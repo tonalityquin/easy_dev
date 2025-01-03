@@ -1,0 +1,9 @@
+<resources>
+    <string name="default_web_client_id">YOUR_WEB_CLIENT_ID</string>
+    <string name="firebase_database_url">https://easydev-97fb6.firebaseio.com</string>
+    <string name="gcm_defaultSenderId">470236709494</string>
+    <string name="google_api_key">AIzaSyCGZDQxQRaSTeO6ujcTm9cE414tfftSb7k</string>
+    <string name="google_app_id">1:470236709494:android:64a301ffb3f0ecafc8d557</string>
+    <string name="google_crash_reporting_api_key">AIzaSyCGZDQxQRaSTeO6ujcTm9cE414tfftSb7k</string>
+    <string name="project_id">easydev-97fb6</string>
+</resources>
