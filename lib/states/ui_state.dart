@@ -16,27 +16,50 @@ class UIState with ChangeNotifier {
 
   // 키패드 표시 상태 변경
   void toggleKeypad(bool value) {
-    _showKeypad = value;
-    notifyListeners();
+    if (_showKeypad != value) {
+      _showKeypad = value;
+      notifyListeners();
+    }
   }
 
   // 로딩 상태 변경
   void setLoading(bool value) {
-    _isLoading = value;
-    notifyListeners();
+    if (_isLoading != value) {
+      _isLoading = value;
+      notifyListeners();
+    }
   }
 
   // 활성화된 컨트롤러 이름 설정
   void setActiveController(String controller) {
-    _activeController = controller;
+    if (controller.isNotEmpty && _activeController != controller) {
+      _activeController = controller;
+      notifyListeners();
+    }
+  }
+
+  // 키패드 상태 초기화
+  void resetKeypadState() {
+    _showKeypad = true;
+    notifyListeners();
+  }
+
+  // 로딩 상태 초기화
+  void resetLoadingState() {
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  // 활성화된 컨트롤러 초기화
+  void resetActiveController() {
+    _activeController = null;
     notifyListeners();
   }
 
   // 모든 상태 초기화
   void resetState() {
-    _showKeypad = true;
-    _isLoading = false;
-    _activeController = null;
-    notifyListeners();
+    resetKeypadState();
+    resetLoadingState();
+    resetActiveController();
   }
 }
