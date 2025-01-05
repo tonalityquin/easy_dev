@@ -28,9 +28,10 @@ class TypePage extends StatelessWidget {
           },
           child: Consumer<PageState>(
             builder: (context, state, child) {
+              // PageInfo 객체에서 page 속성을 추출하여 전달
               return IndexedStack(
                 index: state.selectedIndex, // 선택된 페이지 렌더링
-                children: state.pages,
+                children: state.pages.map((pageInfo) => pageInfo.page).toList(),
               );
             },
           ),
@@ -39,8 +40,7 @@ class TypePage extends StatelessWidget {
           builder: (context, state, child) {
             return BottomNavigationBar(
               currentIndex: state.selectedIndex,
-              onTap: state.onItemTapped,
-              // 탭 클릭 이벤트
+              onTap: state.onItemTapped, // 탭 클릭 이벤트
               items: const [
                 BottomNavigationBarItem(
                   icon: Icon(Icons.directions_car),
