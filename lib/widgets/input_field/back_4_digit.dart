@@ -27,7 +27,7 @@ class NumFieldBack4 extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 150,
+      width: MediaQuery.of(context).size.width * 0.4, // 동적 너비 적용
       child: TextField(
         controller: controller,
         keyboardType: TextInputType.number,
@@ -40,14 +40,14 @@ class NumFieldBack4 extends StatelessWidget {
         decoration: InputDecoration(
           labelText: labelText,
           labelStyle: labelStyle ??
-              const TextStyle(
+              Theme.of(context).textTheme.bodyLarge?.copyWith(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: Colors.grey,
               ),
           hintText: hintText,
           hintStyle: hintStyle ??
-              const TextStyle(
+              Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: Colors.grey,
               ),
           contentPadding: const EdgeInsets.only(top: 20.0),
@@ -57,23 +57,37 @@ class NumFieldBack4 extends StatelessWidget {
           focusedBorder: const UnderlineInputBorder(
             borderSide: BorderSide(color: Colors.blue, width: 2.0),
           ),
+          errorText: _validateInput(controller.text), // 유효성 검사 메시지
         ),
         style: const TextStyle(
           fontSize: 18,
           fontWeight: FontWeight.bold,
         ),
         onTap: () {
-          print('4-digit field tapped, current content: ${controller.text}, clearing now.');
           if (onTap != null) {
             onTap!();
           }
-
+          // 입력 필드의 텍스트 초기화
           if (controller.text.isNotEmpty) {
             controller.clear();
-            print('4-digit field tapped, cleared content.');
           }
+        },
+        onChanged: (value) {
+          // 입력값 변경 시 유효성 검사 실행
+          _validateInput(value);
         },
       ),
     );
+  }
+
+  /// Method: 입력값 유효성 검사
+  String? _validateInput(String value) {
+    if (value.isEmpty) {
+      return 'This field is required.';
+    }
+    if (value.length < 4) {
+      return 'Enter exactly 4 digits.';
+    }
+    return null; // 유효한 입력값일 경우
   }
 }
