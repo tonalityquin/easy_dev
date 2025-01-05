@@ -6,6 +6,7 @@ import 'package:easydev/widgets/common/common_field.dart';
 class NumFieldFront2 extends StatelessWidget {
   final TextEditingController controller;
   final VoidCallback? onTap;
+
   const NumFieldFront2({
     super.key,
     required this.controller,
