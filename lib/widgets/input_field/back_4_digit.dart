@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:easydev/widgets/common/common_field.dart';
 
-
 /// Class : 번호판 뒷 네 자리(숫자) UI
 class NumFieldBack4 extends StatelessWidget {
   final TextEditingController controller;
@@ -25,7 +24,8 @@ class NumFieldBack4 extends StatelessWidget {
       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
       labelText: '4-digit',
       hintText: 'Enter',
-      readOnly: readOnly, // 전달
+      readOnly: readOnly,
+      // 전달
       onTap: onTap,
     );
   }
