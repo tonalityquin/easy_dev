@@ -119,6 +119,7 @@ class _Input3DigitState extends State<Input3Digit> {
         });
       }
     }
+
   }
 
   bool _validatePlateNumber(String plateNumber) {
