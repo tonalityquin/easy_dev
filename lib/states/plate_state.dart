@@ -8,11 +8,8 @@ class PlateState extends ChangeNotifier {
   final List<Map<String, dynamic>> _departureCompleted = [];
 
   List<Map<String, dynamic>> get requests => _requests;
-
   List<Map<String, dynamic>> get completed => _completed;
-
   List<Map<String, dynamic>> get departureRequests => _departureRequests;
-
   List<Map<String, dynamic>> get departureCompleted => _departureCompleted;
 
   void _subscribeToCollection(String collectionName, List<Map<String, dynamic>> targetList) {
@@ -37,29 +34,74 @@ class PlateState extends ChangeNotifier {
     _subscribeToCollection('departure_completed', _departureCompleted);
   }
 
-  Future<void> moveData({
+  // 데이터를 이동하는 공통 메서드
+  Future<void> transferData({
     required String fromCollection,
     required String toCollection,
     required String id,
-    required Map<String, dynamic> updates,
+    Map<String, dynamic>? additionalData, // 선택적으로 데이터를 추가
   }) async {
     try {
       final snapshot = await FirebaseFirestore.instance.collection(fromCollection).doc(id).get();
-      if (snapshot.exists) {
-        final data = snapshot.data()!;
-
-        await FirebaseFirestore.instance.collection(toCollection).add({
-          ...data,
-          ...updates,
-        });
-
-        await FirebaseFirestore.instance.collection(fromCollection).doc(id).delete();
-
-        notifyListeners();
+      if (!snapshot.exists) {
+        throw Exception('Document with id $id not found in $fromCollection');
       }
+
+      final data = snapshot.data()!;
+      await FirebaseFirestore.instance.collection(toCollection).add({
+        ...data,
+        ...?additionalData, // 추가 데이터 병합
+      });
+
+      await FirebaseFirestore.instance.collection(fromCollection).doc(id).delete();
+      notifyListeners();
     } catch (e) {
-      // 에러를 UI에서 처리할 수 있도록 예외 전달
-      throw Exception('Failed to move data from $fromCollection to $toCollection: $e');
+      throw Exception('Failed to transfer data from $fromCollection to $toCollection: $e');
+    }
+  }
+
+  Future<void> addCompleted(String id, String location) async {
+    await transferData(
+      fromCollection: 'parking_requests',
+      toCollection: 'parking_completed',
+      id: id,
+      additionalData: {
+        'type': '입차 완료',
+        'location': location,
+      },
+    );
+  }
+
+  Future<void> addDepartureRequest(String id) async {
+    await transferData(
+      fromCollection: 'parking_completed',
+      toCollection: 'departure_requests',
+      id: id,
+      additionalData: {
+        'type': '출차 요청',
+      },
+    );
+  }
+
+  Future<void> addDepartureCompleted(String id) async {
+    await transferData(
+      fromCollection: 'departure_requests',
+      toCollection: 'departure_completed',
+      id: id,
+      additionalData: {
+        'type': '출차 완료',
+      },
+    );
+  }
+
+  Future<void> updateRequest(String id, String newType) async {
+    try {
+      await FirebaseFirestore.instance.collection('parking_requests').doc(id).update({
+        'type': newType,
+      });
+      notifyListeners();
+    } catch (e) {
+      throw Exception('Failed to update request: $e');
     }
   }
 
@@ -94,54 +136,7 @@ class PlateState extends ChangeNotifier {
         'location': '미지정',
       });
     } catch (e) {
-      // 에러를 UI로 전달
       throw Exception('Failed to add request: $e');
-    }
-  }
-
-  Future<void> addCompleted(String id, String location) async {
-    await moveData(
-      fromCollection: 'parking_requests',
-      toCollection: 'parking_completed',
-      id: id,
-      updates: {
-        'type': '입차 완료',
-        'location': location,
-      },
-    );
-  }
-
-  Future<void> addDepartureRequest(String id) async {
-    await moveData(
-      fromCollection: 'parking_completed',
-      toCollection: 'departure_requests',
-      id: id,
-      updates: {
-        'type': '출차 요청',
-      },
-    );
-  }
-
-  Future<void> addDepartureCompleted(String id) async {
-    await moveData(
-      fromCollection: 'departure_requests',
-      toCollection: 'departure_completed',
-      id: id,
-      updates: {
-        'type': '출차 완료',
-      },
-    );
-  }
-
-  Future<void> updateRequest(String id, String newType) async {
-    try {
-      await FirebaseFirestore.instance.collection('parking_requests').doc(id).update({
-        'type': newType,
-      });
-      notifyListeners();
-    } catch (e) {
-      // 에러를 UI에서 처리할 수 있도록 예외 전달
-      throw Exception('Failed to update request: $e');
     }
   }
 }
