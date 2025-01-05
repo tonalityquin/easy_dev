@@ -99,18 +99,25 @@ class _Input3DigitState extends State<Input3Digit> {
     try {
       // PlateState의 addRequest 호출
       await context.read<PlateState>().addRequest(plateNumber);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('입차 요청 성공')),
-      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('입차 요청 성공')),
+        );
+      }
       clearInput(); // 입력 필드 초기화
     } catch (error) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('입차 요청 실패: $error')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('입차 요청 실패: $error')),
+        );
+      }
     } finally {
-      setState(() {
-        isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
     }
   }
 

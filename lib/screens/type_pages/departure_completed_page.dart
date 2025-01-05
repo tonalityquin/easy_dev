@@ -10,7 +10,6 @@ class DepartureCompletedPage extends StatelessWidget {
   // Firestore의 모든 관련 데이터를 삭제하는 메서드
   Future<void> _deleteAllData(BuildContext context) async {
     try {
-      // Firestore 컬렉션 삭제
       await FirebaseFirestore.instance.collection('parking_requests').get().then((snapshot) {
         for (var doc in snapshot.docs) {
           doc.reference.delete();
@@ -35,27 +34,37 @@ class DepartureCompletedPage extends StatelessWidget {
         }
       });
 
-      // UI 업데이트
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('모든 데이터가 삭제되었습니다.')),
-      );
+      if (context.mounted) {
+        // 안전하게 BuildContext 사용
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('모든 데이터가 삭제되었습니다.')),
+        );
+      }
     } catch (e) {
-      // 오류 처리
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('데이터 삭제 실패: $e')),
-      );
+      if (context.mounted) {
+        // 안전하게 BuildContext 사용
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('데이터 삭제 실패: $e')),
+        );
+      }
     }
   }
 
   // 로그아웃 메서드
   Future<void> _logout(BuildContext context) async {
     try {
-      await FirebaseAuth.instance.signOut(); // Firebase 로그아웃
-      Navigator.pushReplacementNamed(context, '/login'); // 로그인 페이지로 이동
+      await FirebaseAuth.instance.signOut();
+      if (context.mounted) {
+        // 안전하게 BuildContext 사용
+        Navigator.pushReplacementNamed(context, '/login');
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('로그아웃 실패: $e')),
-      );
+      if (context.mounted) {
+        // 안전하게 BuildContext 사용
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('로그아웃 실패: $e')),
+        );
+      }
     }
   }
 
@@ -73,7 +82,6 @@ class DepartureCompletedPage extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.delete),
             onPressed: () async {
-              // 확인 다이얼로그 표시
               final confirm = await showDialog<bool>(
                 context: context,
                 builder: (BuildContext context) {
@@ -94,9 +102,12 @@ class DepartureCompletedPage extends StatelessWidget {
                 },
               );
 
-              // 확인되면 데이터 삭제
+              // 비동기 작업 전 confirm 값 확인
               if (confirm == true) {
-                await _deleteAllData(context);
+                if (context.mounted) {
+                  // BuildContext 사용 안전 확인
+                  await _deleteAllData(context);
+                }
               }
             },
           ),
@@ -146,8 +157,8 @@ class DepartureCompletedPage extends StatelessWidget {
                         ),
                         subtitle: Text(
                           '요청 시간: ${requestTime.toString().substring(0, 19)}\n'
-                              '누적 시간: ${duration.inMinutes}분 ${duration.inSeconds % 60}초\n'
-                              '위치: ${request['location']}',
+                          '누적 시간: ${duration.inMinutes}분 ${duration.inSeconds % 60}초\n'
+                          '위치: ${request['location']}',
                           style: const TextStyle(fontSize: 12),
                         ),
                       ),

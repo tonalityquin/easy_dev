@@ -59,17 +59,21 @@ class ParkingCompletedPage extends StatelessWidget {
                             ),
                             subtitle: Text(
                               '요청 시간: ${requestTime.toString().substring(0, 19)}\n'
-                                  '누적 시간: ${duration.inMinutes}분 ${duration.inSeconds % 60}초\n'
-                                  '위치: ${request['location']}',
+                              '누적 시간: ${duration.inMinutes}분 ${duration.inSeconds % 60}초\n'
+                              '위치: ${request['location']}',
                               style: const TextStyle(fontSize: 12),
                             ),
                           ),
                           TextButton(
                             onPressed: () async {
                               await context.read<PlateState>().addDepartureRequest(request['id']);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('출차 요청이 등록되었습니다.')),
-                              );
+
+                              // mounted를 확인하여 BuildContext의 유효성 확인
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('출차 요청이 등록되었습니다.')),
+                                );
+                              }
                             },
                             child: const Text('출차 요청'),
                           ),

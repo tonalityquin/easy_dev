@@ -19,9 +19,8 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
       ),
       body: Consumer<PlateState>(
         builder: (context, plateState, child) {
-          final pendingRequests = plateState.requests
-              .where((request) => request['type'] == '입차 요청' || request['type'] == '입차 중')
-              .toList();
+          final pendingRequests =
+              plateState.requests.where((request) => request['type'] == '입차 요청' || request['type'] == '입차 중').toList();
 
           if (pendingRequests.isEmpty) {
             return const Center(
@@ -54,14 +53,17 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                         onTap: () async {
                           final newType = isInProgress ? '입차 요청' : '입차 중';
 
+                          // BuildContext 관련 작업은 비동기 작업 전에 실행
+                          final messenger = ScaffoldMessenger.of(context);
+
                           await context.read<PlateState>().updateRequest(
-                            request['id'],
-                            newType,
-                          );
+                                request['id'],
+                                newType,
+                              );
 
                           if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Type이 ${newType}으로 변경되었습니다.')),
+                            messenger.showSnackBar(
+                              SnackBar(content: Text('Type이 $newType으로 변경되었습니다.')),
                             );
                           }
                         },
@@ -83,14 +85,19 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                             ),
                             subtitle: Text(
                               '요청 시간: ${requestTime.toString().substring(0, 19)}\n'
-                                  '누적 시간: ${duration.inMinutes}분 ${duration.inSeconds % 60}초\n'
-                                  '위치: ${request['location']}',
+                              '누적 시간: ${duration.inMinutes}분 ${duration.inSeconds % 60}초\n'
+                              '위치: ${request['location']}',
                               style: const TextStyle(fontSize: 12),
                             ),
                           ),
                           if (isInProgress)
                             TextButton(
                               onPressed: () async {
+                                // 기존 코드에서 문제 해결
+
+                                final messenger = ScaffoldMessenger.of(context);
+                                final plateState = context.read<PlateState>();
+
                                 final selectedLocation = await showModalBottomSheet<String>(
                                   context: context,
                                   builder: (context) {
@@ -112,18 +119,15 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                                     );
                                   },
                                 );
-
                                 if (selectedLocation != null) {
-                                  await context.read<PlateState>().addCompleted(
+                                  await plateState.addCompleted(
                                     request['id'],
                                     selectedLocation,
                                   );
 
-                                  if (mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('주차 완료: $selectedLocation')),
-                                    );
-                                  }
+                                  messenger.showSnackBar(
+                                    SnackBar(content: Text('주차 완료: $selectedLocation')),
+                                  );
                                 }
                               },
                               child: const Text('주차 영역 선택'),
