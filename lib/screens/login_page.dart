@@ -22,12 +22,16 @@ class _LoginPageState extends State<LoginPage> {
       );
 
       // 로그인 성공 시 TypePage로 이동
-      Navigator.pushReplacementNamed(context, '/home'); // 경로를 '/home'으로 수정
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, '/home'); // 경로를 '/home'으로 수정
+      }
     } catch (e) {
-      // 로그인 실패 시 에러 메시지 출력
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("로그인 실패: ${e.toString()}")),
-      );
+      // 로그인 실패 시 에러 메시지 출력 (mounted 상태 확인 추가)
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("로그인 실패: ${e.toString()}")),
+        );
+      }
     }
   }
 

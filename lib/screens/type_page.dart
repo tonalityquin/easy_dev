@@ -20,7 +20,6 @@ class TypePage extends StatelessWidget {
           onHorizontalDragEnd: (details) {
             if (details.primaryVelocity != null && details.primaryVelocity! > 0) {
               // 우측 스와이프 시 Input3DigitPage로 이동
-              print('스와이프: 오른쪽, Input3DigitPage로 이동');
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const Input3Digit()),
@@ -40,7 +39,8 @@ class TypePage extends StatelessWidget {
           builder: (context, state, child) {
             return BottomNavigationBar(
               currentIndex: state.selectedIndex,
-              onTap: state.onItemTapped, // 탭 클릭 이벤트
+              onTap: state.onItemTapped,
+              // 탭 클릭 이벤트
               items: const [
                 BottomNavigationBarItem(
                   icon: Icon(Icons.directions_car),
