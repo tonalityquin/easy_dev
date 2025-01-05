@@ -1,3 +1,15 @@
+# To Do list
+
+## 파일 별 Reformation
+
+## 섹터 기능 기술 탐색 및 구현 후, 안정성 검사된 뒤, Release version에 Input
+### Req.
+- 섹터는 3개
+- 용량 최소화
+
+
+
+
 # easy_dev
 easyvalet app's dev version
 
