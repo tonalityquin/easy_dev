@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../../states/plate_state.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../states/plate_state.dart';
+import '../../widgets/container/plate_container.dart'; // PlateContainer import
 
 class DepartureCompletedPage extends StatelessWidget {
   const DepartureCompletedPage({super.key});
@@ -80,7 +81,7 @@ class DepartureCompletedPage extends StatelessWidget {
             onPressed: () => _logout(context), // 로그아웃 메서드 호출
           ),
           IconButton(
-            icon: const Icon(Icons.delete),
+            icon: const Icon(Icons.delete), // 삭제 버튼
             onPressed: () async {
               final confirm = await showDialog<bool>(
                 context: context,
@@ -115,58 +116,9 @@ class DepartureCompletedPage extends StatelessWidget {
       ),
       body: Consumer<PlateState>(
         builder: (context, plateState, child) {
-          final departureCompleted = plateState.departureCompleted;
-
-          if (departureCompleted.isEmpty) {
-            return const Center(
-              child: Text(
-                '완료된 출차가 없습니다.',
-                style: TextStyle(fontSize: 18, color: Colors.grey),
-              ),
-            );
-          }
-
-          return ListView.builder(
-            itemCount: departureCompleted.length,
-            itemBuilder: (context, index) {
-              final request = departureCompleted[index];
-              final DateTime requestTime = request['request_time'].toDate();
-              final Duration duration = DateTime.now().difference(requestTime);
-
-              return Container(
-                margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey),
-                  borderRadius: BorderRadius.circular(5),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      flex: 2,
-                      child: Container(
-                        height: 50,
-                        color: Colors.blueGrey,
-                      ),
-                    ),
-                    Expanded(
-                      flex: 8,
-                      child: ListTile(
-                        title: Text(
-                          '[${request['plate_number']}]',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        subtitle: Text(
-                          '요청 시간: ${requestTime.toString().substring(0, 19)}\n'
-                          '누적 시간: ${duration.inMinutes}분 ${duration.inSeconds % 60}초\n'
-                          '위치: ${request['location']}',
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
+          return PlateContainer(
+            data: plateState.departureCompleted,
+            filterCondition: (_) => true, // 모든 완료된 출차 표시
           );
         },
       ),

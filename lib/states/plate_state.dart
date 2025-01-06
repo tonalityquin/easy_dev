@@ -2,13 +2,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 class PlateState extends ChangeNotifier {
-  final List<Map<String, dynamic>> _requests = [];
-  final List<Map<String, dynamic>> _completed = [];
+  final List<Map<String, dynamic>> _parkingrequests = [];
+  final List<Map<String, dynamic>> _parkingcompleted = [];
   final List<Map<String, dynamic>> _departureRequests = [];
   final List<Map<String, dynamic>> _departureCompleted = [];
 
-  List<Map<String, dynamic>> get requests => _requests;
-  List<Map<String, dynamic>> get completed => _completed;
+  List<Map<String, dynamic>> get requests => _parkingrequests;
+  List<Map<String, dynamic>> get completed => _parkingcompleted;
   List<Map<String, dynamic>> get departureRequests => _departureRequests;
   List<Map<String, dynamic>> get departureCompleted => _departureCompleted;
 
@@ -28,8 +28,8 @@ class PlateState extends ChangeNotifier {
 
   // 생성자에서 모든 구독 초기화
   PlateState() {
-    _subscribeToCollection('parking_requests', _requests);
-    _subscribeToCollection('parking_completed', _completed);
+    _subscribeToCollection('parking_requests', _parkingrequests);
+    _subscribeToCollection('parking_completed', _parkingcompleted);
     _subscribeToCollection('departure_requests', _departureRequests);
     _subscribeToCollection('departure_completed', _departureCompleted);
   }
