@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../states/plate_state.dart';
-import '../../widgets/container/plate_container.dart'; // PlateContainer import
+import '../../widgets/container/plate_container.dart';
 
 class DepartureRequestPage extends StatelessWidget {
   const DepartureRequestPage({super.key});
@@ -15,9 +15,14 @@ class DepartureRequestPage extends StatelessWidget {
       ),
       body: Consumer<PlateState>(
         builder: (context, plateState, child) {
-          return PlateContainer(
-            data: plateState.departureRequests,
-            filterCondition: (_) => true, // 모든 출차 요청 표시
+          return ListView(
+            padding: const EdgeInsets.all(8.0),
+            children: [
+              PlateContainer(
+                data: plateState.departureRequests,
+                filterCondition: (_) => true, // 모든 출차 요청 표시
+              ),
+            ],
           );
         },
       ),

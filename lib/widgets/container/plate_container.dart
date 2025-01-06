@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../utils/date_utils.dart'; // CustomDateUtils import
 
-class PlateContainer extends StatelessWidget {
+class PlateContainer extends StatefulWidget {
   final List<Map<String, dynamic>> data;
   final bool Function(Map<String, dynamic>) filterCondition;
 
@@ -11,40 +12,157 @@ class PlateContainer extends StatelessWidget {
   });
 
   @override
+  _PlateContainerState createState() => _PlateContainerState();
+}
+
+class _PlateContainerState extends State<PlateContainer> {
+  @override
   Widget build(BuildContext context) {
-    final filteredData = data.where(filterCondition).toList();
+    final filteredData = widget.data.where(widget.filterCondition).toList();
 
     if (filteredData.isEmpty) {
       return const Center(
         child: Text(
-          '요청이 없습니다.',
+          '데이터가 없습니다.',
           style: TextStyle(fontSize: 18, color: Colors.grey),
         ),
       );
     }
 
-    return ListView.builder(
-      itemCount: filteredData.length,
-      itemBuilder: (context, index) {
-        final request = filteredData[index];
+    return Column(
+      children: filteredData.map((item) {
+        // 로그용 데이터 출력
+        debugPrint('로그 - 요청 시간: ${CustomDateUtils.formatTimestamp(item['request_time'])}');
+        debugPrint('로그 - 경과 시간: ${CustomDateUtils.timeElapsed(item['request_time'])}');
+
         return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
+          padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey),
-            borderRadius: BorderRadius.circular(5),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.grey.withAlpha((0.5 * 255).toInt()),
+                spreadRadius: 2,
+                blurRadius: 5,
+                offset: const Offset(0, 3),
+              ),
+            ],
           ),
-          child: ListTile(
-            title: Text(
-              '[${request['plate_number']}] ${request['type']}',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            subtitle: Text(
-              '요청 시간: ${request['request_time']}\n위치: ${request['location']}',
-              style: const TextStyle(fontSize: 12),
-            ),
+          child: Column(
+            children: [
+              // 상단 plate_number와 세로줄 (중앙 정렬)
+              Row(
+                children: [
+                  Expanded(
+                    flex: 7, // 좌측 7
+                    child: Center(
+                      child: Text(
+                        '${item['plate_number']}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                        textAlign: TextAlign.center, // 중앙 정렬
+                      ),
+                    ),
+                  ),
+                  Container(
+                    width: 1, // 세로줄
+                    height: 20,
+                    color: Colors.grey,
+                  ),
+                  Expanded(
+                    flex: 3, // 우측 3
+                    child: Center(
+                      child: Text(
+                        item['type'] ?? '',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w400,
+                        ),
+                        textAlign: TextAlign.center, // 중앙 정렬
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const Divider(thickness: 1, color: Colors.grey),
+
+              // 중단 좌중우 (5:2:3 비율, 중앙 정렬)
+              Row(
+                children: [
+                  Expanded(
+                    flex: 5, // 좌측 5
+                    child: Center(
+                      child: Text(
+                        '${item['location']}', // 위치를 중앙 정렬
+                        style: const TextStyle(fontSize: 14),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    width: 1, // 첫 번째 세로줄
+                    height: 20,
+                    color: Colors.grey,
+                  ),
+                  const Expanded(
+                    flex: 2, // 중간 2 (공란)
+                    child: Center(
+                      child: Text(''), // 공란
+                    ),
+                  ),
+                  Container(
+                    width: 1, // 두 번째 세로줄
+                    height: 20,
+                    color: Colors.grey,
+                  ),
+                  Expanded(
+                    flex: 3, // 우측 3
+                    child: Center(
+                      child: Text(
+                        CustomDateUtils.formatTimeForUI(item['request_time']), // 요청 시간
+                        style: const TextStyle(fontSize: 14, color: Colors.green),
+                        textAlign: TextAlign.center, // 중앙 정렬
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const Divider(thickness: 1, color: Colors.grey),
+
+              // 하단 좌우 (7:3 비율, 중앙 정렬)
+              Row(
+                children: [
+                  const Expanded(
+                    flex: 7, // 좌측 7 (공란)
+                    child: Center(
+                      child: Text(''), // 공란
+                    ),
+                  ),
+                  Container(
+                    width: 1, // 세로줄
+                    height: 20,
+                    color: Colors.grey,
+                  ),
+                  Expanded(
+                    flex: 3, // 우측 3
+                    child: Center(
+                      child: Text(
+                        CustomDateUtils.timeElapsed(item['request_time']), // 경과 시간
+                        style: const TextStyle(fontSize: 14, color: Colors.red),
+                        textAlign: TextAlign.center, // 중앙 정렬
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         );
-      },
+      }).toList(),
     );
   }
 }

@@ -15,10 +15,15 @@ class ParkingRequestPage extends StatelessWidget {
       ),
       body: Consumer<PlateState>(
         builder: (context, plateState, child) {
-          return PlateContainer(
-            data: plateState.requests,
-            filterCondition: (request) =>
-            request['type'] == '입차 요청' || request['type'] == '입차 중',
+          return ListView(
+            padding: const EdgeInsets.all(8.0),
+            children: [
+              PlateContainer(
+                data: plateState.requests,
+                filterCondition: (request) =>
+                request['type'] == '입차 요청' || request['type'] == '입차 중',
+              ),
+            ],
           );
         },
       ),

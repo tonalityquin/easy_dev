@@ -8,6 +8,11 @@ import '../screens/input_pages/input_3_digit.dart';
 class TypePage extends StatelessWidget {
   const TypePage({super.key});
 
+  Future<void> _refreshData(BuildContext context) async {
+    final pageState = Provider.of<PageState>(context, listen: false);
+    await pageState.refreshData(); // PageState의 데이터 갱신 메서드 호출
+  }
+
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
@@ -26,14 +31,16 @@ class TypePage extends StatelessWidget {
               );
             }
           },
-          child: Consumer<PageState>(
-            builder: (context, state, child) {
-              // PageInfo 객체에서 page 속성을 추출하여 전달
-              return IndexedStack(
-                index: state.selectedIndex, // 선택된 페이지 렌더링
-                children: state.pages.map((pageInfo) => pageInfo.page).toList(),
-              );
-            },
+          child: RefreshIndicator(
+            onRefresh: () => _refreshData(context), // 데이터 갱신 메서드 호출
+            child: Consumer<PageState>(
+              builder: (context, state, child) {
+                return IndexedStack(
+                  index: state.selectedIndex, // 선택된 페이지 렌더링
+                  children: state.pages.map((pageInfo) => pageInfo.page).toList(),
+                );
+              },
+            ),
           ),
         ),
         bottomNavigationBar: Consumer<PageState>(
@@ -41,24 +48,12 @@ class TypePage extends StatelessWidget {
             return BottomNavigationBar(
               currentIndex: state.selectedIndex,
               onTap: state.onItemTapped, // 탭 클릭 이벤트
-              items: const [
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.directions_car),
-                  label: '입차 요청',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.check_circle),
-                  label: '입차 완료',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.departure_board),
-                  label: '출차 요청',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.done_all),
-                  label: '출차 완료',
-                ),
-              ],
+              items: state.pages.map((pageInfo) {
+                return BottomNavigationBarItem(
+                  icon: pageInfo.icon,
+                  label: pageInfo.title,
+                );
+              }).toList(),
               selectedItemColor: Colors.red,
               unselectedItemColor: Colors.blue,
               backgroundColor: Colors.white,
