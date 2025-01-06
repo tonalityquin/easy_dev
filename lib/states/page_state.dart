@@ -1,3 +1,4 @@
+import 'dart:async'; // Timer 사용
 import 'package:flutter/material.dart';
 import '../screens/type_pages/parking_request_page.dart';
 import '../screens/type_pages/parking_completed_page.dart';
@@ -25,6 +26,28 @@ class PageState with ChangeNotifier {
     PageInfo('Departure Completed', const DepartureCompletedPage(), Icon(Icons.done_all)),
   ];
 
+  Timer? _timer; // Timer 변수 추가
+
+  /// 생성자에서 Timer 시작
+  PageState() {
+    _startAutoRefresh();
+  }
+
+  /// 1분마다 상태 갱신
+  void _startAutoRefresh() {
+    _timer = Timer.periodic(const Duration(minutes: 1), (timer) {
+      print('자동 상태 갱신 트리거됨: ${DateTime.now()}'); // 디버깅 로그
+      notifyListeners(); // 상태 갱신 알림
+    });
+  }
+
+  /// Timer 해제
+  @override
+  void dispose() {
+    _timer?.cancel(); // Timer 해제
+    super.dispose();
+  }
+
   /// 현재 선택된 페이지 이름
   String get selectedPageTitle => pages[_selectedIndex].title;
 
@@ -34,6 +57,14 @@ class PageState with ChangeNotifier {
       throw ArgumentError('Invalid index: $index');
     }
     _selectedIndex = index;
+    notifyListeners(); // 상태 변경 알림
+  }
+
+  /// 데이터 갱신 메서드
+  Future<void> refreshData() async {
+    print('데이터 갱신 중...');
+    await Future.delayed(Duration(seconds: 2)); // 테스트용 지연 시간
+    print('데이터 갱신 완료!');
     notifyListeners(); // 상태 변경 알림
   }
 }

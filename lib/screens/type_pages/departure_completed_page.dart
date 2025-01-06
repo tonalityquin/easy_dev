@@ -36,14 +36,12 @@ class DepartureCompletedPage extends StatelessWidget {
       });
 
       if (context.mounted) {
-        // 안전하게 BuildContext 사용
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('모든 데이터가 삭제되었습니다.')),
         );
       }
     } catch (e) {
       if (context.mounted) {
-        // 안전하게 BuildContext 사용
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('데이터 삭제 실패: $e')),
         );
@@ -56,12 +54,10 @@ class DepartureCompletedPage extends StatelessWidget {
     try {
       await FirebaseAuth.instance.signOut();
       if (context.mounted) {
-        // 안전하게 BuildContext 사용
         Navigator.pushReplacementNamed(context, '/login');
       }
     } catch (e) {
       if (context.mounted) {
-        // 안전하게 BuildContext 사용
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('로그아웃 실패: $e')),
         );
@@ -78,7 +74,7 @@ class DepartureCompletedPage extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.logout), // 로그아웃 버튼
-            onPressed: () => _logout(context), // 로그아웃 메서드 호출
+            onPressed: () => _logout(context),
           ),
           IconButton(
             icon: const Icon(Icons.delete), // 삭제 버튼
@@ -103,10 +99,8 @@ class DepartureCompletedPage extends StatelessWidget {
                 },
               );
 
-              // 비동기 작업 전 confirm 값 확인
               if (confirm == true) {
                 if (context.mounted) {
-                  // BuildContext 사용 안전 확인
                   await _deleteAllData(context);
                 }
               }
@@ -116,9 +110,14 @@ class DepartureCompletedPage extends StatelessWidget {
       ),
       body: Consumer<PlateState>(
         builder: (context, plateState, child) {
-          return PlateContainer(
-            data: plateState.departureCompleted,
-            filterCondition: (_) => true, // 모든 완료된 출차 표시
+          return ListView(
+            padding: const EdgeInsets.all(8.0),
+            children: [
+              PlateContainer(
+                data: plateState.departureCompleted,
+                filterCondition: (_) => true, // 모든 완료된 출차 표시
+              ),
+            ],
           );
         },
       ),

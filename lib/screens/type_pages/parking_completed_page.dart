@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../states/plate_state.dart';
-import '../../widgets/container/plate_container.dart'; // PlateContainer import
+import '../../widgets/container/plate_container.dart';
 
 class ParkingCompletedPage extends StatelessWidget {
   const ParkingCompletedPage({super.key});
@@ -15,9 +15,14 @@ class ParkingCompletedPage extends StatelessWidget {
       ),
       body: Consumer<PlateState>(
         builder: (context, plateState, child) {
-          return PlateContainer(
-            data: plateState.completed,
-            filterCondition: (_) => true, // 모든 완료된 요청 표시
+          return ListView(
+            padding: const EdgeInsets.all(8.0),
+            children: [
+              PlateContainer(
+                data: plateState.completed,
+                filterCondition: (_) => true, // 모든 완료된 요청 표시
+              ),
+            ],
           );
         },
       ),
