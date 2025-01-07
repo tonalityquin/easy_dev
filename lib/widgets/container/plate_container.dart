@@ -4,17 +4,20 @@ import '../../states/plate_state.dart'; // PlateRequest 가져오기
 
 class PlateContainer extends StatelessWidget {
   final List<PlateRequest> data;
-  final bool Function(PlateRequest) filterCondition;
+  final bool Function(PlateRequest)? filterCondition; // 선택적 필터 조건
 
   const PlateContainer({
     required this.data,
-    required this.filterCondition,
+    this.filterCondition, // 필터 조건을 선택적으로 전달
     super.key,
   });
 
   @override
   Widget build(BuildContext context) {
-    final filteredData = data.where(filterCondition).toList();
+    // 필터 조건이 없을 경우 모든 데이터를 표시
+    final filteredData = (filterCondition != null)
+        ? data.where(filterCondition!).toList()
+        : data;
 
     if (filteredData.isEmpty) {
       return const Center(
@@ -48,11 +51,10 @@ class PlateContainer extends StatelessWidget {
           ),
           child: Column(
             children: [
-              // 상단 plateNumber와 세로줄 (중앙 정렬)
               Row(
                 children: [
                   Expanded(
-                    flex: 7, // 좌측 7
+                    flex: 7,
                     child: Center(
                       child: Text(
                         item.plateNumber,
@@ -65,12 +67,12 @@ class PlateContainer extends StatelessWidget {
                     ),
                   ),
                   Container(
-                    width: 1, // 세로줄
+                    width: 1,
                     height: 20,
                     color: Colors.grey,
                   ),
                   Expanded(
-                    flex: 3, // 우측 3
+                    flex: 3,
                     child: Center(
                       child: Text(
                         item.type,
@@ -85,12 +87,10 @@ class PlateContainer extends StatelessWidget {
                 ],
               ),
               const Divider(thickness: 1, color: Colors.grey),
-
-              // 중단 좌중우 (5:2:3 비율, 중앙 정렬)
               Row(
                 children: [
                   Expanded(
-                    flex: 5, // 좌측 5
+                    flex: 5,
                     child: Center(
                       child: Text(
                         item.location,
@@ -100,26 +100,26 @@ class PlateContainer extends StatelessWidget {
                     ),
                   ),
                   Container(
-                    width: 1, // 첫 번째 세로줄
+                    width: 1,
                     height: 20,
                     color: Colors.grey,
                   ),
                   const Expanded(
-                    flex: 2, // 중간 2 (공란)
+                    flex: 2,
                     child: Center(
-                      child: Text(''), // 공란
+                      child: Text(''),
                     ),
                   ),
                   Container(
-                    width: 1, // 두 번째 세로줄
+                    width: 1,
                     height: 20,
                     color: Colors.grey,
                   ),
                   Expanded(
-                    flex: 3, // 우측 3
+                    flex: 3,
                     child: Center(
                       child: Text(
-                        CustomDateUtils.formatTimeForUI(item.requestTime), // 요청 시간
+                        CustomDateUtils.formatTimeForUI(item.requestTime),
                         style: const TextStyle(fontSize: 14, color: Colors.green),
                         textAlign: TextAlign.center,
                       ),
@@ -128,26 +128,24 @@ class PlateContainer extends StatelessWidget {
                 ],
               ),
               const Divider(thickness: 1, color: Colors.grey),
-
-              // 하단 좌우 (7:3 비율, 중앙 정렬)
               Row(
                 children: [
                   const Expanded(
-                    flex: 7, // 좌측 7 (공란)
+                    flex: 7,
                     child: Center(
-                      child: Text(''), // 공란
+                      child: Text(''),
                     ),
                   ),
                   Container(
-                    width: 1, // 세로줄
+                    width: 1,
                     height: 20,
                     color: Colors.grey,
                   ),
                   Expanded(
-                    flex: 3, // 우측 3
+                    flex: 3,
                     child: Center(
                       child: Text(
-                        CustomDateUtils.timeElapsed(item.requestTime), // 경과 시간
+                        CustomDateUtils.timeElapsed(item.requestTime),
                         style: const TextStyle(fontSize: 14, color: Colors.red),
                         textAlign: TextAlign.center,
                       ),

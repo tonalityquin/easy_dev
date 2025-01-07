@@ -15,12 +15,15 @@ class ParkingCompletedPage extends StatelessWidget {
       ),
       body: Consumer<PlateState>(
         builder: (context, plateState, child) {
+          // PlateRequest 데이터 그대로 전달
+          final parkingCompleted = plateState.parkingCompleted;
+
           return ListView(
             padding: const EdgeInsets.all(8.0),
             children: [
               PlateContainer(
-                data: plateState.parkingCompleted, // 데이터 변환 없이 전달
-                filterCondition: (_) => true, // 모든 완료된 요청 표시
+                data: parkingCompleted, // PlateRequest 타입으로 전달
+                filterCondition: (_) => true, // 기본 필터 조건
               ),
             ],
           );

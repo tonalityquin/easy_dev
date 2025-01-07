@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 class CommonField extends StatelessWidget {
   final TextEditingController controller;
   final VoidCallback? onTap;
+  final ValueChanged<String>? onChanged; // onChanged 매개변수 추가
   final bool readOnly;
   final String labelText;
   final TextStyle? labelStyle;
@@ -21,6 +22,7 @@ class CommonField extends StatelessWidget {
     required this.keyboardType,
     required this.inputFormatters,
     this.onTap,
+    this.onChanged, // 초기화 추가
     this.readOnly = false,
     this.labelText = '',
     this.labelStyle,
@@ -30,6 +32,8 @@ class CommonField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context).textTheme;
+
     return SizedBox(
       width: _getWidth(context), // 동적 너비 설정
       child: TextField(
@@ -44,16 +48,16 @@ class CommonField extends StatelessWidget {
         decoration: InputDecoration(
           labelText: labelText,
           labelStyle: labelStyle ??
-              Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey,
-                  ),
+              theme.bodyLarge?.copyWith(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey,
+              ),
           hintText: hintText,
           hintStyle: hintStyle ??
-              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey,
-                  ),
+              theme.bodyMedium?.copyWith(
+                color: Colors.grey,
+              ),
           contentPadding: const EdgeInsets.only(top: 20.0),
           enabledBorder: const UnderlineInputBorder(
             borderSide: BorderSide(color: Colors.black, width: 2.0),
@@ -62,7 +66,7 @@ class CommonField extends StatelessWidget {
             borderSide: BorderSide(color: Colors.blue, width: 2.0),
           ),
         ),
-        style: const TextStyle(
+        style: theme.bodyLarge?.copyWith(
           fontSize: 18,
           fontWeight: FontWeight.bold,
         ),
@@ -74,6 +78,7 @@ class CommonField extends StatelessWidget {
             controller.clear();
           }
         },
+        onChanged: onChanged, // onChanged 전달
       ),
     );
   }
