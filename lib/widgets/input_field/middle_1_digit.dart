@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:easydev/widgets/common/common_field.dart';
 
-/// Class : 번호판 중간 한 자리(한글) UI
 class KorFieldMiddle1 extends StatelessWidget {
   final TextEditingController controller;
   final VoidCallback? onTap;
@@ -12,7 +11,7 @@ class KorFieldMiddle1 extends StatelessWidget {
     super.key,
     required this.controller,
     this.onTap,
-    this.readOnly = false, // 기본값 설정
+    this.readOnly = false,
   });
 
   @override

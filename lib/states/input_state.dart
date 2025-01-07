@@ -1,25 +1,22 @@
 import 'package:flutter/material.dart';
 
 class InputState with ChangeNotifier {
-  // 필드 키 상수화
   static const String front_3 = 'front3';
   static const String middle_1 = 'middle1';
   static const String back_4 = 'back4';
 
   final Map<String, String> _inputFields = {
-    front_3: '', // 앞 3자리
-    middle_1: '', // 중간 1자리
-    back_4: '', // 뒤 4자리
+    front_3: '',
+    middle_1: '',
+    back_4: '',
   };
 
-  // Getter
   String get front3 => _inputFields[front_3] ?? '';
 
   String get middle1 => _inputFields[middle_1] ?? '';
 
   String get back4 => _inputFields[back_4] ?? '';
 
-  // 필드 업데이트
   void updateField(String field, String value) {
     if (_inputFields.containsKey(field)) {
       _inputFields[field] = value;
@@ -29,13 +26,11 @@ class InputState with ChangeNotifier {
     }
   }
 
-  // 입력값 초기화
   void clearInput() {
     _inputFields.updateAll((key, value) => '');
     notifyListeners();
   }
 
-  // 입력값 유효성 검사
   bool isValidField(String field, String value) {
     switch (field) {
       case front_3:
@@ -48,7 +43,6 @@ class InputState with ChangeNotifier {
     }
   }
 
-  // 유효성 검사와 함께 필드 업데이트
   void updateFieldWithValidation(String field, String value) {
     if (!_inputFields.containsKey(field)) {
       debugPrint('Error: Invalid field name: $field');

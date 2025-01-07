@@ -19,9 +19,8 @@ class ParkingRequestPage extends StatelessWidget {
             padding: const EdgeInsets.all(8.0),
             children: [
               PlateContainer(
-                data: plateState.parkingRequests, // PlateRequest 리스트 전달
-                filterCondition: (request) =>
-                request.type == '입차 요청' || request.type == '입차 중', // 객체 필드로 접근
+                data: plateState.parkingRequests,
+                filterCondition: (request) => request.type == '입차 요청' || request.type == '입차 중',
               ),
             ],
           );

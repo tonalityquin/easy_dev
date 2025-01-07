@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
-/// Plate 데이터 모델 정의
 class PlateRequest {
   final String id;
   final String plateNumber;
@@ -17,7 +16,6 @@ class PlateRequest {
     required this.location,
   });
 
-  /// Firestore 문서를 PlateRequest 객체로 변환
   factory PlateRequest.fromDocument(QueryDocumentSnapshot doc) {
     final dynamic timestamp = doc['request_time'];
     return PlateRequest(
@@ -29,12 +27,10 @@ class PlateRequest {
           : (timestamp is DateTime)
               ? timestamp
               : DateTime.now(),
-      // DateTime 형식일 경우 그대로 사용, null 또는 잘못된 값은 현재 시간으로 대체
       location: doc['location'],
     );
   }
 
-  /// PlateRequest 객체를 Firestore에 저장할 데이터로 변환
   Map<String, dynamic> toMap() {
     return {
       'plate_number': plateNumber,
@@ -65,7 +61,6 @@ class PlateState extends ChangeNotifier {
     _initializeSubscriptions();
   }
 
-  /// Firestore 구독 초기화
   void _initializeSubscriptions() {
     for (final collectionName in _data.keys) {
       FirebaseFirestore.instance
@@ -82,7 +77,6 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  /// 데이터 이동 로직
   Future<void> transferData({
     required String fromCollection,
     required String toCollection,

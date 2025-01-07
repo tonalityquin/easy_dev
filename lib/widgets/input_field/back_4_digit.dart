@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:easydev/widgets/common/common_field.dart';
 
-/// Class : 번호판 뒷 네 자리(숫자) UI
 class NumFieldBack4 extends StatefulWidget {
   final TextEditingController controller;
   final VoidCallback? onTap;
@@ -12,17 +11,16 @@ class NumFieldBack4 extends StatefulWidget {
     super.key,
     required this.controller,
     this.onTap,
-    this.readOnly = false, // 기본값 설정
+    this.readOnly = false,
   });
 
   @override
-  NumFieldBack4State createState() => NumFieldBack4State(); // 상태 클래스 public으로 수정
+  NumFieldBack4State createState() => NumFieldBack4State();
 }
 
-class NumFieldBack4State extends State<NumFieldBack4> { // 상태 클래스 public
-  String? _errorText; // 에러 메시지 저장
+class NumFieldBack4State extends State<NumFieldBack4> {
+  String? _errorText;
 
-  /// 유효성 검사 함수
   void _validateInput(String value) {
     if (value.isEmpty || value.length != 4) {
       setState(() {
@@ -30,7 +28,7 @@ class NumFieldBack4State extends State<NumFieldBack4> { // 상태 클래스 publ
       });
     } else {
       setState(() {
-        _errorText = null; // 에러 없음
+        _errorText = null;
       });
     }
   }
@@ -49,10 +47,9 @@ class NumFieldBack4State extends State<NumFieldBack4> { // 상태 클래스 publ
           hintText: 'Enter',
           readOnly: widget.readOnly,
           onTap: widget.onTap,
-          // 입력 값이 변경될 때마다 유효성 검사 실행
           onChanged: (value) => _validateInput(value),
         ),
-        if (_errorText != null) // 에러 메시지 표시
+        if (_errorText != null)
           Padding(
             padding: const EdgeInsets.only(top: 4.0),
             child: Text(

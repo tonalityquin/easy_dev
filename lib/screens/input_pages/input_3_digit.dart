@@ -29,7 +29,6 @@ class _Input3DigitState extends State<Input3Digit> {
     super.initState();
     activeController = controller3digit;
 
-    // 각 컨트롤러에 _handleInputChange 리스너를 추가
     controller3digit.addListener(_handleInputChange);
     controller1digit.addListener(_handleInputChange);
     controller4digit.addListener(_handleInputChange);
@@ -182,37 +181,33 @@ class _Input3DigitState extends State<Input3Digit> {
         showKeypad: showKeypad,
         keypad: activeController == controller3digit
             ? NumKeypad(
-          controller: controller3digit,
-          maxLength: 3,
-          onComplete: () {
-            // NumKeypad 입력 완료 시 KorKeypad로 전환 및 포커스 변경
-            _setActiveController(controller1digit);
-          },
-        )
+                controller: controller3digit,
+                maxLength: 3,
+                onComplete: () {
+                  _setActiveController(controller1digit);
+                },
+              )
             : activeController == controller1digit
-            ? KorKeypad(
-          controller: controller1digit,
-          onComplete: () {
-            // KorKeypad 입력 완료 시 NumKeypad로 전환 및 포커스 변경
-            _setActiveController(controller4digit);
-          },
-        )
-            : NumKeypad(
-          controller: controller4digit,
-          maxLength: 4,
-          onComplete: () {
-            // 모든 입력 완료 시 키패드 숨김
-            setState(() {
-              showKeypad = false;
-            });
-          },
-        ),
+                ? KorKeypad(
+                    controller: controller1digit,
+                    onComplete: () {
+                      _setActiveController(controller4digit);
+                    },
+                  )
+                : NumKeypad(
+                    controller: controller4digit,
+                    maxLength: 4,
+                    onComplete: () {
+                      setState(() {
+                        showKeypad = false;
+                      });
+                    },
+                  ),
         actionButton: ElevatedButton(
           onPressed: isLoading ? null : _submitParkingRequest,
           child: const Text('입차 요청'),
         ),
       ),
-
     );
   }
 }

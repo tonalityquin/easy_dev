@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../utils/app_colors.dart';
 
-/// BottomNavigation : 키패드 및 액션 버튼 처리
 class BottomNavigation extends StatelessWidget {
-  final bool showKeypad; // 키패드 표시 여부
-  final Widget keypad; // 키패드 위젯
-  final Widget actionButton; // 액션 버튼 위젯
-  final VoidCallback? onTap; // 클릭 이벤트 처리
+  final bool showKeypad;
+  final Widget keypad;
+  final Widget actionButton;
+  final VoidCallback? onTap;
 
   const BottomNavigation({
     super.key,
@@ -20,18 +19,17 @@ class BottomNavigation extends StatelessWidget {
   Widget build(BuildContext context) {
     print('BottomNavigation rendered with color: ${AppColors.bottomNavBackground}');
     return GestureDetector(
-      onTap: onTap ?? () {}, // 클릭 이벤트 처리
+      onTap: onTap ?? () {},
       child: Container(
         decoration: const BoxDecoration(
-          color: AppColors.bottomNavBackground, // 배경색
+          color: AppColors.bottomNavBackground,
         ),
         padding: const EdgeInsets.all(16.0),
-        child: _buildContent(), // 상태에 따른 렌더링 로직 분리
+        child: _buildContent(),
       ),
     );
   }
 
-  /// 상태에 따른 렌더링
   Widget _buildContent() {
     return showKeypad ? keypad : actionButton;
   }
