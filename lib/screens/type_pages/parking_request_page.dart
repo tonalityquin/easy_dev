@@ -3,24 +3,32 @@ import 'package:provider/provider.dart';
 import '../../states/plate_state.dart';
 import '../../widgets/container/plate_container.dart';
 
+/// ParkingRequestPage 위젯
+/// 입차 요청 데이터를 표시하는 화면
 class ParkingRequestPage extends StatelessWidget {
   const ParkingRequestPage({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // 상단 앱바 설정
       appBar: AppBar(
-        backgroundColor: Colors.blue,
-        title: const Text('입차 요청 리스트'),
+        backgroundColor: Colors.blue, // 앱바 배경색 (파란색)
+        title: const Text('입차 요청 리스트'), // 화면 제목
       ),
+      // 본문 영역
       body: Consumer<PlateState>(
+        // PlateState 상태 관리 객체를 구독하여 상태 변화에 따라 UI 업데이트
         builder: (context, plateState, child) {
           return ListView(
-            padding: const EdgeInsets.all(8.0),
+            padding: const EdgeInsets.all(8.0), // 리스트뷰 내부 여백 설정
             children: [
+              // PlateContainer 위젯 사용
+              // 입차 요청 데이터를 필터링하여 리스트로 표시
               PlateContainer(
-                data: plateState.parkingRequests,
+                data: plateState.parkingRequests, // PlateState의 입차 요청 데이터
                 filterCondition: (request) => request.type == '입차 요청' || request.type == '입차 중',
+                // 필터 조건: '입차 요청' 또는 '입차 중'인 데이터만 표시
               ),
             ],
           );

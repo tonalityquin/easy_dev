@@ -5,11 +5,16 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../states/plate_state.dart';
 import '../../widgets/container/plate_container.dart';
 
+/// 출차 완료 페이지
+/// 출차 완료된 차량 리스트를 보여주며, 데이터 삭제 및 로그아웃 기능을 제공합니다.
 class DepartureCompletedPage extends StatelessWidget {
   const DepartureCompletedPage({super.key});
 
+  /// Firestorm 모든 데이터를 삭제하는 비동기 함수
+  /// `parking_requests`, `parking_completed`, `departure_requests`, `departure_completed` 컬렉션의 모든 문서를 삭제
   Future<void> _deleteAllData(BuildContext context) async {
     try {
+      // 각각의 Firestore 컬렉션에서 모든 문서를 가져와 삭제
       await FirebaseFirestore.instance.collection('parking_requests').get().then((snapshot) {
         for (var doc in snapshot.docs) {
           doc.reference.delete();
@@ -34,12 +39,14 @@ class DepartureCompletedPage extends StatelessWidget {
         }
       });
 
+      // 삭제 성공 메시지 표시
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('모든 데이터가 삭제되었습니다.')),
         );
       }
     } catch (e) {
+      // 삭제 실패 시 오류 메시지 표시
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('데이터 삭제 실패: $e')),
@@ -48,13 +55,16 @@ class DepartureCompletedPage extends StatelessWidget {
     }
   }
 
+  /// Firebase 인증 로그아웃 처리
+  /// 로그아웃 후 로그인 화면으로 이동
   Future<void> _logout(BuildContext context) async {
     try {
-      await FirebaseAuth.instance.signOut();
+      await FirebaseAuth.instance.signOut(); // 로그아웃 수행
       if (context.mounted) {
-        Navigator.pushReplacementNamed(context, '/login');
+        Navigator.pushReplacementNamed(context, '/login'); // 로그인 페이지로 리다이렉트
       }
     } catch (e) {
+      // 로그아웃 실패 시 오류 메시지 표시
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('로그아웃 실패: $e')),
@@ -63,20 +73,25 @@ class DepartureCompletedPage extends StatelessWidget {
     }
   }
 
+  /// 페이지 빌드 메서드
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // 상단 앱바 구성
       appBar: AppBar(
-        backgroundColor: Colors.blue,
-        title: const Text('출차 완료 리스트'),
+        backgroundColor: Colors.blue, // 앱바 배경색
+        title: const Text('출차 완료 리스트'), // 앱바 타이틀
         actions: [
+          // 로그아웃 버튼
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () => _logout(context),
           ),
+          // 모든 데이터 삭제 버튼
           IconButton(
             icon: const Icon(Icons.delete),
             onPressed: () async {
+              // 삭제 확인 다이얼로그 표시
               final confirm = await showDialog<bool>(
                 context: context,
                 builder: (BuildContext context) {
@@ -84,10 +99,12 @@ class DepartureCompletedPage extends StatelessWidget {
                     title: const Text('모든 데이터 삭제'),
                     content: const Text('정말로 모든 데이터를 삭제하시겠습니까?'),
                     actions: [
+                      // 취소 버튼
                       TextButton(
                         onPressed: () => Navigator.of(context).pop(false),
                         child: const Text('취소'),
                       ),
+                      // 확인 버튼
                       TextButton(
                         onPressed: () => Navigator.of(context).pop(true),
                         child: const Text('확인'),
@@ -97,6 +114,7 @@ class DepartureCompletedPage extends StatelessWidget {
                 },
               );
 
+              // 삭제 확정 시 데이터 삭제
               if (confirm == true) {
                 if (context.mounted) {
                   await _deleteAllData(context);
@@ -106,14 +124,16 @@ class DepartureCompletedPage extends StatelessWidget {
           ),
         ],
       ),
+      // 출차 완료 데이터 표시
       body: Consumer<PlateState>(
         builder: (context, plateState, child) {
           return ListView(
             padding: const EdgeInsets.all(8.0),
             children: [
+              // PlateContainer 위젯을 사용해 데이터를 렌더링
               PlateContainer(
-                data: plateState.departureCompleted,
-                filterCondition: (_) => true,
+                data: plateState.departureCompleted, // 출차 완료 데이터
+                filterCondition: (_) => true, // 필터 조건: 모든 데이터 표시
               ),
             ],
           );
