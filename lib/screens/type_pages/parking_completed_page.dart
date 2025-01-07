@@ -19,7 +19,7 @@ class ParkingCompletedPage extends StatelessWidget {
             padding: const EdgeInsets.all(8.0),
             children: [
               PlateContainer(
-                data: plateState.completed,
+                data: plateState.parkingCompleted, // 데이터 변환 없이 전달
                 filterCondition: (_) => true, // 모든 완료된 요청 표시
               ),
             ],

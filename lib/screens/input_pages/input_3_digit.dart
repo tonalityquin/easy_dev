@@ -6,7 +6,7 @@ import '../../widgets/input_field/back_4_digit.dart';
 import '../../widgets/keypad/num_keypad.dart';
 import '../../widgets/keypad/kor_keypad.dart';
 import '../../widgets/navigation/bottom_navigation.dart';
-import '../../states/plate_state.dart'; // PlateState import 추가
+import '../../states/plate_state.dart';
 
 class Input3Digit extends StatefulWidget {
   const Input3Digit({super.key});
@@ -29,6 +29,7 @@ class _Input3DigitState extends State<Input3Digit> {
     super.initState();
     activeController = controller3digit;
 
+    // 각 컨트롤러에 _handleInputChange 리스너를 추가
     controller3digit.addListener(_handleInputChange);
     controller1digit.addListener(_handleInputChange);
     controller4digit.addListener(_handleInputChange);
@@ -42,16 +43,6 @@ class _Input3DigitState extends State<Input3Digit> {
     super.dispose();
   }
 
-  void clearInput() {
-    setState(() {
-      controller3digit.clear();
-      controller1digit.clear();
-      controller4digit.clear();
-      activeController = controller3digit;
-      showKeypad = true;
-    });
-  }
-
   void _setActiveController(TextEditingController controller) {
     setState(() {
       activeController = controller;
@@ -59,26 +50,42 @@ class _Input3DigitState extends State<Input3Digit> {
     });
   }
 
+  bool _validateField(TextEditingController controller, int maxLength) {
+    return controller.text.length <= maxLength;
+  }
+
   void _handleInputChange() {
-    setState(() {
-      if (controller3digit.text.length > 3 || controller1digit.text.length > 1 || controller4digit.text.length > 4) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('입력값이 유효하지 않습니다. 다시 확인해주세요.')),
-        );
-        clearInput();
-        return;
-      }
+    if (!_validateField(controller3digit, 3) ||
+        !_validateField(controller1digit, 1) ||
+        !_validateField(controller4digit, 4)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('입력값이 유효하지 않습니다. 다시 확인해주세요.')),
+      );
+      clearInput();
+      return;
+    }
 
-      if (controller3digit.text.length == 3 && controller1digit.text.length == 1 && controller4digit.text.length == 4) {
+    if (controller3digit.text.length == 3 && controller1digit.text.length == 1 && controller4digit.text.length == 4) {
+      setState(() {
         showKeypad = false;
-        return;
-      }
+      });
+      return;
+    }
 
-      if (activeController == controller3digit && controller3digit.text.length == 3) {
-        _setActiveController(controller1digit);
-      } else if (activeController == controller1digit && controller1digit.text.length == 1) {
-        _setActiveController(controller4digit);
-      }
+    if (activeController == controller3digit && controller3digit.text.length == 3) {
+      _setActiveController(controller1digit);
+    } else if (activeController == controller1digit && controller1digit.text.length == 1) {
+      _setActiveController(controller4digit);
+    }
+  }
+
+  void clearInput() {
+    setState(() {
+      controller3digit.clear();
+      controller1digit.clear();
+      controller4digit.clear();
+      activeController = controller3digit;
+      showKeypad = true;
     });
   }
 
@@ -97,15 +104,13 @@ class _Input3DigitState extends State<Input3Digit> {
     });
 
     try {
-      // PlateState의 addRequest 호출
       await context.read<PlateState>().addRequest(plateNumber);
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('입차 요청 성공')),
         );
       }
-      clearInput(); // 입력 필드 초기화
+      clearInput();
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -119,76 +124,11 @@ class _Input3DigitState extends State<Input3Digit> {
         });
       }
     }
-
   }
 
   bool _validatePlateNumber(String plateNumber) {
     final RegExp platePattern = RegExp(r'^\d{3}-[가-힣]-\d{4}$');
     return platePattern.hasMatch(plateNumber);
-  }
-
-  Widget _buildInputFields(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          '번호판 입력',
-          style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
-        ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            SizedBox(
-              width: screenWidth * 0.25,
-              child: NumFieldFront3(
-                controller: controller3digit,
-                readOnly: true,
-                onTap: () => _setActiveController(controller3digit),
-              ),
-            ),
-            SizedBox(
-              width: screenWidth * 0.15,
-              child: KorFieldMiddle1(
-                controller: controller1digit,
-                readOnly: true,
-                onTap: () => _setActiveController(controller1digit),
-              ),
-            ),
-            SizedBox(
-              width: screenWidth * 0.35,
-              child: NumFieldBack4(
-                controller: controller4digit,
-                readOnly: true,
-                onTap: () => _setActiveController(controller4digit),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildKeypad() {
-    if (activeController == controller1digit) {
-      return KorKeypad(
-        controller: controller1digit,
-        onComplete: () => _setActiveController(controller4digit),
-      );
-    } else {
-      return NumKeypad(
-        controller: activeController,
-        maxLength: activeController == controller3digit ? 3 : 4,
-        onComplete: () {
-          if (activeController == controller4digit) {
-            setState(() {
-              showKeypad = false;
-            });
-          }
-        },
-      );
-    }
   }
 
   @override
@@ -202,7 +142,35 @@ class _Input3DigitState extends State<Input3Digit> {
         children: [
           Padding(
             padding: const EdgeInsets.all(16.0),
-            child: _buildInputFields(context),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '번호판 입력',
+                  style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    NumFieldFront3(
+                      controller: controller3digit,
+                      readOnly: true,
+                      onTap: () => _setActiveController(controller3digit),
+                    ),
+                    KorFieldMiddle1(
+                      controller: controller1digit,
+                      readOnly: true,
+                      onTap: () => _setActiveController(controller1digit),
+                    ),
+                    NumFieldBack4(
+                      controller: controller4digit,
+                      readOnly: true,
+                      onTap: () => _setActiveController(controller4digit),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
           if (isLoading)
             const Center(
@@ -212,12 +180,39 @@ class _Input3DigitState extends State<Input3Digit> {
       ),
       bottomNavigationBar: BottomNavigation(
         showKeypad: showKeypad,
-        keypad: _buildKeypad(),
+        keypad: activeController == controller3digit
+            ? NumKeypad(
+          controller: controller3digit,
+          maxLength: 3,
+          onComplete: () {
+            // NumKeypad 입력 완료 시 KorKeypad로 전환 및 포커스 변경
+            _setActiveController(controller1digit);
+          },
+        )
+            : activeController == controller1digit
+            ? KorKeypad(
+          controller: controller1digit,
+          onComplete: () {
+            // KorKeypad 입력 완료 시 NumKeypad로 전환 및 포커스 변경
+            _setActiveController(controller4digit);
+          },
+        )
+            : NumKeypad(
+          controller: controller4digit,
+          maxLength: 4,
+          onComplete: () {
+            // 모든 입력 완료 시 키패드 숨김
+            setState(() {
+              showKeypad = false;
+            });
+          },
+        ),
         actionButton: ElevatedButton(
           onPressed: isLoading ? null : _submitParkingRequest,
           child: const Text('입차 요청'),
         ),
       ),
+
     );
   }
 }

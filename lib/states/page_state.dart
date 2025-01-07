@@ -1,5 +1,3 @@
-// 파일명: page_state.dart
-
 import 'dart:async'; // Timer 사용
 import 'package:flutter/material.dart';
 import 'page_info.dart';
@@ -12,6 +10,16 @@ class PageState with ChangeNotifier {
   final List<PageInfo> pages;
 
   Timer? _timer; // Timer 변수 추가
+  bool _isLoading = false; // 로딩 상태 추가
+
+  /// 로딩 상태 Getter
+  bool get isLoading => _isLoading;
+
+  /// 로딩 상태 Setter
+  void setLoading(bool value) {
+    _isLoading = value;
+    notifyListeners(); // 상태 변경 알림
+  }
 
   /// 생성자에서 페이지 리스트 및 Timer 시작
   PageState({required this.pages}) {

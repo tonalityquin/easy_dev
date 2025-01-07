@@ -15,12 +15,15 @@ class DepartureRequestPage extends StatelessWidget {
       ),
       body: Consumer<PlateState>(
         builder: (context, plateState, child) {
+          // 데이터를 가져와 필요한 필터링 적용
+          final departureRequests = plateState.departureRequests;
+
           return ListView(
             padding: const EdgeInsets.all(8.0),
             children: [
               PlateContainer(
-                data: plateState.departureRequests,
-                filterCondition: (_) => true, // 모든 출차 요청 표시
+                data: departureRequests, // 필터링된 데이터 전달
+                filterCondition: (request) => true, // 기본 조건: 모든 요청 표시
               ),
             ],
           );

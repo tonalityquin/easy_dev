@@ -2,10 +2,9 @@ import 'package:flutter/material.dart';
 import '../../utils/date_utils.dart'; // CustomDateUtils import
 import '../../states/plate_state.dart'; // PlateRequest 가져오기
 
-
-class PlateContainer extends StatefulWidget {
-  final List<Map<String, dynamic>> data;
-  final bool Function(Map<String, dynamic>) filterCondition;
+class PlateContainer extends StatelessWidget {
+  final List<PlateRequest> data;
+  final bool Function(PlateRequest) filterCondition;
 
   const PlateContainer({
     required this.data,
@@ -14,13 +13,8 @@ class PlateContainer extends StatefulWidget {
   });
 
   @override
-  _PlateContainerState createState() => _PlateContainerState();
-}
-
-class _PlateContainerState extends State<PlateContainer> {
-  @override
   Widget build(BuildContext context) {
-    final filteredData = widget.data.where(widget.filterCondition).toList();
+    final filteredData = data.where(filterCondition).toList();
 
     if (filteredData.isEmpty) {
       return const Center(
@@ -34,8 +28,8 @@ class _PlateContainerState extends State<PlateContainer> {
     return Column(
       children: filteredData.map((item) {
         // 로그용 데이터 출력
-        debugPrint('로그 - 요청 시간: ${CustomDateUtils.formatTimestamp(item['request_time'])}');
-        debugPrint('로그 - 경과 시간: ${CustomDateUtils.timeElapsed(item['request_time'])}');
+        debugPrint('로그 - 요청 시간: ${CustomDateUtils.formatTimestamp(item.requestTime)}');
+        debugPrint('로그 - 경과 시간: ${CustomDateUtils.timeElapsed(item.requestTime)}');
 
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
@@ -54,19 +48,19 @@ class _PlateContainerState extends State<PlateContainer> {
           ),
           child: Column(
             children: [
-              // 상단 plate_number와 세로줄 (중앙 정렬)
+              // 상단 plateNumber와 세로줄 (중앙 정렬)
               Row(
                 children: [
                   Expanded(
                     flex: 7, // 좌측 7
                     child: Center(
                       child: Text(
-                        '${item['plate_number']}',
+                        item.plateNumber,
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
                         ),
-                        textAlign: TextAlign.center, // 중앙 정렬
+                        textAlign: TextAlign.center,
                       ),
                     ),
                   ),
@@ -79,12 +73,12 @@ class _PlateContainerState extends State<PlateContainer> {
                     flex: 3, // 우측 3
                     child: Center(
                       child: Text(
-                        item['type'] ?? '',
+                        item.type,
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w400,
                         ),
-                        textAlign: TextAlign.center, // 중앙 정렬
+                        textAlign: TextAlign.center,
                       ),
                     ),
                   ),
@@ -99,7 +93,7 @@ class _PlateContainerState extends State<PlateContainer> {
                     flex: 5, // 좌측 5
                     child: Center(
                       child: Text(
-                        '${item['location']}', // 위치를 중앙 정렬
+                        item.location,
                         style: const TextStyle(fontSize: 14),
                         textAlign: TextAlign.center,
                       ),
@@ -125,9 +119,9 @@ class _PlateContainerState extends State<PlateContainer> {
                     flex: 3, // 우측 3
                     child: Center(
                       child: Text(
-                        CustomDateUtils.formatTimeForUI(item['request_time']), // 요청 시간
+                        CustomDateUtils.formatTimeForUI(item.requestTime), // 요청 시간
                         style: const TextStyle(fontSize: 14, color: Colors.green),
-                        textAlign: TextAlign.center, // 중앙 정렬
+                        textAlign: TextAlign.center,
                       ),
                     ),
                   ),
@@ -153,9 +147,9 @@ class _PlateContainerState extends State<PlateContainer> {
                     flex: 3, // 우측 3
                     child: Center(
                       child: Text(
-                        CustomDateUtils.timeElapsed(item['request_time']), // 경과 시간
+                        CustomDateUtils.timeElapsed(item.requestTime), // 경과 시간
                         style: const TextStyle(fontSize: 14, color: Colors.red),
-                        textAlign: TextAlign.center, // 중앙 정렬
+                        textAlign: TextAlign.center,
                       ),
                     ),
                   ),
