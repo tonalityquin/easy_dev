@@ -27,12 +27,12 @@ class PlateRequest {
       requestTime: (timestamp is Timestamp)
           ? timestamp.toDate()
           : (timestamp is DateTime)
-          ? timestamp
-          : DateTime.now(), // DateTime 형식일 경우 그대로 사용, null 또는 잘못된 값은 현재 시간으로 대체
+              ? timestamp
+              : DateTime.now(),
+      // DateTime 형식일 경우 그대로 사용, null 또는 잘못된 값은 현재 시간으로 대체
       location: doc['location'],
     );
   }
-
 
   /// PlateRequest 객체를 Firestore에 저장할 데이터로 변환
   Map<String, dynamic> toMap() {
@@ -54,8 +54,11 @@ class PlateState extends ChangeNotifier {
   };
 
   List<PlateRequest> get parkingRequests => _data['parking_requests']!;
+
   List<PlateRequest> get parkingCompleted => _data['parking_completed']!;
+
   List<PlateRequest> get departureRequests => _data['departure_requests']!;
+
   List<PlateRequest> get departureCompleted => _data['departure_completed']!;
 
   PlateState() {
@@ -64,7 +67,7 @@ class PlateState extends ChangeNotifier {
 
   /// Firestore 구독 초기화
   void _initializeSubscriptions() {
-    _data.keys.forEach((collectionName) {
+    for (final collectionName in _data.keys) {
       FirebaseFirestore.instance
           .collection(collectionName)
           .orderBy('request_time', descending: true)
@@ -76,7 +79,7 @@ class PlateState extends ChangeNotifier {
         );
         notifyListeners();
       });
-    });
+    }
   }
 
   /// 데이터 이동 로직
@@ -151,10 +154,7 @@ class PlateState extends ChangeNotifier {
 
   Future<void> updateRequest(String id, String newType) async {
     try {
-      await FirebaseFirestore.instance
-          .collection('parking_requests')
-          .doc(id)
-          .update({'type': newType});
+      await FirebaseFirestore.instance.collection('parking_requests').doc(id).update({'type': newType});
       notifyListeners();
     } catch (e) {
       throw Exception('Failed to update request: $e');

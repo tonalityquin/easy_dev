@@ -46,8 +46,8 @@ class CustomDateUtils {
 
       debugPrint('현재 시간: ${DateTime.now()}');
       debugPrint('요청 시간: $dateTime');
-      debugPrint('경과 시간: ${hours}시간 ${minutes}분');
-      return '${hours}시간 ${minutes}분';
+      debugPrint('경과 시간: $hours시간 $minutes분');
+      return '$hours시간 $minutes분';
     }
     debugPrint('Invalid timestamp in timeElapsed: $timestamp');
     return 'Unknown';

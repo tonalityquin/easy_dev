@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 class UIState with ChangeNotifier {
   bool _showKeypad = true;
   bool _isLoading = false;
-  Map<String, InputFieldState> _inputFields = {}; // 입력 필드 상태를 개별적으로 관리
+  final Map<String, InputFieldState> _inputFields = {}; // final로 선언하여 재할당 방지
 
   // 키패드 표시 여부
   bool get showKeypad => _showKeypad;
