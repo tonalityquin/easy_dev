@@ -1,20 +1,19 @@
 import 'package:flutter/material.dart';
-import '../../utils/date_utils.dart'; // CustomDateUtils import
-import '../../states/plate_state.dart'; // PlateRequest 가져오기
+import '../../utils/date_utils.dart';
+import '../../states/plate_state.dart';
 
 class PlateContainer extends StatelessWidget {
   final List<PlateRequest> data;
-  final bool Function(PlateRequest)? filterCondition; // 선택적 필터 조건
+  final bool Function(PlateRequest)? filterCondition;
 
   const PlateContainer({
     required this.data,
-    this.filterCondition, // 필터 조건을 선택적으로 전달
+    this.filterCondition,
     super.key,
   });
 
   @override
   Widget build(BuildContext context) {
-    // 필터 조건이 없을 경우 모든 데이터를 표시
     final filteredData = (filterCondition != null)
         ? data.where(filterCondition!).toList()
         : data;
@@ -30,7 +29,6 @@ class PlateContainer extends StatelessWidget {
 
     return Column(
       children: filteredData.map((item) {
-        // 로그용 데이터 출력
         debugPrint('로그 - 요청 시간: ${CustomDateUtils.formatTimestamp(item.requestTime)}');
         debugPrint('로그 - 경과 시간: ${CustomDateUtils.timeElapsed(item.requestTime)}');
 

@@ -2,11 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:easydev/widgets/common/common_field.dart';
 
-/// Class : 번호판 앞 두 자리(숫자) UI
 class NumFieldFront2 extends StatefulWidget {
   final TextEditingController controller;
   final VoidCallback? onTap;
-  final String? Function(String?)? validator; // 입력값 검증 함수
+  final String? Function(String?)? validator;
 
   const NumFieldFront2({
     super.key,
@@ -16,16 +15,16 @@ class NumFieldFront2 extends StatefulWidget {
   });
 
   @override
-  NumFieldFront2State createState() => NumFieldFront2State(); // 상태 클래스 public으로 수정
+  NumFieldFront2State createState() => NumFieldFront2State();
 }
 
-class NumFieldFront2State extends State<NumFieldFront2> { // 상태 클래스 public
-  String? _errorText; // 에러 메시지 상태 관리
+class NumFieldFront2State extends State<NumFieldFront2> {
+  String? _errorText;
 
   void _validateInput(String value) {
     if (widget.validator != null) {
       setState(() {
-        _errorText = widget.validator!(value); // 검증 함수 결과에 따라 에러 메시지 설정
+        _errorText = widget.validator!(value);
       });
     }
   }
@@ -43,10 +42,9 @@ class NumFieldFront2State extends State<NumFieldFront2> { // 상태 클래스 pu
           labelText: '2-digit',
           hintText: 'Enter',
           onTap: widget.onTap,
-          // 입력값 변경 시 검증 수행
           onChanged: (value) => _validateInput(value),
         ),
-        if (_errorText != null) // 에러 메시지 표시
+        if (_errorText != null)
           Padding(
             padding: const EdgeInsets.only(top: 4.0),
             child: Text(

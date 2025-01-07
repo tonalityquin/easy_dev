@@ -3,12 +3,11 @@ import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../states/plate_state.dart';
-import '../../widgets/container/plate_container.dart'; // PlateContainer import
+import '../../widgets/container/plate_container.dart';
 
 class DepartureCompletedPage extends StatelessWidget {
   const DepartureCompletedPage({super.key});
 
-  // Firestore의 모든 관련 데이터를 삭제하는 메서드
   Future<void> _deleteAllData(BuildContext context) async {
     try {
       await FirebaseFirestore.instance.collection('parking_requests').get().then((snapshot) {
@@ -49,7 +48,6 @@ class DepartureCompletedPage extends StatelessWidget {
     }
   }
 
-  // 로그아웃 메서드
   Future<void> _logout(BuildContext context) async {
     try {
       await FirebaseAuth.instance.signOut();
@@ -73,11 +71,11 @@ class DepartureCompletedPage extends StatelessWidget {
         title: const Text('출차 완료 리스트'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout), // 로그아웃 버튼
+            icon: const Icon(Icons.logout),
             onPressed: () => _logout(context),
           ),
           IconButton(
-            icon: const Icon(Icons.delete), // 삭제 버튼
+            icon: const Icon(Icons.delete),
             onPressed: () async {
               final confirm = await showDialog<bool>(
                 context: context,
@@ -115,7 +113,7 @@ class DepartureCompletedPage extends StatelessWidget {
             children: [
               PlateContainer(
                 data: plateState.departureCompleted,
-                filterCondition: (_) => true, // 모든 완료된 출차 표시
+                filterCondition: (_) => true,
               ),
             ],
           );

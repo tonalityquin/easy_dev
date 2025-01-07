@@ -5,15 +5,14 @@ import '../states/page_state.dart';
 import '../states/page_info.dart';
 import '../screens/input_pages/input_3_digit.dart';
 
-/// TypePage : 페이지 전환 및 UI 구성
 class TypePage extends StatelessWidget {
   const TypePage({super.key});
 
   Future<void> _refreshData(BuildContext context) async {
     final pageState = Provider.of<PageState>(context, listen: false);
-    pageState.setLoading(true); // 로딩 상태 활성화
-    await pageState.refreshData(); // 데이터 갱신 메서드 호출
-    pageState.setLoading(false); // 로딩 상태 비활성화
+    pageState.setLoading(true);
+    await pageState.refreshData();
+    pageState.setLoading(false);
   }
 
   @override
@@ -31,7 +30,6 @@ class TypePage extends StatelessWidget {
   }
 }
 
-/// 재사용 가능한 Body 위젯
 class RefreshableBody extends StatelessWidget {
   final Future<void> Function() onRefresh;
 
@@ -61,7 +59,7 @@ class RefreshableBody extends StatelessWidget {
               ),
               if (state.isLoading)
                 const Center(
-                  child: CircularProgressIndicator(), // 로딩 표시 추가
+                  child: CircularProgressIndicator(),
                 ),
             ],
           );
@@ -71,7 +69,6 @@ class RefreshableBody extends StatelessWidget {
   }
 }
 
-/// 재사용 가능한 BottomNavigationBar 위젯
 class PageBottomNavigation extends StatelessWidget {
   const PageBottomNavigation({super.key});
 

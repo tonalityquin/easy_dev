@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// CommonField : 재사용 가능한 공통 입력 필드 위젯
 class CommonField extends StatelessWidget {
   final TextEditingController controller;
   final VoidCallback? onTap;
-  final ValueChanged<String>? onChanged; // onChanged 매개변수 추가
+  final ValueChanged<String>? onChanged;
   final bool readOnly;
   final String labelText;
   final TextStyle? labelStyle;
@@ -22,7 +21,7 @@ class CommonField extends StatelessWidget {
     required this.keyboardType,
     required this.inputFormatters,
     this.onTap,
-    this.onChanged, // 초기화 추가
+    this.onChanged,
     this.readOnly = false,
     this.labelText = '',
     this.labelStyle,
@@ -35,7 +34,7 @@ class CommonField extends StatelessWidget {
     final theme = Theme.of(context).textTheme;
 
     return SizedBox(
-      width: _getWidth(context), // 동적 너비 설정
+      width: _getWidth(context),
       child: TextField(
         controller: controller,
         keyboardType: keyboardType,
@@ -78,12 +77,11 @@ class CommonField extends StatelessWidget {
             controller.clear();
           }
         },
-        onChanged: onChanged, // onChanged 전달
+        onChanged: onChanged,
       ),
     );
   }
 
-  /// Helper Method : 필드 너비 계산
   double _getWidth(BuildContext context) {
     if (maxLength == 1) return 70;
     if (maxLength == 2) return MediaQuery.of(context).size.width * 0.25;
