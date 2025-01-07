@@ -2,20 +2,22 @@ import 'package:flutter/material.dart';
 
 class InputState with ChangeNotifier {
   // 필드 키 상수화
-  static const String FRONT_3 = 'front3';
-  static const String MIDDLE_1 = 'middle1';
-  static const String BACK_4 = 'back4';
+  static const String front_3 = 'front3';
+  static const String middle_1 = 'middle1';
+  static const String back_4 = 'back4';
 
   final Map<String, String> _inputFields = {
-    FRONT_3: '', // 앞 3자리
-    MIDDLE_1: '', // 중간 1자리
-    BACK_4: '', // 뒤 4자리
+    front_3: '', // 앞 3자리
+    middle_1: '', // 중간 1자리
+    back_4: '', // 뒤 4자리
   };
 
   // Getter
-  String get front3 => _inputFields[FRONT_3] ?? '';
-  String get middle1 => _inputFields[MIDDLE_1] ?? '';
-  String get back4 => _inputFields[BACK_4] ?? '';
+  String get front3 => _inputFields[front_3] ?? '';
+
+  String get middle1 => _inputFields[middle_1] ?? '';
+
+  String get back4 => _inputFields[back_4] ?? '';
 
   // 필드 업데이트
   void updateField(String field, String value) {
@@ -36,10 +38,10 @@ class InputState with ChangeNotifier {
   // 입력값 유효성 검사
   bool isValidField(String field, String value) {
     switch (field) {
-      case FRONT_3:
-      case BACK_4:
+      case front_3:
+      case back_4:
         return RegExp(r'^\d{0,3}$').hasMatch(value); // 최대 3자리 숫자
-      case MIDDLE_1:
+      case middle_1:
         return RegExp(r'^\d{0,1}$').hasMatch(value); // 최대 1자리 숫자
       default:
         return false;

@@ -16,10 +16,10 @@ class NumFieldBack4 extends StatefulWidget {
   });
 
   @override
-  _NumFieldBack4State createState() => _NumFieldBack4State();
+  NumFieldBack4State createState() => NumFieldBack4State(); // 상태 클래스 public으로 수정
 }
 
-class _NumFieldBack4State extends State<NumFieldBack4> {
+class NumFieldBack4State extends State<NumFieldBack4> { // 상태 클래스 public
   String? _errorText; // 에러 메시지 저장
 
   /// 유효성 검사 함수

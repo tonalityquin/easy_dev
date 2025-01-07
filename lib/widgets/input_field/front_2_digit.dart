@@ -16,10 +16,10 @@ class NumFieldFront2 extends StatefulWidget {
   });
 
   @override
-  _NumFieldFront2State createState() => _NumFieldFront2State();
+  NumFieldFront2State createState() => NumFieldFront2State(); // 상태 클래스 public으로 수정
 }
 
-class _NumFieldFront2State extends State<NumFieldFront2> {
+class NumFieldFront2State extends State<NumFieldFront2> { // 상태 클래스 public
   String? _errorText; // 에러 메시지 상태 관리
 
   void _validateInput(String value) {
