@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../utils/date_utils.dart'; // CustomDateUtils import
+import '../../states/plate_state.dart'; // PlateRequest 가져오기
+
 
 class PlateContainer extends StatefulWidget {
   final List<Map<String, dynamic>> data;

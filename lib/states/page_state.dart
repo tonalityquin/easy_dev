@@ -1,35 +1,20 @@
+// 파일명: page_state.dart
+
 import 'dart:async'; // Timer 사용
 import 'package:flutter/material.dart';
-import '../screens/type_pages/parking_request_page.dart';
-import '../screens/type_pages/parking_completed_page.dart';
-import '../screens/type_pages/departure_request_page.dart';
-import '../screens/type_pages/departure_completed_page.dart';
-
-/// 페이지 정보 클래스
-class PageInfo {
-  final String title;
-  final Widget page;
-  final Icon icon; // 아이콘 추가
-
-  PageInfo(this.title, this.page, this.icon);
-}
+import 'page_info.dart';
 
 /// 상태 관리 클래스 : 페이지 전환 로직
 class PageState with ChangeNotifier {
   int _selectedIndex = 1; // 초기 선택된 탭 인덱스
   int get selectedIndex => _selectedIndex;
 
-  final List<PageInfo> pages = [
-    PageInfo('Parking Request', const ParkingRequestPage(), Icon(Icons.directions_car)),
-    PageInfo('Parking Completed', const ParkingCompletedPage(), Icon(Icons.check_circle)),
-    PageInfo('Departure Request', const DepartureRequestPage(), Icon(Icons.departure_board)),
-    PageInfo('Departure Completed', const DepartureCompletedPage(), Icon(Icons.done_all)),
-  ];
+  final List<PageInfo> pages;
 
   Timer? _timer; // Timer 변수 추가
 
-  /// 생성자에서 Timer 시작
-  PageState() {
+  /// 생성자에서 페이지 리스트 및 Timer 시작
+  PageState({required this.pages}) {
     _startAutoRefresh();
   }
 
