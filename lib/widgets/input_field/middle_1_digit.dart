@@ -17,16 +17,38 @@ class KorFieldMiddle1 extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CommonField(
-      controller: controller,
-      maxLength: 1,
-      keyboardType: TextInputType.text,
-      inputFormatters: [FilteringTextInputFormatter.singleLineFormatter],
-      labelText: '1-digit',
-      hintText: 'Enter',
-      readOnly: readOnly,
-      // 전달
-      onTap: onTap,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CommonField(
+          controller: controller,
+          maxLength: 1,
+          keyboardType: TextInputType.text,
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'^[ㄱ-ㅎㅏ-ㅣ가-힣]$')), // 한글만 허용
+          ],
+          labelText: '1-digit',
+          hintText: 'Enter',
+          readOnly: readOnly,
+          onTap: onTap,
+        ),
+        ValueListenableBuilder<TextEditingValue>(
+          valueListenable: controller,
+          builder: (context, value, child) {
+            final input = value.text;
+            if (input.isNotEmpty && !RegExp(r'^[ㄱ-ㅎㅏ-ㅣ가-힣]$').hasMatch(input)) {
+              return const Padding(
+                padding: EdgeInsets.only(top: 8.0),
+                child: Text(
+                  '한글만 입력 가능합니다.',
+                  style: TextStyle(color: Colors.red, fontSize: 12),
+                ),
+              );
+            }
+            return const SizedBox.shrink();
+          },
+        ),
+      ],
     );
   }
 }

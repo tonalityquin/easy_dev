@@ -19,7 +19,6 @@ class BottomNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     print('BottomNavigation rendered with color: ${AppColors.bottomNavBackground}');
-
     return GestureDetector(
       onTap: onTap ?? () {}, // 클릭 이벤트 처리
       child: Container(
@@ -27,8 +26,13 @@ class BottomNavigation extends StatelessWidget {
           color: AppColors.bottomNavBackground, // 배경색
         ),
         padding: const EdgeInsets.all(16.0),
-        child: showKeypad ? keypad : actionButton, // 상태에 따른 렌더링
+        child: _buildContent(), // 상태에 따른 렌더링 로직 분리
       ),
     );
+  }
+
+  /// 상태에 따른 렌더링
+  Widget _buildContent() {
+    return showKeypad ? keypad : actionButton;
   }
 }
