@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../utils/app_colors.dart';
 import '../states/page_state.dart';
+import '../states/page_info.dart'; // 페이지 정보 가져오기
 import '../screens/input_pages/input_3_digit.dart';
 
 /// TypePage : 페이지 전환 및 UI 구성
@@ -16,7 +17,7 @@ class TypePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => PageState(), // 상태 주입
+      create: (_) => PageState(pages: defaultPages), // 상태 주입 시 pages 전달
       child: Scaffold(
         appBar: AppBar(
           backgroundColor: AppColors.selectedItemColor,
