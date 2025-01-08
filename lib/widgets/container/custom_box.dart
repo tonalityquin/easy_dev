@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-class custombox {
+class Custombox {
   static const TextStyle titleStyle = TextStyle(
     fontWeight: FontWeight.bold,
     fontSize: 16,
@@ -17,16 +17,15 @@ class custombox {
 }
 
 class CustomBox extends StatelessWidget {
-  final String topLeftText;
+  final String topLeftText; // 번호판 숫자
   final String topRightText;
-  final String midLeftText;
+  final String midLeftText; // 주차 구역
   final String midCenterText;
   final String midRightText; // 입차 요청 시간
   final String bottomLeftText;
   final String bottomRightText; // 누적 시간
   final VoidCallback onTap;
   final Color backgroundColor;
-  final bool showOverlay;
 
   const CustomBox({
     super.key,
@@ -39,7 +38,6 @@ class CustomBox extends StatelessWidget {
     required this.bottomRightText,
     required this.onTap,
     this.backgroundColor = Colors.white,
-    this.showOverlay = false,
   });
 
   Widget buildRow({
@@ -49,6 +47,8 @@ class CustomBox extends StatelessWidget {
     int leftFlex = 7,
     int centerFlex = 2,
     int rightFlex = 3,
+    TextStyle? leftTextStyle, // 왼쪽 텍스트 스타일 추가
+    TextStyle? rightTextStyle, // 오른쪽 텍스트 스타일 추가
   }) {
     return Expanded(
       flex: 2,
@@ -57,7 +57,7 @@ class CustomBox extends StatelessWidget {
           Expanded(
             flex: leftFlex,
             child: Center(
-              child: Text(leftText, style: custombox.subtitleStyle),
+              child: Text(leftText, style: leftTextStyle ?? Custombox.subtitleStyle),
             ),
           ),
           if (centerText != null) ...[
@@ -65,7 +65,7 @@ class CustomBox extends StatelessWidget {
             Expanded(
               flex: centerFlex,
               child: Center(
-                child: Text(centerText, style: custombox.subtitleStyle),
+                child: Text(centerText, style: Custombox.subtitleStyle),
               ),
             ),
           ],
@@ -73,7 +73,7 @@ class CustomBox extends StatelessWidget {
           Expanded(
             flex: rightFlex,
             child: Center(
-              child: Text(rightText, style: custombox.subtitleStyle),
+              child: Text(rightText, style: rightTextStyle ?? Custombox.subtitleStyle),
             ),
           ),
         ],
@@ -97,33 +97,34 @@ class CustomBox extends StatelessWidget {
             Column(
               children: [
                 // topleft, topright 비율 7:3
-                buildRow(leftText: topLeftText, rightText: topRightText, leftFlex: 7, rightFlex: 3),
+                buildRow(
+                  leftText: topLeftText,
+                  rightText: topRightText,
+                  leftFlex: 7,
+                  rightFlex: 3,
+                  leftTextStyle: Custombox.titleStyle, // 번호판 숫자 bold
+                ),
                 const Divider(height: 1.0, color: Colors.black),
                 buildRow(
-                  leftText: midLeftText,
+                  leftText: midLeftText, // 주차 구역 bold
                   centerText: midCenterText,
                   rightText: midRightText,
                   leftFlex: 5,
-                  // 중단의 경우 기존 비율 유지
                   centerFlex: 2,
                   rightFlex: 3,
+                  leftTextStyle: Custombox.titleStyle, // 주차 구역 bold 스타일 적용
+                  rightTextStyle: const TextStyle(color: Colors.green), // 입차 요청 시간 초록색
                 ),
                 const Divider(height: 1.0, color: Colors.black),
-                // bottomleft, bottomright 비율 7:3
-                buildRow(leftText: bottomLeftText, rightText: bottomRightText, leftFlex: 7, rightFlex: 3),
+                buildRow(
+                  leftText: bottomLeftText,
+                  rightText: bottomRightText,
+                  leftFlex: 7,
+                  rightFlex: 3,
+                  rightTextStyle: const TextStyle(color: Colors.red), // 누적 시간 붉은색
+                ),
               ],
             ),
-            if (showOverlay)
-              Align(
-                alignment: Alignment.centerRight,
-                child: Container(
-                  width: MediaQuery.of(context).size.width * 0.285,
-                  color: Colors.white,
-                  child: const Center(
-                    child: Icon(Icons.directions_car, size: 40, color: Colors.black),
-                  ),
-                ),
-              ),
           ],
         ),
       ),
