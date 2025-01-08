@@ -65,7 +65,7 @@ class PlateContainer extends StatelessWidget {
               Row(
                 children: [
                   Expanded(
-                    flex: 7, // 차량 번호판에 대한 비율
+                    flex: 7, // 차량 번호판 및 정산 여부에 대한 비율
                     child: Center(
                       child: Text(
                         item.plateNumber, // 차량 번호판 텍스트
@@ -87,7 +87,7 @@ class PlateContainer extends StatelessWidget {
                     flex: 3, // 타입 정보에 대한 비율
                     child: Center(
                       child: Text(
-                        '', // 차량 타입 텍스트
+                        '정산 여부', // 정산 타입 텍스트
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w400,
@@ -121,7 +121,7 @@ class PlateContainer extends StatelessWidget {
                   const Expanded(
                     flex: 2,
                     child: Center(
-                      child: Text(''), // 비어 있는 공간
+                      child: Text('담당자'), // 비어 있는 공간
                     ),
                   ),
                   Container(
@@ -149,7 +149,7 @@ class PlateContainer extends StatelessWidget {
                   const Expanded(
                     flex: 7,
                     child: Center(
-                      child: Text(''), // 비어 있는 공간
+                      child: Text('주의 사항'), // 비어 있는 공간
                     ),
                   ),
                   Container(
