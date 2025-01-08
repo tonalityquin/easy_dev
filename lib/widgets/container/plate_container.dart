@@ -3,16 +3,29 @@ import 'package:flutter/material.dart';
 import '../../utils/date_utils.dart';
 import '../../states/plate_state.dart';
 
-/// PlateContainer 위젯
-/// 데이터를 기반으로 차량 번호판 정보를 표시하며, 필터 조건을 적용할 수 있음.
-/// - `data`: PlateRequest 객체 목록
-/// - `filterCondition`: 특정 조건에 맞는 데이터를 필터링하는 함수
-class PlateContainer extends StatelessWidget {
-  // 차량 번호판 정보를 포함한 데이터 목록
-  final List<PlateRequest> data;
+/// 공통 스타일 클래스
+/// - 제목과 부제목 텍스트 스타일 및 공통 Divider 정의
+class CommonStyles {
+  static const TextStyle titleStyle = TextStyle(
+    fontWeight: FontWeight.bold,
+    fontSize: 16,
+    color: Colors.black,
+  );
 
-  // 데이터를 필터링하는 조건 함수 (선택적)
-  final bool Function(PlateRequest)? filterCondition;
+  static const TextStyle subtitleStyle = TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.w400,
+    color: Colors.black,
+  );
+
+  static const Divider commonDivider = Divider(thickness: 1, color: Colors.grey);
+}
+
+/// PlateContainer 위젯
+/// - 데이터를 필터링하고 각 항목을 CustomBox로 표시
+class PlateContainer extends StatelessWidget {
+  final List<PlateRequest> data; // 차량 번호판 데이터를 포함한 리스트
+  final bool Function(PlateRequest)? filterCondition; // 데이터 필터 조건 (선택적)
 
   const PlateContainer({
     required this.data,
@@ -20,159 +33,200 @@ class PlateContainer extends StatelessWidget {
     super.key,
   });
 
+  /// 데이터를 필터링하는 메서드
+  /// - filterCondition이 있으면 조건에 맞는 데이터만 반환
+  /// - 없으면 전체 데이터를 반환
+  List<PlateRequest> _filterData(List<PlateRequest> data) {
+    return filterCondition != null ? data.where(filterCondition!).toList() : data;
+  }
+
   @override
   Widget build(BuildContext context) {
-    // 필터 조건이 있는 경우 해당 조건에 맞는 데이터만 필터링
-    final filteredData = (filterCondition != null) ? data.where(filterCondition!).toList() : data;
+    final filteredData = _filterData(data); // 필터링된 데이터 목록
 
-    // 필터링된 데이터가 비어 있으면 사용자에게 알림 표시
+    // 데이터가 비어 있을 경우 화면에 "데이터가 없습니다" 메시지 표시
     if (filteredData.isEmpty) {
-      return const Center(
-        child: Text(
-          '데이터가 없습니다.', // 빈 데이터를 처리하는 경우 메시지
-          style: TextStyle(fontSize: 18, color: Colors.grey),
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text(
+              '데이터가 없습니다.', // 데이터가 없을 때 표시되는 메시지
+              style: TextStyle(fontSize: 18, color: Colors.grey),
+            ),
+            ElevatedButton(
+              onPressed: () => debugPrint('데이터 새로고침'), // 새로고침 로직 호출
+              child: const Text('새로고침'),
+            ),
+          ],
         ),
       );
     }
 
-    // 데이터를 Column으로 렌더링
+    // 필터링된 데이터를 기반으로 CustomBox를 생성
     return Column(
-      // 각 데이터 항목에 대해 위젯 생성
       children: filteredData.map((item) {
-        // 디버깅을 위한 로그 출력: 요청 시간과 경과 시간
-        debugPrint('로그 - 요청 시간: ${CustomDateUtils.formatTimestamp(item.requestTime)}');
-        debugPrint('로그 - 경과 시간: ${CustomDateUtils.timeElapsed(item.requestTime)}');
+        return Column(
+          children: [
+            // CustomBox 생성
+            CustomBox(
+              topLeftText: item.plateNumber,
+              // 차량 번호판
+              topRightText: "정산 영역",
+              // 정산 정보
+              midLeftText: item.location,
+              // 주차 위치
+              midCenterText: "담당자",
+              // 담당자
+              midRightText: CustomDateUtils.formatTimeForUI(item.requestTime),
+              // 입차 요청 시간
+              bottomLeftText: "주의사항",
+              // 주의사항
+              bottomRightText: CustomDateUtils.timeElapsed(item.requestTime),
+              // 누적 시간
+              onTap: () => debugPrint('${item.plateNumber} 탭됨'),
+              // 탭 이벤트 처리
+              backgroundColor: Colors.white, // 박스 배경색
+            ),
+            const SizedBox(
+              height: 5, // CustomBox 아래 간격
+            ),
+          ],
+        );
+      }).toList(),
+    );
+  }
+}
 
-        return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 8), // 외부 여백 설정
-          padding: const EdgeInsets.all(10), // 내부 여백 설정
-          decoration: BoxDecoration(
-            color: Colors.white, // 박스 배경색
-            borderRadius: BorderRadius.circular(8), // 박스 테두리 모서리 둥글게 처리
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withAlpha((0.5 * 255).toInt()), // 그림자 색상 및 투명도
-                spreadRadius: 2, // 그림자 확산 정도
-                blurRadius: 5, // 그림자 블러 정도
-                offset: const Offset(0, 3), // 그림자 위치
-              ),
-            ],
-          ),
-          // 박스 내부 레이아웃 구성
-          child: Column(
-            children: [
-              // 첫 번째 Row: 차량 번호판
-              Row(
+/// CustomBox 위젯
+/// - 데이터를 표시하는 단일 박스
+/// - 상단, 중단, 하단 3개의 Row로 구성
+class CustomBox extends StatelessWidget {
+  final String topLeftText; // 상단 좌측 텍스트 (차량 번호판)
+  final String topRightText; // 상단 우측 텍스트 (정산 정보)
+  final String midLeftText; // 중단 좌측 텍스트 (주차 위치)
+  final String midCenterText; // 중단 중앙 텍스트 (담당자)
+  final String midRightText; // 중단 우측 텍스트 (입차 요청 시간)
+  final String bottomLeftText; // 하단 좌측 텍스트 (주의사항)
+  final String bottomRightText; // 하단 우측 텍스트 (누적 시간)
+  final VoidCallback onTap; // 전체 박스의 탭 이벤트
+  final Color backgroundColor; // 박스 배경색
+
+  const CustomBox({
+    super.key,
+    required this.topLeftText,
+    required this.topRightText,
+    required this.midLeftText,
+    required this.midCenterText,
+    required this.midRightText,
+    required this.bottomLeftText,
+    required this.bottomRightText,
+    required this.onTap,
+    this.backgroundColor = Colors.white,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap, // 탭 이벤트 처리
+      child: Container(
+        width: double.infinity, // 박스의 너비를 화면에 꽉 차도록 설정
+        height: 100, // 박스 높이
+        decoration: BoxDecoration(
+          color: backgroundColor, // 박스 배경색
+          border: Border.all(color: Colors.black, width: 2.0), // 박스 테두리
+        ),
+        child: Column(
+          children: [
+            // Top Row (7:3)
+            Expanded(
+              flex: 2,
+              child: Row(
                 children: [
                   Expanded(
-                    flex: 7, // 차량 번호판 및 정산 여부에 대한 비율
+                    flex: 7, // 상단 좌측 비율
                     child: Center(
-                      child: Text(
-                        item.plateNumber, // 차량 번호판 텍스트
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold, // 텍스트 굵게
-                          fontSize: 16, // 텍스트 크기
-                        ),
-                        textAlign: TextAlign.center, // 중앙 정렬
-                      ),
+                      child: Text(topLeftText, style: CommonStyles.titleStyle), // 차량 번호판
                     ),
                   ),
-                  // 구분선
-                  Container(
-                    width: 1, // 구분선 너비
-                    height: 20, // 구분선 높이
-                    color: Colors.grey, // 구분선 색상
-                  ),
+                  const VerticalDivider(width: 2.0, color: Colors.black), // 세로 구분선
                   Expanded(
-                    flex: 3, // 타입 정보에 대한 비율
+                    flex: 3, // 상단 우측 비율
+                    child: Center(
+                      child: Text(topRightText, style: CommonStyles.subtitleStyle), // 정산 정보
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1.0, color: Colors.black), // 가로 구분선
+            // Mid Row (5:2:3)
+            Expanded(
+              flex: 2,
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 5, // 중단 좌측 비율
+                    child: Center(
+                      child: Text(midLeftText, style: CommonStyles.subtitleStyle), // 주차 위치
+                    ),
+                  ),
+                  const VerticalDivider(width: 2.0, color: Colors.black), // 세로 구분선
+                  Expanded(
+                    flex: 2, // 중단 중앙 비율
+                    child: Center(
+                      child: Text(midCenterText, style: CommonStyles.subtitleStyle), // 담당자
+                    ),
+                  ),
+                  const VerticalDivider(width: 2.0, color: Colors.black), // 세로 구분선
+                  Expanded(
+                    flex: 3, // 중단 우측 비율
                     child: Center(
                       child: Text(
-                        '정산 여부', // 정산 타입 텍스트
+                        midRightText, // 입차 요청 시간
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w400,
+                          color: Colors.green, // 초록색
                         ),
-                        textAlign: TextAlign.center,
                       ),
                     ),
                   ),
                 ],
               ),
-              const Divider(thickness: 1, color: Colors.grey), // 구분선
-
-              // 두 번째 Row: 위치 및 요청 시간 정보
-              Row(
+            ),
+            const Divider(height: 1.0, color: Colors.black), // 가로 구분선
+            // Bottom Row (7:3)
+            Expanded(
+              flex: 2,
+              child: Row(
                 children: [
                   Expanded(
-                    flex: 5, // 위치 정보에 대한 비율
+                    flex: 7, // 하단 좌측 비율
                     child: Center(
-                      child: Text(
-                        item.location, // 위치 텍스트
-                        style: const TextStyle(fontSize: 14),
-                        textAlign: TextAlign.center,
-                      ),
+                      child: Text(bottomLeftText, style: CommonStyles.subtitleStyle), // 주의사항
                     ),
                   ),
-                  Container(
-                    width: 1,
-                    height: 20,
-                    color: Colors.grey,
-                  ),
-                  const Expanded(
-                    flex: 2,
-                    child: Center(
-                      child: Text('담당자'), // 비어 있는 공간
-                    ),
-                  ),
-                  Container(
-                    width: 1,
-                    height: 20,
-                    color: Colors.grey,
-                  ),
+                  const VerticalDivider(width: 2.0, color: Colors.black), // 세로 구분선
                   Expanded(
-                    flex: 3, // 요청 시간 정보에 대한 비율
+                    flex: 3, // 하단 우측 비율
                     child: Center(
                       child: Text(
-                        CustomDateUtils.formatTimeForUI(item.requestTime), // 요청 시간 포맷
-                        style: const TextStyle(fontSize: 14, color: Colors.green), // 요청 시간 텍스트 스타일
-                        textAlign: TextAlign.center,
+                        bottomRightText, // 누적 시간
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w400,
+                          color: Colors.red, // 붉은색
+                        ),
                       ),
                     ),
                   ),
                 ],
               ),
-              const Divider(thickness: 1, color: Colors.grey), // 구분선
-
-              // 세 번째 Row: 경과 시간 정보
-              Row(
-                children: [
-                  const Expanded(
-                    flex: 7,
-                    child: Center(
-                      child: Text('주의 사항'), // 비어 있는 공간
-                    ),
-                  ),
-                  Container(
-                    width: 1,
-                    height: 20,
-                    color: Colors.grey,
-                  ),
-                  Expanded(
-                    flex: 3, // 경과 시간에 대한 비율
-                    child: Center(
-                      child: Text(
-                        CustomDateUtils.timeElapsed(item.requestTime), // 경과 시간 텍스트
-                        style: const TextStyle(fontSize: 14, color: Colors.red), // 경과 시간 텍스트 스타일
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      }).toList(),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
