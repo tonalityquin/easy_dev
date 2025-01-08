@@ -32,8 +32,13 @@ class TypePage extends StatelessWidget {
         ),
         // 본문 영역
         body: RefreshableBody(onRefresh: () => _refreshData(context)), // 새로 고침 가능 본문
-        // 하단 내비게이션 바
-        bottomNavigationBar: const PageBottomNavigation(),
+        // 하단 PlateNavigationBar와 BottomNavigationBar
+        bottomNavigationBar: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            PageBottomNavigation(), // BottomNavigationBar
+          ],
+        ),
       ),
     );
   }

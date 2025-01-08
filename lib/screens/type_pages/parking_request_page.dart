@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../states/plate_state.dart';
 import '../../widgets/container/plate_container.dart';
+import '../../widgets/navigation/plate_navigation.dart';
 
 /// ParkingRequestPage 위젯
 /// 입차 요청 데이터를 표시하는 화면
@@ -14,8 +15,10 @@ class ParkingRequestPage extends StatelessWidget {
       // 상단 앱바 설정
       appBar: AppBar(
         backgroundColor: Colors.blue, // 앱바 배경색 (파란색)
-        title: const Text('입차 요청 리스트'), // 화면 제목
+        centerTitle: true, // 제목 중앙 정렬
+        title: const Text('섹션'), // 화면 제목
       ),
+
       // 본문 영역
       body: Consumer<PlateState>(
         // PlateState 상태 관리 객체를 구독하여 상태 변화에 따라 UI 업데이트
@@ -33,6 +36,14 @@ class ParkingRequestPage extends StatelessWidget {
             ],
           );
         },
+      ),
+      // 하단 PlateNavigation 추가
+      bottomNavigationBar: PlateNavigation(
+        icons: [
+          Icons.search, // 돋보기 아이콘
+          Icons.person, // 사람 아이콘
+          Icons.sort, // 오름/내림차순 아이콘
+        ],
       ),
     );
   }

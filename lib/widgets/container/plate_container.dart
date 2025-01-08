@@ -61,7 +61,7 @@ class PlateContainer extends StatelessWidget {
           // 박스 내부 레이아웃 구성
           child: Column(
             children: [
-              // 첫 번째 Row: 차량 번호판 및 타입 정보
+              // 첫 번째 Row: 차량 번호판
               Row(
                 children: [
                   Expanded(
@@ -87,7 +87,7 @@ class PlateContainer extends StatelessWidget {
                     flex: 3, // 타입 정보에 대한 비율
                     child: Center(
                       child: Text(
-                        item.type, // 차량 타입 텍스트
+                        '', // 차량 타입 텍스트
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w400,

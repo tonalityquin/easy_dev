@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../states/plate_state.dart';
 import '../../widgets/container/plate_container.dart';
+import '../../widgets/navigation/plate_navigation.dart'; // PlateNavigation 추가
 
 /// 입차 완료 리스트를 표시하는 페이지
 /// 사용자는 입차 완료된 항목을 볼 수 있음
@@ -13,8 +14,9 @@ class ParkingCompletedPage extends StatelessWidget {
     return Scaffold(
       // 상단 앱바: 제목과 배경색 지정
       appBar: AppBar(
-        backgroundColor: Colors.blue, // 앱바 배경색
-        title: const Text('입차 완료 리스트'), // 화면 제목
+        backgroundColor: Colors.blue, // 앱바 배경색 (파란색)
+        centerTitle: true, // 제목 중앙 정렬
+        title: const Text('섹션'), // 화면 제목
       ),
       // 본문 영역
       body: Consumer<PlateState>(
@@ -34,6 +36,14 @@ class ParkingCompletedPage extends StatelessWidget {
             ],
           );
         },
+      ),
+      // 하단 PlateNavigation 추가
+      bottomNavigationBar: PlateNavigation(
+        icons: [
+          Icons.search, // 돋보기 아이콘
+          Icons.local_parking, // 주차 구역 아이콘
+          Icons.sort, // 오름/내림차순 아이콘
+        ],
       ),
     );
   }
