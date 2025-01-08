@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../states/plate_state.dart';
 import '../../widgets/container/plate_container.dart';
+import '../../widgets/navigation/plate_navigation.dart'; // PlateNavigation 추가
 
 /// DepartureRequestPage 클래스
 /// 출차 요청 목록을 화면에 표시하는 Stateless 위젯
@@ -17,8 +18,9 @@ class DepartureRequestPage extends StatelessWidget {
     return Scaffold(
       // 상단 AppBar
       appBar: AppBar(
-        backgroundColor: Colors.blue, // AppBar 배경색
-        title: const Text('출차 요청 리스트'), // AppBar 제목
+        backgroundColor: Colors.blue, // 앱바 배경색 (파란색)
+        centerTitle: true, // 제목 중앙 정렬
+        title: const Text('섹션'), // 화면 제목
       ),
       // Body 영역
       body: Consumer<PlateState>(
@@ -39,6 +41,14 @@ class DepartureRequestPage extends StatelessWidget {
             ],
           );
         },
+      ),
+      // 하단 PlateNavigation 추가
+      bottomNavigationBar: PlateNavigation(
+        icons: [
+          Icons.search, // 돋보기 아이콘
+          Icons.person, // 사람 모양 아이콘
+          Icons.sort, // 차순 아이콘
+        ],
       ),
     );
   }

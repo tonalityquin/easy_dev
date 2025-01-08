@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../states/plate_state.dart';
 import '../../widgets/container/plate_container.dart';
+import '../../widgets/navigation/plate_navigation.dart'; // PlateNavigation 추가
 
 /// 출차 완료 페이지
 /// 출차 완료된 차량 리스트를 보여주며, 데이터 삭제 및 로그아웃 기능을 제공합니다.
@@ -11,7 +12,6 @@ class DepartureCompletedPage extends StatelessWidget {
   const DepartureCompletedPage({super.key});
 
   /// Firestorm 모든 데이터를 삭제하는 비동기 함수
-  /// `parking_requests`, `parking_completed`, `departure_requests`, `departure_completed` 컬렉션의 모든 문서를 삭제
   Future<void> _deleteAllData(BuildContext context) async {
     try {
       // 각각의 Firestore 컬렉션에서 모든 문서를 가져와 삭제
@@ -56,7 +56,6 @@ class DepartureCompletedPage extends StatelessWidget {
   }
 
   /// Firebase 인증 로그아웃 처리
-  /// 로그아웃 후 로그인 화면으로 이동
   Future<void> _logout(BuildContext context) async {
     try {
       await FirebaseAuth.instance.signOut(); // 로그아웃 수행
@@ -80,7 +79,8 @@ class DepartureCompletedPage extends StatelessWidget {
       // 상단 앱바 구성
       appBar: AppBar(
         backgroundColor: Colors.blue, // 앱바 배경색
-        title: const Text('출차 완료 리스트'), // 앱바 타이틀
+        centerTitle: true, // 제목 중앙 정렬
+        title: const Text('섹션'),
         actions: [
           // 로그아웃 버튼
           IconButton(
@@ -138,6 +138,14 @@ class DepartureCompletedPage extends StatelessWidget {
             ],
           );
         },
+      ),
+      // 하단 PlateNavigation 추가
+      bottomNavigationBar: PlateNavigation(
+        icons: [
+          Icons.search, // 돋보기 아이콘
+          Icons.person, // 사람 모양 아이콘
+          Icons.sort, // 차순 아이콘
+        ],
       ),
     );
   }
