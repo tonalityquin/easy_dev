@@ -1,32 +1,31 @@
-import 'package:easydev/states/plate_state.dart';
 import 'package:flutter/material.dart';
 import 'custom_box.dart';
 import '../../utils/date_utils.dart';
+import '../../states/plate_state.dart';
 
-class PlateContainer extends StatefulWidget {
+class PlateContainer extends StatelessWidget {
   final List<PlateRequest> data;
   final bool Function(PlateRequest)? filterCondition;
+  final String? activePlate; // 현재 활성 상태 Plate
+  final void Function(String plateNumber) onPlateTap; // 눌림 동작 콜백
+  final String? drivingPlate; // 현재 운전 중인 차량 Plate 추가
 
   const PlateContainer({
     required this.data,
+    required this.onPlateTap, // 필수 콜백 추가
     this.filterCondition,
+    this.activePlate,
+    this.drivingPlate, // 운전 중 상태 전달
     super.key,
   });
 
-  @override
-  State<PlateContainer> createState() => _PlateContainerState();
-}
-
-class _PlateContainerState extends State<PlateContainer> {
-  String? _activePlate;
-
   List<PlateRequest> _filterData(List<PlateRequest> data) {
-    return widget.filterCondition != null ? data.where(widget.filterCondition!).toList() : data;
+    return filterCondition != null ? data.where(filterCondition!).toList() : data;
   }
 
   @override
   Widget build(BuildContext context) {
-    final filteredData = _filterData(widget.data);
+    final filteredData = _filterData(data);
 
     if (filteredData.isEmpty) {
       return Center(
@@ -45,7 +44,12 @@ class _PlateContainerState extends State<PlateContainer> {
 
     return Column(
       children: filteredData.map((item) {
-        final isActive = _activePlate == item.plateNumber;
+        // 배경색 설정 로직
+        final backgroundColor = item.type == '입차 완료'
+            ? Colors.blueAccent.withOpacity(0.3) // 입차 완료 상태 배경색
+            : drivingPlate == item.plateNumber
+            ? Colors.greenAccent // 운전 중 상태
+            : Colors.white; // 기본 상태
 
         return Column(
           children: [
@@ -57,13 +61,8 @@ class _PlateContainerState extends State<PlateContainer> {
               midRightText: CustomDateUtils.formatTimeForUI(item.requestTime),
               bottomLeftText: "주의사항",
               bottomRightText: CustomDateUtils.timeElapsed(item.requestTime),
-              backgroundColor: Colors.white,
-              showOverlay: isActive,
-              onTap: () {
-                setState(() {
-                  _activePlate = isActive ? null : item.plateNumber;
-                });
-              },
+              backgroundColor: backgroundColor, // 상태에 따른 배경색 설정
+              onTap: () => onPlateTap(item.plateNumber), // 외부 콜백 호출
             ),
             const SizedBox(height: 5),
           ],
