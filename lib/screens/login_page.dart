@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart'; // Provider를 사용하기 위해 추가
+import '../states/user_state.dart'; // UserState 가져오기
 
 /// LoginPage 위젯
 /// 사용자가 이름과 전화번호를 통해 Firestore에서 인증할 수 있는 화면
@@ -52,13 +54,19 @@ class _LoginPageState extends State<LoginPage> {
 
     try {
       // Firestore에서 전화번호로 사용자 문서 조회
-      final docSnapshot = await FirebaseFirestore.instance.collection('accounts').doc(phone).get();
+      final docSnapshot = await FirebaseFirestore.instance
+          .collection('accounts')
+          .doc(phone)
+          .get();
 
       if (docSnapshot.exists) {
         final data = docSnapshot.data();
         if (data?['name'] == name) {
-          // 로그인 성공
-          Navigator.pushReplacementNamed(context, '/home');
+          // 로그인 성공 - UserState 업데이트
+          final userState = Provider.of<UserState>(context, listen: false);
+          userState.setUserName(name); // UserState에 이름 저장
+
+          Navigator.pushReplacementNamed(context, '/home'); // 홈 화면으로 이동
         } else {
           // 이름 불일치
           ScaffoldMessenger.of(context).showSnackBar(
@@ -116,9 +124,9 @@ class _LoginPageState extends State<LoginPage> {
             _isLoading
                 ? const CircularProgressIndicator() // 로딩 상태 표시
                 : ElevatedButton(
-                    onPressed: _login, // 로그인 메서드 호출
-                    child: const Text("로그인"),
-                  ),
+              onPressed: _login, // 로그인 메서드 호출
+              child: const Text("로그인"),
+            ),
           ],
         ),
       ),

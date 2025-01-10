@@ -5,6 +5,7 @@ import 'states/page_state.dart'; // 페이지 상태 관리를 위한 상태 클
 import 'states/plate_state.dart'; // 차량 관련 데이터를 관리하는 상태 클래스
 import 'states/page_info.dart'; // 페이지 정보 (기본 페이지 리스트 포함)
 import 'states/area_state.dart'; // 지역 상태 관리
+import 'states/user_state.dart'; // 사용자 상태 관리
 import 'screens/type_page.dart'; // 메인 화면 (타입 선택 화면)
 import 'screens/login_page.dart'; // 로그인 화면
 
@@ -38,6 +39,8 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => PlateState()),
         // 지역 상태 관리 (ChangeNotifier 사용)
         ChangeNotifierProvider(create: (_) => AreaState()),
+        // 사용자 상태 관리 (ChangeNotifier 사용)
+        ChangeNotifierProvider(create: (_) => UserState()),
       ],
       child: MaterialApp(
         // 디버그 모드 배너 비활성화
