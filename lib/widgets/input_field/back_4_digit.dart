@@ -1,7 +1,7 @@
 // Flutter 패키지 및 커스텀 위젯(CommonField) 임포트
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:easydev/widgets/common/common_field.dart';
+import 'package:easydev/widgets/common/common_plate_field.dart';
 
 /// `NumFieldBack4` 위젯
 /// 4자리 숫자를 입력받는 텍스트 필드로, 입력값 검증 기능 포함.
@@ -56,7 +56,7 @@ class NumFieldBack4State extends State<NumFieldBack4> {
       crossAxisAlignment: CrossAxisAlignment.start, // 좌측 정렬
       children: [
         // 4자리 입력 필드 (CommonField 사용)
-        CommonField(
+        CommonPlateField(
           controller: widget.controller,
           // 입력값 컨트롤러
           maxLength: 4,

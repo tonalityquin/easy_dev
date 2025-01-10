@@ -167,4 +167,21 @@ class PlateState extends ChangeNotifier {
       print('Error adding request: $e');
     }
   }
+
+  Future<void> addCompleted(String plateNumber) async {
+    try {
+      final String fourDigit = plateNumber.substring(plateNumber.length - 4);
+
+      await FirebaseFirestore.instance.collection('parking_completed').doc(fourDigit).set({
+        'plate_number': plateNumber,
+        'type': '입차 요청',
+        'request_time': DateTime.now(),
+        'location': '미지정',
+      });
+
+      notifyListeners();
+    } catch (e) {
+      print('Error adding completed: $e');
+    }
+  }
 }

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:easydev/widgets/common/common_field.dart';
+import 'package:easydev/widgets/common/common_plate_field.dart';
 
 // NumFieldFront3 위젯 클래스
 // 숫자 3자리를 입력받는 필드를 구현합니다.
@@ -51,7 +51,7 @@ class _NumFieldFront3State extends State<NumFieldFront3> {
       crossAxisAlignment: CrossAxisAlignment.start, // 왼쪽 정렬
       children: [
         // 공통 입력 필드 (CommonField 위젯 사용)
-        CommonField(
+        CommonPlateField(
           controller: widget.controller,
           // 텍스트 컨트롤러
           maxLength: 3,
