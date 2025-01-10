@@ -13,35 +13,42 @@ class ParkingRequestPage extends StatefulWidget {
 }
 
 class _ParkingRequestPageState extends State<ParkingRequestPage> {
-  String? _activePlate; // 눌림 상태 관리
+  String? _activePlate; // 현재 선택된 차량 번호판 상태를 관리하는 변수
 
+  /// 차량 번호판을 탭할 때 호출되는 메서드
+  /// - 눌린 차량 번호판의 상태를 활성화/비활성화
+  /// - `PlateState`를 업데이트하여 운전 중 상태를 설정
   void _handlePlateTap(BuildContext context, String plateNumber) {
     setState(() {
+      // 현재 눌린 번호판이 이미 활성 상태면 비활성화, 아니면 활성화
       _activePlate = _activePlate == plateNumber ? null : plateNumber;
     });
 
-    // PlateState의 운전 중 상태 업데이트
+    // PlateState에 운전 중 상태를 업데이트
     context.read<PlateState>().setDrivingPlate(_activePlate ?? '');
 
     print('Tapped Plate: $plateNumber');
     print('Active Plate after tap: $_activePlate');
   }
 
-
+  /// '입차 완료' 버튼 클릭 시 호출되는 메서드
+  /// - 선택된 차량을 주차 완료 상태로 업데이트
+  /// - 활성 상태를 초기화
   void _handleParkingCompleted(BuildContext context) {
-    // _activePlate가 null이 아니고 빈 문자열이 아닌지 확인
+    // 활성화된 차량 번호판이 있는지 확인
     if (_activePlate != null && _activePlate!.isNotEmpty) {
       final plateNumber = _activePlate;
 
-      // 주차 완료 처리
+      // PlateState에 주차 완료 상태를 설정
       context.read<PlateState>().setParkingCompleted(plateNumber!);
       setState(() {
-        _activePlate = null; // 주차 완료 후 활성 상태 해제
+        _activePlate = null; // 완료 후 활성화 상태 초기화
       });
 
       print('Parking completed for plate: $plateNumber');
     } else {
       print('No active plate selected.');
+      // 차량 번호판이 선택되지 않은 경우 경고 메시지 표시
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('먼저 차량을 선택하세요.'),
@@ -54,23 +61,27 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.blue,
-        centerTitle: true,
-        title: const Text('섹션'),
+        backgroundColor: Colors.blue, // AppBar의 배경색 설정
+        centerTitle: true, // 제목을 중앙 정렬
+        title: const Text('섹션'), // AppBar의 제목
       ),
       body: Consumer<PlateState>(
         builder: (context, plateState, child) {
           return ListView(
-            padding: const EdgeInsets.all(8.0),
+            padding: const EdgeInsets.all(8.0), // 리스트뷰의 패딩 설정
             children: [
               PlateContainer(
                 data: plateState.parkingRequests,
+                // PlateState의 주차 요청 데이터 전달
                 filterCondition: (request) => request.type == '입차 요청' || request.type == '입차 중',
+                // '입차 요청'과 '입차 중' 상태만 표시
                 activePlate: _activePlate,
+                // 현재 활성화된 차량 번호판 전달
                 onPlateTap: (plateNumber) {
+                  // 차량 번호판을 클릭했을 때의 동작 설정
                   _handlePlateTap(context, plateNumber);
                 },
-                drivingPlate: plateState.isDrivingPlate, // 운전 중 상태 전달
+                drivingPlate: plateState.isDrivingPlate, // 현재 운전 중 상태 전달
               ),
             ],
           );
@@ -78,22 +89,23 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
       ),
       bottomNavigationBar: BottomNavigationBar(
         items: const [
+          // '검색', '입차 완료', '정렬' 버튼 추가
           BottomNavigationBarItem(
-            icon: Icon(Icons.search),
-            label: '검색',
+            icon: Icon(Icons.search), // 검색 아이콘
+            label: '검색', // 검색 라벨
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.local_parking),
-            label: '입차 완료',
+            icon: Icon(Icons.local_parking), // 입차 완료 아이콘
+            label: '입차 완료', // 입차 완료 라벨
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.sort),
-            label: '정렬',
+            icon: Icon(Icons.sort), // 정렬 아이콘
+            label: '정렬', // 정렬 라벨
           ),
         ],
         onTap: (index) {
           if (index == 1) {
-            // local_parking 버튼 동작
+            // '입차 완료' 버튼 클릭 시 동작
             _handleParkingCompleted(context);
           }
         },

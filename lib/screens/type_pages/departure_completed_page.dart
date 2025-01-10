@@ -29,43 +29,38 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
 
   Future<void> _deleteAllData(BuildContext context) async {
     try {
-      await FirebaseFirestore.instance.collection('parking_requests').get().then((snapshot) {
-        for (var doc in snapshot.docs) {
-          doc.reference.delete();
-        }
-      });
+      // 삭제 대상 컬렉션
+      final collections = [
+        'parking_requests',
+        'parking_completed',
+        'departure_requests',
+        'departure_completed',
+      ];
 
-      await FirebaseFirestore.instance.collection('parking_completed').get().then((snapshot) {
-        for (var doc in snapshot.docs) {
-          doc.reference.delete();
-        }
-      });
+      for (final collection in collections) {
+        final snapshot = await FirebaseFirestore.instance.collection(collection).get();
 
-      await FirebaseFirestore.instance.collection('departure_requests').get().then((snapshot) {
-        for (var doc in snapshot.docs) {
-          doc.reference.delete();
+        for (final doc in snapshot.docs) {
+          // 문서 삭제
+          await doc.reference.delete();
         }
-      });
-
-      await FirebaseFirestore.instance.collection('departure_completed').get().then((snapshot) {
-        for (var doc in snapshot.docs) {
-          doc.reference.delete();
-        }
-      });
+      }
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('모든 데이터가 삭제되었습니다.')),
+          const SnackBar(content: Text('모든 문서가 삭제되었습니다. 컬렉션은 유지됩니다.')),
         );
       }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('데이터 삭제 실패: $e')),
+          SnackBar(content: Text('문서 삭제 실패: $e')),
         );
       }
     }
   }
+
+
 
   Future<void> _logout(BuildContext context) async {
     try {
