@@ -25,8 +25,8 @@ class PlateRequest {
       requestTime: (timestamp is Timestamp)
           ? timestamp.toDate()
           : (timestamp is DateTime)
-              ? timestamp
-              : DateTime.now(),
+          ? timestamp
+          : DateTime.now(),
       location: doc['location'],
     );
   }
@@ -49,14 +49,11 @@ class PlateState extends ChangeNotifier {
     'departure_completed': [],
   };
 
-  String? isDrivingPlate; // 운전 중인 차량 번호를 저장
+  String? isDrivingPlate;
 
   List<PlateRequest> get parkingRequests => _data['parking_requests']!;
-
   List<PlateRequest> get parkingCompleted => _data['parking_completed']!;
-
   List<PlateRequest> get departureRequests => _data['departure_requests']!;
-
   List<PlateRequest> get departureCompleted => _data['departure_completed']!;
 
   PlateState() {
@@ -67,7 +64,6 @@ class PlateState extends ChangeNotifier {
     for (final collectionName in _data.keys) {
       FirebaseFirestore.instance
           .collection(collectionName)
-          .orderBy('request_time', descending: true)
           .snapshots()
           .listen((snapshot) {
         _data[collectionName]!.clear();
@@ -80,41 +76,18 @@ class PlateState extends ChangeNotifier {
   }
 
   Future<void> setDrivingPlate(String plateNumber) async {
-    if (plateNumber.isEmpty) {
-      print('Error: plateNumber is empty');
-      return;
-    }
-
     try {
-      if (isDrivingPlate == plateNumber) {
-        isDrivingPlate = null;
+      final String fourDigit = plateNumber.substring(plateNumber.length - 4);
+      isDrivingPlate = isDrivingPlate == plateNumber ? null : plateNumber;
 
-        final query = await FirebaseFirestore.instance
-            .collection('parking_requests')
-            .where('plate_number', isEqualTo: plateNumber)
-            .get();
-
-        if (query.docs.isNotEmpty) {
-          final docId = query.docs.first.id;
-          await FirebaseFirestore.instance.collection('parking_requests').doc(docId).update({'type': '입차 요청'});
-        }
-      } else {
-        isDrivingPlate = plateNumber;
-
-        final query = await FirebaseFirestore.instance
-            .collection('parking_requests')
-            .where('plate_number', isEqualTo: plateNumber)
-            .get();
-
-        if (query.docs.isNotEmpty) {
-          final docId = query.docs.first.id;
-          await FirebaseFirestore.instance.collection('parking_requests').doc(docId).update({'type': '입차 중'});
-        }
-      }
+      await FirebaseFirestore.instance
+          .collection('parking_requests')
+          .doc(fourDigit)
+          .update({'type': isDrivingPlate == null ? '입차 요청' : '입차 중'});
 
       notifyListeners();
     } catch (e) {
-      print('Error updating type: $e');
+      print('Error updating driving state: $e');
     }
   }
 
@@ -125,28 +98,30 @@ class PlateState extends ChangeNotifier {
     required String newType,
   }) async {
     try {
-      final query = await FirebaseFirestore.instance
+      final String fourDigit = plateNumber.substring(plateNumber.length - 4);
+
+      final docSnapshot = await FirebaseFirestore.instance
           .collection(fromCollection)
-          .where('plate_number', isEqualTo: plateNumber)
+          .doc(fourDigit)
           .get();
 
-      if (query.docs.isNotEmpty) {
-        final docId = query.docs.first.id;
-        final documentData = query.docs.first.data();
+      if (docSnapshot.exists) {
+        final documentData = docSnapshot.data();
 
-        await FirebaseFirestore.instance.collection(fromCollection).doc(docId).delete();
-        await FirebaseFirestore.instance.collection(toCollection).add({
-          ...documentData,
+        await FirebaseFirestore.instance.collection(fromCollection).doc(fourDigit).delete();
+
+        await FirebaseFirestore.instance.collection(toCollection).doc(fourDigit).set({
+          ...documentData!,
           'type': newType,
         });
       } else {
-        print('No matching document found in $fromCollection for plate: $plateNumber');
+        print('No document found in $fromCollection with ID: $fourDigit');
       }
-    } catch (e) {
-      print('Error transferring data from $fromCollection to $toCollection: $e');
-    }
 
-    notifyListeners();
+      notifyListeners();
+    } catch (e) {
+      print('Error transferring data: $e');
+    }
   }
 
   Future<void> setParkingCompleted(String plateNumber) async {
@@ -178,31 +153,18 @@ class PlateState extends ChangeNotifier {
 
   Future<void> addRequest(String plateNumber) async {
     try {
-      for (String collectionName in _data.keys) {
-        final query = await FirebaseFirestore.instance
-            .collection(collectionName)
-            .where('plate_number', isEqualTo: plateNumber)
-            .get();
-        if (query.docs.isNotEmpty) throw Exception('Plate number already exists in $collectionName');
-      }
+      final String fourDigit = plateNumber.substring(plateNumber.length - 4);
 
-      await FirebaseFirestore.instance.collection('parking_requests').add({
+      await FirebaseFirestore.instance.collection('parking_requests').doc(fourDigit).set({
         'plate_number': plateNumber,
         'type': '입차 요청',
         'request_time': DateTime.now(),
         'location': '미지정',
       });
-    } catch (e) {
-      throw Exception('Failed to add request: $e');
-    }
-  }
 
-  Future<void> updateRequest(String id, String newType) async {
-    try {
-      await FirebaseFirestore.instance.collection('parking_requests').doc(id).update({'type': newType});
       notifyListeners();
     } catch (e) {
-      throw Exception('Failed to update request: $e');
+      print('Error adding request: $e');
     }
   }
 }
