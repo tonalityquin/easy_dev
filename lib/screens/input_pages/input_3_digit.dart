@@ -137,8 +137,15 @@ class _Input3DigitState extends State<Input3Digit> {
   Future<void> _handleAction() async {
     final String plateNumber = '${controller3digit.text}-${controller1digit.text}-${controller4digit.text}';
     final plateState = context.read<PlateState>();
-
     final String location = locationController.text;
+
+    // 중복 검사
+    if (plateState.isPlateNumberDuplicated(plateNumber)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('이미 등록된 번호판입니다: $plateNumber')),
+      );
+      return;
+    }
 
     if (!_validatePlateNumber(plateNumber)) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -257,20 +264,20 @@ class _Input3DigitState extends State<Input3Digit> {
         showKeypad: showKeypad,
         keypad: activeController == controller3digit
             ? NumKeypad(
-                controller: controller3digit,
-                maxLength: 3,
-                onComplete: () => _setActiveController(controller1digit),
-              )
+          controller: controller3digit,
+          maxLength: 3,
+          onComplete: () => _setActiveController(controller1digit),
+        )
             : activeController == controller1digit
-                ? KorKeypad(
-                    controller: controller1digit,
-                    onComplete: () => _setActiveController(controller4digit),
-                  )
-                : NumKeypad(
-                    controller: controller4digit,
-                    maxLength: 4,
-                    onComplete: () => setState(() => showKeypad = false),
-                  ),
+            ? KorKeypad(
+          controller: controller1digit,
+          onComplete: () => _setActiveController(controller4digit),
+        )
+            : NumKeypad(
+          controller: controller4digit,
+          maxLength: 4,
+          onComplete: () => setState(() => showKeypad = false),
+        ),
         actionButton: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -278,20 +285,20 @@ class _Input3DigitState extends State<Input3Digit> {
               onPressed: isLocationSelected
                   ? _clearLocation
                   : () {
-                      showModalBottomSheet(
-                        context: context,
-                        builder: (BuildContext context) {
-                          return LocationModal(
-                            onSelect: (String selectedLocation) {
-                              setState(() {
-                                locationController.text = selectedLocation;
-                                isLocationSelected = true;
-                              });
-                            },
-                          );
-                        },
-                      );
-                    },
+                showModalBottomSheet(
+                  context: context,
+                  builder: (BuildContext context) {
+                    return LocationModal(
+                      onSelect: (String selectedLocation) {
+                        setState(() {
+                          locationController.text = selectedLocation;
+                          isLocationSelected = true;
+                        });
+                      },
+                    );
+                  },
+                );
+              },
               style: commonButtonStyle,
               child: Text(isLocationSelected ? '구역 초기화' : '주차 구역'),
             ),

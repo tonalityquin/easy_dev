@@ -25,8 +25,8 @@ class PlateRequest {
       requestTime: (timestamp is Timestamp)
           ? timestamp.toDate()
           : (timestamp is DateTime)
-              ? timestamp
-              : DateTime.now(),
+          ? timestamp
+          : DateTime.now(),
       location: doc['location'],
     );
   }
@@ -52,11 +52,8 @@ class PlateState extends ChangeNotifier {
   String? isDrivingPlate;
 
   List<PlateRequest> get parkingRequests => _data['parking_requests']!;
-
   List<PlateRequest> get parkingCompleted => _data['parking_completed']!;
-
   List<PlateRequest> get departureRequests => _data['departure_requests']!;
-
   List<PlateRequest> get departureCompleted => _data['departure_completed']!;
 
   PlateState() {
@@ -73,6 +70,17 @@ class PlateState extends ChangeNotifier {
         notifyListeners();
       });
     }
+  }
+
+  // 중복 번호 확인 메서드
+  bool isPlateNumberDuplicated(String plateNumber) {
+    final allPlates = [
+      ...parkingRequests.map((e) => e.plateNumber),
+      ...parkingCompleted.map((e) => e.plateNumber),
+      ...departureRequests.map((e) => e.plateNumber),
+      ...departureCompleted.map((e) => e.plateNumber),
+    ];
+    return allPlates.contains(plateNumber);
   }
 
   Future<void> setDrivingPlate(String plateNumber) async {
@@ -152,6 +160,11 @@ class PlateState extends ChangeNotifier {
     try {
       final String fourDigit = plateNumber.substring(plateNumber.length - 4);
 
+      // 중복 검사
+      if (isPlateNumberDuplicated(plateNumber)) {
+        throw Exception('이미 등록된 번호판입니다.');
+      }
+
       await FirebaseFirestore.instance.collection('parking_requests').doc(fourDigit).set({
         'plate_number': plateNumber,
         'type': '입차 요청',
@@ -169,11 +182,16 @@ class PlateState extends ChangeNotifier {
     try {
       final String fourDigit = plateNumber.substring(plateNumber.length - 4);
 
+      // 중복 검사
+      if (isPlateNumberDuplicated(plateNumber)) {
+        throw Exception('이미 등록된 번호판입니다.');
+      }
+
       await FirebaseFirestore.instance.collection('parking_completed').doc(fourDigit).set({
         'plate_number': plateNumber,
-        'type': '입차 요청',
+        'type': '입차 완료',
         'request_time': DateTime.now(),
-        'location': location.isNotEmpty ? location : '미지정', // location 값 사용
+        'location': location.isNotEmpty ? location : '미지정',
       });
 
       notifyListeners();
