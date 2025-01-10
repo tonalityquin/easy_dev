@@ -60,8 +60,6 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
     }
   }
 
-
-
   Future<void> _logout(BuildContext context) async {
     try {
       await FirebaseAuth.instance.signOut();

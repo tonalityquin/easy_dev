@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:easydev/widgets/common/common_field.dart';
+import 'package:easydev/widgets/common/common_plate_field.dart';
 
 /// NumFieldFront2 위젯
 /// 2자리 숫자를 입력받는 필드로, 유효성 검사와 에러 메시지 표시를 포함합니다.
@@ -52,7 +52,7 @@ class NumFieldFront2State extends State<NumFieldFront2> {
         /// 공통 입력 필드 위젯
         /// - 최대 입력 길이: 2자리
         /// - 입력 타입: 숫자만 입력 가능
-        CommonField(
+        CommonPlateField(
           controller: widget.controller,
           maxLength: 2,
           // 최대 2자리 숫자만 입력 가능

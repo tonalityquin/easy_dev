@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 
 /// CommonField 위젯
 /// 공통 입력 필드로 사용되며, 다양한 옵션으로 사용자 입력 처리를 지원
-class CommonField extends StatelessWidget {
+class CommonPlateField extends StatelessWidget {
   // 필드 컨트롤러 (입력값 제어)
   final TextEditingController controller;
 
@@ -39,7 +39,7 @@ class CommonField extends StatelessWidget {
   final List<TextInputFormatter> inputFormatters;
 
   // CommonField 생성자
-  const CommonField({
+  const CommonPlateField({
     super.key,
     required this.controller,
     required this.maxLength,

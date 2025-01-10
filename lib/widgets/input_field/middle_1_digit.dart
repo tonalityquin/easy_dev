@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:easydev/widgets/common/common_field.dart';
+import 'package:easydev/widgets/common/common_plate_field.dart';
 
 /// `KorFieldMiddle1`
 ///
@@ -31,7 +31,7 @@ class KorFieldMiddle1 extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start, // 왼쪽 정렬
       children: [
         // 공통 필드(CommonField) 위젯 활용
-        CommonField(
+        CommonPlateField(
           controller: controller,
           maxLength: 1,
           // 최대 입력 길이: 1자
