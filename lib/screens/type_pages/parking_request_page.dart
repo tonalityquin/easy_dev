@@ -88,19 +88,28 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
         },
       ),
       bottomNavigationBar: BottomNavigationBar(
-        items: const [
-          // '검색', '입차 완료', '정렬' 버튼 추가
+        items: [
           BottomNavigationBarItem(
-            icon: Icon(Icons.search), // 검색 아이콘
-            label: '검색', // 검색 라벨
+            // 아이콘 상태에 따른 변경
+            icon: _activePlate == null
+                ? const Icon(Icons.search) // 기본 아이콘
+                : const Icon(Icons.highlight_alt), // 선택된 상태 아이콘
+            label: _activePlate == null ? '번호판 검색' : '정보 수정',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.local_parking), // 입차 완료 아이콘
-            label: '입차 완료', // 입차 완료 라벨
+            // 아이콘 상태에 따른 변경
+            icon: _activePlate == null
+                ? const Icon(Icons.local_parking) // 기본 아이콘
+                : const Icon(Icons.check_circle), // 선택된 상태 아이콘
+            // 상태에 따른 레이블 변경
+            label: _activePlate == null ? '구역별 검색' : '구역 선택',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.sort), // 정렬 아이콘
-            label: '정렬', // 정렬 라벨
+            // 아이콘 상태에 따른 변경
+            icon: _activePlate == null
+                ? const Icon(Icons.sort) // 기본 아이콘
+                : const Icon(Icons.sort_by_alpha), // 선택된 상태 아이콘
+            label: _activePlate == null ? '정렬' : '뭘 넣지?',
           ),
         ],
         onTap: (index) {
