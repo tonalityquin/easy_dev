@@ -77,23 +77,33 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
         },
       ),
       bottomNavigationBar: BottomNavigationBar(
-        items: const [
+        items: [
           BottomNavigationBarItem(
-            icon: Icon(Icons.search),
-            label: '검색',
+            // 아이콘 상태에 따른 변경
+            icon: _activePlate == null
+                ? const Icon(Icons.search) // 기본 아이콘
+                : const Icon(Icons.highlight_alt), // 선택된 상태 아이콘
+            label: _activePlate == null ? '검색' : '정보 수정',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.local_parking),
-            label: '출차 완료',
+            // 아이콘 상태에 따른 변경
+            icon: _activePlate == null
+                ? const Icon(Icons.local_parking) // 기본 아이콘
+                : const Icon(Icons.check_circle), // 선택된 상태 아이콘
+            // 상태에 따른 레이블 변경
+            label: _activePlate == null ? '주차 구역' : '입차 완료',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.sort),
-            label: '정렬',
+            // 아이콘 상태에 따른 변경
+            icon: _activePlate == null
+                ? const Icon(Icons.sort) // 기본 아이콘
+                : const Icon(Icons.sort_by_alpha), // 선택된 상태 아이콘
+            label: _activePlate == null ? '정렬' : '뭘 넣지?',
           ),
         ],
         onTap: (index) {
           if (index == 1) {
-            // 출차 완료 버튼 동작
+            // '입차 완료' 버튼 클릭 시 동작
             _handleDepartureCompleted(context);
           }
         },
