@@ -44,12 +44,10 @@ class PlateContainer extends StatelessWidget {
 
     return Column(
       children: filteredData.map((item) {
-        // 배경색 설정 로직
-        final backgroundColor = item.type == '입차 완료'
-            ? Colors.blueAccent.withOpacity(0.3) // 입차 완료 상태 배경색
-            : drivingPlate == item.plateNumber
-            ? Colors.greenAccent // 운전 중 상태
-            : Colors.white; // 기본 상태
+        // 배경색 설정 로직 수정
+        final backgroundColor = activePlate == item.plateNumber
+            ? Colors.greenAccent // 클릭 시 초록색
+            : Colors.white; // 기본 상태: 하얀색
 
         return Column(
           children: [
@@ -61,7 +59,8 @@ class PlateContainer extends StatelessWidget {
               midRightText: CustomDateUtils.formatTimeForUI(item.requestTime),
               bottomLeftText: "주의사항",
               bottomRightText: CustomDateUtils.timeElapsed(item.requestTime),
-              backgroundColor: backgroundColor, // 상태에 따른 배경색 설정
+              backgroundColor: backgroundColor,
+              // 수정된 배경색 설정
               onTap: () => onPlateTap(item.plateNumber), // 외부 콜백 호출
             ),
             const SizedBox(height: 5),
