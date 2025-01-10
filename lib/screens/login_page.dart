@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// LoginPage 위젯
-/// 사용자가 이메일과 비밀번호를 통해 Firebase 인증으로 로그인할 수 있는 화면
+/// 사용자가 이름과 전화번호를 통해 Firestore에서 인증할 수 있는 화면
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -11,50 +11,37 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  // 이메일과 비밀번호 입력을 제어하는 텍스트 컨트롤러
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
+  // 이름과 전화번호 입력을 제어하는 텍스트 컨트롤러
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
 
-  // Firebase Authentication 인스턴스 초기화
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-
-  // 로딩 상태 및 비밀번호 표시 여부를 제어하는 플래그
+  // 로딩 상태를 제어하는 플래그
   bool _isLoading = false;
-  bool _passwordVisible = false;
 
-  /// 이메일 유효성을 검사하는 메서드
-  /// @param email - 사용자가 입력한 이메일
-  /// @return null - 유효한 이메일, 에러 메시지 - 유효하지 않은 이메일
-  String? _validateEmail(String email) {
-    final emailRegex = RegExp(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
-    if (email.isEmpty) return '이메일을 입력해주세요.';
-    if (!emailRegex.hasMatch(email)) return '유효한 이메일 형식이 아닙니다.';
+  /// 전화번호 유효성을 검사하는 메서드
+  String? _validatePhone(String phone) {
+    final phoneRegex = RegExp(r'^[0-9]{10,11}$'); // 10~11자리 숫자만 허용
+    if (phone.isEmpty) return '전화번호를 입력해주세요.';
+    if (!phoneRegex.hasMatch(phone)) return '유효한 전화번호를 입력해주세요.';
     return null;
   }
 
-  /// 비밀번호 유효성을 검사하는 메서드
-  /// @param password - 사용자가 입력한 비밀번호
-  /// @return null - 유효한 비밀번호, 에러 메시지 - 유효하지 않은 비밀번호
-  String? _validatePassword(String password) {
-    if (password.isEmpty) return '비밀번호를 입력해주세요.';
-    if (password.length < 6) return '비밀번호는 6자리 이상이어야 합니다.';
-    return null;
-  }
+  /// Firestore에서 이름과 전화번호로 사용자 인증
+  Future<void> _login() async {
+    final name = _nameController.text.trim();
+    final phone = _phoneController.text.trim();
 
-  /// Firebase Authentication을 이용한 로그인 메서드
-  /// 유효성 검사 후 이메일 및 비밀번호로 인증을 시도
-  void _login() async {
-    final email = _emailController.text.trim();
-    final password = _passwordController.text.trim();
-
-    // 이메일 및 비밀번호 유효성 검사
-    final emailError = _validateEmail(email);
-    final passwordError = _validatePassword(password);
-
-    if (emailError != null || passwordError != null) {
-      // 유효하지 않을 경우 에러 메시지를 표시
+    // 전화번호 유효성 검사
+    final phoneError = _validatePhone(phone);
+    if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(emailError ?? passwordError!)),
+        const SnackBar(content: Text('이름을 입력해주세요.')),
+      );
+      return;
+    }
+    if (phoneError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(phoneError)),
       );
       return;
     }
@@ -64,33 +51,30 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-      // Firebase 로그인 시도
-      await _auth.signInWithEmailAndPassword(email: email, password: password);
+      // Firestore에서 전화번호로 사용자 문서 조회
+      final docSnapshot = await FirebaseFirestore.instance.collection('accounts').doc(phone).get();
 
-      // 로그인 성공 시 홈 화면으로 이동
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, '/home');
-      }
-    } on FirebaseAuthException catch (e) {
-      // Firebase 로그인 실패 시 에러 처리
-      String errorMessage;
-      switch (e.code) {
-        case 'user-not-found':
-          errorMessage = '등록되지 않은 사용자입니다.';
-          break;
-        case 'wrong-password':
-          errorMessage = '잘못된 비밀번호입니다.';
-          break;
-        default:
-          errorMessage = '로그인 실패: ${e.message}';
-      }
-
-      // 에러 메시지를 화면에 표시
-      if (mounted) {
+      if (docSnapshot.exists) {
+        final data = docSnapshot.data();
+        if (data?['name'] == name) {
+          // 로그인 성공
+          Navigator.pushReplacementNamed(context, '/home');
+        } else {
+          // 이름 불일치
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('이름이 올바르지 않습니다.')),
+          );
+        }
+      } else {
+        // 전화번호가 존재하지 않음
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(errorMessage)),
+          const SnackBar(content: Text('해당 전화번호가 등록되지 않았습니다.')),
         );
       }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('로그인 실패: $e')),
+      );
     } finally {
       setState(() {
         _isLoading = false; // 로딩 상태 비활성화
@@ -109,33 +93,22 @@ class _LoginPageState extends State<LoginPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // 이메일 입력 필드
+            // 이름 입력 필드
             TextField(
-              controller: _emailController,
+              controller: _nameController,
               decoration: const InputDecoration(
-                labelText: "이메일",
+                labelText: "이름",
                 border: OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 16),
-            // 비밀번호 입력 필드
+            // 전화번호 입력 필드
             TextField(
-              controller: _passwordController,
-              obscureText: !_passwordVisible, // 비밀번호 표시 여부
-              decoration: InputDecoration(
-                labelText: "비밀번호",
-                border: const OutlineInputBorder(),
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _passwordVisible ? Icons.visibility : Icons.visibility_off,
-                  ),
-                  onPressed: () {
-                    // 비밀번호 표시 상태를 토글
-                    setState(() {
-                      _passwordVisible = !_passwordVisible;
-                    });
-                  },
-                ),
+              controller: _phoneController,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: "전화번호",
+                border: OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 24),
@@ -143,9 +116,9 @@ class _LoginPageState extends State<LoginPage> {
             _isLoading
                 ? const CircularProgressIndicator() // 로딩 상태 표시
                 : ElevatedButton(
-              onPressed: _login, // 로그인 메서드 호출
-              child: const Text("로그인"),
-            ),
+                    onPressed: _login, // 로그인 메서드 호출
+                    child: const Text("로그인"),
+                  ),
           ],
         ),
       ),
