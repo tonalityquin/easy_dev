@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../states/plate_state.dart';
 import '../../widgets/container/plate_container.dart';
+import '../../widgets/navigation/top_navigation.dart';
+
 
 /// ParkingCompletedPage 클래스
 /// 입차 완료 리스트를 표시하는 Stateful 위젯
@@ -48,11 +50,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.blue,
-        centerTitle: true,
-        title: const Text('섹션'),
-      ),
+      appBar: const TopNavigation(), // TopNavigation 추가
       body: Consumer<PlateState>(
         builder: (context, plateState, child) {
           final parkingCompleted = plateState.parkingCompleted;

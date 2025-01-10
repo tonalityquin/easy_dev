@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../states/plate_state.dart';
 import '../../widgets/container/plate_container.dart';
+import '../../widgets/navigation/top_navigation.dart';
+
 
 /// ParkingRequestPage 위젯
 /// 입차 요청 데이터를 표시하는 화면
@@ -60,11 +62,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.blue, // AppBar의 배경색 설정
-        centerTitle: true, // 제목을 중앙 정렬
-        title: const Text('섹션'), // AppBar의 제목
-      ),
+      appBar: const TopNavigation(), // TopNavigation 추가
       body: Consumer<PlateState>(
         builder: (context, plateState, child) {
           return ListView(
