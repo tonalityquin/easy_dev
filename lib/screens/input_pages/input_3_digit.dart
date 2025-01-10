@@ -138,6 +138,8 @@ class _Input3DigitState extends State<Input3Digit> {
     final String plateNumber = '${controller3digit.text}-${controller1digit.text}-${controller4digit.text}';
     final plateState = context.read<PlateState>();
 
+    final String location = locationController.text;
+
     if (!_validatePlateNumber(plateNumber)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('번호판 형식이 올바르지 않습니다.')),
@@ -153,12 +155,12 @@ class _Input3DigitState extends State<Input3Digit> {
       if (!isLocationSelected) {
         await plateState.addRequest(plateNumber);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('입차 요청 성공')),
+          const SnackBar(content: Text('입차 요청')),
         );
       } else {
-        await plateState.addCompleted(plateNumber);
+        await plateState.addCompleted(plateNumber, location);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('입차 완료 처리되었습니다.')),
+          const SnackBar(content: Text('입차 완료')),
         );
       }
       clearInput();
@@ -255,39 +257,41 @@ class _Input3DigitState extends State<Input3Digit> {
         showKeypad: showKeypad,
         keypad: activeController == controller3digit
             ? NumKeypad(
-          controller: controller3digit,
-          maxLength: 3,
-          onComplete: () => _setActiveController(controller1digit),
-        )
+                controller: controller3digit,
+                maxLength: 3,
+                onComplete: () => _setActiveController(controller1digit),
+              )
             : activeController == controller1digit
-            ? KorKeypad(
-          controller: controller1digit,
-          onComplete: () => _setActiveController(controller4digit),
-        )
-            : NumKeypad(
-          controller: controller4digit,
-          maxLength: 4,
-          onComplete: () => setState(() => showKeypad = false),
-        ),
+                ? KorKeypad(
+                    controller: controller1digit,
+                    onComplete: () => _setActiveController(controller4digit),
+                  )
+                : NumKeypad(
+                    controller: controller4digit,
+                    maxLength: 4,
+                    onComplete: () => setState(() => showKeypad = false),
+                  ),
         actionButton: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             ElevatedButton(
-              onPressed: isLocationSelected ? _clearLocation : () {
-                showModalBottomSheet(
-                  context: context,
-                  builder: (BuildContext context) {
-                    return LocationModal(
-                      onSelect: (String selectedLocation) {
-                        setState(() {
-                          locationController.text = selectedLocation;
-                          isLocationSelected = true;
-                        });
-                      },
-                    );
-                  },
-                );
-              },
+              onPressed: isLocationSelected
+                  ? _clearLocation
+                  : () {
+                      showModalBottomSheet(
+                        context: context,
+                        builder: (BuildContext context) {
+                          return LocationModal(
+                            onSelect: (String selectedLocation) {
+                              setState(() {
+                                locationController.text = selectedLocation;
+                                isLocationSelected = true;
+                              });
+                            },
+                          );
+                        },
+                      );
+                    },
               style: commonButtonStyle,
               child: Text(isLocationSelected ? '구역 초기화' : '주차 구역'),
             ),
