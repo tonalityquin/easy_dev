@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 
-/// LocationModal
 /// 주차 구역 선택 모달 위젯
-class LocationModal extends StatelessWidget {
+class LocationSelect extends StatelessWidget {
   final Function(String) onSelect; // 선택한 옵션을 처리하는 콜백 함수
 
   // 주차 구역 옵션 리스트 (LocationModal 내부에서 관리)
-  final List<String> options = const ['Zone A', 'Zone B', 'Zone C'];
+  final List<String> options = const ['지역 A', '지역 B', '지역 C'];
 
-  const LocationModal({
+  const LocationSelect({
     super.key,
     required this.onSelect,
   });

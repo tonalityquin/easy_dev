@@ -4,39 +4,11 @@ import '../../widgets/input_field/front_3_digit.dart';
 import '../../widgets/input_field/middle_1_digit.dart';
 import '../../widgets/input_field/back_4_digit.dart';
 import '../../widgets/input_field/location_field.dart';
+import '../../widgets/keypad/location_select.dart';
 import '../../widgets/keypad/num_keypad.dart';
 import '../../widgets/keypad/kor_keypad.dart';
 import '../../widgets/navigation/bottom_navigation.dart';
 import '../../states/plate_state.dart';
-
-/// LocationModal
-/// 주차 구역 선택 모달 위젯
-class LocationModal extends StatelessWidget {
-  final Function(String) onSelect; // 선택한 옵션을 처리하는 콜백 함수
-
-  // 주차 구역 옵션 리스트
-  final List<String> options = const ['Zone A', 'Zone B', 'Zone C'];
-
-  const LocationModal({
-    super.key,
-    required this.onSelect,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      children: options.map((String option) {
-        return ListTile(
-          title: Text(option, style: const TextStyle(fontSize: 16.0)),
-          onTap: () {
-            Navigator.pop(context); // 모달 닫기
-            onSelect(option); // 선택한 옵션 전달
-          },
-        );
-      }).toList(),
-    );
-  }
-}
 
 class Input3Digit extends StatefulWidget {
   const Input3Digit({super.key});
@@ -147,6 +119,7 @@ class _Input3DigitState extends State<Input3Digit> {
       return;
     }
 
+    // 번호판 형식 검증
     if (!_validatePlateNumber(plateNumber)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('번호판 형식이 올바르지 않습니다.')),
@@ -155,32 +128,43 @@ class _Input3DigitState extends State<Input3Digit> {
     }
 
     setState(() {
-      isLoading = true;
+      isLoading = true; // 로딩 상태 활성화
     });
 
     try {
       if (!isLocationSelected) {
+        // 입차 요청 로직
         await plateState.addRequest(plateNumber);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('입차 요청')),
         );
       } else {
+        // 입차 완료 로직
         await plateState.addCompleted(plateNumber, location);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('입차 완료')),
+
         );
+
+        // 주차 구역 초기화
+        locationController.clear(); // LocationField 초기화
+        setState(() {
+          isLocationSelected = false; // 상태 갱신
+        });
       }
-      clearInput();
+
+      clearInput(); // 입력 필드 초기화
     } catch (error) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('오류 발생: $error')),
       );
     } finally {
       setState(() {
-        isLoading = false;
+        isLoading = false; // 로딩 상태 비활성화
       });
     }
   }
+
 
   bool _validatePlateNumber(String plateNumber) {
     final RegExp platePattern = RegExp(r'^\d{3}-[가-힣]-\d{4}$');
@@ -237,7 +221,7 @@ class _Input3DigitState extends State<Input3Digit> {
                       showModalBottomSheet(
                         context: context,
                         builder: (BuildContext context) {
-                          return LocationModal(
+                          return LocationSelect(
                             onSelect: (String selectedLocation) {
                               setState(() {
                                 locationController.text = selectedLocation;
@@ -264,20 +248,20 @@ class _Input3DigitState extends State<Input3Digit> {
         showKeypad: showKeypad,
         keypad: activeController == controller3digit
             ? NumKeypad(
-          controller: controller3digit,
-          maxLength: 3,
-          onComplete: () => _setActiveController(controller1digit),
-        )
+                controller: controller3digit,
+                maxLength: 3,
+                onComplete: () => _setActiveController(controller1digit),
+              )
             : activeController == controller1digit
-            ? KorKeypad(
-          controller: controller1digit,
-          onComplete: () => _setActiveController(controller4digit),
-        )
-            : NumKeypad(
-          controller: controller4digit,
-          maxLength: 4,
-          onComplete: () => setState(() => showKeypad = false),
-        ),
+                ? KorKeypad(
+                    controller: controller1digit,
+                    onComplete: () => _setActiveController(controller4digit),
+                  )
+                : NumKeypad(
+                    controller: controller4digit,
+                    maxLength: 4,
+                    onComplete: () => setState(() => showKeypad = false),
+                  ),
         actionButton: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -285,20 +269,20 @@ class _Input3DigitState extends State<Input3Digit> {
               onPressed: isLocationSelected
                   ? _clearLocation
                   : () {
-                showModalBottomSheet(
-                  context: context,
-                  builder: (BuildContext context) {
-                    return LocationModal(
-                      onSelect: (String selectedLocation) {
-                        setState(() {
-                          locationController.text = selectedLocation;
-                          isLocationSelected = true;
-                        });
-                      },
-                    );
-                  },
-                );
-              },
+                      showModalBottomSheet(
+                        context: context,
+                        builder: (BuildContext context) {
+                          return LocationSelect(
+                            onSelect: (String selectedLocation) {
+                              setState(() {
+                                locationController.text = selectedLocation;
+                                isLocationSelected = true;
+                              });
+                            },
+                          );
+                        },
+                      );
+                    },
               style: commonButtonStyle,
               child: Text(isLocationSelected ? '구역 초기화' : '주차 구역'),
             ),
