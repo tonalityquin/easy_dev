@@ -25,8 +25,8 @@ class PlateRequest {
       requestTime: (timestamp is Timestamp)
           ? timestamp.toDate()
           : (timestamp is DateTime)
-          ? timestamp
-          : DateTime.now(),
+              ? timestamp
+              : DateTime.now(),
       location: doc['location'],
     );
   }
@@ -52,8 +52,11 @@ class PlateState extends ChangeNotifier {
   String? isDrivingPlate;
 
   List<PlateRequest> get parkingRequests => _data['parking_requests']!;
+
   List<PlateRequest> get parkingCompleted => _data['parking_completed']!;
+
   List<PlateRequest> get departureRequests => _data['departure_requests']!;
+
   List<PlateRequest> get departureCompleted => _data['departure_completed']!;
 
   PlateState() {
@@ -62,10 +65,7 @@ class PlateState extends ChangeNotifier {
 
   void _initializeSubscriptions() {
     for (final collectionName in _data.keys) {
-      FirebaseFirestore.instance
-          .collection(collectionName)
-          .snapshots()
-          .listen((snapshot) {
+      FirebaseFirestore.instance.collection(collectionName).snapshots().listen((snapshot) {
         _data[collectionName]!.clear();
         _data[collectionName]!.addAll(
           snapshot.docs.map((doc) => PlateRequest.fromDocument(doc)).toList(),
@@ -100,10 +100,7 @@ class PlateState extends ChangeNotifier {
     try {
       final String fourDigit = plateNumber.substring(plateNumber.length - 4);
 
-      final docSnapshot = await FirebaseFirestore.instance
-          .collection(fromCollection)
-          .doc(fourDigit)
-          .get();
+      final docSnapshot = await FirebaseFirestore.instance.collection(fromCollection).doc(fourDigit).get();
 
       if (docSnapshot.exists) {
         final documentData = docSnapshot.data();
@@ -168,7 +165,7 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  Future<void> addCompleted(String plateNumber) async {
+  Future<void> addCompleted(String plateNumber, String location) async {
     try {
       final String fourDigit = plateNumber.substring(plateNumber.length - 4);
 
@@ -176,7 +173,7 @@ class PlateState extends ChangeNotifier {
         'plate_number': plateNumber,
         'type': '입차 요청',
         'request_time': DateTime.now(),
-        'location': '미지정',
+        'location': location.isNotEmpty ? location : '미지정', // location 값 사용
       });
 
       notifyListeners();
