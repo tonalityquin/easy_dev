@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import 'custom_box.dart';
-import '../../utils/date_utils.dart';
-import '../../states/plate_state.dart';
+import 'package:provider/provider.dart'; // Provider 패키지 추가
+import '../../utils/date_utils.dart'; // 날짜 관련 유틸리티
+import '../../states/plate_state.dart'; // PlateRequest 관련 상태 관리
+import '../../states/user_state.dart'; // 유저 상태 관리
+import 'custom_box.dart'; // CustomBox 위젯
 
 class PlateContainer extends StatelessWidget {
   final List<PlateRequest> data;
@@ -19,12 +21,16 @@ class PlateContainer extends StatelessWidget {
     super.key,
   });
 
+  /// 필터 조건에 따라 데이터를 필터링
   List<PlateRequest> _filterData(List<PlateRequest> data) {
     return filterCondition != null ? data.where(filterCondition!).toList() : data;
   }
 
   @override
   Widget build(BuildContext context) {
+    // UserState에서 유저 이름 가져오기
+    final userName = Provider.of<UserState>(context).userName ?? "담당자 없음";
+
     final filteredData = _filterData(data);
 
     if (filteredData.isEmpty) {
@@ -44,7 +50,7 @@ class PlateContainer extends StatelessWidget {
 
     return Column(
       children: filteredData.map((item) {
-        // 배경색 설정 로직 수정
+        // 배경색 설정 로직
         final backgroundColor = activePlate == item.plateNumber
             ? Colors.greenAccent // 클릭 시 초록색
             : Colors.white; // 기본 상태: 하얀색
@@ -52,16 +58,15 @@ class PlateContainer extends StatelessWidget {
         return Column(
           children: [
             CustomBox(
-              topLeftText: item.plateNumber,
-              topRightText: "정산 영역",
-              midLeftText: item.location,
-              midCenterText: "담당자",
-              midRightText: CustomDateUtils.formatTimeForUI(item.requestTime),
-              bottomLeftText: "주의사항",
-              bottomRightText: CustomDateUtils.timeElapsed(item.requestTime),
-              backgroundColor: backgroundColor,
-              // 수정된 배경색 설정
-              onTap: () => onPlateTap(item.plateNumber), // 외부 콜백 호출
+              topLeftText: item.plateNumber, // 차량 번호
+              topRightText: "정산 영역", // 오른쪽 상단 텍스트
+              midLeftText: item.location, // 위치 정보
+              midCenterText: userName, // "담당자"에 유저 이름 표시
+              midRightText: CustomDateUtils.formatTimeForUI(item.requestTime), // 요청 시간
+              bottomLeftText: "주의사항", // 하단 왼쪽 텍스트
+              bottomRightText: CustomDateUtils.timeElapsed(item.requestTime), // 경과 시간
+              backgroundColor: backgroundColor, // 배경색 설정
+              onTap: () => onPlateTap(item.plateNumber), // Plate 클릭 동작
             ),
             const SizedBox(height: 5),
           ],
