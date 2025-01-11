@@ -54,10 +54,7 @@ class _LoginPageState extends State<LoginPage> {
 
     try {
       // Firestore에서 전화번호로 사용자 문서 조회
-      final docSnapshot = await FirebaseFirestore.instance
-          .collection('accounts')
-          .doc(phone)
-          .get();
+      final docSnapshot = await FirebaseFirestore.instance.collection('accounts').doc(phone).get();
 
       if (docSnapshot.exists) {
         final data = docSnapshot.data();
@@ -124,9 +121,9 @@ class _LoginPageState extends State<LoginPage> {
             _isLoading
                 ? const CircularProgressIndicator() // 로딩 상태 표시
                 : ElevatedButton(
-              onPressed: _login, // 로그인 메서드 호출
-              child: const Text("로그인"),
-            ),
+                    onPressed: _login, // 로그인 메서드 호출
+                    child: const Text("로그인"),
+                  ),
           ],
         ),
       ),

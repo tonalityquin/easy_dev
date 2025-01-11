@@ -1,12 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
-/// CustomDateUtils 클래스
-/// - 시간 및 날짜 관련 변환 및 포맷팅 유틸리티 클래스
+/// **CustomDateUtils 클래스**
+/// - 시간 및 날짜와 관련된 유틸리티 메서드를 제공하는 클래스
+/// - Firebase Timestamp 및 DateTime 객체를 처리하여 다양한 포맷으로 변환
 class CustomDateUtils {
-  /// UI에서 표시하기 위한 시간 포맷팅 함수
-  /// @param [timestamp] Firebase Timestamp 또는 DateTime 객체
-  /// @return String - HH:mm:ss 형식의 시간 문자열
+  /// **UI에서 표시하기 위한 시간 포맷팅 함수**
+  /// - [timestamp]: Firebase Timestamp 또는 DateTime 객체
+  /// - 반환값: `HH:mm:ss` 형식의 시간 문자열
   static String formatTimeForUI(dynamic timestamp) {
     DateTime? dateTime;
 
@@ -14,23 +15,22 @@ class CustomDateUtils {
     if (timestamp is Timestamp) {
       dateTime = timestamp.toDate();
     } else if (timestamp is DateTime) {
-      // 이미 DateTime 타입인 경우
-      dateTime = timestamp;
+      dateTime = timestamp; // 이미 DateTime 타입인 경우
     }
 
-    // DateTime이 유효하면 포맷팅된 시간 반환
+    // DateTime 객체가 유효한 경우
     if (dateTime != null) {
       return '${_twoDigits(dateTime.hour)}:${_twoDigits(dateTime.minute)}:${_twoDigits(dateTime.second)}';
     }
 
-    // 유효하지 않은 입력에 대해 디버그 출력 및 기본 값 반환
+    // 유효하지 않은 입력 처리
     debugPrint('Invalid timestamp in formatTimeForUI: $timestamp');
     return 'Unknown';
   }
 
-  /// 타임스탬프를 날짜 및 시간 형식으로 변환하는 함수
-  /// @param [timestamp] Firebase Timestamp 또는 DateTime 객체
-  /// @return String - yyyy-MM-dd HH:mm:ss 형식의 문자열
+  /// **타임스탬프를 날짜 및 시간 형식으로 변환하는 함수**
+  /// - [timestamp]: Firebase Timestamp 또는 DateTime 객체
+  /// - 반환값: `yyyy-MM-dd HH:mm:ss` 형식의 문자열
   static String formatTimestamp(dynamic timestamp) {
     DateTime? dateTime;
 
@@ -38,24 +38,23 @@ class CustomDateUtils {
     if (timestamp is Timestamp) {
       dateTime = timestamp.toDate();
     } else if (timestamp is DateTime) {
-      // 이미 DateTime 타입인 경우
-      dateTime = timestamp;
+      dateTime = timestamp; // 이미 DateTime 타입인 경우
     }
 
-    // DateTime이 유효하면 포맷팅된 날짜 및 시간 반환
+    // DateTime 객체가 유효한 경우
     if (dateTime != null) {
       return '${dateTime.year}-${_twoDigits(dateTime.month)}-${_twoDigits(dateTime.day)} '
           '${_twoDigits(dateTime.hour)}:${_twoDigits(dateTime.minute)}:${_twoDigits(dateTime.second)}';
     }
 
-    // 유효하지 않은 입력에 대해 디버그 출력 및 기본 값 반환
+    // 유효하지 않은 입력 처리
     debugPrint('Invalid timestamp in formatTimestamp: $timestamp');
     return 'Unknown';
   }
 
-  /// 특정 타임스탬프로부터 경과된 시간(시간/분)을 반환하는 함수
-  /// @param [timestamp] Firebase Timestamp 또는 DateTime 객체
-  /// @return String - N시간 N분 형식의 경과 시간
+  /// **특정 타임스탬프로부터 경과된 시간 계산**
+  /// - [timestamp]: Firebase Timestamp 또는 DateTime 객체
+  /// - 반환값: `N시간 N분` 형식의 경과 시간 문자열
   static String timeElapsed(dynamic timestamp) {
     DateTime? dateTime;
 
@@ -63,11 +62,10 @@ class CustomDateUtils {
     if (timestamp is Timestamp) {
       dateTime = timestamp.toDate();
     } else if (timestamp is DateTime) {
-      // 이미 DateTime 타입인 경우
-      dateTime = timestamp;
+      dateTime = timestamp; // 이미 DateTime 타입인 경우
     }
 
-    // DateTime이 유효하면 현재 시간과의 차이를 계산
+    // DateTime 객체가 유효한 경우
     if (dateTime != null) {
       Duration difference = DateTime.now().difference(dateTime);
 
@@ -81,15 +79,15 @@ class CustomDateUtils {
       return '$hours시간 $minutes분';
     }
 
-    // 유효하지 않은 입력에 대해 디버그 출력 및 기본 값 반환
+    // 유효하지 않은 입력 처리
     debugPrint('Invalid timestamp in timeElapsed: $timestamp');
     return 'Unknown';
   }
 
-  /// 숫자를 두 자리로 포맷팅하는 함수
-  /// @param [n] 정수
-  /// @return String - 두 자리 형식의 문자열 (e.g., 01, 09, 15)
+  /// **숫자를 두 자리로 포맷팅**
+  /// - [n]: 정수
+  /// - 반환값: 두 자리 형식의 문자열 (예: `01`, `09`, `15`)
   static String _twoDigits(int n) {
-    return n.toString().padLeft(2, '0'); // 한 자리는 앞에 0을 추가
+    return n.toString().padLeft(2, '0'); // 한 자리는 앞에 0 추가
   }
 }
