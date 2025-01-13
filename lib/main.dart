@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart'; // Firebase 초기화를 위한 패키지
 import 'package:provider/provider.dart'; // 상태 관리를 위한 Provider 패키지
+import 'states/management_state.dart';
 import 'states/page_state.dart'; // 페이지 상태 관리를 위한 상태 클래스
 import 'states/plate_state.dart'; // 차량 관련 데이터를 관리하는 상태 클래스
 import 'states/page_info.dart'; // 페이지 정보 (기본 페이지 리스트 포함)
@@ -41,6 +42,8 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AreaState()),
         // 사용자 상태 관리 (ChangeNotifier 사용)
         ChangeNotifierProvider(create: (_) => UserState()),
+        //  (ChangeNotifier 사용)
+        ChangeNotifierProvider(create: (_) => ManagementState()),
       ],
       child: MaterialApp(
         // 디버그 모드 배너 비활성화
