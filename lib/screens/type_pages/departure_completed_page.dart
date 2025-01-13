@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../states/plate_state.dart'; // PlateState 상태 관리 클래스
+import '../../states/area_state.dart'; // AreaState 상태 관리 클래스
 import '../../widgets/container/plate_container.dart'; // 번호판 컨테이너 위젯
 import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바
 
@@ -20,9 +21,11 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
   String? _activePlate; // 현재 눌린 번호판의 상태 관리
 
   /// 번호판 클릭 시 호출되는 메서드
-  void _handlePlateTap(BuildContext context, String plateNumber) {
+  void _handlePlateTap(BuildContext context, String plateNumber, String area) {
+    final String activeKey = '${plateNumber}_$area'; // 고유 키 생성
+
     setState(() {
-      _activePlate = _activePlate == plateNumber ? null : plateNumber;
+      _activePlate = _activePlate == activeKey ? null : activeKey;
     });
   }
 
@@ -113,9 +116,19 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
           ),
         ],
       ),
-      body: Consumer<PlateState>(
-        builder: (context, plateState, child) {
-          final departureCompleted = plateState.departureCompleted;
+      body: Consumer2<PlateState, AreaState>(
+        builder: (context, plateState, areaState, child) {
+          final currentArea = areaState.currentArea;
+
+          if (currentArea == null) {
+            return const Center(
+              child: Text('지역을 선택해주세요.'),
+            );
+          }
+
+          // 지역별 데이터 필터링
+          final departureCompleted = plateState.getPlatesByArea('departure_completed', currentArea);
+
           return ListView(
             padding: const EdgeInsets.all(8.0),
             children: [
@@ -123,8 +136,8 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                 data: departureCompleted,
                 filterCondition: (_) => true,
                 activePlate: _activePlate,
-                onPlateTap: (plateNumber) {
-                  _handlePlateTap(context, plateNumber);
+                onPlateTap: (plateNumber, area) {
+                  _handlePlateTap(context, plateNumber, currentArea!); // 현재 지역 정보 포함
                 },
               ),
             ],
