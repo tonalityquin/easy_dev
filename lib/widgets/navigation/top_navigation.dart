@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../states/area_state.dart';
+import '../../states/plate_state.dart';
 
 /// **TopNavigation 위젯**
 /// - 지역 선택 및 전환 기능을 제공하는 AppBar
@@ -23,20 +24,16 @@ class TopNavigation extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     // **AreaState 가져오기**
-    // - 현재 선택된 지역과 사용 가능한 지역 목록을 관리
     final areaState = context.watch<AreaState>();
+    final plateState = context.read<PlateState>(); // PlateState 접근
     final selectedArea = areaState.currentArea; // 현재 선택된 지역
 
     return AppBar(
       title: DropdownButton<String>(
         value: selectedArea,
-        // 현재 선택된 지역 값
-        underline: Container(),
-        // 드롭다운 아래 선 제거
-        dropdownColor: Colors.white,
-        // 드롭다운 메뉴 배경색
+        underline: Container(), // 드롭다운 아래 선 제거
+        dropdownColor: Colors.white, // 드롭다운 메뉴 배경색
         items: areaState.availableAreas.map((area) {
-          // **지역 목록을 드롭다운 메뉴로 변환**
           return DropdownMenuItem<String>(
             value: area, // 각 지역의 값
             child: Text(
@@ -46,9 +43,9 @@ class TopNavigation extends StatelessWidget implements PreferredSizeWidget {
           );
         }).toList(),
         onChanged: (newArea) {
-          // **선택된 지역 변경 처리**
           if (newArea != null) {
             areaState.updateArea(newArea); // 지역 상태 업데이트
+            plateState.notifyListeners(); // PlateState에 변경 알림
           }
         },
       ),

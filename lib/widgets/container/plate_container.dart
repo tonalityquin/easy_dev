@@ -12,7 +12,7 @@ class PlateContainer extends StatelessWidget {
   final List<PlateRequest> data; // PlateRequest 데이터 리스트
   final bool Function(PlateRequest)? filterCondition; // 필터 조건 (선택적)
   final String? activePlate; // 현재 활성 상태 Plate 번호
-  final void Function(String plateNumber) onPlateTap; // Plate 클릭 콜백 함수
+  final void Function(String plateNumber, String area) onPlateTap; // Plate 클릭 콜백 함수
   final String? drivingPlate; // 현재 운전 중인 차량 Plate 번호
 
   /// **PlateContainer 생성자**
@@ -32,7 +32,14 @@ class PlateContainer extends StatelessWidget {
   /// - [data]: PlateRequest 데이터 리스트
   /// - 반환값: 필터링된 PlateRequest 리스트
   List<PlateRequest> _filterData(List<PlateRequest> data) {
-    return filterCondition != null ? data.where(filterCondition!).toList() : data;
+    final seenIds = <String>{};
+    return data.where((request) {
+      if (seenIds.contains(request.id)) {
+        return false; // 중복 데이터 제거
+      }
+      seenIds.add(request.id);
+      return true;
+    }).toList();
   }
 
   @override
@@ -66,9 +73,10 @@ class PlateContainer extends StatelessWidget {
     return Column(
       children: filteredData.map((item) {
         // **배경색 설정 로직**
-        final backgroundColor = activePlate == item.plateNumber
+        final backgroundColor = activePlate == '${item.plateNumber}_${item.area}'
             ? Colors.greenAccent // 활성화된 Plate: 초록색
             : Colors.white; // 기본 상태: 하얀색
+
 
         return Column(
           children: [
@@ -90,7 +98,7 @@ class PlateContainer extends StatelessWidget {
               // 경과 시간
               backgroundColor: backgroundColor,
               // 배경색 설정
-              onTap: () => onPlateTap(item.plateNumber), // Plate 클릭 동작
+              onTap: () => onPlateTap(item.plateNumber, item.area), // Plate 클릭 동작
             ),
             const SizedBox(height: 5), // 각 Plate 간 간격 추가
           ],
