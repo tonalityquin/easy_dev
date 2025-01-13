@@ -22,25 +22,25 @@ class ManagementNavigation extends StatelessWidget implements PreferredSizeWidge
   /// **위젯 UI 구성**
   @override
   Widget build(BuildContext context) {
-    // **AreaState 가져오기**
+    // **ManagementState 가져오기**
     // - 현재 선택된 지역과 사용 가능한 지역 목록을 관리
-    final areaState = context.watch<ManagementState>();
-    final selectedArea = areaState.currentArea; // 현재 선택된 지역
+    final manageState = context.watch<ManagementState>();
+    final selectMode = manageState.currentStatus; // 현재 선택된 모드
 
     return AppBar(
       title: DropdownButton<String>(
-        value: selectedArea,
+        value: selectMode,
         // 현재 선택된 지역 값
         underline: Container(),
         // 드롭다운 아래 선 제거
         dropdownColor: Colors.white,
         // 드롭다운 메뉴 배경색
-        items: areaState.availableAreas.map((manage) {
+        items: manageState.availableStatus.map((mode) {
           // **지역 목록을 드롭다운 메뉴로 변환**
           return DropdownMenuItem<String>(
-            value: manage, // 각 지역의 값
+            value: mode, // 각 지역의 값
             child: Text(
-              manage, // 지역 이름 표시
+              mode, // 지역 이름 표시
               style: const TextStyle(color: Colors.black), // 텍스트 스타일
             ),
           );
@@ -48,7 +48,7 @@ class ManagementNavigation extends StatelessWidget implements PreferredSizeWidge
         onChanged: (newManage) {
           // **선택된 지역 변경 처리**
           if (newManage != null) {
-            areaState.updateArea(newManage); // 지역 상태 업데이트
+            manageState.updateManage(newManage); // 지역 상태 업데이트
           }
         },
       ),
