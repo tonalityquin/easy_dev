@@ -3,7 +3,7 @@ import 'package:provider/provider.dart'; // Provider 패키지 추가
 import '../../utils/date_utils.dart'; // 날짜 관련 유틸리티
 import '../../states/plate_state.dart'; // PlateRequest 관련 상태 관리
 import '../../states/user_state.dart'; // 유저 상태 관리
-import 'custom_box.dart'; // CustomBox 위젯
+import 'plate_custom_box.dart'; // CustomBox 위젯
 
 /// **PlateContainer 클래스**
 /// - 차량 번호판 관련 데이터를 표시하는 컨테이너
@@ -73,7 +73,7 @@ class PlateContainer extends StatelessWidget {
         return Column(
           children: [
             // CustomBox 위젯으로 Plate 데이터 표시
-            CustomBox(
+            PlateCustomBox(
               topLeftText: item.plateNumber,
               // 차량 번호판
               topRightText: "정산 영역",

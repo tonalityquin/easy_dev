@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-/// **Custombox 클래스**
+/// **PlateCustomboxStyles 클래스**
 /// - 공통 스타일 및 Divider를 제공하는 클래스
-class Custombox {
+class PlateCustomBoxStyles {
   // 제목 텍스트 스타일 (굵고 큰 텍스트)
   static const TextStyle titleStyle = TextStyle(
     fontWeight: FontWeight.bold,
@@ -23,7 +23,7 @@ class Custombox {
 
 /// **CustomBox 위젯**
 /// - 주차 요청 또는 완료 정보를 표시하는 위젯
-class CustomBox extends StatelessWidget {
+class PlateCustomBox extends StatelessWidget {
   // 필드 정의
   final String topLeftText; // 번호판 숫자
   final String topRightText; // 번호판 상태
@@ -45,7 +45,7 @@ class CustomBox extends StatelessWidget {
   /// - [bottomRightText]: 누적 시간
   /// - [onTap]: 탭 이벤트 콜백
   /// - [backgroundColor]: 배경색 (기본값: 흰색)
-  const CustomBox({
+  const PlateCustomBox({
     super.key,
     required this.topLeftText,
     required this.topRightText,
@@ -85,7 +85,7 @@ class CustomBox extends StatelessWidget {
           Expanded(
             flex: leftFlex,
             child: Center(
-              child: Text(leftText, style: leftTextStyle ?? Custombox.subtitleStyle),
+              child: Text(leftText, style: leftTextStyle ?? PlateCustomBoxStyles.subtitleStyle),
             ),
           ),
           // 중앙 텍스트 (옵션)
@@ -94,7 +94,7 @@ class CustomBox extends StatelessWidget {
             Expanded(
               flex: centerFlex,
               child: Center(
-                child: Text(centerText, style: Custombox.subtitleStyle),
+                child: Text(centerText, style: PlateCustomBoxStyles.subtitleStyle),
               ),
             ),
           ],
@@ -103,7 +103,7 @@ class CustomBox extends StatelessWidget {
           Expanded(
             flex: rightFlex,
             child: Center(
-              child: Text(rightText, style: rightTextStyle ?? Custombox.subtitleStyle),
+              child: Text(rightText, style: rightTextStyle ?? PlateCustomBoxStyles.subtitleStyle),
             ),
           ),
         ],
@@ -132,7 +132,7 @@ class CustomBox extends StatelessWidget {
                   rightText: topRightText,
                   leftFlex: 7,
                   rightFlex: 3,
-                  leftTextStyle: Custombox.titleStyle, // 번호판 숫자 bold
+                  leftTextStyle: PlateCustomBoxStyles.titleStyle, // 번호판 숫자 bold
                 ),
                 const Divider(height: 1.0, color: Colors.black), // 구분선
                 // 두 번째 행: 주차 구역과 입차 요청 시간
@@ -143,7 +143,7 @@ class CustomBox extends StatelessWidget {
                   leftFlex: 5,
                   centerFlex: 2,
                   rightFlex: 3,
-                  leftTextStyle: Custombox.titleStyle, // 주차 구역 bold 스타일 적용
+                  leftTextStyle: PlateCustomBoxStyles.titleStyle, // 주차 구역 bold 스타일 적용
                   rightTextStyle: const TextStyle(color: Colors.green), // 입차 요청 시간 초록색
                 ),
                 const Divider(height: 1.0, color: Colors.black), // 구분선
