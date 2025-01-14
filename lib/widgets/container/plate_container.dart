@@ -45,7 +45,7 @@ class PlateContainer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // UserState에서 유저 이름 가져오기
-    final userName = Provider.of<UserState>(context).userName ?? "담당자 없음";
+    final userName = Provider.of<UserState>(context).name ?? "담당자 없음";
 
     // 필터링된 데이터 가져오기
     final filteredData = _filterData(data);
