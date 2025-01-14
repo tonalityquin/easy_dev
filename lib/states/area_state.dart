@@ -5,10 +5,10 @@ import 'package:flutter/material.dart';
 /// - 지역 변경 시 상태 변화를 알림
 class AreaState with ChangeNotifier {
   // 현재 선택된 지역, 기본값은 'Area A'
-  String _currentArea = 'Area A';
+  String _currentArea = 'Seoul';
 
   // 사용 가능한 지역 목록
-  final List<String> _availableAreas = ['Area A', 'Area B', 'Area C'];
+  final List<String> _availableAreas = ['Seoul', 'Incheon', 'YangJoo'];
 
   /// **현재 선택된 지역 반환**
   /// - 외부에서 현재 선택된 지역을 가져올 때 사용

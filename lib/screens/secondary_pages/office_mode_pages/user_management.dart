@@ -51,7 +51,7 @@ class _UserManagementState extends State<UserManagement> {
           'phone': data['phone'] ?? '',
           'email': data['email'] ?? '',
           'role': data['role'] ?? '',
-          'access': data['access'] ?? '',
+          'area': data['area'] ?? '',
         });
 
         fetchedSelectedUsers[id] = data['isSelected'] == true;
@@ -75,7 +75,7 @@ class _UserManagementState extends State<UserManagement> {
   }
 
   /// Firestore에 사용자 추가 (문서 ID로 phone 사용)
-  Future<void> _addUser(String name, String phone, String email, String role, String access) async {
+  Future<void> _addUser(String name, String phone, String email, String role, String area) async {
     try {
       final docRef = _firestore.collection('user_accounts').doc(phone);
       await docRef.set({
@@ -83,7 +83,7 @@ class _UserManagementState extends State<UserManagement> {
         'phone': phone,
         'email': email,
         'role': role,
-        'access': access,
+        'area': area,
         'isSelected': false, // 초기 선택 상태
       });
 
@@ -94,7 +94,7 @@ class _UserManagementState extends State<UserManagement> {
           'phone': phone,
           'email': email,
           'role': role,
-          'access': access,
+          'area': area,
         });
         _selectedUsers[phone] = false; // 초기 선택 상태
       });
@@ -138,39 +138,56 @@ class _UserManagementState extends State<UserManagement> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator()) // 로딩 중 표시
           : _users.isEmpty
-          ? const Center(child: Text('No users added.')) // 사용자 없음 메시지
-          : ListView.builder(
-        itemCount: _users.length,
-        itemBuilder: (context, index) {
-          final userContainer = _users[index];
-          final isSelected = _selectedUsers[userContainer['id']] ?? false;
-          return UserCustomBox(
-            topLeftText: userContainer['name']!,
-            topRightText: userContainer['email']!,
-            midLeftText: userContainer['role']!,
-            midCenterText: userContainer['phone']!,
-            midRightText: userContainer['access']!,
-            onTap: () => _toggleSelection(userContainer['id']!),
-            // 선택 상태 토글
-            backgroundColor: isSelected ? Colors.green : Colors.white, // 배경색 설정
-          );
-        },
-      ),
+              ? const Center(child: Text('No users added.')) // 사용자 없음 메시지
+              : ListView.builder(
+                  itemCount: _users.length,
+                  itemBuilder: (context, index) {
+                    final userContainer = _users[index];
+                    final isSelected = _selectedUsers[userContainer['id']] ?? false;
+                    return UserCustomBox(
+                      topLeftText: userContainer['name']!,
+                      topRightText: userContainer['email']!,
+                      midLeftText: userContainer['role']!,
+                      midCenterText: userContainer['phone']!,
+                      midRightText: userContainer['area']!,
+                      onTap: () => _toggleSelection(userContainer['id']!),
+                      // 선택 상태 토글
+                      backgroundColor: isSelected ? Colors.green : Colors.white, // 배경색 설정
+                    );
+                  },
+                ),
       bottomNavigationBar: SecondaryMiniNavigation(
         icons: _navigationIcons, // 동적으로 변경되는 아이콘
         onIconTapped: (index) {
-          if (index == 1) {
-            // Add 아이콘 클릭 시 UserAccounts 호출
+          final selectedIds = _selectedUsers.keys.where((id) => _selectedUsers[id] == true).toList();
+
+          if (_navigationIcons[index] == Icons.add) {
+            // Add 아이콘 동작
             showDialog(
               context: context,
               builder: (context) => UserAccounts(
-                onSave: (name, phone, email, role, access) {
-                  _addUser(name, phone, email, role, access);
+                onSave: (name, phone, email, role, area) {
+                  _addUser(name, phone, email, role, area);
                 },
+                areaValue: 'Section A', // 현재 TopNavigation에서 선택된 지역 값 전달
               ),
             );
+          } else if (_navigationIcons[index] == Icons.delete && selectedIds.isNotEmpty) {
+            // Delete 아이콘 동작
+            for (final id in selectedIds) {
+              _firestore.collection('user_accounts').doc(id).delete().then((_) {
+                setState(() {
+                  _users.removeWhere((user) => user['id'] == id);
+                  _selectedUsers.remove(id);
+                  _navigationIcons = [Icons.question_mark, Icons.add, Icons.question_mark];
+                });
+              }).catchError((error) {
+                debugPrint('Error deleting user: $error');
+              });
+            }
           }
         },
+
       ),
     );
   }
