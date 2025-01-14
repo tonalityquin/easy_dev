@@ -7,14 +7,15 @@ import 'secondary_info.dart'; // SecondaryInfo 클래스 사용
 /// - 현재 선택된 페이지, 로딩 상태, 데이터 갱신, 자동 갱신 등을 처리
 class SecondaryState with ChangeNotifier {
   int _selectedIndex = 0; // 현재 선택된 페이지의 인덱스, 기본값은 0 (DashBoard)
+  List<SecondaryInfo> _pages; // 페이지 정보 리스트
+  Timer? _timer; // 자동 갱신 타이머
+  bool _isLoading = false; // 로딩 상태
 
   /// **현재 선택된 페이지의 인덱스**
   int get selectedIndex => _selectedIndex;
 
-  final List<SecondaryInfo> pages; // 페이지 정보 리스트
-
-  Timer? _timer; // 자동 갱신 타이머
-  bool _isLoading = false; // 로딩 상태
+  /// **현재 페이지 리스트**
+  List<SecondaryInfo> get pages => _pages;
 
   /// **현재 로딩 상태**
   bool get isLoading => _isLoading;
@@ -28,7 +29,7 @@ class SecondaryState with ChangeNotifier {
 
   /// **PageState 생성자**
   /// - [pages]: 앱의 페이지 리스트를 받아 초기화
-  SecondaryState({required this.pages}) {
+  SecondaryState({required List<SecondaryInfo> pages}) : _pages = pages {
     _startAutoRefresh(); // 자동 갱신 시작
   }
 
@@ -50,13 +51,13 @@ class SecondaryState with ChangeNotifier {
   }
 
   /// **현재 선택된 페이지의 타이틀 반환**
-  String get selectedPageTitle => pages[_selectedIndex].title;
+  String get selectedPageTitle => _pages[_selectedIndex].title;
 
   /// **페이지 탭 처리**
   /// - [index]: 선택된 페이지의 인덱스
   /// - 잘못된 인덱스가 입력되면 예외 발생
   void onItemTapped(int index) {
-    if (index < 0 || index >= pages.length) {
+    if (index < 0 || index >= _pages.length) {
       throw ArgumentError('Invalid index: $index'); // 유효하지 않은 인덱스 처리
     }
     _selectedIndex = index; // 선택된 페이지 업데이트
@@ -69,6 +70,14 @@ class SecondaryState with ChangeNotifier {
     print('데이터 갱신 중...');
     await Future.delayed(const Duration(seconds: 2)); // 데이터 갱신 시뮬레이션
     print('데이터 갱신 완료!');
+    notifyListeners(); // 상태 변경 알림
+  }
+
+  /// **페이지 리스트 업데이트**
+  /// - [newPages]: 새 페이지 리스트
+  void updatePages(List<SecondaryInfo> newPages) {
+    _pages = newPages;
+    _selectedIndex = 0; // 페이지 변경 시 인덱스 초기화
     notifyListeners(); // 상태 변경 알림
   }
 }

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// **PlateNavigation 위젯**
+/// **_AdminNavigation 위젯**
 /// - PlateContainer와 연계된 추가 네비게이션 바
 /// - 아이콘 클릭과 정렬 상태 변경 기능 제공
 ///
@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 /// - [height]: 네비게이션 바의 세로 높이 (기본값: 40.0)
 /// - [icons]: 표시할 아이콘 목록 (필수)
 /// - [onSortToggle]: 정렬 상태 변경 시 호출되는 콜백 함수 (선택적)
-class PlateNavigation extends StatefulWidget {
+class SecondaryRoleNavigation extends StatefulWidget {
   /// **세로 높이**
   /// - 네비게이션 바의 높이를 조절
   final double height;
@@ -25,7 +25,7 @@ class PlateNavigation extends StatefulWidget {
   /// - [height]: 네비게이션 바의 세로 높이 (옵션, 기본값: 40.0)
   /// - [icons]: 네비게이션 바에 표시할 아이콘 목록 (필수)
   /// - [onSortToggle]: 정렬 상태 변경 콜백 (옵션)
-  const PlateNavigation({
+  const SecondaryRoleNavigation({
     super.key,
     this.height = 40.0,
     required this.icons,
@@ -33,10 +33,10 @@ class PlateNavigation extends StatefulWidget {
   });
 
   @override
-  _PlateNavigationState createState() => _PlateNavigationState();
+  _SecondaryRoleNavigation createState() => _SecondaryRoleNavigation();
 }
 
-class _PlateNavigationState extends State<PlateNavigation> {
+class _SecondaryRoleNavigation extends State<SecondaryRoleNavigation> {
   /// **정렬 상태**
   /// - `true`: 오름차순
   /// - `false`: 내림차순
@@ -60,7 +60,7 @@ class _PlateNavigationState extends State<PlateNavigation> {
       children: [
         // **PlateNavigationBar**
         Container(
-          color: Colors.blue[200], // 배경색
+          color: Colors.white, // 배경색
           height: widget.height, // 세로 높이 설정
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround, // 아이콘 간격 균등 분배
