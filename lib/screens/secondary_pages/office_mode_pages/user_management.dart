@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // Firestore 패키지
+import 'package:provider/provider.dart';
 import '../../../widgets/navigation/secondary_role_navigation.dart'; // 상단 내비게이션 바
 import '../../../widgets/navigation/secondary_mini_navigation.dart'; // 하단 내비게이션 바
 import 'user_management_pages/user_accounts.dart'; // UserAccounts 위젯 임포트
 import '../../../widgets/container/user_custom_box.dart'; // UserCustomBox 위젯 임포트
+import '../../../states/area_state.dart';
 
 class UserManagement extends StatefulWidget {
   const UserManagement({Key? key}) : super(key: key);
@@ -165,12 +167,17 @@ class _UserManagementState extends State<UserManagement> {
             // Add 아이콘 동작
             showDialog(
               context: context,
-              builder: (context) => UserAccounts(
-                onSave: (name, phone, email, role, area) {
-                  _addUser(name, phone, email, role, area);
-                },
-                areaValue: 'Section A', // 현재 TopNavigation에서 선택된 지역 값 전달
-              ),
+              builder: (BuildContext dialogContext) {
+                // Provider에서 현재 선택된 지역 가져오기
+                final currentArea = Provider.of<AreaState>(dialogContext, listen: false).currentArea;
+
+                return UserAccounts(
+                  onSave: (name, phone, email, role, area) {
+                    _addUser(name, phone, email, role, area);
+                  },
+                  areaValue: currentArea, // 동적으로 가져온 지역 값 전달
+                );
+              },
             );
           } else if (_navigationIcons[index] == Icons.delete && selectedIds.isNotEmpty) {
             // Delete 아이콘 동작
@@ -187,7 +194,6 @@ class _UserManagementState extends State<UserManagement> {
             }
           }
         },
-
       ),
     );
   }
