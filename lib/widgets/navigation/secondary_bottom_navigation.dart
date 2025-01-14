@@ -12,7 +12,7 @@ import '../../utils/app_colors.dart'; // 앱의 공통 색상 정의
 /// - [onTap]: 내비게이션 바를 탭했을 때 실행되는 콜백 (선택적)
 class SecondaryBottomNavigation extends StatelessWidget {
   /// **키패드 표시 여부 플래그**
-  /// - `true`: 키패드를 표시
+  /// - `true`: 키패드를 표시.
   /// - `false`: 액션 버튼을 표시
   final bool showKeypad;
 

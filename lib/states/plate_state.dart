@@ -271,4 +271,9 @@ class PlateState extends ChangeNotifier {
       print('Error adding completed: $e');
     }
   }
+
+  /// PlateState의 상태를 갱신하고 알림을 보냅니다.
+  void refreshPlateState() {
+    notifyListeners();
+  }
 }

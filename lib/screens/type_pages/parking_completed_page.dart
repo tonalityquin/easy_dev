@@ -34,13 +34,6 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
     if (_activePlate != null && _activePlate!.isNotEmpty) {
       final currentArea = context.read<AreaState>().currentArea;
 
-      if (currentArea == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('지역을 선택해주세요.')),
-        );
-        return;
-      }
-
       final plateNumber = _activePlate!.split('_')[0]; // plateNumber 추출
       context.read<PlateState>().setDepartureRequested(plateNumber, currentArea);
 
@@ -65,12 +58,6 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
       body: Consumer2<PlateState, AreaState>(
         builder: (context, plateState, areaState, child) {
           final currentArea = areaState.currentArea; // 현재 선택된 지역
-
-          if (currentArea == null) {
-            return const Center(
-              child: Text('지역을 선택해주세요.'), // 지역 선택 안내 메시지
-            );
-          }
 
           final parkingCompleted = plateState.getPlatesByArea('parking_completed', currentArea);
 
