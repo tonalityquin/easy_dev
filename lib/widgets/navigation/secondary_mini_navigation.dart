@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../states/management_state.dart';
+import '../../states/secondary_role_state.dart';
 
 /// **ManagementNavigation 위젯**
 /// - 지역 선택 및 전환 기능을 제공하는 AppBar
 /// - 지역 선택을 위해 DropdownButton을 사용하며, 선택된 지역 상태를 업데이트
-class ManagementNavigation extends StatelessWidget implements PreferredSizeWidget {
+class SecondaryMiniNavigation extends StatelessWidget implements PreferredSizeWidget {
   /// **AppBar 높이**
   /// - 기본값: `kToolbarHeight` (표준 툴바 높이)
   final double height;
 
-  /// **ManagementNavigation 생성자**
+  /// **SecondaryMiniNavigation 생성자**
   /// - [height]: AppBar의 높이를 설정 (옵션, 기본값: `kToolbarHeight`)
-  const ManagementNavigation({super.key, this.height = kToolbarHeight});
+  const SecondaryMiniNavigation({super.key, this.height = kToolbarHeight});
 
   /// **AppBar 크기 반환**
   /// - `PreferredSizeWidget` 구현을 위해 필요한 메서드
@@ -24,7 +24,7 @@ class ManagementNavigation extends StatelessWidget implements PreferredSizeWidge
   Widget build(BuildContext context) {
     // **ManagementState 가져오기**
     // - 현재 선택된 지역과 사용 가능한 지역 목록을 관리
-    final manageState = context.watch<ManagementState>();
+    final manageState = context.watch<SecondaryRoleState>();
     final selectMode = manageState.currentStatus; // 현재 선택된 모드
 
     return AppBar(

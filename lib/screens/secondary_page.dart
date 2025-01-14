@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../utils/app_colors.dart'; // 앱의 색상 팔레트 정의
 import '../states/secondary_state.dart'; // 페이지 상태 관리 클래스
+import '../states/secondary_role_state.dart'; // 모드 상태 관리 클래스
 import '../states/secondary_info.dart'; // 페이지 정보를 포함하는 클래스
 
 /// SecondaryPage 위젯
 /// 다양한 타입 페이지를 탐색할 수 있는 기본 화면.
-/// 상태 관리를 위해 SecondaryState를 사용하며, 새로 고침 및 페이지 전환 기능 포함.
 class SecondaryPage extends StatelessWidget {
   const SecondaryPage({super.key});
 
@@ -22,9 +22,20 @@ class SecondaryPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      // SecondaryState 제공자로 초기화
-      create: (_) => SecondaryState(pages: defaultPages),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => SecondaryRoleState()), // Role 상태 관리
+        ChangeNotifierProxyProvider<SecondaryRoleState, SecondaryState>(
+          create: (_) => SecondaryState(pages: fieldModePages), // 초기 Field Mode 페이지
+          update: (_, roleState, secondaryState) {
+            // Role 상태 변화에 따라 페이지 업데이트
+            final newPages = roleState.currentStatus == 'Field Mode'
+                ? fieldModePages
+                : officeModePages;
+            return secondaryState!..updatePages(newPages);
+          },
+        ),
+      ],
       child: Scaffold(
         // 상단 앱바 설정
         appBar: AppBar(
@@ -57,7 +68,6 @@ class RefreshableBody extends StatelessWidget {
       // 수평 드래그 종료 시 동작
       onHorizontalDragEnd: (details) {
         // `Input3Digit`으로 스와이프하는 코드는 삭제되었습니다.
-        // 기존 로직을 비워두거나 다른 동작으로 대체 가능
       },
       child: Consumer<SecondaryState>(
         // SecondaryState 상태를 사용
