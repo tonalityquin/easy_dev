@@ -14,14 +14,13 @@ class _UserAccountsState extends State<UserAccounts> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _roleController = TextEditingController();
+  String _selectedRole = 'Dev'; // 초기값 설정
 
   @override
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
-    _roleController.dispose();
     super.dispose();
   }
 
@@ -59,12 +58,24 @@ class _UserAccountsState extends State<UserAccounts> {
               ),
             ),
             const SizedBox(height: 16),
-            TextField(
-              controller: _roleController,
+            // Role 필드: 드롭다운으로 변경
+            DropdownButtonFormField<String>(
+              value: _selectedRole,
               decoration: const InputDecoration(
                 labelText: 'Role',
                 border: OutlineInputBorder(),
               ),
+              items: ['Dev', 'Admin', 'User']
+                  .map((role) => DropdownMenuItem(
+                value: role,
+                child: Text(role),
+              ))
+                  .toList(),
+              onChanged: (value) {
+                setState(() {
+                  _selectedRole = value!; // 선택한 값으로 업데이트
+                });
+              },
             ),
             const SizedBox(height: 16),
             // Area 필드: 유저 수정 불가능
@@ -87,7 +98,7 @@ class _UserAccountsState extends State<UserAccounts> {
                       _nameController.text,
                       _phoneController.text,
                       _emailController.text,
-                      _roleController.text,
+                      _selectedRole, // 드롭다운에서 선택한 값 전달
                       widget.areaValue, // Area 값 고정 전달
                     );
                     Navigator.pop(context);
