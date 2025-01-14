@@ -60,12 +60,6 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
         builder: (context, plateState, areaState, cild) {
           final currentArea = context.read<AreaState>().currentArea;
 
-          if (currentArea == null) {
-            return const Center(
-              child: Text('지역을 선택해주세요.'),
-            );
-          }
-
           // 현재 지역의 입차 요청 데이터를 필터링
           final parkingRequests = plateState.getPlatesByArea('parking_requests', currentArea);
 
@@ -78,7 +72,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                 filterCondition: (request) => request.type == '입차 요청' || request.type == '입차 중',
                 activePlate: _activePlate,
                 onPlateTap: (plateNumber, area) {
-                  _handlePlateTap(context, plateNumber, currentArea!); // 지역 정보 전달
+                  _handlePlateTap(context, plateNumber, currentArea); // 지역 정보 전달
                 },
                 drivingPlate: plateState.isDrivingPlate,
               ),

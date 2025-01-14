@@ -120,12 +120,6 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
         builder: (context, plateState, areaState, child) {
           final currentArea = areaState.currentArea;
 
-          if (currentArea == null) {
-            return const Center(
-              child: Text('지역을 선택해주세요.'),
-            );
-          }
-
           // 지역별 데이터 필터링
           final departureCompleted = plateState.getPlatesByArea('departure_completed', currentArea);
 
@@ -137,7 +131,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                 filterCondition: (_) => true,
                 activePlate: _activePlate,
                 onPlateTap: (plateNumber, area) {
-                  _handlePlateTap(context, plateNumber, currentArea!); // 현재 지역 정보 포함
+                  _handlePlateTap(context, plateNumber, currentArea); // 현재 지역 정보 포함
                 },
               ),
             ],

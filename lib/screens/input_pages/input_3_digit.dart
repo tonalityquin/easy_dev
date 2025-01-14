@@ -115,14 +115,7 @@ class _Input3DigitState extends State<Input3Digit> {
     final areaState = context.read<AreaState>(); // 현재 지역 가져오기
     final String location = locationController.text;
 
-    if (areaState.currentArea == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('지역을 선택해주세요.')),
-      );
-      return;
-    }
-
-    if (plateState.isPlateNumberDuplicated(plateNumber, areaState.currentArea!)) {
+    if (plateState.isPlateNumberDuplicated(plateNumber, areaState.currentArea)) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('이미 등록된 번호판입니다: $plateNumber')),
       );
@@ -142,12 +135,12 @@ class _Input3DigitState extends State<Input3Digit> {
 
     try {
       if (!isLocationSelected) {
-        await plateState.addRequest(plateNumber, location, areaState.currentArea!); // 지역 정보 포함
+        await plateState.addRequest(plateNumber, location, areaState.currentArea); // 지역 정보 포함
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('입차 요청')),
         );
       } else {
-        await plateState.addCompleted(plateNumber, location, areaState.currentArea!); // 지역 정보 포함
+        await plateState.addCompleted(plateNumber, location, areaState.currentArea); // 지역 정보 포함
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('입차 완료')),
         );

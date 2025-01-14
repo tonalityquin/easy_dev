@@ -40,18 +40,6 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
       final plateNumber = activeParts[0];
       final area = activeParts[1];
 
-      final areaState = context.read<AreaState>();
-
-      if (areaState.currentArea == null) {
-        // 지역이 선택되지 않은 경우 경고 메시지 표시
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('지역을 선택해주세요.'),
-          ),
-        );
-        return;
-      }
-
       // 출차 완료 처리: PlateState 갱신
       context.read<PlateState>().setDepartureCompleted(plateNumber, area);
 
@@ -82,13 +70,6 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
         builder: (context, plateState, areaState, child) {
           final currentArea = context.read<AreaState>().currentArea;
 
-          // 지역 선택 여부 확인
-          if (currentArea == null) {
-            return const Center(
-              child: Text('지역을 선택해주세요.'),
-            );
-          }
-
           // 현재 지역에 해당하는 출차 요청 데이터 필터링
           final departureRequests = plateState.getPlatesByArea('departure_requests', currentArea);
 
@@ -103,7 +84,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                 activePlate: _activePlate,
                 // 현재 활성화된 번호판 전달
                 onPlateTap: (plateNumber, area) {
-                  _handlePlateTap(context, plateNumber, currentArea!); // 번호판 클릭 처리
+                  _handlePlateTap(context, plateNumber, currentArea); // 번호판 클릭 처리
                 },
                 drivingPlate: plateState.isDrivingPlate, // 현재 주행 중 차량 정보 전달
               ),
