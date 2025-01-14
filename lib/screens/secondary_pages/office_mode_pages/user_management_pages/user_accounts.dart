@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 
 class UserAccounts extends StatefulWidget {
   final Function(String name, String phone, String email, String role, String access) onSave;
+  final String areaValue; // TopNavigation에서 전달받은 지역 값
 
-  const UserAccounts({Key? key, required this.onSave}) : super(key: key);
+  const UserAccounts({Key? key, required this.onSave, required this.areaValue}) : super(key: key);
 
   @override
   State<UserAccounts> createState() => _UserAccountsState();
@@ -14,7 +15,6 @@ class _UserAccountsState extends State<UserAccounts> {
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _roleController = TextEditingController();
-  final TextEditingController _accessController = TextEditingController();
 
   @override
   void dispose() {
@@ -22,7 +22,6 @@ class _UserAccountsState extends State<UserAccounts> {
     _phoneController.dispose();
     _emailController.dispose();
     _roleController.dispose();
-    _accessController.dispose();
     super.dispose();
   }
 
@@ -68,12 +67,10 @@ class _UserAccountsState extends State<UserAccounts> {
               ),
             ),
             const SizedBox(height: 16),
-            TextField(
-              controller: _accessController,
-              decoration: const InputDecoration(
-                labelText: 'Access',
-                border: OutlineInputBorder(),
-              ),
+            // Area 필드: 유저 수정 불가능
+            Text(
+              'Area: ${widget.areaValue}',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const Spacer(),
             Row(
@@ -91,7 +88,7 @@ class _UserAccountsState extends State<UserAccounts> {
                       _phoneController.text,
                       _emailController.text,
                       _roleController.text,
-                      _accessController.text,
+                      widget.areaValue, // Area 값 고정 전달
                     );
                     Navigator.pop(context);
                   },
