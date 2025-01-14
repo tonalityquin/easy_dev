@@ -79,7 +79,8 @@ class _UserManagementState extends State<UserManagement> {
   /// Firestore에 사용자 추가 (문서 ID로 phone 사용)
   Future<void> _addUser(String name, String phone, String email, String role, String area) async {
     try {
-      final docRef = _firestore.collection('user_accounts').doc(phone);
+      // phone과 area를 결합한 고유 ID 사용
+      final docRef = _firestore.collection('user_accounts').doc('$phone-$area');
       await docRef.set({
         'name': name,
         'phone': phone,
@@ -91,19 +92,20 @@ class _UserManagementState extends State<UserManagement> {
 
       setState(() {
         _users.add({
-          'id': phone,
+          'id': '$phone-$area', // 고유 ID
           'name': name,
           'phone': phone,
           'email': email,
           'role': role,
           'area': area,
         });
-        _selectedUsers[phone] = false; // 초기 선택 상태
+        _selectedUsers['$phone-$area'] = false; // 초기 선택 상태
       });
     } catch (e) {
       debugPrint('Error adding user: $e');
     }
   }
+
 
   /// 선택 상태 토글 및 Firestore 업데이트
   Future<void> _toggleSelection(String id) async {
@@ -135,16 +137,22 @@ class _UserManagementState extends State<UserManagement> {
 
   @override
   Widget build(BuildContext context) {
+    // 현재 선택된 지역 가져오기
+    final currentArea = context.watch<AreaState>().currentArea;
+
+    // 현재 지역과 일치하는 사용자만 필터링
+    final filteredUsers = _users.where((user) => user['area'] == currentArea).toList();
+
     return Scaffold(
       appBar: const SecondaryRoleNavigation(), // 상단 내비게이션
       body: _isLoading
           ? const Center(child: CircularProgressIndicator()) // 로딩 중 표시
-          : _users.isEmpty
-              ? const Center(child: Text('No users added.')) // 사용자 없음 메시지
+          : filteredUsers.isEmpty
+              ? const Center(child: Text('No users in this area.')) // 지역에 사용자 없음 메시지
               : ListView.builder(
-                  itemCount: _users.length,
+                  itemCount: filteredUsers.length,
                   itemBuilder: (context, index) {
-                    final userContainer = _users[index];
+                    final userContainer = filteredUsers[index];
                     final isSelected = _selectedUsers[userContainer['id']] ?? false;
                     return UserCustomBox(
                       topLeftText: userContainer['name']!,
