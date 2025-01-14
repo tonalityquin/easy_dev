@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../states/area_state.dart';
 import '../../states/plate_state.dart';
+import '../../states/user_state.dart'; // UserState 가져오기
 
 /// **TopNavigation 위젯**
 /// - 지역 선택 및 전환 기능을 제공하는 AppBar
@@ -23,16 +24,21 @@ class TopNavigation extends StatelessWidget implements PreferredSizeWidget {
   /// **위젯 UI 구성**
   @override
   Widget build(BuildContext context) {
-    // **AreaState 가져오기**
+    // **AreaState 및 UserState 가져오기**
     final areaState = context.watch<AreaState>();
+    final userState = context.watch<UserState>();
     final plateState = context.read<PlateState>(); // PlateState 접근
+
     final selectedArea = areaState.currentArea; // 현재 선택된 지역
+    final userRole = userState.role; // 현재 사용자 Role
 
     return AppBar(
       title: DropdownButton<String>(
         value: selectedArea,
-        underline: Container(), // 드롭다운 아래 선 제거
-        dropdownColor: Colors.white, // 드롭다운 메뉴 배경색
+        underline: Container(),
+        // 드롭다운 아래 선 제거
+        dropdownColor: Colors.white,
+        // 드롭다운 메뉴 배경색
         items: areaState.availableAreas.map((area) {
           return DropdownMenuItem<String>(
             value: area, // 각 지역의 값
@@ -42,12 +48,14 @@ class TopNavigation extends StatelessWidget implements PreferredSizeWidget {
             ),
           );
         }).toList(),
-        onChanged: (newArea) {
-          if (newArea != null) {
-            areaState.updateArea(newArea); // 지역 상태 업데이트
-            plateState.refreshPlateState(); // PlateState에 변경 알림
-          }
-        },
+        onChanged: userRole == 'User'
+            ? null // User는 지역 변경 불가
+            : (newArea) {
+                if (newArea != null) {
+                  areaState.updateArea(newArea); // 지역 상태 업데이트
+                  plateState.refreshPlateState(); // PlateState에 변경 알림
+                }
+              },
       ),
       centerTitle: true, // 제목 가운데 정렬
       backgroundColor: Colors.blue, // AppBar 배경색

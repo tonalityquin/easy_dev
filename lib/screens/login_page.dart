@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:provider/provider.dart'; // Provider를 사용하기 위해 추가
+import 'package:provider/provider.dart';
 import '../states/user_state.dart'; // UserState 가져오기
+import '../states/area_state.dart'; // AreaState 가져오기
 
 /// LoginPage 위젯
 /// 사용자가 이름과 전화번호를 통해 Firestore에서 인증할 수 있는 화면
@@ -19,18 +20,21 @@ class _LoginPageState extends State<LoginPage> {
 
   /// 전화번호 유효성 검사
   String? _validatePhone(String phone) {
-    final phoneRegex = RegExp(r'^[0-9]{10,11}$'); // 10~11자리 숫자만 허용
-    if (phone.isEmpty) return '전화번호를 입력해주세요.';
-    if (!phoneRegex.hasMatch(phone)) return '유효한 전화번호를 입력해주세요.';
+    // 공백 제거
+    final trimmedPhone = phone.trim();
+
+    // 전화번호 유효성 검사
+    final phoneRegex = RegExp(r'^[0-9]{10,11}$');
+    if (trimmedPhone.isEmpty) return '전화번호를 입력해주세요.';
+    if (!phoneRegex.hasMatch(trimmedPhone)) return '유효한 전화번호를 입력해주세요.';
     return null;
   }
 
   /// Firestore에서 이름과 전화번호로 사용자 인증
   Future<void> _login() async {
     final name = _nameController.text.trim();
-    final phone = _phoneController.text.trim();
+    final phone = _phoneController.text.trim().replaceAll(RegExp(r'\D'), ''); // 숫자만 남김
 
-    // 전화번호 유효성 검사
     final phoneError = _validatePhone(phone);
     if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -46,29 +50,38 @@ class _LoginPageState extends State<LoginPage> {
     }
 
     setState(() {
-      _isLoading = true; // 로딩 상태 활성화
+      _isLoading = true;
     });
 
     try {
-      // Firestore에서 전화번호로 사용자 문서 조회
-      final docSnapshot = await FirebaseFirestore.instance.collection('user_accounts').doc(phone).get();
+      // Firestore에서 전화번호로 사용자 데이터 조회
+      final querySnapshot =
+      await FirebaseFirestore.instance.collection('user_accounts').where('phone', isEqualTo: phone).get();
 
-      if (docSnapshot.exists) {
-        final data = docSnapshot.data();
-        if (data?['name'] == name) {
-          // 로그인 성공 - UserState 업데이트
+      if (querySnapshot.docs.isNotEmpty) {
+        final doc = querySnapshot.docs.first;
+        final data = doc.data();
+        final role = data['role'];
+        final area = data['area'];
+
+        if (role == null || area == null) {
+          throw Exception('사용자 데이터가 완전하지 않습니다.');
+        }
+
+        if (data['name'] == name) {
           final userState = Provider.of<UserState>(context, listen: false);
-          userState.updateUser(name: name, phone: phone); // UserState에 이름과 전화번호 저장
+          final areaState = Provider.of<AreaState>(context, listen: false);
 
-          Navigator.pushReplacementNamed(context, '/home'); // 홈 화면으로 이동
+          userState.updateUser(name: name, phone: phone, role: role, area: area);
+          areaState.updateArea(area);
+
+          Navigator.pushReplacementNamed(context, '/home');
         } else {
-          // 이름 불일치
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('이름이 올바르지 않습니다.')),
           );
         }
       } else {
-        // 전화번호가 존재하지 않음
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('해당 전화번호가 등록되지 않았습니다.')),
         );
@@ -79,7 +92,7 @@ class _LoginPageState extends State<LoginPage> {
       );
     } finally {
       setState(() {
-        _isLoading = false; // 로딩 상태 비활성화
+        _isLoading = false;
       });
     }
   }

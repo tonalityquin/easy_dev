@@ -106,7 +106,6 @@ class _UserManagementState extends State<UserManagement> {
     }
   }
 
-
   /// 선택 상태 토글 및 Firestore 업데이트
   Future<void> _toggleSelection(String id) async {
     final currentState = _selectedUsers[id] ?? false;

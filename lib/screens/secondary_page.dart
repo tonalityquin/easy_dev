@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../utils/app_colors.dart'; // 앱의 색상 팔레트 정의
 import '../states/secondary_state.dart'; // 페이지 상태 관리 클래스
 import '../states/secondary_role_state.dart'; // 모드 상태 관리 클래스
+import '../states/user_state.dart'; // 사용자 상태 관리 클래스
 import '../states/secondary_info.dart'; // 페이지 정보를 포함하는 클래스
 
 /// SecondaryPage 위젯
@@ -22,6 +23,9 @@ class SecondaryPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final userState = context.watch<UserState>(); // UserState를 통해 사용자 상태 가져오기
+    final userRole = userState.role; // Role 가져오기
+
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => SecondaryRoleState()), // Role 상태 관리
@@ -29,21 +33,18 @@ class SecondaryPage extends StatelessWidget {
           create: (_) => SecondaryState(pages: fieldModePages), // 초기 Field Mode 페이지
           update: (_, roleState, secondaryState) {
             // Role 상태 변화에 따라 페이지 업데이트
-            final newPages = roleState.currentStatus == 'Field Mode'
+            final newPages = userRole == 'User'
                 ? fieldModePages
-                : officeModePages;
+                : (roleState.currentStatus == 'Field Mode' ? fieldModePages : officeModePages);
             return secondaryState!..updatePages(newPages);
           },
         ),
       ],
       child: Scaffold(
-        // 상단 앱바 설정
         appBar: AppBar(
           backgroundColor: AppColors.selectedItemColor, // 선택된 아이템의 색상
         ),
-        // 본문 영역: 새로 고침 가능 본문
         body: RefreshableBody(onRefresh: () => _refreshData(context)),
-        // 하단 내비게이션 바: PlateNavigationBar와 BottomNavigationBar 포함
         bottomNavigationBar: Column(
           mainAxisSize: MainAxisSize.min,
           children: const [
@@ -109,16 +110,20 @@ class PageBottomNavigation extends StatelessWidget {
       // PageState를 사용하여 현재 상태 및 페이지 정보에 접근
       builder: (context, state, child) {
         return BottomNavigationBar(
-          currentIndex: state.selectedIndex, // 현재 선택된 페이지의 인덱스
-          onTap: state.onItemTapped, // 특정 페이지 탭 시 호출
+          currentIndex: state.selectedIndex,
+          // 현재 선택된 페이지의 인덱스
+          onTap: state.onItemTapped,
+          // 특정 페이지 탭 시 호출
           items: state.pages.map((pageInfo) {
             return BottomNavigationBarItem(
               icon: pageInfo.icon, // 페이지 아이콘
               label: pageInfo.title, // 페이지 타이틀
             );
           }).toList(),
-          selectedItemColor: Colors.green, // 선택된 아이템의 색상
-          unselectedItemColor: Colors.purple, // 선택되지 않은 아이템의 색상
+          selectedItemColor: Colors.green,
+          // 선택된 아이템의 색상
+          unselectedItemColor: Colors.purple,
+          // 선택되지 않은 아이템의 색상
           backgroundColor: Colors.white, // 바의 배경 색상
         );
       },
