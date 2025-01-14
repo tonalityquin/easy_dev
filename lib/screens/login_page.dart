@@ -13,14 +13,11 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  // 이름과 전화번호 입력을 제어하는 텍스트 컨트롤러
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController(); // 이름 입력 필드 컨트롤러
+  final TextEditingController _phoneController = TextEditingController(); // 전화번호 입력 필드 컨트롤러
+  bool _isLoading = false; // 로딩 상태 관리
 
-  // 로딩 상태를 제어하는 플래그
-  bool _isLoading = false;
-
-  /// 전화번호 유효성을 검사하는 메서드
+  /// 전화번호 유효성 검사
   String? _validatePhone(String phone) {
     final phoneRegex = RegExp(r'^[0-9]{10,11}$'); // 10~11자리 숫자만 허용
     if (phone.isEmpty) return '전화번호를 입력해주세요.';
@@ -54,14 +51,14 @@ class _LoginPageState extends State<LoginPage> {
 
     try {
       // Firestore에서 전화번호로 사용자 문서 조회
-      final docSnapshot = await FirebaseFirestore.instance.collection('accounts').doc(phone).get();
+      final docSnapshot = await FirebaseFirestore.instance.collection('user_accounts').doc(phone).get();
 
       if (docSnapshot.exists) {
         final data = docSnapshot.data();
         if (data?['name'] == name) {
           // 로그인 성공 - UserState 업데이트
           final userState = Provider.of<UserState>(context, listen: false);
-          userState.setUserName(name); // UserState에 이름 저장
+          userState.updateUser(name: name, phone: phone); // UserState에 이름과 전화번호 저장
 
           Navigator.pushReplacementNamed(context, '/home'); // 홈 화면으로 이동
         } else {
@@ -121,9 +118,9 @@ class _LoginPageState extends State<LoginPage> {
             _isLoading
                 ? const CircularProgressIndicator() // 로딩 상태 표시
                 : ElevatedButton(
-                    onPressed: _login, // 로그인 메서드 호출
-                    child: const Text("로그인"),
-                  ),
+              onPressed: _login, // 로그인 메서드 호출
+              child: const Text("로그인"),
+            ),
           ],
         ),
       ),

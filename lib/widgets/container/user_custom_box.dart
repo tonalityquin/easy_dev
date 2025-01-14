@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-/// **Custombox 클래스**
-/// - 공통 스타일 및 Divider를 제공하는 클래스
 class UserCustomBoxStyles {
   // 제목 텍스트 스타일 (굵고 큰 텍스트)
   static const TextStyle titleStyle = TextStyle(
@@ -21,8 +19,6 @@ class UserCustomBoxStyles {
   static const Divider commonDivider = Divider(thickness: 1, color: Colors.grey);
 }
 
-/// **CustomBox 위젯**
-/// - 주차 요청 또는 완료 정보를 표시하는 위젯
 class UserCustomBox extends StatelessWidget {
   // 필드 정의
   final String topLeftText; // 번호판 숫자
@@ -30,21 +26,9 @@ class UserCustomBox extends StatelessWidget {
   final String midLeftText; // 주차 구역
   final String midCenterText; // 중앙 텍스트 (옵션)
   final String midRightText; // 입차 요청 시간
-  final String bottomLeftText; // 추가 정보
-  final String bottomRightText; // 누적 시간
   final VoidCallback onTap; // 탭 이벤트 콜백
   final Color backgroundColor; // 배경색
 
-  /// **UserCustomBox 생성자**
-  /// - [topLeftText]: 번호판 숫자
-  /// - [topRightText]: 번호판 상태
-  /// - [midLeftText]: 주차 구역
-  /// - [midCenterText]: 중앙 텍스트
-  /// - [midRightText]: 입차 요청 시간
-  /// - [bottomLeftText]: 추가 정보
-  /// - [bottomRightText]: 누적 시간
-  /// - [onTap]: 탭 이벤트 콜백
-  /// - [backgroundColor]: 배경색 (기본값: 흰색)
   const UserCustomBox({
     super.key,
     required this.topLeftText,
@@ -52,28 +36,17 @@ class UserCustomBox extends StatelessWidget {
     required this.midLeftText,
     required this.midCenterText,
     required this.midRightText,
-    required this.bottomLeftText,
-    required this.bottomRightText,
     required this.onTap,
     this.backgroundColor = Colors.white,
   });
 
-  /// **행(Row) 빌드 메서드**
-  /// - [leftText]: 왼쪽 텍스트
-  /// - [centerText]: 중앙 텍스트 (선택적)
-  /// - [rightText]: 오른쪽 텍스트
-  /// - [leftFlex]: 왼쪽 영역 비율 (기본값: 7)
-  /// - [centerFlex]: 중앙 영역 비율 (기본값: 2)
-  /// - [rightFlex]: 오른쪽 영역 비율 (기본값: 3)
-  /// - [leftTextStyle]: 왼쪽 텍스트 스타일 (선택적)
-  /// - [rightTextStyle]: 오른쪽 텍스트 스타일 (선택적)
   Widget buildRow({
     required String leftText,
     String? centerText,
     required String rightText,
-    int leftFlex = 7,
-    int centerFlex = 2,
-    int rightFlex = 3,
+    required int leftFlex,
+    required int centerFlex,
+    required int rightFlex,
     TextStyle? leftTextStyle,
     TextStyle? rightTextStyle,
   }) {
@@ -117,7 +90,7 @@ class UserCustomBox extends StatelessWidget {
       onTap: onTap, // 탭 이벤트
       child: Container(
         width: double.infinity, // 가로 길이를 부모에 맞춤
-        height: 120, // 고정된 높이
+        height: 80, // 고정된 높이 (조정됨)
         decoration: BoxDecoration(
           color: backgroundColor, // 배경색
           border: Border.all(color: Colors.black, width: 2.0), // 테두리 스타일
@@ -126,34 +99,28 @@ class UserCustomBox extends StatelessWidget {
           children: [
             Column(
               children: [
-                // 첫 번째 행: 번호판 숫자와 상태 (7:3 비율)
+                // 첫 번째 행: 번호판 숫자와 상태 (3:7 비율)
                 buildRow(
                   leftText: topLeftText,
                   rightText: topRightText,
-                  leftFlex: 7,
-                  rightFlex: 3,
+                  leftFlex: 3,
+                  centerFlex: 0,
+                  // 중앙 텍스트 없음
+                  rightFlex: 7,
                   leftTextStyle: UserCustomBoxStyles.titleStyle, // 번호판 숫자 bold
                 ),
                 const Divider(height: 1.0, color: Colors.black), // 구분선
-                // 두 번째 행: 주차 구역과 입차 요청 시간
+                // 두 번째 행: 주차 구역, 중앙 텍스트, 입차 요청 시간 (3:5:2 비율)
                 buildRow(
-                  leftText: midLeftText, // 주차 구역 bold
+                  leftText: midLeftText,
                   centerText: midCenterText,
                   rightText: midRightText,
-                  leftFlex: 5,
-                  centerFlex: 2,
-                  rightFlex: 3,
-                  leftTextStyle: UserCustomBoxStyles.titleStyle, // 주차 구역 bold 스타일 적용
-                  rightTextStyle: const TextStyle(color: Colors.green), // 입차 요청 시간 초록색
-                ),
-                const Divider(height: 1.0, color: Colors.black), // 구분선
-                // 세 번째 행: 추가 정보와 누적 시간
-                buildRow(
-                  leftText: bottomLeftText,
-                  rightText: bottomRightText,
-                  leftFlex: 7,
-                  rightFlex: 3,
-                  rightTextStyle: const TextStyle(color: Colors.red), // 누적 시간 붉은색
+                  leftFlex: 3,
+                  centerFlex: 5,
+                  rightFlex: 2,
+                  leftTextStyle: UserCustomBoxStyles.titleStyle,
+                  // 주차 구역 bold
+                  rightTextStyle: const TextStyle(color: Colors.black), // 입차 요청 시간 초록색
                 ),
               ],
             ),
