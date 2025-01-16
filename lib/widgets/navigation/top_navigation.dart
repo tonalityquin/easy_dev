@@ -42,11 +42,11 @@ class TopNavigation extends StatelessWidget implements PreferredSizeWidget {
         onChanged: (userRole == 'Fielder' || userRole == 'Field Leader')
             ? null
             : (newArea) {
-          if (newArea != null) {
-            areaState.updateArea(newArea);
-            plateState.refreshPlateState();
-          }
-        },
+                if (newArea != null) {
+                  areaState.updateArea(newArea);
+                  plateState.refreshPlateState();
+                }
+              },
         style: const TextStyle(color: Colors.black),
       ),
       centerTitle: true,
