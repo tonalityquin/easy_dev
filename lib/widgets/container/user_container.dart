@@ -29,8 +29,7 @@ class UserContainer extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16), // 내부 여백만 유지
         decoration: BoxDecoration(
           color: isSelected ? Colors.green : Colors.white,
           border: Border.all(color: Colors.grey),

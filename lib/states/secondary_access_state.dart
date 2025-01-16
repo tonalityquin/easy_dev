@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'secondary_info.dart'; // Import for fieldModePages and officeModePages
 
 /// **관리 클래스**
-class SecondaryRoleState with ChangeNotifier {
+class SecondaryAccessState with ChangeNotifier {
   String _currentStatus = 'Office Mode'; // 기본값
   final List<String> _availableStatus = ['Field Mode', 'Office Mode']; // 선택 가능한 모드 목록
   String? _currentArea;

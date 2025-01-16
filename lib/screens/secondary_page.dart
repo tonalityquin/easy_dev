@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../utils/app_colors.dart'; // 앱의 색상 팔레트 정의
 import '../states/secondary_state.dart'; // 페이지 상태 관리 클래스
-import '../states/secondary_role_state.dart'; // 모드 상태 관리 클래스
+import '../states/secondary_access_state.dart'; // 모드 상태 관리 클래스
 import '../states/user_state.dart'; // 사용자 상태 관리 클래스
 import '../states/secondary_info.dart'; // 페이지 정보를 포함하는 클래스
 
@@ -28,8 +28,8 @@ class SecondaryPage extends StatelessWidget {
 
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => SecondaryRoleState()), // Role 상태 관리
-        ChangeNotifierProxyProvider<SecondaryRoleState, SecondaryState>(
+        ChangeNotifierProvider(create: (_) => SecondaryAccessState()), // Role 상태 관리
+        ChangeNotifierProxyProvider<SecondaryAccessState, SecondaryState>(
           create: (_) => SecondaryState(pages: fieldModePages), // 초기 Field Mode 페이지
           update: (_, roleState, secondaryState) {
             // Role 상태 변화에 따라 페이지 업데이트

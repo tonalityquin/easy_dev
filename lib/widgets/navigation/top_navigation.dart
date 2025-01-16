@@ -36,7 +36,7 @@ class TopNavigation extends StatelessWidget implements PreferredSizeWidget {
             child: Text(area),
           );
         }).toList(),
-        onChanged: userRole == 'User'
+        onChanged: (userRole == 'Fielder' || userRole == 'Field Leader')
             ? null
             : (newArea) {
                 if (newArea != null) {

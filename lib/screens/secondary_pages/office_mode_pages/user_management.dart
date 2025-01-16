@@ -22,9 +22,9 @@ class _UserManagementState extends State<UserManagement> {
 
   // SecondaryMiniNavigation 아이콘 상태
   List<IconData> _navigationIcons = [
-    Icons.question_mark,
-    Icons.add,
-    Icons.question_mark,
+    Icons.add, // 기본: 사용자 추가
+    Icons.help_outline, // 기본: 기능 미정 Placeholder
+    Icons.settings, // 기본: 설정 관련 Placeholder
   ];
 
   /// Firestore에서 데이터 가져오기
@@ -120,7 +120,7 @@ class _UserManagementState extends State<UserManagement> {
         if (_selectedUsers.containsValue(true)) {
           _navigationIcons = [Icons.lock, Icons.delete, Icons.edit];
         } else {
-          _navigationIcons = [Icons.question_mark, Icons.add, Icons.question_mark];
+          _navigationIcons = [Icons.add, Icons.help_outline, Icons.settings];
         }
       });
     } catch (e) {
@@ -193,7 +193,7 @@ class _UserManagementState extends State<UserManagement> {
                 setState(() {
                   _users.removeWhere((user) => user['id'] == id);
                   _selectedUsers.remove(id);
-                  _navigationIcons = [Icons.question_mark, Icons.add, Icons.question_mark];
+                  _navigationIcons = [Icons.add, Icons.help_outline, Icons.settings];
                 });
               }).catchError((error) {
                 debugPrint('Error deleting user: $error');
