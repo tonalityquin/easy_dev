@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../../widgets/input_field/front_3_digit.dart';
 import '../../widgets/input_field/middle_1_digit.dart';
 import '../../widgets/input_field/back_4_digit.dart';
 import '../../widgets/input_field/location_field.dart';
-import '../../widgets/keypad/location_select.dart';
+import '../../widgets/container/location_container.dart';
 import '../../widgets/keypad/num_keypad.dart';
 import '../../widgets/keypad/kor_keypad.dart';
 import '../../widgets/navigation/bottom_navigation.dart';
@@ -142,7 +143,6 @@ class _Input3DigitState extends State<Input3Digit> {
 
     try {
       if (!isLocationSelected) {
-        // 입차 요청으로 데이터 추가
         await plateState.addRequestOrCompleted(
           collection: 'parking_requests',
           plateNumber: plateNumber,
@@ -152,7 +152,6 @@ class _Input3DigitState extends State<Input3Digit> {
         );
         _showSnackBar('입차 요청');
       } else {
-        // 입차 완료로 데이터 추가
         await plateState.addRequestOrCompleted(
           collection: 'parking_completed',
           plateNumber: plateNumber,
@@ -173,7 +172,6 @@ class _Input3DigitState extends State<Input3Digit> {
       });
     }
   }
-
 
   bool _validatePlateNumber(String plateNumber) {
     final RegExp platePattern = RegExp(r'^\d{3}-[가-힣]-\d{4}$');
@@ -230,12 +228,42 @@ class _Input3DigitState extends State<Input3Digit> {
                       showModalBottomSheet(
                         context: context,
                         builder: (BuildContext context) {
-                          return LocationSelect(
-                            onSelect: (String selectedLocation) {
-                              setState(() {
-                                locationController.text = selectedLocation;
-                                isLocationSelected = true;
-                              });
+                          final currentArea = context.watch<AreaState>().currentArea;
+
+                          return FutureBuilder<QuerySnapshot>(
+                            future: FirebaseFirestore.instance
+                                .collection('locations')
+                                .where('area', isEqualTo: currentArea)
+                                .get(),
+                            builder: (BuildContext context, AsyncSnapshot<QuerySnapshot> snapshot) {
+                              if (snapshot.connectionState == ConnectionState.waiting) {
+                                return const Center(child: CircularProgressIndicator());
+                              }
+                              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                                return const Center(child: Text('No locations available.'));
+                              }
+
+                              final locations = snapshot.data!.docs;
+
+                              return ListView.builder(
+                                itemCount: locations.length,
+                                itemBuilder: (BuildContext context, int index) {
+                                  final location = locations[index];
+                                  final locationName = location['locationName'];
+
+                                  return LocationContainer(
+                                    location: locationName,
+                                    isSelected: locationController.text == locationName,
+                                    onTap: () {
+                                      setState(() {
+                                        locationController.text = locationName;
+                                        isLocationSelected = true;
+                                      });
+                                      Navigator.pop(context);
+                                    },
+                                  );
+                                },
+                              );
                             },
                           );
                         },
@@ -281,12 +309,42 @@ class _Input3DigitState extends State<Input3Digit> {
                       showModalBottomSheet(
                         context: context,
                         builder: (BuildContext context) {
-                          return LocationSelect(
-                            onSelect: (String selectedLocation) {
-                              setState(() {
-                                locationController.text = selectedLocation;
-                                isLocationSelected = true;
-                              });
+                          final currentArea = context.watch<AreaState>().currentArea;
+
+                          return FutureBuilder<QuerySnapshot>(
+                            future: FirebaseFirestore.instance
+                                .collection('locations')
+                                .where('area', isEqualTo: currentArea)
+                                .get(),
+                            builder: (BuildContext context, AsyncSnapshot<QuerySnapshot> snapshot) {
+                              if (snapshot.connectionState == ConnectionState.waiting) {
+                                return const Center(child: CircularProgressIndicator());
+                              }
+                              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                                return const Center(child: Text('No locations available.'));
+                              }
+
+                              final locations = snapshot.data!.docs;
+
+                              return ListView.builder(
+                                itemCount: locations.length,
+                                itemBuilder: (BuildContext context, int index) {
+                                  final location = locations[index];
+                                  final locationName = location['locationName'];
+
+                                  return LocationContainer(
+                                    location: locationName,
+                                    isSelected: locationController.text == locationName,
+                                    onTap: () {
+                                      setState(() {
+                                        locationController.text = locationName;
+                                        isLocationSelected = true;
+                                      });
+                                      Navigator.pop(context);
+                                    },
+                                  );
+                                },
+                              );
                             },
                           );
                         },
