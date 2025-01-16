@@ -182,7 +182,7 @@ class _UserManagementState extends State<UserManagement> {
                   onSave: (name, phone, email, role, area) {
                     _addUser(name, phone, email, role, area);
                   },
-                  areaValue: currentArea, // 동적으로 가져온 지역 값 전달
+                  areaValue: currentArea!, // 동적으로 가져온 지역 값 전달
                 );
               },
             );

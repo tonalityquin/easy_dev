@@ -17,23 +17,31 @@ class ParkingRequestPage extends StatefulWidget {
 class _ParkingRequestPageState extends State<ParkingRequestPage> {
   String? _activePlate; // 현재 선택된 차량 번호판 상태를 관리하는 변수
 
+  /// SnackBar 메시지 출력 함수
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   /// 차량 번호판을 탭할 때 호출되는 메서드
   /// [plateNumber]: 탭된 차량 번호판 번호
-  void _handlePlateTap(BuildContext context, String plateNumber, String area) {
-    final String activeKey = '${plateNumber}_$area'; // plateNumber + area 조합
+  void _handlePlateTap(String plateNumber, String area) {
+    final String activeKey = '${plateNumber}_$area';
 
     setState(() {
-      _activePlate = _activePlate == activeKey ? null : activeKey;
+      // 선택 상태 토글
+      _activePlate = (_activePlate == activeKey) ? null : activeKey;
     });
+  }
 
-    // Driving 상태 업데이트
-    context.read<PlateState>().setDrivingPlate(plateNumber, area);
+  /// 선택된 차량 번호판 여부 확인
+  bool _isPlateSelected() {
+    return _activePlate != null && _activePlate!.isNotEmpty;
   }
 
   /// '입차 완료' 버튼 클릭 시 호출되는 메서드
   /// 선택된 차량 번호판을 주차 완료 상태로 업데이트
-  void _handleParkingCompleted(BuildContext context) {
-    if (_activePlate != null && _activePlate!.isNotEmpty) {
+  void _handleParkingCompleted() {
+    if (_isPlateSelected()) {
       final activeParts = _activePlate!.split('_');
       final plateNumber = activeParts[0];
       final area = activeParts[1];
@@ -44,11 +52,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
         _activePlate = null;
       });
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('먼저 차량을 선택하세요.'),
-        ),
-      );
+      _showSnackBar('먼저 차량을 선택하세요.');
     }
   }
 
@@ -57,22 +61,21 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
     return Scaffold(
       appBar: const TopNavigation(),
       body: Consumer2<PlateState, AreaState>(
-        builder: (context, plateState, areaState, cild) {
-          final currentArea = context.read<AreaState>().currentArea;
+        builder: (context, plateState, areaState, child) {
+          final currentArea = areaState.currentArea;
 
           // 현재 지역의 입차 요청 데이터를 필터링
-          final parkingRequests = plateState.getPlatesByArea('parking_requests', currentArea);
+          final parkingRequests = plateState.getPlatesByArea('parking_requests', currentArea!);
 
           return ListView(
             padding: const EdgeInsets.all(8.0),
             children: [
               PlateContainer(
                 data: parkingRequests,
-                // 필터링된 데이터 전달
                 filterCondition: (request) => request.type == '입차 요청' || request.type == '입차 중',
                 activePlate: _activePlate,
                 onPlateTap: (plateNumber, area) {
-                  _handlePlateTap(context, plateNumber, currentArea); // 지역 정보 전달
+                  _handlePlateTap(plateNumber, currentArea);
                 },
                 drivingPlate: plateState.isDrivingPlate,
               ),
@@ -83,21 +86,21 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
       bottomNavigationBar: BottomNavigationBar(
         items: [
           BottomNavigationBarItem(
-            icon: _activePlate == null ? const Icon(Icons.search) : const Icon(Icons.highlight_alt),
+            icon: Icon(_activePlate == null ? Icons.search : Icons.highlight_alt),
             label: _activePlate == null ? '번호판 검색' : '정보 수정',
           ),
           BottomNavigationBarItem(
-            icon: _activePlate == null ? const Icon(Icons.local_parking) : const Icon(Icons.check_circle),
+            icon: Icon(_activePlate == null ? Icons.local_parking : Icons.check_circle),
             label: _activePlate == null ? '구역별 검색' : '입차 완료',
           ),
           BottomNavigationBarItem(
-            icon: _activePlate == null ? const Icon(Icons.sort) : const Icon(Icons.sort_by_alpha),
-            label: _activePlate == null ? '정렬' : '뭘 넣지?',
+            icon: Icon(_activePlate == null ? Icons.sort : Icons.sort_by_alpha),
+            label: _activePlate == null ? '정렬' : '정렬 완료',
           ),
         ],
         onTap: (index) {
           if (index == 1) {
-            _handleParkingCompleted(context);
+            _handleParkingCompleted();
           }
         },
       ),

@@ -11,8 +11,6 @@ import '../../widgets/navigation/bottom_navigation.dart';
 import '../../states/plate_state.dart';
 import '../../states/area_state.dart'; // AreaState 가져오기
 
-/// Input3Digit 위젯
-/// 번호판 입력 및 주차 구역 설정을 처리하는 화면
 class Input3Digit extends StatefulWidget {
   const Input3Digit({super.key});
 
@@ -41,19 +39,30 @@ class _Input3DigitState extends State<Input3Digit> {
   void initState() {
     super.initState();
     activeController = controller3digit;
-    controller3digit.addListener(_handleInputChange);
-    controller1digit.addListener(_handleInputChange);
-    controller4digit.addListener(_handleInputChange);
+    _addInputListeners();
     isLocationSelected = locationController.text.isNotEmpty;
   }
 
   @override
   void dispose() {
+    _removeInputListeners();
     controller3digit.dispose();
     controller1digit.dispose();
     controller4digit.dispose();
     locationController.dispose();
     super.dispose();
+  }
+
+  void _addInputListeners() {
+    controller3digit.addListener(_handleInputChange);
+    controller1digit.addListener(_handleInputChange);
+    controller4digit.addListener(_handleInputChange);
+  }
+
+  void _removeInputListeners() {
+    controller3digit.removeListener(_handleInputChange);
+    controller1digit.removeListener(_handleInputChange);
+    controller4digit.removeListener(_handleInputChange);
   }
 
   void _setActiveController(TextEditingController controller) {
@@ -71,9 +80,7 @@ class _Input3DigitState extends State<Input3Digit> {
     if (!_validateField(controller3digit, 3) ||
         !_validateField(controller1digit, 1) ||
         !_validateField(controller4digit, 4)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('입력값이 유효하지 않습니다. 다시 확인해주세요.')),
-      );
+      _showSnackBar('입력값이 유효하지 않습니다. 다시 확인해주세요.');
       clearInput();
       return;
     }
@@ -90,6 +97,10 @@ class _Input3DigitState extends State<Input3Digit> {
     } else if (activeController == controller1digit && controller1digit.text.length == 1) {
       _setActiveController(controller4digit);
     }
+  }
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   void clearInput() {
@@ -112,20 +123,16 @@ class _Input3DigitState extends State<Input3Digit> {
   Future<void> _handleAction() async {
     final String plateNumber = '${controller3digit.text}-${controller1digit.text}-${controller4digit.text}';
     final plateState = context.read<PlateState>();
-    final areaState = context.read<AreaState>(); // 현재 지역 가져오기
+    final areaState = context.read<AreaState>();
     final String location = locationController.text;
 
-    if (plateState.isPlateNumberDuplicated(plateNumber, areaState.currentArea)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('이미 등록된 번호판입니다: $plateNumber')),
-      );
+    if (plateState.isPlateNumberDuplicated(plateNumber, areaState.currentArea!)) {
+      _showSnackBar('이미 등록된 번호판입니다: $plateNumber');
       return;
     }
 
     if (!_validatePlateNumber(plateNumber)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('번호판 형식이 올바르지 않습니다.')),
-      );
+      _showSnackBar('번호판 형식이 올바르지 않습니다.');
       return;
     }
 
@@ -135,29 +142,38 @@ class _Input3DigitState extends State<Input3Digit> {
 
     try {
       if (!isLocationSelected) {
-        await plateState.addRequest(plateNumber, location, areaState.currentArea); // 지역 정보 포함
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('입차 요청')),
+        // 입차 요청으로 데이터 추가
+        await plateState.addRequestOrCompleted(
+          collection: 'parking_requests',
+          plateNumber: plateNumber,
+          location: location,
+          area: areaState.currentArea!,
+          type: '입차 요청',
         );
+        _showSnackBar('입차 요청');
       } else {
-        await plateState.addCompleted(plateNumber, location, areaState.currentArea); // 지역 정보 포함
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('입차 완료')),
+        // 입차 완료로 데이터 추가
+        await plateState.addRequestOrCompleted(
+          collection: 'parking_completed',
+          plateNumber: plateNumber,
+          location: location,
+          area: areaState.currentArea!,
+          type: '입차 완료',
         );
+        _showSnackBar('입차 완료');
         _clearLocation();
       }
 
       clearInput();
     } catch (error) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('오류 발생: $error')),
-      );
+      _showSnackBar('오류 발생: $error');
     } finally {
       setState(() {
         isLoading = false;
       });
     }
   }
+
 
   bool _validatePlateNumber(String plateNumber) {
     final RegExp platePattern = RegExp(r'^\d{3}-[가-힣]-\d{4}$');

@@ -1,15 +1,12 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../states/plate_state.dart'; // PlateState 상태 관리 클래스
-import '../../states/area_state.dart'; // AreaState 상태 관리 클래스
-import '../../widgets/container/plate_container.dart'; // 번호판 컨테이너 위젯
-import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바
+import '../../states/plate_state.dart';
+import '../../states/area_state.dart';
+import '../../widgets/container/plate_container.dart';
+import '../../widgets/navigation/top_navigation.dart';
 
-/// DepartureCompletedPage
-/// 출차 완료된 차량 리스트를 보여주는 페이지.
-/// 데이터 삭제 및 로그아웃 기능 포함.
 class DepartureCompletedPage extends StatefulWidget {
   const DepartureCompletedPage({super.key});
 
@@ -18,18 +15,27 @@ class DepartureCompletedPage extends StatefulWidget {
 }
 
 class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
-  String? _activePlate; // 현재 눌린 번호판의 상태 관리
+  String? _activePlate;
+
+  /// SnackBar 메시지 출력 함수
+  void _showSnackBar(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  /// 번호판 선택 여부 확인
+  bool _isPlateSelected() {
+    return _activePlate != null && _activePlate!.isNotEmpty;
+  }
 
   /// 번호판 클릭 시 호출되는 메서드
-  void _handlePlateTap(BuildContext context, String plateNumber, String area) {
-    final String activeKey = '${plateNumber}_$area'; // 고유 키 생성
-
+  void _handlePlateTap(String plateNumber, String area) {
+    final String activeKey = '${plateNumber}_$area';
     setState(() {
-      _activePlate = _activePlate == activeKey ? null : activeKey;
+      _activePlate = (_activePlate == activeKey) ? null : activeKey;
     });
   }
 
-  /// 모든 컬렉션의 데이터를 삭제
+  /// 모든 데이터 삭제
   Future<void> _deleteAllData(BuildContext context) async {
     try {
       final collections = [
@@ -44,21 +50,13 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
           await doc.reference.delete();
         }
       }
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('모든 문서가 삭제되었습니다. 컬렉션은 유지됩니다.')),
-        );
-      }
+      _showSnackBar(context, '모든 문서가 삭제되었습니다. 컬렉션은 유지됩니다.');
     } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('문서 삭제 실패: $e')),
-        );
-      }
+      _showSnackBar(context, '문서 삭제 실패: $e');
     }
   }
 
-  /// 로그아웃 처리 메서드
+  /// 로그아웃 처리
   Future<void> _logout(BuildContext context) async {
     try {
       await FirebaseAuth.instance.signOut();
@@ -66,11 +64,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
         Navigator.pushReplacementNamed(context, '/login');
       }
     } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('로그아웃 실패: $e')),
-        );
-      }
+      _showSnackBar(context, '로그아웃 실패: $e');
     }
   }
 
@@ -78,8 +72,8 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const TopNavigation(), // TopNavigation 추가
-        backgroundColor: Colors.blue, // 배경색
+        title: const TopNavigation(),
+        backgroundColor: Colors.blue,
         actions: [
           // 로그아웃 버튼
           IconButton(
@@ -119,9 +113,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
       body: Consumer2<PlateState, AreaState>(
         builder: (context, plateState, areaState, child) {
           final currentArea = areaState.currentArea;
-
-          // 지역별 데이터 필터링
-          final departureCompleted = plateState.getPlatesByArea('departure_completed', currentArea);
+          final departureCompleted = plateState.getPlatesByArea('departure_completed', currentArea!);
 
           return ListView(
             padding: const EdgeInsets.all(8.0),
@@ -130,9 +122,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                 data: departureCompleted,
                 filterCondition: (_) => true,
                 activePlate: _activePlate,
-                onPlateTap: (plateNumber, area) {
-                  _handlePlateTap(context, plateNumber, currentArea); // 현재 지역 정보 포함
-                },
+                onPlateTap: _handlePlateTap,
               ),
             ],
           );
@@ -141,16 +131,16 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
       bottomNavigationBar: BottomNavigationBar(
         items: [
           BottomNavigationBarItem(
-            icon: _activePlate == null ? const Icon(Icons.search) : const Icon(Icons.highlight_alt),
-            label: _activePlate == null ? '검색' : '정보 수정',
+            icon: Icon(_isPlateSelected() ? Icons.highlight_alt : Icons.search),
+            label: _isPlateSelected() ? '정보 수정' : '검색',
           ),
           BottomNavigationBarItem(
-            icon: _activePlate == null ? const Icon(Icons.local_parking) : const Icon(Icons.check_circle),
-            label: _activePlate == null ? '주차 구역' : '입차 완료',
+            icon: Icon(_isPlateSelected() ? Icons.check_circle : Icons.local_parking),
+            label: _isPlateSelected() ? '출차 완료' : '주차 구역',
           ),
-          BottomNavigationBarItem(
-            icon: _activePlate == null ? const Icon(Icons.sort) : const Icon(Icons.sort_by_alpha),
-            label: _activePlate == null ? '정렬' : '뭘 넣지?',
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.sort),
+            label: '정렬',
           ),
         ],
       ),

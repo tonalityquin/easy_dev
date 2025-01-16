@@ -3,8 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../states/user_state.dart'; // UserState 가져오기
 import '../states/area_state.dart'; // AreaState 가져오기
+import 'dart:io'; // 인터넷 연결 확인을 위한 패키지
 
-/// LoginPage 위젯
 /// 사용자가 이름과 전화번호를 통해 Firestore에서 인증할 수 있는 화면
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -18,16 +18,28 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController _phoneController = TextEditingController(); // 전화번호 입력 필드 컨트롤러
   bool _isLoading = false; // 로딩 상태 관리
 
+  /// SnackBar 메시지 출력 함수
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   /// 전화번호 유효성 검사
   String? _validatePhone(String phone) {
-    // 공백 제거
     final trimmedPhone = phone.trim();
-
-    // 전화번호 유효성 검사
     final phoneRegex = RegExp(r'^[0-9]{10,11}$');
     if (trimmedPhone.isEmpty) return '전화번호를 입력해주세요.';
     if (!phoneRegex.hasMatch(trimmedPhone)) return '유효한 전화번호를 입력해주세요.';
     return null;
+  }
+
+  /// 인터넷 연결 확인
+  Future<bool> _isInternetConnected() async {
+    try {
+      final result = await InternetAddress.lookup('google.com');
+      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Firestore에서 이름과 전화번호로 사용자 인증
@@ -37,15 +49,11 @@ class _LoginPageState extends State<LoginPage> {
 
     final phoneError = _validatePhone(phone);
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('이름을 입력해주세요.')),
-      );
+      _showSnackBar('이름을 입력해주세요.');
       return;
     }
     if (phoneError != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(phoneError)),
-      );
+      _showSnackBar(phoneError);
       return;
     }
 
@@ -53,10 +61,19 @@ class _LoginPageState extends State<LoginPage> {
       _isLoading = true;
     });
 
+    // 인터넷 연결 확인
+    if (!await _isInternetConnected()) {
+      _showSnackBar('인터넷 연결이 필요합니다.');
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    }
+
     try {
       // Firestore에서 전화번호로 사용자 데이터 조회
       final querySnapshot =
-      await FirebaseFirestore.instance.collection('user_accounts').where('phone', isEqualTo: phone).get();
+          await FirebaseFirestore.instance.collection('user_accounts').where('phone', isEqualTo: phone).get();
 
       if (querySnapshot.docs.isNotEmpty) {
         final doc = querySnapshot.docs.first;
@@ -77,19 +94,13 @@ class _LoginPageState extends State<LoginPage> {
 
           Navigator.pushReplacementNamed(context, '/home');
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('이름이 올바르지 않습니다.')),
-          );
+          _showSnackBar('이름이 올바르지 않습니다.');
         }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('해당 전화번호가 등록되지 않았습니다.')),
-        );
+        _showSnackBar('해당 전화번호가 등록되지 않았습니다.');
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('로그인 실패: $e')),
-      );
+      _showSnackBar('로그인 실패: $e');
     } finally {
       setState(() {
         _isLoading = false;
@@ -131,9 +142,9 @@ class _LoginPageState extends State<LoginPage> {
             _isLoading
                 ? const CircularProgressIndicator() // 로딩 상태 표시
                 : ElevatedButton(
-              onPressed: _login, // 로그인 메서드 호출
-              child: const Text("로그인"),
-            ),
+                    onPressed: _login, // 로그인 메서드 호출
+                    child: const Text("로그인"),
+                  ),
           ],
         ),
       ),
