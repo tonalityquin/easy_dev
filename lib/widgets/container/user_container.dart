@@ -20,26 +20,30 @@ class UserContainer extends StatelessWidget {
     required this.onTap,
   }) : super(key: key);
 
+  Widget _buildTextRow(String label, String value) {
+    return Text('$label: $value');
+  }
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap, // 클릭 이벤트
+      onTap: onTap,
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.green : Colors.white, // 배경색
+          color: isSelected ? Colors.green : Colors.white,
           border: Border.all(color: Colors.grey),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Name: $name'),
-            Text('Phone: $phone'),
-            Text('Email: $email'),
-            Text('Role: $role'),
-            Text('Access: $access'),
+            _buildTextRow('Name', name),
+            _buildTextRow('Phone', phone),
+            _buildTextRow('Email', email),
+            _buildTextRow('Role', role),
+            _buildTextRow('Access', access),
           ],
         ),
       ),

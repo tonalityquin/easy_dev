@@ -41,17 +41,24 @@ class KorFieldMiddle1 extends StatelessWidget {
         /// **공통 입력 필드**
         /// - `CommonPlateField`를 활용하여 한글 입력 필드 구현
         CommonPlateField(
-          controller: controller, // 텍스트 값 관리 컨트롤러
-          maxLength: 1, // 최대 입력 길이: 1자
-          keyboardType: TextInputType.text, // 텍스트 입력 키보드
+          controller: controller,
+          // 텍스트 값 관리 컨트롤러
+          maxLength: 1,
+          // 최대 입력 길이: 1자
+          keyboardType: TextInputType.text,
+          // 텍스트 입력 키보드
           inputFormatters: [
             FilteringTextInputFormatter.allow(RegExp(r'^[ㄱ-ㅎㅏ-ㅣ가-힣]$')), // 한글만 허용
           ],
-          labelText: '1-digit', // 레이블 텍스트
-          hintText: 'Enter', // 힌트 텍스트
-          readOnly: readOnly, // 읽기 전용 여부 설정
+          labelText: '1-digit',
+          // 레이블 텍스트
+          hintText: 'Enter',
+          // 힌트 텍스트
+          readOnly: readOnly,
+          // 읽기 전용 여부 설정
           onTap: onTap, // 탭 이벤트 콜백
         ),
+
         /// **유효성 검사 및 경고 메시지**
         /// - 한글 이외의 입력값에 대해 경고 메시지 출력
         ValueListenableBuilder<TextEditingValue>(
