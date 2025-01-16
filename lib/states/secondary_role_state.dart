@@ -3,13 +3,8 @@ import 'secondary_info.dart'; // Import for fieldModePages and officeModePages
 
 /// **관리 클래스**
 class SecondaryRoleState with ChangeNotifier {
-  // 현재 선택된 모드, 기본값은 'Office Mode'
-  String _currentStatus = 'Office Mode';
-
-  // 사용 가능한 모드 목록
-  final List<String> _availableStatus = ['Field Mode', 'Office Mode'];
-
-  // 현재 선택된 지역
+  String _currentStatus = 'Office Mode'; // 기본값
+  final List<String> _availableStatus = ['Field Mode', 'Office Mode']; // 선택 가능한 모드 목록
   String? _currentArea;
 
   /// **현재 선택된 모드 반환**

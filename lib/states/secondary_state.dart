@@ -1,83 +1,53 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'secondary_info.dart'; // SecondaryInfo 클래스 사용
 
-/// **SecondaryState 클래스**
-/// - 앱의 페이지 상태를 관리하는 클래스
-/// - 현재 선택된 페이지, 로딩 상태, 데이터 갱신, 자동 갱신 등을 처리
 class SecondaryState with ChangeNotifier {
-  int _selectedIndex = 0; // 현재 선택된 페이지의 인덱스, 기본값은 0 (DashBoard)
+  int _selectedIndex = 0; // 현재 선택된 페이지의 인덱스
   List<SecondaryInfo> _pages; // 페이지 정보 리스트
-  Timer? _timer; // 자동 갱신 타이머
   bool _isLoading = false; // 로딩 상태
 
-  /// **현재 선택된 페이지의 인덱스**
+  /// 현재 선택된 페이지의 인덱스
   int get selectedIndex => _selectedIndex;
 
-  /// **현재 페이지 리스트**
+  /// 현재 페이지 리스트
   List<SecondaryInfo> get pages => _pages;
 
-  /// **현재 로딩 상태**
+  /// 현재 로딩 상태
   bool get isLoading => _isLoading;
 
-  /// **로딩 상태 업데이트**
-  /// - [value]: 새로운 로딩 상태 값 (true 또는 false)
+  /// 로딩 상태 업데이트
   void setLoading(bool value) {
     _isLoading = value;
-    notifyListeners(); // 상태 변경 알림
+    notifyListeners();
   }
 
-  /// **PageState 생성자**
-  /// - [pages]: 앱의 페이지 리스트를 받아 초기화
-  SecondaryState({required List<SecondaryInfo> pages}) : _pages = pages {
-    _startAutoRefresh(); // 자동 갱신 시작
-  }
+  /// SecondaryState 생성자
+  SecondaryState({required List<SecondaryInfo> pages}) : _pages = pages;
 
-  /// **자동 갱신 시작**
-  /// - 1분마다 상태 변경을 트리거
-  void _startAutoRefresh() {
-    _timer = Timer.periodic(const Duration(minutes: 1), (timer) {
-      print('자동 상태 갱신 트리거됨: ${DateTime.now()}');
-      notifyListeners(); // 상태 변경 알림
-    });
-  }
-
-  /// **리소스 정리**
-  /// - 타이머를 취소하고 부모 클래스의 dispose 호출
-  @override
-  void dispose() {
-    _timer?.cancel(); // 자동 갱신 타이머 취소
-    super.dispose();
-  }
-
-  /// **현재 선택된 페이지의 타이틀 반환**
+  /// 현재 선택된 페이지의 타이틀 반환
   String get selectedPageTitle => _pages[_selectedIndex].title;
 
-  /// **페이지 탭 처리**
-  /// - [index]: 선택된 페이지의 인덱스
-  /// - 잘못된 인덱스가 입력되면 예외 발생
+  /// 페이지 탭 처리
   void onItemTapped(int index) {
     if (index < 0 || index >= _pages.length) {
-      throw ArgumentError('Invalid index: $index'); // 유효하지 않은 인덱스 처리
+      throw ArgumentError('Invalid index: $index');
     }
-    _selectedIndex = index; // 선택된 페이지 업데이트
-    notifyListeners(); // 상태 변경 알림
+    _selectedIndex = index;
+    notifyListeners();
   }
 
-  /// **데이터 갱신 메서드**
-  /// - 비동기 작업으로 2초 지연 후 상태를 갱신
+  /// 데이터 갱신 메서드
   Future<void> refreshData() async {
     print('데이터 갱신 중...');
-    await Future.delayed(const Duration(seconds: 2)); // 데이터 갱신 시뮬레이션
+    await Future.delayed(const Duration(seconds: 2));
     print('데이터 갱신 완료!');
-    notifyListeners(); // 상태 변경 알림
+    notifyListeners();
   }
 
-  /// **페이지 리스트 업데이트**
-  /// - [newPages]: 새 페이지 리스트
+  /// 페이지 리스트 업데이트
   void updatePages(List<SecondaryInfo> newPages) {
     _pages = newPages;
-    _selectedIndex = 0; // 페이지 변경 시 인덱스 초기화
-    notifyListeners(); // 상태 변경 알림
+    _selectedIndex = 0;
+    notifyListeners();
   }
 }

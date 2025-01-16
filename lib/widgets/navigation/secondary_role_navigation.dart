@@ -23,7 +23,7 @@ class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWi
     final manageState = context.watch<SecondaryRoleState>();
     final userState = context.watch<UserState>();
 
-    final userRole = userState.role?.toLowerCase(); // role 값을 소문자로 변환
+    final userRole = userState.role.toLowerCase(); // role 값을 소문자로 변환
     final selectMode = userRole == 'user' ? 'Field Mode' : manageState.currentStatus; // User는 Field Mode 고정
 
     if (userRole == 'user' && manageState.currentStatus != 'Field Mode') {

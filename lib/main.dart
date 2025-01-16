@@ -10,7 +10,6 @@ import 'states/user_state.dart'; // 사용자 상태 관리
 import 'screens/type_page.dart'; // 메인 화면 (타입 선택 화면)
 import 'screens/login_page.dart'; // 로그인 화면
 
-/// 앱의 진입점 (main 함수)
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();

@@ -1,10 +1,9 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'page_info.dart'; // PageInfo 클래스 사용
 
 /// **PageState 클래스**
 /// - 앱의 페이지 상태를 관리하는 클래스
-/// - 현재 선택된 페이지, 로딩 상태, 데이터 갱신, 자동 갱신 등을 처리
+/// - 현재 선택된 페이지, 로딩 상태, 데이터 갱신 등을 처리
 class PageState with ChangeNotifier {
   int _selectedIndex = 1; // 현재 선택된 페이지의 인덱스, 기본값은 1 (Parking Completed)
 
@@ -13,7 +12,6 @@ class PageState with ChangeNotifier {
 
   final List<PageInfo> pages; // 페이지 정보 리스트
 
-  Timer? _timer; // 자동 갱신 타이머
   bool _isLoading = false; // 로딩 상태
 
   /// **현재 로딩 상태**
@@ -28,24 +26,12 @@ class PageState with ChangeNotifier {
 
   /// **PageState 생성자**
   /// - [pages]: 앱의 페이지 리스트를 받아 초기화
-  PageState({required this.pages}) {
-    _startAutoRefresh(); // 자동 갱신 시작
-  }
-
-  /// **자동 갱신 시작**
-  /// - 1분마다 상태 변경을 트리거
-  void _startAutoRefresh() {
-    _timer = Timer.periodic(const Duration(minutes: 1), (timer) {
-      print('자동 상태 갱신 트리거됨: ${DateTime.now()}');
-      notifyListeners(); // 상태 변경 알림
-    });
-  }
+  PageState({required this.pages});
 
   /// **리소스 정리**
-  /// - 타이머를 취소하고 부모 클래스의 dispose 호출
+  /// - 부모 클래스의 dispose 호출
   @override
   void dispose() {
-    _timer?.cancel(); // 자동 갱신 타이머 취소
     super.dispose();
   }
 
