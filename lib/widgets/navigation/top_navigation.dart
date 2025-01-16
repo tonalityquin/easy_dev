@@ -4,8 +4,6 @@ import '../../states/area_state.dart';
 import '../../states/plate_state.dart';
 import '../../states/user_state.dart';
 
-/// **TopNavigation 위젯**
-/// - 지역 선택 및 전환 기능을 제공하는 AppBar
 class TopNavigation extends StatelessWidget implements PreferredSizeWidget {
   final double height;
 
@@ -20,10 +18,6 @@ class TopNavigation extends StatelessWidget implements PreferredSizeWidget {
     final userState = context.watch<UserState>();
     final plateState = context.read<PlateState>();
 
-    // UserState와 AreaState 동기화
-    areaState.syncWithUserState(userState.area);
-
-    // 선택된 지역 값
     final selectedArea = areaState.availableAreas.contains(areaState.currentArea)
         ? areaState.currentArea
         : areaState.availableAreas.first;
@@ -32,16 +26,18 @@ class TopNavigation extends StatelessWidget implements PreferredSizeWidget {
 
     debugPrint('TopNavigation: selectedArea=$selectedArea'); // 디버깅 로그
 
+    // AreaState와 UserState를 동기화하는 조건 추가
+    if (areaState.currentArea.isEmpty) {
+      areaState.syncWithUserState(userState.area);
+    }
+
     return AppBar(
       title: DropdownButton<String>(
         value: selectedArea,
         underline: const SizedBox.shrink(),
         dropdownColor: Colors.white,
         items: areaState.availableAreas.map((area) {
-          return DropdownMenuItem<String>(
-            value: area,
-            child: Text(area),
-          );
+          return DropdownMenuItem<String>(value: area, child: Text(area));
         }).toList(),
         onChanged: (userRole == 'Fielder' || userRole == 'Field Leader')
             ? null
