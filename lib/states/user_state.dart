@@ -9,8 +9,11 @@ class UserState extends ChangeNotifier {
 
   // 게터(Getter) - 상태값을 읽어올 때 사용
   String get name => _name;
+
   String get phone => _phone;
+
   String get role => _role;
+
   String get area => _area;
 
   // 사용자 정보를 업데이트하고 SharedPreferences에 저장
