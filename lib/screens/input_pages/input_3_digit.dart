@@ -127,7 +127,7 @@ class _Input3DigitState extends State<Input3Digit> {
     final areaState = context.read<AreaState>();
     final String location = locationController.text;
 
-    if (plateState.isPlateNumberDuplicated(plateNumber, areaState.currentArea!)) {
+    if (plateState.isPlateNumberDuplicated(plateNumber, areaState.currentArea)) {
       _showSnackBar('이미 등록된 번호판입니다: $plateNumber');
       return;
     }
@@ -147,7 +147,7 @@ class _Input3DigitState extends State<Input3Digit> {
           collection: 'parking_requests',
           plateNumber: plateNumber,
           location: location,
-          area: areaState.currentArea!,
+          area: areaState.currentArea,
           type: '입차 요청',
         );
         _showSnackBar('입차 요청');
@@ -156,7 +156,7 @@ class _Input3DigitState extends State<Input3Digit> {
           collection: 'parking_completed',
           plateNumber: plateNumber,
           location: location,
-          area: areaState.currentArea!,
+          area: areaState.currentArea,
           type: '입차 완료',
         );
         _showSnackBar('입차 완료');

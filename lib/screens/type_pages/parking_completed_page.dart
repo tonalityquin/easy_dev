@@ -43,7 +43,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
       final plateNumber = activeParts[0];
       final currentArea = context.read<AreaState>().currentArea;
 
-      context.read<PlateState>().setDepartureRequested(plateNumber, currentArea!);
+      context.read<PlateState>().setDepartureRequested(plateNumber, currentArea);
 
       setState(() {
         _activePlate = null;
@@ -62,7 +62,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
       body: Consumer2<PlateState, AreaState>(
         builder: (context, plateState, areaState, child) {
           final currentArea = areaState.currentArea;
-          final parkingCompleted = plateState.getPlatesByArea('parking_completed', currentArea!);
+          final parkingCompleted = plateState.getPlatesByArea('parking_completed', currentArea);
 
           return ListView(
             padding: const EdgeInsets.all(8.0),

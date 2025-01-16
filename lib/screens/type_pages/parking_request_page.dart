@@ -65,7 +65,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
           final currentArea = areaState.currentArea;
 
           // 현재 지역의 입차 요청 데이터를 필터링
-          final parkingRequests = plateState.getPlatesByArea('parking_requests', currentArea!);
+          final parkingRequests = plateState.getPlatesByArea('parking_requests', currentArea);
 
           return ListView(
             padding: const EdgeInsets.all(8.0),

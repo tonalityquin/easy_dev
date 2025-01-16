@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../states/plate_state.dart';
 import '../../states/area_state.dart';
+import '../../states/user_state.dart';
 import '../../widgets/container/plate_container.dart';
 import '../../widgets/navigation/top_navigation.dart';
 
@@ -59,7 +60,14 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
   /// 로그아웃 처리
   Future<void> _logout(BuildContext context) async {
     try {
+      // Firebase Auth 로그아웃
       await FirebaseAuth.instance.signOut();
+
+      // UserState 초기화
+      final userState = Provider.of<UserState>(context, listen: false);
+      await userState.clearUser();
+
+      // 로그인 페이지로 이동
       if (context.mounted) {
         Navigator.pushReplacementNamed(context, '/login');
       }
@@ -113,7 +121,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
       body: Consumer2<PlateState, AreaState>(
         builder: (context, plateState, areaState, child) {
           final currentArea = areaState.currentArea;
-          final departureCompleted = plateState.getPlatesByArea('departure_completed', currentArea!);
+          final departureCompleted = plateState.getPlatesByArea('departure_completed', currentArea);
 
           return ListView(
             padding: const EdgeInsets.all(8.0),

@@ -61,7 +61,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
       body: Consumer2<PlateState, AreaState>(
         builder: (context, plateState, areaState, child) {
           final currentArea = areaState.currentArea;
-          final departureRequests = plateState.getPlatesByArea('departure_requests', currentArea!);
+          final departureRequests = plateState.getPlatesByArea('departure_requests', currentArea);
 
           return ListView(
             padding: const EdgeInsets.all(8.0),

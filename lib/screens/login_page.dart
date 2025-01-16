@@ -18,6 +18,29 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController _phoneController = TextEditingController(); // 전화번호 입력 필드 컨트롤러
   bool _isLoading = false; // 로딩 상태 관리
 
+  @override
+  void initState() {
+    super.initState();
+    _checkLoginState(); // 앱 실행 시 로그인 상태 확인
+  }
+
+  /// 로그인 상태 확인 및 자동 로그인
+  Future<void> _checkLoginState() async {
+    final userState = Provider.of<UserState>(context, listen: false);
+    await userState.loadUser(); // 사용자 정보 불러오기
+
+    // Null-safe 체크 불필요, isNotEmpty만 사용
+    if (userState.phone.isNotEmpty) {
+      Future.delayed(Duration.zero, () {
+        Navigator.pushReplacementNamed(context, '/home');
+      });
+    } else {
+      debugPrint('자동 로그인 실패: phone 데이터가 없습니다.');
+    }
+  }
+
+
+
   /// SnackBar 메시지 출력 함수
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
@@ -73,7 +96,7 @@ class _LoginPageState extends State<LoginPage> {
     try {
       // Firestore에서 전화번호로 사용자 데이터 조회
       final querySnapshot =
-          await FirebaseFirestore.instance.collection('user_accounts').where('phone', isEqualTo: phone).get();
+      await FirebaseFirestore.instance.collection('user_accounts').where('phone', isEqualTo: phone).get();
 
       if (querySnapshot.docs.isNotEmpty) {
         final doc = querySnapshot.docs.first;
@@ -89,10 +112,11 @@ class _LoginPageState extends State<LoginPage> {
           final userState = Provider.of<UserState>(context, listen: false);
           final areaState = Provider.of<AreaState>(context, listen: false);
 
+          // 사용자 상태 업데이트
           userState.updateUser(name: name, phone: phone, role: role, area: area);
           areaState.updateArea(area);
 
-          Navigator.pushReplacementNamed(context, '/home');
+          Navigator.pushReplacementNamed(context, '/home'); // 홈 화면으로 이동
         } else {
           _showSnackBar('이름이 올바르지 않습니다.');
         }
@@ -142,9 +166,9 @@ class _LoginPageState extends State<LoginPage> {
             _isLoading
                 ? const CircularProgressIndicator() // 로딩 상태 표시
                 : ElevatedButton(
-                    onPressed: _login, // 로그인 메서드 호출
-                    child: const Text("로그인"),
-                  ),
+              onPressed: _login, // 로그인 메서드 호출
+              child: const Text("로그인"),
+            ),
           ],
         ),
       ),
