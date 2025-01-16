@@ -29,15 +29,19 @@ class _LoginPageState extends State<LoginPage> {
     final userState = Provider.of<UserState>(context, listen: false);
     await userState.loadUser(); // 사용자 정보 불러오기
 
-    // Null-safe 체크 불필요, isNotEmpty만 사용
-    if (userState.phone.isNotEmpty) {
-      Future.delayed(Duration.zero, () {
-        Navigator.pushReplacementNamed(context, '/home');
-      });
+    if (userState.phone.isNotEmpty &&
+        userState.name.isNotEmpty &&
+        userState.role.isNotEmpty &&
+        userState.area.isNotEmpty) {
+      // 모든 정보가 유효한 경우에만 이동
+      Navigator.pushReplacementNamed(context, '/home');
     } else {
-      debugPrint('자동 로그인 실패: phone 데이터가 없습니다.');
+      // 유효하지 않은 경우 로그인 화면 유지
+      debugPrint('자동 로그인 실패: 유효한 사용자 데이터가 없습니다.');
     }
   }
+
+
 
 
 

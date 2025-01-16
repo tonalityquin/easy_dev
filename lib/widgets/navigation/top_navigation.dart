@@ -20,16 +20,23 @@ class TopNavigation extends StatelessWidget implements PreferredSizeWidget {
     final userState = context.watch<UserState>();
     final plateState = context.read<PlateState>();
 
-    final selectedArea = areaState.currentArea;
+    // UserState와 AreaState 동기화
+    areaState.syncWithUserState(userState.area);
+
+    // 선택된 지역 값
+    final selectedArea = areaState.availableAreas.contains(areaState.currentArea)
+        ? areaState.currentArea
+        : areaState.availableAreas.first;
+
     final userRole = userState.role;
+
+    debugPrint('TopNavigation: selectedArea=$selectedArea'); // 디버깅 로그
 
     return AppBar(
       title: DropdownButton<String>(
         value: selectedArea,
         underline: const SizedBox.shrink(),
-        // 드롭다운 아래 선 제거
         dropdownColor: Colors.white,
-        // 드롭다운 배경색
         items: areaState.availableAreas.map((area) {
           return DropdownMenuItem<String>(
             value: area,
@@ -39,12 +46,12 @@ class TopNavigation extends StatelessWidget implements PreferredSizeWidget {
         onChanged: (userRole == 'Fielder' || userRole == 'Field Leader')
             ? null
             : (newArea) {
-                if (newArea != null) {
-                  areaState.updateArea(newArea);
-                  plateState.refreshPlateState();
-                }
-              },
-        style: const TextStyle(color: Colors.black), // 텍스트 스타일 공통화
+          if (newArea != null) {
+            areaState.updateArea(newArea);
+            plateState.refreshPlateState();
+          }
+        },
+        style: const TextStyle(color: Colors.black),
       ),
       centerTitle: true,
       backgroundColor: Colors.blue,

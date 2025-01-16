@@ -9,12 +9,24 @@ class UserState extends ChangeNotifier {
 
   // 게터(Getter) - 상태값을 읽어올 때 사용
   String get name => _name;
-
   String get phone => _phone;
-
   String get role => _role;
 
   String get area => _area;
+
+  // 세터(Setter) - area 값 변경 추적
+  set area(String newArea) {
+    _area = newArea;
+    notifyListeners(); // 상태 변경 알림
+    debugPrint('Area setter triggered: newArea=$_area'); // 변경 시점 로그
+  }
+
+  // notifyListeners 오버라이드
+  @override
+  void notifyListeners() {
+    super.notifyListeners();
+    debugPrint('UserState notifyListeners called: area=$_area'); // 상태 변경 알림 로그
+  }
 
   // 사용자 정보를 업데이트하고 SharedPreferences에 저장
   void updateUser({
@@ -29,12 +41,14 @@ class UserState extends ChangeNotifier {
     _area = area;
     notifyListeners(); // 상태 변경 알림
 
-    // SharedPreferences에 저장
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('name', name);
     await prefs.setString('phone', phone);
     await prefs.setString('role', role);
     await prefs.setString('area', area);
+    await prefs.setBool('isLoggedIn', true);
+
+    debugPrint('After updateUser: area=$_area'); // 변경 후 area 값 출력
   }
 
   // 저장된 사용자 정보를 불러오기
@@ -53,7 +67,9 @@ class UserState extends ChangeNotifier {
       _role = '';
       _area = '';
     }
-    notifyListeners();
+    notifyListeners(); // 상태 변경 알림
+
+    debugPrint('After loadUser: area=$_area'); // 불러온 후 area 값 출력
   }
 
   // 사용자 정보를 초기화하고 SharedPreferences에서 삭제
@@ -65,5 +81,6 @@ class UserState extends ChangeNotifier {
     _role = '';
     _area = '';
     notifyListeners(); // 상태 변경 알림
+    debugPrint('UserState cleared: area=$_area'); // 초기화 확인 로그
   }
 }
