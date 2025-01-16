@@ -170,7 +170,7 @@ class _LocationManagementState extends State<LocationManagement> {
               builder: (BuildContext dialogContext) {
                 final currentArea = Provider.of<AreaState>(dialogContext, listen: false).currentArea;
                 return LocationSetting(
-                  onSave: (locationName) => _addLocation(locationName, currentArea!),
+                  onSave: (locationName) => _addLocation(locationName, currentArea),
                 );
               },
             );

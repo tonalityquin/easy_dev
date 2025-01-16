@@ -12,7 +12,8 @@ class DashBoard extends StatelessWidget {
       body: const Center(
         child: Text('DashBoard Page'), // 본문
       ),
-      bottomNavigationBar: const SecondaryMiniNavigation( // 하단 내비게이션
+      bottomNavigationBar: const SecondaryMiniNavigation(
+        // 하단 내비게이션
         icons: [
           Icons.search, // 검색 아이콘
           Icons.person, // 프로필 아이콘
