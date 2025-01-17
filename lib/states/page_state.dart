@@ -3,7 +3,7 @@ import 'page_info.dart'; // PageInfo 클래스 사용
 
 /// **PageState 클래스**
 /// - 앱의 페이지 상태를 관리하는 클래스
-/// - 현재 선택된 페이지, 로딩 상태, 데이터 갱신 등을 처리
+/// - 현재 선택된 페이지와 로딩 상태를 처리
 class PageState with ChangeNotifier {
   int _selectedIndex = 1; // 현재 선택된 페이지의 인덱스, 기본값은 1 (Parking Completed)
 
@@ -46,15 +46,6 @@ class PageState with ChangeNotifier {
       throw ArgumentError('Invalid index: $index'); // 유효하지 않은 인덱스 처리
     }
     _selectedIndex = index; // 선택된 페이지 업데이트
-    notifyListeners(); // 상태 변경 알림
-  }
-
-  /// **데이터 갱신 메서드**
-  /// - 비동기 작업으로 2초 지연 후 상태를 갱신
-  Future<void> refreshData() async {
-    print('데이터 갱신 중...');
-    await Future.delayed(const Duration(seconds: 2)); // 데이터 갱신 시뮬레이션
-    print('데이터 갱신 완료!');
     notifyListeners(); // 상태 변경 알림
   }
 }

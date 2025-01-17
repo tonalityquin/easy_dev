@@ -79,11 +79,13 @@ class PlateState extends ChangeNotifier {
     return _data[collection]!.where((request) => request.area == area).toList();
   }
 
-  /// **중복된 번호판 검증**
   bool isPlateNumberDuplicated(String plateNumber, String area) {
-    final platesInArea =
-        _data.values.expand((list) => list).where((request) => request.area == area).map((e) => e.plateNumber);
-    return platesInArea.contains(plateNumber);
+    final platesInArea = _data.entries
+        .where((entry) => entry.key != 'departure_completed') // departure_completed 제외
+        .expand((entry) => entry.value) // 각 컬렉션 데이터 평탄화
+        .where((request) => request.area == area) // 특정 지역 데이터 필터링
+        .map((request) => request.plateNumber); // 번호판만 추출
+    return platesInArea.contains(plateNumber); // 중복 여부 확인
   }
 
   /// **Firestore에 데이터 추가**
