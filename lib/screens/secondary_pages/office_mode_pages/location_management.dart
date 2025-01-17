@@ -30,6 +30,9 @@ class _LocationManagementState extends State<LocationManagement> {
   Future<void> _fetchLocations() async {
     try {
       final snapshot = await _firestore.collection('locations').get();
+
+      if (!mounted) return; // State가 dispose된 경우 return
+
       if (snapshot.docs.isEmpty) {
         setState(() {
           _locations.clear();
@@ -55,6 +58,8 @@ class _LocationManagementState extends State<LocationManagement> {
         fetchedSelectedLocations[id] = data['isSelected'] == true;
       }
 
+      if (!mounted) return; // State가 dispose된 경우 return
+
       setState(() {
         _locations
           ..clear()
@@ -67,6 +72,8 @@ class _LocationManagementState extends State<LocationManagement> {
       });
     } catch (e) {
       debugPrint('Error fetching locations: $e');
+      if (!mounted) return;
+
       setState(() {
         _isLoading = false;
       });
@@ -82,6 +89,8 @@ class _LocationManagementState extends State<LocationManagement> {
         'area': area,
         'isSelected': false,
       });
+
+      if (!mounted) return;
 
       setState(() {
         _locations.add({
@@ -101,12 +110,12 @@ class _LocationManagementState extends State<LocationManagement> {
   Future<void> _toggleSelection(String id) async {
     final currentState = _selectedLocations[id] ?? false;
     try {
-      // Firestore에서 상태 업데이트
       await _firestore.collection('locations').doc(id).update({
         'isSelected': !currentState,
       });
 
-      // 상태 변경 및 아이콘 업데이트
+      if (!mounted) return;
+
       setState(() {
         _selectedLocations[id] = !currentState;
         _updateIcons();
@@ -132,10 +141,15 @@ class _LocationManagementState extends State<LocationManagement> {
   }
 
   @override
+  void dispose() {
+    debugPrint('Disposing LocationManagement state');
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final currentArea = context.watch<AreaState>().currentArea;
 
-    // 현재 지역과 일치하는 데이터만 필터링
     final filteredLocations = _locations.where((location) => location['area'] == currentArea).toList();
 
     return Scaffold(
@@ -143,22 +157,22 @@ class _LocationManagementState extends State<LocationManagement> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : filteredLocations.isEmpty
-              ? const Center(child: Text('No locations in this area.'))
-              : ListView.builder(
-                  itemCount: filteredLocations.length,
-                  itemBuilder: (context, index) {
-                    final location = filteredLocations[index];
-                    final isSelected = _selectedLocations[location['id']] ?? false;
-                    return LocationContainer(
-                      location: location['locationName']!,
-                      isSelected: isSelected,
-                      onTap: () {
-                        debugPrint('Tapped on location: ${location['locationName']}');
-                        _toggleSelection(location['id']!);
-                      },
-                    );
-                  },
-                ),
+          ? const Center(child: Text('No locations in this area.'))
+          : ListView.builder(
+        itemCount: filteredLocations.length,
+        itemBuilder: (context, index) {
+          final location = filteredLocations[index];
+          final isSelected = _selectedLocations[location['id']] ?? false;
+          return LocationContainer(
+            location: location['locationName']!,
+            isSelected: isSelected,
+            onTap: () {
+              debugPrint('Tapped on location: ${location['locationName']}');
+              _toggleSelection(location['id']!);
+            },
+          );
+        },
+      ),
       bottomNavigationBar: SecondaryMiniNavigation(
         icons: _navigationIcons,
         onIconTapped: (index) {
@@ -177,6 +191,8 @@ class _LocationManagementState extends State<LocationManagement> {
           } else if (_navigationIcons[index] == Icons.delete && selectedIds.isNotEmpty) {
             for (final id in selectedIds) {
               _firestore.collection('locations').doc(id).delete().then((_) {
+                if (!mounted) return;
+
                 setState(() {
                   _locations.removeWhere((location) => location['id'] == id);
                   _selectedLocations.remove(id);
