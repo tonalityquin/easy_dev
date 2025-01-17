@@ -1,15 +1,24 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+/// **UserRepository 인터페이스**
 abstract class UserRepository {
+  /// 사용자 목록 스트림 반환
   Stream<List<Map<String, dynamic>>> getUsersStream();
 
+  /// 사용자 추가
   Future<void> addUser(String id, Map<String, dynamic> userData);
 
+  /// 사용자 삭제
   Future<void> deleteUsers(List<String> ids);
 
+  /// 사용자 선택 상태 토글
   Future<void> toggleUserSelection(String id, bool isSelected);
+
+  /// 전화번호로 사용자 조회 (추가된 메서드)
+  Future<Map<String, dynamic>?> getUserByPhone(String phone);
 }
 
+/// **Firestore 기반 UserRepository 구현체**
 class FirestoreUserRepository implements UserRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
@@ -60,5 +69,23 @@ class FirestoreUserRepository implements UserRepository {
     } catch (e) {
       rethrow;
     }
+  }
+
+  @override
+  Future<Map<String, dynamic>?> getUserByPhone(String phone) async {
+    try {
+      final querySnapshot = await _firestore
+          .collection('user_accounts')
+          .where('phone', isEqualTo: phone)
+          .get();
+
+      if (querySnapshot.docs.isNotEmpty) {
+        final doc = querySnapshot.docs.first;
+        return doc.data();
+      }
+    } catch (e) {
+      rethrow;
+    }
+    return null; // 사용자 데이터가 없을 경우 null 반환
   }
 }
