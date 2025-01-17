@@ -142,6 +142,18 @@ class PlateState extends ChangeNotifier {
     }
   }
 
+  /// 특정 지역에서 사용 가능한 주차 구역 가져오기
+  Future<List<String>> getAvailableLocations(String area) async {
+    try {
+      final locations = await _repository.getAvailableLocations(area);
+      debugPrint('Available locations in $area: $locations');
+      return locations;
+    } catch (e) {
+      debugPrint('Error fetching available locations: $e');
+      return [];
+    }
+  }
+
   /// 상태 갱신
   void refreshPlateState() {
     notifyListeners();
