@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../models/plate_request.dart';
 import '../repositories/plate_repository.dart';
@@ -19,7 +18,7 @@ class PlateState extends ChangeNotifier {
 
   String? isDrivingPlate;
 
-  /// **Firestore 실시간 데이터 동기화 초기화**
+  /// Firestore 실시간 데이터 동기화 초기화
   void _initializeSubscriptions() {
     for (final collectionName in _data.keys) {
       _repository.getCollectionStream(collectionName).listen((data) {
@@ -29,19 +28,24 @@ class PlateState extends ChangeNotifier {
     }
   }
 
+  /// 특정 지역에 해당하는 번호판 리스트 반환
   List<PlateRequest> getPlatesByArea(String collection, String area) {
-    return _data[collection]!.where((request) => request.area == area).toList();
+    final plates = _data[collection]!.where((request) => request.area == area).toList();
+    debugPrint('Filtered Plates for $collection in $area: $plates');
+    return plates;
   }
 
+  /// 번호판 중복 여부 확인
   bool isPlateNumberDuplicated(String plateNumber, String area) {
     final platesInArea = _data.entries
-        .where((entry) => entry.key != 'departure_completed')
-        .expand((entry) => entry.value)
-        .where((request) => request.area == area)
-        .map((request) => request.plateNumber);
-    return platesInArea.contains(plateNumber);
+        .where((entry) => entry.key != 'departure_completed') // 'departure_completed' 제외
+        .expand((entry) => entry.value) // 각 컬렉션 데이터 평탄화
+        .where((request) => request.area == area) // 특정 지역 데이터 필터링
+        .map((request) => request.plateNumber); // 번호판만 추출
+    return platesInArea.contains(plateNumber); // 중복 여부 확인
   }
 
+  /// 번호판 추가 요청 처리
   Future<void> addRequestOrCompleted({
     required String collection,
     required String plateNumber,
@@ -49,31 +53,27 @@ class PlateState extends ChangeNotifier {
     required String area,
     required String type,
   }) async {
-    final documentId = '${plateNumber}_$area';
-
     if (isPlateNumberDuplicated(plateNumber, area)) {
       debugPrint('중복된 번호판: $plateNumber');
       return;
     }
 
     try {
-      await _repository.addOrUpdateDocument(
-        collection,
-        documentId,
-        {
-          'plate_number': plateNumber,
-          'type': type,
-          'request_time': DateTime.now(),
-          'location': location.isNotEmpty ? location : '미지정',
-          'area': area,
-        },
+      await _repository.addRequestOrCompleted(
+        collection: collection,
+        plateNumber: plateNumber,
+        location: location,
+        area: area,
+        type: type,
       );
+
       notifyListeners();
     } catch (e) {
-      debugPrint('Error adding data to $collection: $e');
+      debugPrint('Error adding request or completed: $e');
     }
   }
 
+  /// 데이터 전송 처리
   Future<void> transferData({
     required String fromCollection,
     required String toCollection,
@@ -92,18 +92,6 @@ class PlateState extends ChangeNotifier {
           ...documentData,
           'type': newType,
         });
-
-        _data[fromCollection]!.removeWhere((request) => request.id == documentId);
-        final updatedRequest = PlateRequest(
-          id: documentId,
-          plateNumber: documentData['plate_number'],
-          type: newType,
-          requestTime: (documentData['request_time'] as Timestamp).toDate(),
-          location: documentData['location'],
-          area: documentData['area'],
-        );
-        _data[toCollection]!.add(updatedRequest);
-
         notifyListeners();
       }
     } catch (e) {
@@ -111,6 +99,7 @@ class PlateState extends ChangeNotifier {
     }
   }
 
+  /// 입차 완료 처리
   Future<void> setParkingCompleted(String plateNumber, String area) async {
     await transferData(
       fromCollection: 'parking_requests',
@@ -121,6 +110,7 @@ class PlateState extends ChangeNotifier {
     );
   }
 
+  /// 출차 요청 처리
   Future<void> setDepartureRequested(String plateNumber, String area) async {
     await transferData(
       fromCollection: 'parking_completed',
@@ -131,6 +121,7 @@ class PlateState extends ChangeNotifier {
     );
   }
 
+  /// 출차 완료 처리
   Future<void> setDepartureCompleted(String plateNumber, String area) async {
     await transferData(
       fromCollection: 'departure_requests',
@@ -141,24 +132,17 @@ class PlateState extends ChangeNotifier {
     );
   }
 
-  /// **모든 데이터를 삭제하고 상태 갱신**
+  /// 모든 데이터 삭제
   Future<void> deleteAllData() async {
     try {
-      // Firestore에서 모든 데이터를 삭제
       await _repository.deleteAllData();
-
-      // 데이터 삭제 후 상태를 갱신
-      _data.forEach((key, value) {
-        _data[key] = []; // 컬렉션의 모든 데이터 비우기
-      });
-
-      // 상태 변경을 UI에 반영
-      notifyListeners();
+      notifyListeners(); // 상태 갱신 후 UI에 반영
     } catch (e) {
       debugPrint('Error deleting all data: $e');
     }
   }
 
+  /// 상태 갱신
   void refreshPlateState() {
     notifyListeners();
   }

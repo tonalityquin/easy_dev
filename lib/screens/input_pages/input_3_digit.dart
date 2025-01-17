@@ -142,6 +142,7 @@ class _Input3DigitState extends State<Input3Digit> {
     });
 
     try {
+      // UI에서 PlateState를 통해 Repository 호출
       if (!isLocationSelected) {
         await plateState.addRequestOrCompleted(
           collection: 'parking_requests',
@@ -172,6 +173,7 @@ class _Input3DigitState extends State<Input3Digit> {
       });
     }
   }
+
 
   bool _validatePlateNumber(String plateNumber) {
     final RegExp platePattern = RegExp(r'^\d{3}-[가-힣]-\d{4}$');
