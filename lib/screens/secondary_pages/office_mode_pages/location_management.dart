@@ -142,7 +142,7 @@ class _LocationManagementState extends State<LocationManagement> {
 
   @override
   void dispose() {
-    debugPrint('Disposing LocationManagement state');
+    debugPrint('Disposing LocationManagement');
     super.dispose();
   }
 
@@ -157,22 +157,22 @@ class _LocationManagementState extends State<LocationManagement> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : filteredLocations.isEmpty
-          ? const Center(child: Text('No locations in this area.'))
-          : ListView.builder(
-        itemCount: filteredLocations.length,
-        itemBuilder: (context, index) {
-          final location = filteredLocations[index];
-          final isSelected = _selectedLocations[location['id']] ?? false;
-          return LocationContainer(
-            location: location['locationName']!,
-            isSelected: isSelected,
-            onTap: () {
-              debugPrint('Tapped on location: ${location['locationName']}');
-              _toggleSelection(location['id']!);
-            },
-          );
-        },
-      ),
+              ? const Center(child: Text('No locations in this area.'))
+              : ListView.builder(
+                  itemCount: filteredLocations.length,
+                  itemBuilder: (context, index) {
+                    final location = filteredLocations[index];
+                    final isSelected = _selectedLocations[location['id']] ?? false;
+                    return LocationContainer(
+                      location: location['locationName']!,
+                      isSelected: isSelected,
+                      onTap: () {
+                        debugPrint('Tapped on location: ${location['locationName']}');
+                        _toggleSelection(location['id']!);
+                      },
+                    );
+                  },
+                ),
       bottomNavigationBar: SecondaryMiniNavigation(
         icons: _navigationIcons,
         onIconTapped: (index) {
