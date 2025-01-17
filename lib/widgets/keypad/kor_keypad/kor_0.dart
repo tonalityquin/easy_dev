@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:easydev/utils/keypad_utils.dart';
+import '../../../utils/keypad_utils.dart';
 
 class Kor0 extends StatelessWidget {
   final Function(String) onKeyTap;
