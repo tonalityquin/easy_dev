@@ -41,10 +41,6 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-
-
-
-
   /// SnackBar 메시지 출력 함수
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
@@ -100,7 +96,7 @@ class _LoginPageState extends State<LoginPage> {
     try {
       // Firestore에서 전화번호로 사용자 데이터 조회
       final querySnapshot =
-      await FirebaseFirestore.instance.collection('user_accounts').where('phone', isEqualTo: phone).get();
+          await FirebaseFirestore.instance.collection('user_accounts').where('phone', isEqualTo: phone).get();
 
       if (querySnapshot.docs.isNotEmpty) {
         final doc = querySnapshot.docs.first;
@@ -170,9 +166,9 @@ class _LoginPageState extends State<LoginPage> {
             _isLoading
                 ? const CircularProgressIndicator() // 로딩 상태 표시
                 : ElevatedButton(
-              onPressed: _login, // 로그인 메서드 호출
-              child: const Text("로그인"),
-            ),
+                    onPressed: _login, // 로그인 메서드 호출
+                    child: const Text("로그인"),
+                  ),
           ],
         ),
       ),

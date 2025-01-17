@@ -1,37 +1,72 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // SharedPreferences 패키지 추가
+import 'package:shared_preferences/shared_preferences.dart';
+import '../repositories/user_repository.dart';
 
-/// **UserState 클래스**
-/// 사용자 정보를 관리하고, SharedPreferences와 상태를 동기화하는 클래스
 class UserState extends ChangeNotifier {
-  String _name = ''; // 사용자 이름
-  String _phone = ''; // 사용자 전화번호
-  String _role = ''; // 사용자 역할
-  String _area = ''; // 사용자 지역
+  final UserRepository _repository;
 
-  /// **상태값 게터 (Getter)**
+  UserState(this._repository) {
+    _fetchUsers(); // Firestore에서 데이터 실시간 동기화
+    loadUser(); // SharedPreferences에서 로그인 상태 복구
+  }
+
+  // 사용자 정보 및 상태
+  String _name = '';
+  String _phone = '';
+  String _role = '';
+  String _area = '';
+  bool _isLoggedIn = false;
+
+  // Firestore 사용자 리스트
+  List<Map<String, String>> _users = [];
+  Map<String, bool> _selectedUsers = {};
+  bool _isLoading = true;
+
+  // 게터(Getter)
   String get name => _name;
   String get phone => _phone;
   String get role => _role;
   String get area => _area;
+  bool get isLoggedIn => _isLoggedIn;
+  List<Map<String, String>> get users => _users;
+  Map<String, bool> get selectedUsers => _selectedUsers;
+  bool get isLoading => _isLoading;
 
-  /// **지역 상태값 세터 (Setter)**
-  /// - 지역 값 변경 시 상태를 갱신하고 알림
-  set area(String newArea) {
-    _area = newArea;
-    notifyListeners(); // 상태 변경 알림
-    debugPrint('Area setter triggered: newArea=$_area'); // 변경 시점 로그
+  /// Firestore 사용자 데이터 실시간 동기화
+  void _fetchUsers() {
+    _repository.getUsersStream().listen((data) {
+      _users = data
+          .map((user) => {
+        'id': user['id'] as String,
+        'name': user['name'] as String,
+        'phone': user['phone'] as String,
+        'email': user['email'] as String,
+        'role': user['role'] as String,
+        'area': user['area'] as String,
+      })
+          .toList();
+
+      _selectedUsers = {
+        for (var user in data)
+          user['id'] as String: user['isSelected'] as bool,
+      };
+
+      _isLoading = false;
+      notifyListeners();
+    });
   }
 
-  /// **상태 변경 알림 로깅**
-  @override
-  void notifyListeners() {
-    super.notifyListeners();
-    debugPrint('UserState notifyListeners called: name=$_name, area=$_area'); // 상태 변경 로그
+  /// SharedPreferences에 사용자 정보 저장
+  Future<void> _saveToPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('name', _name);
+    await prefs.setString('phone', _phone);
+    await prefs.setString('role', _role);
+    await prefs.setString('area', _area);
+    await prefs.setBool('isLoggedIn', _isLoggedIn);
   }
 
-  /// **사용자 정보를 업데이트**
-  /// - 상태 변경 및 SharedPreferences 저장
+  /// 사용자 정보 업데이트 (로그인 시 호출)
   Future<void> updateUser({
     required String name,
     required String phone,
@@ -42,53 +77,79 @@ class UserState extends ChangeNotifier {
     _phone = phone;
     _role = role;
     _area = area;
+    _isLoggedIn = true;
 
-    notifyListeners(); // 상태 변경 알림
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('name', name);
-    await prefs.setString('phone', phone);
-    await prefs.setString('role', role);
-    await prefs.setString('area', area);
-    await prefs.setBool('isLoggedIn', true);
-
-    debugPrint('After updateUser: name=$_name, area=$_area'); // 업데이트 로그
+    notifyListeners();
+    await _saveToPreferences();
   }
 
-  /// **사용자 정보 불러오기**
-  /// - SharedPreferences에서 사용자 정보 로드
+  /// SharedPreferences에서 사용자 정보 불러오기
   Future<void> loadUser() async {
     final prefs = await SharedPreferences.getInstance();
-    final isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
+    _isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
 
-    if (isLoggedIn) {
+    if (_isLoggedIn) {
       _name = prefs.getString('name') ?? '';
       _phone = prefs.getString('phone') ?? '';
       _role = prefs.getString('role') ?? '';
       _area = prefs.getString('area') ?? '';
     } else {
-      _name = '';
-      _phone = '';
-      _role = '';
-      _area = '';
+      _clearState();
     }
 
-    notifyListeners(); // 상태 변경 알림
-    debugPrint('After loadUser: name=$_name, area=$_area'); // 불러온 상태 로그
+    notifyListeners();
   }
 
-  /// **사용자 정보 초기화**
-  /// - 상태 초기화 및 SharedPreferences 삭제
+  /// 사용자 선택 상태 토글
+  Future<void> toggleSelection(String id) async {
+    final currentState = _selectedUsers[id] ?? false;
+    try {
+      await _repository.toggleUserSelection(id, !currentState);
+    } catch (e) {
+      debugPrint('Error toggling selection: $e');
+    }
+  }
+
+  /// Firestore에서 사용자 추가
+  Future<void> addUser(String name, String phone, String email, String role, String area) async {
+    try {
+      final id = '$phone-$area';
+      await _repository.addUser(id, {
+        'name': name,
+        'phone': phone,
+        'email': email,
+        'role': role,
+        'area': area,
+        'isSelected': false,
+      });
+    } catch (e) {
+      debugPrint('Error adding user: $e');
+    }
+  }
+
+  /// Firestore에서 사용자 삭제
+  Future<void> deleteUsers(List<String> ids) async {
+    try {
+      await _repository.deleteUsers(ids);
+    } catch (e) {
+      debugPrint('Error deleting users: $e');
+    }
+  }
+
+  /// SharedPreferences 및 상태 초기화
   Future<void> clearUser() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.clear(); // SharedPreferences 데이터 삭제
+    await prefs.clear();
+    _clearState();
+    notifyListeners();
+  }
 
+  /// 상태 초기화
+  void _clearState() {
     _name = '';
     _phone = '';
     _role = '';
     _area = '';
-
-    notifyListeners(); // 상태 변경 알림
-    debugPrint('UserState cleared: name=$_name, area=$_area'); // 초기화 로그
+    _isLoggedIn = false;
   }
 }
