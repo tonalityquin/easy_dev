@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../models/plate_request.dart';
 import '../../utils/date_utils.dart';
-import '../../states/plate_state.dart';
 import '../../states/user_state.dart';
 import 'plate_custom_box.dart';
 
