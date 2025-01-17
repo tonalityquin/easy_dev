@@ -34,6 +34,10 @@ class MyApp extends StatelessWidget {
 
     return MultiProvider(
       providers: [
+        // PlateRepository를 앱 전체에서 사용할 수 있도록 제공
+        Provider<PlateRepository>(
+          create: (_) => plateRepository,
+        ),
         ChangeNotifierProvider(create: (_) => PageState(pages: defaultPages)),
         ChangeNotifierProvider(create: (_) => PlateState(plateRepository)), // PlateRepository 주입
         ChangeNotifierProvider(create: (_) => AreaState()),

@@ -1,7 +1,6 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import '../../repositories/plate_repository.dart'; // PlateRepository 임포트
 import '../../states/plate_state.dart';
 import '../../states/area_state.dart';
 import '../../states/user_state.dart';
@@ -38,31 +37,18 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
 
   /// 모든 데이터 삭제
   Future<void> _deleteAllData(BuildContext context) async {
+    final plateRepository = Provider.of<PlateRepository>(context, listen: false); // Provider로 PlateRepository 사용
     try {
-      final collections = [
-        'parking_requests',
-        'parking_completed',
-        'departure_requests',
-        'departure_completed',
-      ];
-      for (final collection in collections) {
-        final snapshot = await FirebaseFirestore.instance.collection(collection).get();
-        for (final doc in snapshot.docs) {
-          await doc.reference.delete();
-        }
-      }
+      await plateRepository.deleteAllData();
       _showSnackBar(context, '모든 문서가 삭제되었습니다. 컬렉션은 유지됩니다.');
     } catch (e) {
       _showSnackBar(context, '문서 삭제 실패: $e');
     }
   }
 
-  /// 로그아웃 처리
+  /// 로그아웃 처리 (FirebaseAuth 의존성 제거)
   Future<void> _logout(BuildContext context) async {
     try {
-      // Firebase Auth 로그아웃
-      await FirebaseAuth.instance.signOut();
-
       // UserState 초기화
       final userState = Provider.of<UserState>(context, listen: false);
       await userState.clearUser();
@@ -92,25 +78,22 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
           IconButton(
             icon: const Icon(Icons.delete),
             onPressed: () async {
-              final confirm = await showDialog<bool>(
-                context: context,
-                builder: (BuildContext context) {
-                  return AlertDialog(
-                    title: const Text('모든 데이터 삭제'),
-                    content: const Text('정말로 모든 데이터를 삭제하시겠습니까?'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(false),
-                        child: const Text('취소'),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(true),
-                        child: const Text('확인'),
-                      ),
-                    ],
-                  );
-                },
-              );
+              final confirm = await showDialog<bool>(context: context, builder: (BuildContext context) {
+                return AlertDialog(
+                  title: const Text('모든 데이터 삭제'),
+                  content: const Text('정말로 모든 데이터를 삭제하시겠습니까?'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      child: const Text('취소'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(true),
+                      child: const Text('확인'),
+                    ),
+                  ],
+                );
+              });
               if (confirm == true) {
                 await _deleteAllData(context);
               }

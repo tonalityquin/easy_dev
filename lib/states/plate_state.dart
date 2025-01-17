@@ -141,6 +141,24 @@ class PlateState extends ChangeNotifier {
     );
   }
 
+  /// **모든 데이터를 삭제하고 상태 갱신**
+  Future<void> deleteAllData() async {
+    try {
+      // Firestore에서 모든 데이터를 삭제
+      await _repository.deleteAllData();
+
+      // 데이터 삭제 후 상태를 갱신
+      _data.forEach((key, value) {
+        _data[key] = []; // 컬렉션의 모든 데이터 비우기
+      });
+
+      // 상태 변경을 UI에 반영
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error deleting all data: $e');
+    }
+  }
+
   void refreshPlateState() {
     notifyListeners();
   }
