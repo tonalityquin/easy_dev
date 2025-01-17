@@ -11,16 +11,6 @@ import '../states/secondary_info.dart'; // 페이지 정보를 포함하는 클�
 class SecondaryPage extends StatelessWidget {
   const SecondaryPage({super.key});
 
-  /// 데이터를 새로 고침하는 함수
-  /// [context] BuildContext를 통해 PageState 접근
-  /// SecondaryState의 loading 상태를 설정하고 데이터를 갱신
-  Future<void> _refreshData(BuildContext context) async {
-    final pageState = Provider.of<SecondaryState>(context, listen: false);
-    pageState.setLoading(true); // 로딩 상태 활성화
-    await pageState.refreshData(); // 데이터 갱신
-    pageState.setLoading(false); // 로딩 상태 비활성화
-  }
-
   @override
   Widget build(BuildContext context) {
     final userState = context.watch<UserState>(); // UserState를 통해 사용자 상태 가져오기
@@ -44,7 +34,7 @@ class SecondaryPage extends StatelessWidget {
         appBar: AppBar(
           backgroundColor: AppColors.selectedItemColor, // 선택된 아이템의 색상
         ),
-        body: RefreshableBody(onRefresh: () => _refreshData(context)),
+        body: const RefreshableBody(), // RefreshableBody에서 onRefresh 제거
         bottomNavigationBar: Column(
           mainAxisSize: MainAxisSize.min,
           children: const [
@@ -57,11 +47,9 @@ class SecondaryPage extends StatelessWidget {
 }
 
 /// RefreshableBody 위젯
-/// 새로 고침 가능한 본문 위젯.
+/// 새로 고침 가능한 본문 위젯 (onRefresh 제거 후 수정).
 class RefreshableBody extends StatelessWidget {
-  final Future<void> Function() onRefresh; // 새로 고침 함수
-
-  const RefreshableBody({super.key, required this.onRefresh});
+  const RefreshableBody({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -75,16 +63,12 @@ class RefreshableBody extends StatelessWidget {
         builder: (context, state, child) {
           return Stack(
             children: [
-              // 새로 고침 가능 영역
-              RefreshIndicator(
-                onRefresh: onRefresh, // onRefresh로 전달된 함수 실행
-                child: IndexedStack(
-                  // 현재 선택된 페이지 표시
-                  index: state.selectedIndex,
-                  children: state.pages
-                      .map((pageInfo) => pageInfo.page) // 각 SecondaryInfo 표시
-                      .toList(),
-                ),
+              // 현재 선택된 페이지 표시
+              IndexedStack(
+                index: state.selectedIndex,
+                children: state.pages
+                    .map((pageInfo) => pageInfo.page) // 각 SecondaryInfo 표시
+                    .toList(),
               ),
               // 로딩 상태 표시
               if (state.isLoading)
