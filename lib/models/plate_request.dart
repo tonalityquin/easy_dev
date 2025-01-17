@@ -31,8 +31,8 @@ class PlateRequest {
           : (timestamp is DateTime)
           ? timestamp
           : DateTime.now(),
-      location: doc['location'],
-      area: doc['area'],
+      location: doc['location'] ?? '미지정',
+      area: doc.data()?.containsKey('area') == true ? doc['area'] : '미지정', // "area" 필드가 없으면 기본값 사용
     );
   }
 

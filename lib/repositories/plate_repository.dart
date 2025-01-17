@@ -14,6 +14,9 @@ abstract class PlateRepository {
     required String area,
     required String type,
   });
+
+  /// 특정 지역에 대한 사용 가능한 위치를 가져오는 메서드
+  Future<List<String>> getAvailableLocations(String area);
 }
 
 class FirestorePlateRepository implements PlateRepository {
@@ -80,5 +83,19 @@ class FirestorePlateRepository implements PlateRepository {
       'location': location.isNotEmpty ? location : '미지정',
       'area': area,
     });
+  }
+
+  @override
+  Future<List<String>> getAvailableLocations(String area) async {
+    try {
+      final querySnapshot = await _firestore
+          .collection('locations') // Firestore의 'locations' 컬렉션
+          .where('area', isEqualTo: area) // area 필터 적용
+          .get();
+
+      return querySnapshot.docs.map((doc) => doc['locationName'] as String).toList();
+    } catch (e) {
+      throw Exception('Failed to fetch available locations: $e');
+    }
   }
 }

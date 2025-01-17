@@ -6,6 +6,7 @@ import '../../widgets/input_field/back_4_digit.dart';
 import '../../widgets/input_field/location_field.dart';
 import '../../widgets/keypad/num_keypad.dart';
 import '../../widgets/keypad/kor_keypad.dart';
+import '../../widgets/container/location_container.dart';
 import '../../widgets/navigation/bottom_navigation.dart';
 import '../../states/plate_state.dart';
 import '../../states/area_state.dart';
@@ -122,18 +123,20 @@ class _Input3DigitState extends State<Input3Digit> {
 
   Future<void> _handleAction() async {
     final String plateNumber = '${controller3digit.text}-${controller1digit.text}-${controller4digit.text}';
+    final plateRepository = context.read<PlateRepository>();
     final plateState = context.read<PlateState>();
     final areaState = context.read<AreaState>();
-    final String location = locationController.text;
+    String location = locationController.text;
 
+    // 중복 번호판 확인
     if (plateState.isPlateNumberDuplicated(plateNumber, areaState.currentArea)) {
       _showSnackBar('이미 등록된 번호판입니다: $plateNumber');
       return;
     }
 
-    if (!_validatePlateNumber(plateNumber)) {
-      _showSnackBar('번호판 형식이 올바르지 않습니다.');
-      return;
+    // 주차 구역이 비어 있으면 "미지정"으로 처리
+    if (location.isEmpty) {
+      location = '미지정';
     }
 
     setState(() {
@@ -141,8 +144,6 @@ class _Input3DigitState extends State<Input3Digit> {
     });
 
     try {
-      final plateRepository = context.read<PlateRepository>();
-
       if (!isLocationSelected) {
         await plateRepository.addRequestOrCompleted(
           collection: 'parking_requests',
@@ -161,10 +162,9 @@ class _Input3DigitState extends State<Input3Digit> {
           type: '입차 완료',
         );
         _showSnackBar('입차 완료');
-        _clearLocation();
       }
-
       clearInput();
+      _clearLocation();
     } catch (error) {
       _showSnackBar('오류 발생: $error');
     } finally {
@@ -174,9 +174,44 @@ class _Input3DigitState extends State<Input3Digit> {
     }
   }
 
-  bool _validatePlateNumber(String plateNumber) {
-    final RegExp platePattern = RegExp(r'^\d{3}-[가-힣]-\d{4}$');
-    return platePattern.hasMatch(plateNumber);
+  void _selectParkingLocation() {
+    showModalBottomSheet(
+      context: context,
+      builder: (BuildContext context) {
+        final currentArea = context.watch<AreaState>().currentArea;
+
+        return FutureBuilder<List<String>>(
+          future: context.read<PlateRepository>().getAvailableLocations(currentArea),
+          builder: (BuildContext context, AsyncSnapshot<List<String>> snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (!snapshot.hasData || snapshot.data!.isEmpty) {
+              return const Center(child: Text('사용 가능한 주차 구역이 없습니다.'));
+            }
+
+            final locations = snapshot.data!;
+            return ListView.builder(
+              itemCount: locations.length,
+              itemBuilder: (BuildContext context, int index) {
+                final location = locations[index];
+                return LocationContainer(
+                  location: location,
+                  isSelected: locationController.text == location,
+                  onTap: () {
+                    setState(() {
+                      locationController.text = location;
+                      isLocationSelected = true;
+                    });
+                    Navigator.pop(context);
+                  },
+                );
+              },
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -223,10 +258,15 @@ class _Input3DigitState extends State<Input3Digit> {
                 ),
                 const SizedBox(height: 8.0),
                 Center(
-                  child: LocationField(
-                    controller: locationController,
-                    onTap: () => _clearLocation(),
-                    widthFactor: 0.7,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      LocationField(
+                        controller: locationController,
+                        onTap: _selectParkingLocation,
+                        widthFactor: 0.7,
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -238,23 +278,25 @@ class _Input3DigitState extends State<Input3Digit> {
       bottomNavigationBar: BottomNavigation(
         showKeypad: showKeypad,
         keypad: activeController == controller3digit
-            ? NumKeypad(controller: controller3digit, maxLength: 3, onComplete: () => _setActiveController(controller1digit))
+            ? NumKeypad(
+                controller: controller3digit, maxLength: 3, onComplete: () => _setActiveController(controller1digit))
             : activeController == controller1digit
-            ? KorKeypad(controller: controller1digit, onComplete: () => _setActiveController(controller4digit))
-            : NumKeypad(controller: controller4digit, maxLength: 4, onComplete: () => setState(() => showKeypad = false)),
+                ? KorKeypad(controller: controller1digit, onComplete: () => _setActiveController(controller4digit))
+                : NumKeypad(
+                    controller: controller4digit, maxLength: 4, onComplete: () => setState(() => showKeypad = false)),
         actionButton: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             ElevatedButton(
-              onPressed: _clearLocation,
+              onPressed: isLocationSelected ? _clearLocation : _selectParkingLocation,
               style: commonButtonStyle,
-              child: const Text('구역 초기화'),
+              child: Text(isLocationSelected ? '구역 초기화' : '주차 구역 선택'),
             ),
             const SizedBox(height: 15),
             ElevatedButton(
               onPressed: isLoading ? null : _handleAction,
               style: commonButtonStyle,
-              child: const Text('입차 요청'),
+              child: Text(isLocationSelected ? '입차 완료' : '입차 요청'),
             ),
           ],
         ),
