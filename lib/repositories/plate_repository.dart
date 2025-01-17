@@ -6,9 +6,15 @@ abstract class PlateRepository {
   Future<void> addOrUpdateDocument(String collection, String documentId, Map<String, dynamic> data);
   Future<void> deleteDocument(String collection, String documentId);
   Future<Map<String, dynamic>?> getDocument(String collection, String documentId);
-  Future<void> deleteAllData(); // deleteAllData 메서드 추가
+  Future<void> deleteAllData();
+  Future<void> addRequestOrCompleted({
+    required String collection,
+    required String plateNumber,
+    required String location,
+    required String area,
+    required String type,
+  });
 }
-
 
 class FirestorePlateRepository implements PlateRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -55,5 +61,24 @@ class FirestorePlateRepository implements PlateRepository {
     } catch (e) {
       rethrow;
     }
+  }
+
+  @override
+  Future<void> addRequestOrCompleted({
+    required String collection,
+    required String plateNumber,
+    required String location,
+    required String area,
+    required String type,
+  }) async {
+    final documentId = '${plateNumber}_$area';
+
+    await _firestore.collection(collection).doc(documentId).set({
+      'plate_number': plateNumber,
+      'type': type,
+      'request_time': DateTime.now(),
+      'location': location.isNotEmpty ? location : '미지정',
+      'area': area,
+    });
   }
 }
