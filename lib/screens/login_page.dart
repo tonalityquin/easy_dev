@@ -29,17 +29,15 @@ class _LoginPageState extends State<LoginPage> {
     final userState = Provider.of<UserState>(context, listen: false);
     await userState.loadUser(); // 사용자 정보 불러오기
 
-    if (userState.phone.isNotEmpty &&
-        userState.name.isNotEmpty &&
-        userState.role.isNotEmpty &&
-        userState.area.isNotEmpty) {
-      // 모든 정보가 유효한 경우에만 이동
+    if (userState.isLoggedIn) {
+      // 이미 로그인된 경우 홈 화면으로 이동
       Navigator.pushReplacementNamed(context, '/home');
     } else {
-      // 유효하지 않은 경우 로그인 화면 유지
+      // 로그인 실패 시 로그인 화면 유지
       debugPrint('자동 로그인 실패: 유효한 사용자 데이터가 없습니다.');
     }
   }
+
 
   /// SnackBar 메시지 출력 함수
   void _showSnackBar(String message) {
@@ -54,6 +52,7 @@ class _LoginPageState extends State<LoginPage> {
     if (!phoneRegex.hasMatch(trimmedPhone)) return '유효한 전화번호를 입력해주세요.';
     return null;
   }
+
 
   /// 인터넷 연결 확인
   Future<bool> _isInternetConnected() async {

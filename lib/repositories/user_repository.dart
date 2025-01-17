@@ -2,8 +2,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 abstract class UserRepository {
   Stream<List<Map<String, dynamic>>> getUsersStream();
+
   Future<void> addUser(String id, Map<String, dynamic> userData);
+
   Future<void> deleteUsers(List<String> ids);
+
   Future<void> toggleUserSelection(String id, bool isSelected);
 }
 
