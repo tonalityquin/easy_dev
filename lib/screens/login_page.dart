@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
-import '../states/user_state.dart'; // UserState 가져오기
-import '../states/area_state.dart'; // AreaState 가져오기
-import 'dart:io'; // 인터넷 연결 확인을 위한 패키지
+import '../states/user_state.dart';
+import '../states/area_state.dart';
+import '../repositories/user_repository.dart'; // UserRepository 가져오기
+import 'dart:io';
 
-/// 사용자가 이름과 전화번호를 통해 Firestore에서 인증할 수 있는 화면
+/// 사용자가 이름과 전화번호를 통해 인증할 수 있는 화면
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -14,30 +14,27 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final TextEditingController _nameController = TextEditingController(); // 이름 입력 필드 컨트롤러
-  final TextEditingController _phoneController = TextEditingController(); // 전화번호 입력 필드 컨트롤러
-  bool _isLoading = false; // 로딩 상태 관리
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _checkLoginState(); // 앱 실행 시 로그인 상태 확인
+    _checkLoginState();
   }
 
   /// 로그인 상태 확인 및 자동 로그인
   Future<void> _checkLoginState() async {
     final userState = Provider.of<UserState>(context, listen: false);
-    await userState.loadUser(); // 사용자 정보 불러오기
+    await userState.loadUser();
 
     if (userState.isLoggedIn) {
-      // 이미 로그인된 경우 홈 화면으로 이동
       Navigator.pushReplacementNamed(context, '/home');
     } else {
-      // 로그인 실패 시 로그인 화면 유지
       debugPrint('자동 로그인 실패: 유효한 사용자 데이터가 없습니다.');
     }
   }
-
 
   /// SnackBar 메시지 출력 함수
   void _showSnackBar(String message) {
@@ -53,7 +50,6 @@ class _LoginPageState extends State<LoginPage> {
     return null;
   }
 
-
   /// 인터넷 연결 확인
   Future<bool> _isInternetConnected() async {
     try {
@@ -64,10 +60,10 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  /// Firestore에서 이름과 전화번호로 사용자 인증
+  /// Repository를 통해 사용자 인증
   Future<void> _login() async {
     final name = _nameController.text.trim();
-    final phone = _phoneController.text.trim().replaceAll(RegExp(r'\D'), ''); // 숫자만 남김
+    final phone = _phoneController.text.trim().replaceAll(RegExp(r'\D'), '');
 
     final phoneError = _validatePhone(phone);
     if (name.isEmpty) {
@@ -83,7 +79,6 @@ class _LoginPageState extends State<LoginPage> {
       _isLoading = true;
     });
 
-    // 인터넷 연결 확인
     if (!await _isInternetConnected()) {
       _showSnackBar('인터넷 연결이 필요합니다.');
       setState(() {
@@ -93,34 +88,26 @@ class _LoginPageState extends State<LoginPage> {
     }
 
     try {
-      // Firestore에서 전화번호로 사용자 데이터 조회
-      final querySnapshot =
-          await FirebaseFirestore.instance.collection('user_accounts').where('phone', isEqualTo: phone).get();
+      final userRepository = context.read<UserRepository>();
 
-      if (querySnapshot.docs.isNotEmpty) {
-        final doc = querySnapshot.docs.first;
-        final data = doc.data();
-        final role = data['role'];
-        final area = data['area'];
+      // UserRepository를 통해 사용자 인증
+      final user = await userRepository.getUserByPhone(phone);
+      if (user != null && user['name'] == name) {
+        final userState = Provider.of<UserState>(context, listen: false);
+        final areaState = Provider.of<AreaState>(context, listen: false);
 
-        if (role == null || area == null) {
-          throw Exception('사용자 데이터가 완전하지 않습니다.');
-        }
+        // 사용자 상태 업데이트
+        userState.updateUser(
+          name: user['name'],
+          phone: phone,
+          role: user['role'],
+          area: user['area'],
+        );
+        areaState.updateArea(user['area']);
 
-        if (data['name'] == name) {
-          final userState = Provider.of<UserState>(context, listen: false);
-          final areaState = Provider.of<AreaState>(context, listen: false);
-
-          // 사용자 상태 업데이트
-          userState.updateUser(name: name, phone: phone, role: role, area: area);
-          areaState.updateArea(area);
-
-          Navigator.pushReplacementNamed(context, '/home'); // 홈 화면으로 이동
-        } else {
-          _showSnackBar('이름이 올바르지 않습니다.');
-        }
+        Navigator.pushReplacementNamed(context, '/home');
       } else {
-        _showSnackBar('해당 전화번호가 등록되지 않았습니다.');
+        _showSnackBar(user == null ? '해당 전화번호가 등록되지 않았습니다.' : '이름이 올바르지 않습니다.');
       }
     } catch (e) {
       _showSnackBar('로그인 실패: $e');
@@ -142,7 +129,6 @@ class _LoginPageState extends State<LoginPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // 이름 입력 필드
             TextField(
               controller: _nameController,
               decoration: const InputDecoration(
@@ -151,7 +137,6 @@ class _LoginPageState extends State<LoginPage> {
               ),
             ),
             const SizedBox(height: 16),
-            // 전화번호 입력 필드
             TextField(
               controller: _phoneController,
               keyboardType: TextInputType.phone,
@@ -161,11 +146,10 @@ class _LoginPageState extends State<LoginPage> {
               ),
             ),
             const SizedBox(height: 24),
-            // 로그인 버튼 또는 로딩 스피너
             _isLoading
-                ? const CircularProgressIndicator() // 로딩 상태 표시
+                ? const CircularProgressIndicator()
                 : ElevatedButton(
-                    onPressed: _login, // 로그인 메서드 호출
+                    onPressed: _login,
                     child: const Text("로그인"),
                   ),
           ],

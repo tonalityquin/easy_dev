@@ -38,10 +38,13 @@ class MyApp extends StatelessWidget {
         Provider<PlateRepository>(
           create: (_) => plateRepository,
         ),
+        Provider<UserRepository>(
+          create: (_) => userRepository, // UserRepository 주입
+        ),
         ChangeNotifierProvider(create: (_) => PageState(pages: defaultPages)),
         ChangeNotifierProvider(create: (_) => PlateState(plateRepository)), // PlateRepository 주입
         ChangeNotifierProvider(create: (_) => AreaState()),
-        ChangeNotifierProvider(create: (_) => UserState(userRepository)), // UserRepository 주입
+        ChangeNotifierProvider(create: (_) => UserState(userRepository)), // UserState에 UserRepository 주입
         ChangeNotifierProvider(create: (_) => SecondaryAccessState()),
         ChangeNotifierProvider(create: (_) => LocationState(locationRepository)), // LocationRepository 주입
       ],

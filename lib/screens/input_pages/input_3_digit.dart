@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../../widgets/input_field/front_3_digit.dart';
 import '../../widgets/input_field/middle_1_digit.dart';
 import '../../widgets/input_field/back_4_digit.dart';
 import '../../widgets/input_field/location_field.dart';
-import '../../widgets/container/location_container.dart';
 import '../../widgets/keypad/num_keypad.dart';
 import '../../widgets/keypad/kor_keypad.dart';
 import '../../widgets/navigation/bottom_navigation.dart';
 import '../../states/plate_state.dart';
-import '../../states/area_state.dart'; // AreaState 가져오기
+import '../../states/area_state.dart';
+import '../../repositories/plate_repository.dart';
 
 class Input3Digit extends StatefulWidget {
   const Input3Digit({super.key});
@@ -142,18 +141,19 @@ class _Input3DigitState extends State<Input3Digit> {
     });
 
     try {
-      // UI에서 PlateState를 통해 Repository 호출
+      final plateRepository = context.read<PlateRepository>();
+
       if (!isLocationSelected) {
-        await plateState.addRequestOrCompleted(
+        await plateRepository.addRequestOrCompleted(
           collection: 'parking_requests',
           plateNumber: plateNumber,
           location: location,
           area: areaState.currentArea,
           type: '입차 요청',
         );
-        _showSnackBar('입차 요청');
+        _showSnackBar('입차 요청 완료');
       } else {
-        await plateState.addRequestOrCompleted(
+        await plateRepository.addRequestOrCompleted(
           collection: 'parking_completed',
           plateNumber: plateNumber,
           location: location,
@@ -173,7 +173,6 @@ class _Input3DigitState extends State<Input3Digit> {
       });
     }
   }
-
 
   bool _validatePlateNumber(String plateNumber) {
     final RegExp platePattern = RegExp(r'^\d{3}-[가-힣]-\d{4}$');
@@ -226,140 +225,36 @@ class _Input3DigitState extends State<Input3Digit> {
                 Center(
                   child: LocationField(
                     controller: locationController,
-                    onTap: () {
-                      showModalBottomSheet(
-                        context: context,
-                        builder: (BuildContext context) {
-                          final currentArea = context.watch<AreaState>().currentArea;
-
-                          return FutureBuilder<QuerySnapshot>(
-                            future: FirebaseFirestore.instance
-                                .collection('locations')
-                                .where('area', isEqualTo: currentArea)
-                                .get(),
-                            builder: (BuildContext context, AsyncSnapshot<QuerySnapshot> snapshot) {
-                              if (snapshot.connectionState == ConnectionState.waiting) {
-                                return const Center(child: CircularProgressIndicator());
-                              }
-                              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                                return const Center(child: Text('No locations available.'));
-                              }
-
-                              final locations = snapshot.data!.docs;
-
-                              return ListView.builder(
-                                itemCount: locations.length,
-                                itemBuilder: (BuildContext context, int index) {
-                                  final location = locations[index];
-                                  final locationName = location['locationName'];
-
-                                  return LocationContainer(
-                                    location: locationName,
-                                    isSelected: locationController.text == locationName,
-                                    onTap: () {
-                                      setState(() {
-                                        locationController.text = locationName;
-                                        isLocationSelected = true;
-                                      });
-                                      Navigator.pop(context);
-                                    },
-                                  );
-                                },
-                              );
-                            },
-                          );
-                        },
-                      );
-                    },
+                    onTap: () => _clearLocation(),
                     widthFactor: 0.7,
                   ),
                 ),
               ],
             ),
           ),
-          if (isLoading)
-            const Center(
-              child: CircularProgressIndicator(),
-            ),
+          if (isLoading) const Center(child: CircularProgressIndicator()),
         ],
       ),
       bottomNavigationBar: BottomNavigation(
         showKeypad: showKeypad,
         keypad: activeController == controller3digit
-            ? NumKeypad(
-                controller: controller3digit,
-                maxLength: 3,
-                onComplete: () => _setActiveController(controller1digit),
-              )
+            ? NumKeypad(controller: controller3digit, maxLength: 3, onComplete: () => _setActiveController(controller1digit))
             : activeController == controller1digit
-                ? KorKeypad(
-                    controller: controller1digit,
-                    onComplete: () => _setActiveController(controller4digit),
-                  )
-                : NumKeypad(
-                    controller: controller4digit,
-                    maxLength: 4,
-                    onComplete: () => setState(() => showKeypad = false),
-                  ),
+            ? KorKeypad(controller: controller1digit, onComplete: () => _setActiveController(controller4digit))
+            : NumKeypad(controller: controller4digit, maxLength: 4, onComplete: () => setState(() => showKeypad = false)),
         actionButton: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             ElevatedButton(
-              onPressed: isLocationSelected
-                  ? _clearLocation
-                  : () {
-                      showModalBottomSheet(
-                        context: context,
-                        builder: (BuildContext context) {
-                          final currentArea = context.watch<AreaState>().currentArea;
-
-                          return FutureBuilder<QuerySnapshot>(
-                            future: FirebaseFirestore.instance
-                                .collection('locations')
-                                .where('area', isEqualTo: currentArea)
-                                .get(),
-                            builder: (BuildContext context, AsyncSnapshot<QuerySnapshot> snapshot) {
-                              if (snapshot.connectionState == ConnectionState.waiting) {
-                                return const Center(child: CircularProgressIndicator());
-                              }
-                              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                                return const Center(child: Text('No locations available.'));
-                              }
-
-                              final locations = snapshot.data!.docs;
-
-                              return ListView.builder(
-                                itemCount: locations.length,
-                                itemBuilder: (BuildContext context, int index) {
-                                  final location = locations[index];
-                                  final locationName = location['locationName'];
-
-                                  return LocationContainer(
-                                    location: locationName,
-                                    isSelected: locationController.text == locationName,
-                                    onTap: () {
-                                      setState(() {
-                                        locationController.text = locationName;
-                                        isLocationSelected = true;
-                                      });
-                                      Navigator.pop(context);
-                                    },
-                                  );
-                                },
-                              );
-                            },
-                          );
-                        },
-                      );
-                    },
+              onPressed: _clearLocation,
               style: commonButtonStyle,
-              child: Text(isLocationSelected ? '구역 초기화' : '주차 구역'),
+              child: const Text('구역 초기화'),
             ),
             const SizedBox(height: 15),
             ElevatedButton(
               onPressed: isLoading ? null : _handleAction,
               style: commonButtonStyle,
-              child: Text(isLocationSelected ? '입차 완료' : '입차 요청'),
+              child: const Text('입차 요청'),
             ),
           ],
         ),
