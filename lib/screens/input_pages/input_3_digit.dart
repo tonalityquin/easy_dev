@@ -12,6 +12,8 @@ import '../../states/plate_state.dart';
 import '../../states/area_state.dart';
 import '../../repositories/plate_repository.dart';
 
+/// **Input3Digit**
+/// 번호판 및 주차 구역 입력을 처리하는 화면
 class Input3Digit extends StatefulWidget {
   const Input3Digit({super.key});
 
@@ -20,15 +22,16 @@ class Input3Digit extends StatefulWidget {
 }
 
 class _Input3DigitState extends State<Input3Digit> {
+  // 컨트롤러: 입력 필드 및 상태 관리
   final TextEditingController controller3digit = TextEditingController();
   final TextEditingController controller1digit = TextEditingController();
   final TextEditingController controller4digit = TextEditingController();
   final TextEditingController locationController = TextEditingController();
 
-  late TextEditingController activeController;
-  bool showKeypad = true;
-  bool isLoading = false;
-  bool isLocationSelected = false;
+  late TextEditingController activeController; // 현재 활성화된 입력 필드
+  bool showKeypad = true; // 키패드 표시 여부
+  bool isLoading = false; // 로딩 상태
+  bool isLocationSelected = false; // 주차 구역 선택 여부
 
   final ButtonStyle commonButtonStyle = ElevatedButton.styleFrom(
     backgroundColor: Colors.grey[300],
@@ -54,6 +57,7 @@ class _Input3DigitState extends State<Input3Digit> {
     super.dispose();
   }
 
+  // 입력 필드의 변화 감지
   void _addInputListeners() {
     controller3digit.addListener(_handleInputChange);
     controller1digit.addListener(_handleInputChange);
@@ -66,6 +70,7 @@ class _Input3DigitState extends State<Input3Digit> {
     controller4digit.removeListener(_handleInputChange);
   }
 
+  // 현재 활성화된 입력 필드 설정
   void _setActiveController(TextEditingController controller) {
     setState(() {
       activeController = controller;
@@ -73,10 +78,12 @@ class _Input3DigitState extends State<Input3Digit> {
     });
   }
 
+  // 입력값 유효성 검사
   bool _validateField(TextEditingController controller, int maxLength) {
     return controller.text.length <= maxLength;
   }
 
+  // 입력값 변화 처리
   void _handleInputChange() {
     if (!_validateField(controller3digit, 3) ||
         !_validateField(controller1digit, 1) ||
@@ -86,6 +93,7 @@ class _Input3DigitState extends State<Input3Digit> {
       return;
     }
 
+    // 모든 필드가 채워졌을 경우 키패드 숨김
     if (controller3digit.text.length == 3 && controller1digit.text.length == 1 && controller4digit.text.length == 4) {
       setState(() {
         showKeypad = false;
@@ -93,6 +101,7 @@ class _Input3DigitState extends State<Input3Digit> {
       return;
     }
 
+    // 다음 입력 필드로 포커스 이동
     if (activeController == controller3digit && controller3digit.text.length == 3) {
       _setActiveController(controller1digit);
     } else if (activeController == controller1digit && controller1digit.text.length == 1) {
@@ -100,10 +109,12 @@ class _Input3DigitState extends State<Input3Digit> {
     }
   }
 
+  // 알림 메시지 표시
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  // 입력값 초기화
   void clearInput() {
     setState(() {
       controller3digit.clear();
@@ -114,6 +125,7 @@ class _Input3DigitState extends State<Input3Digit> {
     });
   }
 
+  // 주차 구역 초기화
   void _clearLocation() {
     setState(() {
       locationController.clear();
@@ -121,6 +133,7 @@ class _Input3DigitState extends State<Input3Digit> {
     });
   }
 
+  // 입차 요청 또는 완료 처리
   Future<void> _handleAction() async {
     final String plateNumber = '${controller3digit.text}-${controller1digit.text}-${controller4digit.text}';
     final plateRepository = context.read<PlateRepository>();
@@ -128,13 +141,11 @@ class _Input3DigitState extends State<Input3Digit> {
     final areaState = context.read<AreaState>();
     String location = locationController.text;
 
-    // 중복 번호판 확인
     if (plateState.isPlateNumberDuplicated(plateNumber, areaState.currentArea)) {
       _showSnackBar('이미 등록된 번호판입니다: $plateNumber');
       return;
     }
 
-    // 주차 구역이 비어 있으면 "미지정"으로 처리
     if (location.isEmpty) {
       location = '미지정';
     }
@@ -174,6 +185,7 @@ class _Input3DigitState extends State<Input3Digit> {
     }
   }
 
+  // 주차 구역 선택
   void _selectParkingLocation() {
     showModalBottomSheet(
       context: context,

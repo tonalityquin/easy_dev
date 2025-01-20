@@ -1,20 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// **UserAccounts 위젯**
-/// - 사용자 정보를 입력받아 Firestore에 저장하는 역할을 수행
-/// - 역할(Role) 목록과 입력값 유효성 검증 추가
+/// 사용자 계정을 입력받아 저장하는 화면
 class UserAccounts extends StatefulWidget {
-  /// **저장 콜백 함수**
-  /// - 사용자가 입력한 데이터를 저장하는 역할
+  /// 저장 콜백 함수
   final Function(String name, String phone, String email, String role, String access) onSave;
 
-  /// **지역 값**
-  /// - `TopNavigation`에서 전달받은 지역 값 (읽기 전용)
+  /// TopNavigation에서 전달받은 지역 값
   final String areaValue;
 
-  /// **역할 목록**
-  /// - 외부에서 주입 가능한 역할 리스트
+  /// 역할 목록 (기본값 제공)
   final List<String> roleOptions;
 
   const UserAccounts({
@@ -36,8 +31,8 @@ class _UserAccountsState extends State<UserAccounts> {
   final FocusNode _phoneFocus = FocusNode();
   final FocusNode _emailFocus = FocusNode();
 
-  String _selectedRole = 'Fielder'; // 초기값 설정
-  String? _errorMessage;
+  String _selectedRole = 'Fielder'; // 초기 역할 값
+  String? _errorMessage; // 에러 메시지 상태
 
   @override
   void dispose() {
@@ -50,9 +45,7 @@ class _UserAccountsState extends State<UserAccounts> {
     super.dispose();
   }
 
-  /// **입력값 유효성 검증**
-  /// - 이름, 전화번호, 이메일 형식 확인
-  /// - 에러 메시지를 설정하여 사용자에게 경고
+  /// 입력값 유효성 검증
   bool _validateInputs() {
     if (_nameController.text.isEmpty) {
       _setErrorMessage('name');
@@ -70,7 +63,7 @@ class _UserAccountsState extends State<UserAccounts> {
     return true;
   }
 
-  /// **에러 메시지 설정**
+  /// 에러 메시지 설정
   void _setErrorMessage(String? message) {
     setState(() {
       _errorMessage = message;
@@ -88,6 +81,7 @@ class _UserAccountsState extends State<UserAccounts> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // 이름 입력 필드
             TextField(
               controller: _nameController,
               focusNode: _nameFocus,
@@ -99,6 +93,7 @@ class _UserAccountsState extends State<UserAccounts> {
               ),
             ),
             const SizedBox(height: 16),
+            // 전화번호 입력 필드
             TextField(
               controller: _phoneController,
               focusNode: _phoneFocus,
@@ -112,6 +107,7 @@ class _UserAccountsState extends State<UserAccounts> {
               ),
             ),
             const SizedBox(height: 16),
+            // 이메일 입력 필드 및 접미사
             Row(
               children: [
                 Expanded(
@@ -131,7 +127,7 @@ class _UserAccountsState extends State<UserAccounts> {
                   flex: 2,
                   child: Container(
                     alignment: Alignment.center,
-                    height: 56, // TextField의 높이에 맞춤
+                    height: 56,
                     decoration: BoxDecoration(
                       border: Border.all(color: Colors.grey),
                       borderRadius: BorderRadius.circular(4),
@@ -142,6 +138,7 @@ class _UserAccountsState extends State<UserAccounts> {
               ],
             ),
             const SizedBox(height: 16),
+            // 역할 선택 드롭다운
             DropdownButtonFormField<String>(
               value: _selectedRole,
               decoration: const InputDecoration(
@@ -161,10 +158,12 @@ class _UserAccountsState extends State<UserAccounts> {
               },
             ),
             const SizedBox(height: 16),
+            // 지역 표시
             Text(
               'Area: ${widget.areaValue}',
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
+            // 에러 메시지 표시
             if (_errorMessage != null)
               Padding(
                 padding: const EdgeInsets.only(top: 16.0),
@@ -174,6 +173,7 @@ class _UserAccountsState extends State<UserAccounts> {
                 ),
               ),
             const Spacer(),
+            // 버튼 (취소 및 저장)
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [

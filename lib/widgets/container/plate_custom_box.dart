@@ -1,50 +1,40 @@
 import 'package:flutter/material.dart';
 
-/// **PlateCustomboxStyles 클래스**
-/// - 공통 스타일 및 Divider를 제공하는 클래스
+/// **PlateCustomBox**
+/// - 번호판 정보를 정리된 UI로 표시하는 위젯
+/// - 다양한 텍스트 정보(번호판, 주차 구역, 상태 등)를 표시하며,
+///   탭 이벤트와 스타일 커스터마이징 기능 제공
 class PlateCustomBoxStyles {
-  // 제목 텍스트 스타일 (굵고 큰 텍스트)
+  /// 제목 텍스트 스타일 (굵고 큰 텍스트)
   static const TextStyle titleStyle = TextStyle(
     fontWeight: FontWeight.bold,
     fontSize: 16,
     color: Colors.black,
   );
 
-  // 부제목 텍스트 스타일 (보통 크기의 텍스트)
+  /// 부제목 텍스트 스타일 (보통 크기)
   static const TextStyle subtitleStyle = TextStyle(
     fontSize: 14,
     fontWeight: FontWeight.w400,
     color: Colors.black,
   );
 
-  // 공통 Divider 스타일 (회색, 두께 1)
+  /// 공통 Divider 스타일 (회색, 두께 1)
   static const Divider commonDivider = Divider(thickness: 1, color: Colors.grey);
 }
 
-/// **CustomBox 위젯**
-/// - 주차 요청 또는 완료 정보를 표시하는 위젯
 class PlateCustomBox extends StatelessWidget {
-  // 필드 정의
+  // **필드 정의**
   final String topLeftText; // 번호판 숫자
   final String topRightText; // 번호판 상태
   final String midLeftText; // 주차 구역
-  final String midCenterText; // 중앙 텍스트 (옵션)
+  final String midCenterText; // 중앙 텍스트
   final String midRightText; // 입차 요청 시간
   final String bottomLeftText; // 추가 정보
   final String bottomRightText; // 누적 시간
   final VoidCallback onTap; // 탭 이벤트 콜백
   final Color backgroundColor; // 배경색
 
-  /// **CustomBox 생성자**
-  /// - [topLeftText]: 번호판 숫자
-  /// - [topRightText]: 번호판 상태
-  /// - [midLeftText]: 주차 구역
-  /// - [midCenterText]: 중앙 텍스트
-  /// - [midRightText]: 입차 요청 시간
-  /// - [bottomLeftText]: 추가 정보
-  /// - [bottomRightText]: 누적 시간
-  /// - [onTap]: 탭 이벤트 콜백
-  /// - [backgroundColor]: 배경색 (기본값: 흰색)
   const PlateCustomBox({
     super.key,
     required this.topLeftText,
@@ -58,15 +48,8 @@ class PlateCustomBox extends StatelessWidget {
     this.backgroundColor = Colors.white,
   });
 
-  /// **행(Row) 빌드 메서드**
-  /// - [leftText]: 왼쪽 텍스트
-  /// - [centerText]: 중앙 텍스트 (선택적)
-  /// - [rightText]: 오른쪽 텍스트
-  /// - [leftFlex]: 왼쪽 영역 비율 (기본값: 7)
-  /// - [centerFlex]: 중앙 영역 비율 (기본값: 2)
-  /// - [rightFlex]: 오른쪽 영역 비율 (기본값: 3)
-  /// - [leftTextStyle]: 왼쪽 텍스트 스타일 (선택적)
-  /// - [rightTextStyle]: 오른쪽 텍스트 스타일 (선택적)
+  /// **행(Row) 생성**
+  /// - 텍스트 간 구분선과 정렬을 포함하여 표시
   Widget buildRow({
     required String leftText,
     String? centerText,
@@ -114,37 +97,37 @@ class PlateCustomBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap, // 탭 이벤트
+      onTap: onTap, // 탭 이벤트 처리
       child: Container(
-        width: double.infinity, // 가로 길이를 부모에 맞춤
+        width: double.infinity, // 부모 크기에 맞춤
         height: 120, // 고정된 높이
         decoration: BoxDecoration(
           color: backgroundColor, // 배경색
-          border: Border.all(color: Colors.black, width: 2.0), // 테두리 스타일
+          border: Border.all(color: Colors.black, width: 2.0), // 테두리
         ),
         child: Stack(
           children: [
             Column(
               children: [
-                // 첫 번째 행: 번호판 숫자와 상태 (7:3 비율)
+                // 첫 번째 행: 번호판 숫자와 상태
                 buildRow(
                   leftText: topLeftText,
                   rightText: topRightText,
                   leftFlex: 7,
                   rightFlex: 3,
-                  leftTextStyle: PlateCustomBoxStyles.titleStyle, // 번호판 숫자 bold
+                  leftTextStyle: PlateCustomBoxStyles.titleStyle, // 번호판 bold 스타일
                 ),
                 const Divider(height: 1.0, color: Colors.black), // 구분선
-                // 두 번째 행: 주차 구역과 입차 요청 시간
+                // 두 번째 행: 주차 구역, 중앙 텍스트, 입차 요청 시간
                 buildRow(
-                  leftText: midLeftText, // 주차 구역 bold
+                  leftText: midLeftText,
                   centerText: midCenterText,
                   rightText: midRightText,
                   leftFlex: 5,
                   centerFlex: 2,
                   rightFlex: 3,
-                  leftTextStyle: PlateCustomBoxStyles.titleStyle, // 주차 구역 bold 스타일 적용
-                  rightTextStyle: const TextStyle(color: Colors.green), // 입차 요청 시간 초록색
+                  leftTextStyle: PlateCustomBoxStyles.titleStyle,
+                  rightTextStyle: const TextStyle(color: Colors.green), // 초록색 시간
                 ),
                 const Divider(height: 1.0, color: Colors.black), // 구분선
                 // 세 번째 행: 추가 정보와 누적 시간
@@ -153,7 +136,7 @@ class PlateCustomBox extends StatelessWidget {
                   rightText: bottomRightText,
                   leftFlex: 7,
                   rightFlex: 3,
-                  rightTextStyle: const TextStyle(color: Colors.red), // 누적 시간 붉은색
+                  rightTextStyle: const TextStyle(color: Colors.red), // 붉은색 누적 시간
                 ),
               ],
             ),

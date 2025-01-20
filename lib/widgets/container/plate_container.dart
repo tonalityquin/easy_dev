@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../models/plate_request.dart';
-import '../../utils/date_utils.dart';
-import '../../states/user_state.dart';
-import 'plate_custom_box.dart';
+import '../../models/plate_request.dart'; // PlateRequest 모델
+import '../../utils/date_utils.dart'; // 날짜 관련 유틸리티
+import '../../states/user_state.dart'; // 사용자 상태 관리
+import 'plate_custom_box.dart'; // 커스텀 박스 위젯
 
+/// PlateContainer
+/// - 번호판 데이터를 기반으로 필터링 및 UI를 생성하는 위젯
+/// - 선택된 번호판, 필터 조건, 클릭 이벤트 등을 처리
 class PlateContainer extends StatelessWidget {
-  final List<PlateRequest> data;
-  final bool Function(PlateRequest)? filterCondition;
-  final String? activePlate;
-  final void Function(String plateNumber, String area) onPlateTap;
-  final String? drivingPlate;
+  final List<PlateRequest> data; // 번호판 데이터 리스트
+  final bool Function(PlateRequest)? filterCondition; // 데이터 필터 조건
+  final String? activePlate; // 현재 활성화된 번호판
+  final void Function(String plateNumber, String area) onPlateTap; // 번호판 클릭 이벤트
+  final String? drivingPlate; // 운행 중인 번호판
 
   const PlateContainer({
     required this.data,
@@ -21,6 +24,9 @@ class PlateContainer extends StatelessWidget {
     super.key,
   });
 
+  /// 데이터 필터링 및 중복 제거
+  /// - [data]: 원본 데이터 리스트
+  /// - 필터 조건이 있을 경우 이를 적용
   List<PlateRequest> _filterData(List<PlateRequest> data) {
     final seenIds = <String>{};
     return data.where((request) {
@@ -28,15 +34,16 @@ class PlateContainer extends StatelessWidget {
         return false; // 중복 제거
       }
       seenIds.add(request.id);
-      return filterCondition == null || filterCondition!(request); // 필터 조건 활용
+      return filterCondition == null || filterCondition!(request); // 필터 조건 적용
     }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    final userName = Provider.of<UserState>(context).name;
-    final filteredData = _filterData(data);
+    final userName = Provider.of<UserState>(context).name; // 사용자 이름 가져오기
+    final filteredData = _filterData(data); // 데이터 필터링
 
+    // 데이터가 없을 경우 표시할 UI
     if (filteredData.isEmpty) {
       return Center(
         child: const Text(
@@ -46,24 +53,27 @@ class PlateContainer extends StatelessWidget {
       );
     }
 
+    // 필터링된 데이터를 기반으로 UI 생성
     return Column(
       children: filteredData.map((item) {
-        final backgroundColor = activePlate == '${item.plateNumber}_${item.area}' ? Colors.greenAccent : Colors.white;
+        final backgroundColor = activePlate == '${item.plateNumber}_${item.area}'
+            ? Colors.greenAccent // 활성화된 번호판의 배경색
+            : Colors.white; // 비활성화된 번호판의 배경색
 
         return Column(
           children: [
             PlateCustomBox(
-              topLeftText: item.plateNumber,
-              topRightText: "정산 영역",
-              midLeftText: item.location,
-              midCenterText: userName,
-              midRightText: CustomDateUtils.formatTimeForUI(item.requestTime),
-              bottomLeftText: "주의사항",
-              bottomRightText: CustomDateUtils.timeElapsed(item.requestTime),
-              backgroundColor: backgroundColor,
-              onTap: () => onPlateTap(item.plateNumber, item.area),
+              topLeftText: item.plateNumber, // 상단 왼쪽 텍스트
+              topRightText: "정산 영역", // 상단 오른쪽 텍스트
+              midLeftText: item.location, // 중간 왼쪽 텍스트
+              midCenterText: userName, // 중간 중앙 텍스트
+              midRightText: CustomDateUtils.formatTimeForUI(item.requestTime), // 중간 오른쪽 텍스트
+              bottomLeftText: "주의사항", // 하단 왼쪽 텍스트
+              bottomRightText: CustomDateUtils.timeElapsed(item.requestTime), // 하단 오른쪽 텍스트
+              backgroundColor: backgroundColor, // 배경색
+              onTap: () => onPlateTap(item.plateNumber, item.area), // 클릭 이벤트 처리
             ),
-            const SizedBox(height: 5),
+            const SizedBox(height: 5), // 간격 추가
           ],
         );
       }).toList(),

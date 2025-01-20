@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
+/// 주차 구역 추가 및 설정 화면
 class LocationSetting extends StatefulWidget {
-  /// **저장 콜백 함수**
-  /// - 사용자가 입력한 주차 구역 데이터를 저장하는 역할
+  /// 사용자가 입력한 주차 구역 데이터를 저장하는 콜백
   final Function(String location) onSave;
 
   const LocationSetting({Key? key, required this.onSave}) : super(key: key);
@@ -12,8 +12,8 @@ class LocationSetting extends StatefulWidget {
 }
 
 class _LocationSettingState extends State<LocationSetting> {
-  final TextEditingController _locationController = TextEditingController(); // 주차 구역 입력 컨트롤러
-  final FocusNode _locationFocus = FocusNode(); // 주차 구역 입력 포커스
+  final TextEditingController _locationController = TextEditingController(); // 입력 필드 컨트롤러
+  final FocusNode _locationFocus = FocusNode(); // 입력 필드 포커스
   String? _errorMessage; // 에러 메시지 상태
 
   @override
@@ -23,8 +23,7 @@ class _LocationSettingState extends State<LocationSetting> {
     super.dispose();
   }
 
-  /// **입력값 유효성 검증**
-  /// - 주차 구역 입력값이 비어 있으면 에러 메시지 표시
+  /// 입력값 유효성 검증
   bool _validateInput() {
     if (_locationController.text.isEmpty) {
       setState(() {
@@ -33,7 +32,7 @@ class _LocationSettingState extends State<LocationSetting> {
       return false;
     }
     setState(() {
-      _errorMessage = null; // 에러 메시지 초기화
+      _errorMessage = null;
     });
     return true;
   }
@@ -42,7 +41,7 @@ class _LocationSettingState extends State<LocationSetting> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Add Parking Location'), // 페이지 제목
+        title: const Text('Add Parking Location'),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -53,7 +52,7 @@ class _LocationSettingState extends State<LocationSetting> {
               controller: _locationController,
               focusNode: _locationFocus,
               textInputAction: TextInputAction.done,
-              keyboardType: TextInputType.text, // 텍스트 입력용 키보드
+              keyboardType: TextInputType.text,
               decoration: const InputDecoration(
                 labelText: 'Parking Location',
                 border: OutlineInputBorder(),
@@ -78,7 +77,7 @@ class _LocationSettingState extends State<LocationSetting> {
                 ElevatedButton(
                   onPressed: () {
                     if (_validateInput()) {
-                      widget.onSave(_locationController.text); // 입력값 저장
+                      widget.onSave(_locationController.text); // 유효한 입력값 저장
                       Navigator.pop(context);
                     }
                   },

@@ -1,49 +1,47 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../utils/app_colors.dart'; // 앱의 색상 팔레트 정의
+import '../utils/app_colors.dart'; // 앱 색상 팔레트
 import '../states/page_state.dart'; // 페이지 상태 관리 클래스
-import '../states/page_info.dart'; // 페이지 정보를 포함하는 클래스
+import '../states/page_info.dart'; // 페이지 정보 관리 클래스
 import '../screens/input_pages/input_3_digit.dart'; // 3자리 입력 페이지
-import 'secondary_page.dart';
+import 'secondary_page.dart'; // SecondaryPage
 
-/// TypePage 위젯
-/// 다양한 타입 페이지를 탐색할 수 있는 기본 화면.
+/// 다양한 타입의 페이지를 탐색할 수 있는 기본 화면
 class TypePage extends StatelessWidget {
   const TypePage({super.key});
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      // PageState 제공자로 초기화
+      // PageState 상태 제공
       create: (_) => PageState(pages: defaultPages),
       child: Scaffold(
         appBar: AppBar(
-          backgroundColor: AppColors.selectedItemColor, // 선택된 아이템의 색상
+          backgroundColor: AppColors.selectedItemColor, // 선택된 아이템 색상
         ),
-        body: const RefreshableBody(), // RefreshableBody에서 onRefresh 제거
-        bottomNavigationBar: const PageBottomNavigation(),
+        body: const RefreshableBody(), // 수평 드래그 동작이 가능한 본문 위젯
+        bottomNavigationBar: const PageBottomNavigation(), // 하단 내비게이션
       ),
     );
   }
 }
 
-/// RefreshableBody 위젯
-/// 본문 위젯, 수평 드래그 동작 처리 및 상태 표시.
+/// 본문 위젯
+/// - 수평 드래그를 통해 페이지 전환 가능
+/// - 상태 관리 및 로딩 상태 표시
 class RefreshableBody extends StatelessWidget {
   const RefreshableBody({super.key});
 
   /// 드래그 동작 처리
-  /// [context] 빌드 컨텍스트
-  /// [velocity] 드래그 속도
+  /// - 오른쪽 드래그: Input3Digit 페이지로 이동
+  /// - 왼쪽 드래그: SecondaryPage로 이동
   void _handleDrag(BuildContext context, double velocity) {
     if (velocity > 0) {
-      // 오른쪽 드래그 시 Input3Digit 페이지로 이동
       Navigator.push(
         context,
         MaterialPageRoute(builder: (context) => const Input3Digit()),
       );
     } else if (velocity < 0) {
-      // 왼쪽 드래그 시 SecondaryPage로 이동
       Navigator.push(
         context,
         MaterialPageRoute(builder: (context) => const SecondaryPage()),
@@ -58,16 +56,15 @@ class RefreshableBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      // 수평 드래그 종료 시 동작
+      // 수평 드래그 종료 시 `_handleDrag` 호출
       onHorizontalDragEnd: (details) {
         _handleDrag(context, details.primaryVelocity ?? 0);
       },
       child: Consumer<PageState>(
-        // PageState 상태를 사용
         builder: (context, state, child) {
           return Stack(
             children: [
-              // 현재 선택된 페이지 표시
+              // 현재 선택된 페이지를 표시
               IndexedStack(
                 index: state.selectedIndex,
                 children: state.pages.map((pageInfo) => pageInfo.page).toList(),
@@ -75,7 +72,7 @@ class RefreshableBody extends StatelessWidget {
               // 로딩 상태 표시
               if (state.isLoading)
                 const Center(
-                  child: CircularProgressIndicator(), // 로딩 스피너
+                  child: CircularProgressIndicator(),
                 ),
             ],
           );
@@ -85,32 +82,27 @@ class RefreshableBody extends StatelessWidget {
   }
 }
 
-/// PageBottomNavigation 위젯
-/// 하단 내비게이션 바, 페이지 전환 관리.
+/// 하단 내비게이션 바
+/// - 페이지 전환을 관리
 class PageBottomNavigation extends StatelessWidget {
   const PageBottomNavigation({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Consumer<PageState>(
-      // PageState를 사용하여 현재 상태 및 페이지 정보에 접근
       builder: (context, state, child) {
         return BottomNavigationBar(
-          currentIndex: state.selectedIndex,
-          // 현재 선택된 페이지의 인덱스
-          onTap: state.onItemTapped,
-          // 특정 페이지 탭 시 호출
+          currentIndex: state.selectedIndex, // 현재 선택된 페이지 인덱스
+          onTap: state.onItemTapped, // 페이지 전환 처리
           items: state.pages.map((pageInfo) {
             return BottomNavigationBarItem(
               icon: pageInfo.icon, // 페이지 아이콘
               label: pageInfo.title, // 페이지 타이틀
             );
           }).toList(),
-          selectedItemColor: Colors.red,
-          // 선택된 아이템의 색상
-          unselectedItemColor: Colors.blue,
-          // 선택되지 않은 아이템의 색상
-          backgroundColor: Colors.white, // 바의 배경 색상
+          selectedItemColor: Colors.red, // 선택된 아이템 색상
+          unselectedItemColor: Colors.blue, // 선택되지 않은 아이템 색상
+          backgroundColor: Colors.white, // 배경 색상
         );
       },
     );

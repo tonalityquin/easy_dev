@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../repositories/plate_repository.dart'; // PlateRepository 임포트
+import '../../repositories/plate_repository.dart';
 import '../../states/plate_state.dart';
 import '../../states/area_state.dart';
 import '../../states/user_state.dart';
 import '../../widgets/container/plate_container.dart';
 import '../../widgets/navigation/top_navigation.dart';
 
+/// 출차 완료 페이지
+/// - 출차 완료된 차량 데이터를 관리
+/// - 로그아웃 및 데이터 삭제 기능 포함
 class DepartureCompletedPage extends StatefulWidget {
   const DepartureCompletedPage({super.key});
 
@@ -15,9 +18,9 @@ class DepartureCompletedPage extends StatefulWidget {
 }
 
 class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
-  String? _activePlate;
+  String? _activePlate; // 현재 활성화된 번호판
 
-  /// SnackBar 메시지 출력 함수
+  /// 메시지를 SnackBar로 출력
   void _showSnackBar(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
@@ -27,7 +30,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
     return _activePlate != null && _activePlate!.isNotEmpty;
   }
 
-  /// 번호판 클릭 시 호출되는 메서드
+  /// 번호판 클릭 시 활성화 상태 토글
   void _handlePlateTap(String plateNumber, String area) {
     final String activeKey = '${plateNumber}_$area';
     setState(() {
@@ -37,7 +40,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
 
   /// 모든 데이터 삭제
   Future<void> _deleteAllData(BuildContext context) async {
-    final plateRepository = Provider.of<PlateRepository>(context, listen: false); // Provider로 PlateRepository 사용
+    final plateRepository = Provider.of<PlateRepository>(context, listen: false);
     try {
       await plateRepository.deleteAllData();
       _showSnackBar(context, '모든 문서가 삭제되었습니다. 컬렉션은 유지됩니다.');
@@ -46,16 +49,14 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
     }
   }
 
-  /// 로그아웃 처리 (FirebaseAuth 의존성 제거)
+  /// 로그아웃 처리
   Future<void> _logout(BuildContext context) async {
     try {
-      // UserState 초기화
       final userState = Provider.of<UserState>(context, listen: false);
       await userState.clearUser();
 
-      // 로그인 페이지로 이동
       if (context.mounted) {
-        Navigator.pushReplacementNamed(context, '/login');
+        Navigator.pushReplacementNamed(context, '/login'); // 로그인 페이지로 이동
       }
     } catch (e) {
       _showSnackBar(context, '로그아웃 실패: $e');
@@ -66,7 +67,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const TopNavigation(),
+        title: const TopNavigation(), // 상단 내비게이션
         backgroundColor: Colors.blue,
         actions: [
           // 로그아웃 버튼
@@ -78,22 +79,25 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
           IconButton(
             icon: const Icon(Icons.delete),
             onPressed: () async {
-              final confirm = await showDialog<bool>(context: context, builder: (BuildContext context) {
-                return AlertDialog(
-                  title: const Text('모든 데이터 삭제'),
-                  content: const Text('정말로 모든 데이터를 삭제하시겠습니까?'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(false),
-                      child: const Text('취소'),
-                    ),
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(true),
-                      child: const Text('확인'),
-                    ),
-                  ],
-                );
-              });
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (BuildContext context) {
+                  return AlertDialog(
+                    title: const Text('모든 데이터 삭제'),
+                    content: const Text('정말로 모든 데이터를 삭제하시겠습니까?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        child: const Text('취소'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(true),
+                        child: const Text('확인'),
+                      ),
+                    ],
+                  );
+                },
+              );
               if (confirm == true) {
                 await _deleteAllData(context);
               }
@@ -103,14 +107,14 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
       ),
       body: Consumer2<PlateState, AreaState>(
         builder: (context, plateState, areaState, child) {
-          final currentArea = areaState.currentArea;
+          final currentArea = areaState.currentArea; // 현재 선택된 지역
           final departureCompleted = plateState.getPlatesByArea('departure_completed', currentArea);
 
           return ListView(
             padding: const EdgeInsets.all(8.0),
             children: [
               PlateContainer(
-                data: departureCompleted,
+                data: departureCompleted, // 출차 완료된 차량 데이터
                 filterCondition: (_) => true,
                 activePlate: _activePlate,
                 onPlateTap: _handlePlateTap,

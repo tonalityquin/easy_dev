@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// **CommonPlateField 위젯**
-/// - 차량 번호판 입력과 같은 다양한 입력 필드로 재사용 가능
+/// 번호판 입력 필드를 공통으로 처리하는 위젯
+/// - 입력 길이 제한, 스타일 커스터마이징, 콜백 등 다양한 기능 제공
 class CommonPlateField extends StatelessWidget {
-  final TextEditingController controller;
-  final VoidCallback? onTap;
-  final ValueChanged<String>? onChanged;
-  final bool readOnly;
-  final String labelText;
-  final TextStyle? labelStyle;
-  final String? hintText;
-  final TextStyle? hintStyle;
-  final int maxLength;
-  final TextInputType keyboardType;
-  final List<TextInputFormatter> inputFormatters;
+  final TextEditingController controller; // 입력 값을 제어하는 컨트롤러
+  final VoidCallback? onTap; // 입력 필드 탭 콜백
+  final ValueChanged<String>? onChanged; // 입력 값 변경 콜백
+  final bool readOnly; // 읽기 전용 여부
+  final String labelText; // 라벨 텍스트
+  final TextStyle? labelStyle; // 라벨 스타일
+  final String? hintText; // 힌트 텍스트
+  final TextStyle? hintStyle; // 힌트 스타일
+  final int maxLength; // 입력 길이 제한
+  final TextInputType keyboardType; // 키보드 타입
+  final List<TextInputFormatter> inputFormatters; // 입력 포맷터
 
   const CommonPlateField({
     super.key,
@@ -36,22 +36,22 @@ class CommonPlateField extends StatelessWidget {
     final theme = Theme.of(context).textTheme;
 
     return SizedBox(
-      width: _getWidth(context),
+      width: _getWidth(context), // 입력 필드의 동적 너비 계산
       child: TextField(
         controller: controller,
         keyboardType: keyboardType,
         textAlign: TextAlign.center,
         inputFormatters: [
-          LengthLimitingTextInputFormatter(maxLength),
-          ...inputFormatters,
+          LengthLimitingTextInputFormatter(maxLength), // 입력 길이 제한
+          ...inputFormatters, // 추가 포맷터 적용
         ],
-        readOnly: readOnly,
+        readOnly: readOnly, // 읽기 전용 설정
         decoration: InputDecoration(
-          labelText: labelText,
-          labelStyle: _getLabelStyle(theme),
-          hintText: hintText,
-          hintStyle: _getHintStyle(theme),
-          contentPadding: const EdgeInsets.only(top: 20.0),
+          labelText: labelText, // 라벨 텍스트
+          labelStyle: _getLabelStyle(theme), // 라벨 스타일
+          hintText: hintText, // 힌트 텍스트
+          hintStyle: _getHintStyle(theme), // 힌트 스타일
+          contentPadding: const EdgeInsets.only(top: 20.0), // 입력 필드 패딩
           enabledBorder: const UnderlineInputBorder(
             borderSide: BorderSide(color: Colors.black, width: 2.0),
           ),
@@ -65,16 +65,17 @@ class CommonPlateField extends StatelessWidget {
         ),
         onTap: () {
           if (onTap != null) {
-            onTap!(); // 추가적인 콜백 호출
+            onTap!(); // 추가 콜백 호출
           }
           controller.clear(); // 입력 필드 초기화
         },
-        onChanged: onChanged,
+        onChanged: onChanged, // 입력 값 변경 시 호출
       ),
     );
   }
 
-  /// **라벨 스타일 설정**
+  /// 라벨 스타일 반환
+  /// - 사용자 정의 스타일이 없으면 기본 스타일 적용
   TextStyle _getLabelStyle(TextTheme theme) {
     return labelStyle ??
         (theme.bodyLarge ?? const TextStyle()).copyWith(
@@ -84,7 +85,8 @@ class CommonPlateField extends StatelessWidget {
         );
   }
 
-  /// **힌트 스타일 설정**
+  /// 힌트 스타일 반환
+  /// - 사용자 정의 스타일이 없으면 기본 스타일 적용
   TextStyle _getHintStyle(TextTheme theme) {
     return hintStyle ??
         (theme.bodyMedium ?? const TextStyle()).copyWith(
@@ -92,7 +94,8 @@ class CommonPlateField extends StatelessWidget {
         );
   }
 
-  /// **입력 필드의 폭 계산**
+  /// 입력 필드의 너비 계산
+  /// - `maxLength`에 따라 동적으로 너비 결정
   double _getWidth(BuildContext context) {
     if (maxLength == 1) return 70;
     if (maxLength == 2) return MediaQuery.of(context).size.width * 0.25;

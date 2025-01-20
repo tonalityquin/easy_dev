@@ -2,25 +2,27 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../repositories/user_repository.dart';
 
+/// 사용자 상태 관리 클래스
+/// - Firestore와 SharedPreferences를 통해 사용자 정보를 관리
 class UserState extends ChangeNotifier {
   final UserRepository _repository;
 
   UserState(this._repository) {
-    _fetchUsers(); // Firestore에서 데이터 실시간 동기화
-    loadUser(); // SharedPreferences에서 로그인 상태 복구
+    _fetchUsers(); // Firestore 데이터 실시간 동기화
+    loadUser(); // SharedPreferences에서 사용자 정보 복구
   }
 
   // 사용자 정보 및 상태
-  String _name = '';
-  String _phone = '';
-  String _role = '';
-  String _area = '';
-  bool _isLoggedIn = false;
+  String _name = ''; // 사용자 이름
+  String _phone = ''; // 사용자 전화번호
+  String _role = ''; // 사용자 역할
+  String _area = ''; // 사용자 지역
+  bool _isLoggedIn = false; // 로그인 상태
 
   // Firestore 사용자 리스트
   List<Map<String, String>> _users = [];
-  Map<String, bool> _selectedUsers = {};
-  bool _isLoading = true;
+  Map<String, bool> _selectedUsers = {}; // 선택된 사용자 상태
+  bool _isLoading = true; // 로딩 상태
 
   // 게터(Getter)
   String get name => _name;

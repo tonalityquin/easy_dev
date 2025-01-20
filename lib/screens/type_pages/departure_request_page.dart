@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../states/plate_state.dart'; // 번호판 상태 관리 클래스
-import '../../states/area_state.dart'; // 지역 상태 관리 클래스
+import '../../states/plate_state.dart'; // 번호판 상태 관리
+import '../../states/area_state.dart'; // 지역 상태 관리
 import '../../widgets/container/plate_container.dart'; // 번호판 컨테이너 위젯
 import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바
 
+/// 출차 요청 페이지
+/// - 출차 요청된 차량 목록을 표시하고 출차 완료 처리
 class DepartureRequestPage extends StatefulWidget {
   const DepartureRequestPage({super.key});
 
@@ -13,9 +15,9 @@ class DepartureRequestPage extends StatefulWidget {
 }
 
 class _DepartureRequestPageState extends State<DepartureRequestPage> {
-  String? _activePlate; // 현재 활성화된 번호판 상태 관리
+  String? _activePlate; // 현재 선택된 번호판
 
-  /// SnackBar 메시지 출력 함수
+  /// 메시지를 SnackBar로 출력
   void _showSnackBar(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
@@ -25,27 +27,27 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
     return _activePlate != null && _activePlate!.isNotEmpty;
   }
 
-  /// 번호판 클릭 시 호출되는 메서드
+  /// 번호판 선택 상태 토글
   void _handlePlateTap(String plateNumber, String area) {
     final String activeKey = '${plateNumber}_$area';
 
     setState(() {
-      // 선택 상태 토글
       _activePlate = (_activePlate == activeKey) ? null : activeKey;
     });
   }
 
-  /// 출차 완료 처리 메서드
+  /// 출차 완료 처리
   void _handleDepartureCompleted(BuildContext context) {
     if (_isPlateSelected()) {
       final activeParts = _activePlate!.split('_');
       final plateNumber = activeParts[0];
       final area = activeParts[1];
 
+      // 출차 완료 처리
       context.read<PlateState>().setDepartureCompleted(plateNumber, area);
 
       setState(() {
-        _activePlate = null;
+        _activePlate = null; // 선택된 번호판 초기화
       });
 
       _showSnackBar(context, '출차 완료가 완료되었습니다.');
@@ -57,21 +59,21 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const TopNavigation(),
+      appBar: const TopNavigation(), // 상단 내비게이션
       body: Consumer2<PlateState, AreaState>(
         builder: (context, plateState, areaState, child) {
-          final currentArea = areaState.currentArea;
+          final currentArea = areaState.currentArea; // 현재 지역
           final departureRequests = plateState.getPlatesByArea('departure_requests', currentArea);
 
           return ListView(
             padding: const EdgeInsets.all(8.0),
             children: [
               PlateContainer(
-                data: departureRequests,
+                data: departureRequests, // 출차 요청 데이터
                 filterCondition: (request) => request.type == '출차 요청' || request.type == '출차 중',
-                activePlate: _activePlate,
-                onPlateTap: _handlePlateTap,
-                drivingPlate: plateState.isDrivingPlate,
+                activePlate: _activePlate, // 선택된 번호판
+                onPlateTap: _handlePlateTap, // 번호판 클릭 처리
+                drivingPlate: plateState.isDrivingPlate, // 차량 운행 여부
               ),
             ],
           );
@@ -94,7 +96,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
         ],
         onTap: (index) {
           if (index == 1) {
-            _handleDepartureCompleted(context);
+            _handleDepartureCompleted(context); // 출차 완료 처리
           }
         },
       ),
