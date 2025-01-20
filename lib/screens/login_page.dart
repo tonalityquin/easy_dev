@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../states/user_state.dart';
-import '../states/area_state.dart';
+import '../states/user_state.dart'; // 사용자 상태 관리
+import '../states/area_state.dart'; // 지역 상태 관리
 import '../repositories/user_repository.dart'; // UserRepository 가져오기
 import 'dart:io';
 
-/// 사용자가 이름과 전화번호를 통해 인증할 수 있는 화면
+/// 로그인 페이지
+/// - 사용자 이름과 전화번호로 인증
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -14,17 +15,17 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
-  bool _isLoading = false;
+  final TextEditingController _nameController = TextEditingController(); // 이름 입력 컨트롤러
+  final TextEditingController _phoneController = TextEditingController(); // 전화번호 입력 컨트롤러
+  bool _isLoading = false; // 로딩 상태
 
   @override
   void initState() {
     super.initState();
-    _checkLoginState();
+    _checkLoginState(); // 자동 로그인 확인
   }
 
-  /// 로그인 상태 확인 및 자동 로그인
+  /// 자동 로그인 상태 확인
   Future<void> _checkLoginState() async {
     final userState = Provider.of<UserState>(context, listen: false);
     await userState.loadUser();
@@ -36,7 +37,7 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  /// SnackBar 메시지 출력 함수
+  /// SnackBar로 메시지 출력
   void _showSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
@@ -60,7 +61,7 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  /// Repository를 통해 사용자 인증
+  /// 사용자 인증 및 로그인 처리
   Future<void> _login() async {
     final name = _nameController.text.trim();
     final phone = _phoneController.text.trim().replaceAll(RegExp(r'\D'), '');
@@ -90,13 +91,13 @@ class _LoginPageState extends State<LoginPage> {
     try {
       final userRepository = context.read<UserRepository>();
 
-      // UserRepository를 통해 사용자 인증
+      // 사용자 인증
       final user = await userRepository.getUserByPhone(phone);
       if (user != null && user['name'] == name) {
         final userState = Provider.of<UserState>(context, listen: false);
         final areaState = Provider.of<AreaState>(context, listen: false);
 
-        // 사용자 상태 업데이트
+        // 사용자 및 지역 상태 업데이트
         userState.updateUser(
           name: user['name'],
           phone: phone,
@@ -129,6 +130,7 @@ class _LoginPageState extends State<LoginPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            // 이름 입력 필드
             TextField(
               controller: _nameController,
               decoration: const InputDecoration(
@@ -137,6 +139,7 @@ class _LoginPageState extends State<LoginPage> {
               ),
             ),
             const SizedBox(height: 16),
+            // 전화번호 입력 필드
             TextField(
               controller: _phoneController,
               keyboardType: TextInputType.phone,
@@ -146,6 +149,7 @@ class _LoginPageState extends State<LoginPage> {
               ),
             ),
             const SizedBox(height: 24),
+            // 로그인 버튼 또는 로딩 인디케이터
             _isLoading
                 ? const CircularProgressIndicator()
                 : ElevatedButton(

@@ -1,50 +1,52 @@
 import 'package:flutter/material.dart';
 import '../repositories/location_repository.dart';
 
+/// LocationState
+/// - Firestore와 동기화하여 주차 구역 데이터를 관리
+/// - 선택 상태 및 네비게이션 아이콘 상태를 포함
 class LocationState extends ChangeNotifier {
   final LocationRepository _repository;
 
   LocationState(this._repository) {
-    _initializeLocations(); // Firestore 데이터 동기화
+    _initializeLocations(); // Firestore 데이터와 동기화
   }
 
-  List<Map<String, String>> _locations = [];
-  Map<String, bool> _selectedLocations = {};
-  bool _isLoading = true;
+  List<Map<String, String>> _locations = []; // 주차 구역 데이터
+  Map<String, bool> _selectedLocations = {}; // 선택된 구역 상태
+  bool _isLoading = true; // 로딩 상태
+  List<IconData> _navigationIcons = [Icons.add, Icons.circle, Icons.settings]; // 하단 네비게이션 아이콘 상태
 
-  List<IconData> _navigationIcons = [
-    Icons.add,
-    Icons.circle,
-    Icons.settings,
-  ];
-
+  // 주차 구역 데이터 반환
   List<Map<String, String>> get locations => _locations;
 
+  // 선택된 구역 상태 반환
   Map<String, bool> get selectedLocations => _selectedLocations;
 
+  // 로딩 상태 반환
   bool get isLoading => _isLoading;
 
+  // 하단 네비게이션 아이콘 반환
   List<IconData> get navigationIcons => _navigationIcons;
 
   /// Firestore 데이터 실시간 동기화
+  /// - Firestore에서 주차 구역 데이터를 구독하고 상태 업데이트
   void _initializeLocations() {
     _repository.getLocationsStream().listen((data) {
       _locations = data
           .map((location) => {
-        'id': location['id'] as String,
-        'locationName': location['locationName'] as String,
-        'area': location['area'] as String,
-      })
+                'id': location['id'] as String,
+                'locationName': location['locationName'] as String,
+                'area': location['area'] as String,
+              })
           .toList();
 
       _selectedLocations = {
-        for (var location in data)
-          location['id'] as String: location['isSelected'] as bool,
+        for (var location in data) location['id'] as String: location['isSelected'] as bool,
       };
 
-      _updateIcons();
-      _isLoading = false;
-      notifyListeners();
+      _updateIcons(); // 아이콘 상태 업데이트
+      _isLoading = false; // 로딩 완료
+      notifyListeners(); // 상태 변경 알림
     });
   }
 
@@ -66,7 +68,7 @@ class LocationState extends ChangeNotifier {
     }
   }
 
-  /// 선택 상태 토글
+  /// 주차 구역 선택 상태 토글
   Future<void> toggleSelection(String id) async {
     final currentState = _selectedLocations[id] ?? false;
     try {
@@ -76,12 +78,13 @@ class LocationState extends ChangeNotifier {
     }
   }
 
-  /// 아이콘 상태 업데이트
+  /// 네비게이션 아이콘 상태 업데이트
+  /// - 선택된 구역이 있는 경우 아이콘 변경
   void _updateIcons() {
     if (_selectedLocations.values.contains(true)) {
-      _navigationIcons = [Icons.lock, Icons.delete, Icons.edit];
+      _navigationIcons = [Icons.lock, Icons.delete, Icons.edit]; // 선택된 상태의 아이콘
     } else {
-      _navigationIcons = [Icons.add, Icons.circle, Icons.settings];
+      _navigationIcons = [Icons.add, Icons.circle, Icons.settings]; // 기본 아이콘
     }
   }
 }

@@ -1,24 +1,24 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// **UserRepository 인터페이스**
+/// 사용자 데이터 관리를 위한 UserRepository 인터페이스
 abstract class UserRepository {
-  /// 사용자 목록 스트림 반환
+  /// 사용자 목록을 스트림 형태로 반환
   Stream<List<Map<String, dynamic>>> getUsersStream();
 
   /// 사용자 추가
   Future<void> addUser(String id, Map<String, dynamic> userData);
 
-  /// 사용자 삭제
+  /// 여러 사용자 삭제
   Future<void> deleteUsers(List<String> ids);
 
-  /// 사용자 선택 상태 토글
+  /// 사용자 선택 상태 변경
   Future<void> toggleUserSelection(String id, bool isSelected);
 
-  /// 전화번호로 사용자 조회 (추가된 메서드)
+  /// 전화번호로 사용자 조회
   Future<Map<String, dynamic>?> getUserByPhone(String phone);
 }
 
-/// **Firestore 기반 UserRepository 구현체**
+/// Firestore를 사용한 UserRepository 구현
 class FirestoreUserRepository implements UserRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
@@ -42,50 +42,34 @@ class FirestoreUserRepository implements UserRepository {
 
   @override
   Future<void> addUser(String id, Map<String, dynamic> userData) async {
-    try {
-      await _firestore.collection('user_accounts').doc(id).set(userData);
-    } catch (e) {
-      rethrow;
-    }
+    await _firestore.collection('user_accounts').doc(id).set(userData);
   }
 
   @override
   Future<void> deleteUsers(List<String> ids) async {
-    try {
-      for (var id in ids) {
-        await _firestore.collection('user_accounts').doc(id).delete();
-      }
-    } catch (e) {
-      rethrow;
+    for (var id in ids) {
+      await _firestore.collection('user_accounts').doc(id).delete();
     }
   }
 
   @override
   Future<void> toggleUserSelection(String id, bool isSelected) async {
-    try {
-      await _firestore.collection('user_accounts').doc(id).update({
-        'isSelected': isSelected,
-      });
-    } catch (e) {
-      rethrow;
-    }
+    await _firestore.collection('user_accounts').doc(id).update({
+      'isSelected': isSelected,
+    });
   }
 
   @override
   Future<Map<String, dynamic>?> getUserByPhone(String phone) async {
-    try {
-      final querySnapshot = await _firestore
-          .collection('user_accounts')
-          .where('phone', isEqualTo: phone)
-          .get();
+    final querySnapshot = await _firestore
+        .collection('user_accounts')
+        .where('phone', isEqualTo: phone)
+        .get();
 
-      if (querySnapshot.docs.isNotEmpty) {
-        final doc = querySnapshot.docs.first;
-        return doc.data();
-      }
-    } catch (e) {
-      rethrow;
+    if (querySnapshot.docs.isNotEmpty) {
+      final doc = querySnapshot.docs.first;
+      return doc.data();
     }
-    return null; // 사용자 데이터가 없을 경우 null 반환
+    return null;
   }
 }

@@ -1,14 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// **PlateRequest 클래스**
-/// - 차량 번호판 요청 데이터를 나타내는 모델 클래스
+/// 차량 번호판 요청 데이터를 나타내는 모델 클래스
 class PlateRequest {
-  final String id;
-  final String plateNumber;
-  final String type;
-  final DateTime requestTime;
-  final String location;
-  final String area;
+  final String id; // Firestore 문서 ID
+  final String plateNumber; // 차량 번호판
+  final String type; // 요청 유형
+  final DateTime requestTime; // 요청 시간
+  final String location; // 요청 위치
+  final String area; // 요청 지역
 
   PlateRequest({
     required this.id,
@@ -19,7 +18,7 @@ class PlateRequest {
     required this.area,
   });
 
-  /// Firestore 문서에서 객체 생성
+  /// Firestore 문서 데이터를 PlateRequest 객체로 변환
   factory PlateRequest.fromDocument(DocumentSnapshot<Map<String, dynamic>> doc) {
     final dynamic timestamp = doc['request_time'];
     return PlateRequest(
@@ -32,11 +31,11 @@ class PlateRequest {
           ? timestamp
           : DateTime.now(),
       location: doc['location'] ?? '미지정',
-      area: doc.data()?.containsKey('area') == true ? doc['area'] : '미지정', // "area" 필드가 없으면 기본값 사용
+      area: doc.data()?.containsKey('area') == true ? doc['area'] : '미지정',
     );
   }
 
-  /// 객체를 Firestore에 저장 가능한 Map으로 변환
+  /// PlateRequest 객체를 Map 형식으로 변환
   Map<String, dynamic> toMap() {
     return {
       'plate_number': plateNumber,
