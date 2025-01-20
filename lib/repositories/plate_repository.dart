@@ -1,10 +1,56 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../models/plate_request.dart';
+
+/// 차량 번호판 요청 데이터를 나타내는 모델 클래스
+class PlateModel {
+  final String id; // Firestore 문서 ID
+  final String plateNumber; // 차량 번호판
+  final String type; // 요청 유형
+  final DateTime requestTime; // 요청 시간
+  final String location; // 요청 위치
+  final String area; // 요청 지역
+
+  PlateModel({
+    required this.id,
+    required this.plateNumber,
+    required this.type,
+    required this.requestTime,
+    required this.location,
+    required this.area,
+  });
+
+  /// Firestore 문서 데이터를 PlateRequest 객체로 변환
+  factory PlateModel.fromDocument(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final dynamic timestamp = doc['request_time'];
+    return PlateModel(
+      id: doc.id,
+      plateNumber: doc['plate_number'],
+      type: doc['type'],
+      requestTime: (timestamp is Timestamp)
+          ? timestamp.toDate()
+          : (timestamp is DateTime)
+              ? timestamp
+              : DateTime.now(),
+      location: doc['location'] ?? '미지정',
+      area: doc.data()?.containsKey('area') == true ? doc['area'] : '미지정',
+    );
+  }
+
+  /// PlateRequest 객체를 Map 형식으로 변환
+  Map<String, dynamic> toMap() {
+    return {
+      'plate_number': plateNumber,
+      'type': type,
+      'request_time': requestTime,
+      'location': location,
+      'area': area,
+    };
+  }
+}
 
 /// Plate 관련 데이터를 처리하는 추상 클래스
 abstract class PlateRepository {
   /// 지정된 컬렉션의 데이터를 스트림 형태로 가져옴
-  Stream<List<PlateRequest>> getCollectionStream(String collectionName);
+  Stream<List<PlateModel>> getCollectionStream(String collectionName);
 
   /// 문서를 추가하거나 업데이트
   Future<void> addOrUpdateDocument(String collection, String documentId, Map<String, dynamic> data);
@@ -36,9 +82,9 @@ class FirestorePlateRepository implements PlateRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   @override
-  Stream<List<PlateRequest>> getCollectionStream(String collectionName) {
+  Stream<List<PlateModel>> getCollectionStream(String collectionName) {
     return _firestore.collection(collectionName).snapshots().map((snapshot) {
-      return snapshot.docs.map((doc) => PlateRequest.fromDocument(doc)).toList();
+      return snapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList();
     });
   }
 
