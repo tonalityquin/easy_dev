@@ -50,29 +50,24 @@ class PlateState extends ChangeNotifier {
     required String area,
     required String type,
     required String userName,
+    String? selectedBy, // 선택 유저 추가
   }) async {
-    if (isPlateNumberDuplicated(plateNumber, area)) {
-      debugPrint('중복된 번호판: $plateNumber');
-      return;
-    }
+    final documentId = '${plateNumber}_$area';
 
-    try {
-      await _repository.addRequestOrCompleted(
-        collection: collection,
-        plateNumber: plateNumber,
-        location: location,
-        area: area,
-        type: type,
-        userName: userName,
-      );
-
-      notifyListeners();
-    } catch (e) {
-      debugPrint('Error adding request or completed: $e');
-    }
+    await _repository.addOrUpdateDocument(collection, documentId, {
+      'plate_number': plateNumber,
+      'type': type,
+      'request_time': DateTime.now(),
+      'location': location.isNotEmpty ? location : '미지정',
+      'area': area,
+      'userName': userName,
+      'isSelected': false,
+      'selectedBy': selectedBy, // 선택 유저 반영
+    });
   }
 
-  /// 데이터 전송 처리
+
+
   /// 데이터 전송 처리
   Future<void> transferData({
     required String fromCollection,
@@ -92,6 +87,7 @@ class PlateState extends ChangeNotifier {
           ...documentData,
           'type': newType,
           'isSelected': false, // 선택 상태 초기화
+          'selectedBy': null, // 필요 시 유지하거나 초기화
         });
         notifyListeners();
       }
@@ -100,32 +96,46 @@ class PlateState extends ChangeNotifier {
     }
   }
 
+
   /// 선택 상태 토글
   Future<void> toggleIsSelected({
     required String collection,
     required String plateNumber,
     required String area,
+    required String userName, // 현재 유저 이름 추가
   }) async {
     final plateId = '${plateNumber}_$area';
     final plate = _data[collection]?.firstWhere(
-      (p) => p.id == plateId,
+          (p) => p.id == plateId,
       orElse: () => PlateModel(
         id: plateId,
         plateNumber: plateNumber,
-        type: 'unknown',
+        type: '', // 기본값
         requestTime: DateTime.now(),
-        location: 'unknown',
+        location: '',
         area: area,
-        userName: 'unknown',
+        userName: '',
         isSelected: false,
-      ), // 기본값 반환
+        selectedBy: null, // 기본값
+      ),
     );
 
     if (plate != null) {
+      // 이미 선택된 번호판에 대해 다른 유저가 선택을 시도하면 안됨
+      if (plate.selectedBy != null && plate.selectedBy != userName) {
+        debugPrint('Plate is already selected by another user: ${plate.selectedBy}');
+        return; // 다른 유저가 선택한 경우 작업 차단
+      }
+
       final newIsSelected = !plate.isSelected;
 
       // Firestore 업데이트
-      await _repository.updatePlateSelection(collection, plateId, newIsSelected);
+      await _repository.updatePlateSelection(
+        collection,
+        plateId,
+        newIsSelected,
+        selectedBy: newIsSelected ? userName : null, // 선택 유저 업데이트
+      );
 
       // 로컬 상태 업데이트
       final index = _data[collection]?.indexOf(plate);
@@ -139,35 +149,49 @@ class PlateState extends ChangeNotifier {
           area: plate.area,
           userName: plate.userName,
           isSelected: newIsSelected,
+          selectedBy: newIsSelected ? userName : null, // 선택 유저 업데이트
         );
         notifyListeners();
       }
     }
   }
 
+
+
+
+
   /// 선택된 번호판 반환
-  PlateModel? getSelectedPlate(String collection) {
+  PlateModel? getSelectedPlate(String collection, String userName) {
     final collectionData = _data[collection];
+
+    // 데이터가 없거나 비어 있으면 null 반환
     if (collectionData == null || collectionData.isEmpty) {
-      return null; // 데이터가 없으면 null 반환
+      return null;
     }
 
-    // 선택된 번호판이 없으면 null 반환
-    return collectionData.firstWhere(
-      (plate) => plate.isSelected,
-      orElse: () => PlateModel(
-        id: '',
-        // 기본값 설정
-        plateNumber: '',
-        type: '',
-        requestTime: DateTime.now(),
-        location: '',
-        area: '',
-        userName: 'unknown',
-        isSelected: false,
-      ),
-    );
+    // 현재 유저가 선택한 번호판만 반환
+    try {
+      return collectionData.firstWhere(
+            (plate) => plate.isSelected && plate.selectedBy == userName,
+        orElse: () => PlateModel( // 기본값 반환
+          id: '',
+          plateNumber: '',
+          type: '',
+          requestTime: DateTime.now(),
+          location: '',
+          area: '',
+          userName: '',
+          isSelected: false,
+          selectedBy: null,
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error in getSelectedPlate: $e');
+      return null;
+    }
   }
+
+
 
   /// 입차 완료 처리
   Future<void> setParkingCompleted(String plateNumber, String area) async {
@@ -229,10 +253,11 @@ class PlateState extends ChangeNotifier {
     required String collection,
     required String id,
     required bool isSelected,
+    required String? selectedBy, // 선택한 유저 추가
   }) async {
     try {
       // Firestore 상태 업데이트
-      await _repository.updatePlateSelection(collection, id, isSelected);
+      await _repository.updatePlateSelection(collection, id, isSelected, selectedBy: selectedBy);
 
       // 로컬 상태 동기화
       final collectionData = _data[collection];
@@ -247,7 +272,8 @@ class PlateState extends ChangeNotifier {
             location: collectionData[index].location,
             area: collectionData[index].area,
             userName: collectionData[index].userName,
-            isSelected: isSelected, // 선택 상태 갱신
+            isSelected: isSelected,
+            selectedBy: selectedBy, // 선택 유저 반영
           );
           notifyListeners(); // UI 상태 갱신
         }
@@ -256,6 +282,7 @@ class PlateState extends ChangeNotifier {
       debugPrint('Error updating isSelected: $e');
     }
   }
+
 
   /// 상태 갱신
   void refreshPlateState() {

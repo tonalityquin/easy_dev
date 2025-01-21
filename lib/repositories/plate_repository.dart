@@ -8,9 +8,9 @@ class PlateModel {
   final DateTime requestTime; // 요청 시간
   final String location; // 요청 위치
   final String area; // 요청 지역
-  final String userName;
+  final String userName; // 생성한 유저 이름
   final bool isSelected; // 선택 여부
-
+  final String? selectedBy; // 선택한 유저 이름
 
   PlateModel({
     required this.id,
@@ -20,8 +20,8 @@ class PlateModel {
     required this.location,
     required this.area,
     required this.userName,
-    this.isSelected = false, // 기본값 false
-
+    this.isSelected = false,
+    this.selectedBy,
   });
 
   /// Firestore 문서 데이터를 PlateRequest 객체로 변환
@@ -39,9 +39,8 @@ class PlateModel {
       location: doc['location'] ?? '미지정',
       area: doc.data()?.containsKey('area') == true ? doc['area'] : '미지정',
       userName: doc['userName'] ?? 'Unknown',
-      isSelected: doc.data()?.containsKey('isSelected') == true
-          ? doc['isSelected']
-          : false,
+      isSelected: doc.data()?.containsKey('isSelected') == true ? doc['isSelected'] : false,
+      selectedBy: doc['selectedBy'],
     );
   }
 
@@ -55,6 +54,7 @@ class PlateModel {
       'area': area,
       'userName': userName,
       'isSelected': isSelected,
+      'selectedBy': selectedBy,
     };
   }
 }
@@ -76,8 +76,7 @@ abstract class PlateRepository {
   /// 모든 데이터 삭제
   Future<void> deleteAllData();
 
-  Future<void> updatePlateSelection(String collection, String id, bool isSelected);
-
+  Future<void> updatePlateSelection(String collection, String id, bool isSelected, {String? selectedBy});
 
   /// 요청 데이터를 추가하거나 완료 데이터로 업데이트
   Future<void> addRequestOrCompleted({
@@ -106,7 +105,11 @@ class FirestorePlateRepository implements PlateRepository {
 
   @override
   Future<void> addOrUpdateDocument(String collection, String documentId, Map<String, dynamic> data) async {
-    await _firestore.collection(collection).doc(documentId).set(data);
+    final updatedData = {
+      ...data,
+      'selectedBy': data['selectedBy'], // 추가된 필드
+    };
+    await _firestore.collection(collection).doc(documentId).set(updatedData);
   }
 
   @override
@@ -160,15 +163,19 @@ class FirestorePlateRepository implements PlateRepository {
       'area': area,
       'userName': userName,
       'isSelected': false,
+      'selectedBy': null,
     });
   }
 
   @override
-  Future<void> updatePlateSelection(String collection, String id, bool isSelected) async {
+  Future<void> updatePlateSelection(String collection, String id, bool isSelected, {String? selectedBy}) async {
     try {
-      await _firestore.collection(collection).doc(id).update({
+      final updateData = {
         'isSelected': isSelected,
-      });
+        'selectedBy': selectedBy, // 선택 유저 추가
+      };
+
+      await _firestore.collection(collection).doc(id).update(updateData);
     } catch (e) {
       throw Exception('Failed to update plate selection: $e');
     }

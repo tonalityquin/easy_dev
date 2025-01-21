@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../states/plate_state.dart'; // PlateState 상태 관리
 import '../../states/area_state.dart'; // AreaState 상태 관리
+import '../../states/user_state.dart';
 import '../../widgets/container/plate_container.dart'; // 번호판 컨테이너 위젯
 import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바
 
@@ -17,9 +18,11 @@ class ParkingCompletedPage extends StatelessWidget {
   /// 출차 요청 처리
   void _handleDepartureRequested(BuildContext context) {
     final plateState = context.read<PlateState>();
+    final userName = context.read<UserState>().name; // 현재 사용자 이름 가져오기
+
 
     // 현재 선택된 번호판 가져오기
-    final selectedPlate = plateState.getSelectedPlate('parking_completed');
+    final selectedPlate = plateState.getSelectedPlate('parking_completed', userName);
     if (selectedPlate != null) {
       plateState.setDepartureRequested(selectedPlate.plateNumber, selectedPlate.area);
 
@@ -37,6 +40,7 @@ class ParkingCompletedPage extends StatelessWidget {
         builder: (context, plateState, areaState, child) {
           final currentArea = areaState.currentArea; // 현재 지역
           final parkingCompleted = plateState.getPlatesByArea('parking_completed', currentArea);
+          final userName = context.read<UserState>().name; // 현재 사용자 이름 가져오기
 
           return ListView(
             padding: const EdgeInsets.all(8.0),
@@ -50,6 +54,7 @@ class ParkingCompletedPage extends StatelessWidget {
                     collection: 'parking_completed',
                     plateNumber: plateNumber,
                     area: area,
+                    userName: userName, // userName 전달
                   );
                 },
               ),
@@ -60,7 +65,7 @@ class ParkingCompletedPage extends StatelessWidget {
       bottomNavigationBar: Consumer<PlateState>(
         builder: (context, plateState, child) {
           // 현재 선택된 번호판 가져오기
-          final selectedPlate = plateState.getSelectedPlate('parking_completed');
+          final selectedPlate = plateState.getSelectedPlate('parking_completed', context.read<UserState>().name);
 
           return BottomNavigationBar(
             items: [
@@ -87,4 +92,5 @@ class ParkingCompletedPage extends StatelessWidget {
       ),
     );
   }
+
 }

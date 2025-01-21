@@ -89,6 +89,7 @@ class DepartureCompletedPage extends StatelessWidget {
         builder: (context, plateState, areaState, child) {
           final currentArea = areaState.currentArea; // 현재 선택된 지역
           final departureCompleted = plateState.getPlatesByArea('departure_completed', currentArea);
+          final userName = context.read<UserState>().name; // 현재 사용자 이름 가져오기
 
           return ListView(
             padding: const EdgeInsets.all(8.0),
@@ -102,6 +103,7 @@ class DepartureCompletedPage extends StatelessWidget {
                     collection: 'departure_completed',
                     plateNumber: plateNumber,
                     area: area,
+                    userName: userName, // userName 전달
                   );
                 },
               ),
@@ -111,8 +113,11 @@ class DepartureCompletedPage extends StatelessWidget {
       ),
       bottomNavigationBar: Consumer<PlateState>(
         builder: (context, plateState, child) {
+          // 현재 사용자 이름 가져오기
+          final userName = context.read<UserState>().name;
+
           // 현재 선택된 번호판 가져오기
-          final selectedPlate = plateState.getSelectedPlate('departure_completed');
+          final selectedPlate = plateState.getSelectedPlate('departure_completed', userName);
 
           return BottomNavigationBar(
             items: [

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../states/plate_state.dart'; // 번호판 상태 관리
 import '../../states/area_state.dart'; // 지역 상태 관리
+import '../../states/user_state.dart';
 import '../../widgets/container/plate_container.dart'; // 번호판 컨테이너 위젯
 import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바
 
@@ -18,9 +19,10 @@ class DepartureRequestPage extends StatelessWidget {
   /// 출차 완료 처리
   void _handleDepartureCompleted(BuildContext context) {
     final plateState = context.read<PlateState>();
+    final userName = context.read<UserState>().name; // 현재 사용자 이름 가져오기
 
     // 현재 선택된 번호판 가져오기
-    final selectedPlate = plateState.getSelectedPlate('departure_requests');
+    final selectedPlate = plateState.getSelectedPlate('departure_requests', userName);
     if (selectedPlate != null) {
       plateState.setDepartureCompleted(selectedPlate.plateNumber, selectedPlate.area);
 
@@ -38,6 +40,7 @@ class DepartureRequestPage extends StatelessWidget {
         builder: (context, plateState, areaState, child) {
           final currentArea = areaState.currentArea; // 현재 지역
           final departureRequests = plateState.getPlatesByArea('departure_requests', currentArea);
+          final userName = context.read<UserState>().name; // 현재 사용자 이름 가져오기
 
           return ListView(
             padding: const EdgeInsets.all(8.0),
@@ -51,6 +54,7 @@ class DepartureRequestPage extends StatelessWidget {
                     collection: 'departure_requests',
                     plateNumber: plateNumber,
                     area: area,
+                    userName: userName, // userName 전달
                   );
                 },
               ),
@@ -61,7 +65,7 @@ class DepartureRequestPage extends StatelessWidget {
       bottomNavigationBar: Consumer<PlateState>(
         builder: (context, plateState, child) {
           // 현재 선택된 번호판 가져오기
-          final selectedPlate = plateState.getSelectedPlate('departure_requests');
+          final selectedPlate = plateState.getSelectedPlate('departure_requests', context.read<UserState>().name);
 
           return BottomNavigationBar(
             items: [
@@ -88,4 +92,5 @@ class DepartureRequestPage extends StatelessWidget {
       ),
     );
   }
+
 }
