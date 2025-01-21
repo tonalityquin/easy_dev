@@ -6,52 +6,26 @@ import '../../widgets/container/plate_container.dart'; // 번호판 컨테이너
 import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바
 
 /// 입차 완료 리스트를 표시하는 화면
-class ParkingCompletedPage extends StatefulWidget {
+class ParkingCompletedPage extends StatelessWidget {
   const ParkingCompletedPage({super.key});
 
-  @override
-  State<ParkingCompletedPage> createState() => _ParkingCompletedPageState();
-}
-
-class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
-  String? _activePlate; // 현재 선택된 번호판
-
   /// SnackBar로 메시지 출력
-  void _showSnackBar(String message) {
+  void _showSnackBar(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  /// 번호판 선택 여부 확인
-  bool _isPlateSelected() {
-    return _activePlate != null && _activePlate!.isNotEmpty;
-  }
-
-  /// 번호판 클릭 시 선택 상태 변경
-  void _handlePlateTap(String plateNumber, String area) {
-    final String activeKey = '${plateNumber}_$area';
-
-    setState(() {
-      _activePlate = (_activePlate == activeKey) ? null : activeKey;
-    });
   }
 
   /// 출차 요청 처리
   void _handleDepartureRequested(BuildContext context) {
-    if (_isPlateSelected()) {
-      final activeParts = _activePlate!.split('_');
-      final plateNumber = activeParts[0];
-      final currentArea = context.read<AreaState>().currentArea;
+    final plateState = context.read<PlateState>();
 
-      // 출차 요청 상태 업데이트
-      context.read<PlateState>().setDepartureRequested(plateNumber, currentArea);
+    // 현재 선택된 번호판 가져오기
+    final selectedPlate = plateState.getSelectedPlate('parking_completed');
+    if (selectedPlate != null) {
+      plateState.setDepartureRequested(selectedPlate.plateNumber, selectedPlate.area);
 
-      setState(() {
-        _activePlate = null; // 선택된 번호판 초기화
-      });
-
-      _showSnackBar('출차 요청이 완료되었습니다.');
+      _showSnackBar(context, '출차 요청이 완료되었습니다.');
     } else {
-      _showSnackBar('먼저 차량을 선택하세요.');
+      _showSnackBar(context, '먼저 차량을 선택하세요.');
     }
   }
 
@@ -69,34 +43,46 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
             children: [
               PlateContainer(
                 data: parkingCompleted, // 입차 완료 데이터
+                collection: 'parking_completed', // 컬렉션 이름
                 filterCondition: (_) => true, // 필터 조건
-                activePlate: _activePlate, // 현재 선택된 번호판
-                onPlateTap: _handlePlateTap, // 번호판 클릭 이벤트 처리
-                drivingPlate: _activePlate, // 운행 중인 번호판
+                onPlateTap: (plateNumber, area) {
+                  plateState.toggleIsSelected(
+                    collection: 'parking_completed',
+                    plateNumber: plateNumber,
+                    area: area,
+                  );
+                },
               ),
             ],
           );
         },
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        items: [
-          BottomNavigationBarItem(
-            icon: Icon(_isPlateSelected() ? Icons.highlight_alt : Icons.search),
-            label: _isPlateSelected() ? '정보 수정' : '검색',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(_isPlateSelected() ? Icons.check_circle : Icons.local_parking),
-            label: _isPlateSelected() ? '출차 요청' : '주차 구역',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(_isPlateSelected() ? Icons.sort_by_alpha : Icons.sort),
-            label: _isPlateSelected() ? '정렬 완료' : '정렬',
-          ),
-        ],
-        onTap: (index) {
-          if (index == 1) {
-            _handleDepartureRequested(context); // 출차 요청 처리
-          }
+      bottomNavigationBar: Consumer<PlateState>(
+        builder: (context, plateState, child) {
+          // 현재 선택된 번호판 가져오기
+          final selectedPlate = plateState.getSelectedPlate('parking_completed');
+
+          return BottomNavigationBar(
+            items: [
+              BottomNavigationBarItem(
+                icon: Icon(selectedPlate == null ? Icons.search : Icons.highlight_alt),
+                label: selectedPlate == null ? '번호판 검색' : '정보 수정',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(selectedPlate == null ? Icons.local_parking : Icons.check_circle),
+                label: selectedPlate == null ? '주차 구역' : '출차 요청',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(selectedPlate == null ? Icons.sort : Icons.sort_by_alpha),
+                label: selectedPlate == null ? '정렬' : '정렬 완료',
+              ),
+            ],
+            onTap: (index) {
+              if (index == 1) {
+                _handleDepartureRequested(context); // 출차 요청 처리
+              }
+            },
+          );
         },
       ),
     );

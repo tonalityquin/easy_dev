@@ -10,32 +10,12 @@ import '../../widgets/navigation/top_navigation.dart';
 /// 출차 완료 페이지
 /// - 출차 완료된 차량 데이터를 관리
 /// - 로그아웃 및 데이터 삭제 기능 포함
-class DepartureCompletedPage extends StatefulWidget {
+class DepartureCompletedPage extends StatelessWidget {
   const DepartureCompletedPage({super.key});
-
-  @override
-  State<DepartureCompletedPage> createState() => _DepartureCompletedPageState();
-}
-
-class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
-  String? _activePlate; // 현재 활성화된 번호판
 
   /// 메시지를 SnackBar로 출력
   void _showSnackBar(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  /// 번호판 선택 여부 확인
-  bool _isPlateSelected() {
-    return _activePlate != null && _activePlate!.isNotEmpty;
-  }
-
-  /// 번호판 클릭 시 활성화 상태 토글
-  void _handlePlateTap(String plateNumber, String area) {
-    final String activeKey = '${plateNumber}_$area';
-    setState(() {
-      _activePlate = (_activePlate == activeKey) ? null : activeKey;
-    });
   }
 
   /// 모든 데이터 삭제
@@ -115,29 +95,42 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
             children: [
               PlateContainer(
                 data: departureCompleted, // 출차 완료된 차량 데이터
+                collection: 'departure_completed', // 컬렉션 이름
                 filterCondition: (_) => true,
-                activePlate: _activePlate,
-                onPlateTap: _handlePlateTap,
+                onPlateTap: (plateNumber, area) {
+                  plateState.toggleIsSelected(
+                    collection: 'departure_completed',
+                    plateNumber: plateNumber,
+                    area: area,
+                  );
+                },
               ),
             ],
           );
         },
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        items: [
-          BottomNavigationBarItem(
-            icon: Icon(_isPlateSelected() ? Icons.highlight_alt : Icons.search),
-            label: _isPlateSelected() ? '정보 수정' : '검색',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(_isPlateSelected() ? Icons.check_circle : Icons.local_parking),
-            label: _isPlateSelected() ? '출차 완료' : '주차 구역',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(Icons.sort),
-            label: '정렬',
-          ),
-        ],
+      bottomNavigationBar: Consumer<PlateState>(
+        builder: (context, plateState, child) {
+          // 현재 선택된 번호판 가져오기
+          final selectedPlate = plateState.getSelectedPlate('departure_completed');
+
+          return BottomNavigationBar(
+            items: [
+              BottomNavigationBarItem(
+                icon: Icon(selectedPlate == null ? Icons.search : Icons.highlight_alt),
+                label: selectedPlate == null ? '번호판 검색' : '정보 수정',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(selectedPlate == null ? Icons.local_parking : Icons.check_circle),
+                label: selectedPlate == null ? '주차 구역' : '출차 완료',
+              ),
+              const BottomNavigationBarItem(
+                icon: Icon(Icons.sort),
+                label: '정렬',
+              ),
+            ],
+          );
+        },
       ),
     );
   }

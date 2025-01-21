@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../states/user_state.dart';
 import '../../widgets/input_field/front_3_digit.dart';
 import '../../widgets/input_field/middle_1_digit.dart';
 import '../../widgets/input_field/back_4_digit.dart';
@@ -139,6 +140,7 @@ class _Input3DigitState extends State<Input3Digit> {
     final plateRepository = context.read<PlateRepository>();
     final plateState = context.read<PlateState>();
     final areaState = context.read<AreaState>();
+    final userState = context.read<UserState>();
     String location = locationController.text;
 
     if (plateState.isPlateNumberDuplicated(plateNumber, areaState.currentArea)) {
@@ -161,6 +163,7 @@ class _Input3DigitState extends State<Input3Digit> {
           plateNumber: plateNumber,
           location: location,
           area: areaState.currentArea,
+          userName: userState.name,
           type: '입차 요청',
         );
         _showSnackBar('입차 요청 완료');
@@ -170,6 +173,7 @@ class _Input3DigitState extends State<Input3Digit> {
           plateNumber: plateNumber,
           location: location,
           area: areaState.currentArea,
+          userName: userState.name,
           type: '입차 완료',
         );
         _showSnackBar('입차 완료');

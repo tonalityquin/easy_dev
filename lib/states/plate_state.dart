@@ -15,8 +15,6 @@ class PlateState extends ChangeNotifier {
     'departure_completed': [],
   };
 
-  String? isDrivingPlate;
-
   /// Firestore 실시간 데이터 동기화 초기화
   void _initializeSubscriptions() {
     for (final collectionName in _data.keys) {
@@ -51,6 +49,7 @@ class PlateState extends ChangeNotifier {
     required String location,
     required String area,
     required String type,
+    required String userName,
   }) async {
     if (isPlateNumberDuplicated(plateNumber, area)) {
       debugPrint('중복된 번호판: $plateNumber');
@@ -64,6 +63,7 @@ class PlateState extends ChangeNotifier {
         location: location,
         area: area,
         type: type,
+        userName: userName,
       );
 
       notifyListeners();
@@ -72,6 +72,7 @@ class PlateState extends ChangeNotifier {
     }
   }
 
+  /// 데이터 전송 처리
   /// 데이터 전송 처리
   Future<void> transferData({
     required String fromCollection,
@@ -90,12 +91,82 @@ class PlateState extends ChangeNotifier {
         await _repository.addOrUpdateDocument(toCollection, documentId, {
           ...documentData,
           'type': newType,
+          'isSelected': false, // 선택 상태 초기화
         });
         notifyListeners();
       }
     } catch (e) {
       debugPrint('Error transferring data: $e');
     }
+  }
+
+  /// 선택 상태 토글
+  Future<void> toggleIsSelected({
+    required String collection,
+    required String plateNumber,
+    required String area,
+  }) async {
+    final plateId = '${plateNumber}_$area';
+    final plate = _data[collection]?.firstWhere(
+      (p) => p.id == plateId,
+      orElse: () => PlateModel(
+        id: plateId,
+        plateNumber: plateNumber,
+        type: 'unknown',
+        requestTime: DateTime.now(),
+        location: 'unknown',
+        area: area,
+        userName: 'unknown',
+        isSelected: false,
+      ), // 기본값 반환
+    );
+
+    if (plate != null) {
+      final newIsSelected = !plate.isSelected;
+
+      // Firestore 업데이트
+      await _repository.updatePlateSelection(collection, plateId, newIsSelected);
+
+      // 로컬 상태 업데이트
+      final index = _data[collection]?.indexOf(plate);
+      if (index != null && index >= 0) {
+        _data[collection]?[index] = PlateModel(
+          id: plate.id,
+          plateNumber: plate.plateNumber,
+          type: plate.type,
+          requestTime: plate.requestTime,
+          location: plate.location,
+          area: plate.area,
+          userName: plate.userName,
+          isSelected: newIsSelected,
+        );
+        notifyListeners();
+      }
+    }
+  }
+
+  /// 선택된 번호판 반환
+  PlateModel? getSelectedPlate(String collection) {
+    final collectionData = _data[collection];
+    if (collectionData == null || collectionData.isEmpty) {
+      return null; // 데이터가 없으면 null 반환
+    }
+
+    // 선택된 번호판이 없으면 null 반환
+    return collectionData.firstWhere(
+      (plate) => plate.isSelected,
+      orElse: () => PlateModel(
+        id: '',
+        // 기본값 설정
+        plateNumber: '',
+        type: '',
+        requestTime: DateTime.now(),
+        location: '',
+        area: '',
+        userName: 'unknown',
+        isSelected: false,
+      ),
+    );
   }
 
   /// 입차 완료 처리
@@ -150,6 +221,39 @@ class PlateState extends ChangeNotifier {
     } catch (e) {
       debugPrint('Error fetching available locations: $e');
       return [];
+    }
+  }
+
+  /// 번호판 선택 상태 업데이트
+  Future<void> updateIsSelected({
+    required String collection,
+    required String id,
+    required bool isSelected,
+  }) async {
+    try {
+      // Firestore 상태 업데이트
+      await _repository.updatePlateSelection(collection, id, isSelected);
+
+      // 로컬 상태 동기화
+      final collectionData = _data[collection];
+      if (collectionData != null) {
+        final index = collectionData.indexWhere((plate) => plate.id == id);
+        if (index != -1) {
+          collectionData[index] = PlateModel(
+            id: collectionData[index].id,
+            plateNumber: collectionData[index].plateNumber,
+            type: collectionData[index].type,
+            requestTime: collectionData[index].requestTime,
+            location: collectionData[index].location,
+            area: collectionData[index].area,
+            userName: collectionData[index].userName,
+            isSelected: isSelected, // 선택 상태 갱신
+          );
+          notifyListeners(); // UI 상태 갱신
+        }
+      }
+    } catch (e) {
+      debugPrint('Error updating isSelected: $e');
     }
   }
 
