@@ -70,12 +70,12 @@ class DepartureRequestPage extends StatelessWidget {
           return BottomNavigationBar(
             items: [
               BottomNavigationBarItem(
-                icon: Icon(selectedPlate == null ? Icons.search : Icons.highlight_alt),
-                label: selectedPlate == null ? '번호판 검색' : '정보 수정',
+                icon: Icon(selectedPlate == null || !selectedPlate.isSelected ? Icons.search : Icons.highlight_alt),
+                label: selectedPlate == null || !selectedPlate.isSelected ? '번호판 검색' : '정보 수정',
               ),
               BottomNavigationBarItem(
-                icon: Icon(selectedPlate == null ? Icons.local_parking : Icons.check_circle),
-                label: selectedPlate == null ? '주차 구역' : '출차 완료',
+                icon: Icon(selectedPlate == null || !selectedPlate.isSelected ? Icons.local_parking : Icons.check_circle),
+                label: selectedPlate == null || !selectedPlate.isSelected ? '주차 구역' : '출차 완료',
               ),
               const BottomNavigationBarItem(
                 icon: Icon(Icons.sort),
@@ -83,7 +83,7 @@ class DepartureRequestPage extends StatelessWidget {
               ),
             ],
             onTap: (index) {
-              if (index == 1) {
+              if (index == 1 && selectedPlate != null && selectedPlate.isSelected) {
                 _handleDepartureCompleted(context); // 출차 완료 처리
               }
             },
@@ -92,5 +92,4 @@ class DepartureRequestPage extends StatelessWidget {
       ),
     );
   }
-
 }

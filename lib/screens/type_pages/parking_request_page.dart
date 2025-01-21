@@ -80,7 +80,8 @@ class ParkingRequestPage extends StatelessWidget {
                 label: selectedPlate == null || !selectedPlate.isSelected ? '번호판 검색' : '정보 수정',
               ),
               BottomNavigationBarItem(
-                icon: Icon(selectedPlate == null || !selectedPlate.isSelected ? Icons.local_parking : Icons.check_circle),
+                icon:
+                    Icon(selectedPlate == null || !selectedPlate.isSelected ? Icons.local_parking : Icons.check_circle),
                 label: selectedPlate == null || !selectedPlate.isSelected ? '구역별 검색' : '입차 완료',
               ),
               BottomNavigationBarItem(
