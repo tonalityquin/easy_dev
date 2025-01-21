@@ -26,11 +26,6 @@ class PageState with ChangeNotifier {
   /// - [pages]: 관리할 페이지 정보 리스트
   PageState({required this.pages});
 
-  @override
-  void dispose() {
-    super.dispose();
-  }
-
   /// 현재 선택된 페이지의 타이틀 반환
   String get selectedPageTitle => pages[_selectedIndex].title;
 
