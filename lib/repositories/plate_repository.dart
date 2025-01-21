@@ -8,6 +8,9 @@ class PlateModel {
   final DateTime requestTime; // 요청 시간
   final String location; // 요청 위치
   final String area; // 요청 지역
+  final String userName;
+  final bool isSelected; // 선택 여부
+
 
   PlateModel({
     required this.id,
@@ -16,6 +19,9 @@ class PlateModel {
     required this.requestTime,
     required this.location,
     required this.area,
+    required this.userName,
+    this.isSelected = false, // 기본값 false
+
   });
 
   /// Firestore 문서 데이터를 PlateRequest 객체로 변환
@@ -32,6 +38,10 @@ class PlateModel {
               : DateTime.now(),
       location: doc['location'] ?? '미지정',
       area: doc.data()?.containsKey('area') == true ? doc['area'] : '미지정',
+      userName: doc['userName'] ?? 'Unknown',
+      isSelected: doc.data()?.containsKey('isSelected') == true
+          ? doc['isSelected']
+          : false,
     );
   }
 
@@ -43,6 +53,8 @@ class PlateModel {
       'request_time': requestTime,
       'location': location,
       'area': area,
+      'userName': userName,
+      'isSelected': isSelected,
     };
   }
 }
@@ -64,6 +76,9 @@ abstract class PlateRepository {
   /// 모든 데이터 삭제
   Future<void> deleteAllData();
 
+  Future<void> updatePlateSelection(String collection, String id, bool isSelected);
+
+
   /// 요청 데이터를 추가하거나 완료 데이터로 업데이트
   Future<void> addRequestOrCompleted({
     required String collection,
@@ -71,6 +86,7 @@ abstract class PlateRepository {
     required String location,
     required String area,
     required String type,
+    required String userName,
   });
 
   /// 특정 지역의 사용 가능한 위치 목록 가져오기
@@ -132,6 +148,7 @@ class FirestorePlateRepository implements PlateRepository {
     required String location,
     required String area,
     required String type,
+    required String userName,
   }) async {
     final documentId = '${plateNumber}_$area';
 
@@ -141,8 +158,22 @@ class FirestorePlateRepository implements PlateRepository {
       'request_time': DateTime.now(),
       'location': location.isNotEmpty ? location : '미지정',
       'area': area,
+      'userName': userName,
+      'isSelected': false,
     });
   }
+
+  @override
+  Future<void> updatePlateSelection(String collection, String id, bool isSelected) async {
+    try {
+      await _firestore.collection(collection).doc(id).update({
+        'isSelected': isSelected,
+      });
+    } catch (e) {
+      throw Exception('Failed to update plate selection: $e');
+    }
+  }
+
 
   @override
   Future<List<String>> getAvailableLocations(String area) async {
