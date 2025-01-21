@@ -137,7 +137,7 @@ class DepartureCompletedPage extends StatelessWidget {
                 _showSnackBar(context, '출차 완료가 완료되었습니다.');
                 plateState.setDepartureCompleted(selectedPlate.plateNumber, selectedPlate.area);
               }
-            },  
+            },
           );
         },
       ),
