@@ -20,12 +20,10 @@ class ParkingCompletedPage extends StatelessWidget {
     final plateState = context.read<PlateState>();
     final userName = context.read<UserState>().name; // 현재 사용자 이름 가져오기
 
-
     // 현재 선택된 번호판 가져오기
     final selectedPlate = plateState.getSelectedPlate('parking_completed', userName);
     if (selectedPlate != null) {
       plateState.setDepartureRequested(selectedPlate.plateNumber, selectedPlate.area);
-
       _showSnackBar(context, '출차 요청이 완료되었습니다.');
     } else {
       _showSnackBar(context, '먼저 차량을 선택하세요.');
@@ -70,20 +68,20 @@ class ParkingCompletedPage extends StatelessWidget {
           return BottomNavigationBar(
             items: [
               BottomNavigationBarItem(
-                icon: Icon(selectedPlate == null ? Icons.search : Icons.highlight_alt),
-                label: selectedPlate == null ? '번호판 검색' : '정보 수정',
+                icon: Icon(selectedPlate == null || !selectedPlate.isSelected ? Icons.search : Icons.highlight_alt),
+                label: selectedPlate == null || !selectedPlate.isSelected ? '번호판 검색' : '정보 수정',
               ),
               BottomNavigationBarItem(
-                icon: Icon(selectedPlate == null ? Icons.local_parking : Icons.check_circle),
-                label: selectedPlate == null ? '주차 구역' : '출차 요청',
+                icon: Icon(selectedPlate == null || !selectedPlate.isSelected ? Icons.local_parking : Icons.check_circle),
+                label: selectedPlate == null || !selectedPlate.isSelected ? '주차 구역' : '출차 요청',
               ),
               BottomNavigationBarItem(
-                icon: Icon(selectedPlate == null ? Icons.sort : Icons.sort_by_alpha),
-                label: selectedPlate == null ? '정렬' : '정렬 완료',
+                icon: Icon(selectedPlate == null || !selectedPlate.isSelected ? Icons.sort : Icons.sort_by_alpha),
+                label: selectedPlate == null || !selectedPlate.isSelected ? '정렬' : '정렬 완료',
               ),
             ],
             onTap: (index) {
-              if (index == 1) {
+              if (index == 1 && selectedPlate != null && selectedPlate.isSelected) {
                 _handleDepartureRequested(context); // 출차 요청 처리
               }
             },
@@ -92,5 +90,4 @@ class ParkingCompletedPage extends StatelessWidget {
       ),
     );
   }
-
 }
