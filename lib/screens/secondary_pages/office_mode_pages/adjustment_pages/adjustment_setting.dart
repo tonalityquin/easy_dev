@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../../../states/area_state.dart';
 
 /// 조정 사항 추가 및 설정 화면
 class AdjustmentSetting extends StatefulWidget {
   /// 사용자가 입력한 조정 사항 데이터를 저장하는 콜백
-  final Function(String adjustment) onSave;
+  final Function(Map<String, dynamic> adjustmentData) onSave;
 
   const AdjustmentSetting({Key? key, required this.onSave}) : super(key: key);
 
@@ -188,8 +190,18 @@ class _AdjustmentSettingState extends State<AdjustmentSetting> {
                 ElevatedButton(
                   onPressed: () {
                     if (_validateInput()) {
-                      widget.onSave(_adjustmentController.text); // 유효한 입력값 저장
-                      Navigator.pop(context); // 저장 후 화면 닫기
+                      // AreaState에서 현재 선택된 지역 가져오기
+                      final currentArea = context.read<AreaState>().currentArea;
+                      widget.onSave({
+                        'CountType': _adjustmentController.text,
+                        'basicStandard': _basicStandardValue,
+                        'basicAmount': _basicAmountController.text,
+                        'addStandard': _addStandardValue,
+                        'addAmount': _addAmountController.text,
+                        'area': currentArea, // 현재 선택된 지역 사용
+                        'isSelected': false,
+                      });
+                      Navigator.pop(context); // 화면 닫기
                     }
                   },
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
