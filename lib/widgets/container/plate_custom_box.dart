@@ -38,7 +38,8 @@ class PlateCustomBox extends StatelessWidget {
   final String midLeftText; // 주차 구역
   final String midCenterText; // 중앙 텍스트
   final String midRightText; // 입차 요청 시간
-  final String bottomLeftText; // 추가 정보
+  final String bottomLeftLeftText; // 추가 정보
+  final String bottomLeftCenterText; // 추가 정보
   final String bottomRightText; // 누적 시간
   final VoidCallback onTap; // 탭 이벤트 콜백
   final Color backgroundColor; // 배경색
@@ -51,7 +52,8 @@ class PlateCustomBox extends StatelessWidget {
     required this.midLeftText,
     required this.midCenterText,
     required this.midRightText,
-    required this.bottomLeftText,
+    required this.bottomLeftLeftText,
+    required this.bottomLeftCenterText,
     required this.bottomRightText,
     required this.onTap,
     this.backgroundColor = Colors.white,
@@ -151,10 +153,11 @@ class PlateCustomBox extends StatelessWidget {
                 const Divider(height: 1.0, color: Colors.black), // 구분선
                 // 세 번째 행: 추가 정보와 누적 시간
                 buildRow(
-                  leftText: bottomLeftText,
+                  leftText: "$bottomLeftLeftText, $bottomLeftCenterText",
                   rightText: bottomRightText,
                   leftFlex: 7,
                   rightFlex: 3,
+                  leftTextStyle: PlateCustomBoxStyles.miniTitleStyle, // miniTitleStyle 적용
                   rightTextStyle: const TextStyle(color: Colors.red), // 붉은색 누적 시간
                 ),
               ],

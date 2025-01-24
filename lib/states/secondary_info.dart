@@ -3,9 +3,10 @@ import '../screens/secondary_pages/field_mode_pages/dash_board.dart'; // 대시�
 import '../screens/secondary_pages/field_mode_pages/docu_sign.dart'; // 관리 페이지
 import '../screens/secondary_pages/field_mode_pages/chat.dart'; // 채팅 페이지
 import '../screens/secondary_pages/field_mode_pages/wireless.dart'; // 무전 페이지
-import '../screens/secondary_pages/office_mode_pages/adjustment.dart'; // 조정 페이지
-import '../screens/secondary_pages/office_mode_pages/calander.dart'; // 일정 관리 페이지
+import '../screens/secondary_pages/office_mode_pages/adjustment_management.dart'; // 조정 페이지
+import '../screens/secondary_pages/office_mode_pages/calender.dart'; // 일정 관리 페이지
 import '../screens/secondary_pages/office_mode_pages/location_management.dart'; // 위치 관리 페이지
+import '../screens/secondary_pages/office_mode_pages/status_management.dart';
 import '../screens/secondary_pages/office_mode_pages/user_management.dart'; // 사용자 관리 페이지
 
 /// 페이지 정보를 나타내는 클래스
@@ -32,8 +33,9 @@ final List<SecondaryInfo> fieldModePages = [
 
 /// Office Mode에 해당하는 페이지 목록
 final List<SecondaryInfo> officeModePages = [
-  SecondaryInfo('User Management', const UserManagement(), Icon(Icons.people)), // 사용자 관리
-  SecondaryInfo('Location Management', const LocationManagement(), Icon(Icons.location_on)), // 위치 관리
-  SecondaryInfo('Adjustment', const Adjustment(), Icon(Icons.tune)), // 조정 페이지
-  SecondaryInfo('Calendar', const Calander(), Icon(Icons.calendar_today)), // 일정 관리
+  SecondaryInfo('사용자 관리', const UserManagement(), Icon(Icons.people)), // 사용자 관리
+  SecondaryInfo('구역 관리', const LocationManagement(), Icon(Icons.location_on)), // 위치 관리
+  SecondaryInfo('정산 관리', const AdjustmentManagement(), Icon(Icons.tune)), // 정산 관리
+  SecondaryInfo('상태 관리', const StatusManagement(), Icon(Icons.tune)), // 차량 상태 관리
+  SecondaryInfo('Calendar', const Calender(), Icon(Icons.calendar_today)), // 일정 관리
 ];

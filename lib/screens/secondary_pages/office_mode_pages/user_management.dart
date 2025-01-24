@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../widgets/navigation/secondary_role_navigation.dart';
 import '../../../widgets/navigation/secondary_mini_navigation.dart';
-import 'user_management_pages/user_accounts.dart';
+import 'user_management_pages/user_setting.dart';
 import '../../../widgets/container/user_custom_box.dart';
 import '../../../states/user_state.dart';
 import '../../../states/area_state.dart';
@@ -66,7 +66,7 @@ class UserManagement extends StatelessWidget {
               builder: (BuildContext dialogContext) {
                 final currentArea = Provider.of<AreaState>(dialogContext, listen: false).currentArea;
 
-                return UserAccounts(
+                return UserSetting(
                   onSave: (name, phone, email, role, area) {
                     userState.addUser(name, phone, email, role, area); // 사용자 추가
                   },

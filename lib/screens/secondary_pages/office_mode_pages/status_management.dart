@@ -3,15 +3,15 @@ import '../../../widgets/navigation/secondary_role_navigation.dart'; // 상단 �
 import '../../../widgets/navigation/secondary_mini_navigation.dart'; // 하단 내비게이션 바
 
 
-class Calander extends StatelessWidget {
-  const Calander({Key? key}) : super(key: key);
+class StatusManagement extends StatelessWidget {
+  const StatusManagement({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: const SecondaryRoleNavigation(), // 상단 내비게이션
       body: const Center(
-        child: Text('Calander Page'), // 본문
+        child: Text('Status Page'), // 본문
       ),
       bottomNavigationBar: const SecondaryMiniNavigation( // 하단 내비게이션
         icons: [
