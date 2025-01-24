@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-/// **UserContainer**
-/// - 사용자 정보를 표시하는 컨테이너 위젯
-/// - 사용자 이름, 전화번호, 이메일, 역할, 접근 권한 등을 표시
+/// **AdjustmentContainer**
+/// - 정산 정보를 표시하는 컨테이너 위젯
+/// -  등을 표시
 /// - 선택 여부에 따라 스타일 변경 및 탭 이벤트 처리
 class AdjustmentContainer extends StatelessWidget {
   final String countType; // 정산 유형
