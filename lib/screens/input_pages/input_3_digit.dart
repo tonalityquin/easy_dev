@@ -191,40 +191,43 @@ class _Input3DigitState extends State<Input3Digit> {
 
   // 주차 구역 선택
   void _selectParkingLocation() {
-    showModalBottomSheet(
+    showDialog(
       context: context,
       builder: (BuildContext context) {
         final currentArea = context.watch<AreaState>().currentArea;
 
-        return FutureBuilder<List<String>>(
-          future: context.read<PlateRepository>().getAvailableLocations(currentArea),
-          builder: (BuildContext context, AsyncSnapshot<List<String>> snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (!snapshot.hasData || snapshot.data!.isEmpty) {
-              return const Center(child: Text('사용 가능한 주차 구역이 없습니다.'));
-            }
+        return AlertDialog(
+          title: const Text('주차 구역 선택'),
+          content: FutureBuilder<List<String>>(
+            future: context.read<PlateRepository>().getAvailableLocations(currentArea),
+            builder: (BuildContext context, AsyncSnapshot<List<String>> snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return const Center(child: Text('사용 가능한 주차 구역이 없습니다.'));
+              }
 
-            final locations = snapshot.data!;
-            return ListView.builder(
-              itemCount: locations.length,
-              itemBuilder: (BuildContext context, int index) {
-                final location = locations[index];
-                return LocationContainer(
-                  location: location,
-                  isSelected: locationController.text == location,
-                  onTap: () {
-                    setState(() {
-                      locationController.text = location;
-                      isLocationSelected = true;
-                    });
-                    Navigator.pop(context);
-                  },
-                );
-              },
-            );
-          },
+              final locations = snapshot.data!;
+              return SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: locations.map((location) {
+                    return ListTile(
+                      title: Text(location),
+                      onTap: () {
+                        setState(() {
+                          locationController.text = location;
+                          isLocationSelected = true;
+                        });
+                        Navigator.pop(context);
+                      },
+                    );
+                  }).toList(),
+                ),
+              );
+            },
+          ),
         );
       },
     );
@@ -295,11 +298,11 @@ class _Input3DigitState extends State<Input3Digit> {
         showKeypad: showKeypad,
         keypad: activeController == controller3digit
             ? NumKeypad(
-                controller: controller3digit, maxLength: 3, onComplete: () => _setActiveController(controller1digit))
+            controller: controller3digit, maxLength: 3, onComplete: () => _setActiveController(controller1digit))
             : activeController == controller1digit
-                ? KorKeypad(controller: controller1digit, onComplete: () => _setActiveController(controller4digit))
-                : NumKeypad(
-                    controller: controller4digit, maxLength: 4, onComplete: () => setState(() => showKeypad = false)),
+            ? KorKeypad(controller: controller1digit, onComplete: () => _setActiveController(controller4digit))
+            : NumKeypad(
+            controller: controller4digit, maxLength: 4, onComplete: () => setState(() => showKeypad = false)),
         actionButton: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
