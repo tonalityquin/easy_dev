@@ -19,6 +19,13 @@ class PlateCustomBoxStyles {
     color: Colors.black,
   );
 
+  /// 소형 제목 텍스트 스타일 (작고 굵은 텍스트)
+  static const TextStyle miniTitleStyle = TextStyle(
+    fontWeight: FontWeight.bold,
+    fontSize: 12,
+    color: Colors.black,
+  );
+
   /// 공통 Divider 스타일 (회색, 두께 1)
   static const Divider commonDivider = Divider(thickness: 1, color: Colors.grey);
 }
@@ -26,7 +33,8 @@ class PlateCustomBoxStyles {
 class PlateCustomBox extends StatelessWidget {
   // **필드 정의**
   final String topLeftText; // 번호판 숫자
-  final String topRightText; // 번호판 상태
+  final String topRightUpText; // 정산 유형
+  final String topRightDownText; // 정산 금액 현황
   final String midLeftText; // 주차 구역
   final String midCenterText; // 중앙 텍스트
   final String midRightText; // 입차 요청 시간
@@ -38,7 +46,8 @@ class PlateCustomBox extends StatelessWidget {
   const PlateCustomBox({
     super.key,
     required this.topLeftText,
-    required this.topRightText,
+    required this.topRightUpText,
+    required this.topRightDownText,
     required this.midLeftText,
     required this.midCenterText,
     required this.midRightText,
@@ -86,7 +95,11 @@ class PlateCustomBox extends StatelessWidget {
           Expanded(
             flex: rightFlex,
             child: Center(
-              child: Text(rightText, style: rightTextStyle ?? PlateCustomBoxStyles.subtitleStyle),
+              child: Text(
+                rightText,
+                style: rightTextStyle ?? PlateCustomBoxStyles.subtitleStyle,
+                textAlign: TextAlign.center, // 가운데 정렬 추가
+              ),
             ),
           ),
         ],
@@ -112,10 +125,16 @@ class PlateCustomBox extends StatelessWidget {
                 // 첫 번째 행: 번호판 숫자와 상태
                 buildRow(
                   leftText: topLeftText,
-                  rightText: topRightText,
+                  rightText: "$topRightUpText\n$topRightDownText",
+                  // 두 텍스트를 줄바꿈 처리
                   leftFlex: 7,
                   rightFlex: 3,
-                  leftTextStyle: PlateCustomBoxStyles.titleStyle, // 번호판 bold 스타일
+                  leftTextStyle: PlateCustomBoxStyles.titleStyle,
+                  // 번호판 bold 스타일
+                  rightTextStyle: PlateCustomBoxStyles.miniTitleStyle.copyWith(
+                    fontSize: 12, // 글자 크기 12
+                    height: 1.5, // 줄 간격
+                  ),
                 ),
                 const Divider(height: 1.0, color: Colors.black), // 구분선
                 // 두 번째 행: 주차 구역, 중앙 텍스트, 입차 요청 시간
