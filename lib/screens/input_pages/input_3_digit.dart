@@ -7,7 +7,6 @@ import '../../widgets/input_field/back_4_digit.dart';
 import '../../widgets/input_field/location_field.dart';
 import '../../widgets/keypad/num_keypad.dart';
 import '../../widgets/keypad/kor_keypad.dart';
-import '../../widgets/container/location_container.dart';
 import '../../widgets/navigation/bottom_navigation.dart';
 import '../../states/plate_state.dart';
 import '../../states/area_state.dart';

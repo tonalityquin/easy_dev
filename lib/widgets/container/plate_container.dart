@@ -60,10 +60,10 @@ class PlateContainer extends StatelessWidget {
           children: [
             PlateCustomBox(
               topLeftText: item.plateNumber,
-              topRightText: "정산 영역",
+              topRightUpText: "정산 유형",
+              topRightDownText: "정산 금액 현황",
               midLeftText: item.location,
               midCenterText: displayUser ?? '기본 사용자',
-              // displayUser가 null이면 '기본 사용자'를 대신 사용
               midRightText: CustomDateUtils.formatTimeForUI(item.requestTime),
               bottomLeftText: "주의사항",
               bottomRightText: CustomDateUtils.timeElapsed(item.requestTime),
