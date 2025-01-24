@@ -3,8 +3,8 @@ import '../../../widgets/navigation/secondary_role_navigation.dart'; // 상단 �
 import '../../../widgets/navigation/secondary_mini_navigation.dart'; // 하단 내비게이션 바
 import 'adjustment_pages/adjustment_setting.dart'; // AdjustmentSetting 페이지 추가
 
-class Adjustment extends StatelessWidget {
-  const Adjustment({Key? key}) : super(key: key);
+class AdjustmentManagement extends StatelessWidget {
+  const AdjustmentManagement({Key? key}) : super(key: key);
 
   /// Add 아이콘 클릭 시 AdjustmentSetting 페이지를 팝업으로 열기
   void _showAdjustmentSettingDialog(BuildContext context) {

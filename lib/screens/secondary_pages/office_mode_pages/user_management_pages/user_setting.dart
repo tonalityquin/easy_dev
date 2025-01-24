@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 /// 사용자 계정을 입력받아 저장하는 화면
-class UserAccounts extends StatefulWidget {
+class UserSetting extends StatefulWidget {
   /// 저장 콜백 함수
   final Function(String name, String phone, String email, String role, String access) onSave;
 
@@ -12,7 +12,7 @@ class UserAccounts extends StatefulWidget {
   /// 역할 목록 (기본값 제공)
   final List<String> roleOptions;
 
-  const UserAccounts({
+  const UserSetting({
     Key? key,
     required this.onSave,
     required this.areaValue,
@@ -20,10 +20,10 @@ class UserAccounts extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  State<UserAccounts> createState() => _UserAccountsState();
+  State<UserSetting> createState() => _UserAccountsState();
 }
 
-class _UserAccountsState extends State<UserAccounts> {
+class _UserAccountsState extends State<UserSetting> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();

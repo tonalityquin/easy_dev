@@ -65,7 +65,8 @@ class PlateContainer extends StatelessWidget {
               midLeftText: item.location,
               midCenterText: displayUser ?? '기본 사용자',
               midRightText: CustomDateUtils.formatTimeForUI(item.requestTime),
-              bottomLeftText: "주의사항",
+              bottomLeftLeftText: "주의사항 토글",
+              bottomLeftCenterText: "주의사항 수기",
               bottomRightText: CustomDateUtils.timeElapsed(item.requestTime),
               backgroundColor: backgroundColor,
               onTap: () {
