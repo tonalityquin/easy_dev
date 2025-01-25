@@ -27,55 +27,53 @@ class SecondaryMiniNavigation extends StatefulWidget {
 }
 
 class _SecondaryMiniNavigation extends State<SecondaryMiniNavigation> {
-  bool isAscending = true; // 정렬 상태
+  bool isAscending = true;
 
-  /// **정렬 상태 토글**
-  /// - 정렬 상태를 변경하고 콜백 호출
+  /// 정렬 상태를 변경하고 콜백 호출
   void toggleSortOrder() {
     setState(() {
-      isAscending = !isAscending; // 정렬 상태 변경
+      isAscending = !isAscending;
     });
-    widget.onSortToggle?.call(isAscending); // 콜백 호출
+    widget.onSortToggle?.call(isAscending);
   }
 
-  /// **아이콘 생성**
-  /// - 정렬 아이콘을 포함한 일반 아이콘 생성
+  /// 정렬 아이콘 포함 일반 아이콘 생성
   Widget _buildIcon(IconData iconData, int index) {
-    final isSortIcon = iconData == Icons.sort; // 정렬 아이콘 여부 확인
+    final isSortIcon = iconData == Icons.sort;
 
     return IconButton(
       icon: isSortIcon
           ? Transform(
         alignment: Alignment.center,
-        transform: Matrix4.rotationX(isAscending ? 0 : 3.14159), // 정렬 방향 회전
+        transform: Matrix4.rotationX(isAscending ? 0 : 3.14159),
         child: Icon(Icons.sort),
       )
-          : Icon(iconData), // 일반 아이콘
+          : Icon(iconData),
       onPressed: () {
         if (isSortIcon) {
-          toggleSortOrder(); // 정렬 상태 토글
+          toggleSortOrder();
         } else {
-          widget.onIconTapped?.call(index); // 아이콘 클릭 콜백 호출
+          widget.onIconTapped?.call(index);
         }
       },
-      padding: EdgeInsets.zero, // 아이콘 간격 최소화
-      constraints: const BoxConstraints(), // 기본 크기 제한
-      iconSize: widget.iconSize, // 아이콘 크기 설정
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(),
+      iconSize: widget.iconSize,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Column(
-      mainAxisSize: MainAxisSize.min, // 최소 크기로 설정
+      mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          color: widget.backgroundColor, // 배경색 설정
-          height: widget.height, // 네비게이션 높이 설정
+          color: widget.backgroundColor,
+          height: widget.height,
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround, // 아이콘 간격 균등 배치
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: widget.icons.asMap().entries.map((entry) {
-              return _buildIcon(entry.value, entry.key); // 아이콘 생성
+              return _buildIcon(entry.value, entry.key);
             }).toList(),
           ),
         ),

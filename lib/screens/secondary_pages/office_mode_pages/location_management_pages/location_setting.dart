@@ -25,16 +25,11 @@ class _LocationSettingState extends State<LocationSetting> {
 
   /// 입력값 유효성 검증
   bool _validateInput() {
-    if (_locationController.text.isEmpty) {
-      setState(() {
-        _errorMessage = 'Parking location is required.';
-      });
-      return false;
-    }
+    final isValid = _locationController.text.isNotEmpty;
     setState(() {
-      _errorMessage = null;
+      _errorMessage = isValid ? null : 'Parking location is required.';
     });
-    return true;
+    return isValid;
   }
 
   @override

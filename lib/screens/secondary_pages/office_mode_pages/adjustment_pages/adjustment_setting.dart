@@ -29,8 +29,8 @@ class _AdjustmentSettingState extends State<AdjustmentSetting> {
   String? _addStandardValue;
 
   // 드롭다운 옵션 목록
-  final List<String> _basicStandardOptions = ['30분', '60분'];
-  final List<String> _addStandardOptions = ['10분', '30분', '60분'];
+  static const List<String> _basicStandardOptions = ['30분', '60분'];
+  static const List<String> _addStandardOptions = ['10분', '30분', '60분'];
 
   @override
   void dispose() {
@@ -45,11 +45,13 @@ class _AdjustmentSettingState extends State<AdjustmentSetting> {
 
   /// 입력값 유효성 검증
   bool _validateInput() {
-    if (_adjustmentController.text.isEmpty ||
-        _basicStandardValue == null ||
-        _addStandardValue == null ||
-        _basicAmountController.text.isEmpty ||
-        _addAmountController.text.isEmpty) {
+    final fields = [
+      _adjustmentController.text,
+      _basicAmountController.text,
+      _addAmountController.text,
+    ];
+
+    if (fields.any((field) => field.isEmpty) || _basicStandardValue == null || _addStandardValue == null) {
       setState(() {
         _errorMessage = 'All fields are required.';
       });

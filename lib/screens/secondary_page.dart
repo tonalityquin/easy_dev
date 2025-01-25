@@ -11,6 +11,16 @@ import '../states/secondary_info.dart'; // 페이지 정보 관리 클래스
 class SecondaryPage extends StatelessWidget {
   const SecondaryPage({super.key});
 
+  /// 사용자 Role 및 Role 상태에 따른 페이지 업데이트 로직
+  List<SecondaryInfo> _getUpdatedPages(String userRole, SecondaryAccessState roleState) {
+    if (userRole == 'User') {
+      return fieldModePages; // 일반 사용자에게는 Field Mode Pages 제공
+    } else {
+      // Role 상태에 따라 Field Mode 또는 Office Mode 제공
+      return roleState.currentStatus == 'Field Mode' ? fieldModePages : officeModePages;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final userState = context.watch<UserState>(); // 사용자 상태 가져오기
@@ -24,9 +34,7 @@ class SecondaryPage extends StatelessWidget {
         ChangeNotifierProxyProvider<SecondaryAccessState, SecondaryState>(
           create: (_) => SecondaryState(pages: fieldModePages),
           update: (_, roleState, secondaryState) {
-            final newPages = userRole == 'User'
-                ? fieldModePages
-                : (roleState.currentStatus == 'Field Mode' ? fieldModePages : officeModePages);
+            final newPages = _getUpdatedPages(userRole, roleState); // 상태 업데이트 함수 호출
             return secondaryState!..updatePages(newPages);
           },
         ),
@@ -60,14 +68,13 @@ class RefreshableBody extends StatelessWidget {
       },
       child: Consumer<SecondaryState>(
         builder: (context, state, child) {
+          // 상태가 null이 될 가능성이 없으므로 null 체크 제거
           return Stack(
             children: [
               // 선택된 페이지 표시
               IndexedStack(
                 index: state.selectedIndex,
-                children: state.pages
-                    .map((pageInfo) => pageInfo.page)
-                    .toList(),
+                children: state.pages.map((pageInfo) => pageInfo.page).toList(),
               ),
               // 로딩 상태 표시
               if (state.isLoading)
@@ -92,16 +99,20 @@ class PageBottomNavigation extends StatelessWidget {
     return Consumer<SecondaryState>(
       builder: (context, state, child) {
         return BottomNavigationBar(
-          currentIndex: state.selectedIndex, // 현재 선택된 페이지 인덱스
-          onTap: state.onItemTapped, // 페이지 탭 처리
+          currentIndex: state.selectedIndex,
+          // 현재 선택된 페이지 인덱스
+          onTap: state.onItemTapped,
+          // 페이지 탭 처리
           items: state.pages.map((pageInfo) {
             return BottomNavigationBarItem(
               icon: pageInfo.icon, // 페이지 아이콘
               label: pageInfo.title, // 페이지 타이틀
             );
           }).toList(),
-          selectedItemColor: Colors.green, // 선택된 아이템 색상
-          unselectedItemColor: Colors.purple, // 선택되지 않은 아이템 색상
+          selectedItemColor: Colors.green,
+          // 선택된 아이템 색상
+          unselectedItemColor: Colors.purple,
+          // 선택되지 않은 아이템 색상
           backgroundColor: Colors.white, // 배경 색상
         );
       },
