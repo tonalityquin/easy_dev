@@ -26,12 +26,19 @@ class UserState extends ChangeNotifier {
 
   // 게터(Getter)
   String get name => _name;
+
   String get phone => _phone;
+
   String get role => _role;
+
   String get area => _area;
+
   bool get isLoggedIn => _isLoggedIn;
+
   List<Map<String, String>> get users => _users;
+
   Map<String, bool> get selectedUsers => _selectedUsers;
+
   bool get isLoading => _isLoading;
 
   /// Firestore 사용자 데이터 실시간 동기화
@@ -39,18 +46,17 @@ class UserState extends ChangeNotifier {
     _repository.getUsersStream().listen((data) {
       _users = data
           .map((user) => {
-        'id': user['id'] as String,
-        'name': user['name'] as String,
-        'phone': user['phone'] as String,
-        'email': user['email'] as String,
-        'role': user['role'] as String,
-        'area': user['area'] as String,
-      })
+                'id': user['id'] as String,
+                'name': user['name'] as String,
+                'phone': user['phone'] as String,
+                'email': user['email'] as String,
+                'role': user['role'] as String,
+                'area': user['area'] as String,
+              })
           .toList();
 
       _selectedUsers = {
-        for (var user in data)
-          user['id'] as String: user['isSelected'] as bool,
+        for (var user in data) user['id'] as String: user['isSelected'] as bool,
       };
 
       _isLoading = false;

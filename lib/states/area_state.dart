@@ -14,29 +14,24 @@ class AreaState with ChangeNotifier {
   // 사용 가능한 지역 목록 반환
   List<String> get availableAreas => List.unmodifiable(_availableAreas);
 
-  /// 지역 상태 초기화
-  /// - 외부 상태와 동기화하며, 유효한 지역으로 초기화
-  void initializeArea(String area) {
+  /// 상태 변경 알림
+  /// - 중복 제거를 위해 상태 변경 로직을 메서드로 추출
+  void _notifyStateChange() {
+    Future.delayed(Duration.zero, notifyListeners);
+  }
+
+  /// 지역 상태 초기화 또는 사용자 상태와 동기화
+  /// - 유효한 지역으로 초기화하거나 동기화
+  void initializeOrSyncArea(String area) {
     if (_currentArea != area) {
       if (_availableAreas.contains(area) && area.isNotEmpty) {
         _currentArea = area;
       } else {
         _currentArea = _availableAreas.first; // 기본값 설정
       }
-
-      // 상태 변경 알림을 위젯 빌드 이후에 호출
-      Future.delayed(Duration.zero, () {
-        notifyListeners();
-      });
-
-      debugPrint('AreaState initialized: currentArea=$_currentArea');
+      _notifyStateChange(); // 중복 제거
+      debugPrint('AreaState synced/initialized: currentArea=$_currentArea');
     }
-  }
-
-  /// 사용자 상태와 지역 동기화
-  /// - `UserState`의 지역 정보와 일치시킴
-  void syncWithUserState(String userArea) {
-    initializeArea(userArea);
   }
 
   /// 지역 업데이트
@@ -44,12 +39,7 @@ class AreaState with ChangeNotifier {
   void updateArea(String newArea) {
     if (_availableAreas.contains(newArea) && _currentArea != newArea) {
       _currentArea = newArea;
-
-      // 상태 변경 알림을 위젯 빌드 이후에 호출
-      Future.delayed(Duration.zero, () {
-        notifyListeners();
-      });
-
+      _notifyStateChange(); // 중복 제거
       debugPrint('AreaState updated: currentArea=$_currentArea');
     } else if (!_availableAreas.contains(newArea)) {
       debugPrint('잘못된 지역: $newArea');

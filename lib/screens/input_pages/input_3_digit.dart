@@ -281,7 +281,6 @@ class _Input3DigitState extends State<Input3Digit> {
                     children: [
                       LocationField(
                         controller: locationController,
-                        onTap: _selectParkingLocation,
                         widthFactor: 0.7,
                       ),
                     ],
@@ -297,11 +296,11 @@ class _Input3DigitState extends State<Input3Digit> {
         showKeypad: showKeypad,
         keypad: activeController == controller3digit
             ? NumKeypad(
-            controller: controller3digit, maxLength: 3, onComplete: () => _setActiveController(controller1digit))
+                controller: controller3digit, maxLength: 3, onComplete: () => _setActiveController(controller1digit))
             : activeController == controller1digit
-            ? KorKeypad(controller: controller1digit, onComplete: () => _setActiveController(controller4digit))
-            : NumKeypad(
-            controller: controller4digit, maxLength: 4, onComplete: () => setState(() => showKeypad = false)),
+                ? KorKeypad(controller: controller1digit, onComplete: () => _setActiveController(controller4digit))
+                : NumKeypad(
+                    controller: controller4digit, maxLength: 4, onComplete: () => setState(() => showKeypad = false)),
         actionButton: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

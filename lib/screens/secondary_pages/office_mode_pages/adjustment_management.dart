@@ -9,6 +9,21 @@ import 'adjustment_pages/adjustment_setting.dart'; // AdjustmentSetting 페이�
 class AdjustmentManagement extends StatelessWidget {
   const AdjustmentManagement({Key? key}) : super(key: key);
 
+  /// SnackBar 메시지 표시 헬퍼 함수
+  void _showSnackBar(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  /// 선택된 Adjustment ID 목록 반환
+  List<String> _getSelectedIds(AdjustmentState state) {
+    return state.selectedAdjustments.entries
+        .where((entry) => entry.value) // 선택된 항목만 필터링
+        .map((entry) => entry.key)
+        .toList();
+  }
+
   /// Add 아이콘 클릭 시 AdjustmentSetting 페이지를 팝업으로 열기
   void _showAdjustmentSettingDialog(BuildContext context) {
     showDialog(
@@ -20,15 +35,19 @@ class AdjustmentManagement extends StatelessWidget {
           ),
           child: AdjustmentSetting(
             onSave: (adjustmentData) async {
-              // Firestore에 데이터 저장
-              await context.read<AdjustmentState>().addAdjustments(
-                adjustmentData['CountType'],
-                adjustmentData['area'],
-                adjustmentData['basicStandard'],
-                adjustmentData['basicAmount'],
-                adjustmentData['addStandard'],
-                adjustmentData['addAmount'],
-              );
+              try {
+                await context.read<AdjustmentState>().addAdjustments(
+                      adjustmentData['CountType'],
+                      adjustmentData['area'],
+                      adjustmentData['basicStandard'],
+                      adjustmentData['basicAmount'],
+                      adjustmentData['addStandard'],
+                      adjustmentData['addAmount'],
+                    );
+                _showSnackBar(context, '정산 데이터가 성공적으로 추가되었습니다.');
+              } catch (e) {
+                _showSnackBar(context, '데이터 추가 중 오류가 발생했습니다.');
+              }
             },
           ),
         );
@@ -39,27 +58,18 @@ class AdjustmentManagement extends StatelessWidget {
   /// 선택된 Adjustment를 Firestore에서 삭제
   Future<void> _deleteSelectedAdjustments(BuildContext context) async {
     final adjustmentState = context.read<AdjustmentState>();
-    final selectedIds = adjustmentState.selectedAdjustments.entries
-        .where((entry) => entry.value) // 선택된 항목만 필터링
-        .map((entry) => entry.key)
-        .toList();
+    final selectedIds = _getSelectedIds(adjustmentState);
 
     if (selectedIds.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('삭제할 항목을 선택하세요.')),
-      );
+      _showSnackBar(context, '삭제할 항목을 선택하세요.');
       return;
     }
 
     try {
-      await adjustmentState.deleteAdjustments(selectedIds); // 선택된 항목 삭제
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('선택된 항목이 삭제되었습니다.')),
-      );
+      await adjustmentState.deleteAdjustments(selectedIds);
+      _showSnackBar(context, '선택된 항목이 삭제되었습니다.');
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('삭제 중 오류가 발생했습니다.')),
-      );
+      _showSnackBar(context, '삭제 중 오류가 발생했습니다.');
     }
   }
 
@@ -79,8 +89,6 @@ class AdjustmentManagement extends StatelessWidget {
           }
 
           final adjustments = snapshot.data ?? [];
-          debugPrint('Adjustment 데이터를 UI에서 수신: $adjustments'); // 로그 추가
-
           if (adjustments.isEmpty) {
             return const Center(child: Text('No adjustments found'));
           }
@@ -90,7 +98,6 @@ class AdjustmentManagement extends StatelessWidget {
             itemBuilder: (context, index) {
               final adjustment = adjustments[index];
 
-              // 값이 누락되었을 경우 기본값 설정
               final countType = adjustment['CountType'] ?? 'Unknown';
               final basicStandard = adjustment['basicStandard'] ?? 'Unknown';
               final basicAmount = adjustment['basicAmount'] ?? '0';
@@ -101,19 +108,30 @@ class AdjustmentManagement extends StatelessWidget {
               return Column(
                 children: [
                   AdjustmentCustomBox(
-                    leftText: countType, // CountType 표시
-                    centerTopText: "기본 기준: $basicStandard", // 기본 기준
-                    centerBottomText: "기본 금액: $basicAmount", // 기본 금액
-                    rightTopText: "추가 기준: $addStandard", // 추가 기준
-                    rightBottomText: "추가 금액: $addAmount", // 추가 금액
-                    onTap: () {
-                      context
-                          .read<AdjustmentState>()
-                          .toggleSelection(adjustment['id']); // 선택 상태 토글
+                    leftText: countType,
+                    centerTopText: "기본 기준: $basicStandard",
+                    centerBottomText: "기본 금액: $basicAmount",
+                    rightTopText: "추가 기준: $addStandard",
+                    rightBottomText: "추가 금액: $addAmount",
+                    onTap: () async {
+                      try {
+                        // ID 검증 추가
+                        if (adjustment['id'] == null) {
+                          throw Exception('Invalid data: ID is null');
+                        }
+
+                        await context.read<AdjustmentState>().toggleSelection(adjustment['id']);
+                        _showSnackBar(
+                          context,
+                          isSelected ? '선택 해제되었습니다.' : '선택되었습니다.',
+                        );
+                      } catch (e) {
+                        _showSnackBar(context, '선택 상태 변경 중 오류가 발생했습니다.');
+                      }
                     },
                     backgroundColor: isSelected ? Colors.greenAccent : Colors.white,
                   ),
-                  const Divider(height: 1.0, color: Colors.grey), // Divider 추가
+                  const Divider(height: 1.0, color: Colors.grey),
                 ],
               );
             },
@@ -121,19 +139,17 @@ class AdjustmentManagement extends StatelessWidget {
         },
       ),
       bottomNavigationBar: SecondaryMiniNavigation(
-        // 하단 내비게이션
         icons: [
-          Icons.add, // 정산 유형 추가 아이콘
-          Icons.delete, // 정산 유형 삭제 아이콘
-          Icons.tire_repair, // 정산 유형 수정 아이콘
+          Icons.add,
+          Icons.delete,
+          Icons.tire_repair,
         ],
         onIconTapped: (index) {
           if (index == 0) {
-            _showAdjustmentSettingDialog(context); // Add 아이콘 클릭 시 AdjustmentSetting 페이지 팝업 열기
+            _showAdjustmentSettingDialog(context);
           } else if (index == 1) {
-            _deleteSelectedAdjustments(context); // Delete 아이콘 클릭 시 선택된 Adjustment 삭제
+            _deleteSelectedAdjustments(context);
           }
-          // 추가로 다른 아이콘들에 대한 동작도 정의할 수 있음
         },
       ),
     );

@@ -76,12 +76,12 @@ class PlateContainer extends StatelessWidget {
                   return;
                 }
 
-                final newSelectedState = !item.isSelected; // 상태 반전
-                Provider.of<PlateState>(context, listen: false).updateIsSelected(
-                  collection: collection, // 동적 컬렉션 이름
-                  id: item.id,
-                  isSelected: newSelectedState,
-                  selectedBy: newSelectedState ? userName : null, // 선택 유저 반영
+                final plateState = Provider.of<PlateState>(context, listen: false);
+                plateState.toggleIsSelected(
+                  collection: collection,
+                  plateNumber: item.plateNumber,
+                  area: item.area,
+                  userName: userName,
                 );
               },
             ),

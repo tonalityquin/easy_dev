@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../repositories/adjustment_repository.dart';
-import 'area_state.dart'; // AreaState를 가져오기
+import 'area_state.dart';
 
 /// AdjustmentState
 /// - Firestore와 동기화하여 정산 데이터를 관리
@@ -16,7 +16,7 @@ class AdjustmentState extends ChangeNotifier {
   List<Map<String, String>> _adjustments = []; // 정산 데이터
   Map<String, bool> _selectedAdjustments = {}; // 선택된 정산 상태
   bool _isLoading = true; // 로딩 상태
-  List<IconData> _navigationIcons = [Icons.add, Icons.circle, Icons.settings]; // 하단 네비게이션 아이콘 상태
+  List<IconData> _navigationIcons = UIHelper.defaultIcons; // 하단 네비게이션 아이콘 상태
 
   // 정산 데이터 반환
   List<Map<String, String>> get adjustments => _adjustments;
@@ -36,21 +36,13 @@ class AdjustmentState extends ChangeNotifier {
     final currentArea = _areaState.currentArea; // AreaState에서 현재 지역 가져오기
     _repository.getAdjustmentStream(currentArea).listen((data) {
       debugPrint('Firestore에서 수신한 데이터: $data'); // 로그 추가
-      _adjustments = data.map((adjustment) => {
-        'id': adjustment['id'] as String,
-        'countType': adjustment['CountType'] as String,
-        'area': adjustment['area'] as String,
-        'basicStandard': adjustment['basicStandard'] as String,
-        'basicAmount': adjustment['basicAmount'] as String,
-        'addStandard': adjustment['addStandard'] as String,
-        'addAmount': adjustment['addAmount'] as String,
-      }).toList();
 
+      _adjustments = UIHelper.mapAdjustmentsData(data);
       _selectedAdjustments = {
         for (var adjustment in data) adjustment['id'] as String: adjustment['isSelected'] as bool,
       };
 
-      _updateIcons();
+      _navigationIcons = UIHelper.updateIcons(_selectedAdjustments);
       _isLoading = false;
       notifyListeners();
     });
@@ -87,6 +79,7 @@ class AdjustmentState extends ChangeNotifier {
       await _repository.addAdjustment(adjustmentData);
     } catch (e) {
       debugPrint('Error adding adjustment: $e');
+      rethrow; // 에러를 호출부로 전달
     }
   }
 
@@ -96,26 +89,51 @@ class AdjustmentState extends ChangeNotifier {
       await _repository.deleteAdjustment(ids);
     } catch (e) {
       debugPrint('Error deleting adjustment: $e');
+      rethrow; // 에러를 호출부로 전달
     }
   }
 
   /// 정산 선택 상태 토글
+  /// - UI 피드백은 호출부에서 처리
   Future<void> toggleSelection(String id) async {
     final currentState = _selectedAdjustments[id] ?? false;
     try {
+      // Firestore에서 선택 상태를 토글
       await _repository.toggleAdjustmentSelection(id, !currentState);
+
+      // 선택 상태 업데이트
+      _selectedAdjustments[id] = !currentState;
+      notifyListeners();
     } catch (e) {
       debugPrint('Error toggling selection: $e');
+      rethrow; // 에러를 호출부로 전달
     }
+  }
+}
+
+/// UI 관련 헬퍼 클래스
+/// - 중복 코드를 제거하고 UI 상태 관리를 지원
+class UIHelper {
+  static const List<IconData> defaultIcons = [Icons.add, Icons.circle, Icons.settings];
+
+  /// Firestore 데이터 매핑
+  static List<Map<String, String>> mapAdjustmentsData(List<Map<String, dynamic>> data) {
+    return data.map((adjustment) => {
+      'id': adjustment['id'] as String,
+      'countType': adjustment['CountType'] as String,
+      'area': adjustment['area'] as String,
+      'basicStandard': adjustment['basicStandard'] as String,
+      'basicAmount': adjustment['basicAmount'] as String,
+      'addStandard': adjustment['addStandard'] as String,
+      'addAmount': adjustment['addAmount'] as String,
+    }).toList();
   }
 
   /// 네비게이션 아이콘 상태 업데이트
-  /// - 선택된 정산이 있는 경우 아이콘 변경
-  void _updateIcons() {
-    if (_selectedAdjustments.values.contains(true)) {
-      _navigationIcons = [Icons.lock, Icons.delete, Icons.edit]; // 선택된 상태의 아이콘
-    } else {
-      _navigationIcons = [Icons.add, Icons.circle, Icons.settings]; // 기본 아이콘
+  static List<IconData> updateIcons(Map<String, bool> selectedAdjustments) {
+    if (selectedAdjustments.values.contains(true)) {
+      return [Icons.lock, Icons.delete, Icons.edit]; // 선택된 상태의 아이콘
     }
+    return defaultIcons; // 기본 아이콘
   }
 }

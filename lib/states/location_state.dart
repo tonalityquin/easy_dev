@@ -28,26 +28,41 @@ class LocationState extends ChangeNotifier {
   // 하단 네비게이션 아이콘 반환
   List<IconData> get navigationIcons => _navigationIcons;
 
+  // 네비게이션 아이콘 상태를 동적으로 정의
+  final Map<bool, List<IconData>> _iconStates = {
+    true: [Icons.lock, Icons.delete, Icons.edit], // 선택된 상태의 아이콘
+    false: [Icons.add, Icons.circle, Icons.settings], // 기본 아이콘
+  };
+
   /// Firestore 데이터 실시간 동기화
   /// - Firestore에서 주차 구역 데이터를 구독하고 상태 업데이트
   void _initializeLocations() {
     _repository.getLocationsStream().listen((data) {
-      _locations = data
-          .map((location) => {
-                'id': location['id'] as String,
-                'locationName': location['locationName'] as String,
-                'area': location['area'] as String,
-              })
-          .toList();
-
-      _selectedLocations = {
-        for (var location in data) location['id'] as String: location['isSelected'] as bool,
-      };
-
+      _updateLocations(data); // 주차 구역 데이터 및 선택 상태 업데이트
       _updateIcons(); // 아이콘 상태 업데이트
       _isLoading = false; // 로딩 완료
       notifyListeners(); // 상태 변경 알림
+    }, onError: (error) {
+      // Firestore 스트림 에러 처리
+      debugPrint('Error syncing locations: $error');
+      _isLoading = false;
+      notifyListeners();
     });
+  }
+
+  /// 주차 구역 데이터 및 선택 상태 업데이트
+  void _updateLocations(List<Map<String, dynamic>> data) {
+    _locations = data
+        .map((location) => {
+              'id': location['id'] as String,
+              'locationName': location['locationName'] as String,
+              'area': location['area'] as String,
+            })
+        .toList();
+
+    _selectedLocations = {
+      for (var location in data) location['id'] as String: location['isSelected'] as bool,
+    };
   }
 
   /// Firestore에 주차 구역 추가
@@ -79,12 +94,7 @@ class LocationState extends ChangeNotifier {
   }
 
   /// 네비게이션 아이콘 상태 업데이트
-  /// - 선택된 구역이 있는 경우 아이콘 변경
   void _updateIcons() {
-    if (_selectedLocations.values.contains(true)) {
-      _navigationIcons = [Icons.lock, Icons.delete, Icons.edit]; // 선택된 상태의 아이콘
-    } else {
-      _navigationIcons = [Icons.add, Icons.circle, Icons.settings]; // 기본 아이콘
-    }
+    _navigationIcons = _iconStates[_selectedLocations.values.contains(true)]!;
   }
 }

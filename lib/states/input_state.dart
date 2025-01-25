@@ -9,25 +9,25 @@ class InputState with ChangeNotifier {
   static const String middle_1 = 'middle1'; // 번호판 중간 1자리 필드
   static const String back_4 = 'back4'; // 번호판 뒤 4자리 필드
 
+  /// **필드 목록 정의**
+  /// - 자동화를 위해 모든 필드를 리스트로 관리
+  final List<String> _fields = [front_3, middle_1, back_4];
+
   /// **필드별 유효성 검사 규칙**
   final Map<String, RegExp> _validationRules = {
-    front_3: RegExp(r'^\d{0,3}$'),
-    middle_1: RegExp(r'^\d{0,1}$'),
-    back_4: RegExp(r'^\d{0,4}$'),
+    front_3: RegExp(r'^\d{0,3}$'), // 3자리 숫자까지 입력 허용
+    middle_1: RegExp(r'^\d{0,1}$'), // 1자리 숫자까지 입력 허용
+    back_4: RegExp(r'^\d{0,4}$'), // 4자리 숫자까지 입력 허용
   };
 
   /// **입력 필드 값을 저장하는 내부 맵**
-  final Map<String, String> _inputFields = {
-    front_3: '',
-    middle_1: '',
-    back_4: '',
+  late final Map<String, String> _inputFields = {
+    for (var field in _fields) field: '', // 필드 리스트를 기반으로 초기화
   };
 
   /// **필드 값 읽기**
   String get front3 => _inputFields[front_3] ?? '';
-
   String get middle1 => _inputFields[middle_1] ?? '';
-
   String get back4 => _inputFields[back_4] ?? '';
 
   /// **필드 값을 업데이트하고 상태 변경 알림**

@@ -1,75 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart'; // Firebase 초기화를 위한 패키지
 import 'package:provider/provider.dart'; // 상태 관리를 위한 Provider 패키지
-import 'repositories/plate_repository.dart'; // PlateRepository 가져오기
-import 'repositories/location_repository.dart'; // LocationRepository 가져오기
-import 'repositories/user_repository.dart'; // UserRepository 가져오기
-import 'repositories/adjustment_repository.dart'; // AdjustmentRepository 가져오기
-import 'states/secondary_access_state.dart';
-import 'states/page_state.dart'; // 페이지 상태 관리를 위한 상태 클래스
-import 'states/plate_state.dart'; // 차량 관련 데이터를 관리하는 상태 클래스
-import 'states/page_info.dart'; // 페이지 정보 (기본 페이지 리스트 포함)
-import 'states/area_state.dart'; // 지역 상태 관리
-import 'states/user_state.dart'; // 사용자 상태 관리
-import 'states/location_state.dart'; // Location 상태 관리
-import 'states/adjustment_state.dart'; // AdjustmentState 가져오기
-import 'screens/type_page.dart'; // 메인 화면 (타입 선택 화면)
-import 'screens/login_page.dart'; // 로그인 화면
-import 'screens/secondary_pages/office_mode_pages/location_management.dart'; // LocationManagement 페이지
+import 'routes.dart'; // 앱 라우팅 정보를 관리하는 파일
+import 'providers.dart'; // 상태 관리 객체를 정의한 파일
 
+// 앱의 시작점: Firebase 초기화 후 MyApp 실행
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
+  WidgetsFlutterBinding.ensureInitialized(); // 비동기 작업을 위한 Flutter 엔진 초기화
+  await Firebase.initializeApp(); // Firebase 초기화
 
-  runApp(const MyApp());
+  runApp(const MyApp()); // MyApp 위젯 실행
 }
 
+// MyApp 클래스: 앱의 전체 구조 정의
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const MyApp({super.key}); // 생성자
 
   @override
   Widget build(BuildContext context) {
-    // Firestore 기반의 Repository 구현체 생성
-    final plateRepository = FirestorePlateRepository();
-    final locationRepository = FirestoreLocationRepository();
-    final userRepository = FirestoreUserRepository(); // UserRepository 구현체 생성
-    final adjustmentRepository = FirestoreAdjustmentRepository(); // AdjustmentRepository 구현체 생성
-
     return MultiProvider(
-      providers: [
-        // PlateRepository를 앱 전체에서 사용할 수 있도록 제공
-        Provider<PlateRepository>(
-          create: (_) => plateRepository,
-        ),
-        Provider<UserRepository>(
-          create: (_) => userRepository, // UserRepository 주입
-        ),
-        Provider<AdjustmentRepository>(
-          create: (_) => adjustmentRepository, // AdjustmentRepository 주입
-        ),
-        ChangeNotifierProvider(create: (_) => PageState(pages: defaultPages)),
-        ChangeNotifierProvider(create: (_) => PlateState(plateRepository)), // PlateRepository 주입
-        ChangeNotifierProvider(create: (_) => AreaState()), // AreaState 생성
-        ChangeNotifierProvider(create: (_) => UserState(userRepository)), // UserState에 UserRepository 주입
-        ChangeNotifierProvider(create: (_) => SecondaryAccessState()),
-        ChangeNotifierProvider(create: (_) => LocationState(locationRepository)), // LocationRepository 주입
-        ChangeNotifierProvider(
-          create: (context) => AdjustmentState(
-            context.read<AdjustmentRepository>(), // AdjustmentRepository 주입
-            context.read<AreaState>(), // AreaState 주입
-          ),
-        ), // AdjustmentState 주입
-      ],
+      providers: appProviders, // providers.dart에서 정의된 상태 관리 객체 목록
       child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        title: 'easyvalet',
-        theme: ThemeData(primarySwatch: Colors.blue),
-        initialRoute: '/login',
-        routes: {
-          '/login': (context) => const LoginPage(),
-          '/home': (context) => const TypePage(),
-          '/location_management': (context) => const LocationManagement(), // LocationManagement 추가 가능
-        },
+        debugShowCheckedModeBanner: false, // 디버그 배너 제거
+        title: 'easyvalet', // 앱 이름
+        theme: ThemeData(primarySwatch: Colors.blue), // 앱의 기본 테마 색상
+        initialRoute: '/login', // 앱의 초기 라우트 경로
+        routes: appRoutes, // routes.dart에서 정의된 라우팅 정보
       ),
     );
   }
