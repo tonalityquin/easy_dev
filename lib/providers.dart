@@ -4,49 +4,39 @@ import 'repositories/plate_repository.dart'; // PlateRepository 가져오기
 import 'repositories/location_repository.dart'; // LocationRepository 가져오기
 import 'repositories/user_repository.dart'; // UserRepository 가져오기
 import 'repositories/adjustment_repository.dart'; // AdjustmentRepository 가져오기
-import 'states/secondary_access_state.dart'; // SecondaryAccess 상태 관리
-import 'states/page_state.dart'; // 페이지 상태 관리를 위한 상태 클래스
-import 'states/plate_state.dart'; // 차량 관련 데이터를 관리하는 상태 클래스
-import 'states/page_info.dart'; // 페이지 정보 (기본 페이지 리스트 포함)
-import 'states/area_state.dart'; // 지역 상태 관리
-import 'states/user_state.dart'; // 사용자 상태 관리
-import 'states/location_state.dart'; // Location 상태 관리
-import 'states/adjustment_state.dart'; // AdjustmentState 가져오기
+import 'repositories/status_repository.dart'; // 🔄 StatusRepository 가져오기
+import 'states/secondary_access_state.dart';
+import 'states/page_state.dart';
+import 'states/plate_state.dart';
+import 'states/page_info.dart';
+import 'states/area_state.dart'; // 🔄 AreaState 가져오기
+import 'states/user_state.dart';
+import 'states/location_state.dart';
+import 'states/adjustment_state.dart';
+import 'states/status_state.dart'; // 🔄 Firestore 연동된 StatusState 가져오기
 
 // 상태 관리 객체 초기화
 final List<SingleChildWidget> appProviders = [
-  // Firestore 기반의 Repository 구현체 생성
-  Provider<PlateRepository>(
-    create: (_) => FirestorePlateRepository(),
-  ),
-  Provider<UserRepository>(
-    create: (_) => FirestoreUserRepository(), // UserRepository 주입
-  ),
-  Provider<AdjustmentRepository>(
-    create: (_) => FirestoreAdjustmentRepository(), // AdjustmentRepository 주입
-  ),
-  ChangeNotifierProvider(
-    create: (_) => PageState(pages: defaultPages),
-  ),
-  ChangeNotifierProvider(
-    create: (_) => PlateState(FirestorePlateRepository()), // PlateRepository 주입
-  ),
-  ChangeNotifierProvider(
-    create: (_) => AreaState(), // AreaState 생성
-  ),
-  ChangeNotifierProvider(
-    create: (_) => UserState(FirestoreUserRepository()), // UserState에 UserRepository 주입
-  ),
-  ChangeNotifierProvider(
-    create: (_) => SecondaryAccessState(),
-  ),
-  ChangeNotifierProvider(
-    create: (_) => LocationState(FirestoreLocationRepository()), // LocationRepository 주입
-  ),
+  Provider<PlateRepository>(create: (_) => FirestorePlateRepository()),
+  Provider<UserRepository>(create: (_) => FirestoreUserRepository()),
+  Provider<AdjustmentRepository>(create: (_) => FirestoreAdjustmentRepository()),
+  Provider<StatusRepository>(create: (_) => StatusRepository()), // 🔄 FirestoreStatusRepository 추가
+  ChangeNotifierProvider(create: (_) => PageState(pages: defaultPages)),
+  ChangeNotifierProvider(create: (_) => PlateState(FirestorePlateRepository())),
+  ChangeNotifierProvider(create: (_) => AreaState()), // 🔄 AreaState 추가
+  ChangeNotifierProvider(create: (_) => UserState(FirestoreUserRepository())),
+  ChangeNotifierProvider(create: (_) => SecondaryAccessState()),
+  ChangeNotifierProvider(create: (_) => LocationState(FirestoreLocationRepository())),
   ChangeNotifierProvider(
     create: (context) => AdjustmentState(
-      context.read<AdjustmentRepository>(), // AdjustmentRepository 주입
-      context.read<AreaState>(), // AreaState 주입
+      context.read<AdjustmentRepository>(),
+      context.read<AreaState>(),
+    ),
+  ),
+  ChangeNotifierProvider(
+    create: (context) => StatusState(
+      context.read<StatusRepository>(), // 🔄 Firestore에서 데이터 가져오기
+      context.read<AreaState>(), // 🔄 AreaState 주입 (지역 변경 감지)
     ),
   ),
 ];
