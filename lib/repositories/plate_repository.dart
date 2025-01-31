@@ -86,6 +86,7 @@ abstract class PlateRepository {
     required String area,
     required String type,
     required String userName,
+    String? adjustmentType,
   });
 
   /// 특정 지역의 사용 가능한 위치 목록 가져오기
@@ -152,6 +153,7 @@ class FirestorePlateRepository implements PlateRepository {
     required String area,
     required String type,
     required String userName,
+    String? adjustmentType,
   }) async {
     final documentId = '${plateNumber}_$area';
 
@@ -162,10 +164,12 @@ class FirestorePlateRepository implements PlateRepository {
       'location': location.isNotEmpty ? location : '미지정',
       'area': area,
       'userName': userName,
+      'adjustmentType': adjustmentType, // 🔹 Firestore에 정산 유형 저장
       'isSelected': false,
       'selectedBy': null,
     });
   }
+
 
   @override
   Future<void> updatePlateSelection(String collection, String id, bool isSelected, {String? selectedBy}) async {
