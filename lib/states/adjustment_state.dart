@@ -1,60 +1,72 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../repositories/adjustment_repository.dart';
 import 'area_state.dart';
 
-/// AdjustmentState
-/// - Firestore와 동기화하여 정산 데이터를 관리
-/// - 선택 상태 및 네비게이션 아이콘 상태를 포함
 class AdjustmentState extends ChangeNotifier {
   final AdjustmentRepository _repository;
-  final AreaState _areaState; // AreaState 의존성 추가
+  final AreaState _areaState;
+  StreamSubscription<List<Map<String, dynamic>>>? _subscription;
 
   AdjustmentState(this._repository, this._areaState) {
-    _initializeAdjustments(); // Firestore 데이터와 동기화
+    _initializeAdjustments();
   }
 
-  List<Map<String, String>> _adjustments = []; // 정산 데이터
-  Map<String, bool> _selectedAdjustments = {}; // 선택된 정산 상태
-  bool _isLoading = true; // 로딩 상태
-  List<IconData> _navigationIcons = UIHelper.defaultIcons; // 하단 네비게이션 아이콘 상태
+  List<Map<String, dynamic>> _adjustments = [];
+  Map<String, bool> _selectedAdjustments = {}; // ✅ 선택된 데이터 저장
 
-  // 정산 데이터 반환
-  List<Map<String, String>> get adjustments => _adjustments;
+  List<Map<String, dynamic>> get adjustments => _adjustments;
+  Map<String, bool> get selectedAdjustments => _selectedAdjustments; // ✅ 추가된 변수
 
-  // 선택된 정산 상태 반환
-  Map<String, bool> get selectedAdjustments => _selectedAdjustments;
+  Stream<List<Map<String, dynamic>>> get adjustmentsStream {
+    final currentArea = _areaState.currentArea;
+    return _repository.getAdjustmentStream(currentArea);
+  }
 
-  // 로딩 상태 반환
-  bool get isLoading => _isLoading;
+  void syncWithAreaState() {
+    final currentArea = _areaState.currentArea.trim();
+    debugPrint('🔥 AdjustmentState: 지역 변경 감지됨 ($currentArea) → 데이터 새로 가져옴');
 
-  // 하단 네비게이션 아이콘 반환
-  List<IconData> get navigationIcons => _navigationIcons;
+    _subscription?.cancel(); // 기존 스트림 구독 취소
+    _adjustments.clear(); // 🔥 기존 데이터 초기화 (이전 지역의 데이터 제거)
+    notifyListeners();
 
-  /// Firestore 데이터 실시간 동기화
-  /// - Firestore에서 정산 데이터를 구독하고 상태 업데이트
+    _initializeAdjustments(); // 새로운 지역 데이터 불러오기
+  }
+
+
   void _initializeAdjustments() {
-    final currentArea = _areaState.currentArea; // AreaState에서 현재 지역 가져오기
-    _repository.getAdjustmentStream(currentArea).listen((data) {
-      debugPrint('Firestore에서 수신한 데이터: $data'); // 로그 추가
+    final currentArea = _areaState.currentArea.trim();
+    _adjustments.clear();
+    _selectedAdjustments.clear();
 
-      _adjustments = UIHelper.mapAdjustmentsData(data);
-      _selectedAdjustments = {
-        for (var adjustment in data) adjustment['id'] as String: adjustment['isSelected'] as bool,
-      };
+    _subscription = _repository.getAdjustmentStream(currentArea).listen((data) {
+      _adjustments = data
+          .where((adj) => adj['area'].toString().trim() == currentArea)
+          .map((adj) => {
+        'id': adj['id'],
+        'countType': adj['CountType']?.toString().trim() ?? adj['countType']?.toString().trim() ?? '',
+        'area': adj['area'],
+        'basicStandard': int.tryParse(adj['basicStandard']?.toString() ?? '0') ?? 0,
+        'basicAmount': int.tryParse(adj['basicAmount']?.toString() ?? '0') ?? 0,
+        'addStandard': int.tryParse(adj['addStandard']?.toString() ?? '0') ?? 0,
+        'addAmount': int.tryParse(adj['addAmount']?.toString() ?? '0') ?? 0,
+      })
+          .where((adj) => adj['countType'].isNotEmpty)
+          .toList();
 
-      _navigationIcons = UIHelper.updateIcons(_selectedAdjustments);
-      _isLoading = false;
+      debugPrint('🔥 현재 선택된 지역($currentArea)에 맞는 데이터: $_adjustments');
       notifyListeners();
     });
   }
 
-  /// Stream 반환: Firestore 데이터 스트림
-  Stream<List<Map<String, dynamic>>> get adjustmentsStream {
-    final currentArea = _areaState.currentArea; // AreaState에서 현재 지역 가져오기
-    return _repository.getAdjustmentStream(currentArea); // Firestore 쿼리에 지역 전달
+
+  /// ✅ 선택 상태 토글
+  void toggleSelection(String id) {
+    _selectedAdjustments[id] = !(_selectedAdjustments[id] ?? false);
+    notifyListeners();
   }
 
-  /// Firestore에 정산 타입 추가
   Future<void> addAdjustments(
       String countType,
       String area,
@@ -64,7 +76,6 @@ class AdjustmentState extends ChangeNotifier {
       String addAmount,
       ) async {
     try {
-      // Firestore에 저장할 데이터를 Map 형태로 생성
       final adjustmentData = {
         'CountType': countType,
         'area': area,
@@ -72,68 +83,29 @@ class AdjustmentState extends ChangeNotifier {
         'basicAmount': basicAmount,
         'addStandard': addStandard,
         'addAmount': addAmount,
-        'isSelected': false,
       };
 
-      // Map 데이터를 Firestore에 전달
       await _repository.addAdjustment(adjustmentData);
+      syncWithAreaState();
     } catch (e) {
-      debugPrint('Error adding adjustment: $e');
-      rethrow; // 에러를 호출부로 전달
+      debugPrint('🔥 Error adding adjustment: $e');
+      rethrow;
     }
   }
 
-  /// Firestore에서 정산 데이터 삭제
   Future<void> deleteAdjustments(List<String> ids) async {
     try {
       await _repository.deleteAdjustment(ids);
+      syncWithAreaState();
     } catch (e) {
-      debugPrint('Error deleting adjustment: $e');
-      rethrow; // 에러를 호출부로 전달
+      debugPrint('🔥 Error deleting adjustment: $e');
+      rethrow;
     }
   }
 
-  /// 정산 선택 상태 토글
-  /// - UI 피드백은 호출부에서 처리
-  Future<void> toggleSelection(String id) async {
-    final currentState = _selectedAdjustments[id] ?? false;
-    try {
-      // Firestore에서 선택 상태를 토글
-      await _repository.toggleAdjustmentSelection(id, !currentState);
-
-      // 선택 상태 업데이트
-      _selectedAdjustments[id] = !currentState;
-      notifyListeners();
-    } catch (e) {
-      debugPrint('Error toggling selection: $e');
-      rethrow; // 에러를 호출부로 전달
-    }
-  }
-}
-
-/// UI 관련 헬퍼 클래스
-/// - 중복 코드를 제거하고 UI 상태 관리를 지원
-class UIHelper {
-  static const List<IconData> defaultIcons = [Icons.add, Icons.circle, Icons.settings];
-
-  /// Firestore 데이터 매핑
-  static List<Map<String, String>> mapAdjustmentsData(List<Map<String, dynamic>> data) {
-    return data.map((adjustment) => {
-      'id': adjustment['id'] as String,
-      'countType': adjustment['CountType'] as String,
-      'area': adjustment['area'] as String,
-      'basicStandard': adjustment['basicStandard'] as String,
-      'basicAmount': adjustment['basicAmount'] as String,
-      'addStandard': adjustment['addStandard'] as String,
-      'addAmount': adjustment['addAmount'] as String,
-    }).toList();
-  }
-
-  /// 네비게이션 아이콘 상태 업데이트
-  static List<IconData> updateIcons(Map<String, bool> selectedAdjustments) {
-    if (selectedAdjustments.values.contains(true)) {
-      return [Icons.lock, Icons.delete, Icons.edit]; // 선택된 상태의 아이콘
-    }
-    return defaultIcons; // 기본 아이콘
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
   }
 }

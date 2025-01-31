@@ -1,21 +1,19 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 
 /// 정산 데이터를 관리하는 추상 클래스
 abstract class AdjustmentRepository {
   /// Firestore 위치 데이터를 스트림 형태로 반환
   Stream<List<Map<String, dynamic>>> getAdjustmentStream(String currentArea);
 
-  /// Firestore에 새로운 위치 추가
+  /// Firestore에 새로운 정산 기준 추가
   Future<void> addAdjustment(Map<String, dynamic> adjustmentData);
 
-  /// Firestore에서 여러 위치 삭제
+  /// Firestore에서 여러 정산 기준 삭제
   Future<void> deleteAdjustment(List<String> ids);
-
-  /// Firestore에서 특정 타입의 선택 상태 변경
-  Future<void> toggleAdjustmentSelection(String id, bool isSelected);
 }
 
-/// Firestore 기반 위치 데이터 관리 구현 클래스
+/// Firestore 기반 정산 데이터 관리 구현 클래스
 class FirestoreAdjustmentRepository implements AdjustmentRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
@@ -23,34 +21,49 @@ class FirestoreAdjustmentRepository implements AdjustmentRepository {
   Stream<List<Map<String, dynamic>>> getAdjustmentStream(String currentArea) {
     return _firestore
         .collection('adjustment')
-        .where('area', isEqualTo: currentArea) // Firestore 쿼리 단계에서 필터링
+        .where('area', isEqualTo: currentArea)
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs.map((doc) {
+      final dataList = snapshot.docs.map((doc) {
         final data = doc.data();
         return {
           'id': doc.id,
           'CountType': data['CountType']?.toString() ?? '',
           'area': data['area']?.toString() ?? '',
-          'basicStandard': data['basicStandard']?.toString() ?? '',
-          'basicAmount': data['basicAmount']?.toString() ?? '',
-          'addStandard': data['addStandard']?.toString() ?? '',
-          'addAmount': data['addAmount']?.toString() ?? '',
-          'isSelected': (data['isSelected'] ?? false) == true,
+          'basicStandard': int.tryParse(data['basicStandard'].toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? 0,
+          'basicAmount': int.tryParse(data['basicAmount'].toString()) ?? 0,
+          'addStandard': int.tryParse(data['addStandard'].toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? 0,
+          'addAmount': int.tryParse(data['addAmount'].toString()) ?? 0,
         };
       }).toList();
+
+      debugPrint('🔥 Firestore에서 받아온 데이터 ($currentArea): $dataList');
+      return dataList;
     });
   }
+
+
 
   @override
   Future<void> addAdjustment(Map<String, dynamic> adjustmentData) async {
     try {
-      final documentId = adjustmentData['CountType']; // CountType을 문서 ID로 사용
-      await _firestore.collection('adjustment').doc(documentId).set(adjustmentData);
+      String countType = adjustmentData['CountType'];
+      String area = adjustmentData['area'];
+      String documentId = '${countType}_$area'; // 🔥 문서 ID를 countType_지역명으로 설정
+
+      await _firestore.collection('adjustment').doc(documentId).set({
+        'CountType': countType,
+        'area': area,
+        'basicStandard': int.tryParse(adjustmentData['basicStandard'].toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? 0,
+        'basicAmount': int.tryParse(adjustmentData['basicAmount'].toString()) ?? 0,
+        'addStandard': int.tryParse(adjustmentData['addStandard'].toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? 0,
+        'addAmount': int.tryParse(adjustmentData['addAmount'].toString()) ?? 0,
+      });
     } catch (e) {
       rethrow; // 예외 재발생
     }
   }
+
 
   @override
   Future<void> deleteAdjustment(List<String> ids) async {
@@ -58,17 +71,6 @@ class FirestoreAdjustmentRepository implements AdjustmentRepository {
       for (var id in ids) {
         await _firestore.collection('adjustment').doc(id).delete();
       }
-    } catch (e) {
-      rethrow; // 예외 재발생
-    }
-  }
-
-  @override
-  Future<void> toggleAdjustmentSelection(String id, bool isSelected) async {
-    try {
-      await _firestore.collection('adjustment').doc(id).update({
-        'isSelected': isSelected, // 선택 상태를 업데이트
-      });
     } catch (e) {
       rethrow; // 예외 재발생
     }

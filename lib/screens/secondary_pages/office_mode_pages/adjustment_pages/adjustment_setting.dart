@@ -29,8 +29,8 @@ class _AdjustmentSettingState extends State<AdjustmentSetting> {
   String? _addStandardValue;
 
   // 드롭다운 옵션 목록
-  static const List<String> _basicStandardOptions = ['30분', '60분'];
-  static const List<String> _addStandardOptions = ['10분', '30분', '60분'];
+  static const List<String> _basicStandardOptions = ['1분','5분','30분', '60분'];
+  static const List<String> _addStandardOptions = ['1분','10분', '30분', '60분'];
 
   @override
   void dispose() {
