@@ -28,6 +28,12 @@ class _Input3DigitState extends State<Input3Digit> {
   List<bool> isSelected = [];
   List<String> statuses = [];
 
+  // 🔹 정산 데이터를 저장할 변수 추가
+  int selectedBasicStandard = 0;
+  int selectedBasicAmount = 0;
+  int selectedAddStandard = 0;
+  int selectedAddAmount = 0;
+
   // 컨트롤러: 입력 필드 및 상태 관리
   final TextEditingController controller3digit = TextEditingController();
   final TextEditingController controller1digit = TextEditingController();
@@ -35,17 +41,6 @@ class _Input3DigitState extends State<Input3Digit> {
   final TextEditingController locationController = TextEditingController();
 
   String? selectedAdjustment;
-
-  Future<List<String>> _fetchAdjustmentTypes() async {
-    final adjustmentState = context.read<AdjustmentState>();
-    final areaState = context.read<AreaState>(); // 🔹 현재 선택된 지역 가져오기
-    final currentArea = areaState.currentArea;
-
-    return adjustmentState.adjustments
-        .where((adj) => adj['area'] == currentArea) // 🔹 현재 선택된 지역과 일치하는 데이터만 가져오기
-        .map((adj) => adj['countType'] ?? '')
-        .toList();
-  }
 
   late TextEditingController activeController; // 현재 활성화된 입력 필드
   bool showKeypad = true; // 키패드 표시 여부
@@ -216,7 +211,13 @@ class _Input3DigitState extends State<Input3Digit> {
           userName: userState.name,
           type: '입차 요청',
           adjustmentType: selectedAdjustment,
-          statusList: selectedStatuses.isNotEmpty ? selectedStatuses : [], // 🔹 비어 있으면 [] 저장
+          statusList: selectedStatuses.isNotEmpty ? selectedStatuses : [],
+          // 🔹 비어 있으면 [] 저장
+          basicStandard: selectedBasicStandard,
+          // ✅ 상태에서 가져온 데이터 저장
+          basicAmount: selectedBasicAmount,
+          addStandard: selectedAddStandard,
+          addAmount: selectedAddAmount,
         );
         _showSnackBar('입차 요청 완료');
       } else {
@@ -228,7 +229,13 @@ class _Input3DigitState extends State<Input3Digit> {
           userName: userState.name,
           type: '입차 완료',
           adjustmentType: selectedAdjustment,
-          statusList: selectedStatuses.isNotEmpty ? selectedStatuses : [], // 🔹 비어 있으면 [] 저장
+          statusList: selectedStatuses.isNotEmpty ? selectedStatuses : [],
+          // 🔹 비어 있으면 [] 저장
+          basicStandard: selectedBasicStandard,
+          // ✅ 상태에서 가져온 데이터 저장
+          basicAmount: selectedBasicAmount,
+          addStandard: selectedAddStandard,
+          addAmount: selectedAddAmount,
         );
         _showSnackBar('입차 완료');
       }
@@ -285,6 +292,12 @@ class _Input3DigitState extends State<Input3Digit> {
         );
       },
     );
+  }
+
+  Future<void> _refreshAdjustments() async {
+    final adjustmentState = context.read<AdjustmentState>();
+    await Future.delayed(const Duration(milliseconds: 300)); // 🔥 Firestore 데이터 로드 대기
+    adjustmentState.syncWithAreaState(); // 🔥 강제 동기화 트리거
   }
 
   @override
@@ -349,15 +362,31 @@ class _Input3DigitState extends State<Input3Digit> {
                     style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8.0),
-                  FutureBuilder<List<String>>(
-                    future: _fetchAdjustmentTypes(),
+                  FutureBuilder(
+                    future: _refreshAdjustments(), // 🔥 지역 변경 후 강제 업데이트
                     builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-                      if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                      final adjustmentState = context.watch<AdjustmentState>();
+                      final currentArea = context.watch<AreaState>().currentArea.trim();
+                      final adjustmentsForArea = adjustmentState.adjustments
+                          .where((adj) => adj['area'].toString().trim() == currentArea)
+                          .map<String>((adj) => adj['countType']?.toString().trim() ?? '')
+                          .where((type) => type.isNotEmpty)
+                          .toList();
+
+                      debugPrint('🔥 현재 지역($currentArea)에 대한 필터링된 정산 유형: $adjustmentsForArea');
+
+                      if (adjustmentsForArea.isEmpty) {
                         return const Text('등록된 정산 유형이 없습니다.');
                       }
+
+                      if (selectedAdjustment == null || !adjustmentsForArea.contains(selectedAdjustment)) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          setState(() {
+                            selectedAdjustment = adjustmentsForArea.first;
+                          });
+                        });
+                      }
+
                       return DropdownButtonFormField<String>(
                         value: selectedAdjustment,
                         onChanged: (newValue) {
@@ -365,7 +394,7 @@ class _Input3DigitState extends State<Input3Digit> {
                             selectedAdjustment = newValue;
                           });
                         },
-                        items: snapshot.data!.map((type) {
+                        items: adjustmentsForArea.map((type) {
                           return DropdownMenuItem<String>(
                             value: type,
                             child: Text(type),

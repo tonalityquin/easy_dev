@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../repositories/plate_repository.dart';
+import '../../utils/fee_calculator.dart';
 import '../../states/plate_state.dart';
 import '../../states/user_state.dart';
 import '../../utils/date_utils.dart'; // 날짜 관련 유틸리티
@@ -42,8 +43,8 @@ class PlateContainer extends StatelessWidget {
 
     // 데이터가 없을 경우 표시할 UI
     if (filteredData.isEmpty) {
-      return Center(
-        child: const Text(
+      return const Center(
+        child: Text(
           '현재 조건에 맞는 데이터가 없습니다.',
           style: TextStyle(fontSize: 18, color: Colors.grey),
         ),
@@ -53,29 +54,53 @@ class PlateContainer extends StatelessWidget {
     // 필터링된 데이터를 기반으로 UI 생성
     return Column(
       children: filteredData.map((item) {
-        final backgroundColor = item.isSelected ? Colors.greenAccent : Colors.white; // 선택 여부에 따른 배경색
-        final displayUser = item.isSelected ? item.selectedBy : item.userName; // 선택된 경우 selectedBy, 아니면 userName
+        final backgroundColor = item.isSelected ? Colors.greenAccent : Colors.white;
+        final displayUser = item.isSelected ? item.selectedBy : item.userName;
+
+        // ✅ Firestore에서 가져온 데이터가 `String`일 경우 `int`로 변환 (null인 경우 기본값 0 설정)
+        int basicStandard = (item.basicStandard is String)
+            ? int.tryParse(item.basicStandard as String) ?? 0
+            : (item.basicStandard ?? 0);
+
+        int basicAmount = (item.basicAmount is String)
+            ? int.tryParse(item.basicAmount as String) ?? 0
+            : (item.basicAmount ?? 0);
+
+        int addStandard = (item.addStandard is String)
+            ? int.tryParse(item.addStandard as String) ?? 0
+            : (item.addStandard ?? 0);
+
+        int addAmount = (item.addAmount is String)
+            ? int.tryParse(item.addAmount as String) ?? 0
+            : (item.addAmount ?? 0);
+
+        // 🚗 주차 요금 계산
+        int currentFee = calculateParkingFee(
+          entryTimeInMinutes: item.requestTime.hour * 60 + item.requestTime.minute,
+          currentTimeInMinutes: DateTime.now().hour * 60 + DateTime.now().minute,
+          basicStandard: basicStandard, // ✅ 변환된 값 사용
+          basicAmount: basicAmount,     // ✅ 변환된 값 사용
+          addStandard: addStandard,     // ✅ 변환된 값 사용
+          addAmount: addAmount,         // ✅ 변환된 값 사용
+        ).toInt();
+
+        // ✅ 경과 시간 복구
+        int elapsedMinutes = DateTime.now().difference(item.requestTime).inMinutes;
 
         return Column(
           children: [
             PlateCustomBox(
               topLeftText: item.plateNumber,
-              topRightUpText: "정산 유형",
-              topRightDownText: "정산 금액 현황",
+              topRightUpText: "${item.adjustmentType ?? '없음'}",
+              topRightDownText: "${currentFee}원",
               midLeftText: item.location,
               midCenterText: displayUser ?? '기본 사용자',
               midRightText: CustomDateUtils.formatTimeForUI(item.requestTime),
-              bottomLeftLeftText: "주의사항 토글",
+              bottomLeftLeftText: item.statusList.isNotEmpty ? item.statusList.join(", ") : "주의사항 없음",
               bottomLeftCenterText: "주의사항 수기",
-              bottomRightText: CustomDateUtils.timeElapsed(item.requestTime),
+              bottomRightText: "경과 시간: ${elapsedMinutes}분", // ✅ 경과 시간 복구
               backgroundColor: backgroundColor,
               onTap: () {
-                if (item.selectedBy != null && item.selectedBy != userName) {
-                  // 다른 유저가 선택한 번호판은 선택할 수 없도록 처리
-                  _showSnackBar(context, '이 번호판은 ${item.selectedBy} 유저가 선택하였습니다.');
-                  return;
-                }
-
                 final plateState = Provider.of<PlateState>(context, listen: false);
                 plateState.toggleIsSelected(
                   collection: collection,
@@ -90,13 +115,5 @@ class PlateContainer extends StatelessWidget {
         );
       }).toList(),
     );
-  }
-
-  // Snackbar 함수 정의
-  void _showSnackBar(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(message),
-      duration: const Duration(seconds: 2),
-    ));
   }
 }

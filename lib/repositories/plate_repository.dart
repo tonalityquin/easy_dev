@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 
 /// 차량 번호판 요청 데이터를 나타내는 모델 클래스
 class PlateModel {
@@ -11,6 +12,12 @@ class PlateModel {
   final String userName; // 생성한 유저 이름
   final bool isSelected; // 선택 여부
   final String? selectedBy; // 선택한 유저 이름
+  final String? adjustmentType; // 🔹 정산 유형 추가
+  final List<String> statusList; // 🔹 상태 리스트 추가
+  final int? basicStandard;
+  final int? basicAmount;
+  final int? addStandard;
+  final int? addAmount;
 
   PlateModel({
     required this.id,
@@ -22,11 +29,25 @@ class PlateModel {
     required this.userName,
     this.isSelected = false,
     this.selectedBy,
+    this.adjustmentType, // 🔹 추가
+    this.statusList = const [], // 🔹 추가 (기본값 빈 리스트)
+    this.basicStandard,
+    this.basicAmount,
+    this.addStandard,
+    this.addAmount,
   });
 
   /// Firestore 문서 데이터를 PlateRequest 객체로 변환
   factory PlateModel.fromDocument(DocumentSnapshot<Map<String, dynamic>> doc) {
     final dynamic timestamp = doc['request_time'];
+    final Map<String, dynamic>? data = doc.data();
+
+    int parseToInt(dynamic value) {
+      if (value is int) return value;
+      if (value is String) return int.tryParse(value) ?? 0;
+      return 0;
+    }
+
     return PlateModel(
       id: doc.id,
       plateNumber: doc['plate_number'],
@@ -37,10 +58,16 @@ class PlateModel {
               ? timestamp
               : DateTime.now(),
       location: doc['location'] ?? '미지정',
-      area: doc.data()?.containsKey('area') == true ? doc['area'] : '미지정',
+      area: doc['area'] ?? '미지정',
       userName: doc['userName'] ?? 'Unknown',
-      isSelected: doc.data()?.containsKey('isSelected') == true ? doc['isSelected'] : false,
+      isSelected: doc['isSelected'] ?? false,
       selectedBy: doc['selectedBy'],
+      adjustmentType: doc['adjustmentType'],
+      statusList: (doc['statusList'] is List) ? List<String>.from(doc['statusList']) : [],
+      basicStandard: parseToInt(data?['basicStandard']),
+      basicAmount: parseToInt(data?['basicAmount']),
+      addStandard: parseToInt(data?['addStandard']),
+      addAmount: parseToInt(data?['addAmount']),
     );
   }
 
@@ -55,6 +82,12 @@ class PlateModel {
       'userName': userName,
       'isSelected': isSelected,
       'selectedBy': selectedBy,
+      'adjustmentType': adjustmentType,
+      'statusList': statusList,
+      'basicStandard': basicStandard,
+      'basicAmount': basicAmount,
+      'addStandard': addStandard,
+      'addAmount': addAmount,
     };
   }
 }
@@ -88,6 +121,10 @@ abstract class PlateRepository {
     required String userName,
     String? adjustmentType,
     List<String>? statusList,
+    int basicStandard, // 🔥 추가
+    int basicAmount, // 🔥 추가
+    int addStandard, // 🔥 추가
+    int addAmount, // 🔥 추가
   });
 
   /// 특정 지역의 사용 가능한 위치 목록 가져오기
@@ -156,9 +193,41 @@ class FirestorePlateRepository implements PlateRepository {
     required String userName,
     String? adjustmentType,
     List<String>? statusList,
+    int? basicStandard,
+    int? basicAmount,
+    int? addStandard,
+    int? addAmount,
   }) async {
     final documentId = '${plateNumber}_$area';
 
+    // ✅ Firestore에서 adjustmentType + area 를 활용해 문서명을 직접 조회
+    if (adjustmentType != null) {
+      try {
+        final adjustmentRef = FirebaseFirestore.instance.collection('adjustment');
+        final adjustmentDoc = await adjustmentRef.doc('${adjustmentType}_$area').get();
+
+        if (adjustmentDoc.exists) {
+          final adjustmentData = adjustmentDoc.data()!;
+
+          debugPrint('🔥 Firestore에서 가져온 정산 데이터: $adjustmentData');
+
+          // ✅ Firestore에서 가져온 값이 존재하면 적용
+          basicStandard = int.tryParse(adjustmentData['basicStandard'].toString()) ?? 0;
+          basicAmount = int.tryParse(adjustmentData['basicAmount'].toString()) ?? 0;
+          addStandard = int.tryParse(adjustmentData['addStandard'].toString()) ?? 0;
+          addAmount = int.tryParse(adjustmentData['addAmount'].toString()) ?? 0;
+
+          debugPrint(
+              '✅ Firestore 반영된 값: basicStandard=$basicStandard, basicAmount=$basicAmount, addStandard=$addStandard, addAmount=$addAmount');
+        } else {
+          debugPrint('⚠ Firestore에서 adjustmentType=$adjustmentType, area=$area 데이터를 찾을 수 없음');
+        }
+      } catch (e) {
+        debugPrint('❌ Firestore 데이터 로드 실패: $e');
+      }
+    }
+
+    // ✅ Firestore에 저장할 데이터
     final data = {
       'plate_number': plateNumber,
       'type': type,
@@ -170,11 +239,13 @@ class FirestorePlateRepository implements PlateRepository {
       'statusList': statusList ?? [],
       'isSelected': false,
       'selectedBy': null,
+      'basicStandard': basicStandard ?? 0,
+      'basicAmount': basicAmount ?? 0,
+      'addStandard': addStandard ?? 0,
+      'addAmount': addAmount ?? 0,
     };
 
-    if (statusList != null && statusList.isNotEmpty) {
-      data['statusList'] = statusList;
-    }
+    debugPrint('🔥 Firestore 저장 데이터: $data');
 
     await _firestore.collection(collection).doc(documentId).set(data);
   }
@@ -182,9 +253,12 @@ class FirestorePlateRepository implements PlateRepository {
   @override
   Future<void> updatePlateSelection(String collection, String id, bool isSelected, {String? selectedBy}) async {
     try {
+      final doc = await _firestore.collection(collection).doc(id).get();
+      if (!doc.exists) throw Exception('Document not found');
+
       final updateData = {
         'isSelected': isSelected,
-        'selectedBy': selectedBy, // 선택 유저 추가
+        'selectedBy': selectedBy,
       };
 
       await _firestore.collection(collection).doc(id).update(updateData);

@@ -25,18 +25,6 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  /// 공통 로컬 상태 동기화 로직
-  void _syncLocalState(String collection, String id, PlateModel updatedPlate) {
-    final collectionData = _data[collection];
-    if (collectionData != null) {
-      final index = collectionData.indexWhere((plate) => plate.id == id);
-      if (index != -1) {
-        collectionData[index] = updatedPlate;
-        notifyListeners();
-      }
-    }
-  }
-
   /// 특정 지역에 해당하는 번호판 리스트 반환
   List<PlateModel> getPlatesByArea(String collection, String area) {
     final plates = _data[collection]?.where((request) => request.area == area).toList() ?? [];
@@ -69,6 +57,24 @@ class PlateState extends ChangeNotifier {
     final documentId = '${plateNumber}_$area';
 
     try {
+      int basicStandard = 0;
+      int basicAmount = 0;
+      int addStandard = 0;
+      int addAmount = 0;
+
+      if (adjustmentType != null) {
+        // 🔥 Firestore에서 adjustmentType(정산 유형) 정보 가져오기
+        final adjustmentData = await _repository.getDocument('adjustments', adjustmentType);
+        if (adjustmentData != null) {
+          basicStandard = adjustmentData['basicStandard'] ?? 0;
+          basicAmount = adjustmentData['basicAmount'] ?? 0;
+          addStandard = adjustmentData['addStandard'] ?? 0;
+          addAmount = adjustmentData['addAmount'] ?? 0;
+        } else {
+          debugPrint('⚠ Firestore에서 adjustmentType=$adjustmentType 데이터를 찾을 수 없음');
+        }
+      }
+
       await _repository.addOrUpdateDocument(collection, documentId, {
         'plate_number': plateNumber,
         'type': type,
@@ -80,10 +86,16 @@ class PlateState extends ChangeNotifier {
         'statusList': statusList ?? [],
         'isSelected': false,
         'selectedBy': selectedBy,
+        'basicStandard': basicStandard, // 🔹 Firestore에서 가져온 값 반영
+        'basicAmount': basicAmount,     // 🔹 Firestore에서 가져온 값 반영
+        'addStandard': addStandard,     // 🔹 Firestore에서 가져온 값 반영
+        'addAmount': addAmount,         // 🔹 Firestore에서 가져온 값 반영
       });
+
+      notifyListeners();
       return true;
     } catch (e) {
-      debugPrint('Error adding request: $e');
+      debugPrint('❌ Error adding request: $e');
       return false;
     }
   }
@@ -130,35 +142,39 @@ class PlateState extends ChangeNotifier {
     final plateId = '${plateNumber}_$area';
 
     try {
-      final plate = _data[collection]?.firstWhere(
-        (p) => p.id == plateId,
-        orElse: () => throw Exception('Plate not found'),
+      // ✅ Firestore 연동 없이 로컬 `_data`에서 처리
+      final plateList = _data[collection];
+      if (plateList == null) throw Exception('Collection not found');
+
+      final index = plateList.indexWhere((p) => p.id == plateId);
+      if (index == -1) throw Exception('Plate not found');
+
+      final plate = plateList[index];
+      _validateSelection(plate, userName);
+
+      final newIsSelected = !plate.isSelected;
+
+      // ✅ Firestore 없이 로컬 데이터만 변경
+      _data[collection] = List.from(plateList)..[index] = PlateModel(
+        id: plate.id,
+        plateNumber: plate.plateNumber,
+        type: plate.type,
+        requestTime: plate.requestTime,
+        location: plate.location,
+        area: plate.area,
+        userName: plate.userName,
+        isSelected: newIsSelected,
+        selectedBy: newIsSelected ? userName : null,
+        adjustmentType: plate.adjustmentType,
+        statusList: plate.statusList,
+        basicStandard: plate.basicStandard,
+        basicAmount: plate.basicAmount,
+        addStandard: plate.addStandard,
+        addAmount: plate.addAmount,
       );
 
-      if (plate != null) {
-        _validateSelection(plate, userName);
 
-        final newIsSelected = !plate.isSelected;
-        await _repository.updatePlateSelection(
-          collection,
-          plateId,
-          newIsSelected,
-          selectedBy: newIsSelected ? userName : null,
-        );
-
-        final updatedPlate = PlateModel(
-          id: plate.id,
-          plateNumber: plate.plateNumber,
-          type: plate.type,
-          requestTime: plate.requestTime,
-          location: plate.location,
-          area: plate.area,
-          userName: plate.userName,
-          isSelected: newIsSelected,
-          selectedBy: newIsSelected ? userName : null,
-        );
-        _syncLocalState(collection, plateId, updatedPlate);
-      }
+      notifyListeners(); // UI 갱신
     } catch (e) {
       debugPrint('Error toggling isSelected: $e');
     }
