@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../states/adjustment_state.dart';
+import '../../states/status_state.dart';
 import '../../states/user_state.dart';
 import '../../widgets/input_field/front_3_digit.dart';
 import '../../widgets/input_field/middle_1_digit.dart';
@@ -23,6 +24,10 @@ class Input3Digit extends StatefulWidget {
 }
 
 class _Input3DigitState extends State<Input3Digit> {
+  List<String> selectedStatuses = [];
+  List<bool> isSelected = [];
+  List<String> statuses = [];
+
   // 컨트롤러: 입력 필드 및 상태 관리
   final TextEditingController controller3digit = TextEditingController();
   final TextEditingController controller1digit = TextEditingController();
@@ -59,6 +64,27 @@ class _Input3DigitState extends State<Input3Digit> {
     activeController = controller3digit;
     _addInputListeners();
     isLocationSelected = locationController.text.isNotEmpty;
+
+    // 🔹 상태 목록을 초기화하는 함수 호출
+    _initializeStatuses();
+  }
+
+  // 🔹 상태 목록을 불러오는 함수
+  Future<void> _initializeStatuses() async {
+    final statusState = context.read<StatusState>();
+    final areaState = context.read<AreaState>();
+    final currentArea = areaState.currentArea;
+
+    final fetchedStatuses = statusState.statuses
+        .where((status) => status['area'] == currentArea)
+        .map((status) => (status['name'] ?? '') as String)
+        .toList();
+
+    // 🔹 상태 업데이트 (setState 사용)
+    setState(() {
+      statuses = fetchedStatuses;
+      isSelected = List.generate(statuses.length, (index) => false);
+    });
   }
 
   @override
@@ -169,6 +195,17 @@ class _Input3DigitState extends State<Input3Digit> {
       isLoading = true;
     });
 
+    // 🔹 `isSelected`를 반영하여 선택된 상태 목록을 업데이트
+    selectedStatuses = [];
+    for (int i = 0; i < isSelected.length; i++) {
+      if (isSelected[i]) {
+        selectedStatuses.add(statuses[i]); // 🔹 `statuses`가 선언되었으므로 오류 해결
+      }
+    }
+
+    // 🔹 선택된 상태 리스트를 출력하여 디버깅
+    debugPrint('선택된 상태: $selectedStatuses');
+
     try {
       if (!isLocationSelected) {
         await plateRepository.addRequestOrCompleted(
@@ -179,6 +216,7 @@ class _Input3DigitState extends State<Input3Digit> {
           userName: userState.name,
           type: '입차 요청',
           adjustmentType: selectedAdjustment,
+          statusList: selectedStatuses.isNotEmpty ? selectedStatuses : [], // 🔹 비어 있으면 [] 저장
         );
         _showSnackBar('입차 요청 완료');
       } else {
@@ -189,6 +227,8 @@ class _Input3DigitState extends State<Input3Digit> {
           area: areaState.currentArea,
           userName: userState.name,
           type: '입차 완료',
+          adjustmentType: selectedAdjustment,
+          statusList: selectedStatuses.isNotEmpty ? selectedStatuses : [], // 🔹 비어 있으면 [] 저장
         );
         _showSnackBar('입차 완료');
       }
@@ -304,8 +344,6 @@ class _Input3DigitState extends State<Input3Digit> {
                     ),
                   ),
                   const SizedBox(height: 32.0),
-
-                  /// 🔽 추가된 정산 유형 UI
                   const Text(
                     '정산 유형',
                     style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
@@ -340,6 +378,33 @@ class _Input3DigitState extends State<Input3Digit> {
                       );
                     },
                   ),
+                  const SizedBox(height: 32.0),
+                  const Text(
+                    '차량 상태',
+                    style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8.0),
+                  statuses.isEmpty
+                      ? const Text('등록된 차량 상태가 없습니다.')
+                      : Wrap(
+                          spacing: 8.0,
+                          children: List.generate(statuses.length, (index) {
+                            return ChoiceChip(
+                              label: Text(statuses[index]),
+                              selected: isSelected[index],
+                              onSelected: (selected) {
+                                setState(() {
+                                  isSelected[index] = selected;
+                                  if (selected) {
+                                    selectedStatuses.add(statuses[index]);
+                                  } else {
+                                    selectedStatuses.remove(statuses[index]);
+                                  }
+                                });
+                              },
+                            );
+                          }),
+                        ),
                 ],
               ),
             ),
