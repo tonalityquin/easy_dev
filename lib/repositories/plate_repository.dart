@@ -252,20 +252,28 @@ class FirestorePlateRepository implements PlateRepository {
 
   @override
   Future<void> updatePlateSelection(String collection, String id, bool isSelected, {String? selectedBy}) async {
+    final docRef = FirebaseFirestore.instance.collection(collection).doc(id);
+
     try {
-      final doc = await _firestore.collection(collection).doc(id).get();
-      if (!doc.exists) throw Exception('Document not found');
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final docSnapshot = await transaction.get(docRef);
+        if (!docSnapshot.exists) throw Exception('Document not found');
 
-      final updateData = {
-        'isSelected': isSelected,
-        'selectedBy': selectedBy,
-      };
+        // ✅ Firestore에 업데이트 수행
+        transaction.update(docRef, {
+          'isSelected': isSelected,
+          'selectedBy': isSelected ? selectedBy : null,
+        });
 
-      await _firestore.collection(collection).doc(id).update(updateData);
+        debugPrint('✅ Firestore 업데이트 완료: isSelected=$isSelected, selectedBy=$selectedBy');
+      });
     } catch (e) {
+      debugPrint('❌ Firestore 업데이트 실패: $e');
       throw Exception('Failed to update plate selection: $e');
     }
   }
+
+
 
   @override
   Future<List<String>> getAvailableLocations(String area) async {
