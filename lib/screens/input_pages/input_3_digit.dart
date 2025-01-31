@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../states/adjustment_state.dart';
 import '../../states/user_state.dart';
 import '../../widgets/input_field/front_3_digit.dart';
 import '../../widgets/input_field/middle_1_digit.dart';
@@ -27,6 +28,19 @@ class _Input3DigitState extends State<Input3Digit> {
   final TextEditingController controller1digit = TextEditingController();
   final TextEditingController controller4digit = TextEditingController();
   final TextEditingController locationController = TextEditingController();
+
+  String? selectedAdjustment;
+
+  Future<List<String>> _fetchAdjustmentTypes() async {
+    final adjustmentState = context.read<AdjustmentState>();
+    final areaState = context.read<AreaState>(); // 🔹 현재 선택된 지역 가져오기
+    final currentArea = areaState.currentArea;
+
+    return adjustmentState.adjustments
+        .where((adj) => adj['area'] == currentArea) // 🔹 현재 선택된 지역과 일치하는 데이터만 가져오기
+        .map((adj) => adj['countType'] ?? '')
+        .toList();
+  }
 
   late TextEditingController activeController; // 현재 활성화된 입력 필드
   bool showKeypad = true; // 키패드 표시 여부
@@ -164,6 +178,7 @@ class _Input3DigitState extends State<Input3Digit> {
           area: areaState.currentArea,
           userName: userState.name,
           type: '입차 요청',
+          adjustmentType: selectedAdjustment,
         );
         _showSnackBar('입차 요청 완료');
       } else {
@@ -242,54 +257,93 @@ class _Input3DigitState extends State<Input3Digit> {
         children: [
           Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  '번호 입력',
-                  style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
-                ),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    NumFieldFront3(
-                      controller: controller3digit,
-                      readOnly: true,
-                      onTap: () => _setActiveController(controller3digit),
-                    ),
-                    KorFieldMiddle1(
-                      controller: controller1digit,
-                      readOnly: true,
-                      onTap: () => _setActiveController(controller1digit),
-                    ),
-                    NumFieldBack4(
-                      controller: controller4digit,
-                      readOnly: true,
-                      onTap: () => _setActiveController(controller4digit),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 32.0),
-                const Text(
-                  '주차 구역',
-                  style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8.0),
-                Center(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+            child: SingleChildScrollView(
+              // ✅ 스크롤 가능하도록 감싸줌
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '번호 입력',
+                    style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      LocationField(
-                        controller: locationController,
-                        widthFactor: 0.7,
+                      NumFieldFront3(
+                        controller: controller3digit,
+                        readOnly: true,
+                        onTap: () => _setActiveController(controller3digit),
+                      ),
+                      KorFieldMiddle1(
+                        controller: controller1digit,
+                        readOnly: true,
+                        onTap: () => _setActiveController(controller1digit),
+                      ),
+                      NumFieldBack4(
+                        controller: controller4digit,
+                        readOnly: true,
+                        onTap: () => _setActiveController(controller4digit),
                       ),
                     ],
                   ),
-                ),
-              ],
+                  const SizedBox(height: 32.0),
+                  const Text(
+                    '주차 구역',
+                    style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8.0),
+                  Center(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        LocationField(
+                          controller: locationController,
+                          widthFactor: 0.7,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 32.0),
+
+                  /// 🔽 추가된 정산 유형 UI
+                  const Text(
+                    '정산 유형',
+                    style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8.0),
+                  FutureBuilder<List<String>>(
+                    future: _fetchAdjustmentTypes(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                        return const Text('등록된 정산 유형이 없습니다.');
+                      }
+                      return DropdownButtonFormField<String>(
+                        value: selectedAdjustment,
+                        onChanged: (newValue) {
+                          setState(() {
+                            selectedAdjustment = newValue;
+                          });
+                        },
+                        items: snapshot.data!.map((type) {
+                          return DropdownMenuItem<String>(
+                            value: type,
+                            child: Text(type),
+                          );
+                        }).toList(),
+                        decoration: const InputDecoration(
+                          labelText: '정산 유형 선택',
+                          border: OutlineInputBorder(),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
-          if (isLoading) const Center(child: CircularProgressIndicator()),
         ],
       ),
       bottomNavigationBar: BottomNavigation(

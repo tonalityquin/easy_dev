@@ -63,6 +63,7 @@ class PlateState extends ChangeNotifier {
     required String type,
     required String userName,
     String? selectedBy,
+    String? adjustmentType, // 🔹 추가된 파라미터
   }) async {
     final documentId = '${plateNumber}_$area';
 
@@ -74,6 +75,7 @@ class PlateState extends ChangeNotifier {
         'location': location.isNotEmpty ? location : '미지정',
         'area': area,
         'userName': userName,
+        'adjustmentType': adjustmentType, // 🔹 Firestore에 정산 유형 저장
         'isSelected': false,
         'selectedBy': selectedBy,
       });
@@ -83,6 +85,7 @@ class PlateState extends ChangeNotifier {
       return false;
     }
   }
+
 
   /// 데이터 전송 처리
   Future<bool> transferData({
