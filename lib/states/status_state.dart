@@ -5,6 +5,7 @@ import 'area_state.dart';
 class StatusState extends ChangeNotifier {
   final StatusRepository _repository;
   final AreaState _areaState; // 🔄 AreaState 추가
+
   StatusState(this._repository, this._areaState) {
     _fetchStatusToggles(); // Firestore 데이터와 동기화
     _areaState.addListener(_fetchStatusToggles); // 🔄 지역 변경 감지
@@ -16,6 +17,12 @@ class StatusState extends ChangeNotifier {
 
   List<Map<String, dynamic>> get toggleItems => _toggleItems;
   String? get selectedItemId => _selectedItemId;
+
+  List<Map<String, dynamic>> get statuses {
+    return _toggleItems
+        .where((status) => status['area'] == _areaState.currentArea)
+        .toList();
+  }
 
   /// Firestore에서 상태 데이터 실시간 가져오기 (지역 필터 적용)
   void _fetchStatusToggles() {

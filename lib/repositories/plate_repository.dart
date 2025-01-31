@@ -87,6 +87,7 @@ abstract class PlateRepository {
     required String type,
     required String userName,
     String? adjustmentType,
+    List<String>? statusList,
   });
 
   /// 특정 지역의 사용 가능한 위치 목록 가져오기
@@ -154,22 +155,29 @@ class FirestorePlateRepository implements PlateRepository {
     required String type,
     required String userName,
     String? adjustmentType,
+    List<String>? statusList,
   }) async {
     final documentId = '${plateNumber}_$area';
 
-    await _firestore.collection(collection).doc(documentId).set({
+    final data = {
       'plate_number': plateNumber,
       'type': type,
       'request_time': DateTime.now(),
       'location': location.isNotEmpty ? location : '미지정',
       'area': area,
       'userName': userName,
-      'adjustmentType': adjustmentType, // 🔹 Firestore에 정산 유형 저장
+      'adjustmentType': adjustmentType,
+      'statusList': statusList ?? [],
       'isSelected': false,
       'selectedBy': null,
-    });
-  }
+    };
 
+    if (statusList != null && statusList.isNotEmpty) {
+      data['statusList'] = statusList;
+    }
+
+    await _firestore.collection(collection).doc(documentId).set(data);
+  }
 
   @override
   Future<void> updatePlateSelection(String collection, String id, bool isSelected, {String? selectedBy}) async {
@@ -184,7 +192,6 @@ class FirestorePlateRepository implements PlateRepository {
       throw Exception('Failed to update plate selection: $e');
     }
   }
-
 
   @override
   Future<List<String>> getAvailableLocations(String area) async {
