@@ -87,9 +87,9 @@ class PlateState extends ChangeNotifier {
         'isSelected': false,
         'selectedBy': selectedBy,
         'basicStandard': basicStandard, // 🔹 Firestore에서 가져온 값 반영
-        'basicAmount': basicAmount,     // 🔹 Firestore에서 가져온 값 반영
-        'addStandard': addStandard,     // 🔹 Firestore에서 가져온 값 반영
-        'addAmount': addAmount,         // 🔹 Firestore에서 가져온 값 반영
+        'basicAmount': basicAmount, // 🔹 Firestore에서 가져온 값 반영
+        'addStandard': addStandard, // 🔹 Firestore에서 가져온 값 반영
+        'addAmount': addAmount, // 🔹 Firestore에서 가져온 값 반영
       });
 
       notifyListeners();
@@ -99,7 +99,6 @@ class PlateState extends ChangeNotifier {
       return false;
     }
   }
-
 
   /// 데이터 전송 처리
   Future<bool> transferData({
@@ -142,7 +141,6 @@ class PlateState extends ChangeNotifier {
     final plateId = '${plateNumber}_$area';
 
     try {
-      // ✅ Firestore 연동 없이 로컬 `_data`에서 처리
       final plateList = _data[collection];
       if (plateList == null) throw Exception('Collection not found');
 
@@ -150,41 +148,36 @@ class PlateState extends ChangeNotifier {
       if (index == -1) throw Exception('Plate not found');
 
       final plate = plateList[index];
-      _validateSelection(plate, userName);
 
       final newIsSelected = !plate.isSelected;
+      final newSelectedBy = newIsSelected ? userName : null;
 
-      // ✅ Firestore 없이 로컬 데이터만 변경
-      _data[collection] = List.from(plateList)..[index] = PlateModel(
-        id: plate.id,
-        plateNumber: plate.plateNumber,
-        type: plate.type,
-        requestTime: plate.requestTime,
-        location: plate.location,
-        area: plate.area,
-        userName: plate.userName,
-        isSelected: newIsSelected,
-        selectedBy: newIsSelected ? userName : null,
-        adjustmentType: plate.adjustmentType,
-        statusList: plate.statusList,
-        basicStandard: plate.basicStandard,
-        basicAmount: plate.basicAmount,
-        addStandard: plate.addStandard,
-        addAmount: plate.addAmount,
-      );
+      // ✅ Firestore 업데이트 추가
+      await _repository.updatePlateSelection(collection, plateId, newIsSelected, selectedBy: newSelectedBy);
 
+      // ✅ Firestore 업데이트 후 로컬 상태도 갱신
+      _data[collection] = List.from(plateList)
+        ..[index] = PlateModel(
+          id: plate.id,
+          plateNumber: plate.plateNumber,
+          type: plate.type,
+          requestTime: plate.requestTime,
+          location: plate.location,
+          area: plate.area,
+          userName: plate.userName,
+          isSelected: newIsSelected,
+          selectedBy: newSelectedBy,
+          adjustmentType: plate.adjustmentType,
+          statusList: plate.statusList,
+          basicStandard: plate.basicStandard,
+          basicAmount: plate.basicAmount,
+          addStandard: plate.addStandard,
+          addAmount: plate.addAmount,
+        );
 
-      notifyListeners(); // UI 갱신
+      notifyListeners();
     } catch (e) {
       debugPrint('Error toggling isSelected: $e');
-    }
-  }
-
-  /// 선택 상태 유효성 검사
-  void _validateSelection(PlateModel plate, String userName) {
-    if (plate.selectedBy != null && plate.selectedBy != userName) {
-      debugPrint('Plate is already selected by another user: ${plate.selectedBy}');
-      throw Exception('This plate is already selected.');
     }
   }
 
