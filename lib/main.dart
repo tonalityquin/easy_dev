@@ -7,10 +7,15 @@ import 'providers.dart'; // 상태 관리 객체를 정의한 파일
 // 앱의 시작점: Firebase 초기화 후 MyApp 실행
 void main() async {
   WidgetsFlutterBinding.ensureInitialized(); // 비동기 작업을 위한 Flutter 엔진 초기화
-  await Firebase.initializeApp(); // Firebase 초기화
+  try {
+    await Firebase.initializeApp(); // Firebase 초기화
+  } catch (e) {
+    print('Firebase 초기화 실패: $e'); // 에러 출력
+  }
 
   runApp(const MyApp()); // MyApp 위젯 실행
 }
+
 
 // MyApp 클래스: 앱의 전체 구조 정의
 class MyApp extends StatelessWidget {

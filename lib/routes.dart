@@ -9,3 +9,7 @@ final Map<String, WidgetBuilder> appRoutes = {
   '/home': (context) => const TypePage(),
   '/location_management': (context) => const LocationManagement(), // LocationManagement 추가 가능
 };
+
+/// ## Improvement
+/// 1. 다이나믹 라우팅 적용 고려
+/// ID에 따라 다른 페이지를 렌더링
