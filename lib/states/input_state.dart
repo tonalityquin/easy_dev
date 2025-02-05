@@ -32,13 +32,15 @@ class InputState with ChangeNotifier {
 
   /// **필드 값을 업데이트하고 상태 변경 알림**
   void updateField(String field, String value) {
-    if (_inputFields.containsKey(field)) {
-      _inputFields[field] = value;
-      notifyListeners();
-    } else {
-      throw ArgumentError('Invalid field name: $field');
+    if (!_inputFields.containsKey(field)) {
+      final error = '🚨 Invalid field name: $field';
+      debugPrint(error);
+      return;
     }
+    _inputFields[field] = value;
+    notifyListeners();
   }
+
 
   /// **필드 유효성 검사**
   bool isValidField(String field, String value) {
@@ -46,19 +48,29 @@ class InputState with ChangeNotifier {
   }
 
   /// **유효성 검증 후 필드 업데이트**
-  void updateFieldWithValidation(String field, String value, {void Function(String)? onError}) {
+  void updateFieldWithValidation(String field, String value, {required void Function(String) onError}) {
     if (!isValidField(field, value)) {
-      final error = 'Invalid value for field $field: $value';
+      final error = '🚨 Invalid value for field $field: $value';
       debugPrint(error);
-      if (onError != null) onError(error);
+      onError(error);
       return;
     }
     updateField(field, value);
   }
 
+
   /// **모든 입력 필드 초기화**
   void clearInput() {
-    _inputFields.updateAll((key, value) => '');
-    notifyListeners();
+    bool hasChanged = false;
+    _inputFields.forEach((key, value) {
+      if (value.isNotEmpty) {
+        _inputFields[key] = '';
+        hasChanged = true;
+      }
+    });
+
+    if (hasChanged) {
+      notifyListeners(); // 🚀 값이 변경된 경우에만 UI 업데이트
+    }
   }
 }

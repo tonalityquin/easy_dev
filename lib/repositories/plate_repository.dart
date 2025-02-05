@@ -1,19 +1,26 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+/// 🔥 숫자 변환 유틸리티 함수 추가
+int parseInt(dynamic value) {
+  if (value is int) return value;
+  if (value is String) return int.tryParse(value) ?? 0;
+  return 0;
+}
+
 /// 차량 번호판 요청 데이터를 나타내는 모델 클래스
 class PlateModel {
-  final String id; // Firestore 문서 ID
-  final String plateNumber; // 차량 번호판
-  final String type; // 요청 유형
-  final DateTime requestTime; // 요청 시간
-  final String location; // 요청 위치
-  final String area; // 요청 지역
-  final String userName; // 생성한 유저 이름
-  final bool isSelected; // 선택 여부
-  final String? selectedBy; // 선택한 유저 이름
-  final String? adjustmentType; // 🔹 정산 유형 추가
-  final List<String> statusList; // 🔹 상태 리스트 추가
+  final String id;
+  final String plateNumber;
+  final String type;
+  final DateTime requestTime;
+  final String location;
+  final String area;
+  final String userName;
+  final bool isSelected;
+  final String? selectedBy;
+  final String? adjustmentType;
+  final List<String> statusList;
   final int? basicStandard;
   final int? basicAmount;
   final int? addStandard;
@@ -29,24 +36,18 @@ class PlateModel {
     required this.userName,
     this.isSelected = false,
     this.selectedBy,
-    this.adjustmentType, // 🔹 추가
-    this.statusList = const [], // 🔹 추가 (기본값 빈 리스트)
+    this.adjustmentType,
+    this.statusList = const [],
     this.basicStandard,
     this.basicAmount,
     this.addStandard,
     this.addAmount,
   });
 
-  /// Firestore 문서 데이터를 PlateRequest 객체로 변환
+  /// Firestore 문서 데이터를 PlateModel 객체로 변환
   factory PlateModel.fromDocument(DocumentSnapshot<Map<String, dynamic>> doc) {
     final dynamic timestamp = doc['request_time'];
     final Map<String, dynamic>? data = doc.data();
-
-    int parseToInt(dynamic value) {
-      if (value is int) return value;
-      if (value is String) return int.tryParse(value) ?? 0;
-      return 0;
-    }
 
     return PlateModel(
       id: doc.id,
@@ -64,14 +65,14 @@ class PlateModel {
       selectedBy: doc['selectedBy'],
       adjustmentType: doc['adjustmentType'],
       statusList: (doc['statusList'] is List) ? List<String>.from(doc['statusList']) : [],
-      basicStandard: parseToInt(data?['basicStandard']),
-      basicAmount: parseToInt(data?['basicAmount']),
-      addStandard: parseToInt(data?['addStandard']),
-      addAmount: parseToInt(data?['addAmount']),
+      basicStandard: parseInt(data?['basicStandard']),
+      basicAmount: parseInt(data?['basicAmount']),
+      addStandard: parseInt(data?['addStandard']),
+      addAmount: parseInt(data?['addAmount']),
     );
   }
 
-  /// PlateRequest 객체를 Map 형식으로 변환
+  /// PlateModel 객체를 Map 형식으로 변환
   Map<String, dynamic> toMap() {
     return {
       'plate_number': plateNumber,
@@ -172,14 +173,19 @@ class FirestorePlateRepository implements PlateRepository {
         'departure_completed',
       ];
 
-      for (final collection in collections) {
+      await Future.wait(collections.map((collection) async {
         final snapshot = await _firestore.collection(collection).get();
-        for (final doc in snapshot.docs) {
-          await doc.reference.delete();
+        final batch = _firestore.batch();
+
+        for (var doc in snapshot.docs) {
+          batch.delete(doc.reference);
         }
-      }
+
+        await batch.commit(); // 🔥 일괄 삭제 수행
+      }));
     } catch (e) {
-      rethrow;
+      debugPrint('❌ Firestore 전체 데이터 삭제 실패: $e');
+      throw Exception("전체 데이터 삭제 실패: $e");
     }
   }
 
@@ -200,34 +206,31 @@ class FirestorePlateRepository implements PlateRepository {
   }) async {
     final documentId = '${plateNumber}_$area';
 
-    // ✅ Firestore에서 adjustmentType + area 를 활용해 문서명을 직접 조회
     if (adjustmentType != null) {
       try {
-        final adjustmentRef = FirebaseFirestore.instance.collection('adjustment');
+        final adjustmentRef = _firestore.collection('adjustment');
         final adjustmentDoc = await adjustmentRef.doc('${adjustmentType}_$area').get();
 
         if (adjustmentDoc.exists) {
           final adjustmentData = adjustmentDoc.data()!;
-
           debugPrint('🔥 Firestore에서 가져온 정산 데이터: $adjustmentData');
 
-          // ✅ Firestore에서 가져온 값이 존재하면 적용
-          basicStandard = int.tryParse(adjustmentData['basicStandard'].toString()) ?? 0;
-          basicAmount = int.tryParse(adjustmentData['basicAmount'].toString()) ?? 0;
-          addStandard = int.tryParse(adjustmentData['addStandard'].toString()) ?? 0;
-          addAmount = int.tryParse(adjustmentData['addAmount'].toString()) ?? 0;
-
-          debugPrint(
-              '✅ Firestore 반영된 값: basicStandard=$basicStandard, basicAmount=$basicAmount, addStandard=$addStandard, addAmount=$addAmount');
+          basicStandard = parseInt(adjustmentData['basicStandard']);
+          basicAmount = parseInt(adjustmentData['basicAmount']);
+          addStandard = parseInt(adjustmentData['addStandard']);
+          addAmount = parseInt(adjustmentData['addAmount']);
         } else {
-          debugPrint('⚠ Firestore에서 adjustmentType=$adjustmentType, area=$area 데이터를 찾을 수 없음');
+          throw Exception('🚨 Firestore에서 adjustmentType=$adjustmentType, area=$area 데이터를 찾을 수 없음');
         }
+      } on FirebaseException catch (e) {
+        debugPrint("🔥 Firestore 에러 (addRequestOrCompleted): ${e.message}");
+        throw Exception("Firestore 데이터 로드 실패: ${e.message}");
       } catch (e) {
-        debugPrint('❌ Firestore 데이터 로드 실패: $e');
+        debugPrint("❌ 알 수 없는 에러 (addRequestOrCompleted): $e");
+        throw Exception("예상치 못한 에러 발생");
       }
     }
 
-    // ✅ Firestore에 저장할 데이터
     final data = {
       'plate_number': plateNumber,
       'type': type,
@@ -252,14 +255,13 @@ class FirestorePlateRepository implements PlateRepository {
 
   @override
   Future<void> updatePlateSelection(String collection, String id, bool isSelected, {String? selectedBy}) async {
-    final docRef = FirebaseFirestore.instance.collection(collection).doc(id);
+    final docRef = _firestore.collection(collection).doc(id);
 
     try {
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
+      await _firestore.runTransaction((transaction) async {
         final docSnapshot = await transaction.get(docRef);
-        if (!docSnapshot.exists) throw Exception('Document not found');
+        if (!docSnapshot.exists) throw Exception('🚨 문서를 찾을 수 없음: $id');
 
-        // ✅ Firestore에 업데이트 수행
         transaction.update(docRef, {
           'isSelected': isSelected,
           'selectedBy': isSelected ? selectedBy : null,
@@ -267,13 +269,14 @@ class FirestorePlateRepository implements PlateRepository {
 
         debugPrint('✅ Firestore 업데이트 완료: isSelected=$isSelected, selectedBy=$selectedBy');
       });
+    } on FirebaseException catch (e) {
+      debugPrint("🔥 Firestore 에러 (updatePlateSelection): ${e.message}");
+      throw Exception("Firestore 업데이트 실패: ${e.message}");
     } catch (e) {
-      debugPrint('❌ Firestore 업데이트 실패: $e');
-      throw Exception('Failed to update plate selection: $e');
+      debugPrint("❌ 알 수 없는 에러 (updatePlateSelection): $e");
+      throw Exception("예상치 못한 에러 발생: $e");
     }
   }
-
-
 
   @override
   Future<List<String>> getAvailableLocations(String area) async {

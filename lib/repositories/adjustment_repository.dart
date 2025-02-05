@@ -1,6 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+/// 🔥 숫자 변환 유틸리티 함수 추가
+int parseInt(dynamic value) {
+  return int.tryParse(value.toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+}
+
 /// 정산 데이터를 관리하는 추상 클래스
 abstract class AdjustmentRepository {
   /// Firestore 위치 데이터를 스트림 형태로 반환
@@ -19,21 +24,17 @@ class FirestoreAdjustmentRepository implements AdjustmentRepository {
 
   @override
   Stream<List<Map<String, dynamic>>> getAdjustmentStream(String currentArea) {
-    return _firestore
-        .collection('adjustment')
-        .where('area', isEqualTo: currentArea)
-        .snapshots()
-        .map((snapshot) {
+    return _firestore.collection('adjustment').where('area', isEqualTo: currentArea).snapshots().map((snapshot) {
       final dataList = snapshot.docs.map((doc) {
         final data = doc.data();
         return {
           'id': doc.id,
           'CountType': data['CountType']?.toString() ?? '',
           'area': data['area']?.toString() ?? '',
-          'basicStandard': int.tryParse(data['basicStandard'].toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? 0,
-          'basicAmount': int.tryParse(data['basicAmount'].toString()) ?? 0,
-          'addStandard': int.tryParse(data['addStandard'].toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? 0,
-          'addAmount': int.tryParse(data['addAmount'].toString()) ?? 0,
+          'basicStandard': parseInt(data['basicStandard']),
+          'basicAmount': parseInt(data['basicAmount']),
+          'addStandard': parseInt(data['addStandard']),
+          'addAmount': parseInt(data['addAmount']),
         };
       }).toList();
 
@@ -42,37 +43,40 @@ class FirestoreAdjustmentRepository implements AdjustmentRepository {
     });
   }
 
-
-
   @override
   Future<void> addAdjustment(Map<String, dynamic> adjustmentData) async {
     try {
-      String countType = adjustmentData['CountType'];
-      String area = adjustmentData['area'];
-      String documentId = '${countType}_$area'; // 🔥 문서 ID를 countType_지역명으로 설정
+      String documentId = '${adjustmentData['CountType']}_${adjustmentData['area']}';
 
       await _firestore.collection('adjustment').doc(documentId).set({
-        'CountType': countType,
-        'area': area,
-        'basicStandard': int.tryParse(adjustmentData['basicStandard'].toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? 0,
-        'basicAmount': int.tryParse(adjustmentData['basicAmount'].toString()) ?? 0,
-        'addStandard': int.tryParse(adjustmentData['addStandard'].toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? 0,
-        'addAmount': int.tryParse(adjustmentData['addAmount'].toString()) ?? 0,
+        'CountType': adjustmentData['CountType'],
+        'area': adjustmentData['area'],
+        'basicStandard': parseInt(adjustmentData['basicStandard']),
+        'basicAmount': parseInt(adjustmentData['basicAmount']),
+        'addStandard': parseInt(adjustmentData['addStandard']),
+        'addAmount': parseInt(adjustmentData['addAmount']),
       });
+    } on FirebaseException catch (e) {
+      debugPrint("🔥 Firestore 에러 (addAdjustment): ${e.message}");
+      throw Exception("Firestore 저장 실패: ${e.message}");
     } catch (e) {
-      rethrow; // 예외 재발생
+      debugPrint("🔥 알 수 없는 에러 (addAdjustment): $e");
+      throw Exception("예상치 못한 에러 발생");
     }
   }
-
 
   @override
   Future<void> deleteAdjustment(List<String> ids) async {
     try {
-      for (var id in ids) {
-        await _firestore.collection('adjustment').doc(id).delete();
-      }
+      await Future.wait(
+        ids.map((id) => _firestore.collection('adjustment').doc(id).delete()),
+      );
+    } on FirebaseException catch (e) {
+      debugPrint("🔥 Firestore 에러 (deleteAdjustment): ${e.message}");
+      throw Exception("Firestore 삭제 실패: ${e.message}");
     } catch (e) {
-      rethrow; // 예외 재발생
+      debugPrint("🔥 알 수 없는 에러 (deleteAdjustment): $e");
+      throw Exception("예상치 못한 에러 발생");
     }
   }
 }

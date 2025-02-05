@@ -1,17 +1,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 
 /// 위치 데이터를 관리하는 추상 클래스
 abstract class LocationRepository {
-  /// Firestore 위치 데이터를 스트림 형태로 반환
   Stream<List<Map<String, dynamic>>> getLocationsStream();
 
-  /// Firestore에 새로운 위치 추가
   Future<void> addLocation(String locationName, String area);
 
-  /// Firestore에서 여러 위치 삭제
   Future<void> deleteLocations(List<String> ids);
 
-  /// Firestore에서 특정 위치의 선택 상태 변경
   Future<void> toggleLocationSelection(String id, bool isSelected);
 }
 
@@ -42,19 +39,21 @@ class FirestoreLocationRepository implements LocationRepository {
         'area': area,
         'isSelected': false,
       });
-    } catch (e) {
-      rethrow; // 예외 재발생
+    } on FirebaseException catch (e) {
+      debugPrint("🔥 Firestore 에러 (addLocation): ${e.message}");
+      throw Exception("Firestore 저장 실패: ${e.message}");
     }
   }
 
   @override
   Future<void> deleteLocations(List<String> ids) async {
     try {
-      for (var id in ids) {
-        await _firestore.collection('locations').doc(id).delete();
-      }
-    } catch (e) {
-      rethrow; // 예외 재발생
+      await Future.wait(
+        ids.map((id) => _firestore.collection('locations').doc(id).delete()),
+      );
+    } on FirebaseException catch (e) {
+      debugPrint("🔥 Firestore 에러 (deleteLocations): ${e.message}");
+      throw Exception("Firestore 삭제 실패: ${e.message}");
     }
   }
 
@@ -64,8 +63,9 @@ class FirestoreLocationRepository implements LocationRepository {
       await _firestore.collection('locations').doc(id).update({
         'isSelected': isSelected,
       });
-    } catch (e) {
-      rethrow; // 예외 재발생
+    } on FirebaseException catch (e) {
+      debugPrint("🔥 Firestore 에러 (toggleLocationSelection): ${e.message}");
+      throw Exception("Firestore 업데이트 실패: ${e.message}");
     }
   }
 }

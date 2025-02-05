@@ -20,13 +20,19 @@ final List<SingleChildWidget> appProviders = [
   Provider<PlateRepository>(create: (_) => FirestorePlateRepository()),
   Provider<UserRepository>(create: (_) => FirestoreUserRepository()),
   Provider<AdjustmentRepository>(create: (_) => FirestoreAdjustmentRepository()),
-  Provider<StatusRepository>(create: (_) => StatusRepository()), // 🔄 FirestoreStatusRepository 추가
-  ChangeNotifierProvider(create: (_) => PageState(pages: defaultPages)),
-  ChangeNotifierProvider(create: (_) => PlateState(FirestorePlateRepository())),
-  ChangeNotifierProvider(create: (_) => AreaState()), // 🔄 AreaState 추가
-  ChangeNotifierProvider(create: (_) => UserState(FirestoreUserRepository())),
+  Provider<StatusRepository>(create: (_) => StatusRepository()),
+  ChangeNotifierProvider(create: (context) => PageState(pages: defaultPages)),
+  ChangeNotifierProvider(
+    create: (context) => PlateState(context.read<PlateRepository>()),
+  ),
+  ChangeNotifierProvider(create: (_) => AreaState()),
+  ChangeNotifierProvider(
+    create: (context) => UserState(context.read<UserRepository>()),
+  ),
   ChangeNotifierProvider(create: (_) => SecondaryAccessState()),
-  ChangeNotifierProvider(create: (_) => LocationState(FirestoreLocationRepository())),
+  ChangeNotifierProvider(
+    create: (context) => LocationState(FirestoreLocationRepository()),
+  ),
   ChangeNotifierProvider(
     create: (context) => AdjustmentState(
       context.read<AdjustmentRepository>(),
@@ -34,9 +40,12 @@ final List<SingleChildWidget> appProviders = [
     ),
   ),
   ChangeNotifierProvider(
-    create: (context) => StatusState(
-      context.read<StatusRepository>(), // 🔄 Firestore에서 데이터 가져오기
-      context.read<AreaState>(), // 🔄 AreaState 주입 (지역 변경 감지)
-    ),
+    create: (context) {
+      final statusRepo = context.read<StatusRepository?>();
+      if (statusRepo == null) {
+        throw Exception("StatusRepository가 등록되지 않았습니다.");
+      }
+      return StatusState(statusRepo, context.read<AreaState>());
+    },
   ),
 ];
