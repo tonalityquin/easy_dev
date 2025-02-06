@@ -119,7 +119,9 @@ class UserState extends ChangeNotifier {
   }
 
   /// Firestore에서 사용자 추가
-  Future<void> addUser(String name, String phone, String email, String role, String area) async {
+  /// Firestore에서 사용자 추가 (UI 피드백 가능)
+  Future<void> addUser(String name, String phone, String email, String role, String area,
+      {required void Function(String) onError}) async {
     try {
       final id = '$phone-$area';
       await _repository.addUser(id, {
@@ -131,16 +133,18 @@ class UserState extends ChangeNotifier {
         'isSelected': false,
       });
     } catch (e) {
-      debugPrint('Error adding user: $e');
+      debugPrint('❌ Firestore 사용자 추가 실패: $e');
+      onError('🚨 사용자 추가 실패: $e'); // ✅ UI 피드백 추가
     }
   }
 
-  /// Firestore에서 사용자 삭제
-  Future<void> deleteUsers(List<String> ids) async {
+  /// Firestore에서 사용자 삭제 (UI 피드백 가능)
+  Future<void> deleteUsers(List<String> ids, {required void Function(String) onError}) async {
     try {
       await _repository.deleteUsers(ids);
     } catch (e) {
-      debugPrint('Error deleting users: $e');
+      debugPrint('❌ Firestore 사용자 삭제 실패: $e');
+      onError('🚨 사용자 삭제 실패: $e'); // ✅ UI 피드백 추가
     }
   }
 

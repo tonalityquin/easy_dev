@@ -16,28 +16,29 @@ class StatusState extends ChangeNotifier {
   final TextEditingController textController = TextEditingController();
 
   List<Map<String, dynamic>> get toggleItems => _toggleItems;
+
   String? get selectedItemId => _selectedItemId;
 
   List<Map<String, dynamic>> get statuses {
-    return _toggleItems
-        .where((status) => status['area'] == _areaState.currentArea)
-        .toList();
+    return _toggleItems.where((status) => status['area'] == _areaState.currentArea).toList();
   }
 
+  /// Firestore에서 상태 데이터 실시간 가져오기 (지역 필터 적용)
+  /// Firestore에서 상태 데이터 실시간 가져오기 (지역 필터 적용)
   /// Firestore에서 상태 데이터 실시간 가져오기 (지역 필터 적용)
   void _fetchStatusToggles() {
     final String? currentArea = _areaState.currentArea;
 
     if (currentArea == null || currentArea.isEmpty) {
-      // 🔄 지역이 설정되지 않은 경우 Firestore 쿼리 실행 안 함
-      _toggleItems = [];
-      notifyListeners();
       return;
     }
 
     _repository.getStatusStream(currentArea).listen((statusList) {
-      _toggleItems = statusList;
-      notifyListeners();
+      if (_toggleItems != statusList) {
+        // ✅ 데이터가 변경된 경우에만 notifyListeners 호출
+        _toggleItems = statusList;
+        notifyListeners();
+      }
     });
   }
 

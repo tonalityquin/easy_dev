@@ -18,8 +18,9 @@ class PageState with ChangeNotifier {
 
   /// 로딩 상태 설정 및 알림
   void setLoading(bool value) {
+    if (_isLoading == value) return; // 🚀 값이 변경되지 않으면 리빌드 방지
     _isLoading = value;
-    notifyListeners(); // 상태 변경 알림
+    notifyListeners();
   }
 
   /// 생성자
@@ -31,11 +32,14 @@ class PageState with ChangeNotifier {
 
   /// 페이지 전환 처리
   /// - [index]: 선택된 페이지의 인덱스
-  void onItemTapped(int index) {
+  void onItemTapped(int index, {void Function(String)? onError}) {
     if (index < 0 || index >= pages.length) {
-      throw ArgumentError('Invalid index: $index'); // 유효하지 않은 인덱스 처리
+      final error = '🚨 Invalid index: $index';
+      debugPrint(error);
+      if (onError != null) onError(error); // 🚀 UI에서 사용자에게 알림 가능
+      return;
     }
-    _selectedIndex = index; // 선택된 페이지 업데이트
-    notifyListeners(); // 상태 변경 알림
+    _selectedIndex = index;
+    notifyListeners();
   }
 }

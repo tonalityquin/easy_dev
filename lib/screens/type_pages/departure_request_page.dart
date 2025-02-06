@@ -54,7 +54,12 @@ class DepartureRequestPage extends StatelessWidget {
                     collection: 'departure_requests',
                     plateNumber: plateNumber,
                     area: area,
-                    userName: userName, // userName 전달
+                    userName: userName,
+                    onError: (errorMessage) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(errorMessage)),
+                      );
+                    },
                   );
                 },
               ),

@@ -22,7 +22,12 @@ class ParkingRequestPage extends StatelessWidget {
           collection: 'parking_requests',
           plateNumber: plateNumber,
           area: area,
-          userName: userName, // userName 전달
+          userName: userName,
+          onError: (errorMessage) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(errorMessage)), // 🚀 Firestore 요청 실패 시 UI 알림 추가
+            );
+          },
         );
   }
 

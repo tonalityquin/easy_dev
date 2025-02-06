@@ -92,16 +92,20 @@ class PageBottomNavigation extends StatelessWidget {
     return Consumer<PageState>(
       builder: (context, state, child) {
         return BottomNavigationBar(
-          currentIndex: state.selectedIndex, // 현재 선택된 페이지 인덱스
-          onTap: state.onItemTapped, // 페이지 전환 처리
+          currentIndex: state.selectedIndex,
+          // 현재 선택된 페이지 인덱스
+          onTap: state.onItemTapped,
+          // 페이지 전환 처리
           items: state.pages.map((pageInfo) {
             return BottomNavigationBarItem(
-              icon: pageInfo.icon, // 페이지 아이콘
+              icon: Icon(pageInfo.iconData), // ✅ IconData를 Icon으로 변경
               label: pageInfo.title, // 페이지 타이틀
             );
           }).toList(),
-          selectedItemColor: Colors.red, // 선택된 아이템 색상
-          unselectedItemColor: Colors.blue, // 선택되지 않은 아이템 색상
+          selectedItemColor: Colors.red,
+          // 선택된 아이템 색상
+          unselectedItemColor: Colors.blue,
+          // 선택되지 않은 아이템 색상
           backgroundColor: Colors.white, // 배경 색상
         );
       },

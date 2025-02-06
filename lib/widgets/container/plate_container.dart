@@ -107,6 +107,11 @@ class PlateContainer extends StatelessWidget {
                   plateNumber: item.plateNumber,
                   area: item.area,
                   userName: userName,
+                  onError: (errorMessage) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(errorMessage)),
+                    );
+                  },
                 );
               },
             ),
