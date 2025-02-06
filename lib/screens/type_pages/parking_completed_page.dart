@@ -52,7 +52,12 @@ class ParkingCompletedPage extends StatelessWidget {
                     collection: 'parking_completed',
                     plateNumber: plateNumber,
                     area: area,
-                    userName: userName, // userName 전달
+                    userName: userName,
+                    onError: (errorMessage) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(errorMessage)),
+                      );
+                    },
                   );
                 },
               ),
@@ -72,7 +77,8 @@ class ParkingCompletedPage extends StatelessWidget {
                 label: selectedPlate == null || !selectedPlate.isSelected ? '번호판 검색' : '정보 수정',
               ),
               BottomNavigationBarItem(
-                icon: Icon(selectedPlate == null || !selectedPlate.isSelected ? Icons.local_parking : Icons.check_circle),
+                icon:
+                    Icon(selectedPlate == null || !selectedPlate.isSelected ? Icons.local_parking : Icons.check_circle),
                 label: selectedPlate == null || !selectedPlate.isSelected ? '주차 구역' : '출차 요청',
               ),
               BottomNavigationBarItem(

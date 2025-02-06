@@ -30,9 +30,7 @@ class UserManagement extends StatelessWidget {
 
   // 선택 여부에 따른 아이콘 배열 반환
   List<IconData> getNavigationIcons(bool hasSelectedUsers) {
-    return hasSelectedUsers
-        ? [Icons.lock, Icons.delete, Icons.edit]
-        : [Icons.add, Icons.help_outline, Icons.settings];
+    return hasSelectedUsers ? [Icons.lock, Icons.delete, Icons.edit] : [Icons.add, Icons.help_outline, Icons.settings];
   }
 
   @override
@@ -48,30 +46,30 @@ class UserManagement extends StatelessWidget {
       body: userState.isLoading
           ? const Center(child: CircularProgressIndicator()) // 로딩 상태 표시
           : filteredUsers.isEmpty
-          ? const Center(child: Text('No users in this area.')) // 사용자가 없는 경우 메시지 표시
-          : ListView.builder(
-        itemCount: filteredUsers.length,
-        itemBuilder: (context, index) {
-          final userContainer = filteredUsers[index];
-          final isSelected = userState.selectedUsers[userContainer['id']] ?? false;
+              ? const Center(child: Text('No users in this area.')) // 사용자가 없는 경우 메시지 표시
+              : ListView.builder(
+                  itemCount: filteredUsers.length,
+                  itemBuilder: (context, index) {
+                    final userContainer = filteredUsers[index];
+                    final isSelected = userState.selectedUsers[userContainer['id']] ?? false;
 
-          return UserCustomBox(
-            topLeftText: userContainer['name']!,
-            // 사용자 이름
-            topRightText: userContainer['email']!,
-            // 이메일
-            midLeftText: userContainer['role']!,
-            // 역할
-            midCenterText: userContainer['phone']!,
-            // 전화번호
-            midRightText: userContainer['area']!,
-            // 지역
-            onTap: () => userState.toggleSelection(userContainer['id']!),
-            // 선택 상태 토글
-            backgroundColor: isSelected ? Colors.green : Colors.white, // 선택 여부에 따른 배경색
-          );
-        },
-      ),
+                    return UserCustomBox(
+                      topLeftText: userContainer['name']!,
+                      // 사용자 이름
+                      topRightText: userContainer['email']!,
+                      // 이메일
+                      midLeftText: userContainer['role']!,
+                      // 역할
+                      midCenterText: userContainer['phone']!,
+                      // 전화번호
+                      midRightText: userContainer['area']!,
+                      // 지역
+                      onTap: () => userState.toggleSelection(userContainer['id']!),
+                      // 선택 상태 토글
+                      backgroundColor: isSelected ? Colors.green : Colors.white, // 선택 여부에 따른 배경색
+                    );
+                  },
+                ),
       bottomNavigationBar: SecondaryMiniNavigation(
         // 선택된 사용자가 있는지에 따라 다른 아이콘 표시
         icons: getNavigationIcons(userState.selectedUsers.containsValue(true)),
@@ -82,11 +80,29 @@ class UserManagement extends StatelessWidget {
           if (index == 0) {
             // 사용자 추가 다이얼로그 표시
             buildAddUserDialog(context, (name, phone, email, role, area) {
-              userState.addUser(name, phone, email, role, area); // 사용자 추가
+              userState.addUser(
+                name,
+                phone,
+                email,
+                role,
+                area,
+                onError: (errorMessage) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(errorMessage)),
+                  );
+                },
+              );
             });
           } else if (index == 1 && selectedIds.isNotEmpty) {
             // 선택된 사용자 삭제
-            userState.deleteUsers(selectedIds);
+            userState.deleteUsers(
+              selectedIds,
+              onError: (errorMessage) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(errorMessage)),
+                );
+              },
+            );
           }
         },
       ),

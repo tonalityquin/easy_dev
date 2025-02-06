@@ -63,7 +63,6 @@ class PlateState extends ChangeNotifier {
       int addAmount = 0;
 
       if (adjustmentType != null) {
-        // 🔥 Firestore에서 adjustmentType(정산 유형) 정보 가져오기
         final adjustmentData = await _repository.getDocument('adjustments', adjustmentType);
         if (adjustmentData != null) {
           basicStandard = adjustmentData['basicStandard'] ?? 0;
@@ -86,10 +85,10 @@ class PlateState extends ChangeNotifier {
         'statusList': statusList ?? [],
         'isSelected': false,
         'selectedBy': selectedBy,
-        'basicStandard': basicStandard, // 🔹 Firestore에서 가져온 값 반영
-        'basicAmount': basicAmount, // 🔹 Firestore에서 가져온 값 반영
-        'addStandard': addStandard, // 🔹 Firestore에서 가져온 값 반영
-        'addAmount': addAmount, // 🔹 Firestore에서 가져온 값 반영
+        'basicStandard': basicStandard,
+        'basicAmount': basicAmount,
+        'addStandard': addStandard,
+        'addAmount': addAmount,
       });
 
       notifyListeners();
@@ -137,25 +136,29 @@ class PlateState extends ChangeNotifier {
     required String plateNumber,
     required String area,
     required String userName,
+    required void Function(String) onError, // ✅ UI 피드백을 위한 onError 추가
   }) async {
     final plateId = '${plateNumber}_$area';
 
     try {
       final plateList = _data[collection];
-      if (plateList == null) throw Exception('Collection not found');
+      if (plateList == null) throw Exception('🚨 Collection not found');
 
       final index = plateList.indexWhere((p) => p.id == plateId);
-      if (index == -1) throw Exception('Plate not found');
+      if (index == -1) throw Exception('🚨 Plate not found');
 
       final plate = plateList[index];
 
       final newIsSelected = !plate.isSelected;
       final newSelectedBy = newIsSelected ? userName : null;
 
-      // ✅ Firestore 업데이트 추가
-      await _repository.updatePlateSelection(collection, plateId, newIsSelected, selectedBy: newSelectedBy);
+      await _repository.updatePlateSelection(
+        collection,
+        plateId,
+        newIsSelected,
+        selectedBy: newSelectedBy,
+      );
 
-      // ✅ Firestore 업데이트 후 로컬 상태도 갱신
       _data[collection] = List.from(plateList)
         ..[index] = PlateModel(
           id: plate.id,
@@ -177,7 +180,8 @@ class PlateState extends ChangeNotifier {
 
       notifyListeners();
     } catch (e) {
-      debugPrint('Error toggling isSelected: $e');
+      debugPrint('❌ Error toggling isSelected: $e');
+      onError('🚨 번호판 선택 상태 변경 실패: $e'); // 🚀 UI 피드백 가능
     }
   }
 
@@ -193,52 +197,60 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  /// 상태 전환 메서드들
-  Future<void> setParkingCompleted(String plateNumber, String area) async {
+  Future<void> updatePlateStatus({
+    required String plateNumber,
+    required String area,
+    required String fromCollection,
+    required String toCollection,
+    required String newType,
+  }) async {
     await transferData(
-      fromCollection: 'parking_requests',
-      toCollection: 'parking_completed',
+      fromCollection: fromCollection,
+      toCollection: toCollection,
       plateNumber: plateNumber,
       area: area,
+      newType: newType,
+    );
+  }
+
+// ✅ 기존 중복된 함수들을 제거하고 `updatePlateStatus()`로 통합
+  Future<void> setParkingCompleted(String plateNumber, String area) async {
+    await updatePlateStatus(
+      plateNumber: plateNumber,
+      area: area,
+      fromCollection: 'parking_requests',
+      toCollection: 'parking_completed',
       newType: '입차 완료',
     );
   }
 
   Future<void> setDepartureRequested(String plateNumber, String area) async {
-    await transferData(
-      fromCollection: 'parking_completed',
-      toCollection: 'departure_requests',
+    await updatePlateStatus(
       plateNumber: plateNumber,
       area: area,
+      fromCollection: 'parking_completed',
+      toCollection: 'departure_requests',
       newType: '출차 요청',
     );
   }
 
   Future<void> setDepartureCompleted(String plateNumber, String area) async {
-    await transferData(
-      fromCollection: 'departure_requests',
-      toCollection: 'departure_completed',
+    await updatePlateStatus(
       plateNumber: plateNumber,
       area: area,
+      fromCollection: 'departure_requests',
+      toCollection: 'departure_completed',
       newType: '출차 완료',
     );
   }
 
   /// 특정 지역에서 사용 가능한 주차 구역 가져오기
   Future<List<String>> getAvailableLocations(String area) async {
-    try {
-      final locations = await _repository.getAvailableLocations(area);
-      debugPrint('Available locations in $area: $locations');
-      return locations;
-    } catch (e) {
-      debugPrint('Error fetching available locations: $e');
-      return [];
-    }
+    return await _repository.getAvailableLocations(area);
   }
 
   /// 지역 상태와 동기화
   void syncWithAreaState(String area) {
-    debugPrint('PlateState: Syncing with area state: $area');
     notifyListeners();
   }
 }

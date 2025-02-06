@@ -29,19 +29,21 @@ class SecondaryAccessState with ChangeNotifier {
   /// - [newStatus]: 새로운 모드
   /// - 상태가 변경되면 알림
   void updateManage(String newStatus) {
-    if (_currentStatus != newStatus) {
-      _currentStatus = newStatus;
-      notifyListeners(); // 상태 변경 알림
+    if (!_availableStatus.contains(newStatus) || _currentStatus == newStatus) {
+      return; // 🚀 변경되지 않은 경우 `notifyListeners()` 호출 안 함
     }
+    _currentStatus = newStatus;
+    notifyListeners();
   }
 
   /// 지역 업데이트
   /// - [newArea]: 새로운 지역
   /// - 상태가 변경되면 알림
-  void updateArea(String newArea) {
-    if (_currentArea != newArea) {
-      _currentArea = newArea;
-      notifyListeners(); // 상태 변경 알림
+  void updateArea(String? newArea) {
+    if (newArea == null || newArea.trim().isEmpty || _currentArea == newArea) {
+      return; // 🚀 변경되지 않은 경우 `notifyListeners()` 호출 안 함
     }
+    _currentArea = newArea;
+    notifyListeners();
   }
 }

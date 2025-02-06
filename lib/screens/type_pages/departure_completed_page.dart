@@ -103,8 +103,14 @@ class DepartureCompletedPage extends StatelessWidget {
                     collection: 'departure_completed',
                     plateNumber: plateNumber,
                     area: area,
-                    userName: userName, // userName 전달
+                    userName: userName,
+                    onError: (errorMessage) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(errorMessage)),
+                      );
+                    },
                   );
+
                 },
               ),
             ],

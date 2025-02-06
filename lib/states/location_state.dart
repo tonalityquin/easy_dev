@@ -38,17 +38,17 @@ class LocationState extends ChangeNotifier {
   /// - Firestore에서 주차 구역 데이터를 구독하고 상태 업데이트
   void _initializeLocations() {
     _repository.getLocationsStream().listen((data) {
-      _updateLocations(data); // 주차 구역 데이터 및 선택 상태 업데이트
-      _updateIcons(); // 아이콘 상태 업데이트
-      _isLoading = false; // 로딩 완료
-      notifyListeners(); // 상태 변경 알림
+      _updateLocations(data);
+      _updateIcons();
+      _isLoading = false;
+      notifyListeners(); // 🚀 한 번만 호출하여 성능 최적화
     }, onError: (error) {
-      // Firestore 스트림 에러 처리
       debugPrint('Error syncing locations: $error');
       _isLoading = false;
       notifyListeners();
     });
   }
+
 
   /// 주차 구역 데이터 및 선택 상태 업데이트
   void _updateLocations(List<Map<String, dynamic>> data) {
@@ -66,32 +66,40 @@ class LocationState extends ChangeNotifier {
   }
 
   /// Firestore에 주차 구역 추가
-  Future<void> addLocation(String locationName, String area) async {
+  Future<void> addLocation(String locationName, String area, {required void Function(String) onError}) async {
     try {
       await _repository.addLocation(locationName, area);
     } catch (e) {
       debugPrint('Error adding location: $e');
+      onError('🚨 주차 구역 추가 실패: $e'); // 🚀 UI에서 사용자에게 알림
     }
   }
 
   /// Firestore에서 주차 구역 삭제
-  Future<void> deleteLocations(List<String> ids) async {
+  Future<void> deleteLocations(List<String> ids, {required void Function(String) onError}) async {
     try {
       await _repository.deleteLocations(ids);
     } catch (e) {
       debugPrint('Error deleting location: $e');
+      onError('🚨 주차 구역 삭제 실패: $e'); // 🚀 UI에서 사용자에게 알림
     }
   }
 
   /// 주차 구역 선택 상태 토글
   Future<void> toggleSelection(String id) async {
-    final currentState = _selectedLocations[id] ?? false;
+    final previousState = _selectedLocations[id] ?? false;
+    _selectedLocations[id] = !previousState;
+    notifyListeners(); // UI 즉시 업데이트
+
     try {
-      await _repository.toggleLocationSelection(id, !currentState);
+      await _repository.toggleLocationSelection(id, !previousState);
     } catch (e) {
       debugPrint('Error toggling selection: $e');
+      _selectedLocations[id] = previousState; // 🚀 Firestore 실패 시 기존 상태 복구
+      notifyListeners();
     }
   }
+
 
   /// 네비게이션 아이콘 상태 업데이트
   void _updateIcons() {
