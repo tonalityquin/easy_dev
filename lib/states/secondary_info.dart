@@ -33,9 +33,9 @@ final List<SecondaryInfo> fieldModePages = [
 
 /// Office Mode에 해당하는 페이지 목록
 final List<SecondaryInfo> officeModePages = [
-  SecondaryInfo('사용자 관리', const UserManagement(), Icon(Icons.people)), // 사용자 관리
+  SecondaryInfo('유저 관리', const UserManagement(), Icon(Icons.people)), // 사용자 관리
   SecondaryInfo('구역 관리', const LocationManagement(), Icon(Icons.location_on)), // 위치 관리
-  SecondaryInfo('정산 관리', const AdjustmentManagement(), Icon(Icons.tune)), // 정산 관리
+  SecondaryInfo('정산 관리', const AdjustmentManagement(), Icon(Icons.adjust)), // 정산 관리
   SecondaryInfo('상태 관리', const StatusManagement(), Icon(Icons.tune)), // 차량 상태 관리
-  SecondaryInfo('Calendar', const Calender(), Icon(Icons.calendar_today)), // 일정 관리
+  SecondaryInfo('투두 달력', const Calendar(), Icon(Icons.calendar_today)), // 일정 관리
 ];
