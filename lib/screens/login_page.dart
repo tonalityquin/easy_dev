@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../states/user_state.dart'; // 사용자 상태 관리
-import '../states/area_state.dart'; // 지역 상태 관리
-import '../repositories/user_repository.dart'; // UserRepository 가져오기
+import '../states/user_state.dart';
+import '../states/area_state.dart';
+import '../repositories/user_repository.dart';
+import '../utils/show_snackbar.dart'; // 🔹 show_snackbar.dart 파일 import
 import 'dart:io';
 
-/// 로그인 페이지
-/// - 사용자 이름과 전화번호로 인증
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -15,17 +14,17 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final TextEditingController _nameController = TextEditingController(); // 이름 입력 컨트롤러
-  final TextEditingController _phoneController = TextEditingController(); // 전화번호 입력 컨트롤러
-  bool _isLoading = false; // 로딩 상태
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _checkLoginState(); // 자동 로그인 확인
+    _checkLoginState();
   }
 
-  /// 자동 로그인 상태 확인
   Future<void> _checkLoginState() async {
     final userState = Provider.of<UserState>(context, listen: false);
     await userState.loadUser();
@@ -37,12 +36,6 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  /// SnackBar로 메시지 출력
-  void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  /// 전화번호 유효성 검사
   String? _validatePhone(String phone) {
     final trimmedPhone = phone.trim();
     final phoneRegex = RegExp(r'^[0-9]{10,11}$');
@@ -51,7 +44,12 @@ class _LoginPageState extends State<LoginPage> {
     return null;
   }
 
-  /// 인터넷 연결 확인
+  String? _validatePassword(String password) {
+    if (password.isEmpty) return '비밀번호를 입력해주세요.';
+    if (password.length < 5) return '비밀번호는 최소 5자 이상이어야 합니다.';
+    return null;
+  }
+
   Future<bool> _isInternetConnected() async {
     try {
       final result = await InternetAddress.lookup('google.com');
@@ -61,18 +59,23 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  /// 사용자 인증 및 로그인 처리
   Future<void> _login() async {
     final name = _nameController.text.trim();
     final phone = _phoneController.text.trim().replaceAll(RegExp(r'\D'), '');
+    final password = _passwordController.text.trim();
 
     final phoneError = _validatePhone(phone);
+    final passwordError = _validatePassword(password);
     if (name.isEmpty) {
-      _showSnackBar('이름을 입력해주세요.');
+      showSnackbar(context, '이름을 입력해주세요.'); // 🔹 함수명 변경
       return;
     }
     if (phoneError != null) {
-      _showSnackBar(phoneError);
+      showSnackbar(context, phoneError); // 🔹 함수명 변경
+      return;
+    }
+    if (passwordError != null) {
+      showSnackbar(context, passwordError); // 🔹 함수명 변경
       return;
     }
 
@@ -81,7 +84,7 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     if (!await _isInternetConnected()) {
-      _showSnackBar('인터넷 연결이 필요합니다.');
+      showSnackbar(context, '인터넷 연결이 필요합니다.'); // 🔹 함수명 변경
       setState(() {
         _isLoading = false;
       });
@@ -91,27 +94,26 @@ class _LoginPageState extends State<LoginPage> {
     try {
       final userRepository = context.read<UserRepository>();
 
-      // 사용자 인증
       final user = await userRepository.getUserByPhone(phone);
-      if (user != null && user['name'] == name) {
+      if (user != null && user['name'] == name && user['password'] == password) {
         final userState = Provider.of<UserState>(context, listen: false);
         final areaState = Provider.of<AreaState>(context, listen: false);
 
-        // 사용자 및 지역 상태 업데이트
         userState.updateUser(
           name: user['name'],
           phone: phone,
           role: user['role'],
+          password: user['password'],
           area: user['area'],
         );
         areaState.updateArea(user['area']);
 
         Navigator.pushReplacementNamed(context, '/home');
       } else {
-        _showSnackBar(user == null ? '해당 전화번호가 등록되지 않았습니다.' : '이름이 올바르지 않습니다.');
+        showSnackbar(context, user == null ? '해당 전화번호가 등록되지 않았습니다.' : '이름 또는 비밀번호가 올바르지 않습니다.'); // 🔹 함수명 변경
       }
     } catch (e) {
-      _showSnackBar('로그인 실패: $e');
+      showSnackbar(context, '로그인 실패: $e'); // 🔹 함수명 변경
     } finally {
       setState(() {
         _isLoading = false;
@@ -130,7 +132,6 @@ class _LoginPageState extends State<LoginPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // 이름 입력 필드
             TextField(
               controller: _nameController,
               decoration: const InputDecoration(
@@ -139,7 +140,6 @@ class _LoginPageState extends State<LoginPage> {
               ),
             ),
             const SizedBox(height: 16),
-            // 전화번호 입력 필드
             TextField(
               controller: _phoneController,
               keyboardType: TextInputType.phone,
@@ -148,8 +148,16 @@ class _LoginPageState extends State<LoginPage> {
                 border: OutlineInputBorder(),
               ),
             ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _passwordController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: "비밀번호",
+                border: OutlineInputBorder(),
+              ),
+            ),
             const SizedBox(height: 24),
-            // 로그인 버튼 또는 로딩 인디케이터
             _isLoading
                 ? const CircularProgressIndicator()
                 : ElevatedButton(

@@ -154,9 +154,9 @@ class _CalendarState extends State<Calendar> {
   Widget _buildKanbanBoard() {
     return Row(
       children: [
-        _buildKanbanColumn("To Do", Colors.red),
-        _buildKanbanColumn("In Progress", Colors.orange),
-        _buildKanbanColumn("Done", Colors.green),
+        _buildKanbanColumn("To Do", Colors.white),
+        _buildKanbanColumn("In Progress", Colors.white),
+        _buildKanbanColumn("Done", Colors.white),
       ],
     );
   }
@@ -171,7 +171,7 @@ class _CalendarState extends State<Calendar> {
             color: color,
             child: Text(
               title,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
             ),
           ),
           Expanded(

@@ -1,23 +1,18 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// 사용자 계정을 입력받아 저장하는 화면
 class UserSetting extends StatefulWidget {
-  /// 저장 콜백 함수
-  final Function(String name, String phone, String email, String role, String access) onSave;
-
-  /// TopNavigation에서 전달받은 지역 값
+  final Function(String name, String phone, String email, String role, String password, String access) onSave;
   final String areaValue;
-
-  /// 역할 목록 (기본값 제공)
   final List<String> roleOptions;
 
   const UserSetting({
-    Key? key,
+    super.key,
     required this.onSave,
     required this.areaValue,
-    this.roleOptions = const ['Dev', 'Officer', 'Field Leader', 'Fielder'],
-  }) : super(key: key);
+    this.roleOptions = const ['Dev', 'Officer', 'Field Leader', 'Fielder', '대표 이사', '본부장', '팀장', '팀원'],
+  });
 
   @override
   State<UserSetting> createState() => _UserAccountsState();
@@ -27,81 +22,86 @@ class _UserAccountsState extends State<UserSetting> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
   final FocusNode _nameFocus = FocusNode();
   final FocusNode _phoneFocus = FocusNode();
   final FocusNode _emailFocus = FocusNode();
 
-  String _selectedRole = 'Fielder'; // 초기 역할 값
-  String? _errorMessage; // 에러 메시지 상태
+  String _selectedRole = 'Fielder';
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _passwordController.text = _generateRandomPassword();
+  }
 
   @override
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
+    _passwordController.dispose();
     _nameFocus.dispose();
     _phoneFocus.dispose();
     _emailFocus.dispose();
     super.dispose();
   }
 
-  /// 입력값 검증 규칙 정의
   final Map<String, String Function(String)> validationRules = {
-    'name': (value) => value.isEmpty ? 'Name cannot be empty' : '',
-    'phone': (value) => RegExp(r'^\d{9,}$').hasMatch(value) ? '' : 'Phone number must be at least 9 digits',
-    'email': (value) => value.isEmpty ? 'Email cannot be empty' : '',
+    '이름': (value) => value.isEmpty ? '이름을 다시 입력하세요' : '',
+    '전화번호': (value) => RegExp(r'^\d{9,}$').hasMatch(value) ? '' : '전화번호를 다시 입력 하세요',
+    '이메일(구글)': (value) => value.isEmpty ? '이메일을 다시 입력 하세요' : '',
   };
 
-  /// 입력값 유효성 검증
   bool _validateInputs() {
     String? errorMessage;
-    if ((errorMessage = validationRules['name']!(_nameController.text)).isNotEmpty) {
+    if ((errorMessage = validationRules['이름']!(_nameController.text)).isNotEmpty) {
       _setErrorMessage(errorMessage);
       return false;
     }
-    if ((errorMessage = validationRules['phone']!(_phoneController.text)).isNotEmpty) {
+    if ((errorMessage = validationRules['전화번호']!(_phoneController.text)).isNotEmpty) {
       _setErrorMessage(errorMessage);
       return false;
     }
-    if ((errorMessage = validationRules['email']!(_emailController.text)).isNotEmpty) {
+    if ((errorMessage = validationRules['이메일(구글)']!(_emailController.text)).isNotEmpty) {
       _setErrorMessage(errorMessage);
       return false;
     }
-    _setErrorMessage(null); // 에러 메시지 초기화
+    _setErrorMessage(null);
     return true;
   }
 
-  /// 에러 메시지 설정
   void _setErrorMessage(String? message) {
     setState(() {
       _errorMessage = message;
     });
   }
 
+  String _generateRandomPassword() {
+    final random = Random();
+    return (10000 + random.nextInt(90000)).toString();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('User Accounts'),
-      ),
+      appBar: AppBar(title: const Text('계정 생성')),
       body: ListView(
-        // UI 개선: ListView로 변경하여 스크롤 가능하도록 수정
         padding: const EdgeInsets.all(16.0),
         children: [
-          // 이름 입력 필드
           TextField(
             controller: _nameController,
             focusNode: _nameFocus,
             textInputAction: TextInputAction.next,
             onSubmitted: (_) => FocusScope.of(context).requestFocus(_phoneFocus),
             decoration: InputDecoration(
-              labelText: 'Name',
+              labelText: '이름',
               border: const OutlineInputBorder(),
-              errorText: _errorMessage == 'Name cannot be empty' ? _errorMessage : null,
+              errorText: _errorMessage == '이름을 다시 입력하세요' ? _errorMessage : null,
             ),
           ),
           const SizedBox(height: 16),
-          // 전화번호 입력 필드
           TextField(
             controller: _phoneController,
             focusNode: _phoneFocus,
@@ -110,13 +110,12 @@ class _UserAccountsState extends State<UserSetting> {
             keyboardType: TextInputType.phone,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             decoration: InputDecoration(
-              labelText: 'Phone',
+              labelText: '전화번호',
               border: const OutlineInputBorder(),
-              errorText: _errorMessage == 'Phone number must be at least 9 digits' ? _errorMessage : null,
+              errorText: _errorMessage == '전화번호를 다시 입력하세요' ? _errorMessage : null,
             ),
           ),
           const SizedBox(height: 16),
-          // 이메일 입력 필드 및 접미사
           Row(
             children: [
               Expanded(
@@ -126,9 +125,9 @@ class _UserAccountsState extends State<UserSetting> {
                   focusNode: _emailFocus,
                   keyboardType: TextInputType.text,
                   decoration: InputDecoration(
-                    labelText: 'Email Prefix',
+                    labelText: '이메일(구글)',
                     border: const OutlineInputBorder(),
-                    errorText: _errorMessage == 'Email cannot be empty' ? _errorMessage : null,
+                    errorText: _errorMessage == '이메일(구글)' ? _errorMessage : null,
                   ),
                 ),
               ),
@@ -148,11 +147,10 @@ class _UserAccountsState extends State<UserSetting> {
             ],
           ),
           const SizedBox(height: 16),
-          // 역할 선택 드롭다운
           DropdownButtonFormField<String>(
             value: _selectedRole,
             decoration: const InputDecoration(
-              labelText: 'Role',
+              labelText: '직책',
               border: OutlineInputBorder(),
             ),
             items: widget.roleOptions
@@ -168,12 +166,19 @@ class _UserAccountsState extends State<UserSetting> {
             },
           ),
           const SizedBox(height: 16),
-          // 지역 표시
+          TextField(
+            controller: _passwordController,
+            readOnly: true,
+            decoration: const InputDecoration(
+              labelText: '비밀번호',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 16),
           Text(
-            'Area: ${widget.areaValue}',
+            '현재 지역: ${widget.areaValue}',
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
-          // 에러 메시지 표시
           if (_errorMessage != null)
             Padding(
               padding: const EdgeInsets.only(top: 16.0),
@@ -183,14 +188,13 @@ class _UserAccountsState extends State<UserSetting> {
               ),
             ),
           const SizedBox(height: 16),
-          // 버튼 (취소 및 저장)
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               ElevatedButton(
                 onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                child: const Text('Cancel'),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.white),
+                child: const Text('취소'),
               ),
               ElevatedButton(
                 onPressed: () {
@@ -201,13 +205,14 @@ class _UserAccountsState extends State<UserSetting> {
                       _phoneController.text,
                       fullEmail,
                       _selectedRole,
+                      _passwordController.text,
                       widget.areaValue,
                     );
                     Navigator.pop(context);
                   }
                 },
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                child: const Text('Save'),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.white),
+                child: const Text('생성'),
               ),
             ],
           ),
