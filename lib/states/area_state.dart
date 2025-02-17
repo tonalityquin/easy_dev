@@ -6,7 +6,7 @@ class AreaState with ChangeNotifier {
   String _currentArea = ''; // 현재 선택된 지역
 
   // 사용 가능한 지역 목록
-  final List<String> _availableAreas = ['Seoul', 'Incheon', 'YangJoo'];
+  final List<String> _availableAreas = ['dev', 'test', 'release', '본사', '가로수길'];
 
   // 현재 지역 반환
   String get currentArea => _currentArea;
@@ -30,7 +30,7 @@ class AreaState with ChangeNotifier {
         _currentArea = _availableAreas.first; // 기본값 설정
       }
       _notifyStateChange(); // 중복 제거
-      debugPrint('AreaState synced/initialized: currentArea=$_currentArea');
+      debugPrint('지역 동기화/초기화: 선택된 지역=$_currentArea');
     }
   }
 
@@ -40,7 +40,7 @@ class AreaState with ChangeNotifier {
     if (_availableAreas.contains(newArea) && _currentArea != newArea) {
       _currentArea = newArea;
       _notifyStateChange(); // 중복 제거
-      debugPrint('AreaState updated: currentArea=$_currentArea');
+      debugPrint('지역 업데이트: 선택된 지역=$_currentArea');
     } else if (!_availableAreas.contains(newArea)) {
       debugPrint('잘못된 지역: $newArea');
     }
