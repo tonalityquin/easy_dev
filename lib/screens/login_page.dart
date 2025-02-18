@@ -19,6 +19,7 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
 
+  // 🔹 (1) initState - 초기 로그인 상태 확인
   @override
   void initState() {
     super.initState();
@@ -36,6 +37,7 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  // 🔹 (2) 입력값 유효성 검사
   String? _validatePhone(String phone) {
     final trimmedPhone = phone.trim();
     final phoneRegex = RegExp(r'^[0-9]{10,11}$');
@@ -50,6 +52,7 @@ class _LoginPageState extends State<LoginPage> {
     return null;
   }
 
+  // 🔹 (3) 인터넷 연결 확인
   Future<bool> _isInternetConnected() async {
     try {
       final result = await InternetAddress.lookup('google.com');
@@ -59,6 +62,7 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  // 🔹 (4) 로그인 처리
   Future<void> _login() async {
     final name = _nameController.text.trim();
     final phone = _phoneController.text.trim().replaceAll(RegExp(r'\D'), '');
@@ -66,6 +70,7 @@ class _LoginPageState extends State<LoginPage> {
 
     final phoneError = _validatePhone(phone);
     final passwordError = _validatePassword(password);
+
     if (name.isEmpty) {
       showSnackbar(context, '이름을 입력해주세요.');
       return;
@@ -121,6 +126,7 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  // 🔹 (5) UI 렌더링
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -164,9 +170,9 @@ class _LoginPageState extends State<LoginPage> {
             _isLoading
                 ? const CircularProgressIndicator()
                 : ElevatedButton(
-                    onPressed: _login,
-                    child: const Text("로그인"),
-                  ),
+              onPressed: _login,
+              child: const Text("로그인"),
+            ),
           ],
         ),
       ),
