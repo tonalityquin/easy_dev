@@ -22,12 +22,17 @@ class DashBoard extends StatelessWidget {
     }
   }
 
-  /// 🔹 로그아웃: isWorking 값을 유지한 채 사용자 데이터 삭제 후 앱 종료
+  /// 🔹 로그아웃: isWorking 값을 false로 변경 후 사용자 데이터 삭제
   Future<void> _logout(BuildContext context) async {
     try {
       final userState = Provider.of<UserState>(context, listen: false);
 
-      await userState.clearUser(); // 🔹 사용자 데이터 삭제 (isWorking 값은 변경하지 않음)
+      await userState.toggleWorkStatus(); // 🔹 isWorking을 false로 설정
+
+      // 🔹 Firestore 업데이트 확인을 위해 1초 대기
+      await Future.delayed(const Duration(seconds: 1));
+
+      await userState.clearUser(); // 🔹 사용자 데이터 삭제
       exit(0); // 🔹 앱 종료
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
