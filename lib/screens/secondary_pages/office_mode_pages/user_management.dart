@@ -10,7 +10,8 @@ import '../../../states/area_state.dart';
 class UserManagement extends StatelessWidget {
   const UserManagement({super.key});
 
-  void buildAddUserDialog(BuildContext context, void Function(String, String, String, String, String, String) onSave) {
+  void buildAddUserDialog(
+      BuildContext context, void Function(String, String, String, String, String, String, bool) onSave) {
     final currentArea = Provider.of<AreaState>(context, listen: false).currentArea;
 
     showDialog(
@@ -32,7 +33,7 @@ class UserManagement extends StatelessWidget {
     final selectedIds = userState.selectedUsers.keys.where((id) => userState.selectedUsers[id] == true).toList();
 
     if (index == 0) {
-      buildAddUserDialog(context, (name, phone, email, role, area, password) {
+      buildAddUserDialog(context, (name, phone, email, role, area, password, isWorking) {
         userState.addUser(
           name,
           phone,
@@ -40,6 +41,7 @@ class UserManagement extends StatelessWidget {
           role,
           area,
           password,
+          isWorking,
           onError: (errorMessage) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(errorMessage)),

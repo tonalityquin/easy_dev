@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 class UserSetting extends StatefulWidget {
-  final Function(String name, String phone, String email, String role, String password, String access) onSave;
+  final Function(String name, String phone, String email, String role, String password, String access, bool isWorking) onSave;
   final String areaValue;
   final List<String> roleOptions;
 
@@ -207,6 +207,7 @@ class _UserAccountsState extends State<UserSetting> {
                       _selectedRole,
                       _passwordController.text,
                       widget.areaValue,
+                      false,
                     );
                     Navigator.pop(context);
                   }
