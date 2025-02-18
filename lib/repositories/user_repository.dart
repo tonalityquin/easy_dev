@@ -10,11 +10,11 @@ abstract class UserRepository {
 
   Future<void> addUser(String id, Map<String, dynamic> userData);
 
+  Future<void> updateWorkStatus(String phone, String area, bool isWorking); // 🔹 area 추가
+
   Future<void> toggleUserSelection(String id, bool isSelected);
 
   Future<void> deleteUsers(List<String> ids);
-
-  Future<void> updateWorkStatus(String phone, String area, bool isWorking); // 🔹 area 추가
 }
 
 class FirestoreUserRepository implements UserRepository {
@@ -24,6 +24,7 @@ class FirestoreUserRepository implements UserRepository {
     return _firestore.collection('user_accounts');
   }
 
+  // 🔹 (1) 사용자 리스트 조회 (스트림)
   @override
   Stream<List<Map<String, dynamic>>> getUsersStream() {
     return _getCollectionRef().snapshots().map((snapshot) {
@@ -44,6 +45,8 @@ class FirestoreUserRepository implements UserRepository {
     });
   }
 
+  // 🔹 (2) 특정 사용자의 상태를 실시간으로 조회
+  @override
   Stream<Map<String, dynamic>?> listenToUserStatus(String phone) {
     return _getCollectionRef()
         .doc(phone)
@@ -51,11 +54,12 @@ class FirestoreUserRepository implements UserRepository {
         .map((doc) => doc.exists ? doc.data() : null);
   }
 
-
+  // 🔹 (3) 특정 사용자의 데이터를 조회
   @override
   Future<Map<String, dynamic>?> getUserByPhone(String phone) async {
     try {
-      final querySnapshot = await _getCollectionRef().where('phone', isEqualTo: phone).get();
+      final querySnapshot =
+      await _getCollectionRef().where('phone', isEqualTo: phone).get();
 
       if (querySnapshot.docs.isNotEmpty) {
         final doc = querySnapshot.docs.first;
@@ -71,19 +75,7 @@ class FirestoreUserRepository implements UserRepository {
     }
   }
 
-  @override
-  Future<void> updateWorkStatus(String phone, String area, bool isWorking) async {
-    final userId = '$phone-$area'; // 🔹 Firestore 문서 ID에 area 추가
-
-    try {
-      await _getCollectionRef().doc(userId).update({'isWorking': isWorking});
-    } on FirebaseException catch (e) {
-      debugPrint("Firestore 에러 (updateWorkStatus): ${e.message}");
-      throw Exception("Firestore 출근 상태 업데이트 실패: ${e.message}");
-    }
-  }
-
-
+  // 🔹 (4) 사용자 추가
   @override
   Future<void> addUser(String id, Map<String, dynamic> userData) async {
     try {
@@ -97,6 +89,20 @@ class FirestoreUserRepository implements UserRepository {
     }
   }
 
+  // 🔹 (5) 출근 상태 업데이트
+  @override
+  Future<void> updateWorkStatus(String phone, String area, bool isWorking) async {
+    final userId = '$phone-$area'; // 🔹 Firestore 문서 ID에 area 추가
+
+    try {
+      await _getCollectionRef().doc(userId).update({'isWorking': isWorking});
+    } on FirebaseException catch (e) {
+      debugPrint("Firestore 에러 (updateWorkStatus): ${e.message}");
+      throw Exception("Firestore 출근 상태 업데이트 실패: ${e.message}");
+    }
+  }
+
+  // 🔹 (6) 사용자 선택 상태 토글
   @override
   Future<void> toggleUserSelection(String id, bool isSelected) async {
     try {
@@ -112,6 +118,7 @@ class FirestoreUserRepository implements UserRepository {
     }
   }
 
+  // 🔹 (7) 여러 사용자 삭제
   @override
   Future<void> deleteUsers(List<String> ids) async {
     try {

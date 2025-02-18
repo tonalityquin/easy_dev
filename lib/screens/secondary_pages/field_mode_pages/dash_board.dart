@@ -8,7 +8,7 @@ import '../../../states/user_state.dart'; // 사용자 상태 가져오기
 class DashBoard extends StatelessWidget {
   const DashBoard({super.key});
 
-  /// 🔹 퇴근 버튼: Firestore에서 isWorking = false 설정 후 앱 종료
+  /// 🔹 출근 / 퇴근 처리
   Future<void> _handleWorkStatus(UserState userState) async {
     if (userState.isWorking) {
       await userState.toggleWorkStatus(); // Firestore에서 출근 상태 해제 (isWorking = false)
@@ -22,7 +22,7 @@ class DashBoard extends StatelessWidget {
     }
   }
 
-  /// 🔹 로그아웃: isWorking 값을 false로 변경 후 사용자 데이터 삭제
+  /// 🔹 로그아웃 처리
   Future<void> _logout(BuildContext context) async {
     try {
       final userState = Provider.of<UserState>(context, listen: false);
@@ -41,19 +41,13 @@ class DashBoard extends StatelessWidget {
     }
   }
 
+  /// 🔹 UI 렌더링
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: const SecondaryRoleNavigation(), // 상단 내비게이션
       body: Consumer<UserState>(
         builder: (context, userState, _) {
-          // 로그인한 사용자 정보 가져오기
-          final name = userState.name;
-          final phone = userState.phone;
-          final role = userState.role;
-          final area = userState.area;
-          final isWorking = userState.isWorking; // 출근 상태 가져오기
-
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -63,19 +57,19 @@ class DashBoard extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 10),
-                Text('이름: $name'),
-                Text('전화번호: $phone'),
-                Text('역할: $role'),
-                Text('지역: $area'),
+                Text('이름: ${userState.name}'),
+                Text('전화번호: ${userState.phone}'),
+                Text('역할: ${userState.role}'),
+                Text('지역: ${userState.area}'),
                 const SizedBox(height: 20),
 
                 // 🔹 출근 / 퇴근 버튼
                 ElevatedButton(
                   onPressed: () => _handleWorkStatus(userState),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: isWorking ? Colors.white : Colors.white,
+                    backgroundColor: userState.isWorking ? Colors.white : Colors.white,
                   ),
-                  child: Text(isWorking ? '퇴근' : '출근'),
+                  child: Text(userState.isWorking ? '퇴근' : '출근'),
                 ),
 
                 const SizedBox(height: 20),
