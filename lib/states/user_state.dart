@@ -16,6 +16,7 @@ class UserState extends ChangeNotifier {
   String _area = '';
   String _password = '';
   bool _isLoggedIn = false;
+  bool _isWorking = false;
 
   List<Map<String, String>> _users = [];
   Map<String, bool> _selectedUsers = {};
@@ -33,6 +34,8 @@ class UserState extends ChangeNotifier {
 
   bool get isLoggedIn => _isLoggedIn;
 
+  bool get isWorking => _isWorking;
+
   List<Map<String, String>> get users => _users;
 
   Map<String, bool> get selectedUsers => _selectedUsers;
@@ -49,6 +52,15 @@ class UserState extends ChangeNotifier {
       _role = prefs.getString('role') ?? '';
       _area = prefs.getString('area') ?? '';
       _password = prefs.getString('password') ?? '';
+
+      // 🔹 Firestore에서 출근 상태를 강제로 가져옴
+      final userData = await _repository.getUserByPhone(_phone);
+      if (userData != null) {
+        _isWorking = userData['isWorking'] ?? false; // 🔹 Firestore 값 반영
+        await prefs.setBool('isWorking', _isWorking); // 🔹 SharedPreferences 동기화
+      }
+
+      notifyListeners(); // 🔹 UI 즉시 업데이트
     } else {
       _clearState();
     }
@@ -79,6 +91,21 @@ class UserState extends ChangeNotifier {
     });
   }
 
+  Future<void> toggleWorkStatus() async {
+    _isWorking = !_isWorking;
+    await _repository.updateWorkStatus(_phone, _area, _isWorking); // 🔹 Firestore 업데이트
+    await _saveToPreferences(); // 🔹 로컬 저장
+
+    // 🔹 Firestore에서 최신 데이터를 다시 불러옴 (다른 기기에서도 일관성 유지)
+    final userData = await _repository.getUserByPhone(_phone);
+    if (userData != null) {
+      _isWorking = userData['isWorking'] ?? false;
+      await _saveToPreferences();
+    }
+
+    notifyListeners();
+  }
+
   Future<void> _saveToPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('name', _name);
@@ -87,6 +114,7 @@ class UserState extends ChangeNotifier {
     await prefs.setString('area', _area);
     await prefs.setString('password', _password);
     await prefs.setBool('isLoggedIn', _isLoggedIn);
+    await prefs.setBool('isWorking', _isWorking);
   }
 
   Future<void> clearUser() async {
@@ -114,6 +142,15 @@ class UserState extends ChangeNotifier {
     await _saveToPreferences();
   }
 
+  void listenToUserStatus() {
+    _repository.listenToUserStatus(_phone).listen((userData) {
+      if (userData != null) {
+        _isWorking = userData['isWorking'] ?? false;
+        notifyListeners();
+      }
+    });
+  }
+
   void _clearState() {
     _name = '';
     _phone = '';
@@ -121,9 +158,11 @@ class UserState extends ChangeNotifier {
     _area = '';
     _password = '';
     _isLoggedIn = false;
+    _isWorking = false;
   }
 
-  Future<void> addUser(String name, String phone, String email, String role, String password, String area,
+  Future<void> addUser(
+      String name, String phone, String email, String role, String password, String area, bool isWorking,
       {required void Function(String) onError}) async {
     try {
       final id = '$phone-$area';
@@ -135,6 +174,7 @@ class UserState extends ChangeNotifier {
         'password': password,
         'area': area,
         'isSelected': false,
+        'isWorking': false,
       });
     } catch (e) {
       debugPrint('사용자 추가 실패: $e');

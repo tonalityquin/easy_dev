@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 abstract class UserRepository {
   Stream<List<Map<String, dynamic>>> getUsersStream();
 
+  Stream<Map<String, dynamic>?> listenToUserStatus(String phone);
+
   Future<Map<String, dynamic>?> getUserByPhone(String phone);
 
   Future<void> addUser(String id, Map<String, dynamic> userData);
@@ -11,6 +13,8 @@ abstract class UserRepository {
   Future<void> toggleUserSelection(String id, bool isSelected);
 
   Future<void> deleteUsers(List<String> ids);
+
+  Future<void> updateWorkStatus(String phone, String area, bool isWorking); // 🔹 area 추가
 }
 
 class FirestoreUserRepository implements UserRepository {
@@ -34,10 +38,19 @@ class FirestoreUserRepository implements UserRepository {
           'password': data['password']?.toString() ?? '',
           'area': data['area']?.toString() ?? '',
           'isSelected': (data['isSelected'] ?? false) == true,
+          'isWorking': data['isWorking'] ?? false, // 🔹 Firestore에서 출근 상태 추가
         };
       }).toList();
     });
   }
+
+  Stream<Map<String, dynamic>?> listenToUserStatus(String phone) {
+    return _getCollectionRef()
+        .doc(phone)
+        .snapshots()
+        .map((doc) => doc.exists ? doc.data() : null);
+  }
+
 
   @override
   Future<Map<String, dynamic>?> getUserByPhone(String phone) async {
@@ -57,6 +70,19 @@ class FirestoreUserRepository implements UserRepository {
       throw Exception("예상치 못한 에러 발생");
     }
   }
+
+  @override
+  Future<void> updateWorkStatus(String phone, String area, bool isWorking) async {
+    final userId = '$phone-$area'; // 🔹 Firestore 문서 ID에 area 추가
+
+    try {
+      await _getCollectionRef().doc(userId).update({'isWorking': isWorking});
+    } on FirebaseException catch (e) {
+      debugPrint("Firestore 에러 (updateWorkStatus): ${e.message}");
+      throw Exception("Firestore 출근 상태 업데이트 실패: ${e.message}");
+    }
+  }
+
 
   @override
   Future<void> addUser(String id, Map<String, dynamic> userData) async {

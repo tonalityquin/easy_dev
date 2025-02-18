@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../states/user_state.dart';
 import '../states/area_state.dart';
 import '../repositories/user_repository.dart';
-import '../utils/show_snackbar.dart'; // 🔹 show_snackbar.dart 파일 import
+import '../utils/show_snackbar.dart';
 import 'dart:io';
 
 class LoginPage extends StatefulWidget {
@@ -67,15 +67,15 @@ class _LoginPageState extends State<LoginPage> {
     final phoneError = _validatePhone(phone);
     final passwordError = _validatePassword(password);
     if (name.isEmpty) {
-      showSnackbar(context, '이름을 입력해주세요.'); // 🔹 함수명 변경
+      showSnackbar(context, '이름을 입력해주세요.');
       return;
     }
     if (phoneError != null) {
-      showSnackbar(context, phoneError); // 🔹 함수명 변경
+      showSnackbar(context, phoneError);
       return;
     }
     if (passwordError != null) {
-      showSnackbar(context, passwordError); // 🔹 함수명 변경
+      showSnackbar(context, passwordError);
       return;
     }
 
@@ -84,7 +84,7 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     if (!await _isInternetConnected()) {
-      showSnackbar(context, '인터넷 연결이 필요합니다.'); // 🔹 함수명 변경
+      showSnackbar(context, '인터넷 연결이 필요합니다.');
       setState(() {
         _isLoading = false;
       });
@@ -110,10 +110,10 @@ class _LoginPageState extends State<LoginPage> {
 
         Navigator.pushReplacementNamed(context, '/home');
       } else {
-        showSnackbar(context, user == null ? '해당 전화번호가 등록되지 않았습니다.' : '이름 또는 비밀번호가 올바르지 않습니다.'); // 🔹 함수명 변경
+        showSnackbar(context, user == null ? '해당 전화번호가 등록되지 않았습니다.' : '이름 또는 비밀번호가 올바르지 않습니다.');
       }
     } catch (e) {
-      showSnackbar(context, '로그인 실패: $e'); // 🔹 함수명 변경
+      showSnackbar(context, '로그인 실패: $e');
     } finally {
       setState(() {
         _isLoading = false;
@@ -124,14 +124,17 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("로그인 페이지"),
-      ),
+      appBar: AppBar(),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            SizedBox(
+              height: 120,
+              child: Image.asset('assets/images/belivus_logo.PNG'),
+            ),
+            const SizedBox(height: 24),
             TextField(
               controller: _nameController,
               decoration: const InputDecoration(
@@ -153,7 +156,7 @@ class _LoginPageState extends State<LoginPage> {
               controller: _passwordController,
               obscureText: true,
               decoration: const InputDecoration(
-                labelText: "비밀번호",
+                labelText: "비밀번호(5자리)",
                 border: OutlineInputBorder(),
               ),
             ),

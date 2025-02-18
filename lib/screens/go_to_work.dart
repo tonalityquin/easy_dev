@@ -4,8 +4,8 @@ import '../../../widgets/navigation/secondary_role_navigation.dart'; // 상단 �
 import '../../../widgets/navigation/secondary_mini_navigation.dart'; // 하단 내비게이션 바
 import '../../../states/user_state.dart'; // 사용자 상태 가져오기
 
-class DashBoard extends StatelessWidget {
-  const DashBoard({super.key});
+class GoToWork extends StatelessWidget {
+  const GoToWork({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -20,13 +20,20 @@ class DashBoard extends StatelessWidget {
           final area = userState.area;
           final isWorking = userState.isWorking; // 출근 상태 가져오기
 
+          // ✅ 출근 상태일 경우 즉시 TypePage로 이동
+          if (isWorking) {
+            Future.microtask(() {
+              Navigator.pushReplacementNamed(context, '/type_page');
+            });
+          }
+
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
                   '사용자 정보',
-                  style: Theme.of(context).textTheme.titleLarge, // 수정된 부분
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 10),
                 Text('이름: $name'),
@@ -37,6 +44,9 @@ class DashBoard extends StatelessWidget {
                 ElevatedButton(
                   onPressed: () {
                     userState.toggleWorkStatus(); // 출근/퇴근 토글
+                    if (userState.isWorking) {
+                      Navigator.pushReplacementNamed(context, '/type_page'); // 출근 시 TypePage로 이동
+                    }
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: isWorking ? Colors.grey : Colors.white, // 출근 상태에 따라 색상 변경
