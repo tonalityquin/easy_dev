@@ -34,18 +34,24 @@ final List<SingleChildWidget> appProviders = [
     create: (context) => LocationState(FirestoreLocationRepository()),
   ),
   ChangeNotifierProvider(
-    create: (context) => AdjustmentState(
-      context.read<AdjustmentRepository>(),
-      context.read<AreaState>(),
-    ),
+    create: (context) {
+      final areaState = context.read<AreaState>(); // ✅ 중복 호출 방지
+      return AdjustmentState(
+        context.read<AdjustmentRepository>(),
+        areaState,
+      );
+    },
   ),
   ChangeNotifierProvider(
     create: (context) {
       final statusRepo = context.read<StatusRepository?>();
+      final areaState = context.read<AreaState>(); // ✅ 중복 호출 방지
+
       if (statusRepo == null) {
-        throw Exception("StatusRepository가 등록되지 않았습니다.");
+        // 🚀 예외 발생 대신 기본 리포지토리를 제공
+        return StatusState(StatusRepository(), areaState);
       }
-      return StatusState(statusRepo, context.read<AreaState>());
+      return StatusState(statusRepo, areaState);
     },
   ),
 ];

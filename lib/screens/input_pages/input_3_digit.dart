@@ -14,6 +14,10 @@ import '../../states/plate_state.dart';
 import '../../states/area_state.dart';
 import '../../repositories/plate_repository.dart';
 
+/// 사진 촬영
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+
 /// **Input3Digit**
 /// 번호판 및 주차 구역 입력을 처리하는 화면
 class Input3Digit extends StatefulWidget {
@@ -79,6 +83,27 @@ class _Input3DigitState extends State<Input3Digit> {
     setState(() {
       statuses = fetchedStatuses;
       isSelected = List.generate(statuses.length, (index) => false);
+    });
+  }
+
+  /// 사진 촬영 관련
+  List<File> _selectedImages = []; // 🔥 여러 장 저장 가능하도록 리스트로 변경
+
+  Future<void> _captureImage() async {
+    final picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.camera);
+
+    if (image == null) return; // 사용자가 촬영을 취소한 경우
+
+    setState(() {
+      _selectedImages.add(File(image.path)); // 🔥 리스트에 추가하여 여러 장 저장
+    });
+  }
+
+  /// 사진 삭제 기능 추가
+  void _removeImage(int index) {
+    setState(() {
+      _selectedImages.removeAt(index);
     });
   }
 
@@ -190,11 +215,11 @@ class _Input3DigitState extends State<Input3Digit> {
       isLoading = true;
     });
 
-    // 🔹 `isSelected`를 반영하여 선택된 상태 목록을 업데이트
+    // 🔹 isSelected를 반영하여 선택된 상태 목록을 업데이트
     selectedStatuses = [];
     for (int i = 0; i < isSelected.length; i++) {
       if (isSelected[i]) {
-        selectedStatuses.add(statuses[i]); // 🔹 `statuses`가 선언되었으므로 오류 해결
+        selectedStatuses.add(statuses[i]); // 🔹 statuses가 선언되었으므로 오류 해결
       }
     }
 
@@ -358,6 +383,51 @@ class _Input3DigitState extends State<Input3Digit> {
                   ),
                   const SizedBox(height: 32.0),
                   const Text(
+                    '촬영 사진',
+                    style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8.0),
+                  Container(
+                    height: 100, // 🔥 높이 조정 (여러 장을 보기 좋게 배치)
+                    child: _selectedImages.isEmpty
+                        ? const Center(child: Text('촬영된 사진 없음'))
+                        : ListView.builder(
+                            scrollDirection: Axis.horizontal, // 🔥 가로 스크롤 가능하도록 설정
+                            itemCount: _selectedImages.length,
+                            itemBuilder: (context, index) {
+                              return Stack(
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.all(4.0),
+                                    child: Image.file(
+                                      _selectedImages[index],
+                                      width: 100, // 🔥 사진 크기 조정
+                                      height: 100,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                  Positioned(
+                                    top: 0,
+                                    right: 0,
+                                    child: GestureDetector(
+                                      onTap: () => _removeImage(index), // 🔥 삭제 기능 추가
+                                      child: Container(
+                                        padding: const EdgeInsets.all(4.0),
+                                        decoration: BoxDecoration(
+                                          color: Colors.red,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(Icons.close, size: 16, color: Colors.white),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                  ),
+                  const SizedBox(height: 32.0),
+                  const Text(
                     '정산 유형',
                     style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
                   ),
@@ -452,16 +522,55 @@ class _Input3DigitState extends State<Input3Digit> {
         actionButton: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ElevatedButton(
-              onPressed: isLocationSelected ? _clearLocation : _selectParkingLocation,
-              style: commonButtonStyle,
-              child: Text(isLocationSelected ? '구역 초기화' : '주차 구역 선택'),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _captureImage,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey[300],
+                      foregroundColor: Colors.black, // 🔥 글자 색상 명확하게 설정
+                      padding: const EdgeInsets.symmetric(vertical: 15.0), // 🔥 버튼 크기 조절
+                    ),
+                    child: Text(
+                      '사진 촬영',
+                      textAlign: TextAlign.center, // 🔥 텍스트 중앙 정렬
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: isLocationSelected ? _clearLocation : _selectParkingLocation,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey[300],
+                      foregroundColor: Colors.black, // 🔥 글자 색상 명확하게 설정
+                      padding: const EdgeInsets.symmetric(vertical: 15.0),
+                    ),
+                    child: Text(
+                      isLocationSelected ? '구역 초기화' : '주차 구역 선택',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 15),
+            const SizedBox(height: 15), // 버튼 간 간격 추가
             ElevatedButton(
               onPressed: isLoading ? null : _handleAction,
               style: commonButtonStyle,
-              child: Text(isLocationSelected ? '입차 완료' : '입차 요청'),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  isLocationSelected ? '입차 완료' : '입차 요청',
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 16),
+                ),
+              ),
             ),
           ],
         ),

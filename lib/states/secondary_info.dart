@@ -8,6 +8,8 @@ import '../screens/secondary_pages/office_mode_pages/calender.dart'; // 일정 �
 import '../screens/secondary_pages/office_mode_pages/location_management.dart'; // 위치 관리 페이지
 import '../screens/secondary_pages/office_mode_pages/status_management.dart';
 import '../screens/secondary_pages/office_mode_pages/user_management.dart'; // 사용자 관리 페이지
+import '../screens/secondary_pages/statistics_mode_pages/calendar_type_statistics.dart';
+import '../screens/secondary_pages/statistics_mode_pages/graph_type_statistics.dart';
 
 /// 페이지 정보를 나타내는 클래스
 /// - 각 페이지의 타이틀, 위젯, 아이콘 정보를 포함
@@ -38,4 +40,10 @@ final List<SecondaryInfo> officeModePages = [
   SecondaryInfo('정산 관리', const AdjustmentManagement(), Icon(Icons.adjust)), // 정산 관리
   SecondaryInfo('상태 관리', const StatusManagement(), Icon(Icons.tune)), // 차량 상태 관리
   SecondaryInfo('투두 달력', const Calendar(), Icon(Icons.calendar_today)), // 일정 관리
+];
+
+/// Office Mode에 해당하는 페이지 목록
+final List<SecondaryInfo> statisticsPages = [
+  SecondaryInfo('달력 타입', const CalendarTypeStatistics(), Icon(Icons.calendar_month)), // 달력 타입
+  SecondaryInfo('그래프 타입',  GraphTypeStatistics(), Icon(Icons.auto_graph_sharp)), // ✅ `const` 추가
 ];

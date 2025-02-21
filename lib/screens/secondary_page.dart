@@ -16,8 +16,17 @@ class SecondaryPage extends StatelessWidget {
     if (userRole == 'User') {
       return fieldModePages; // 일반 사용자에게는 Field Mode Pages 제공
     } else {
-      // Role 상태에 따라 Field Mode 또는 Office Mode 제공
-      return roleState.currentStatus == 'Field Mode' ? fieldModePages : officeModePages;
+      // ✅ Statistics Mode 반영 추가
+      switch (roleState.currentStatus) {
+        case 'Field Mode':
+          return fieldModePages;
+        case 'Office Mode':
+          return officeModePages;
+        case 'Statistics Mode':
+          return statisticsPages;
+        default:
+          return fieldModePages; // 기본값
+      }
     }
   }
 
@@ -68,7 +77,6 @@ class RefreshableBody extends StatelessWidget {
       },
       child: Consumer<SecondaryState>(
         builder: (context, state, child) {
-          // 상태가 null이 될 가능성이 없으므로 null 체크 제거
           return Stack(
             children: [
               // 선택된 페이지 표시
@@ -100,9 +108,7 @@ class PageBottomNavigation extends StatelessWidget {
       builder: (context, state, child) {
         return BottomNavigationBar(
           currentIndex: state.selectedIndex,
-          // 현재 선택된 페이지 인덱스
           onTap: state.onItemTapped,
-          // 페이지 탭 처리
           items: state.pages.map((pageInfo) {
             return BottomNavigationBarItem(
               icon: pageInfo.icon, // 페이지 아이콘
@@ -110,10 +116,8 @@ class PageBottomNavigation extends StatelessWidget {
             );
           }).toList(),
           selectedItemColor: Colors.green,
-          // 선택된 아이템 색상
           unselectedItemColor: Colors.purple,
-          // 선택되지 않은 아이템 색상
-          backgroundColor: Colors.white, // 배경 색상
+          backgroundColor: Colors.white,
         );
       },
     );
