@@ -1,18 +1,41 @@
+/// Goal.
+// 일자 별 - 입차, 출차, 매출(금액, 납부 방법) - 달력의 날짜를 눌러서 확인
+// 요일 별 - 입차, 출차, 매출(금액, 납부 방법) - 달력의 요일을 눌러서 확인
+// 시간대 별 - 입차, 출차
+// 월 별 - 입차, 출차, 매출(금액, 납부 방법)
+
+// 직원 별 - 입차, 출차 통계
+
+/// MiniNavigation Funciton
+/// Appbar
+// 'Secondary_role_navigation' - 오피스, 필드, 통계 등 모드 선택
+/// Body
+// calendar
+// Function
+// onTap
+// - 요일
+// - 일자
+
+/// Bottom
+// Left ; graph
+// Middle ; calendar(V)
+/// Middle ; calendar
+/// right ;
+
 import 'package:flutter/material.dart';
 import '../../../widgets/navigation/secondary_role_navigation.dart'; // 상단 내비게이션 바
 import '../../../widgets/navigation/secondary_mini_navigation.dart'; // 하단 내비게이션 바
 
-class Calendar extends StatefulWidget {
-  const Calendar({Key? key}) : super(key: key);
+class CalendarTypeStatistics extends StatefulWidget {
+  const CalendarTypeStatistics({Key? key}) : super(key: key);
 
   @override
   _CalendarState createState() => _CalendarState();
 }
 
-class _CalendarState extends State<Calendar> {
-  bool isKanbanMode = false; // 🔄 현재 화면 모드 (false: Calendar, true: Kanban)
-
+class _CalendarState extends State<CalendarTypeStatistics> {
   DateTime _selectedDate = DateTime.now(); // 현재 선택된 날짜
+  int? selectedWeekday; // 선택된 요일 (0: 일요일 ~ 6: 토요일)
   late DateTime _firstDayOfMonth; // 이번 달의 첫 번째 날
   late int _daysInMonth; // 이번 달의 총 일수
   late int _startingWeekday; // 이번 달이 시작하는 요일 (0: 일요일 ~ 6: 토요일)
@@ -34,6 +57,7 @@ class _CalendarState extends State<Calendar> {
   void _previousMonth() {
     setState(() {
       _selectedDate = DateTime(_selectedDate.year, _selectedDate.month - 1, 1);
+      selectedWeekday = null; // 요일 선택 초기화
       _updateCalendar();
     });
   }
@@ -42,14 +66,8 @@ class _CalendarState extends State<Calendar> {
   void _nextMonth() {
     setState(() {
       _selectedDate = DateTime(_selectedDate.year, _selectedDate.month + 1, 1);
+      selectedWeekday = null; // 요일 선택 초기화
       _updateCalendar();
-    });
-  }
-
-  /// 🔄 화면 모드 전환 (캘린더 ↔ 칸반)
-  void _toggleMode() {
-    setState(() {
-      isKanbanMode = !isKanbanMode;
     });
   }
 
@@ -57,17 +75,15 @@ class _CalendarState extends State<Calendar> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: const SecondaryRoleNavigation(),
-      body: isKanbanMode ? _buildKanbanBoard() : _buildCalendar(), // 🔄 현재 모드에 따라 화면 변경
+      body: _buildCalendar(), // 📅 캘린더 화면
       bottomNavigationBar: SecondaryMiniNavigation(
         icons: [
           Icons.add,
-          isKanbanMode ? Icons.today_outlined : Icons.developer_board, // 🔄 현재 모드에 따라 아이콘 변경
+          Icons.calendar_today, // 🗓 캘린더 아이콘 유지
           Icons.delete,
         ],
         onIconTapped: (index) {
-          if (index == 1) {
-            _toggleMode(); // 캘린더 ↔ 칸반 전환
-          }
+          // 버튼 기능 정의 (현재 기능 없음)
         },
       ),
     );
@@ -91,26 +107,43 @@ class _CalendarState extends State<Calendar> {
           ),
         ),
 
-        /// 📅 요일 헤더
+        /// 📅 요일 헤더 (클릭 가능하도록 변경)
         GridView.count(
           shrinkWrap: true,
           crossAxisCount: 7,
           children: ["일", "월", "화", "수", "목", "금", "토"].asMap().entries.map((entry) {
             int index = entry.key;
             String day = entry.value;
-            return Center(
-              child: Text(
-                day,
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: index == 0 ? Colors.red : (index == 6 ? Colors.blue : Colors.black), // 일요일 빨강, 토요일 파랑
+            bool isSelected = selectedWeekday == index; // 선택된 요일인지 확인
+
+            return GestureDetector(
+              onTap: () {
+                setState(() {
+                  selectedWeekday = index; // 선택된 요일 변경
+                });
+              },
+              child: Container(
+                decoration: BoxDecoration(
+                  color: isSelected ? Colors.blue : Colors.transparent, // 선택된 요일 강조
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Center(
+                  child: Text(
+                    day,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: isSelected
+                          ? Colors.white
+                          : (index == 0 ? Colors.red : (index == 6 ? Colors.blue : Colors.black)), // 일요일 빨강, 토요일 파랑
+                    ),
+                  ),
                 ),
               ),
             );
           }).toList(),
         ),
 
-        /// 📅 날짜 GridView
+        /// 📅 날짜 GridView (클릭 가능)
         Expanded(
           child: GridView.builder(
             padding: const EdgeInsets.all(10),
@@ -133,6 +166,7 @@ class _CalendarState extends State<Calendar> {
                 onTap: () {
                   setState(() {
                     _selectedDate = DateTime(_selectedDate.year, _selectedDate.month, day);
+                    selectedWeekday = null; // 날짜 선택 시 요일 선택 초기화
                   });
                 },
                 child: Container(
@@ -157,41 +191,6 @@ class _CalendarState extends State<Calendar> {
           ),
         ),
       ],
-    );
-  }
-
-  /// 🏗 Kanban Board UI (기본적인 틀만 구현)
-  Widget _buildKanbanBoard() {
-    return Row(
-      children: [
-        _buildKanbanColumn("To Do", Colors.white),
-        _buildKanbanColumn("In Progress", Colors.white),
-        _buildKanbanColumn("Done", Colors.white),
-      ],
-    );
-  }
-
-  /// 📌 Kanban Board의 개별 컬럼 위젯
-  Widget _buildKanbanColumn(String title, Color color) {
-    return Expanded(
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            color: color,
-            child: Text(
-              title,
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
-            ),
-          ),
-          Expanded(
-            child: Container(
-              color: color.withOpacity(0.2),
-              child: Center(child: Text("No tasks yet", style: TextStyle(color: color))),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

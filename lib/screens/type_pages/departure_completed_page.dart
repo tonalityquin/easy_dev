@@ -3,13 +3,12 @@ import 'package:provider/provider.dart';
 import '../../repositories/plate_repository.dart';
 import '../../states/plate_state.dart';
 import '../../states/area_state.dart';
-import '../../states/user_state.dart';
 import '../../widgets/container/plate_container.dart'; // 번호판 컨테이너 위젯
 import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바
 
 /// 출차 완료 페이지
 /// - 출차 완료된 차량 데이터를 관리
-/// - 로그아웃 및 데이터 삭제 기능 포함
+/// - 데이터 삭제 기능 포함
 class DepartureCompletedPage extends StatelessWidget {
   const DepartureCompletedPage({super.key});
 
@@ -29,20 +28,6 @@ class DepartureCompletedPage extends StatelessWidget {
     }
   }
 
-  /// 로그아웃 처리
-  Future<void> _logout(BuildContext context) async {
-    try {
-      final userState = Provider.of<UserState>(context, listen: false);
-      await userState.clearUser();
-
-      if (context.mounted) {
-        Navigator.pushReplacementNamed(context, '/login'); // 로그인 페이지로 이동
-      }
-    } catch (e) {
-      _showSnackBar(context, '로그아웃 실패: $e');
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -50,11 +35,6 @@ class DepartureCompletedPage extends StatelessWidget {
         title: const TopNavigation(), // 상단 내비게이션
         backgroundColor: Colors.blue,
         actions: [
-          // 로그아웃 버튼
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () => _logout(context),
-          ),
           // 데이터 삭제 버튼
           IconButton(
             icon: const Icon(Icons.delete),
@@ -89,7 +69,6 @@ class DepartureCompletedPage extends StatelessWidget {
         builder: (context, plateState, areaState, child) {
           final currentArea = areaState.currentArea; // 현재 지역
           final departureCompleted = plateState.getPlatesByArea('departure_completed', currentArea);
-          final userName = context.read<UserState>().name; // 현재 사용자 이름 가져오기
 
           return ListView(
             padding: const EdgeInsets.all(8.0),
@@ -103,14 +82,13 @@ class DepartureCompletedPage extends StatelessWidget {
                     collection: 'departure_completed',
                     plateNumber: plateNumber,
                     area: area,
-                    userName: userName,
+                    userName: '', // 사용자 정보 없음
                     onError: (errorMessage) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text(errorMessage)),
                       );
                     },
                   );
-
                 },
               ),
             ],
@@ -119,8 +97,7 @@ class DepartureCompletedPage extends StatelessWidget {
       ),
       bottomNavigationBar: Consumer<PlateState>(
         builder: (context, plateState, child) {
-          // 현재 선택된 번호판 가져오기
-          final selectedPlate = plateState.getSelectedPlate('departure_completed', context.read<UserState>().name);
+          final selectedPlate = plateState.getSelectedPlate('departure_completed', '');
 
           return BottomNavigationBar(
             items: [
