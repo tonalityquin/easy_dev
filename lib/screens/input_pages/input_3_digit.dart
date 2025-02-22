@@ -1,3 +1,5 @@
+// ------------------- Input3Digit.dart -------------------
+// Future<void> _initializeCamera() async 에서 사진 해상도
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../states/adjustment_state.dart';
@@ -13,12 +15,12 @@ import '../../widgets/navigation/bottom_navigation.dart';
 import '../../states/plate_state.dart';
 import '../../states/area_state.dart';
 import '../../repositories/plate_repository.dart';
+import '../../utils/show_snackbar.dart';
 
-/// 사진 촬영
+// 🔥 카메라 관련
 import 'dart:io';
-import 'package:image_picker/image_picker.dart';
+import 'package:camera/camera.dart';
 
-/// **Input3Digit**
 /// 번호판 및 주차 구역 입력을 처리하는 화면
 class Input3Digit extends StatefulWidget {
   const Input3Digit({super.key});
@@ -28,28 +30,36 @@ class Input3Digit extends StatefulWidget {
 }
 
 class _Input3DigitState extends State<Input3Digit> {
+  // ------------------- 멤버 변수 선언 -------------------
   List<String> selectedStatuses = [];
   List<bool> isSelected = [];
   List<String> statuses = [];
 
-  // 🔹 정산 데이터를 저장할 변수 추가
+  // 정산 데이터를 저장할 변수
   int selectedBasicStandard = 0;
   int selectedBasicAmount = 0;
   int selectedAddStandard = 0;
   int selectedAddAmount = 0;
 
-  // 컨트롤러: 입력 필드 및 상태 관리
+  // 입력 컨트롤러
   final TextEditingController controller3digit = TextEditingController();
   final TextEditingController controller1digit = TextEditingController();
   final TextEditingController controller4digit = TextEditingController();
   final TextEditingController locationController = TextEditingController();
 
-  String? selectedAdjustment;
+  // 현재 활성화된 입력 필드
+  late TextEditingController activeController;
 
-  late TextEditingController activeController; // 현재 활성화된 입력 필드
   bool showKeypad = true; // 키패드 표시 여부
   bool isLoading = false; // 로딩 상태
   bool isLocationSelected = false; // 주차 구역 선택 여부
+
+  // 카메라 컨트롤러
+  CameraController? _cameraController;
+  bool _isCameraInitialized = false;
+  List<XFile> _capturedImages = [];
+
+  String? selectedAdjustment;
 
   final ButtonStyle commonButtonStyle = ElevatedButton.styleFrom(
     backgroundColor: Colors.grey[300],
@@ -57,18 +67,18 @@ class _Input3DigitState extends State<Input3Digit> {
     padding: const EdgeInsets.symmetric(horizontal: 150.0, vertical: 15.0),
   );
 
+  // ------------------- initState -------------------
   @override
   void initState() {
     super.initState();
     activeController = controller3digit;
     _addInputListeners();
     isLocationSelected = locationController.text.isNotEmpty;
-
-    // 🔹 상태 목록을 초기화하는 함수 호출
     _initializeStatuses();
+    _initializeCamera();
   }
 
-  // 🔹 상태 목록을 불러오는 함수
+  // 주차 구역 상태 목록 불러오기
   Future<void> _initializeStatuses() async {
     final statusState = context.read<StatusState>();
     final areaState = context.read<AreaState>();
@@ -79,45 +89,13 @@ class _Input3DigitState extends State<Input3Digit> {
         .map((status) => (status['name'] ?? '') as String)
         .toList();
 
-    // 🔹 상태 업데이트 (setState 사용)
     setState(() {
       statuses = fetchedStatuses;
       isSelected = List.generate(statuses.length, (index) => false);
     });
   }
 
-  /// 사진 촬영 관련
-  List<File> _selectedImages = []; // 🔥 여러 장 저장 가능하도록 리스트로 변경
-
-  Future<void> _captureImage() async {
-    final picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.camera);
-
-    if (image == null) return; // 사용자가 촬영을 취소한 경우
-
-    setState(() {
-      _selectedImages.add(File(image.path)); // 🔥 리스트에 추가하여 여러 장 저장
-    });
-  }
-
-  /// 사진 삭제 기능 추가
-  void _removeImage(int index) {
-    setState(() {
-      _selectedImages.removeAt(index);
-    });
-  }
-
-  @override
-  void dispose() {
-    _removeInputListeners();
-    controller3digit.dispose();
-    controller1digit.dispose();
-    controller4digit.dispose();
-    locationController.dispose();
-    super.dispose();
-  }
-
-  // 입력 필드의 변화 감지
+  // ------------------- 입력 리스너 관련 메서드 -------------------
   void _addInputListeners() {
     controller3digit.addListener(_handleInputChange);
     controller1digit.addListener(_handleInputChange);
@@ -130,31 +108,19 @@ class _Input3DigitState extends State<Input3Digit> {
     controller4digit.removeListener(_handleInputChange);
   }
 
-  // 현재 활성화된 입력 필드 설정
-  void _setActiveController(TextEditingController controller) {
-    setState(() {
-      activeController = controller;
-      showKeypad = true;
-    });
-  }
-
-  // 입력값 유효성 검사
-  bool _validateField(TextEditingController controller, int maxLength) {
-    return controller.text.length <= maxLength;
-  }
-
-  // 입력값 변화 처리
   void _handleInputChange() {
     if (!_validateField(controller3digit, 3) ||
         !_validateField(controller1digit, 1) ||
         !_validateField(controller4digit, 4)) {
-      _showSnackBar('입력값이 유효하지 않습니다. 다시 확인해주세요.');
+      showSnackbar(context, '입력값이 유효하지 않습니다. 다시 확인해주세요.');
       clearInput();
       return;
     }
 
     // 모든 필드가 채워졌을 경우 키패드 숨김
-    if (controller3digit.text.length == 3 && controller1digit.text.length == 1 && controller4digit.text.length == 4) {
+    if (controller3digit.text.length == 3 &&
+        controller1digit.text.length == 1 &&
+        controller4digit.text.length == 4) {
       setState(() {
         showKeypad = false;
       });
@@ -169,12 +135,121 @@ class _Input3DigitState extends State<Input3Digit> {
     }
   }
 
-  // 알림 메시지 표시
-  void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  // ------------------- 카메라 관련 메서드 -------------------
+  Future<void> _initializeCamera() async {
+    final cameras = await availableCameras();
+    final backCamera = cameras.first;
+
+    _cameraController = CameraController(
+      backCamera,
+      ResolutionPreset.medium, // low / medium / high / veryHigh / ultraHigh / max
+      enableAudio: false,
+    );
+
+    await _cameraController!.initialize();
+    setState(() {
+      _isCameraInitialized = true;
+    });
   }
 
-  // 입력값 초기화
+  /// 카메라 팝업 표시
+  Future<void> _showCameraPreviewDialog() async {
+    if (!_isCameraInitialized) {
+      showSnackbar(context, '카메라가 아직 초기화되지 않았습니다.');
+      return;
+    }
+
+    await showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          child: Column(
+            children: [
+              Expanded(
+                // 🔥 AspectRatio를 통해 정방형(1:1)으로 보이게 함
+                child: AspectRatio(
+                  aspectRatio: 1.0,
+                  child: RotatedBox(
+                    quarterTurns: 1, // 1=90도 회전
+                    child: CameraPreview(_cameraController!),
+                  ),
+                ),
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  ElevatedButton(
+                    onPressed: () async {
+                      await _captureImage();
+                      // 팝업은 닫지 않음
+                    },
+                    child: const Text('촬영'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context); // 팝업 닫기
+                    },
+                    child: const Text('완료'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// 사진 촬영
+  Future<void> _captureImage() async {
+    if (!_cameraController!.value.isInitialized || _cameraController!.value.isTakingPicture) {
+      return;
+    }
+
+    try {
+      final XFile image = await _cameraController!.takePicture();
+      setState(() {
+        _capturedImages.add(image);
+      });
+    } catch (e) {
+      debugPrint("사진 촬영 오류: $e");
+    }
+  }
+
+  /// 사진 삭제
+  void _removeImage(int index) {
+    setState(() {
+      _capturedImages.removeAt(index);
+    });
+  }
+
+  // ------------------- [추가] 큰 팝업(Dialog)으로 전체 사진 보기 메서드 -------------------
+  void _showFullPreviewDialog(XFile imageFile) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          child: Image.file(
+            File(imageFile.path),
+            fit: BoxFit.contain, // 화면 안에 맞춰 표시
+          ),
+        );
+      },
+    );
+  }
+
+  // ------------------- 기타 주요 메서드 -------------------
+  void _setActiveController(TextEditingController controller) {
+    setState(() {
+      activeController = controller;
+      showKeypad = true;
+    });
+  }
+
+  bool _validateField(TextEditingController controller, int maxLength) {
+    return controller.text.length <= maxLength;
+  }
+
   void clearInput() {
     setState(() {
       controller3digit.clear();
@@ -185,7 +260,6 @@ class _Input3DigitState extends State<Input3Digit> {
     });
   }
 
-  // 주차 구역 초기화
   void _clearLocation() {
     setState(() {
       locationController.clear();
@@ -193,17 +267,18 @@ class _Input3DigitState extends State<Input3Digit> {
     });
   }
 
-  // 입차 요청 또는 완료 처리
   Future<void> _handleAction() async {
-    final String plateNumber = '${controller3digit.text}-${controller1digit.text}-${controller4digit.text}';
+    final String plateNumber =
+        '${controller3digit.text}-${controller1digit.text}-${controller4digit.text}';
     final plateRepository = context.read<PlateRepository>();
     final plateState = context.read<PlateState>();
     final areaState = context.read<AreaState>();
     final userState = context.read<UserState>();
     String location = locationController.text;
 
+    // 번호판 중복 체크
     if (plateState.isPlateNumberDuplicated(plateNumber, areaState.currentArea)) {
-      _showSnackBar('이미 등록된 번호판입니다: $plateNumber');
+      showSnackbar(context, '이미 등록된 번호판입니다: $plateNumber');
       return;
     }
 
@@ -215,16 +290,13 @@ class _Input3DigitState extends State<Input3Digit> {
       isLoading = true;
     });
 
-    // 🔹 isSelected를 반영하여 선택된 상태 목록을 업데이트
+    // 선택된 상태 업데이트
     selectedStatuses = [];
     for (int i = 0; i < isSelected.length; i++) {
       if (isSelected[i]) {
-        selectedStatuses.add(statuses[i]); // 🔹 statuses가 선언되었으므로 오류 해결
+        selectedStatuses.add(statuses[i]);
       }
     }
-
-    // 🔹 선택된 상태 리스트를 출력하여 디버깅
-    debugPrint('선택된 상태: $selectedStatuses');
 
     try {
       if (!isLocationSelected) {
@@ -237,14 +309,12 @@ class _Input3DigitState extends State<Input3Digit> {
           type: '입차 요청',
           adjustmentType: selectedAdjustment,
           statusList: selectedStatuses.isNotEmpty ? selectedStatuses : [],
-          // 🔹 비어 있으면 [] 저장
           basicStandard: selectedBasicStandard,
-          // ✅ 상태에서 가져온 데이터 저장
           basicAmount: selectedBasicAmount,
           addStandard: selectedAddStandard,
           addAmount: selectedAddAmount,
         );
-        _showSnackBar('입차 요청 완료');
+        showSnackbar(context, '입차 요청 완료');
       } else {
         await plateRepository.addRequestOrCompleted(
           collection: 'parking_completed',
@@ -255,19 +325,17 @@ class _Input3DigitState extends State<Input3Digit> {
           type: '입차 완료',
           adjustmentType: selectedAdjustment,
           statusList: selectedStatuses.isNotEmpty ? selectedStatuses : [],
-          // 🔹 비어 있으면 [] 저장
           basicStandard: selectedBasicStandard,
-          // ✅ 상태에서 가져온 데이터 저장
           basicAmount: selectedBasicAmount,
           addStandard: selectedAddStandard,
           addAmount: selectedAddAmount,
         );
-        _showSnackBar('입차 완료');
+        showSnackbar(context, '입차 완료');
       }
       clearInput();
       _clearLocation();
     } catch (error) {
-      _showSnackBar('오류 발생: $error');
+      showSnackbar(context, '오류 발생: $error');
     } finally {
       setState(() {
         isLoading = false;
@@ -275,7 +343,6 @@ class _Input3DigitState extends State<Input3Digit> {
     }
   }
 
-  // 주차 구역 선택
   void _selectParkingLocation() {
     showDialog(
       context: context,
@@ -321,22 +388,36 @@ class _Input3DigitState extends State<Input3Digit> {
 
   Future<void> _refreshAdjustments() async {
     final adjustmentState = context.read<AdjustmentState>();
-    await Future.delayed(const Duration(milliseconds: 300)); // 🔥 Firestore 데이터 로드 대기
-    adjustmentState.syncWithAreaState(); // 🔥 강제 동기화 트리거
+    await Future.delayed(const Duration(milliseconds: 300)); // Firestore 데이터 로드 대기
+    adjustmentState.syncWithAreaState(); // 지역 상태와 강제 동기화
   }
 
+  // ------------------- dispose -------------------
+  @override
+  void dispose() {
+    _removeInputListeners();
+    controller3digit.dispose();
+    controller1digit.dispose();
+    controller4digit.dispose();
+    locationController.dispose();
+    _cameraController?.dispose();
+    super.dispose();
+  }
+
+  // ------------------- build -------------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.blueAccent,
       ),
-      body: Stack(
+      body: !_isCameraInitialized
+          ? const Center(child: CircularProgressIndicator())
+          : Stack(
         children: [
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: SingleChildScrollView(
-              // ✅ 스크롤 가능하도록 감싸줌
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -387,44 +468,54 @@ class _Input3DigitState extends State<Input3Digit> {
                     style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8.0),
-                  Container(
-                    height: 100, // 🔥 높이 조정 (여러 장을 보기 좋게 배치)
-                    child: _selectedImages.isEmpty
+                  SizedBox(
+                    height: 100,
+                    child: _capturedImages.isEmpty
                         ? const Center(child: Text('촬영된 사진 없음'))
                         : ListView.builder(
-                            scrollDirection: Axis.horizontal, // 🔥 가로 스크롤 가능하도록 설정
-                            itemCount: _selectedImages.length,
-                            itemBuilder: (context, index) {
-                              return Stack(
-                                children: [
-                                  Padding(
-                                    padding: const EdgeInsets.all(4.0),
-                                    child: Image.file(
-                                      _selectedImages[index],
-                                      width: 100, // 🔥 사진 크기 조정
-                                      height: 100,
-                                      fit: BoxFit.cover,
-                                    ),
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _capturedImages.length,
+                      itemBuilder: (context, index) {
+                        return Stack(
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.all(4.0),
+                              child: GestureDetector(
+                                onTap: () {
+                                  // [추가] 사진을 눌렀을 때 전체 화면(팝업)으로 확대
+                                  _showFullPreviewDialog(_capturedImages[index]);
+                                },
+                                child: Image.file(
+                                  File(_capturedImages[index].path),
+                                  width: 100,
+                                  height: 100,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              top: 0,
+                              right: 0,
+                              child: GestureDetector(
+                                onTap: () => _removeImage(index),
+                                child: Container(
+                                  padding: const EdgeInsets.all(4.0),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
                                   ),
-                                  Positioned(
-                                    top: 0,
-                                    right: 0,
-                                    child: GestureDetector(
-                                      onTap: () => _removeImage(index), // 🔥 삭제 기능 추가
-                                      child: Container(
-                                        padding: const EdgeInsets.all(4.0),
-                                        decoration: BoxDecoration(
-                                          color: Colors.red,
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: const Icon(Icons.close, size: 16, color: Colors.white),
-                                      ),
-                                    ),
+                                  child: const Icon(
+                                    Icons.close,
+                                    size: 16,
+                                    color: Colors.white,
                                   ),
-                                ],
-                              );
-                            },
-                          ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
                   ),
                   const SizedBox(height: 32.0),
                   const Text(
@@ -433,7 +524,7 @@ class _Input3DigitState extends State<Input3Digit> {
                   ),
                   const SizedBox(height: 8.0),
                   FutureBuilder(
-                    future: _refreshAdjustments(), // 🔥 지역 변경 후 강제 업데이트
+                    future: _refreshAdjustments(),
                     builder: (context, snapshot) {
                       final adjustmentState = context.watch<AdjustmentState>();
                       final currentArea = context.watch<AreaState>().currentArea.trim();
@@ -443,13 +534,12 @@ class _Input3DigitState extends State<Input3Digit> {
                           .where((type) => type.isNotEmpty)
                           .toList();
 
-                      debugPrint('🔥 현재 지역($currentArea)에 대한 필터링된 정산 유형: $adjustmentsForArea');
-
                       if (adjustmentsForArea.isEmpty) {
                         return const Text('등록된 정산 유형이 없습니다.');
                       }
 
-                      if (selectedAdjustment == null || !adjustmentsForArea.contains(selectedAdjustment)) {
+                      if (selectedAdjustment == null ||
+                          !adjustmentsForArea.contains(selectedAdjustment)) {
                         WidgetsBinding.instance.addPostFrameCallback((_) {
                           setState(() {
                             selectedAdjustment = adjustmentsForArea.first;
@@ -486,24 +576,24 @@ class _Input3DigitState extends State<Input3Digit> {
                   statuses.isEmpty
                       ? const Text('등록된 차량 상태가 없습니다.')
                       : Wrap(
-                          spacing: 8.0,
-                          children: List.generate(statuses.length, (index) {
-                            return ChoiceChip(
-                              label: Text(statuses[index]),
-                              selected: isSelected[index],
-                              onSelected: (selected) {
-                                setState(() {
-                                  isSelected[index] = selected;
-                                  if (selected) {
-                                    selectedStatuses.add(statuses[index]);
-                                  } else {
-                                    selectedStatuses.remove(statuses[index]);
-                                  }
-                                });
-                              },
-                            );
-                          }),
-                        ),
+                    spacing: 8.0,
+                    children: List.generate(statuses.length, (index) {
+                      return ChoiceChip(
+                        label: Text(statuses[index]),
+                        selected: isSelected[index],
+                        onSelected: (selected) {
+                          setState(() {
+                            isSelected[index] = selected;
+                            if (selected) {
+                              selectedStatuses.add(statuses[index]);
+                            } else {
+                              selectedStatuses.remove(statuses[index]);
+                            }
+                          });
+                        },
+                      );
+                    }),
+                  ),
                 ],
               ),
             ),
@@ -514,11 +604,20 @@ class _Input3DigitState extends State<Input3Digit> {
         showKeypad: showKeypad,
         keypad: activeController == controller3digit
             ? NumKeypad(
-                controller: controller3digit, maxLength: 3, onComplete: () => _setActiveController(controller1digit))
+          controller: controller3digit,
+          maxLength: 3,
+          onComplete: () => _setActiveController(controller1digit),
+        )
             : activeController == controller1digit
-                ? KorKeypad(controller: controller1digit, onComplete: () => _setActiveController(controller4digit))
-                : NumKeypad(
-                    controller: controller4digit, maxLength: 4, onComplete: () => setState(() => showKeypad = false)),
+            ? KorKeypad(
+          controller: controller1digit,
+          onComplete: () => _setActiveController(controller4digit),
+        )
+            : NumKeypad(
+          controller: controller4digit,
+          maxLength: 4,
+          onComplete: () => setState(() => showKeypad = false),
+        ),
         actionButton: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -527,16 +626,17 @@ class _Input3DigitState extends State<Input3Digit> {
               children: [
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: _captureImage,
+                    // 사진 촬영 → 카메라 미리보기 Dialog
+                    onPressed: _showCameraPreviewDialog,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.grey[300],
-                      foregroundColor: Colors.black, // 🔥 글자 색상 명확하게 설정
-                      padding: const EdgeInsets.symmetric(vertical: 15.0), // 🔥 버튼 크기 조절
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(vertical: 15.0),
                     ),
-                    child: Text(
+                    child: const Text(
                       '사진 촬영',
-                      textAlign: TextAlign.center, // 🔥 텍스트 중앙 정렬
-                      style: const TextStyle(fontSize: 16),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 16),
                     ),
                   ),
                 ),
@@ -546,7 +646,7 @@ class _Input3DigitState extends State<Input3Digit> {
                     onPressed: isLocationSelected ? _clearLocation : _selectParkingLocation,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.grey[300],
-                      foregroundColor: Colors.black, // 🔥 글자 색상 명확하게 설정
+                      foregroundColor: Colors.black,
                       padding: const EdgeInsets.symmetric(vertical: 15.0),
                     ),
                     child: Text(
@@ -558,7 +658,7 @@ class _Input3DigitState extends State<Input3Digit> {
                 ),
               ],
             ),
-            const SizedBox(height: 15), // 버튼 간 간격 추가
+            const SizedBox(height: 15),
             ElevatedButton(
               onPressed: isLoading ? null : _handleAction,
               style: commonButtonStyle,

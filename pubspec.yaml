@@ -12,7 +12,7 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.8
   provider: ^6.1.2
-  image_picker: ^1.1.2
+  camera: ^0.11.1
 
   # SQLite 패키지
   sqflite: ^2.2.0
