@@ -1,7 +1,11 @@
 // ------------------- Input3Digit.dart -------------------
-// Future<void> _initializeCamera() async 에서 사진 해상도
+// [원본 코드에서 카메라 관련 로직 분리 후, CameraHelper 호출로 대체]
+
+import 'package:camera/camera.dart'; // [추가] CameraPreview, XFile 사용을 위해 직접 import
+import 'dart:io'; // [추가] 이미지 미리보기(File) 사용을 위해 import
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../states/adjustment_state.dart';
 import '../../states/status_state.dart';
 import '../../states/user_state.dart';
@@ -17,9 +21,8 @@ import '../../states/area_state.dart';
 import '../../repositories/plate_repository.dart';
 import '../../utils/show_snackbar.dart';
 
-// 🔥 카메라 관련
-import 'dart:io';
-import 'package:camera/camera.dart';
+// [새로운 코드 추가] camera_helper.dart 불러오기
+import '../../utils/camera_helper.dart'; // CameraHelper를 사용하기 위한 import
 
 /// 번호판 및 주차 구역 입력을 처리하는 화면
 class Input3Digit extends StatefulWidget {
@@ -54,10 +57,8 @@ class _Input3DigitState extends State<Input3Digit> {
   bool isLoading = false; // 로딩 상태
   bool isLocationSelected = false; // 주차 구역 선택 여부
 
-  // 카메라 컨트롤러
-  CameraController? _cameraController;
-  bool _isCameraInitialized = false;
-  List<XFile> _capturedImages = [];
+  // [추가] CameraHelper 인스턴스 생성 (카메라 로직 담당)
+  final CameraHelper _cameraHelper = CameraHelper();
 
   String? selectedAdjustment;
 
@@ -75,10 +76,10 @@ class _Input3DigitState extends State<Input3Digit> {
     _addInputListeners();
     isLocationSelected = locationController.text.isNotEmpty;
     _initializeStatuses();
-    _initializeCamera();
+    _initializeCamera(); // [추가] 카메라 헬퍼 초기화
   }
 
-  // 주차 구역 상태 목록 불러오기
+  // ------------------- 주차 구역 상태 목록 불러오기 -------------------
   Future<void> _initializeStatuses() async {
     final statusState = context.read<StatusState>();
     final areaState = context.read<AreaState>();
@@ -118,9 +119,7 @@ class _Input3DigitState extends State<Input3Digit> {
     }
 
     // 모든 필드가 채워졌을 경우 키패드 숨김
-    if (controller3digit.text.length == 3 &&
-        controller1digit.text.length == 1 &&
-        controller4digit.text.length == 4) {
+    if (controller3digit.text.length == 3 && controller1digit.text.length == 1 && controller4digit.text.length == 4) {
       setState(() {
         showKeypad = false;
       });
@@ -137,24 +136,14 @@ class _Input3DigitState extends State<Input3Digit> {
 
   // ------------------- 카메라 관련 메서드 -------------------
   Future<void> _initializeCamera() async {
-    final cameras = await availableCameras();
-    final backCamera = cameras.first;
-
-    _cameraController = CameraController(
-      backCamera,
-      ResolutionPreset.medium, // low / medium / high / veryHigh / ultraHigh / max
-      enableAudio: false,
-    );
-
-    await _cameraController!.initialize();
-    setState(() {
-      _isCameraInitialized = true;
-    });
+    // CameraHelper를 통해 카메라 초기화
+    await _cameraHelper.initializeCamera();
+    setState(() {});
   }
 
-  /// 카메라 팝업 표시
+  /// 카메라 팝업 표시 (카메라 미리보기 + 촬영 버튼)
   Future<void> _showCameraPreviewDialog() async {
-    if (!_isCameraInitialized) {
+    if (!_cameraHelper.isCameraInitialized) {
       showSnackbar(context, '카메라가 아직 초기화되지 않았습니다.');
       return;
     }
@@ -166,12 +155,12 @@ class _Input3DigitState extends State<Input3Digit> {
           child: Column(
             children: [
               Expanded(
-                // 🔥 AspectRatio를 통해 정방형(1:1)으로 보이게 함
+                // CameraPreview는 camera 패키지에 정의
                 child: AspectRatio(
                   aspectRatio: 1.0,
                   child: RotatedBox(
-                    quarterTurns: 1, // 1=90도 회전
-                    child: CameraPreview(_cameraController!),
+                    quarterTurns: 1,
+                    child: CameraPreview(_cameraHelper.cameraController!),
                   ),
                 ),
               ),
@@ -180,8 +169,9 @@ class _Input3DigitState extends State<Input3Digit> {
                 children: [
                   ElevatedButton(
                     onPressed: () async {
-                      await _captureImage();
+                      await _cameraHelper.captureImage();
                       // 팝업은 닫지 않음
+                      setState(() {});
                     },
                     child: const Text('촬영'),
                   ),
@@ -200,30 +190,13 @@ class _Input3DigitState extends State<Input3Digit> {
     );
   }
 
-  /// 사진 촬영
-  Future<void> _captureImage() async {
-    if (!_cameraController!.value.isInitialized || _cameraController!.value.isTakingPicture) {
-      return;
-    }
-
-    try {
-      final XFile image = await _cameraController!.takePicture();
-      setState(() {
-        _capturedImages.add(image);
-      });
-    } catch (e) {
-      debugPrint("사진 촬영 오류: $e");
-    }
-  }
-
-  /// 사진 삭제
+  /// 사진 삭제 (CameraHelper에서 관리하는 리스트에서 제거)
   void _removeImage(int index) {
-    setState(() {
-      _capturedImages.removeAt(index);
-    });
+    _cameraHelper.removeImage(index);
+    setState(() {});
   }
 
-  // ------------------- [추가] 큰 팝업(Dialog)으로 전체 사진 보기 메서드 -------------------
+  /// 큰 팝업(Dialog)으로 전체 사진 보기
   void _showFullPreviewDialog(XFile imageFile) {
     showDialog(
       context: context,
@@ -231,7 +204,7 @@ class _Input3DigitState extends State<Input3Digit> {
         return Dialog(
           child: Image.file(
             File(imageFile.path),
-            fit: BoxFit.contain, // 화면 안에 맞춰 표시
+            fit: BoxFit.contain,
           ),
         );
       },
@@ -267,9 +240,9 @@ class _Input3DigitState extends State<Input3Digit> {
     });
   }
 
+  // ------------------- 입차 요청/입차 완료 처리 -------------------
   Future<void> _handleAction() async {
-    final String plateNumber =
-        '${controller3digit.text}-${controller1digit.text}-${controller4digit.text}';
+    final String plateNumber = '${controller3digit.text}-${controller1digit.text}-${controller4digit.text}';
     final plateRepository = context.read<PlateRepository>();
     final plateState = context.read<PlateState>();
     final areaState = context.read<AreaState>();
@@ -300,6 +273,7 @@ class _Input3DigitState extends State<Input3Digit> {
 
     try {
       if (!isLocationSelected) {
+        // 입차 요청
         await plateRepository.addRequestOrCompleted(
           collection: 'parking_requests',
           plateNumber: plateNumber,
@@ -316,6 +290,7 @@ class _Input3DigitState extends State<Input3Digit> {
         );
         showSnackbar(context, '입차 요청 완료');
       } else {
+        // 입차 완료
         await plateRepository.addRequestOrCompleted(
           collection: 'parking_completed',
           plateNumber: plateNumber,
@@ -343,6 +318,7 @@ class _Input3DigitState extends State<Input3Digit> {
     }
   }
 
+  // ------------------- 주차 구역 선택 팝업 -------------------
   void _selectParkingLocation() {
     showDialog(
       context: context,
@@ -386,6 +362,7 @@ class _Input3DigitState extends State<Input3Digit> {
     );
   }
 
+  // ------------------- Firestore 정산 유형 반영 -------------------
   Future<void> _refreshAdjustments() async {
     final adjustmentState = context.read<AdjustmentState>();
     await Future.delayed(const Duration(milliseconds: 300)); // Firestore 데이터 로드 대기
@@ -400,7 +377,8 @@ class _Input3DigitState extends State<Input3Digit> {
     controller1digit.dispose();
     controller4digit.dispose();
     locationController.dispose();
-    _cameraController?.dispose();
+    // CameraHelper 자원 해제
+    _cameraHelper.dispose();
     super.dispose();
   }
 
@@ -411,213 +389,215 @@ class _Input3DigitState extends State<Input3Digit> {
       appBar: AppBar(
         backgroundColor: Colors.blueAccent,
       ),
-      body: !_isCameraInitialized
+      // 카메라 초기화 여부 체크
+      body: !_cameraHelper.isCameraInitialized
           ? const Center(child: CircularProgressIndicator())
           : Stack(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    '번호 입력',
-                    style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      NumFieldFront3(
-                        controller: controller3digit,
-                        readOnly: true,
-                        onTap: () => _setActiveController(controller3digit),
-                      ),
-                      KorFieldMiddle1(
-                        controller: controller1digit,
-                        readOnly: true,
-                        onTap: () => _setActiveController(controller1digit),
-                      ),
-                      NumFieldBack4(
-                        controller: controller4digit,
-                        readOnly: true,
-                        onTap: () => _setActiveController(controller4digit),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 32.0),
-                  const Text(
-                    '주차 구역',
-                    style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8.0),
-                  Center(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        LocationField(
-                          controller: locationController,
-                          widthFactor: 0.7,
+                        const Text(
+                          '번호 입력',
+                          style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
                         ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            NumFieldFront3(
+                              controller: controller3digit,
+                              readOnly: true,
+                              onTap: () => _setActiveController(controller3digit),
+                            ),
+                            KorFieldMiddle1(
+                              controller: controller1digit,
+                              readOnly: true,
+                              onTap: () => _setActiveController(controller1digit),
+                            ),
+                            NumFieldBack4(
+                              controller: controller4digit,
+                              readOnly: true,
+                              onTap: () => _setActiveController(controller4digit),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 32.0),
+                        const Text(
+                          '주차 구역',
+                          style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8.0),
+                        Center(
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              LocationField(
+                                controller: locationController,
+                                widthFactor: 0.7,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 32.0),
+                        const Text(
+                          '촬영 사진',
+                          style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8.0),
+                        SizedBox(
+                          height: 100,
+                          child: _cameraHelper.capturedImages.isEmpty
+                              ? const Center(child: Text('촬영된 사진 없음'))
+                              : ListView.builder(
+                                  scrollDirection: Axis.horizontal,
+                                  itemCount: _cameraHelper.capturedImages.length,
+                                  itemBuilder: (context, index) {
+                                    return Stack(
+                                      children: [
+                                        Padding(
+                                          padding: const EdgeInsets.all(4.0),
+                                          child: GestureDetector(
+                                            onTap: () {
+                                              // 전체 화면(팝업)으로 확대
+                                              _showFullPreviewDialog(
+                                                _cameraHelper.capturedImages[index],
+                                              );
+                                            },
+                                            child: Image.file(
+                                              File(_cameraHelper.capturedImages[index].path),
+                                              width: 100,
+                                              height: 100,
+                                              fit: BoxFit.cover,
+                                            ),
+                                          ),
+                                        ),
+                                        Positioned(
+                                          top: 0,
+                                          right: 0,
+                                          child: GestureDetector(
+                                            onTap: () => _removeImage(index),
+                                            child: Container(
+                                              padding: const EdgeInsets.all(4.0),
+                                              decoration: const BoxDecoration(
+                                                color: Colors.red,
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: const Icon(
+                                                Icons.close,
+                                                size: 16,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  },
+                                ),
+                        ),
+                        const SizedBox(height: 32.0),
+                        const Text(
+                          '정산 유형',
+                          style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8.0),
+                        FutureBuilder(
+                          future: _refreshAdjustments(),
+                          builder: (context, snapshot) {
+                            final adjustmentState = context.watch<AdjustmentState>();
+                            final currentArea = context.watch<AreaState>().currentArea.trim();
+                            final adjustmentsForArea = adjustmentState.adjustments
+                                .where((adj) => adj['area'].toString().trim() == currentArea)
+                                .map<String>((adj) => adj['countType']?.toString().trim() ?? '')
+                                .where((type) => type.isNotEmpty)
+                                .toList();
+
+                            if (adjustmentsForArea.isEmpty) {
+                              return const Text('등록된 정산 유형이 없습니다.');
+                            }
+
+                            if (selectedAdjustment == null || !adjustmentsForArea.contains(selectedAdjustment)) {
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                setState(() {
+                                  selectedAdjustment = adjustmentsForArea.first;
+                                });
+                              });
+                            }
+
+                            return DropdownButtonFormField<String>(
+                              value: selectedAdjustment,
+                              onChanged: (newValue) {
+                                setState(() {
+                                  selectedAdjustment = newValue;
+                                });
+                              },
+                              items: adjustmentsForArea.map((type) {
+                                return DropdownMenuItem<String>(
+                                  value: type,
+                                  child: Text(type),
+                                );
+                              }).toList(),
+                              decoration: const InputDecoration(
+                                labelText: '정산 유형 선택',
+                                border: OutlineInputBorder(),
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 32.0),
+                        const Text(
+                          '차량 상태',
+                          style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8.0),
+                        statuses.isEmpty
+                            ? const Text('등록된 차량 상태가 없습니다.')
+                            : Wrap(
+                                spacing: 8.0,
+                                children: List.generate(statuses.length, (index) {
+                                  return ChoiceChip(
+                                    label: Text(statuses[index]),
+                                    selected: isSelected[index],
+                                    onSelected: (selected) {
+                                      setState(() {
+                                        isSelected[index] = selected;
+                                        if (selected) {
+                                          selectedStatuses.add(statuses[index]);
+                                        } else {
+                                          selectedStatuses.remove(statuses[index]);
+                                        }
+                                      });
+                                    },
+                                  );
+                                }),
+                              ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 32.0),
-                  const Text(
-                    '촬영 사진',
-                    style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8.0),
-                  SizedBox(
-                    height: 100,
-                    child: _capturedImages.isEmpty
-                        ? const Center(child: Text('촬영된 사진 없음'))
-                        : ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: _capturedImages.length,
-                      itemBuilder: (context, index) {
-                        return Stack(
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.all(4.0),
-                              child: GestureDetector(
-                                onTap: () {
-                                  // [추가] 사진을 눌렀을 때 전체 화면(팝업)으로 확대
-                                  _showFullPreviewDialog(_capturedImages[index]);
-                                },
-                                child: Image.file(
-                                  File(_capturedImages[index].path),
-                                  width: 100,
-                                  height: 100,
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              top: 0,
-                              right: 0,
-                              child: GestureDetector(
-                                onTap: () => _removeImage(index),
-                                child: Container(
-                                  padding: const EdgeInsets.all(4.0),
-                                  decoration: const BoxDecoration(
-                                    color: Colors.red,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(
-                                    Icons.close,
-                                    size: 16,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 32.0),
-                  const Text(
-                    '정산 유형',
-                    style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8.0),
-                  FutureBuilder(
-                    future: _refreshAdjustments(),
-                    builder: (context, snapshot) {
-                      final adjustmentState = context.watch<AdjustmentState>();
-                      final currentArea = context.watch<AreaState>().currentArea.trim();
-                      final adjustmentsForArea = adjustmentState.adjustments
-                          .where((adj) => adj['area'].toString().trim() == currentArea)
-                          .map<String>((adj) => adj['countType']?.toString().trim() ?? '')
-                          .where((type) => type.isNotEmpty)
-                          .toList();
-
-                      if (adjustmentsForArea.isEmpty) {
-                        return const Text('등록된 정산 유형이 없습니다.');
-                      }
-
-                      if (selectedAdjustment == null ||
-                          !adjustmentsForArea.contains(selectedAdjustment)) {
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          setState(() {
-                            selectedAdjustment = adjustmentsForArea.first;
-                          });
-                        });
-                      }
-
-                      return DropdownButtonFormField<String>(
-                        value: selectedAdjustment,
-                        onChanged: (newValue) {
-                          setState(() {
-                            selectedAdjustment = newValue;
-                          });
-                        },
-                        items: adjustmentsForArea.map((type) {
-                          return DropdownMenuItem<String>(
-                            value: type,
-                            child: Text(type),
-                          );
-                        }).toList(),
-                        decoration: const InputDecoration(
-                          labelText: '정산 유형 선택',
-                          border: OutlineInputBorder(),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 32.0),
-                  const Text(
-                    '차량 상태',
-                    style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8.0),
-                  statuses.isEmpty
-                      ? const Text('등록된 차량 상태가 없습니다.')
-                      : Wrap(
-                    spacing: 8.0,
-                    children: List.generate(statuses.length, (index) {
-                      return ChoiceChip(
-                        label: Text(statuses[index]),
-                        selected: isSelected[index],
-                        onSelected: (selected) {
-                          setState(() {
-                            isSelected[index] = selected;
-                            if (selected) {
-                              selectedStatuses.add(statuses[index]);
-                            } else {
-                              selectedStatuses.remove(statuses[index]);
-                            }
-                          });
-                        },
-                      );
-                    }),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
       bottomNavigationBar: BottomNavigation(
         showKeypad: showKeypad,
         keypad: activeController == controller3digit
             ? NumKeypad(
-          controller: controller3digit,
-          maxLength: 3,
-          onComplete: () => _setActiveController(controller1digit),
-        )
+                controller: controller3digit,
+                maxLength: 3,
+                onComplete: () => _setActiveController(controller1digit),
+              )
             : activeController == controller1digit
-            ? KorKeypad(
-          controller: controller1digit,
-          onComplete: () => _setActiveController(controller4digit),
-        )
-            : NumKeypad(
-          controller: controller4digit,
-          maxLength: 4,
-          onComplete: () => setState(() => showKeypad = false),
-        ),
+                ? KorKeypad(
+                    controller: controller1digit,
+                    onComplete: () => _setActiveController(controller4digit),
+                  )
+                : NumKeypad(
+                    controller: controller4digit,
+                    maxLength: 4,
+                    onComplete: () => setState(() => showKeypad = false),
+                  ),
         actionButton: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -626,7 +606,6 @@ class _Input3DigitState extends State<Input3Digit> {
               children: [
                 Expanded(
                   child: ElevatedButton(
-                    // 사진 촬영 → 카메라 미리보기 Dialog
                     onPressed: _showCameraPreviewDialog,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.grey[300],
