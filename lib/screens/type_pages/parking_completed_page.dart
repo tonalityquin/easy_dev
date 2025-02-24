@@ -15,8 +15,7 @@ class ParkingCompletedPage extends StatefulWidget {
 }
 
 class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
-
-  bool _isSorted = false; // 정렬 아이콘 상태 (상하 반전 여부)
+  bool _isSorted = true; // 정렬 아이콘 상태 (상하 반전 여부)
 
   /// SnackBar로 메시지 출력
   void _showSnackBar(BuildContext context, String message) {
@@ -28,7 +27,6 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
       _isSorted = !_isSorted;
     });
   }
-
 
   /// 출차 요청 처리
   void _handleDepartureRequested(BuildContext context) {
@@ -100,7 +98,10 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                 icon: AnimatedRotation(
                   turns: _isSorted ? 0.5 : 0.0, // 180도 회전 (0.5 턴)
                   duration: const Duration(milliseconds: 300), // 부드러운 애니메이션
-                  child: Icon(Icons.sort),
+                  child: Transform.scale(
+                    scaleX: _isSorted ? -1 : 1, // _isSorted = true → 좌우 반전 / false → 정상
+                    child: Icon(Icons.sort),
+                  ),
                 ),
                 label: selectedPlate == null || !selectedPlate.isSelected ? '정렬' : '강제 이동',
               ),
