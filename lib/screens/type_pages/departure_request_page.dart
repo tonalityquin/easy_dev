@@ -8,13 +8,28 @@ import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션
 
 /// 출차 요청 페이지
 /// - 출차 요청된 차량 목록을 표시하고 출차 완료 처리
-class DepartureRequestPage extends StatelessWidget {
+class DepartureRequestPage extends StatefulWidget {
   const DepartureRequestPage({super.key});
+
+  @override
+  State<DepartureRequestPage> createState() => _DepartureRequestPageState();
+}
+
+class _DepartureRequestPageState extends State<DepartureRequestPage> {
+
+  bool _isSorted = false; // 정렬 아이콘 상태 (상하 반전 여부)
 
   /// 메시지를 SnackBar로 출력
   void _showSnackBar(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
+
+  void _toggleSortIcon() {
+    setState(() {
+      _isSorted = !_isSorted;
+    });
+  }
+
 
   /// 출차 완료 처리
   void _handleDepartureCompleted(BuildContext context) {
@@ -79,17 +94,24 @@ class DepartureRequestPage extends StatelessWidget {
                 label: selectedPlate == null || !selectedPlate.isSelected ? '번호판 검색' : '정보 수정',
               ),
               BottomNavigationBarItem(
-                icon: Icon(selectedPlate == null || !selectedPlate.isSelected ? Icons.local_parking : Icons.check_circle),
+                icon:
+                    Icon(selectedPlate == null || !selectedPlate.isSelected ? Icons.local_parking : Icons.check_circle),
                 label: selectedPlate == null || !selectedPlate.isSelected ? '주차 구역' : '출차 완료',
               ),
-              const BottomNavigationBarItem(
-                icon: Icon(Icons.sort),
-                label: '정렬',
+              BottomNavigationBarItem(
+                icon: AnimatedRotation(
+                  turns: _isSorted ? 0.5 : 0.0, // 180도 회전 (0.5 턴)
+                  duration: const Duration(milliseconds: 300), // 부드러운 애니메이션
+                  child: Icon(Icons.sort),
+                ),
+                label: selectedPlate == null || !selectedPlate.isSelected ? '정렬' : '강제 이동',
               ),
             ],
             onTap: (index) {
               if (index == 1 && selectedPlate != null && selectedPlate.isSelected) {
                 _handleDepartureCompleted(context); // 출차 완료 처리
+              } else if (index == 2) {
+                _toggleSortIcon(); // 정렬 아이콘 반전
               }
             },
           );
