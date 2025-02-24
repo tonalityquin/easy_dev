@@ -7,13 +7,28 @@ import '../../widgets/container/plate_container.dart'; // 번호판 컨테이너
 import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바
 
 /// 입차 완료 리스트를 표시하는 화면
-class ParkingCompletedPage extends StatelessWidget {
+class ParkingCompletedPage extends StatefulWidget {
   const ParkingCompletedPage({super.key});
+
+  @override
+  State<ParkingCompletedPage> createState() => _ParkingCompletedPageState();
+}
+
+class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
+
+  bool _isSorted = false; // 정렬 아이콘 상태 (상하 반전 여부)
 
   /// SnackBar로 메시지 출력
   void _showSnackBar(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
+
+  void _toggleSortIcon() {
+    setState(() {
+      _isSorted = !_isSorted;
+    });
+  }
+
 
   /// 출차 요청 처리
   void _handleDepartureRequested(BuildContext context) {
@@ -82,13 +97,19 @@ class ParkingCompletedPage extends StatelessWidget {
                 label: selectedPlate == null || !selectedPlate.isSelected ? '주차 구역' : '출차 요청',
               ),
               BottomNavigationBarItem(
-                icon: Icon(selectedPlate == null || !selectedPlate.isSelected ? Icons.sort : Icons.sort_by_alpha),
-                label: selectedPlate == null || !selectedPlate.isSelected ? '정렬' : '정렬 완료',
+                icon: AnimatedRotation(
+                  turns: _isSorted ? 0.5 : 0.0, // 180도 회전 (0.5 턴)
+                  duration: const Duration(milliseconds: 300), // 부드러운 애니메이션
+                  child: Icon(Icons.sort),
+                ),
+                label: selectedPlate == null || !selectedPlate.isSelected ? '정렬' : '강제 이동',
               ),
             ],
             onTap: (index) {
               if (index == 1 && selectedPlate != null && selectedPlate.isSelected) {
                 _handleDepartureRequested(context); // 출차 요청 처리
+              } else if (index == 2) {
+                _toggleSortIcon(); // 정렬 아이콘 반전
               }
             },
           );

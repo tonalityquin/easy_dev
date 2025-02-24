@@ -62,26 +62,26 @@ class PlateContainer extends StatelessWidget {
             ? int.tryParse(item.basicStandard as String) ?? 0
             : (item.basicStandard ?? 0);
 
-        int basicAmount = (item.basicAmount is String)
-            ? int.tryParse(item.basicAmount as String) ?? 0
-            : (item.basicAmount ?? 0);
+        int basicAmount =
+            (item.basicAmount is String) ? int.tryParse(item.basicAmount as String) ?? 0 : (item.basicAmount ?? 0);
 
-        int addStandard = (item.addStandard is String)
-            ? int.tryParse(item.addStandard as String) ?? 0
-            : (item.addStandard ?? 0);
+        int addStandard =
+            (item.addStandard is String) ? int.tryParse(item.addStandard as String) ?? 0 : (item.addStandard ?? 0);
 
-        int addAmount = (item.addAmount is String)
-            ? int.tryParse(item.addAmount as String) ?? 0
-            : (item.addAmount ?? 0);
+        int addAmount =
+            (item.addAmount is String) ? int.tryParse(item.addAmount as String) ?? 0 : (item.addAmount ?? 0);
 
         // 🚗 주차 요금 계산
         int currentFee = calculateParkingFee(
           entryTimeInMinutes: item.requestTime.hour * 60 + item.requestTime.minute,
           currentTimeInMinutes: DateTime.now().hour * 60 + DateTime.now().minute,
-          basicStandard: basicStandard, // ✅ 변환된 값 사용
-          basicAmount: basicAmount,     // ✅ 변환된 값 사용
-          addStandard: addStandard,     // ✅ 변환된 값 사용
-          addAmount: addAmount,         // ✅ 변환된 값 사용
+          basicStandard: basicStandard,
+          // ✅ 변환된 값 사용
+          basicAmount: basicAmount,
+          // ✅ 변환된 값 사용
+          addStandard: addStandard,
+          // ✅ 변환된 값 사용
+          addAmount: addAmount, // ✅ 변환된 값 사용
         ).toInt();
 
         // ✅ 경과 시간 복구
@@ -98,7 +98,8 @@ class PlateContainer extends StatelessWidget {
               midRightText: CustomDateUtils.formatTimeForUI(item.requestTime),
               bottomLeftLeftText: item.statusList.isNotEmpty ? item.statusList.join(", ") : "주의사항 없음",
               bottomLeftCenterText: "주의사항 수기",
-              bottomRightText: "경과 시간: ${elapsedMinutes}분", // ✅ 경과 시간 복구
+              bottomRightText: "경과 시간: ${elapsedMinutes}분",
+              // ✅ 경과 시간 복구
               backgroundColor: backgroundColor,
               onTap: () {
                 final plateState = Provider.of<PlateState>(context, listen: false);
