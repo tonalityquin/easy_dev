@@ -15,12 +15,7 @@ class ParkingCompletedPage extends StatefulWidget {
 }
 
 class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
-  bool _isSorted = true; // 정렬 아이콘 상태 (상하 반전 여부)
-
-  /// SnackBar로 메시지 출력
-  void _showSnackBar(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
-  }
+  bool _isSorted = true; // 정렬 아이콘 상태 (최신순: true, 오래된순: false)
 
   void _toggleSortIcon() {
     setState(() {
@@ -31,15 +26,22 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
   /// 출차 요청 처리
   void _handleDepartureRequested(BuildContext context) {
     final plateState = context.read<PlateState>();
-    final userName = context.read<UserState>().name; // 현재 사용자 이름 가져오기
-
-    // 현재 선택된 번호판 가져오기
+    final userName = context.read<UserState>().name;
     final selectedPlate = plateState.getSelectedPlate('parking_completed', userName);
+
     if (selectedPlate != null) {
       plateState.setDepartureRequested(selectedPlate.plateNumber, selectedPlate.area);
-      _showSnackBar(context, '출차 요청이 완료되었습니다.');
-    } else {
-      _showSnackBar(context, '먼저 차량을 선택하세요.');
+
+      // ✅ 상태 변경 후 선택 해제
+      plateState.toggleIsSelected(
+        collection: 'parking_completed',
+        plateNumber: selectedPlate.plateNumber,
+        area: selectedPlate.area,
+        userName: userName,
+        onError: (errorMessage) {
+          debugPrint("toggleIsSelected 실패: $errorMessage"); // 에러 메시지를 콘솔에 출력
+        },
+      );
     }
   }
 
@@ -50,16 +52,23 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
       body: Consumer2<PlateState, AreaState>(
         builder: (context, plateState, areaState, child) {
           final currentArea = areaState.currentArea; // 현재 지역
-          final parkingCompleted = plateState.getPlatesByArea('parking_completed', currentArea);
+          var parkingCompleted = plateState.getPlatesByArea('parking_completed', currentArea);
           final userName = context.read<UserState>().name; // 현재 사용자 이름 가져오기
+
+          // 🔹 정렬 적용 (최신순 or 오래된순)
+          parkingCompleted.sort((a, b) {
+            return _isSorted
+                ? b.requestTime.compareTo(a.requestTime) // 최신순 정렬
+                : a.requestTime.compareTo(b.requestTime); // 오래된순 정렬
+          });
 
           return ListView(
             padding: const EdgeInsets.all(8.0),
             children: [
               PlateContainer(
-                data: parkingCompleted, // 입차 완료 데이터
-                collection: 'parking_completed', // 컬렉션 이름
-                filterCondition: (_) => true, // 필터 조건
+                data: parkingCompleted, // 정렬된 입차 완료 데이터
+                collection: 'parking_completed',
+                filterCondition: (request) => request.type == '입차 완료',
                 onPlateTap: (plateNumber, area) {
                   plateState.toggleIsSelected(
                     collection: 'parking_completed',
@@ -80,7 +89,6 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
       ),
       bottomNavigationBar: Consumer<PlateState>(
         builder: (context, plateState, child) {
-          // 현재 선택된 번호판 가져오기
           final selectedPlate = plateState.getSelectedPlate('parking_completed', context.read<UserState>().name);
 
           return BottomNavigationBar(
@@ -96,21 +104,27 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
               ),
               BottomNavigationBarItem(
                 icon: AnimatedRotation(
-                  turns: _isSorted ? 0.5 : 0.0, // 180도 회전 (0.5 턴)
+                  turns: _isSorted ? 0.5 : 0.0, // ✅ 최신순일 때 180도 회전
                   duration: const Duration(milliseconds: 300), // 부드러운 애니메이션
                   child: Transform.scale(
-                    scaleX: _isSorted ? -1 : 1, // _isSorted = true → 좌우 반전 / false → 정상
-                    child: Icon(Icons.sort),
+                    scaleX: _isSorted ? -1 : 1, // ✅ 좌우 반전 적용
+                    child: Icon(
+                      selectedPlate != null && selectedPlate.isSelected
+                          ? Icons.arrow_forward // ✅ PlateContainer 선택 시 arrow_forward 아이콘 표시
+                          : Icons.sort, // ✅ PlateContainer 미선택 시 sort 아이콘 유지
+                    ),
                   ),
-                ),
-                label: selectedPlate == null || !selectedPlate.isSelected ? '정렬' : '강제 이동',
+                ), // ✅ 콤마 추가하여 오류 수정
+                label: selectedPlate != null && selectedPlate.isSelected ? '이동' : '정렬',
               ),
             ],
             onTap: (index) {
               if (index == 1 && selectedPlate != null && selectedPlate.isSelected) {
-                _handleDepartureRequested(context); // 출차 요청 처리
+                _handleDepartureRequested(context);
               } else if (index == 2) {
-                _toggleSortIcon(); // 정렬 아이콘 반전
+                if (selectedPlate == null || !selectedPlate.isSelected) {
+                  _toggleSortIcon(); // ✅ PlateContainer 미선택 시에만 실행 (정렬 동작)
+                }
               }
             },
           );
