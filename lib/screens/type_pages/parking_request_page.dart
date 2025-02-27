@@ -5,6 +5,7 @@ import '../../states/area_state.dart'; // AreaState 상태 관리
 import '../../states/user_state.dart';
 import '../../widgets/container/plate_container.dart'; // 번호판 데이터를 표시하는 위젯
 import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바
+import '../../widgets/dialog/plate_search_dialog.dart';
 
 /// 입차 요청 데이터를 표시하는 화면
 class ParkingRequestPage extends StatefulWidget {
@@ -57,6 +58,35 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
         onError: (errorMessage) {
           debugPrint("toggleIsSelected 실패: $errorMessage"); // 에러 메시지를 콘솔에 출력
         },
+      );
+    }
+  }
+
+  /// 🔍 번호판 검색 다이얼로그 실행
+  void _showPlateSearchDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => PlateSearchDialog(
+        onSearch: (plateNumber) => _searchPlate(plateNumber), // 검색 실행
+      ),
+    );
+  }
+
+  /// 🔍 번호판 검색 기능
+  void _searchPlate(String plateNumber) {
+    final plateState = context.read<PlateState>();
+    final currentArea = context.read<AreaState>().currentArea;
+    final parkingRequests = plateState.getPlatesByArea('parking_requests', currentArea);
+
+    final searchResults = parkingRequests.where((plate) => plate.plateNumber.endsWith(plateNumber)).toList();
+
+    if (searchResults.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("검색된 차량 수: ${searchResults.length}대")),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("일치하는 차량이 없습니다.")),
       );
     }
   }
@@ -129,7 +159,10 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                 ),
               ],
               onTap: (index) {
-                if (index == 1 && selectedPlate != null && selectedPlate.isSelected) {
+                if (index == 0) {
+                  // ✅ 검색 아이콘 클릭 시 다이얼로그 실행
+                  _showPlateSearchDialog();
+                } else if (index == 1 && selectedPlate != null && selectedPlate.isSelected) {
                   _handleParkingCompleted(context);
                 } else if (index == 2) {
                   if (selectedPlate == null || !selectedPlate.isSelected) {
