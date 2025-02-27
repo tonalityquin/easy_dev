@@ -5,7 +5,6 @@ import '../../states/area_state.dart'; // AreaState 상태 관리
 import '../../states/user_state.dart';
 import '../../widgets/container/plate_container.dart'; // 번호판 데이터를 표시하는 위젯
 import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바
-import '../../widgets/dialog/plate_search_dialog.dart';
 
 /// 입차 요청 데이터를 표시하는 화면
 class ParkingRequestPage extends StatefulWidget {
@@ -18,29 +17,30 @@ class ParkingRequestPage extends StatefulWidget {
 class _ParkingRequestPageState extends State<ParkingRequestPage> {
   bool _isSorted = true; // 정렬 아이콘 상태 (상하 반전 여부)
 
+  /// 🔹 정렬 상태 변경
   void _toggleSortIcon() {
     setState(() {
       _isSorted = !_isSorted;
     });
   }
 
-  /// 차량 번호판 클릭 시 선택 상태 변경
+  /// 🔹 차량 번호판 클릭 시 선택 상태 변경
   void _handlePlateTap(BuildContext context, String plateNumber, String area) {
     final userName = context.read<UserState>().name; // UserState에서 사용자 이름 가져오기
     context.read<PlateState>().toggleIsSelected(
-          collection: 'parking_requests',
-          plateNumber: plateNumber,
-          area: area,
-          userName: userName,
-          onError: (errorMessage) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(errorMessage)), // 🚀 Firestore 요청 실패 시 UI 알림 추가
-            );
-          },
+      collection: 'parking_requests',
+      plateNumber: plateNumber,
+      area: area,
+      userName: userName,
+      onError: (errorMessage) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(errorMessage)), // 🚀 Firestore 요청 실패 시 UI 알림 추가
         );
+      },
+    );
   }
 
-  /// 선택된 차량 번호판을 입차 완료 상태로 업데이트
+  /// 🔹 선택된 차량 번호판을 입차 완료 상태로 업데이트
   void _handleParkingCompleted(BuildContext context) {
     final plateState = context.read<PlateState>();
     final userName = context.read<UserState>().name;
@@ -58,35 +58,6 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
         onError: (errorMessage) {
           debugPrint("toggleIsSelected 실패: $errorMessage"); // 에러 메시지를 콘솔에 출력
         },
-      );
-    }
-  }
-
-  /// 🔍 번호판 검색 다이얼로그 실행
-  void _showPlateSearchDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => PlateSearchDialog(
-        onSearch: (plateNumber) => _searchPlate(plateNumber), // 검색 실행
-      ),
-    );
-  }
-
-  /// 🔍 번호판 검색 기능
-  void _searchPlate(String plateNumber) {
-    final plateState = context.read<PlateState>();
-    final currentArea = context.read<AreaState>().currentArea;
-    final parkingRequests = plateState.getPlatesByArea('parking_requests', currentArea);
-
-    final searchResults = parkingRequests.where((plate) => plate.plateNumber.endsWith(plateNumber)).toList();
-
-    if (searchResults.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("검색된 차량 수: ${searchResults.length}대")),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("일치하는 차량이 없습니다.")),
       );
     }
   }
@@ -159,10 +130,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                 ),
               ],
               onTap: (index) {
-                if (index == 0) {
-                  // ✅ 검색 아이콘 클릭 시 다이얼로그 실행
-                  _showPlateSearchDialog();
-                } else if (index == 1 && selectedPlate != null && selectedPlate.isSelected) {
+                if (index == 1 && selectedPlate != null && selectedPlate.isSelected) {
                   _handleParkingCompleted(context);
                 } else if (index == 2) {
                   if (selectedPlate == null || !selectedPlate.isSelected) {
