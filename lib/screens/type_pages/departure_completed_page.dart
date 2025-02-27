@@ -9,15 +9,29 @@ import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션
 /// 출차 완료 페이지
 /// - 출차 완료된 차량 데이터를 관리
 /// - 데이터 삭제 기능 포함
-class DepartureCompletedPage extends StatelessWidget {
+class DepartureCompletedPage extends StatefulWidget {
   const DepartureCompletedPage({super.key});
 
-  /// 메시지를 SnackBar로 출력
+  @override
+  State<DepartureCompletedPage> createState() => _DepartureCompletedPageState();
+}
+
+class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
+  bool _isSearchMode = false; // 검색 모드 여부
+
+  /// 🔹 검색 아이콘 상태 변경
+  void _toggleSearchIcon() {
+    setState(() {
+      _isSearchMode = !_isSearchMode;
+    });
+  }
+
+  /// 🔹 메시지를 SnackBar로 출력
   void _showSnackBar(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  /// 모든 데이터 삭제
+  /// 🔹 모든 데이터 삭제
   Future<void> _deleteAllData(BuildContext context) async {
     final plateRepository = Provider.of<PlateRepository>(context, listen: false);
     try {
@@ -67,22 +81,22 @@ class DepartureCompletedPage extends StatelessWidget {
       ),
       body: Consumer2<PlateState, AreaState>(
         builder: (context, plateState, areaState, child) {
-          final currentArea = areaState.currentArea; // 현재 지역
+          final currentArea = areaState.currentArea;
           final departureCompleted = plateState.getPlatesByArea('departure_completed', currentArea);
 
           return ListView(
             padding: const EdgeInsets.all(8.0),
             children: [
               PlateContainer(
-                data: departureCompleted, // 출차 완료된 차량 데이터
-                collection: 'departure_completed', // 컬렉션 이름
-                filterCondition: (_) => true, // 필터 조건
+                data: departureCompleted,
+                collection: 'departure_completed',
+                filterCondition: (_) => true,
                 onPlateTap: (plateNumber, area) {
                   plateState.toggleIsSelected(
                     collection: 'departure_completed',
                     plateNumber: plateNumber,
                     area: area,
-                    userName: '', // 사용자 정보 없음
+                    userName: '',
                     onError: (errorMessage) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text(errorMessage)),
@@ -102,11 +116,19 @@ class DepartureCompletedPage extends StatelessWidget {
           return BottomNavigationBar(
             items: [
               BottomNavigationBarItem(
-                icon: Icon(selectedPlate == null || !selectedPlate.isSelected ? Icons.search : Icons.highlight_alt),
-                label: selectedPlate == null || !selectedPlate.isSelected ? '번호판 검색' : '정보 수정',
+                icon: Icon(
+                  selectedPlate == null || !selectedPlate.isSelected
+                      ? (_isSearchMode ? Icons.cancel : Icons.search)
+                      : Icons.highlight_alt,
+                ),
+                label: selectedPlate == null || !selectedPlate.isSelected
+                    ? (_isSearchMode ? '검색 초기화' : '번호판 검색')
+                    : '정보 수정',
               ),
               BottomNavigationBarItem(
-                icon: Icon(selectedPlate == null || !selectedPlate.isSelected ? Icons.local_parking : Icons.check_circle),
+                icon: Icon(
+                  selectedPlate == null || !selectedPlate.isSelected ? Icons.local_parking : Icons.check_circle,
+                ),
                 label: selectedPlate == null || !selectedPlate.isSelected ? '주차 구역' : '출차 완료',
               ),
               const BottomNavigationBarItem(
@@ -115,8 +137,11 @@ class DepartureCompletedPage extends StatelessWidget {
               ),
             ],
             onTap: (index) {
-              if (index == 1 && selectedPlate != null && selectedPlate.isSelected) {
-                // 출차 완료 처리
+              if (index == 0) {
+                if (selectedPlate == null || !selectedPlate.isSelected) {
+                  _toggleSearchIcon(); // 🔹 검색 상태 토글
+                }
+              } else if (index == 1 && selectedPlate != null && selectedPlate.isSelected) {
                 _showSnackBar(context, '출차 완료가 완료되었습니다.');
                 plateState.setDepartureCompleted(selectedPlate.plateNumber, selectedPlate.area);
               }
