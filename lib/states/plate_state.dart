@@ -15,7 +15,41 @@ class PlateState extends ChangeNotifier {
     'departure_completed': [],
   };
 
-  /// Firestore 실시간 데이터 동기화 초기화
+  String? _searchQuery; // ✅ 검색어 저장 변수 추가
+
+  /// 🔹 검색어 Getter 추가
+  String get searchQuery => _searchQuery ?? "";
+
+  /// 🔹 검색어 설정 (`filterByLastFourDigits()` → `setSearchQuery()`로 변경)
+  void setSearchQuery(String query) {
+    _searchQuery = query;
+    notifyListeners();
+  }
+
+  /// 🔹 검색 초기화
+  void clearSearchQuery() {
+    _searchQuery = null;
+    notifyListeners();
+  }
+
+  /// 🔹 특정 지역의 번호판 리스트 반환 (검색 기능 추가)
+  List<PlateModel> getPlatesByArea(String collection, String area) {
+    final plates = _data[collection]?.where((request) => request.area == area).toList() ?? [];
+
+    // 🔍 검색어 필터링 적용
+    if (_searchQuery != null && _searchQuery!.length == 4) {
+      return plates.where((plate) {
+        final last4Digits = plate.plateNumber.length >= 4
+            ? plate.plateNumber.substring(plate.plateNumber.length - 4)
+            : plate.plateNumber;
+        return last4Digits == _searchQuery;
+      }).toList();
+    }
+
+    return plates;
+  }
+
+  /// 🔹 Firestore 실시간 데이터 동기화 초기화
   void _initializeSubscriptions() {
     for (final collectionName in _data.keys) {
       _repository.getCollectionStream(collectionName).listen((data) {
@@ -25,11 +59,21 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  /// 특정 지역에 해당하는 번호판 리스트 반환
-  List<PlateModel> getPlatesByArea(String collection, String area) {
-    final plates = _data[collection]?.where((request) => request.area == area).toList() ?? [];
-    debugPrint('Filtered Plates for $collection in $area: $plates');
-    return plates;
+  /// 🔹 특정 지역의 번호판 중 사용자가 입력한 4자리와 일치하는 번호판 필터링
+  List<PlateModel> getFilteredPlates(String collection, String area, String? searchDigits) {
+    final plates = getPlatesByArea(collection, area); // 기존 지역 필터링된 리스트 가져오기
+
+    if (searchDigits == null || searchDigits.isEmpty) {
+      return plates; // 검색어가 없으면 전체 리스트 반환
+    }
+
+    return plates.where((plate) {
+      // 🔹 번호판의 마지막 4자리를 추출
+      final last4Digits =
+          plate.plateNumber.length >= 4 ? plate.plateNumber.substring(plate.plateNumber.length - 4) : plate.plateNumber;
+
+      return last4Digits == searchDigits; // 입력한 4자리와 비교하여 필터링
+    }).toList();
   }
 
   /// 번호판 중복 여부 확인
@@ -130,7 +174,7 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  /// 선택 상태 토글
+  /// 🔹 선택 상태 토글 (`copyWith()` 제거)
   Future<void> toggleIsSelected({
     required String collection,
     required String plateNumber,
@@ -159,24 +203,24 @@ class PlateState extends ChangeNotifier {
         selectedBy: newSelectedBy,
       );
 
-      _data[collection] = List.from(plateList)
-        ..[index] = PlateModel(
-          id: plate.id,
-          plateNumber: plate.plateNumber,
-          type: plate.type,
-          requestTime: plate.requestTime,
-          location: plate.location,
-          area: plate.area,
-          userName: plate.userName,
-          isSelected: newIsSelected,
-          selectedBy: newSelectedBy,
-          adjustmentType: plate.adjustmentType,
-          statusList: plate.statusList,
-          basicStandard: plate.basicStandard,
-          basicAmount: plate.basicAmount,
-          addStandard: plate.addStandard,
-          addAmount: plate.addAmount,
-        );
+      // ✅ `copyWith()` 없이 직접 리스트를 업데이트
+      _data[collection]![index] = PlateModel(
+        id: plate.id,
+        plateNumber: plate.plateNumber,
+        type: plate.type,
+        requestTime: plate.requestTime,
+        location: plate.location,
+        area: plate.area,
+        userName: plate.userName,
+        isSelected: newIsSelected,
+        selectedBy: newSelectedBy,
+        adjustmentType: plate.adjustmentType,
+        statusList: plate.statusList,
+        basicStandard: plate.basicStandard,
+        basicAmount: plate.basicAmount,
+        addStandard: plate.addStandard,
+        addAmount: plate.addAmount,
+      );
 
       notifyListeners();
     } catch (e) {
@@ -185,7 +229,7 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  /// 선택된 번호판 반환
+  /// 🔹 선택된 번호판 반환
   PlateModel? getSelectedPlate(String collection, String userName) {
     try {
       return _data[collection]?.firstWhere(
