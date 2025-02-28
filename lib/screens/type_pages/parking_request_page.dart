@@ -124,16 +124,18 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
               ),
               BottomNavigationBarItem(
                 icon: AnimatedRotation(
-                  turns: _isSorted ? 0.5 : 0.0,
+                  turns: _isSorted ? 0.5 : 0.0, // ✅ 최신순일 때 180도 회전
                   duration: const Duration(milliseconds: 300),
                   child: Transform.scale(
-                    scaleX: _isSorted ? -1 : 1,
+                    scaleX: _isSorted ? -1 : 1, // ✅ 좌우 반전
                     child: Icon(
                       selectedPlate != null && selectedPlate.isSelected ? Icons.arrow_forward : Icons.sort,
                     ),
                   ),
                 ),
-                label: selectedPlate != null && selectedPlate.isSelected ? '이동' : '정렬',
+                label: selectedPlate != null && selectedPlate.isSelected
+                    ? '이동'
+                    : (_isSorted ? '최신순' : '오래된순'), // ✅ 최신순/오래된순 표시
               ),
             ],
             onTap: (index) {
@@ -145,7 +147,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                 _handleParkingCompleted(context);
               } else if (index == 2) {
                 if (selectedPlate == null || !selectedPlate.isSelected) {
-                  _toggleSortIcon();
+                  _toggleSortIcon(); // ✅ 최신순 ↔ 오래된순 토글
                 }
               }
             },
