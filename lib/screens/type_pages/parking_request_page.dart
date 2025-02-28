@@ -80,20 +80,35 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
     final selectedPlate = plateState.getSelectedPlate('parking_requests', userName);
 
     if (selectedPlate != null) {
-      plateState.setParkingCompleted(selectedPlate.plateNumber, selectedPlate.area);
+      try {
+        // ✅ 선택 해제 먼저 실행
+        plateState.toggleIsSelected(
+          collection: 'parking_requests',
+          plateNumber: selectedPlate.plateNumber,
+          area: selectedPlate.area,
+          userName: userName,
+          onError: (errorMessage) {
+            debugPrint("toggleIsSelected 실패: $errorMessage");
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text("선택 해제에 실패했습니다. 다시 시도해주세요.")),
+            );
+          },
+        );
 
-      // ✅ 상태 변경 후 선택 해제
-      plateState.toggleIsSelected(
-        collection: 'parking_requests',
-        plateNumber: selectedPlate.plateNumber,
-        area: selectedPlate.area,
-        userName: userName,
-        onError: (errorMessage) {
-          debugPrint("toggleIsSelected 실패: $errorMessage");
-        },
-      );
+        // ✅ 입차 완료 처리
+        plateState.setParkingCompleted(selectedPlate.plateNumber, selectedPlate.area);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("입차 완료 처리되었습니다.")),
+        );
+      } catch (e) {
+        debugPrint("입차 완료 처리 실패: $e");
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("입차 완료 처리 중 오류 발생: $e")),
+        );
+      }
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -128,53 +143,49 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
         builder: (context, plateState, child) {
           final userName = context.read<UserState>().name;
           final selectedPlate = plateState.getSelectedPlate('parking_requests', userName);
+          final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
 
           return BottomNavigationBar(
             items: [
               BottomNavigationBarItem(
                 icon: Icon(
-                  selectedPlate == null || !selectedPlate.isSelected
-                      ? (_isSearchMode ? Icons.cancel : Icons.search)
-                      : Icons.highlight_alt,
+                  isPlateSelected ? Icons.highlight_alt : (_isSearchMode ? Icons.cancel : Icons.search),
                 ),
-                label: selectedPlate == null || !selectedPlate.isSelected
-                    ? (_isSearchMode ? '검색 초기화' : '번호판 검색')
-                    : '정보 수정',
+                label: isPlateSelected ? '정보 수정' : (_isSearchMode ? '검색 초기화' : '번호판 검색'),
               ),
               BottomNavigationBarItem(
                 icon: Icon(
-                  selectedPlate == null || !selectedPlate.isSelected ? Icons.local_parking : Icons.check_circle,
+                  isPlateSelected ? Icons.check_circle : Icons.local_parking,
+                  color: isPlateSelected ? Colors.green : Colors.grey, // ✅ 비활성화 색상 적용
                 ),
-                label: selectedPlate == null || !selectedPlate.isSelected ? '구역별 검색' : '입차 완료',
+                label: isPlateSelected ? '입차 완료' : '구역별 검색',
               ),
               BottomNavigationBarItem(
                 icon: AnimatedRotation(
-                  turns: _isSorted ? 0.5 : 0.0, // ✅ 최신순일 때 180도 회전
+                  turns: _isSorted ? 0.5 : 0.0,
                   duration: const Duration(milliseconds: 300),
                   child: Transform.scale(
-                    scaleX: _isSorted ? -1 : 1, // ✅ 좌우 반전
+                    scaleX: _isSorted ? -1 : 1,
                     child: Icon(
-                      selectedPlate != null && selectedPlate.isSelected ? Icons.arrow_forward : Icons.sort,
+                      isPlateSelected ? Icons.arrow_forward : Icons.sort,
                     ),
                   ),
                 ),
-                label: selectedPlate != null && selectedPlate.isSelected
-                    ? '이동'
-                    : (_isSorted ? '최신순' : '오래된순'), // ✅ 최신순/오래된순 표시
+                label: isPlateSelected ? '이동' : (_isSorted ? '최신순' : '오래된순'),
               ),
             ],
             onTap: (index) {
               if (index == 0) {
                 if (_isSearchMode) {
-                  _resetSearch(context); // ✅ 검색 초기화
+                  _resetSearch(context);
                 } else {
-                  _showSearchDialog(context); // ✅ 검색 다이얼로그 표시
+                  _showSearchDialog(context);
                 }
-              } else if (index == 1 && selectedPlate != null && selectedPlate.isSelected) {
+              } else if (index == 1 && isPlateSelected) {
                 _handleParkingCompleted(context);
               } else if (index == 2) {
-                if (selectedPlate == null || !selectedPlate.isSelected) {
-                  _toggleSortIcon(); // ✅ 최신순 ↔ 오래된순 토글
+                if (!isPlateSelected) {
+                  _toggleSortIcon();
                 }
               }
             },

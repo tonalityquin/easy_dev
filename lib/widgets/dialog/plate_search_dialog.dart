@@ -14,7 +14,22 @@ class PlateSearchDialog extends StatefulWidget {
 
 class _PlateSearchDialogState extends State<PlateSearchDialog> {
   final TextEditingController _searchController = TextEditingController();
-  String _enteredNumber = "";
+  final FocusNode _focusNode = FocusNode(); // ✅ 자동 포커스를 위한 FocusNode 추가
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _focusNode.requestFocus(); // ✅ 다이얼로그가 열리면 자동으로 키보드 올라오게 설정
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _focusNode.dispose(); // ✅ FocusNode 해제
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,22 +42,25 @@ class _PlateSearchDialogState extends State<PlateSearchDialog> {
           Container(
             padding: const EdgeInsets.symmetric(vertical: 8.0),
             alignment: Alignment.center,
-            child: Text(
-              _enteredNumber.isNotEmpty ? _enteredNumber : "",
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            child: ValueListenableBuilder<TextEditingValue>(
+              valueListenable: _searchController,
+              builder: (context, value, child) {
+                return Text(
+                  value.text.isNotEmpty ? value.text : "",
+                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                );
+              },
             ),
           ),
-          // 🔹 입력 필드
+          // 🔹 입력 필드 (4자리 제한)
           TextField(
             controller: _searchController,
             maxLength: 4,
+            // ✅ 최대 입력 길이 4자리 제한
+            focusNode: _focusNode,
+            // ✅ 자동 포커스 적용
             keyboardType: TextInputType.number,
             decoration: const InputDecoration(labelText: '번호판 뒷 4자리 입력'),
-            onChanged: (value) {
-              setState(() {
-                _enteredNumber = value;
-              });
-            },
           ),
         ],
       ),
@@ -51,12 +69,20 @@ class _PlateSearchDialogState extends State<PlateSearchDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text('취소'),
         ),
-        TextButton(
-          onPressed: () {
-            widget.onSearch(_searchController.text);
-            Navigator.pop(context);
+        // 🔹 입력이 4자리일 때만 검색 버튼 활성화
+        ValueListenableBuilder<TextEditingValue>(
+          valueListenable: _searchController,
+          builder: (context, value, child) {
+            return TextButton(
+              onPressed: value.text.length == 4
+                  ? () {
+                      widget.onSearch(_searchController.text);
+                      Navigator.pop(context);
+                    }
+                  : null, // ✅ 4자리 미만 입력 시 버튼 비활성화
+              child: const Text('검색'),
+            );
           },
-          child: const Text('검색'),
         ),
       ],
     );
