@@ -25,21 +25,37 @@ class PlateContainer extends StatelessWidget {
   });
 
   /// 데이터 필터링 및 중복 제거
-  List<PlateModel> _filterData(List<PlateModel> data) {
+  List<PlateModel> _filterData(List<PlateModel> data, String searchQuery) {
     final seenIds = <String>{};
+
     return data.where((request) {
       if (seenIds.contains(request.id)) {
-        return false; // 중복 제거
+        return false;
       }
       seenIds.add(request.id);
-      return filterCondition == null || filterCondition!(request); // 필터 조건 적용
+
+      // 🔹 plate_number 마지막 4자리를 검색어와 비교
+      if (searchQuery.isNotEmpty) {
+        String lastFourDigits = request.plateNumber.length >= 4
+            ? request.plateNumber.substring(request.plateNumber.length - 4)
+            : request.plateNumber;
+
+        if (lastFourDigits != searchQuery) {
+          return false;
+        }
+      }
+
+      return filterCondition == null || filterCondition!(request);
     }).toList();
   }
 
+
+
   @override
   Widget build(BuildContext context) {
-    final filteredData = _filterData(data); // 데이터 필터링
-    final userName = Provider.of<UserState>(context, listen: false).name; // 현재 사용자 이름 가져오기
+    final plateState = Provider.of<PlateState>(context); // ✅ `build` 내부에서 접근
+    final filteredData = _filterData(data, plateState.searchQuery); // ✅ `searchQuery` 전달
+    final userName = Provider.of<UserState>(context, listen: false).name;
 
     // 데이터가 없을 경우 표시할 UI
     if (filteredData.isEmpty) {

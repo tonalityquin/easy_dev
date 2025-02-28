@@ -5,6 +5,7 @@ import '../../states/plate_state.dart';
 import '../../states/area_state.dart';
 import '../../widgets/container/plate_container.dart'; // 번호판 컨테이너 위젯
 import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바
+import '../../widgets/dialog/plate_search_dialog.dart'; // ✅ PlateSearchDialog 추가
 
 /// 출차 완료 페이지
 /// - 출차 완료된 차량 데이터를 관리
@@ -19,10 +20,35 @@ class DepartureCompletedPage extends StatefulWidget {
 class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
   bool _isSearchMode = false; // 검색 모드 여부
 
-  /// 🔹 검색 아이콘 상태 변경
-  void _toggleSearchIcon() {
+  /// 🔹 검색 다이얼로그 표시
+  void _showSearchDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return PlateSearchDialog(
+          onSearch: (query) {
+            _filterPlatesByNumber(context, query);
+          },
+        );
+      },
+    );
+  }
+
+  /// 🔹 plate_number에서 마지막 4자리 필터링
+  void _filterPlatesByNumber(BuildContext context, String query) {
+    if (query.length == 4) {
+      context.read<PlateState>().setSearchQuery(query);
+      setState(() {
+        _isSearchMode = true;
+      });
+    }
+  }
+
+  /// 🔹 검색 초기화
+  void _resetSearch(BuildContext context) {
+    context.read<PlateState>().clearSearchQuery();
     setState(() {
-      _isSearchMode = !_isSearchMode;
+      _isSearchMode = false;
     });
   }
 
@@ -138,8 +164,10 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
             ],
             onTap: (index) {
               if (index == 0) {
-                if (selectedPlate == null || !selectedPlate.isSelected) {
-                  _toggleSearchIcon(); // 🔹 검색 상태 토글
+                if (_isSearchMode) {
+                  _resetSearch(context); // ✅ 검색 초기화
+                } else {
+                  _showSearchDialog(context); // ✅ 검색 다이얼로그 표시
                 }
               } else if (index == 1 && selectedPlate != null && selectedPlate.isSelected) {
                 _showSnackBar(context, '출차 완료가 완료되었습니다.');
