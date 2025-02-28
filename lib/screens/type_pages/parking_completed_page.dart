@@ -65,20 +65,32 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
     final selectedPlate = plateState.getSelectedPlate('parking_completed', userName);
 
     if (selectedPlate != null) {
-      plateState.setDepartureRequested(selectedPlate.plateNumber, selectedPlate.area);
+      try {
+        // ✅ 선택 해제를 먼저 실행
+        plateState.toggleIsSelected(
+          collection: 'parking_completed',
+          plateNumber: selectedPlate.plateNumber,
+          area: selectedPlate.area,
+          userName: userName,
+          onError: (errorMessage) {
+            debugPrint("toggleIsSelected 실패: $errorMessage");
+          },
+        );
 
-      // ✅ 상태 변경 후 선택 해제
-      plateState.toggleIsSelected(
-        collection: 'parking_completed',
-        plateNumber: selectedPlate.plateNumber,
-        area: selectedPlate.area,
-        userName: userName,
-        onError: (errorMessage) {
-          debugPrint("toggleIsSelected 실패: $errorMessage");
-        },
-      );
+        // ✅ 출차 요청 처리
+        plateState.setDepartureRequested(selectedPlate.plateNumber, selectedPlate.area);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("출차 요청이 완료되었습니다.")),
+        );
+      } catch (e) {
+        debugPrint("출차 요청 처리 실패: $e");
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("출차 요청 중 오류 발생: $e")),
+        );
+      }
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -120,62 +132,61 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
           );
         },
       ),
-      bottomNavigationBar: Consumer<PlateState>(
-        builder: (context, plateState, child) {
-          final selectedPlate = plateState.getSelectedPlate('parking_completed', context.read<UserState>().name);
+        bottomNavigationBar: Consumer<PlateState>(
+          builder: (context, plateState, child) {
+            final userName = context.read<UserState>().name;
+            final selectedPlate = plateState.getSelectedPlate('parking_completed', userName);
+            final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
 
-          return BottomNavigationBar(
-            items: [
-              BottomNavigationBarItem(
-                icon: Icon(
-                  selectedPlate == null || !selectedPlate.isSelected
-                      ? (_isSearchMode ? Icons.cancel : Icons.search)
-                      : Icons.highlight_alt,
+            return BottomNavigationBar(
+              items: [
+                BottomNavigationBarItem(
+                  icon: Icon(
+                    isPlateSelected
+                        ? Icons.highlight_alt
+                        : (_isSearchMode ? Icons.cancel : Icons.search),
+                  ),
+                  label: isPlateSelected ? '정보 수정' : (_isSearchMode ? '검색 초기화' : '번호판 검색'),
                 ),
-                label: selectedPlate == null || !selectedPlate.isSelected
-                    ? (_isSearchMode ? '검색 초기화' : '번호판 검색')
-                    : '정보 수정',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(
-                  selectedPlate == null || !selectedPlate.isSelected ? Icons.local_parking : Icons.check_circle,
+                BottomNavigationBarItem(
+                  icon: Icon(
+                    isPlateSelected ? Icons.check_circle : Icons.local_parking,
+                    color: isPlateSelected ? Colors.green : Colors.grey, // ✅ 비활성화 색상 적용
+                  ),
+                  label: isPlateSelected ? '출차 요청' : '주차 구역',
                 ),
-                label: selectedPlate == null || !selectedPlate.isSelected ? '주차 구역' : '출차 요청',
-              ),
-              BottomNavigationBarItem(
-                icon: AnimatedRotation(
-                  turns: _isSorted ? 0.5 : 0.0, // ✅ 최신순일 때 180도 회전
-                  duration: const Duration(milliseconds: 300),
-                  child: Transform.scale(
-                    scaleX: _isSorted ? -1 : 1, // ✅ 좌우 반전
-                    child: Icon(
-                      selectedPlate != null && selectedPlate.isSelected ? Icons.arrow_forward : Icons.sort,
+                BottomNavigationBarItem(
+                  icon: AnimatedRotation(
+                    turns: _isSorted ? 0.5 : 0.0,
+                    duration: const Duration(milliseconds: 300),
+                    child: Transform.scale(
+                      scaleX: _isSorted ? -1 : 1,
+                      child: Icon(
+                        isPlateSelected ? Icons.arrow_forward : Icons.sort,
+                      ),
                     ),
                   ),
+                  label: isPlateSelected ? '이동' : (_isSorted ? '최신순' : '오래된순'),
                 ),
-                label: selectedPlate != null && selectedPlate.isSelected
-                    ? '이동'
-                    : (_isSorted ? '최신순' : '오래된순'), // ✅ 최신순/오래된순 표시
-              ),
-            ],
-            onTap: (index) {
-              if (index == 0) {
-                if (_isSearchMode) {
-                  _resetSearch(context); // ✅ 검색 초기화
-                } else {
-                  _showSearchDialog(context); // ✅ 검색 다이얼로그 표시
+              ],
+              onTap: (index) {
+                if (index == 0) {
+                  if (_isSearchMode) {
+                    _resetSearch(context);
+                  } else {
+                    _showSearchDialog(context);
+                  }
+                } else if (index == 1 && isPlateSelected) {
+                  _handleDepartureRequested(context);
+                } else if (index == 2) {
+                  if (!isPlateSelected) {
+                    _toggleSortIcon();
+                  }
                 }
-              } else if (index == 1 && selectedPlate != null && selectedPlate.isSelected) {
-                _handleDepartureRequested(context);
-              } else if (index == 2) {
-                if (selectedPlate == null || !selectedPlate.isSelected) {
-                  _toggleSortIcon();
-                }
-              }
-            },
-          );
-        },
-      ),
+              },
+            );
+          },
+        ),
     );
   }
 }
