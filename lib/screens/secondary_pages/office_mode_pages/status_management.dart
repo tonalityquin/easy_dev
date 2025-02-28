@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
+import '../../../utils/show_snackbar.dart';
 import '../../../states/status_state.dart';
 import '../../../widgets/navigation/secondary_role_navigation.dart'; // 상단 내비게이션 바
 import '../../../widgets/navigation/secondary_mini_navigation.dart'; // 하단 내비게이션 바
@@ -84,24 +84,18 @@ class StatusManagement extends StatelessWidget {
               );
               statusState.textController.clear();
             } else {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("항목 이름을 입력하세요.")),
-              );
+              showSnackbar(context, "항목 이름을 입력하세요."); // ✅ showSnackbar 적용
             }
           } else if (index == 1) {
             // 삭제 버튼 클릭 시
             if (statusState.selectedItemId != null) {
               statusState.removeToggleItem(statusState.selectedItemId!);
             } else {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("삭제할 항목을 선택하세요.")),
-              );
+              showSnackbar(context, "삭제할 항목을 선택하세요."); // ✅ showSnackbar 적용
             }
           } else if (index == 2) {
             // 도움말 버튼 클릭 시
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("도움말 버튼 클릭됨")),
-            );
+            showSnackbar(context, "도움말 버튼 클릭됨"); // ✅ showSnackbar 적용
           }
         },
       ),

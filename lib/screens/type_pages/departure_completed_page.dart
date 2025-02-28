@@ -3,13 +3,12 @@ import 'package:provider/provider.dart';
 import '../../repositories/plate_repository.dart';
 import '../../states/plate_state.dart';
 import '../../states/area_state.dart';
-import '../../widgets/container/plate_container.dart'; // 번호판 컨테이너 위젯
-import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바
-import '../../widgets/dialog/plate_search_dialog.dart'; // ✅ PlateSearchDialog 추가
+import '../../widgets/container/plate_container.dart';
+import '../../widgets/navigation/top_navigation.dart';
+import '../../widgets/dialog/plate_search_dialog.dart';
+import '../../utils/show_snackbar.dart'; // ✅ showSnackbar 유틸 추가
 
 /// 출차 완료 페이지
-/// - 출차 완료된 차량 데이터를 관리
-/// - 데이터 삭제 기능 포함
 class DepartureCompletedPage extends StatefulWidget {
   const DepartureCompletedPage({super.key});
 
@@ -52,19 +51,14 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
     });
   }
 
-  /// 🔹 메시지를 SnackBar로 출력
-  void _showSnackBar(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
-  }
-
   /// 🔹 모든 데이터 삭제
   Future<void> _deleteAllData(BuildContext context) async {
     final plateRepository = Provider.of<PlateRepository>(context, listen: false);
     try {
       await plateRepository.deleteAllData();
-      _showSnackBar(context, '모든 문서가 삭제되었습니다. 컬렉션은 유지됩니다.');
+      showSnackbar(context, '모든 문서가 삭제되었습니다. 컬렉션은 유지됩니다.'); // ✅ showSnackbar 유틸 적용
     } catch (e) {
-      _showSnackBar(context, '문서 삭제 실패: $e');
+      showSnackbar(context, '문서 삭제 실패: $e'); // ✅ showSnackbar 유틸 적용
     }
   }
 
@@ -72,10 +66,9 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const TopNavigation(), // 상단 내비게이션
+        title: const TopNavigation(),
         backgroundColor: Colors.blue,
         actions: [
-          // 데이터 삭제 버튼
           IconButton(
             icon: const Icon(Icons.delete),
             onPressed: () async {
@@ -124,9 +117,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                     area: area,
                     userName: '',
                     onError: (errorMessage) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(errorMessage)),
-                      );
+                      showSnackbar(context, errorMessage); // ✅ showSnackbar 유틸 적용
                     },
                   );
                 },
@@ -170,7 +161,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                   _showSearchDialog(context); // ✅ 검색 다이얼로그 표시
                 }
               } else if (index == 1 && selectedPlate != null && selectedPlate.isSelected) {
-                _showSnackBar(context, '출차 완료가 완료되었습니다.');
+                showSnackbar(context, '출차 완료가 완료되었습니다.'); // ✅ showSnackbar 유틸 적용
                 plateState.setDepartureCompleted(selectedPlate.plateNumber, selectedPlate.area);
               }
             },

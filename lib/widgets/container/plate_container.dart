@@ -5,6 +5,7 @@ import '../../utils/fee_calculator.dart';
 import '../../states/plate_state.dart';
 import '../../states/user_state.dart';
 import '../../utils/date_utils.dart'; // 날짜 관련 유틸리티
+import '../../utils/show_snackbar.dart'; // ✅ showSnackbar 유틸 추가
 import 'plate_custom_box.dart'; // 커스텀 박스 위젯
 
 /// PlateContainer
@@ -48,8 +49,6 @@ class PlateContainer extends StatelessWidget {
       return filterCondition == null || filterCondition!(request);
     }).toList();
   }
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -125,9 +124,7 @@ class PlateContainer extends StatelessWidget {
                   area: item.area,
                   userName: userName,
                   onError: (errorMessage) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(errorMessage)),
-                    );
+                    showSnackbar(context, errorMessage); // ✅ showSnackbar 유틸 적용
                   },
                 );
               },
