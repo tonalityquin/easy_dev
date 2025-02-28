@@ -20,6 +20,7 @@ import '../../states/plate_state.dart';
 import '../../states/area_state.dart';
 import '../../repositories/plate_repository.dart';
 import '../../utils/show_snackbar.dart';
+import '../../widgets/dialog/parking_location_dialog.dart';
 
 // [새로운 코드 추가] camera_helper.dart 불러오기
 import '../../utils/camera_helper.dart'; // CameraHelper를 사용하기 위한 import
@@ -323,40 +324,14 @@ class _Input3DigitState extends State<Input3Digit> {
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        final currentArea = context.watch<AreaState>().currentArea;
-
-        return AlertDialog(
-          title: const Text('주차 구역 선택'),
-          content: FutureBuilder<List<String>>(
-            future: context.read<PlateRepository>().getAvailableLocations(currentArea),
-            builder: (BuildContext context, AsyncSnapshot<List<String>> snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return const Center(child: Text('사용 가능한 주차 구역이 없습니다.'));
-              }
-
-              final locations = snapshot.data!;
-              return SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: locations.map((location) {
-                    return ListTile(
-                      title: Text(location),
-                      onTap: () {
-                        setState(() {
-                          locationController.text = location;
-                          isLocationSelected = true;
-                        });
-                        Navigator.pop(context);
-                      },
-                    );
-                  }).toList(),
-                ),
-              );
-            },
-          ),
+        return ParkingLocationDialog(
+          locationController: locationController,
+          onLocationSelected: (String location) {
+            setState(() {
+              locationController.text = location;
+              isLocationSelected = true;
+            });
+          },
         );
       },
     );
