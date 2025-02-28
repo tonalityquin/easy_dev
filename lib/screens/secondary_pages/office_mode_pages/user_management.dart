@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../utils/show_snackbar.dart';
 import '../../../widgets/navigation/secondary_role_navigation.dart';
 import '../../../widgets/navigation/secondary_mini_navigation.dart';
 import 'user_management_pages/user_setting.dart';
@@ -43,9 +44,7 @@ class UserManagement extends StatelessWidget {
           password,
           isWorking,
           onError: (errorMessage) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(errorMessage)),
-            );
+            showSnackbar(context, errorMessage); // ✅ showSnackbar 유틸 적용
           },
         );
       });
@@ -53,9 +52,7 @@ class UserManagement extends StatelessWidget {
       userState.deleteUsers(
         selectedIds,
         onError: (errorMessage) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(errorMessage)),
-          );
+          showSnackbar(context, errorMessage); // ✅ showSnackbar 유틸 적용
         },
       );
     }

@@ -6,6 +6,7 @@ import '../../states/user_state.dart';
 import '../../widgets/container/plate_container.dart'; // 번호판 컨테이너 위젯
 import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바
 import '../../widgets/dialog/plate_search_dialog.dart'; // ✅ PlateSearchDialog 추가
+import '../../utils/show_snackbar.dart';
 
 /// 출차 요청 페이지
 /// - 출차 요청된 차량 목록을 표시하고 출차 완료 처리
@@ -75,26 +76,19 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
           userName: userName,
           onError: (errorMessage) {
             debugPrint("toggleIsSelected 실패: $errorMessage");
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text("선택 해제에 실패했습니다. 다시 시도해주세요.")),
-            );
+            showSnackbar(context, "선택 해제에 실패했습니다. 다시 시도해주세요."); // ✅ showSnackbar 유틸 적용
           },
         );
 
         // ✅ 출차 완료 처리
         plateState.setDepartureCompleted(selectedPlate.plateNumber, selectedPlate.area);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("출차 완료 처리되었습니다.")),
-        );
+        showSnackbar(context, "출차 완료 처리되었습니다."); // ✅ showSnackbar 유틸 적용
       } catch (e) {
         debugPrint("출차 완료 처리 실패: $e");
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("출차 완료 처리 중 오류 발생: $e")),
-        );
+        showSnackbar(context, "출차 완료 처리 중 오류 발생: $e"); // ✅ showSnackbar 유틸 적용
       }
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -125,9 +119,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                     area: area,
                     userName: userName,
                     onError: (errorMessage) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(errorMessage)),
-                      );
+                      showSnackbar(context, errorMessage); // ✅ showSnackbar 유틸 적용
                     },
                   );
                 },
@@ -136,61 +128,59 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
           );
         },
       ),
-        bottomNavigationBar: Consumer<PlateState>(
-          builder: (context, plateState, child) {
-            final userName = context.read<UserState>().name;
-            final selectedPlate = plateState.getSelectedPlate('departure_requests', userName);
-            final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
+      bottomNavigationBar: Consumer<PlateState>(
+        builder: (context, plateState, child) {
+          final userName = context.read<UserState>().name;
+          final selectedPlate = plateState.getSelectedPlate('departure_requests', userName);
+          final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
 
-            return BottomNavigationBar(
-              items: [
-                BottomNavigationBarItem(
-                  icon: Icon(
-                    isPlateSelected
-                        ? Icons.highlight_alt
-                        : (_isSearchMode ? Icons.cancel : Icons.search),
-                  ),
-                  label: isPlateSelected ? '정보 수정' : (_isSearchMode ? '검색 초기화' : '번호판 검색'),
+          return BottomNavigationBar(
+            items: [
+              BottomNavigationBarItem(
+                icon: Icon(
+                  isPlateSelected ? Icons.highlight_alt : (_isSearchMode ? Icons.cancel : Icons.search),
                 ),
-                BottomNavigationBarItem(
-                  icon: Icon(
-                    isPlateSelected ? Icons.check_circle : Icons.local_parking,
-                    color: isPlateSelected ? Colors.green : Colors.grey, // ✅ 비활성화 색상 적용
-                  ),
-                  label: isPlateSelected ? '출차 완료' : '주차 구역',
+                label: isPlateSelected ? '정보 수정' : (_isSearchMode ? '검색 초기화' : '번호판 검색'),
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(
+                  isPlateSelected ? Icons.check_circle : Icons.local_parking,
+                  color: isPlateSelected ? Colors.green : Colors.grey, // ✅ 비활성화 색상 적용
                 ),
-                BottomNavigationBarItem(
-                  icon: AnimatedRotation(
-                    turns: _isSorted ? 0.5 : 0.0,
-                    duration: const Duration(milliseconds: 300),
-                    child: Transform.scale(
-                      scaleX: _isSorted ? -1 : 1,
-                      child: Icon(
-                        isPlateSelected ? Icons.arrow_forward : Icons.sort,
-                      ),
+                label: isPlateSelected ? '출차 완료' : '주차 구역',
+              ),
+              BottomNavigationBarItem(
+                icon: AnimatedRotation(
+                  turns: _isSorted ? 0.5 : 0.0,
+                  duration: const Duration(milliseconds: 300),
+                  child: Transform.scale(
+                    scaleX: _isSorted ? -1 : 1,
+                    child: Icon(
+                      isPlateSelected ? Icons.arrow_forward : Icons.sort,
                     ),
                   ),
-                  label: isPlateSelected ? '이동' : (_isSorted ? '최신순' : '오래된순'),
                 ),
-              ],
-              onTap: (index) {
-                if (index == 0) {
-                  if (_isSearchMode) {
-                    _resetSearch(context);
-                  } else {
-                    _showSearchDialog(context);
-                  }
-                } else if (index == 1 && isPlateSelected) {
-                  _handleDepartureCompleted(context);
-                } else if (index == 2) {
-                  if (!isPlateSelected) {
-                    _toggleSortIcon();
-                  }
+                label: isPlateSelected ? '이동' : (_isSorted ? '최신순' : '오래된순'),
+              ),
+            ],
+            onTap: (index) {
+              if (index == 0) {
+                if (_isSearchMode) {
+                  _resetSearch(context);
+                } else {
+                  _showSearchDialog(context);
                 }
-              },
-            );
-          },
-        ),
+              } else if (index == 1 && isPlateSelected) {
+                _handleDepartureCompleted(context);
+              } else if (index == 2) {
+                if (!isPlateSelected) {
+                  _toggleSortIcon();
+                }
+              }
+            },
+          );
+        },
+      ),
     );
   }
 }

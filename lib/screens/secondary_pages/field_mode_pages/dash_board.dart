@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart'; // Provider 사용
 import 'dart:io'; // 앱 종료를 위한 패키지 추가
+import '../../../utils/show_snackbar.dart';
 import '../../../widgets/navigation/secondary_role_navigation.dart'; // 상단 내비게이션 바
 import '../../../widgets/navigation/secondary_mini_navigation.dart'; // 하단 내비게이션 바
 import '../../../states/user_state.dart'; // 사용자 상태 가져오기
@@ -35,9 +36,7 @@ class DashBoard extends StatelessWidget {
       await userState.clearUser(); // 🔹 사용자 데이터 삭제
       exit(0); // 🔹 앱 종료
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('로그아웃 실패: $e')),
-      );
+      showSnackbar(context, '출근 처리가 완료되었습니다.');
     }
   }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../utils/app_colors.dart'; // 앱 색상 팔레트
+import '../utils/show_snackbar.dart';
 import '../states/page_state.dart'; // 페이지 상태 관리 클래스
 import '../states/page_info.dart'; // 페이지 정보 관리 클래스
 import '../screens/input_pages/input_3_digit.dart'; // 3자리 입력 페이지
@@ -47,9 +48,7 @@ class RefreshableBody extends StatelessWidget {
         MaterialPageRoute(builder: (context) => const SecondaryPage()),
       );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('드래그 동작이 감지되지 않았습니다.')),
-      );
+      showSnackbar(context, '드래그 동작이 감지되지 않았습니다.');
     }
   }
 

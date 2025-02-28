@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../utils/show_snackbar.dart';
 import '../../../states/adjustment_state.dart';
 import '../../../states/area_state.dart'; // 🔥 지역 상태 추가
 import '../../../widgets/navigation/secondary_role_navigation.dart';
@@ -15,8 +16,6 @@ class AdjustmentManagement extends StatefulWidget {
 }
 
 class _AdjustmentManagementState extends State<AdjustmentManagement> {
-  ScaffoldMessengerState? _scaffoldMessenger;
-
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -26,18 +25,8 @@ class _AdjustmentManagementState extends State<AdjustmentManagement> {
     });
   }
 
-
-
-  void _showSnackBar(String message) {
-    if (!mounted) return;
-    _scaffoldMessenger?.showSnackBar(SnackBar(content: Text(message)));
-  }
-
   List<String> _getSelectedIds(AdjustmentState state) {
-    return state.selectedAdjustments.entries
-        .where((entry) => entry.value)
-        .map((entry) => entry.key)
-        .toList();
+    return state.selectedAdjustments.entries.where((entry) => entry.value).map((entry) => entry.key).toList();
   }
 
   void _showAdjustmentSettingDialog(BuildContext context) {
@@ -52,16 +41,16 @@ class _AdjustmentManagementState extends State<AdjustmentManagement> {
             onSave: (adjustmentData) async {
               try {
                 await context.read<AdjustmentState>().addAdjustments(
-                  adjustmentData['CountType'],
-                  adjustmentData['area'],
-                  adjustmentData['basicStandard'],
-                  adjustmentData['basicAmount'],
-                  adjustmentData['addStandard'],
-                  adjustmentData['addAmount'],
-                );
-                _showSnackBar('정산 데이터가 성공적으로 추가되었습니다.');
+                      adjustmentData['CountType'],
+                      adjustmentData['area'],
+                      adjustmentData['basicStandard'],
+                      adjustmentData['basicAmount'],
+                      adjustmentData['addStandard'],
+                      adjustmentData['addAmount'],
+                    );
+                showSnackbar(context, '정산 데이터가 성공적으로 추가되었습니다.'); // ✅ showSnackbar 적용
               } catch (e) {
-                _showSnackBar('데이터 추가 중 오류가 발생했습니다.');
+                showSnackbar(context, '데이터 추가 중 오류가 발생했습니다.'); // ✅ showSnackbar 적용
               }
             },
           ),
@@ -75,15 +64,15 @@ class _AdjustmentManagementState extends State<AdjustmentManagement> {
     final selectedIds = _getSelectedIds(adjustmentState);
 
     if (selectedIds.isEmpty) {
-      _showSnackBar('삭제할 항목을 선택하세요.');
+      showSnackbar(context, '삭제할 항목을 선택하세요.'); // ✅ showSnackbar 적용
       return;
     }
 
     try {
       await adjustmentState.deleteAdjustments(selectedIds);
-      _showSnackBar('선택된 항목이 삭제되었습니다.');
+      showSnackbar(context, '선택된 항목이 삭제되었습니다.'); // ✅ showSnackbar 적용
     } catch (e) {
-      _showSnackBar('삭제 중 오류가 발생했습니다.');
+      showSnackbar(context, '삭제 중 오류가 발생했습니다.'); // ✅ showSnackbar 적용
     }
   }
 
@@ -96,9 +85,7 @@ class _AdjustmentManagementState extends State<AdjustmentManagement> {
           final currentArea = context.watch<AreaState>().currentArea.trim(); // 🔥 현재 지역 가져오기
 
           // 🔥 현재 지역과 일치하는 데이터만 필터링
-          final adjustments = state.adjustments
-              .where((adj) => adj['area'].toString().trim() == currentArea)
-              .toList();
+          final adjustments = state.adjustments.where((adj) => adj['area'].toString().trim() == currentArea).toList();
 
           if (adjustments.isEmpty) {
             return const Center(child: Text('현재 지역에 해당하는 정산 데이터가 없습니다.'));

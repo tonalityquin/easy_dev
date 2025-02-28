@@ -6,6 +6,7 @@ import '../../states/user_state.dart';
 import '../../widgets/container/plate_container.dart'; // 번호판 데이터를 표시하는 위젯
 import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바
 import '../../widgets/dialog/plate_search_dialog.dart';
+import '../../utils/show_snackbar.dart';
 
 class ParkingRequestPage extends StatefulWidget {
   const ParkingRequestPage({super.key});
@@ -66,9 +67,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
           area: area,
           userName: userName,
           onError: (errorMessage) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(errorMessage)),
-            );
+            showSnackbar(context, errorMessage);
           },
         );
   }
@@ -89,26 +88,19 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
           userName: userName,
           onError: (errorMessage) {
             debugPrint("toggleIsSelected 실패: $errorMessage");
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text("선택 해제에 실패했습니다. 다시 시도해주세요.")),
-            );
+            showSnackbar(context, "선택 해제에 실패했습니다. 다시 시도해주세요.");
           },
         );
 
         // ✅ 입차 완료 처리
         plateState.setParkingCompleted(selectedPlate.plateNumber, selectedPlate.area);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("입차 완료 처리되었습니다.")),
-        );
+        showSnackbar(context, "입차 완료 처리되었습니다."); // ✅ showSnackbar 적용
       } catch (e) {
         debugPrint("입차 완료 처리 실패: $e");
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("입차 완료 처리 중 오류 발생: $e")),
-        );
+        showSnackbar(context, "입차 완료 처리 중 오류 발생: $e"); // ✅ showSnackbar 적용
       }
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
