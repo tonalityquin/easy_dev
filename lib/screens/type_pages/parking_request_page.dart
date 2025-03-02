@@ -7,6 +7,9 @@ import '../../widgets/container/plate_container.dart'; // 번호판 데이터를
 import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바
 import '../../widgets/dialog/plate_search_dialog.dart';
 import '../../utils/show_snackbar.dart';
+import '../../widgets/dialog/parking_location_dialog.dart';
+import '../../repositories/plate_repository.dart';
+
 
 class ParkingRequestPage extends StatefulWidget {
   const ParkingRequestPage({super.key});
@@ -73,34 +76,65 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
   }
 
   /// 🔹 선택된 차량 번호판을 입차 완료 상태로 업데이트
+  /// 🔹 선택된 차량을 입차 완료 처리 (주차 구역 선택 Dialog 적용)
   void _handleParkingCompleted(BuildContext context) {
     final plateState = context.read<PlateState>();
     final userName = context.read<UserState>().name;
     final selectedPlate = plateState.getSelectedPlate('parking_requests', userName);
 
     if (selectedPlate != null) {
-      try {
-        // ✅ 선택 해제 먼저 실행
-        plateState.toggleIsSelected(
-          collection: 'parking_requests',
-          plateNumber: selectedPlate.plateNumber,
-          area: selectedPlate.area,
-          userName: userName,
-          onError: (errorMessage) {
-            debugPrint("toggleIsSelected 실패: $errorMessage");
-            showSnackbar(context, "선택 해제에 실패했습니다. 다시 시도해주세요.");
-          },
-        );
-
-        // ✅ 입차 완료 처리
-        plateState.setParkingCompleted(selectedPlate.plateNumber, selectedPlate.area);
-        showSnackbar(context, "입차 완료 처리되었습니다."); // ✅ showSnackbar 적용
-      } catch (e) {
-        debugPrint("입차 완료 처리 실패: $e");
-        showSnackbar(context, "입차 완료 처리 중 오류 발생: $e"); // ✅ showSnackbar 적용
-      }
+      // ✅ 주차 구역 선택 Dialog 표시
+      final TextEditingController locationController = TextEditingController();
+      showDialog(
+        context: context,
+        builder: (context) {
+          return ParkingLocationDialog(
+            locationController: locationController,
+            onLocationSelected: (String location) {
+              if (location.isNotEmpty) {
+                _completeParking(context, selectedPlate.plateNumber, selectedPlate.area, location);
+              } else {
+                showSnackbar(context, '주차 구역을 입력해주세요.');
+              }
+            },
+          );
+        },
+      );
     }
   }
+
+  /// 🔹 주차 구역을 반영하여 '입차 완료' 처리
+  void _completeParking(BuildContext context, String plateNumber, String area, String location) {
+    final plateState = context.read<PlateState>();
+    final plateRepository = context.read<PlateRepository>();
+
+    try {
+      // ✅ Firestore 업데이트
+      plateRepository.addRequestOrCompleted(
+        collection: 'parking_completed',
+        plateNumber: plateNumber,
+        location: location, // 선택한 주차 구역 반영
+        area: area,
+        userName: context.read<UserState>().name,
+        type: '입차 완료',
+        adjustmentType: null,
+        statusList: [],
+        basicStandard: 0,
+        basicAmount: 0,
+        addStandard: 0,
+        addAmount: 0,
+      );
+
+      // ✅ PlateState에서 '입차 요청' → '입차 완료'로 이동
+      plateState.movePlateToCompleted(plateNumber, location);
+
+      showSnackbar(context, "입차 완료: $plateNumber ($location)");
+    } catch (e) {
+      debugPrint("입차 완료 처리 실패: $e");
+      showSnackbar(context, "입차 완료 처리 중 오류 발생: $e");
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -174,7 +208,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                   _showSearchDialog(context);
                 }
               } else if (index == 1 && isPlateSelected) {
-                _handleParkingCompleted(context);
+                _handleParkingCompleted(context); // ✅ 수정된 입차 완료 로직 적용
               } else if (index == 2) {
                 if (!isPlateSelected) {
                   _toggleSortIcon();

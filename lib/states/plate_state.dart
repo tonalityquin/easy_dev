@@ -229,6 +229,7 @@ class PlateState extends ChangeNotifier {
     }
   }
 
+
   /// 🔹 선택된 번호판 반환
   PlateModel? getSelectedPlate(String collection, String userName) {
     try {
@@ -240,6 +241,78 @@ class PlateState extends ChangeNotifier {
       return null;
     }
   }
+
+  /// 🔹 특정 번호판을 컬렉션에서 찾기
+  PlateModel? _findPlate(String collection, String plateNumber) {
+    try {
+      return _data[collection]?.firstWhere(
+            (plate) => plate.plateNumber == plateNumber,
+      );
+    } catch (e) {
+      debugPrint("🚨 Error in _findPlate: $e");
+      return null;
+    }
+  }
+
+  /// 🔹 선택된 번호판을 '입차 완료' 상태로 이동
+  Future<void> movePlateToCompleted(String plateNumber, String location) async {
+    final selectedPlate = _findPlate('parking_requests', plateNumber);
+    if (selectedPlate != null) {
+      // 새로운 PlateModel 인스턴스 생성
+      final updatedPlate = PlateModel(
+        id: selectedPlate.id,
+        plateNumber: selectedPlate.plateNumber,
+        type: '입차 완료', // ✅ 상태 변경
+        requestTime: selectedPlate.requestTime,
+        location: location, // ✅ 새로운 위치 적용
+        area: selectedPlate.area,
+        userName: selectedPlate.userName,
+        isSelected: false, // ✅ 선택 해제
+        selectedBy: null,
+        adjustmentType: selectedPlate.adjustmentType,
+        statusList: selectedPlate.statusList,
+        basicStandard: selectedPlate.basicStandard,
+        basicAmount: selectedPlate.basicAmount,
+        addStandard: selectedPlate.addStandard,
+        addAmount: selectedPlate.addAmount,
+      );
+
+      final documentId = '${plateNumber}_${selectedPlate.area}';
+
+      try {
+        // 🔹 1️⃣ Firestore에서 `parking_requests` 문서 삭제
+        await _repository.deleteDocument('parking_requests', documentId);
+
+        // 🔹 2️⃣ Firestore에 `parking_completed` 문서 추가
+        await _repository.addOrUpdateDocument('parking_completed', documentId, {
+          'plate_number': updatedPlate.plateNumber,
+          'type': updatedPlate.type,
+          'request_time': updatedPlate.requestTime,
+          'location': updatedPlate.location,
+          'area': updatedPlate.area,
+          'userName': updatedPlate.userName,
+          'adjustmentType': updatedPlate.adjustmentType,
+          'statusList': updatedPlate.statusList,
+          'isSelected': updatedPlate.isSelected,
+          'selectedBy': updatedPlate.selectedBy,
+          'basicStandard': updatedPlate.basicStandard,
+          'basicAmount': updatedPlate.basicAmount,
+          'addStandard': updatedPlate.addStandard,
+          'addAmount': updatedPlate.addAmount,
+        });
+
+        // 🔹 3️⃣ 내부 리스트에서 데이터 이동
+        _data['parking_requests']?.removeWhere((plate) => plate.plateNumber == plateNumber);
+        _data['parking_completed']?.add(updatedPlate);
+
+        notifyListeners(); // 🔄 UI 갱신
+      } catch (e) {
+        debugPrint('🚨 Firestore 데이터 이동 실패: $e');
+      }
+    }
+  }
+
+
 
   Future<void> updatePlateStatus({
     required String plateNumber,
