@@ -79,7 +79,7 @@ class _Input3DigitState extends State<Input3Digit> {
       try {
         await Future.wait([
           _initializeStatuses().timeout(Duration(seconds: 3)), // 3초 후 강제 종료
-          _initializeCamera().timeout(Duration(seconds: 3)),   // 3초 후 강제 종료
+          _initializeCamera().timeout(Duration(seconds: 3)), // 3초 후 강제 종료
         ]);
       } catch (e) {
         debugPrint("초기화 오류 발생: $e"); // 초기화 오류 로그 출력
@@ -91,7 +91,6 @@ class _Input3DigitState extends State<Input3Digit> {
       }
     });
   }
-
 
   // ------------------- 주차 구역 상태 목록 불러오기 -------------------
   Future<void> _initializeStatuses() async {
@@ -124,9 +123,7 @@ class _Input3DigitState extends State<Input3Digit> {
   }
 
   void _handleInputChange() {
-    if (controller3digit.text.isEmpty &&
-        controller1digit.text.isEmpty &&
-        controller4digit.text.isEmpty) {
+    if (controller3digit.text.isEmpty && controller1digit.text.isEmpty && controller4digit.text.isEmpty) {
       return; // 아무것도 입력되지 않은 경우 setState 호출 방지
     }
 
@@ -137,9 +134,7 @@ class _Input3DigitState extends State<Input3Digit> {
       return; // clearInput() 제거하여 무한 루프 방지
     }
 
-    if (controller3digit.text.length == 3 &&
-        controller1digit.text.length == 1 &&
-        controller4digit.text.length == 4) {
+    if (controller3digit.text.length == 3 && controller1digit.text.length == 1 && controller4digit.text.length == 4) {
       setState(() {
         showKeypad = false;
       });
@@ -167,7 +162,7 @@ class _Input3DigitState extends State<Input3Digit> {
     );
 
     if (isUpdated == true) {
-      setState(() {}); // 촬영된 이미지가 업데이트되었으므로 화면 갱신
+      setState(() {}); // ✅ 촬영된 이미지가 업데이트되었으므로 화면 갱신
     }
   }
 
@@ -304,7 +299,6 @@ class _Input3DigitState extends State<Input3Digit> {
     return true; // ✅ Future<bool> 반환하도록 수정
   }
 
-
   // ------------------- dispose -------------------
   @override
   void dispose() {
@@ -397,42 +391,42 @@ class _Input3DigitState extends State<Input3Digit> {
                                   },
                                 ),
                         ),
-
                         const SizedBox(height: 32.0),
                         const Text(
                           '정산 유형',
                           style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 8.0),
-                      FutureBuilder<bool>(
-                        future: _refreshAdjustments().timeout(Duration(seconds: 3), onTimeout: () => false), // ✅ Future<bool> 사용
-                        builder: (context, snapshot) {
-                          if (snapshot.connectionState == ConnectionState.waiting) {
-                            return const Center(child: CircularProgressIndicator());
-                          }
-                          if (snapshot.data == false) {
-                            return const Text('정산 유형 정보를 불러오지 못했습니다.');
-                          }
-                          return DropdownButtonFormField<String>(
-                            value: selectedAdjustment,
-                            onChanged: (newValue) {
-                              setState(() {
-                                selectedAdjustment = newValue;
-                              });
-                            },
-                            items: ['test_Hospital', 'test_Parking'].map((type) {
-                              return DropdownMenuItem<String>(
-                                value: type,
-                                child: Text(type),
-                              );
-                            }).toList(),
-                            decoration: const InputDecoration(
-                              labelText: '정산 유형 선택',
-                              border: OutlineInputBorder(),
-                            ),
-                          );
-                        },
-                      ),
+                        FutureBuilder<bool>(
+                          future: _refreshAdjustments().timeout(Duration(seconds: 3), onTimeout: () => false),
+                          // ✅ Future<bool> 사용
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState == ConnectionState.waiting) {
+                              return const Center(child: CircularProgressIndicator());
+                            }
+                            if (snapshot.data == false) {
+                              return const Text('정산 유형 정보를 불러오지 못했습니다.');
+                            }
+                            return DropdownButtonFormField<String>(
+                              value: selectedAdjustment,
+                              onChanged: (newValue) {
+                                setState(() {
+                                  selectedAdjustment = newValue;
+                                });
+                              },
+                              items: ['test_Hospital', 'test_Parking'].map((type) {
+                                return DropdownMenuItem<String>(
+                                  value: type,
+                                  child: Text(type),
+                                );
+                              }).toList(),
+                              decoration: const InputDecoration(
+                                labelText: '정산 유형 선택',
+                                border: OutlineInputBorder(),
+                              ),
+                            );
+                          },
+                        ),
                         const SizedBox(height: 32.0),
                         const Text(
                           '차량 상태',
