@@ -1,7 +1,5 @@
 // ------------------- Input3Digit.dart -------------------
 // [원본 코드에서 카메라 관련 로직 분리 후, CameraHelper 호출로 대체]
-
-import 'package:camera/camera.dart'; // [추가] CameraPreview, XFile 사용을 위해 직접 import
 import 'dart:io'; // [추가] 이미지 미리보기(File) 사용을 위해 import
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -24,6 +22,7 @@ import '../../widgets/dialog/parking_location_dialog.dart';
 
 // [새로운 코드 추가] camera_helper.dart 불러오기
 import '../../utils/camera_helper.dart'; // CameraHelper를 사용하기 위한 import
+import '../../widgets/dialog/camera_preview_dialog.dart';
 
 /// 번호판 및 주차 구역 입력을 처리하는 화면
 class Input3Digit extends StatefulWidget {
@@ -137,80 +136,23 @@ class _Input3DigitState extends State<Input3Digit> {
 
   // ------------------- 카메라 관련 메서드 -------------------
   Future<void> _initializeCamera() async {
-    // CameraHelper를 통해 카메라 초기화
     await _cameraHelper.initializeCamera();
-    setState(() {});
   }
+
 
   /// 카메라 팝업 표시 (카메라 미리보기 + 촬영 버튼)
+  /// 카메라 미리보기 다이얼로그 표시
   Future<void> _showCameraPreviewDialog() async {
-    if (!_cameraHelper.isCameraInitialized) {
-      showSnackbar(context, '카메라가 아직 초기화되지 않았습니다.');
-      return;
+    final bool? isUpdated = await showDialog(
+      context: context,
+      builder: (BuildContext context) => CameraPreviewDialog(cameraHelper: _cameraHelper),
+    );
+
+    if (isUpdated == true) {
+      setState(() {}); // 촬영된 이미지가 업데이트되었으므로 화면 갱신
     }
-
-    await showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return Dialog(
-          child: Column(
-            children: [
-              Expanded(
-                // CameraPreview는 camera 패키지에 정의
-                child: AspectRatio(
-                  aspectRatio: 1.0,
-                  child: RotatedBox(
-                    quarterTurns: 1,
-                    child: CameraPreview(_cameraHelper.cameraController!),
-                  ),
-                ),
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  ElevatedButton(
-                    onPressed: () async {
-                      await _cameraHelper.captureImage();
-                      // 팝업은 닫지 않음
-                      setState(() {});
-                    },
-                    child: const Text('촬영'),
-                  ),
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(context); // 팝업 닫기
-                    },
-                    child: const Text('완료'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
-    );
   }
 
-  /// 사진 삭제 (CameraHelper에서 관리하는 리스트에서 제거)
-  void _removeImage(int index) {
-    _cameraHelper.removeImage(index);
-    setState(() {});
-  }
-
-  /// 큰 팝업(Dialog)으로 전체 사진 보기
-  void _showFullPreviewDialog(XFile imageFile) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return Dialog(
-          child: Image.file(
-            File(imageFile.path),
-            fit: BoxFit.contain,
-          ),
-        );
-      },
-    );
-  }
 
   // ------------------- 기타 주요 메서드 -------------------
   void _setActiveController(TextEditingController controller) {
@@ -422,6 +364,7 @@ class _Input3DigitState extends State<Input3Digit> {
                           style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 8.0),
+                        // ❌ 기존 코드에서 `_showFullPreviewDialog` 및 `_removeImage`를 호출하는 부분 제거
                         SizedBox(
                           height: 100,
                           child: _cameraHelper.capturedImages.isEmpty
@@ -430,49 +373,19 @@ class _Input3DigitState extends State<Input3Digit> {
                                   scrollDirection: Axis.horizontal,
                                   itemCount: _cameraHelper.capturedImages.length,
                                   itemBuilder: (context, index) {
-                                    return Stack(
-                                      children: [
-                                        Padding(
-                                          padding: const EdgeInsets.all(4.0),
-                                          child: GestureDetector(
-                                            onTap: () {
-                                              // 전체 화면(팝업)으로 확대
-                                              _showFullPreviewDialog(
-                                                _cameraHelper.capturedImages[index],
-                                              );
-                                            },
-                                            child: Image.file(
-                                              File(_cameraHelper.capturedImages[index].path),
-                                              width: 100,
-                                              height: 100,
-                                              fit: BoxFit.cover,
-                                            ),
-                                          ),
-                                        ),
-                                        Positioned(
-                                          top: 0,
-                                          right: 0,
-                                          child: GestureDetector(
-                                            onTap: () => _removeImage(index),
-                                            child: Container(
-                                              padding: const EdgeInsets.all(4.0),
-                                              decoration: const BoxDecoration(
-                                                color: Colors.red,
-                                                shape: BoxShape.circle,
-                                              ),
-                                              child: const Icon(
-                                                Icons.close,
-                                                size: 16,
-                                                color: Colors.white,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
+                                    return Padding(
+                                      padding: const EdgeInsets.all(4.0),
+                                      child: Image.file(
+                                        File(_cameraHelper.capturedImages[index].path),
+                                        width: 100,
+                                        height: 100,
+                                        fit: BoxFit.cover,
+                                      ),
                                     );
                                   },
                                 ),
                         ),
+
                         const SizedBox(height: 32.0),
                         const Text(
                           '정산 유형',
