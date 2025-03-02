@@ -1,0 +1,2 @@
+C:/Users/nrit0/Pictures/easydev/android/app/.cxx/Debug/3s5h3s3s/x86/CMakeFiles/edit_cache.dir
+C:/Users/nrit0/Pictures/easydev/android/app/.cxx/Debug/3s5h3s3s/x86/CMakeFiles/rebuild_cache.dir
