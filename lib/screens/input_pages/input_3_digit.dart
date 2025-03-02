@@ -7,9 +7,7 @@ import 'package:provider/provider.dart';
 import '../../states/adjustment_state.dart';
 import '../../states/status_state.dart';
 import '../../states/user_state.dart';
-import '../../widgets/input_field/front_3_digit.dart';
-import '../../widgets/input_field/middle_1_digit.dart';
-import '../../widgets/input_field/back_4_digit.dart';
+import '../../widgets/input_field/common_plate_field.dart';
 import '../../widgets/input_field/location_field.dart';
 import '../../widgets/keypad/num_keypad.dart';
 import '../../widgets/keypad/kor_keypad.dart';
@@ -75,9 +73,25 @@ class _Input3DigitState extends State<Input3Digit> {
     activeController = controller3digit;
     _addInputListeners();
     isLocationSelected = locationController.text.isNotEmpty;
-    _initializeStatuses();
-    _initializeCamera(); // [추가] 카메라 헬퍼 초기화
+
+    // ✅ 모든 비동기 초기화가 끝난 후 로딩 해제
+    Future.delayed(Duration(milliseconds: 100), () async {
+      try {
+        await Future.wait([
+          _initializeStatuses().timeout(Duration(seconds: 3)), // 3초 후 강제 종료
+          _initializeCamera().timeout(Duration(seconds: 3)),   // 3초 후 강제 종료
+        ]);
+      } catch (e) {
+        debugPrint("초기화 오류 발생: $e"); // 초기화 오류 로그 출력
+      }
+
+      // ✅ setState()를 호출하여 UI 갱신
+      if (mounted) {
+        setState(() {});
+      }
+    });
   }
+
 
   // ------------------- 주차 구역 상태 목록 불러오기 -------------------
   Future<void> _initializeStatuses() async {
@@ -110,23 +124,28 @@ class _Input3DigitState extends State<Input3Digit> {
   }
 
   void _handleInputChange() {
+    if (controller3digit.text.isEmpty &&
+        controller1digit.text.isEmpty &&
+        controller4digit.text.isEmpty) {
+      return; // 아무것도 입력되지 않은 경우 setState 호출 방지
+    }
+
     if (!_validateField(controller3digit, 3) ||
         !_validateField(controller1digit, 1) ||
         !_validateField(controller4digit, 4)) {
       showSnackbar(context, '입력값이 유효하지 않습니다. 다시 확인해주세요.');
-      clearInput();
-      return;
+      return; // clearInput() 제거하여 무한 루프 방지
     }
 
-    // 모든 필드가 채워졌을 경우 키패드 숨김
-    if (controller3digit.text.length == 3 && controller1digit.text.length == 1 && controller4digit.text.length == 4) {
+    if (controller3digit.text.length == 3 &&
+        controller1digit.text.length == 1 &&
+        controller4digit.text.length == 4) {
       setState(() {
         showKeypad = false;
       });
       return;
     }
 
-    // 다음 입력 필드로 포커스 이동
     if (activeController == controller3digit && controller3digit.text.length == 3) {
       _setActiveController(controller1digit);
     } else if (activeController == controller1digit && controller1digit.text.length == 1) {
@@ -138,7 +157,6 @@ class _Input3DigitState extends State<Input3Digit> {
   Future<void> _initializeCamera() async {
     await _cameraHelper.initializeCamera();
   }
-
 
   /// 카메라 팝업 표시 (카메라 미리보기 + 촬영 버튼)
   /// 카메라 미리보기 다이얼로그 표시
@@ -152,7 +170,6 @@ class _Input3DigitState extends State<Input3Digit> {
       setState(() {}); // 촬영된 이미지가 업데이트되었으므로 화면 갱신
     }
   }
-
 
   // ------------------- 기타 주요 메서드 -------------------
   void _setActiveController(TextEditingController controller) {
@@ -280,11 +297,13 @@ class _Input3DigitState extends State<Input3Digit> {
   }
 
   // ------------------- Firestore 정산 유형 반영 -------------------
-  Future<void> _refreshAdjustments() async {
+  Future<bool> _refreshAdjustments() async {
     final adjustmentState = context.read<AdjustmentState>();
-    await Future.delayed(const Duration(milliseconds: 300)); // Firestore 데이터 로드 대기
-    adjustmentState.syncWithAreaState(); // 지역 상태와 강제 동기화
+    await Future.delayed(const Duration(milliseconds: 300));
+    adjustmentState.syncWithAreaState();
+    return true; // ✅ Future<bool> 반환하도록 수정
   }
+
 
   // ------------------- dispose -------------------
   @override
@@ -321,25 +340,19 @@ class _Input3DigitState extends State<Input3Digit> {
                           '번호 입력',
                           style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
                         ),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: [
-                            NumFieldFront3(
-                              controller: controller3digit,
-                              readOnly: true,
-                              onTap: () => _setActiveController(controller3digit),
-                            ),
-                            KorFieldMiddle1(
-                              controller: controller1digit,
-                              readOnly: true,
-                              onTap: () => _setActiveController(controller1digit),
-                            ),
-                            NumFieldBack4(
-                              controller: controller4digit,
-                              readOnly: true,
-                              onTap: () => _setActiveController(controller4digit),
-                            ),
-                          ],
+                        CommonPlateInput(
+                          frontDigitCount: 3,
+                          hasMiddleChar: true,
+                          backDigitCount: 4,
+                          frontController: controller3digit,
+                          middleController: controller1digit,
+                          backController: controller4digit,
+                          onKeypadStateChanged: (TextEditingController activeController) {
+                            setState(() {
+                              this.activeController = controller3digit; // ✅ 항상 3-digit부터 시작
+                              showKeypad = true;
+                            });
+                          },
                         ),
                         const SizedBox(height: 32.0),
                         const Text(
@@ -364,7 +377,6 @@ class _Input3DigitState extends State<Input3Digit> {
                           style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 8.0),
-                        // ❌ 기존 코드에서 `_showFullPreviewDialog` 및 `_removeImage`를 호출하는 부분 제거
                         SizedBox(
                           height: 100,
                           child: _cameraHelper.capturedImages.isEmpty
@@ -392,49 +404,35 @@ class _Input3DigitState extends State<Input3Digit> {
                           style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 8.0),
-                        FutureBuilder(
-                          future: _refreshAdjustments(),
-                          builder: (context, snapshot) {
-                            final adjustmentState = context.watch<AdjustmentState>();
-                            final currentArea = context.watch<AreaState>().currentArea.trim();
-                            final adjustmentsForArea = adjustmentState.adjustments
-                                .where((adj) => adj['area'].toString().trim() == currentArea)
-                                .map<String>((adj) => adj['countType']?.toString().trim() ?? '')
-                                .where((type) => type.isNotEmpty)
-                                .toList();
-
-                            if (adjustmentsForArea.isEmpty) {
-                              return const Text('등록된 정산 유형이 없습니다.');
-                            }
-
-                            if (selectedAdjustment == null || !adjustmentsForArea.contains(selectedAdjustment)) {
-                              WidgetsBinding.instance.addPostFrameCallback((_) {
-                                setState(() {
-                                  selectedAdjustment = adjustmentsForArea.first;
-                                });
+                      FutureBuilder<bool>(
+                        future: _refreshAdjustments().timeout(Duration(seconds: 3), onTimeout: () => false), // ✅ Future<bool> 사용
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return const Center(child: CircularProgressIndicator());
+                          }
+                          if (snapshot.data == false) {
+                            return const Text('정산 유형 정보를 불러오지 못했습니다.');
+                          }
+                          return DropdownButtonFormField<String>(
+                            value: selectedAdjustment,
+                            onChanged: (newValue) {
+                              setState(() {
+                                selectedAdjustment = newValue;
                               });
-                            }
-
-                            return DropdownButtonFormField<String>(
-                              value: selectedAdjustment,
-                              onChanged: (newValue) {
-                                setState(() {
-                                  selectedAdjustment = newValue;
-                                });
-                              },
-                              items: adjustmentsForArea.map((type) {
-                                return DropdownMenuItem<String>(
-                                  value: type,
-                                  child: Text(type),
-                                );
-                              }).toList(),
-                              decoration: const InputDecoration(
-                                labelText: '정산 유형 선택',
-                                border: OutlineInputBorder(),
-                              ),
-                            );
-                          },
-                        ),
+                            },
+                            items: ['test_Hospital', 'test_Parking'].map((type) {
+                              return DropdownMenuItem<String>(
+                                value: type,
+                                child: Text(type),
+                              );
+                            }).toList(),
+                            decoration: const InputDecoration(
+                              labelText: '정산 유형 선택',
+                              border: OutlineInputBorder(),
+                            ),
+                          );
+                        },
+                      ),
                         const SizedBox(height: 32.0),
                         const Text(
                           '차량 상태',

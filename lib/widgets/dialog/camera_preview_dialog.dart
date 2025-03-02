@@ -19,90 +19,108 @@ class _CameraPreviewDialogState extends State<CameraPreviewDialog> {
     return Dialog(
       child: Column(
         children: [
-          Expanded(
-            child: AspectRatio(
-              aspectRatio: 1.0,
-              child: RotatedBox(
-                quarterTurns: 1,
-                child: CameraPreview(widget.cameraHelper.cameraController!),
-              ),
-            ),
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              ElevatedButton(
-                onPressed: () async {
-                  await widget.cameraHelper.captureImage();
-                  setState(() {}); // 다이얼로그 내에서 UI 갱신
-                },
-                child: const Text('촬영'),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context, true); // 완료 버튼을 눌러야 다이얼로그 닫힘
-                },
-                child: const Text('완료'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          if (widget.cameraHelper.capturedImages.isNotEmpty)
-            SizedBox(
-              height: 100,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: widget.cameraHelper.capturedImages.length,
-                itemBuilder: (context, index) {
-                  return Stack(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(4.0),
-                        child: GestureDetector(
-                          onTap: () {
-                            _showFullPreviewDialog(widget.cameraHelper.capturedImages[index]);
-                          },
-                          child: Image.file(
-                            File(widget.cameraHelper.capturedImages[index].path),
-                            width: 100,
-                            height: 100,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        top: 0,
-                        right: 0,
-                        child: GestureDetector(
-                          onTap: () => _removeImage(index),
-                          child: Container(
-                            padding: const EdgeInsets.all(4.0),
-                            decoration: const BoxDecoration(
-                              color: Colors.red,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.close,
-                              size: 16,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ),
+          _buildCameraPreview(),
+          _buildActionButtons(),
+          _buildCapturedImagesPreview(),
         ],
       ),
+    );
+  }
+
+  /// 카메라 미리보기 화면 구성
+  Widget _buildCameraPreview() {
+    return Expanded(
+      child: AspectRatio(
+        aspectRatio: 1.0,
+        child: RotatedBox(
+          quarterTurns: 1,
+          child: CameraPreview(widget.cameraHelper.cameraController!),
+        ),
+      ),
+    );
+  }
+
+  /// 하단 액션 버튼 (촬영, 완료) 구성
+  Widget _buildActionButtons() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        ElevatedButton(
+          onPressed: () async {
+            await widget.cameraHelper.captureImage();
+            setState(() {});
+          },
+          child: const Text('촬영'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.pop(context, true);
+          },
+          child: const Text('완료'),
+        ),
+      ],
+    );
+  }
+
+  /// 캡처된 이미지 리스트 미리보기
+  Widget _buildCapturedImagesPreview() {
+    if (widget.cameraHelper.capturedImages.isEmpty) return const SizedBox.shrink();
+
+    return SizedBox(
+      height: 100,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: widget.cameraHelper.capturedImages.length,
+        itemBuilder: (context, index) {
+          return _buildImageThumbnail(index);
+        },
+      ),
+    );
+  }
+
+  /// 개별 이미지 썸네일 위젯 구성
+  Widget _buildImageThumbnail(int index) {
+    return Stack(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(4.0),
+          child: GestureDetector(
+            onTap: () => _showFullPreviewDialog(widget.cameraHelper.capturedImages[index]),
+            child: Image.file(
+              File(widget.cameraHelper.capturedImages[index].path),
+              width: 100,
+              height: 100,
+              fit: BoxFit.cover,
+            ),
+          ),
+        ),
+        Positioned(
+          top: 0,
+          right: 0,
+          child: GestureDetector(
+            onTap: () => _removeImage(index),
+            child: Container(
+              padding: const EdgeInsets.all(4.0),
+              decoration: const BoxDecoration(
+                color: Colors.red,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.close,
+                size: 16,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
   /// 개별 사진 삭제
   void _removeImage(int index) {
     widget.cameraHelper.removeImage(index);
-    setState(() {}); // UI 갱신
+    setState(() {});
   }
 
   /// 전체 화면 미리보기
