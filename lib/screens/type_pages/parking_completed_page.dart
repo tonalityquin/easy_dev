@@ -70,30 +70,16 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
 
     if (selectedPlate != null) {
       try {
-        // ✅ UI 업데이트 (선택 해제 먼저 실행)
-        plateState.toggleIsSelected(
-          collection: 'parking_completed',
-          plateNumber: selectedPlate.plateNumber,
-          area: selectedPlate.area,
-          userName: userName,
-          onError: (errorMessage) {
+        // ✅ 먼저 출차 요청 상태로 변경 (Firestore 업데이트)
+        plateState.setDepartureRequested(selectedPlate.plateNumber, selectedPlate.area).then((_) {
+          // ✅ Firestore 업데이트 후 UI 안정화
+          Future.delayed(Duration(milliseconds: 300), () {
             if (context.mounted) {
-              showSnackbar(context, errorMessage);
+              Navigator.pop(context); // ✅ UI가 안정화된 후 다이얼로그 닫기
+              showSnackbar(context, "출차 요청이 완료되었습니다.");
             }
-          },
-        );
-
-        // ✅ 출차 요청 처리 (상태 변경)
-        plateState.setDepartureRequested(selectedPlate.plateNumber, selectedPlate.area);
-
-        // ✅ UI 안정화 후 다이얼로그 닫기 및 Snackbar 실행
-        Future.delayed(Duration(milliseconds: 200), () {
-          if (context.mounted) {
-            Navigator.pop(context);
-            showSnackbar(context, "출차 요청이 완료되었습니다.");
-          }
+          });
         });
-
       } catch (e) {
         debugPrint("출차 요청 처리 실패: $e");
 
@@ -103,10 +89,6 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
       }
     }
   }
-
-
-
-
 
   void handleEntryRequest(BuildContext context, String plateNumber, String area) {
     final plateState = context.read<PlateState>();
@@ -126,11 +108,6 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
     // ✅ 완료 메시지 표시
     showSnackbar(context, "입차 요청이 완료되었습니다.");
   }
-
-
-
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -224,8 +201,10 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                     showDialog(
                       context: context,
                       builder: (context) => ParkingCompletedStatusDialog(
-                        plateNumber: selectedPlate.plateNumber, // ✅ plateNumber 전달
-                        area: selectedPlate.area, // ✅ 지역 정보 추가
+                        plateNumber: selectedPlate.plateNumber,
+                        // ✅ plateNumber 전달
+                        area: selectedPlate.area,
+                        // ✅ 지역 정보 추가
                         onRequestEntry: () {
                           handleEntryRequest(context, selectedPlate.plateNumber, selectedPlate.area);
                         },
@@ -239,9 +218,9 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                             builder: (context) => ParkingRequestDeleteDialog(
                               onConfirm: () {
                                 context.read<PlateState>().deletePlateFromParkingCompleted(
-                                  selectedPlate.plateNumber,
-                                  selectedPlate.area,
-                                );
+                                      selectedPlate.plateNumber,
+                                      selectedPlate.area,
+                                    );
                                 showSnackbar(context, "삭제 완료: ${selectedPlate.plateNumber}");
                               },
                             ),
