@@ -45,7 +45,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
 
   /// 🔹 검색 초기화
   void _resetSearch(BuildContext context) {
-    context.read<PlateState>().clearSearchQuery();
+    context.read<PlateState>().clearPlateSearchQuery();
     setState(() {
       _isSearchMode = false;
     });
