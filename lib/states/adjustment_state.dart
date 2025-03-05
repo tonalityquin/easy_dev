@@ -27,12 +27,15 @@ class AdjustmentState extends ChangeNotifier {
     final currentArea = _areaState.currentArea.trim();
     debugPrint('🔥 AdjustmentState: 지역 변경 감지됨 ($currentArea) → 데이터 새로 가져옴');
 
-    _subscription?.cancel(); // 기존 스트림 구독 취소
-    _adjustments.clear(); // 🔥 기존 데이터 초기화 (이전 지역의 데이터 제거)
+    _subscription?.cancel();
+
+    _adjustments = []; // 🔥 기존 데이터 완전 초기화
+    _selectedAdjustments = {}; // 🔥 선택 상태도 초기화
     notifyListeners();
 
-    _initializeAdjustments(); // 새로운 지역 데이터 불러오기
+    _initializeAdjustments();
   }
+
 
 
   void _initializeAdjustments() {
