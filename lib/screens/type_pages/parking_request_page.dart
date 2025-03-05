@@ -180,25 +180,30 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                   label: isPlateSelected ? '정보 수정' : (_isSearchMode ? '검색 초기화' : '번호판 검색'),
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(
-                    isPlateSelected ? Icons.check_circle : Icons.local_parking,
-                    color: isPlateSelected ? Colors.green : Colors.grey, // ✅ 비활성화 색상 적용
+                  icon: isPlateSelected
+                      ? Icon(Icons.check_circle, color: Colors.green)
+                      : Image.asset(
+                    'assets/icons/icon_belivussnc.PNG',  // ✅ 파일 경로 확인
+                    width: 24.0,
+                    height: 24.0,
+                    fit: BoxFit.contain,  // ✅ 이미지 왜곡 방지
                   ),
-                  label: isPlateSelected ? '입차 완료' : '구역별 검색',
+                  label: isPlateSelected ? '입차 완료' : 'Belivus S&C',
                 ),
                 BottomNavigationBarItem(
                   icon: AnimatedRotation(
                     turns: _isSorted ? 0.5 : 0.0,
                     duration: const Duration(milliseconds: 300),
-                    child: Transform.scale(
-                      scaleX: _isSorted ? -1 : 1,
+                    child: Transform.rotate(
+                      angle: 3.1416, // 180도 회전
                       child: Icon(
-                        isPlateSelected ? Icons.arrow_forward : Icons.sort,
+                        isPlateSelected ? Icons.delete : Icons.sort,
                       ),
                     ),
                   ),
-                  label: isPlateSelected ? '상태 수정' : (_isSorted ? '최신순' : '오래된순'),
+                  label: isPlateSelected ? '입차 취소' : (_isSorted ? '최신순' : '오래된순'),
                 ),
+
               ],
               onTap: (index) {
                 if (index == 0) {

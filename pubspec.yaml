@@ -39,3 +39,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/belivus_logo.PNG
+    - assets/icons/icon_belivussnc.PNG
