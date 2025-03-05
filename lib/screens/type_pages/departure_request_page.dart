@@ -186,12 +186,12 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                       context: context,
                       builder: (context) => DepartureRequestStatusDialog(
                         onRequestEntry: () {
-                          // 입차 요청 로직 (추후 구현 예정)
-                          showSnackbar(context, "입차 요청 기능은 개발 중입니다.");
+                          // ✅ '입차 요청' 상태로 변경 (departure_requests → parking_requests)
+                          handleEntryRequestFromDeparture(context, selectedPlate.plateNumber, selectedPlate.area);
                         },
                         onCompleteDeparture: () {
-                          // 출차 완료 로직 (추후 구현 예정)
-                          showSnackbar(context, "출차 완료 기능은 개발 중입니다.");
+                          // ✅ '입차 완료' 상태로 변경
+                          handleParkingCompletedFromDeparture(context, selectedPlate.plateNumber, selectedPlate.area);
                         },
                         onDelete: () {
                           showDialog(
@@ -199,9 +199,9 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                             builder: (context) => ParkingRequestDeleteDialog(
                               onConfirm: () {
                                 context.read<PlateState>().deletePlateFromDepartureRequest(
-                                      selectedPlate.plateNumber,
-                                      selectedPlate.area,
-                                    );
+                                  selectedPlate.plateNumber,
+                                  selectedPlate.area,
+                                );
                                 showSnackbar(context, "삭제 완료: ${selectedPlate.plateNumber}");
                               },
                             ),

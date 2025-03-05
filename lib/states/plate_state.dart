@@ -158,12 +158,18 @@ class PlateState extends ChangeNotifier {
 
       if (documentData != null) {
         await _repository.deleteDocument(fromCollection, documentId);
+
+        // ✅ 입차 요청 상태로 변경될 경우만 "미지정"으로 설정
+        final updatedLocation = (toCollection == 'parking_requests') ? "미지정" : documentData['location'];
+
         await _repository.addOrUpdateDocument(toCollection, documentId, {
           ...documentData,
           'type': newType,
+          'location': updatedLocation, // ✅ 주차 구역 유지 또는 "미지정"
           'isSelected': false,
           'selectedBy': null,
         });
+
         notifyListeners();
         return true;
       }
@@ -180,7 +186,7 @@ class PlateState extends ChangeNotifier {
     required String plateNumber,
     required String area,
     required String userName,
-    required void Function(String) onError, // ✅ UI 피드백을 위한 onError 추가
+    required void Function(String) onError, // ✅ UI에서 Snackbar 실행하도록 수정
   }) async {
     final plateId = '${plateNumber}_$area';
 
@@ -203,7 +209,6 @@ class PlateState extends ChangeNotifier {
         selectedBy: newSelectedBy,
       );
 
-      // ✅ `copyWith()` 없이 직접 리스트를 업데이트
       _data[collection]![index] = PlateModel(
         id: plate.id,
         plateNumber: plate.plateNumber,
@@ -225,9 +230,12 @@ class PlateState extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       debugPrint('❌ Error toggling isSelected: $e');
-      onError('🚨 번호판 선택 상태 변경 실패: $e'); // 🚀 UI 피드백 가능
+
+      // ✅ `onError` 콜백을 호출하여 UI에서 Snackbar 실행
+      onError('🚨 번호판 선택 상태 변경 실패: $e');
     }
   }
+
 
   /// 🔹 선택된 번호판 반환
   PlateModel? getSelectedPlate(String collection, String userName) {
@@ -240,9 +248,10 @@ class PlateState extends ChangeNotifier {
 
     // 조건을 만족하는 plate가 있는지 확인
     return plates.firstWhere(
-          (plate) => plate.isSelected && plate.selectedBy == userName,
+      (plate) => plate.isSelected && plate.selectedBy == userName,
       orElse: () => PlateModel(
-        id: '', // 빈 값 설정
+        id: '',
+        // 빈 값 설정
         plateNumber: '',
         type: '',
         requestTime: DateTime.now(),
@@ -254,8 +263,6 @@ class PlateState extends ChangeNotifier {
       ), // 🔥 PlateModel 기본값 반환
     );
   }
-
-
 
   /// 🔹 특정 번호판을 컬렉션에서 찾기
   PlateModel? _findPlate(String collection, String plateNumber) {
@@ -305,6 +312,48 @@ class PlateState extends ChangeNotifier {
     }
   }
 
+  /// 🔹 특정 plate의 location을 업데이트하는 메서드 (새로 추가)
+  void goBackToParkingRequest(String plateNumber, String? newLocation) {
+    for (final collection in _data.keys) {
+      final plates = _data[collection];
+      if (plates != null) {
+        final index = plates.indexWhere((plate) => plate.plateNumber == plateNumber);
+        if (index != -1) {
+          final oldPlate = plates[index];
+
+          // ✅ `newLocation`이 `null`이거나 빈 값이면 "미지정" 설정
+          final updatedLocation = (newLocation == null || newLocation.trim().isEmpty) ? "미지정" : newLocation;
+
+          plates.removeAt(index);
+
+          final updatedPlate = PlateModel(
+            id: oldPlate.id,
+            plateNumber: oldPlate.plateNumber,
+            type: oldPlate.type,
+            requestTime: oldPlate.requestTime,
+            location: updatedLocation,
+            // ✅ location 변경 적용
+            area: oldPlate.area,
+            userName: oldPlate.userName,
+            isSelected: oldPlate.isSelected,
+            selectedBy: oldPlate.selectedBy,
+            adjustmentType: oldPlate.adjustmentType,
+            statusList: oldPlate.statusList,
+            basicStandard: oldPlate.basicStandard,
+            basicAmount: oldPlate.basicAmount,
+            addStandard: oldPlate.addStandard,
+            addAmount: oldPlate.addAmount,
+          );
+
+          plates.insert(index, updatedPlate);
+
+          notifyListeners(); // 🔄 UI 갱신
+          return;
+        }
+      }
+    }
+  }
+
   Future<void> deletePlateFromDepartureRequest(String plateNumber, String area) async {
     final documentId = '${plateNumber}_$area';
 
@@ -321,9 +370,6 @@ class PlateState extends ChangeNotifier {
       debugPrint("🚨 번호판 삭제 실패 (입차 완료 컬렉션): $e");
     }
   }
-
-
-
 
   /// 🔹 선택된 번호판을 '입차 완료' 상태로 이동
   Future<void> movePlateToCompleted(String plateNumber, String location) async {
@@ -417,11 +463,15 @@ class PlateState extends ChangeNotifier {
     await updatePlateStatus(
       plateNumber: plateNumber,
       area: area,
-      fromCollection: 'parking_completed',
-      toCollection: 'departure_requests',
+      fromCollection: 'parking_completed',  // ✅ 기존 컬렉션
+      toCollection: 'departure_requests',  // ✅ 이동할 컬렉션
       newType: '출차 요청',
     );
+
+    // ✅ 상태 변경 후 UI 업데이트
+    notifyListeners();
   }
+
 
   Future<void> setDepartureCompleted(String plateNumber, String area) async {
     await updatePlateStatus(

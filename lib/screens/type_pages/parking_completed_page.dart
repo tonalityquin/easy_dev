@@ -70,26 +70,67 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
 
     if (selectedPlate != null) {
       try {
-        // ✅ 선택 해제를 먼저 실행
+        // ✅ UI 업데이트 (선택 해제 먼저 실행)
         plateState.toggleIsSelected(
           collection: 'parking_completed',
           plateNumber: selectedPlate.plateNumber,
           area: selectedPlate.area,
           userName: userName,
           onError: (errorMessage) {
-            showSnackbar(context, "선택 해제에 실패했습니다. 다시 시도해주세요.");
+            if (context.mounted) {
+              showSnackbar(context, errorMessage);
+            }
           },
         );
 
-        // ✅ 출차 요청 처리
+        // ✅ 출차 요청 처리 (상태 변경)
         plateState.setDepartureRequested(selectedPlate.plateNumber, selectedPlate.area);
-        showSnackbar(context, "출차 요청이 완료되었습니다."); // ✅ showSnackbar 적용
+
+        // ✅ UI 안정화 후 다이얼로그 닫기 및 Snackbar 실행
+        Future.delayed(Duration(milliseconds: 200), () {
+          if (context.mounted) {
+            Navigator.pop(context);
+            showSnackbar(context, "출차 요청이 완료되었습니다.");
+          }
+        });
+
       } catch (e) {
         debugPrint("출차 요청 처리 실패: $e");
-        showSnackbar(context, "출차 요청 처리 중 오류 발생: $e"); // ✅ showSnackbar 적용
+
+        if (context.mounted) {
+          showSnackbar(context, "출차 요청 처리 중 오류 발생: $e");
+        }
       }
     }
   }
+
+
+
+
+
+  void handleEntryRequest(BuildContext context, String plateNumber, String area) {
+    final plateState = context.read<PlateState>();
+
+    // 🔹 'parking_completed'에서 'parking_requests'로 plate 이동
+    plateState.updatePlateStatus(
+      plateNumber: plateNumber,
+      area: area,
+      fromCollection: 'parking_completed',
+      toCollection: 'parking_requests',
+      newType: '입차 요청',
+    );
+
+    // ✅ location을 `null`로 설정하여 기본값 "미지정"이 자동 적용되도록 함
+    plateState.goBackToParkingRequest(plateNumber, null);
+
+    // ✅ 완료 메시지 표시
+    showSnackbar(context, "입차 요청이 완료되었습니다.");
+  }
+
+
+
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -183,13 +224,14 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                     showDialog(
                       context: context,
                       builder: (context) => ParkingCompletedStatusDialog(
+                        plateNumber: selectedPlate.plateNumber, // ✅ plateNumber 전달
+                        area: selectedPlate.area, // ✅ 지역 정보 추가
                         onRequestEntry: () {
-                          // 입차 요청 로직 (추후 구현 예정)
-                          showSnackbar(context, "입차 요청 기능은 개발 중입니다.");
+                          handleEntryRequest(context, selectedPlate.plateNumber, selectedPlate.area);
                         },
                         onCompleteDeparture: () {
-                          // 출차 완료 로직 (추후 구현 예정)
-                          showSnackbar(context, "출차 완료 기능은 개발 중입니다.");
+                          // ✅ 출차 완료 로직 유지
+                          _handleDepartureRequested(context);
                         },
                         onDelete: () {
                           showDialog(
@@ -197,9 +239,9 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                             builder: (context) => ParkingRequestDeleteDialog(
                               onConfirm: () {
                                 context.read<PlateState>().deletePlateFromParkingCompleted(
-                                      selectedPlate.plateNumber,
-                                      selectedPlate.area,
-                                    );
+                                  selectedPlate.plateNumber,
+                                  selectedPlate.area,
+                                );
                                 showSnackbar(context, "삭제 완료: ${selectedPlate.plateNumber}");
                               },
                             ),
