@@ -4,6 +4,7 @@ import '../../states/plate_state.dart'; // PlateState 상태 관리
 import '../../states/area_state.dart'; // AreaState 상태 관리
 import '../../states/user_state.dart';
 import '../../widgets/container/plate_container.dart'; // 번호판 데이터를 표시하는 위젯
+import '../../widgets/dialog/parking_request_delete_dialog.dart';
 import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바
 import '../../widgets/dialog/plate_search_dialog.dart';
 import '../../utils/show_snackbar.dart';
@@ -200,21 +201,34 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                 label: isPlateSelected ? '상태 수정' : (_isSorted ? '최신순' : '오래된순'),
               ),
             ],
-            onTap: (index) {
-              if (index == 0) {
-                if (_isSearchMode) {
-                  _resetSearch(context);
-                } else {
-                  _showSearchDialog(context);
-                }
-              } else if (index == 1 && isPlateSelected) {
-                _handleParkingCompleted(context); // ✅ 수정된 입차 완료 로직 적용
-              } else if (index == 2) {
-                if (!isPlateSelected) {
-                  _toggleSortIcon();
+              onTap: (index) {
+                if (index == 0) {
+                  if (_isSearchMode) {
+                    _resetSearch(context);
+                  } else {
+                    _showSearchDialog(context);
+                  }
+                } else if (index == 1 && isPlateSelected) {
+                  _handleParkingCompleted(context); // ✅ 입차 완료 처리
+                } else if (index == 2) {
+                  if (isPlateSelected) {
+                    // ✅ 다이얼로그 표시하여 삭제 여부 확인
+                    showDialog(
+                      context: context,
+                      builder: (context) {
+                        return ParkingRequestDeleteDialog(
+                          onConfirm: () {
+                            context.read<PlateState>().deletePlate(selectedPlate.plateNumber, selectedPlate.area);
+                            showSnackbar(context, "삭제 완료: ${selectedPlate.plateNumber}");
+                          },
+                        );
+                      },
+                    );
+                  } else {
+                    _toggleSortIcon();
+                  }
                 }
               }
-            },
           );
         },
       ),

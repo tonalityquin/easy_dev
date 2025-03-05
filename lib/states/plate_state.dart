@@ -229,7 +229,6 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-
   /// 🔹 선택된 번호판 반환
   PlateModel? getSelectedPlate(String collection, String userName) {
     try {
@@ -246,13 +245,33 @@ class PlateState extends ChangeNotifier {
   PlateModel? _findPlate(String collection, String plateNumber) {
     try {
       return _data[collection]?.firstWhere(
-            (plate) => plate.plateNumber == plateNumber,
+        (plate) => plate.plateNumber == plateNumber,
       );
     } catch (e) {
       debugPrint("🚨 Error in _findPlate: $e");
       return null;
     }
   }
+
+  /// 🔹 선택된 번호판을 삭제
+  Future<void> deletePlate(String plateNumber, String area) async {
+    final documentId = '${plateNumber}_$area';
+
+    try {
+      // 🔹 1️⃣ Firestore에서 삭제
+      await _repository.deleteDocument('parking_requests', documentId);
+
+      // 🔹 2️⃣ 내부 리스트에서 데이터 삭제
+      _data['parking_requests']?.removeWhere((plate) => plate.plateNumber == plateNumber);
+
+      notifyListeners(); // 🔄 UI 갱신
+      debugPrint("✅ 번호판 삭제 완료: $plateNumber");
+    } catch (e) {
+      debugPrint("🚨 번호판 삭제 실패: $e");
+    }
+  }
+
+
 
   /// 🔹 선택된 번호판을 '입차 완료' 상태로 이동
   Future<void> movePlateToCompleted(String plateNumber, String location) async {
@@ -262,12 +281,15 @@ class PlateState extends ChangeNotifier {
       final updatedPlate = PlateModel(
         id: selectedPlate.id,
         plateNumber: selectedPlate.plateNumber,
-        type: '입차 완료', // ✅ 상태 변경
+        type: '입차 완료',
+        // ✅ 상태 변경
         requestTime: selectedPlate.requestTime,
-        location: location, // ✅ 새로운 위치 적용
+        location: location,
+        // ✅ 새로운 위치 적용
         area: selectedPlate.area,
         userName: selectedPlate.userName,
-        isSelected: false, // ✅ 선택 해제
+        isSelected: false,
+        // ✅ 선택 해제
         selectedBy: null,
         adjustmentType: selectedPlate.adjustmentType,
         statusList: selectedPlate.statusList,
@@ -311,8 +333,6 @@ class PlateState extends ChangeNotifier {
       }
     }
   }
-
-
 
   Future<void> updatePlateStatus({
     required String plateNumber,
