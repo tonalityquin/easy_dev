@@ -27,7 +27,7 @@ class PlateState extends ChangeNotifier {
   }
 
   /// 🔹 검색 초기화
-  void clearSearchQuery() {
+  void clearPlateSearchQuery() {
     _searchQuery = null;
     notifyListeners();
   }
@@ -75,6 +75,37 @@ class PlateState extends ChangeNotifier {
       return last4Digits == searchDigits; // 입력한 4자리와 비교하여 필터링
     }).toList();
   }
+
+  /// 🔹 특정 주차 구역의 plate_container만 필터링 (번호판 검색과 동일한 방식 적용)
+  List<PlateModel> filterByParkingArea(String collection, String area, String parkingLocation) {
+    debugPrint("🚀 filterByParkingArea() 호출됨: 지역 = $area, 주차 구역 = $parkingLocation");
+
+    // 🔹 1. 먼저 해당 지역(area)에 속하는 plate 목록을 가져옴 (번호판 검색과 동일)
+    List<PlateModel> plates = _data[collection]
+        ?.where((plate) => plate.area == area)
+        .toList() ?? [];
+
+    debugPrint("📌 지역 필터링 후 plate 개수: ${plates.length}");
+
+    // 🔹 2. 선택한 주차 구역(location)에 맞게 추가 필터링
+    plates = plates.where((plate) => plate.location == parkingLocation).toList();
+
+    debugPrint("📌 주차 구역 필터링 후 plate 개수: ${plates.length}");
+
+    return plates; // ✅ _data를 변경하지 않고 필터링된 리스트 반환
+  }
+
+
+
+
+
+  /// 🔹 주차 구역 검색 초기화 (번호판 검색 초기화 방식과 동일하게 구현)
+  void clearLocationSearchQuery() {
+    debugPrint("🔄 주차 구역 검색 초기화 호출됨");
+    _initializeSubscriptions(); // ✅ Firestore의 원본 데이터를 다시 가져옴
+    notifyListeners();
+  }
+
 
   /// 번호판 중복 여부 확인
   bool isPlateNumberDuplicated(String plateNumber, String area) {
@@ -235,7 +266,6 @@ class PlateState extends ChangeNotifier {
       onError('🚨 번호판 선택 상태 변경 실패: $e');
     }
   }
-
 
   /// 🔹 선택된 번호판 반환
   PlateModel? getSelectedPlate(String collection, String userName) {
@@ -463,15 +493,16 @@ class PlateState extends ChangeNotifier {
     await updatePlateStatus(
       plateNumber: plateNumber,
       area: area,
-      fromCollection: 'parking_completed',  // ✅ 기존 컬렉션
-      toCollection: 'departure_requests',  // ✅ 이동할 컬렉션
+      fromCollection: 'parking_completed',
+      // ✅ 기존 컬렉션
+      toCollection: 'departure_requests',
+      // ✅ 이동할 컬렉션
       newType: '출차 요청',
     );
 
     // ✅ 상태 변경 후 UI 업데이트
     notifyListeners();
   }
-
 
   Future<void> setDepartureCompleted(String plateNumber, String area) async {
     await updatePlateStatus(

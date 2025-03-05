@@ -5,6 +5,7 @@ import '../../states/area_state.dart'; // AreaState 상태 관리
 import '../../states/user_state.dart';
 import '../../widgets/container/plate_container.dart'; // 번호판 컨테이너 위젯
 import '../../widgets/dialog/departure_request_confirmation_dialog.dart';
+import '../../widgets/dialog/parking_location_dialog.dart';
 import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바
 import '../../widgets/dialog/plate_search_dialog.dart'; // ✅ PlateSearchDialog 추가
 import '../../widgets/dialog/parking_completed_status_dialog.dart';
@@ -22,6 +23,9 @@ class ParkingCompletedPage extends StatefulWidget {
 class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
   bool _isSorted = true; // 정렬 아이콘 상태 (최신순: true, 오래된순: false)
   bool _isSearchMode = false; // 검색 모드 여부
+  bool _isParkingAreaMode = false; // 주차 구역 모드 여부
+  String? _selectedParkingArea; // 선택된 주차 구역
+  final TextEditingController _locationController = TextEditingController(); // ✅ 추가
 
   /// 🔹 정렬 상태 변경
   void _toggleSortIcon() {
@@ -54,9 +58,47 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
     }
   }
 
+  /// 🔹 주차 구역 선택 다이얼로그 표시
+  void _showParkingAreaDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => ParkingLocationDialog(
+        locationController: _locationController,
+        onLocationSelected: (selectedLocation) {
+          debugPrint("✅ 선택된 주차 구역: $selectedLocation");
+
+          setState(() {
+            _isParkingAreaMode = true;
+            _selectedParkingArea = selectedLocation;
+          });
+
+          final area = context.read<AreaState>().currentArea; // ✅ 지역 가져오기
+
+          // ✅ `filterByParkingArea()` 호출 시 `area`를 함께 전달하여 필터링 정확도 개선
+          setState(() {
+            context.read<PlateState>().filterByParkingArea('parking_completed', area, _selectedParkingArea!);
+          });
+        },
+      ),
+    );
+  }
+
+
+  /// 🔹 주차 구역 필터링 초기화
+  void _resetParkingAreaFilter(BuildContext context) {
+    debugPrint("🔄 주차 구역 초기화 실행됨");
+    setState(() {
+      _isParkingAreaMode = false;
+      _selectedParkingArea = null;
+    });
+
+    // 🔹 번호판 검색 초기화 방식과 동일하게 전체 데이터를 다시 불러옴
+    context.read<PlateState>().clearLocationSearchQuery();
+  }
+
   /// 🔹 검색 초기화
-  void _resetSearch(BuildContext context) {
-    context.read<PlateState>().clearSearchQuery();
+  void _resetPlateSearch(BuildContext context) {
+    context.read<PlateState>().clearPlateSearchQuery();
     setState(() {
       _isSearchMode = false;
     });
@@ -116,10 +158,13 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
       body: Consumer2<PlateState, AreaState>(
         builder: (context, plateState, areaState, child) {
           final currentArea = areaState.currentArea;
-          var parkingCompleted = plateState.getPlatesByArea('parking_completed', currentArea);
+
+          var parkingCompleted = _isParkingAreaMode && _selectedParkingArea != null
+              ? plateState.filterByParkingArea('parking_completed', currentArea, _selectedParkingArea!) // ✅ `area` 반영
+              : plateState.getPlatesByArea('parking_completed', currentArea);
+
           final userName = context.read<UserState>().name;
 
-          // 🔹 정렬 적용 (최신순 or 오래된순)
           parkingCompleted.sort((a, b) {
             return _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime);
           });
@@ -138,7 +183,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                     area: area,
                     userName: userName,
                     onError: (errorMessage) {
-                      showSnackbar(context, errorMessage); // ✅ showSnackbar 적용
+                      showSnackbar(context, errorMessage);
                     },
                   );
                 },
@@ -147,6 +192,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
           );
         },
       ),
+
       bottomNavigationBar: Consumer<PlateState>(
         builder: (context, plateState, child) {
           final userName = context.read<UserState>().name;
@@ -166,7 +212,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                     isPlateSelected ? Icons.check_circle : Icons.local_parking,
                     color: isPlateSelected ? Colors.green : Colors.grey, // ✅ 비활성화 색상 적용
                   ),
-                  label: isPlateSelected ? '출차 요청' : '주차 구역',
+                  label: isPlateSelected ? '출차 요청' : (_isParkingAreaMode ? '주차 구역 초기화' : '주차 구역'),
                 ),
                 BottomNavigationBarItem(
                   icon: AnimatedRotation(
@@ -185,17 +231,25 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
               onTap: (index) {
                 if (index == 0) {
                   if (_isSearchMode) {
-                    _resetSearch(context);
+                    _resetPlateSearch(context);
                   } else {
                     _showSearchDialog(context);
                   }
-                } else if (index == 1 && isPlateSelected) {
-                  showDialog(
-                    context: context,
-                    builder: (context) => DepartureRequestConfirmDialog(
-                      onConfirm: () => _handleDepartureRequested(context), // ✅ 출차 요청 실행
-                    ),
-                  );
+                } else if (index == 1) {
+                  if (isPlateSelected) {
+                    showDialog(
+                      context: context,
+                      builder: (context) => DepartureRequestConfirmDialog(
+                        onConfirm: () => _handleDepartureRequested(context),
+                      ),
+                    );
+                  } else {
+                    if (_isParkingAreaMode) {
+                      _resetParkingAreaFilter(context);
+                    } else {
+                      _showParkingAreaDialog(context);
+                    }
+                  }
                 } else if (index == 2) {
                   if (isPlateSelected) {
                     showDialog(

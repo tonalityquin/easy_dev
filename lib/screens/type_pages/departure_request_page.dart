@@ -5,6 +5,7 @@ import '../../states/area_state.dart'; // 지역 상태 관리
 import '../../states/user_state.dart';
 import '../../widgets/container/plate_container.dart'; // 번호판 컨테이너 위젯
 import '../../widgets/dialog/departure_completed_confirm_dialog.dart';
+import '../../widgets/dialog/parking_location_dialog.dart';
 import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바
 import '../../widgets/dialog/plate_search_dialog.dart'; // ✅ PlateSearchDialog 추가
 import '../../widgets/dialog/departure_request_status_dialog.dart';
@@ -23,6 +24,9 @@ class DepartureRequestPage extends StatefulWidget {
 class _DepartureRequestPageState extends State<DepartureRequestPage> {
   bool _isSorted = true; // 정렬 아이콘 상태 (최신순: true, 오래된순: false)
   bool _isSearchMode = false; // 검색 모드 여부
+  bool _isParkingAreaMode = false; // ✅ 주차 구역 필터 모드 여부
+  String? _selectedParkingArea; // ✅ 선택된 주차 구역
+  final TextEditingController _locationController = TextEditingController(); // ✅ 추가
 
   /// 🔹 정렬 상태 변경
   void _toggleSortIcon() {
@@ -55,9 +59,47 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
     }
   }
 
+  /// 🔹 주차 구역 선택 다이얼로그 표시
+  void _showParkingAreaDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => ParkingLocationDialog(
+        locationController: _locationController,
+        onLocationSelected: (selectedLocation) {
+          debugPrint("✅ 선택된 주차 구역: $selectedLocation");
+
+          setState(() {
+            _isParkingAreaMode = true;
+            _selectedParkingArea = selectedLocation;
+          });
+
+          final area = context.read<AreaState>().currentArea; // ✅ 현재 지역 가져오기
+
+          // ✅ 주차 구역 선택 시 출차 요청 차량 목록을 필터링
+          setState(() {
+            context.read<PlateState>().filterByParkingArea('departure_requests', area, _selectedParkingArea!);
+          });
+        },
+      ),
+    );
+  }
+
+  /// 🔹 주차 구역 필터링 초기화
+  void _resetParkingAreaFilter(BuildContext context) {
+    debugPrint("🔄 주차 구역 초기화 실행됨");
+    setState(() {
+      _isParkingAreaMode = false;
+      _selectedParkingArea = null;
+    });
+
+    // 🔹 전체 출차 요청 데이터를 다시 불러옴
+    context.read<PlateState>().clearLocationSearchQuery();
+  }
+
+
   /// 🔹 검색 초기화
   void _resetSearch(BuildContext context) {
-    context.read<PlateState>().clearSearchQuery();
+    context.read<PlateState>().clearPlateSearchQuery();
     setState(() {
       _isSearchMode = false;
     });
@@ -100,7 +142,11 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
       body: Consumer2<PlateState, AreaState>(
         builder: (context, plateState, areaState, child) {
           final currentArea = areaState.currentArea;
-          var departureRequests = plateState.getPlatesByArea('departure_requests', currentArea);
+
+          var departureRequests = _isParkingAreaMode && _selectedParkingArea != null
+              ? plateState.filterByParkingArea('departure_requests', currentArea, _selectedParkingArea!) // ✅ 주차 구역 필터링 적용
+              : plateState.getPlatesByArea('departure_requests', currentArea);
+
           final userName = context.read<UserState>().name;
 
           // 🔹 정렬 적용 (최신순 or 오래된순)
@@ -122,7 +168,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                     area: area,
                     userName: userName,
                     onError: (errorMessage) {
-                      showSnackbar(context, errorMessage); // ✅ showSnackbar 유틸 적용
+                      showSnackbar(context, errorMessage);
                     },
                   );
                 },
@@ -131,6 +177,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
           );
         },
       ),
+
       bottomNavigationBar: Consumer<PlateState>(
         builder: (context, plateState, child) {
           final userName = context.read<UserState>().name;
@@ -150,7 +197,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                     isPlateSelected ? Icons.check_circle : Icons.local_parking,
                     color: isPlateSelected ? Colors.green : Colors.grey, // ✅ 비활성화 색상 적용
                   ),
-                  label: isPlateSelected ? '출차 완료' : '주차 구역',
+                  label: isPlateSelected ? '출차 완료' : (_isParkingAreaMode ? '주차 구역 초기화' : '주차 구역'),
                 ),
                 BottomNavigationBarItem(
                   icon: AnimatedRotation(
@@ -173,13 +220,21 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                   } else {
                     _showSearchDialog(context);
                   }
-                } else if (index == 1 && isPlateSelected) {
-                  showDialog(
-                    context: context,
-                    builder: (context) => DepartureCompletedConfirmDialog(
-                      onConfirm: () => _handleDepartureCompleted(context), // ✅ 출차 완료 실행
-                    ),
-                  );
+                } else if (index == 1) {
+                  if (isPlateSelected) {
+                    showDialog(
+                      context: context,
+                      builder: (context) => DepartureCompletedConfirmDialog(
+                        onConfirm: () => _handleDepartureCompleted(context),
+                      ),
+                    );
+                  } else {
+                    if (_isParkingAreaMode) {
+                      _resetParkingAreaFilter(context);
+                    } else {
+                      _showParkingAreaDialog(context);
+                    }
+                  }
                 } else if (index == 2) {
                   if (isPlateSelected) {
                     showDialog(
