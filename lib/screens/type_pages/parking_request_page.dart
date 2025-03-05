@@ -11,7 +11,6 @@ import '../../utils/show_snackbar.dart';
 import '../../widgets/dialog/parking_location_dialog.dart';
 import '../../repositories/plate_repository.dart';
 
-
 class ParkingRequestPage extends StatefulWidget {
   const ParkingRequestPage({super.key});
 
@@ -114,7 +113,8 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
       plateRepository.addRequestOrCompleted(
         collection: 'parking_completed',
         plateNumber: plateNumber,
-        location: location, // 선택한 주차 구역 반영
+        location: location,
+        // 선택한 주차 구역 반영
         area: area,
         userName: context.read<UserState>().name,
         type: '입차 완료',
@@ -135,7 +135,6 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
       showSnackbar(context, "입차 완료 처리 중 오류 발생: $e");
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -173,34 +172,34 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
           final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
 
           return BottomNavigationBar(
-            items: [
-              BottomNavigationBarItem(
-                icon: Icon(
-                  isPlateSelected ? Icons.highlight_alt : (_isSearchMode ? Icons.cancel : Icons.search),
+              items: [
+                BottomNavigationBarItem(
+                  icon: Icon(
+                    isPlateSelected ? Icons.highlight_alt : (_isSearchMode ? Icons.cancel : Icons.search),
+                  ),
+                  label: isPlateSelected ? '정보 수정' : (_isSearchMode ? '검색 초기화' : '번호판 검색'),
                 ),
-                label: isPlateSelected ? '정보 수정' : (_isSearchMode ? '검색 초기화' : '번호판 검색'),
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(
-                  isPlateSelected ? Icons.check_circle : Icons.local_parking,
-                  color: isPlateSelected ? Colors.green : Colors.grey, // ✅ 비활성화 색상 적용
+                BottomNavigationBarItem(
+                  icon: Icon(
+                    isPlateSelected ? Icons.check_circle : Icons.local_parking,
+                    color: isPlateSelected ? Colors.green : Colors.grey, // ✅ 비활성화 색상 적용
+                  ),
+                  label: isPlateSelected ? '입차 완료' : '구역별 검색',
                 ),
-                label: isPlateSelected ? '입차 완료' : '구역별 검색',
-              ),
-              BottomNavigationBarItem(
-                icon: AnimatedRotation(
-                  turns: _isSorted ? 0.5 : 0.0,
-                  duration: const Duration(milliseconds: 300),
-                  child: Transform.scale(
-                    scaleX: _isSorted ? -1 : 1,
-                    child: Icon(
-                      isPlateSelected ? Icons.arrow_forward : Icons.sort,
+                BottomNavigationBarItem(
+                  icon: AnimatedRotation(
+                    turns: _isSorted ? 0.5 : 0.0,
+                    duration: const Duration(milliseconds: 300),
+                    child: Transform.scale(
+                      scaleX: _isSorted ? -1 : 1,
+                      child: Icon(
+                        isPlateSelected ? Icons.arrow_forward : Icons.sort,
+                      ),
                     ),
                   ),
+                  label: isPlateSelected ? '상태 수정' : (_isSorted ? '최신순' : '오래된순'),
                 ),
-                label: isPlateSelected ? '상태 수정' : (_isSorted ? '최신순' : '오래된순'),
-              ),
-            ],
+              ],
               onTap: (index) {
                 if (index == 0) {
                   if (_isSearchMode) {
@@ -218,7 +217,9 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                       builder: (context) {
                         return ParkingRequestDeleteDialog(
                           onConfirm: () {
-                            context.read<PlateState>().deletePlate(selectedPlate.plateNumber, selectedPlate.area);
+                            context
+                                .read<PlateState>()
+                                .deletePlateFromParkingRequest(selectedPlate.plateNumber, selectedPlate.area);
                             showSnackbar(context, "삭제 완료: ${selectedPlate.plateNumber}");
                           },
                         );
@@ -228,8 +229,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                     _toggleSortIcon();
                   }
                 }
-              }
-          );
+              });
         },
       ),
     );

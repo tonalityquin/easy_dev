@@ -254,7 +254,7 @@ class PlateState extends ChangeNotifier {
   }
 
   /// 🔹 선택된 번호판을 삭제
-  Future<void> deletePlate(String plateNumber, String area) async {
+  Future<void> deletePlateFromParkingRequest(String plateNumber, String area) async {
     final documentId = '${plateNumber}_$area';
 
     try {
@@ -270,6 +270,25 @@ class PlateState extends ChangeNotifier {
       debugPrint("🚨 번호판 삭제 실패: $e");
     }
   }
+
+  /// 🔹 '입차 완료' 컬렉션에서 번호판 삭제
+  Future<void> deletePlateFromParkingCompleted(String plateNumber, String area) async {
+    final documentId = '${plateNumber}_$area';
+
+    try {
+      // 🔹 1️⃣ Firestore에서 삭제
+      await _repository.deleteDocument('parking_completed', documentId);
+
+      // 🔹 2️⃣ 내부 리스트에서 데이터 삭제
+      _data['parking_completed']?.removeWhere((plate) => plate.plateNumber == plateNumber);
+
+      notifyListeners(); // 🔄 UI 갱신
+      debugPrint("✅ 번호판 삭제 완료 (입차 완료 컬렉션): $plateNumber");
+    } catch (e) {
+      debugPrint("🚨 번호판 삭제 실패 (입차 완료 컬렉션): $e");
+    }
+  }
+
 
 
 
