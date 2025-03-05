@@ -159,7 +159,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                       ),
                     ),
                   ),
-                  label: isPlateSelected ? '이동' : (_isSorted ? '최신순' : '오래된순'),
+                  label: isPlateSelected ? '상태 수정' : (_isSorted ? '최신순' : '오래된순'),
                 ),
               ],
               onTap: (index) {
