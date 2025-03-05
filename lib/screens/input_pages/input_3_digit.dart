@@ -294,10 +294,19 @@ class _Input3DigitState extends State<Input3Digit> {
   // ------------------- Firestore 정산 유형 반영 -------------------
   Future<bool> _refreshAdjustments() async {
     final adjustmentState = context.read<AdjustmentState>();
-    await Future.delayed(const Duration(milliseconds: 300));
-    adjustmentState.syncWithAreaState();
-    return true; // ✅ Future<bool> 반환하도록 수정
+
+    // 🔥 위젯 빌드 이후에 실행되도록 변경
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      adjustmentState.syncWithAreaState();
+    });
+
+    // 상태 반영이 끝날 시간을 확보하기 위해 약간의 지연 추가
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    return adjustmentState.adjustments.isNotEmpty;
   }
+
+
 
   // ------------------- dispose -------------------
   @override

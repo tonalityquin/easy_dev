@@ -38,7 +38,7 @@ class FirestoreAdjustmentRepository implements AdjustmentRepository {
         };
       }).toList();
 
-      debugPrint('🔥 Firestore에서 받아온 데이터 ($currentArea): $dataList');
+      debugPrint('🔥 Firestore에서 가져온 최신 데이터 ($currentArea): $dataList'); // 로그 출력
       return dataList;
     });
   }

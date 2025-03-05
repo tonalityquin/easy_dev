@@ -231,15 +231,31 @@ class PlateState extends ChangeNotifier {
 
   /// 🔹 선택된 번호판 반환
   PlateModel? getSelectedPlate(String collection, String userName) {
-    try {
-      return _data[collection]?.firstWhere(
-        (plate) => plate.isSelected && plate.selectedBy == userName,
-      );
-    } catch (e) {
-      debugPrint('Error in getSelectedPlate: $e');
+    final plates = _data[collection];
+
+    // 컬렉션이 비어 있다면 null 반환 (정상적인 동작)
+    if (plates == null || plates.isEmpty) {
       return null;
     }
+
+    // 조건을 만족하는 plate가 있는지 확인
+    return plates.firstWhere(
+          (plate) => plate.isSelected && plate.selectedBy == userName,
+      orElse: () => PlateModel(
+        id: '', // 빈 값 설정
+        plateNumber: '',
+        type: '',
+        requestTime: DateTime.now(),
+        location: '',
+        area: '',
+        userName: '',
+        isSelected: false,
+        statusList: [],
+      ), // 🔥 PlateModel 기본값 반환
+    );
   }
+
+
 
   /// 🔹 특정 번호판을 컬렉션에서 찾기
   PlateModel? _findPlate(String collection, String plateNumber) {
