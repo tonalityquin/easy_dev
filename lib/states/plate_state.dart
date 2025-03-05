@@ -289,6 +289,23 @@ class PlateState extends ChangeNotifier {
     }
   }
 
+  Future<void> deletePlateFromDepartureRequest(String plateNumber, String area) async {
+    final documentId = '${plateNumber}_$area';
+
+    try {
+      // 🔹 1️⃣ Firestore에서 삭제
+      await _repository.deleteDocument('departure_requests', documentId);
+
+      // 🔹 2️⃣ 내부 리스트에서 데이터 삭제
+      _data['departure_requests']?.removeWhere((plate) => plate.plateNumber == plateNumber);
+
+      notifyListeners(); // 🔄 UI 갱신
+      debugPrint("✅ 번호판 삭제 완료 (입차 완료 컬렉션): $plateNumber");
+    } catch (e) {
+      debugPrint("🚨 번호판 삭제 실패 (입차 완료 컬렉션): $e");
+    }
+  }
+
 
 
 
