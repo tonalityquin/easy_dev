@@ -7,6 +7,8 @@ import '../../widgets/container/plate_container.dart'; // 번호판 컨테이너
 import '../../widgets/dialog/departure_completed_confirm_dialog.dart';
 import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바
 import '../../widgets/dialog/plate_search_dialog.dart'; // ✅ PlateSearchDialog 추가
+import '../../widgets/dialog/departure_request_status_dialog.dart';
+import '../../widgets/dialog/parking_request_delete_dialog.dart';
 import '../../utils/show_snackbar.dart';
 
 /// 출차 요청 페이지
@@ -179,7 +181,35 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                     ),
                   );
                 } else if (index == 2) {
-                  if (!isPlateSelected) {
+                  if (isPlateSelected) {
+                    showDialog(
+                      context: context,
+                      builder: (context) => DepartureRequestStatusDialog(
+                        onRequestEntry: () {
+                          // 입차 요청 로직 (추후 구현 예정)
+                          showSnackbar(context, "입차 요청 기능은 개발 중입니다.");
+                        },
+                        onCompleteDeparture: () {
+                          // 출차 완료 로직 (추후 구현 예정)
+                          showSnackbar(context, "출차 완료 기능은 개발 중입니다.");
+                        },
+                        onDelete: () {
+                          showDialog(
+                            context: context,
+                            builder: (context) => ParkingRequestDeleteDialog(
+                              onConfirm: () {
+                                context.read<PlateState>().deletePlateFromDepartureRequest(
+                                      selectedPlate.plateNumber,
+                                      selectedPlate.area,
+                                    );
+                                showSnackbar(context, "삭제 완료: ${selectedPlate.plateNumber}");
+                              },
+                            ),
+                          );
+                        },
+                      ),
+                    );
+                  } else {
                     _toggleSortIcon();
                   }
                 }
