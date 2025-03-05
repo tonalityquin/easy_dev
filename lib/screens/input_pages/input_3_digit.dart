@@ -408,7 +408,6 @@ class _Input3DigitState extends State<Input3Digit> {
                         const SizedBox(height: 8.0),
                         FutureBuilder<bool>(
                           future: _refreshAdjustments().timeout(Duration(seconds: 3), onTimeout: () => false),
-                          // ✅ Future<bool> 사용
                           builder: (context, snapshot) {
                             if (snapshot.connectionState == ConnectionState.waiting) {
                               return const Center(child: CircularProgressIndicator());
@@ -416,6 +415,15 @@ class _Input3DigitState extends State<Input3Digit> {
                             if (snapshot.data == false) {
                               return const Text('정산 유형 정보를 불러오지 못했습니다.');
                             }
+
+                            // 🔥 Firestore에서 정산 유형 데이터 가져오기
+                            final adjustmentState = context.watch<AdjustmentState>();
+                            final adjustmentList = adjustmentState.adjustments;
+
+                            if (adjustmentList.isEmpty) {
+                              return const Text('등록된 정산 유형이 없습니다.');
+                            }
+
                             return DropdownButtonFormField<String>(
                               value: selectedAdjustment,
                               onChanged: (newValue) {
@@ -423,10 +431,11 @@ class _Input3DigitState extends State<Input3Digit> {
                                   selectedAdjustment = newValue;
                                 });
                               },
-                              items: ['test_Hospital', 'test_Parking'].map((type) {
+                              // 🔥 Firestore에서 가져온 데이터로 Dropdown 리스트 생성
+                              items: adjustmentList.map((adj) {
                                 return DropdownMenuItem<String>(
-                                  value: type,
-                                  child: Text(type),
+                                  value: adj['countType'], // Firestore의 countType 필드 사용
+                                  child: Text(adj['countType']),
                                 );
                               }).toList(),
                               decoration: const InputDecoration(
