@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../repositories/plate_repository.dart';
+import '../../models/plate_model.dart';
 import '../../utils/fee_calculator.dart';
 import '../../states/plate_state.dart';
 import '../../states/user_state.dart';

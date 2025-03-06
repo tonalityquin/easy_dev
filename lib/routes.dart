@@ -9,7 +9,7 @@ final Map<String, WidgetBuilder> appRoutes = {
   '/login': (context) => const LoginPage(),
   '/home': (context) => const GoToWork(),
   '/type_page': (context) => const TypePage(),
-  '/location_management': (context) => const LocationManagement(), // LocationManagement 추가 가능
+  '/location_management': (context) => const LocationManagement(),
 };
 
 /// ## Improvement

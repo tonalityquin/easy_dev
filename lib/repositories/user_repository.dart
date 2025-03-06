@@ -1,5 +1,17 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/material.dart';
+import 'dart:developer' as dev;
+
+class FirestoreFields {
+  static const String id = 'id';
+  static const String name = 'name';
+  static const String phone = 'phone';
+  static const String email = 'email';
+  static const String role = 'role';
+  static const String password = 'password';
+  static const String area = 'area';
+  static const String isSelected = 'isSelected';
+  static const String isWorking = 'isWorking';
+}
 
 abstract class UserRepository {
   Stream<List<Map<String, dynamic>>> getUsersStream();
@@ -31,15 +43,15 @@ class FirestoreUserRepository implements UserRepository {
       return snapshot.docs.map((doc) {
         final data = doc.data();
         return {
-          'id': doc.id,
-          'name': data['name']?.toString() ?? '',
-          'phone': data['phone']?.toString() ?? '',
-          'email': data['email']?.toString() ?? '',
-          'role': data['role']?.toString() ?? '',
-          'password': data['password']?.toString() ?? '',
-          'area': data['area']?.toString() ?? '',
-          'isSelected': (data['isSelected'] ?? false) == true,
-          'isWorking': data['isWorking'] ?? false, // 🔹 Firestore에서 출근 상태 추가
+          FirestoreFields.id: doc.id,
+          FirestoreFields.name: data[FirestoreFields.name]?.toString() ?? '',
+          FirestoreFields.phone: data[FirestoreFields.phone]?.toString() ?? '',
+          FirestoreFields.email: data[FirestoreFields.email]?.toString() ?? '',
+          FirestoreFields.role: data[FirestoreFields.role]?.toString() ?? '',
+          FirestoreFields.password: data[FirestoreFields.password]?.toString() ?? '',
+          FirestoreFields.area: data[FirestoreFields.area]?.toString() ?? '',
+          FirestoreFields.isSelected: (data[FirestoreFields.isSelected] ?? false) == true,
+          FirestoreFields.isWorking: data[FirestoreFields.isWorking] ?? false,
         };
       }).toList();
     });
@@ -48,18 +60,14 @@ class FirestoreUserRepository implements UserRepository {
   // 🔹 (2) 특정 사용자의 상태를 실시간으로 조회
   @override
   Stream<Map<String, dynamic>?> listenToUserStatus(String phone) {
-    return _getCollectionRef()
-        .doc(phone)
-        .snapshots()
-        .map((doc) => doc.exists ? doc.data() : null);
+    return _getCollectionRef().doc(phone).snapshots().map((doc) => doc.exists ? doc.data() : null);
   }
 
   // 🔹 (3) 특정 사용자의 데이터를 조회
   @override
   Future<Map<String, dynamic>?> getUserByPhone(String phone) async {
     try {
-      final querySnapshot =
-      await _getCollectionRef().where('phone', isEqualTo: phone).get();
+      final querySnapshot = await _getCollectionRef().where('phone', isEqualTo: phone).get();
 
       if (querySnapshot.docs.isNotEmpty) {
         final doc = querySnapshot.docs.first;
@@ -67,10 +75,10 @@ class FirestoreUserRepository implements UserRepository {
       }
       return null;
     } on FirebaseException catch (e) {
-      debugPrint("Firestore 에러 (getUserByPhone): ${e.message}");
+      dev.log("Firestore 에러 (getUserByPhone): ${e.message}");
       throw Exception("Firestore 사용자 조회 실패: ${e.message}");
     } catch (e) {
-      debugPrint("알 수 없는 에러 (getUserByPhone): $e");
+      dev.log("알 수 없는 에러 (getUserByPhone): $e");
       throw Exception("예상치 못한 에러 발생");
     }
   }
@@ -81,10 +89,10 @@ class FirestoreUserRepository implements UserRepository {
     try {
       await _getCollectionRef().doc(id).set(userData);
     } on FirebaseException catch (e) {
-      debugPrint("Firestore 에러 (addUser): ${e.message}");
+      dev.log("Firestore 에러 (addUser): ${e.message}");
       throw Exception("Firestore 사용자 추가 실패: ${e.message}");
     } catch (e) {
-      debugPrint("알 수 없는 에러 (addUser): $e");
+      dev.log("알 수 없는 에러 (addUser): $e");
       throw Exception("예상치 못한 에러 발생");
     }
   }
@@ -97,7 +105,7 @@ class FirestoreUserRepository implements UserRepository {
     try {
       await _getCollectionRef().doc(userId).update({'isWorking': isWorking});
     } on FirebaseException catch (e) {
-      debugPrint("Firestore 에러 (updateWorkStatus): ${e.message}");
+      dev.log("Firestore 에러 (updateWorkStatus): ${e.message}");
       throw Exception("Firestore 출근 상태 업데이트 실패: ${e.message}");
     }
   }
@@ -110,10 +118,10 @@ class FirestoreUserRepository implements UserRepository {
         'isSelected': isSelected,
       });
     } on FirebaseException catch (e) {
-      debugPrint("Firestore 에러 (toggleUserSelection): ${e.message}");
+      dev.log("Firestore 에러 (toggleUserSelection): ${e.message}");
       throw Exception("Firestore 상태 업데이트 실패: ${e.message}");
     } catch (e) {
-      debugPrint("알 수 없는 에러 (toggleUserSelection): $e");
+      dev.log("알 수 없는 에러 (toggleUserSelection): $e");
       throw Exception("예상치 못한 에러 발생");
     }
   }
@@ -126,10 +134,10 @@ class FirestoreUserRepository implements UserRepository {
         ids.map((id) => _getCollectionRef().doc(id).delete()),
       );
     } on FirebaseException catch (e) {
-      debugPrint("Firestore 에러 (deleteUsers): ${e.message}");
+      dev.log("Firestore 에러 (deleteUsers): ${e.message}");
       throw Exception("Firestore 사용자 삭제 실패: ${e.message}");
     } catch (e) {
-      debugPrint("알 수 없는 에러 (deleteUsers): $e");
+      dev.log("알 수 없는 에러 (deleteUsers): $e");
       throw Exception("예상치 못한 에러 발생");
     }
   }

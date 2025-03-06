@@ -16,6 +16,7 @@ class AdjustmentState extends ChangeNotifier {
   Map<String, bool> _selectedAdjustments = {}; // ✅ 선택된 데이터 저장
 
   List<Map<String, dynamic>> get adjustments => _adjustments;
+
   Map<String, bool> get selectedAdjustments => _selectedAdjustments; // ✅ 추가된 변수
 
   Stream<List<Map<String, dynamic>>> get adjustmentsStream {
@@ -23,21 +24,20 @@ class AdjustmentState extends ChangeNotifier {
     return _repository.getAdjustmentStream(currentArea);
   }
 
+  /// ✅ 지역 변경 감지 후 데이터 동기화
   void syncWithAreaState() {
-    final currentArea = _areaState.currentArea.trim();
-    debugPrint('🔥 AdjustmentState: 지역 변경 감지됨 ($currentArea) → 데이터 새로 가져옴');
+    try {
+      final currentArea = _areaState.currentArea.trim();
+      debugPrint('🔥 AdjustmentState: 지역 변경 감지됨 ($currentArea) → 데이터 새로 가져옴');
 
-    _subscription?.cancel();
-
-    _adjustments = []; // 🔥 기존 데이터 완전 초기화
-    _selectedAdjustments = {}; // 🔥 선택 상태도 초기화
-    notifyListeners();
-
-    _initializeAdjustments();
+      _subscription?.cancel();
+      _initializeAdjustments();
+    } catch (e) {
+      debugPrint("🔥 Error syncing area state: $e");
+    }
   }
 
-
-
+  /// ✅ Firestore 데이터 초기화 및 실시간 업데이트 구독
   void _initializeAdjustments() {
     final currentArea = _areaState.currentArea.trim();
     _adjustments.clear();
@@ -47,14 +47,14 @@ class AdjustmentState extends ChangeNotifier {
       _adjustments = data
           .where((adj) => adj['area'].toString().trim() == currentArea)
           .map((adj) => {
-        'id': adj['id'],
-        'countType': adj['CountType']?.toString().trim() ?? adj['countType']?.toString().trim() ?? '',
-        'area': adj['area'],
-        'basicStandard': int.tryParse(adj['basicStandard']?.toString() ?? '0') ?? 0,
-        'basicAmount': int.tryParse(adj['basicAmount']?.toString() ?? '0') ?? 0,
-        'addStandard': int.tryParse(adj['addStandard']?.toString() ?? '0') ?? 0,
-        'addAmount': int.tryParse(adj['addAmount']?.toString() ?? '0') ?? 0,
-      })
+                'id': adj['id'],
+                'countType': adj['CountType']?.toString().trim() ?? adj['countType']?.toString().trim() ?? '',
+                'area': adj['area'],
+                'basicStandard': parseInt(adj['basicStandard']),
+                'basicAmount': parseInt(adj['basicAmount']),
+                'addStandard': parseInt(adj['addStandard']),
+                'addAmount': parseInt(adj['addAmount']),
+              })
           .where((adj) => adj['countType'].isNotEmpty)
           .toList();
 
@@ -63,6 +63,12 @@ class AdjustmentState extends ChangeNotifier {
     });
   }
 
+  /// ✅ 숫자 변환 함수 (데이터 안정성 향상)
+  int parseInt(dynamic value) {
+    if (value is int) return value;
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
+  }
 
   /// ✅ 선택 상태 토글
   void toggleSelection(String id) {
@@ -70,14 +76,15 @@ class AdjustmentState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// ✅ Firestore에 조정 데이터 추가
   Future<void> addAdjustments(
-      String countType,
-      String area,
-      String basicStandard,
-      String basicAmount,
-      String addStandard,
-      String addAmount,
-      ) async {
+    String countType,
+    String area,
+    String basicStandard,
+    String basicAmount,
+    String addStandard,
+    String addAmount,
+  ) async {
     try {
       final adjustmentData = {
         'CountType': countType,
@@ -96,6 +103,7 @@ class AdjustmentState extends ChangeNotifier {
     }
   }
 
+  /// ✅ Firestore에서 조정 데이터 삭제
   Future<void> deleteAdjustments(List<String> ids) async {
     try {
       await _repository.deleteAdjustment(ids);
