@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../repositories/plate_repository.dart';
+import '../models/plate_model.dart';
 
 class PlateState extends ChangeNotifier {
   final PlateRepository _repository;
@@ -81,9 +82,7 @@ class PlateState extends ChangeNotifier {
     debugPrint("🚀 filterByParkingArea() 호출됨: 지역 = $area, 주차 구역 = $parkingLocation");
 
     // 🔹 1. 먼저 해당 지역(area)에 속하는 plate 목록을 가져옴 (번호판 검색과 동일)
-    List<PlateModel> plates = _data[collection]
-        ?.where((plate) => plate.area == area)
-        .toList() ?? [];
+    List<PlateModel> plates = _data[collection]?.where((plate) => plate.area == area).toList() ?? [];
 
     debugPrint("📌 지역 필터링 후 plate 개수: ${plates.length}");
 
@@ -95,17 +94,12 @@ class PlateState extends ChangeNotifier {
     return plates; // ✅ _data를 변경하지 않고 필터링된 리스트 반환
   }
 
-
-
-
-
   /// 🔹 주차 구역 검색 초기화 (번호판 검색 초기화 방식과 동일하게 구현)
   void clearLocationSearchQuery() {
     debugPrint("🔄 주차 구역 검색 초기화 호출됨");
     _initializeSubscriptions(); // ✅ Firestore의 원본 데이터를 다시 가져옴
     notifyListeners();
   }
-
 
   /// 번호판 중복 여부 확인
   bool isPlateNumberDuplicated(String plateNumber, String area) {
@@ -140,10 +134,10 @@ class PlateState extends ChangeNotifier {
       if (adjustmentType != null) {
         final adjustmentData = await _repository.getDocument('adjustments', adjustmentType);
         if (adjustmentData != null) {
-          basicStandard = adjustmentData['basicStandard'] ?? 0;
-          basicAmount = adjustmentData['basicAmount'] ?? 0;
-          addStandard = adjustmentData['addStandard'] ?? 0;
-          addAmount = adjustmentData['addAmount'] ?? 0;
+          basicStandard = adjustmentData.basicStandard ?? 0;
+          basicAmount = adjustmentData.basicAmount ?? 0;
+          addStandard = adjustmentData.addStandard ?? 0;
+          addAmount = adjustmentData.addAmount ?? 0;
         } else {
           debugPrint('⚠ Firestore에서 adjustmentType=$adjustmentType 데이터를 찾을 수 없음');
         }
@@ -191,10 +185,10 @@ class PlateState extends ChangeNotifier {
         await _repository.deleteDocument(fromCollection, documentId);
 
         // ✅ 입차 요청 상태로 변경될 경우만 "미지정"으로 설정
-        final updatedLocation = (toCollection == 'parking_requests') ? "미지정" : documentData['location'];
+        final updatedLocation = (toCollection == 'parking_requests') ? "미지정" : documentData.location;
 
         await _repository.addOrUpdateDocument(toCollection, documentId, {
-          ...documentData,
+          ...documentData.toMap(),
           'type': newType,
           'location': updatedLocation, // ✅ 주차 구역 유지 또는 "미지정"
           'isSelected': false,

@@ -96,7 +96,6 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
     context.read<PlateState>().clearLocationSearchQuery();
   }
 
-
   /// 🔹 검색 초기화
   void _resetSearch(BuildContext context) {
     context.read<PlateState>().clearPlateSearchQuery();
@@ -144,7 +143,8 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
           final currentArea = areaState.currentArea;
 
           var departureRequests = _isParkingAreaMode && _selectedParkingArea != null
-              ? plateState.filterByParkingArea('departure_requests', currentArea, _selectedParkingArea!) // ✅ 주차 구역 필터링 적용
+              ? plateState.filterByParkingArea(
+                  'departure_requests', currentArea, _selectedParkingArea!) // ✅ 주차 구역 필터링 적용
               : plateState.getPlatesByArea('departure_requests', currentArea);
 
           final userName = context.read<UserState>().name;
@@ -177,7 +177,6 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
           );
         },
       ),
-
       bottomNavigationBar: Consumer<PlateState>(
         builder: (context, plateState, child) {
           final userName = context.read<UserState>().name;
@@ -254,9 +253,9 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                             builder: (context) => ParkingRequestDeleteDialog(
                               onConfirm: () {
                                 context.read<PlateState>().deletePlateFromDepartureRequest(
-                                  selectedPlate.plateNumber,
-                                  selectedPlate.area,
-                                );
+                                      selectedPlate.plateNumber,
+                                      selectedPlate.area,
+                                    );
                                 showSnackbar(context, "삭제 완료: ${selectedPlate.plateNumber}");
                               },
                             ),
