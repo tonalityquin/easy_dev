@@ -119,7 +119,7 @@ class PlateState extends ChangeNotifier {
     required String area,
     required String type,
     required String userName,
-    String? selectedBy,
+    String? whoSelected,
     String? adjustmentType,
     List<String>? statusList,
   }) async {
@@ -149,15 +149,15 @@ class PlateState extends ChangeNotifier {
         'request_time': DateTime.now(),
         'location': location.isNotEmpty ? location : '미지정',
         'area': area,
-        'userName': userName,
-        'adjustmentType': adjustmentType,
-        'statusList': statusList ?? [],
+        'user_name': userName,
+        'adjustment_type': adjustmentType,
+        'memo_list': statusList ?? [],
         'isSelected': false,
-        'selectedBy': selectedBy,
-        'basicStandard': basicStandard,
-        'basicAmount': basicAmount,
-        'addStandard': addStandard,
-        'addAmount': addAmount,
+        'who_selected': whoSelected,
+        'basic_standard': basicStandard,
+        'basic_amount': basicAmount,
+        'add_standard': addStandard,
+        'add_amount': addAmount,
       });
 
       notifyListeners();
@@ -192,7 +192,7 @@ class PlateState extends ChangeNotifier {
           'type': newType,
           'location': updatedLocation, // ✅ 주차 구역 유지 또는 "미지정"
           'isSelected': false,
-          'selectedBy': null,
+          'who_selected': null,
         });
 
         notifyListeners();
@@ -225,27 +225,27 @@ class PlateState extends ChangeNotifier {
       final plate = plateList[index];
 
       final newIsSelected = !plate.isSelected;
-      final newSelectedBy = newIsSelected ? userName : null;
+      final newWhoSelected = newIsSelected ? userName : null;
 
-      await _repository.updatePlateSelection(
+      await _repository.togglePlateSelection(
         collection,
         plateId,
         newIsSelected,
-        selectedBy: newSelectedBy,
+        whoSelected: newWhoSelected,
       );
 
       _data[collection]![index] = PlateModel(
         id: plate.id,
         plateNumber: plate.plateNumber,
         type: plate.type,
-        requestTime: plate.requestTime,
+        entryTime: plate.entryTime,
         location: plate.location,
         area: plate.area,
         userName: plate.userName,
         isSelected: newIsSelected,
-        selectedBy: newSelectedBy,
+        whoSelected: newWhoSelected,
         adjustmentType: plate.adjustmentType,
-        statusList: plate.statusList,
+        memoList: plate.memoList,
         basicStandard: plate.basicStandard,
         basicAmount: plate.basicAmount,
         addStandard: plate.addStandard,
@@ -272,18 +272,18 @@ class PlateState extends ChangeNotifier {
 
     // 조건을 만족하는 plate가 있는지 확인
     return plates.firstWhere(
-      (plate) => plate.isSelected && plate.selectedBy == userName,
+      (plate) => plate.isSelected && plate.whoSelected == userName,
       orElse: () => PlateModel(
         id: '',
         // 빈 값 설정
         plateNumber: '',
         type: '',
-        requestTime: DateTime.now(),
+        entryTime: DateTime.now(),
         location: '',
         area: '',
         userName: '',
         isSelected: false,
-        statusList: [],
+        memoList: [],
       ), // 🔥 PlateModel 기본값 반환
     );
   }
@@ -354,15 +354,15 @@ class PlateState extends ChangeNotifier {
             id: oldPlate.id,
             plateNumber: oldPlate.plateNumber,
             type: oldPlate.type,
-            requestTime: oldPlate.requestTime,
+            entryTime: oldPlate.entryTime,
             location: updatedLocation,
             // ✅ location 변경 적용
             area: oldPlate.area,
             userName: oldPlate.userName,
             isSelected: oldPlate.isSelected,
-            selectedBy: oldPlate.selectedBy,
+            whoSelected: oldPlate.whoSelected,
             adjustmentType: oldPlate.adjustmentType,
-            statusList: oldPlate.statusList,
+            memoList: oldPlate.memoList,
             basicStandard: oldPlate.basicStandard,
             basicAmount: oldPlate.basicAmount,
             addStandard: oldPlate.addStandard,
@@ -405,16 +405,16 @@ class PlateState extends ChangeNotifier {
         plateNumber: selectedPlate.plateNumber,
         type: '입차 완료',
         // ✅ 상태 변경
-        requestTime: selectedPlate.requestTime,
+        entryTime: selectedPlate.entryTime,
         location: location,
         // ✅ 새로운 위치 적용
         area: selectedPlate.area,
         userName: selectedPlate.userName,
         isSelected: false,
         // ✅ 선택 해제
-        selectedBy: null,
+        whoSelected: null,
         adjustmentType: selectedPlate.adjustmentType,
-        statusList: selectedPlate.statusList,
+        memoList: selectedPlate.memoList,
         basicStandard: selectedPlate.basicStandard,
         basicAmount: selectedPlate.basicAmount,
         addStandard: selectedPlate.addStandard,
@@ -431,18 +431,18 @@ class PlateState extends ChangeNotifier {
         await _repository.addOrUpdateDocument('parking_completed', documentId, {
           'plate_number': updatedPlate.plateNumber,
           'type': updatedPlate.type,
-          'request_time': updatedPlate.requestTime,
+          'entry_time': updatedPlate.entryTime,
           'location': updatedPlate.location,
           'area': updatedPlate.area,
-          'userName': updatedPlate.userName,
-          'adjustmentType': updatedPlate.adjustmentType,
-          'statusList': updatedPlate.statusList,
+          'user_name': updatedPlate.userName,
+          'adjustment_type': updatedPlate.adjustmentType,
+          'memo_list': updatedPlate.memoList,
           'isSelected': updatedPlate.isSelected,
-          'selectedBy': updatedPlate.selectedBy,
-          'basicStandard': updatedPlate.basicStandard,
-          'basicAmount': updatedPlate.basicAmount,
-          'addStandard': updatedPlate.addStandard,
-          'addAmount': updatedPlate.addAmount,
+          'who_selected': updatedPlate.whoSelected,
+          'basic_standard': updatedPlate.basicStandard,
+          'basic_amount': updatedPlate.basicAmount,
+          'add_standard': updatedPlate.addStandard,
+          'add_amount': updatedPlate.addAmount,
         });
 
         // 🔹 3️⃣ 내부 리스트에서 데이터 이동

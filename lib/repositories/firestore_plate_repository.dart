@@ -3,29 +3,32 @@ import '../models/plate_model.dart';
 import 'plate_repository.dart';
 import 'dart:developer' as dev;
 
-/// Firestore 기반 PlateRepository 구현 클래스
+/// PlateRepository를 구현(implements)하는 클래스
 class FirestorePlateRepository implements PlateRepository {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance; // Firestore 인스턴스를 생성하여 _firestore 변수에 저장한다.
 
+  /// Firestore 컬렉션(collectionName)을 실시간(Stream)으로 가져오는 메서드
   @override
-
-  /// 특정 Firestore 컬렉션의 데이터를 스트림 형태로 가져오는 메서드
   Stream<List<PlateModel>> getCollectionStream(String collectionName) {
     return _firestore.collection(collectionName).snapshots().map((snapshot) {
-      return snapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList();
+      // snapshots()를 호출하면 해당 컬렉션의 데이터가 변경될 때마다 자동으로 업데이트된다.
+      return snapshot.docs
+          .map((doc) => PlateModel.fromDocument(doc))
+          .toList(); // .docs.map((doc) => PlateModel.fromDocument(doc)) Firestore 문서를 PlateModel로 변환한다.
     });
   }
 
   @override
-
-  /// Firestore 문서를 추가하거나 업데이트하는 메서드
   Future<void> addOrUpdateDocument(String collection, String documentId, Map<String, dynamic> data) async {
-    final docRef = _firestore.collection(collection).doc(documentId);
-    final docSnapshot = await docRef.get();
+    final docRef = _firestore
+        .collection(collection)
+        .doc(documentId); // Firestore의 특정 컬렉션(collection)에서 주어진 문서 ID(documentId)를 참조하는 DocumentReference 객체를 생성한다.
+    final docSnapshot = await docRef.get(); //  해당 문서(docRef)의 현재 데이터를 Firestore에서 가져와 DocumentSnapshot 객체로 저장한다.
 
     if (docSnapshot.exists) {
-      final existingData = docSnapshot.data();
+      final existingData = docSnapshot.data(); // 문서가 존재하면 해당 문서의 데이터를 Map<String, dynamic> 형식으로 가져온다.
       if (existingData != null && _isSameData(existingData, data)) {
+        // 기존 데이터(existingData)가 null이 아니고, 새로 입력하려는 데이터(data)와 동일한지 _isSameData 함수를 통해 비교한다.
         dev.log("데이터 변경 없음: $documentId", name: "Firestore");
         return;
       }
@@ -35,7 +38,7 @@ class FirestorePlateRepository implements PlateRepository {
     dev.log("DB 문서 저장 완료: $documentId", name: "Firestore");
   }
 
-  /// 기존 데이터와 새로운 데이터를 비교하는 함수
+  /// Firestore의 기존 데이터(oldData) 와 새로운 데이터(newData) 가 동일한지 비교하는 함수
   bool _isSameData(Map<String, dynamic> oldData, Map<String, dynamic> newData) {
     if (oldData.length != newData.length) return false;
     for (String key in oldData.keys) {
@@ -47,8 +50,6 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
-
-  /// Firestore 문서를 삭제하는 메서드
   Future<void> deleteDocument(String collection, String documentId) async {
     final docRef = _firestore.collection(collection).doc(documentId);
     final docSnapshot = await docRef.get();
@@ -61,8 +62,6 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
-
-  /// Firestore에서 특정 문서를 가져오는 메서드
   Future<PlateModel?> getDocument(String collection, String documentId) async {
     final doc = await _firestore.collection(collection).doc(documentId).get();
     if (!doc.exists) return null;
@@ -70,8 +69,6 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
-
-  /// Firestore의 모든 데이터를 삭제하는 메서드
   Future<void> deleteAllData() async {
     try {
       final collections = [
@@ -98,8 +95,6 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
-
-  /// 요청 또는 완료 데이터를 추가하는 메서드
   Future<void> addRequestOrCompleted({
     required String collection,
     required String plateNumber,
@@ -108,7 +103,7 @@ class FirestorePlateRepository implements PlateRepository {
     required String type,
     required String userName,
     String? adjustmentType,
-    List<String>? statusList,
+    List<String>? memoList,
     int? basicStandard,
     int? basicAmount,
     int? addStandard,
@@ -141,18 +136,18 @@ class FirestorePlateRepository implements PlateRepository {
     final data = {
       'plate_number': plateNumber,
       'type': type,
-      'request_time': DateTime.now(),
+      'entry_time': DateTime.now(),
       'location': location.isNotEmpty ? location : '미지정',
       'area': area,
-      'userName': userName,
-      'adjustmentType': adjustmentType,
-      'statusList': statusList ?? [],
-      'isSelected': false,
-      'selectedBy': null,
-      'basicStandard': basicStandard ?? 0,
-      'basicAmount': basicAmount ?? 0,
-      'addStandard': addStandard ?? 0,
-      'addAmount': addAmount ?? 0,
+      'user_name': userName,
+      'adjustment_type': adjustmentType,
+      'memo_list': memoList ?? [],
+      'is_selected': false,
+      'who_selected': null,
+      'basic_standard': basicStandard ?? 0,
+      'basic-amount': basicAmount ?? 0,
+      'add_standard': addStandard ?? 0,
+      'add_amount': addAmount ?? 0,
     };
 
     dev.log('🔥 Firestore 저장 데이터: $data');
@@ -163,7 +158,7 @@ class FirestorePlateRepository implements PlateRepository {
   @override
 
   /// 특정 번호판의 선택 상태를 업데이트하는 메서드
-  Future<void> updatePlateSelection(String collection, String id, bool isSelected, {String? selectedBy}) async {
+  Future<void> togglePlateSelection(String collection, String id, bool isSelected, {String? whoSelected}) async {
     final docRef = _firestore.collection(collection).doc(id);
     try {
       await _firestore.runTransaction((transaction) async {
@@ -174,12 +169,12 @@ class FirestorePlateRepository implements PlateRepository {
         }
 
         transaction.update(docRef, {
-          'isSelected': isSelected,
-          'selectedBy': isSelected ? selectedBy : null,
+          'is_selected': isSelected,
+          'who_selected': isSelected ? whoSelected : null,
         });
       });
     } catch (e) {
-      dev.log("DB 에러 (updatePlateSelection): $e", name: "Firestore");
+      dev.log("DB 에러 (togglePlateSelection): $e", name: "Firestore");
       throw Exception("DB 업데이트 실패: $e");
     }
   }

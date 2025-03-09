@@ -8,9 +8,9 @@ import '../states/area_state.dart';
 import '../states/user_state.dart';
 import '../states/location_state.dart';
 import '../states/adjustment_state.dart';
-import '../states/status_state.dart';
+import '../states/memo_state.dart';
 import '../repositories/adjustment_repository.dart';
-import '../repositories/status_repository.dart';
+import '../repositories/memo_repository.dart';
 import '../repositories/location_repository.dart';
 import '../repositories/plate_repository.dart';
 import '../repositories/user_repository.dart';
@@ -40,13 +40,13 @@ final List<SingleChildWidget> stateProviders = [
   ),
   ChangeNotifierProvider(
     create: (context) {
-      final statusRepo = context.read<StatusRepository?>();
+      final statusRepo = context.read<MemoRepository?>();
       final areaState = context.read<AreaState>();
 
       if (statusRepo == null) {
-        return StatusState(StatusRepository(), areaState);
+        return MemoState(MemoRepository(), areaState);
       }
-      return StatusState(statusRepo, areaState);
+      return MemoState(statusRepo, areaState);
     },
   ),
 ];

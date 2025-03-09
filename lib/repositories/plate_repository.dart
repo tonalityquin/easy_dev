@@ -1,26 +1,25 @@
 import '../models/plate_model.dart';
 
-/// Plate 관련 데이터를 처리하는 추상 클래스
+/// 직접 인스턴스를 만들 수 없는 추상 클래스
 abstract class PlateRepository {
-  /// Firestore 컬렉션을 스트림 형태로 가져온다.
-  Stream<List<PlateModel>> getCollectionStream(String collectionName);
+  Stream<List<PlateModel>> getCollectionStream(
+      String collectionName); // collectionName의 모든 문서를 Stream(데이터가 변경될 때마다 UI 업데이트)으로 가져온다.
+  Future<void> addOrUpdateDocument(String collection, String documentId,
+      Map<String, dynamic> data); // collection과 documentId로 문서를 찾는다, data(Map<String, dynamic>)는 Firestore에 저장할 데이터이다.
 
-  /// 문서를 추가하거나 업데이트한다.
-  Future<void> addOrUpdateDocument(String collection, String documentId, Map<String, dynamic> data);
+  Future<void> deleteDocument(String collection, String documentId); // collection과 documentId로 문서를 찾는다.
 
-  /// 특정 문서를 삭제한다.
-  Future<void> deleteDocument(String collection, String documentId);
+  Future<PlateModel?> getDocument(String collection, String documentId); // collection과 documentId로 문서를 찾는다.
 
-  /// 특정 문서를 가져온다.
-  Future<PlateModel?> getDocument(String collection, String documentId);
-
-  /// Firestore 내 모든 Plate 데이터를 삭제한다.
   Future<void> deleteAllData();
 
-  /// Plate 선택 상태를 업데이트한다.
-  Future<void> updatePlateSelection(String collection, String id, bool isSelected, {String? selectedBy});
+  Future<void> togglePlateSelection(String collection, String id, bool isSelected,
+      {String? whoSelected}); // collection과 documentId, isSelected 선택 여부로 문서를 찾는다.
 
-  /// 요청 데이터를 Firestore에 추가하거나 완료 데이터로 업데이트한다.
+  /// 특정 지역의 사용 가능한 위치 목록을 가져온다.
+  Future<List<String>> getAvailableLocations(String area); // area로 문서를 찾는다.
+
+  /// Firestore에 "요청" 또는 "완료 데이터를 추가하는 메서드
   Future<void> addRequestOrCompleted({
     required String collection,
     required String plateNumber,
@@ -29,13 +28,10 @@ abstract class PlateRepository {
     required String type,
     required String userName,
     String? adjustmentType,
-    List<String>? statusList,
+    List<String>? memoList,
     int basicStandard,
     int basicAmount,
     int addStandard,
     int addAmount,
   });
-
-  /// 특정 지역의 사용 가능한 위치 목록을 가져온다.
-  Future<List<String>> getAvailableLocations(String area);
 }

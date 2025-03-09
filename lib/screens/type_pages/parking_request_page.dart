@@ -119,7 +119,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
         userName: context.read<UserState>().name,
         type: '입차 완료',
         adjustmentType: null,
-        statusList: [],
+        memoList: [],
         basicStandard: 0,
         basicAmount: 0,
         addStandard: 0,
@@ -147,7 +147,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
 
           // 🔹 정렬 적용 (최신순 or 오래된순)
           parkingRequests.sort((a, b) {
-            return _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime);
+            return _isSorted ? b.entryTime.compareTo(a.entryTime) : a.entryTime.compareTo(b.entryTime);
           });
 
           return ListView(

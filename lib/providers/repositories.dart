@@ -5,7 +5,7 @@ import '../repositories/plate_repository.dart';
 import '../repositories/location_repository.dart';  // ✅ 다시 추가 (사용된다면)
 import '../repositories/user_repository.dart';
 import '../repositories/adjustment_repository.dart';
-import '../repositories/status_repository.dart';
+import '../repositories/memo_repository.dart';
 
 // Repository Providers 정의
 final List<SingleChildWidget> repositoryProviders = [
@@ -13,5 +13,5 @@ final List<SingleChildWidget> repositoryProviders = [
   Provider<LocationRepository>(create: (_) => FirestoreLocationRepository()), // ✅ 필요하면 추가
   Provider<UserRepository>(create: (_) => FirestoreUserRepository()),
   Provider<AdjustmentRepository>(create: (_) => FirestoreAdjustmentRepository()),
-  Provider<StatusRepository>(create: (_) => StatusRepository()),
+  Provider<MemoRepository>(create: (_) => MemoRepository()),
 ];

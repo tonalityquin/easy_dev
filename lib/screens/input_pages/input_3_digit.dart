@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../states/adjustment_state.dart';
-import '../../states/status_state.dart';
+import '../../states/memo_state.dart';
 import '../../states/user_state.dart';
 import '../../widgets/input_field/common_plate_field.dart';
 import '../../widgets/input_field/location_field.dart';
@@ -24,38 +24,30 @@ import '../../widgets/dialog/camera_preview_dialog.dart';
 
 /// 번호판 및 주차 구역 입력을 처리하는 화면
 class Input3Digit extends StatefulWidget {
-  const Input3Digit({super.key});
+  const Input3Digit({super.key}); // const 키워드를 사용하여 Input3Digit 위젯을 상수(constant)로 선언한다, key = 위젯 트리에서의 변경 감지 및 최적화 지원용
 
   @override
   State<Input3Digit> createState() => _Input3DigitState();
 }
 
 class _Input3DigitState extends State<Input3Digit> {
-  // ------------------- 멤버 변수 선언 -------------------
-  List<String> selectedStatuses = [];
+  List<String> toggleMemo = [];
   List<bool> isSelected = [];
-  List<String> statuses = [];
-
-  // 정산 데이터를 저장할 변수
+  List<String> memo = [];
   int selectedBasicStandard = 0;
   int selectedBasicAmount = 0;
   int selectedAddStandard = 0;
   int selectedAddAmount = 0;
-
-  // 입력 컨트롤러
   final TextEditingController controller3digit = TextEditingController();
   final TextEditingController controller1digit = TextEditingController();
   final TextEditingController controller4digit = TextEditingController();
   final TextEditingController locationController = TextEditingController();
-
-  // 현재 활성화된 입력 필드
   late TextEditingController activeController;
 
-  bool showKeypad = true; // 키패드 표시 여부
-  bool isLoading = false; // 로딩 상태
-  bool isLocationSelected = false; // 주차 구역 선택 여부
+  bool showKeypad = true;
+  bool isLoading = false;
+  bool isLocationSelected = false;
 
-  // [추가] CameraHelper 인스턴스 생성 (카메라 로직 담당)
   final CameraHelper _cameraHelper = CameraHelper();
 
   String? selectedAdjustment;
@@ -66,26 +58,27 @@ class _Input3DigitState extends State<Input3Digit> {
     padding: const EdgeInsets.symmetric(horizontal: 150.0, vertical: 15.0),
   );
 
-  // ------------------- initState -------------------
+  /// 화면 진입 시 초기화 메서드
   @override
   void initState() {
     super.initState();
-    activeController = controller3digit;
-    _addInputListeners();
-    isLocationSelected = locationController.text.isNotEmpty;
+    activeController = controller3digit; // 초기 입력 필드를 번호판 앞 3자리로 설정한다.
+    _addInputListeners(); // 사용자의 입력을 감지하는 이벤트 리스너를 추가한다.
+    isLocationSelected =
+        locationController.text.isNotEmpty; // locationController의 값이 비어있지 않다면 isLocationSelected를 true로 설정한다.
 
-    // ✅ 모든 비동기 초기화가 끝난 후 로딩 해제
+    /// UI 프레임을 블로킹하지 않고 자연스럽게 실행되기 위한 딜레이 코드
     Future.delayed(Duration(milliseconds: 100), () async {
       try {
         await Future.wait([
-          _initializeStatuses().timeout(Duration(seconds: 3)), // 3초 후 강제 종료
+          _initializeMemo().timeout(Duration(seconds: 3)), // 3초 후 강제 종료
           _initializeCamera().timeout(Duration(seconds: 3)), // 3초 후 강제 종료
         ]);
       } catch (e) {
         debugPrint("초기화 오류 발생: $e"); // 초기화 오류 로그 출력
       }
 
-      // ✅ setState()를 호출하여 UI 갱신
+      // mounted를 확인하여 위젯이 아직 존재하는 경우에만 setState() 호출한다,  초기화가 끝난 후 UI가 정상적으로 갱신을 위한 것이다.
       if (mounted) {
         setState(() {});
       }
@@ -93,19 +86,19 @@ class _Input3DigitState extends State<Input3Digit> {
   }
 
   // ------------------- 주차 구역 상태 목록 불러오기 -------------------
-  Future<void> _initializeStatuses() async {
-    final statusState = context.read<StatusState>();
+  Future<void> _initializeMemo() async {
+    final memoState = context.read<MemoState>();
     final areaState = context.read<AreaState>();
     final currentArea = areaState.currentArea;
 
-    final fetchedStatuses = statusState.statuses
+    final fetchedMemo = memoState.statuses
         .where((status) => status['area'] == currentArea)
         .map((status) => (status['name'] ?? '') as String)
         .toList();
 
     setState(() {
-      statuses = fetchedStatuses;
-      isSelected = List.generate(statuses.length, (index) => false);
+      memo = fetchedMemo;
+      isSelected = List.generate(memo.length, (index) => false);
     });
   }
 
@@ -219,10 +212,10 @@ class _Input3DigitState extends State<Input3Digit> {
     });
 
     // 선택된 상태 업데이트
-    selectedStatuses = [];
+    toggleMemo = [];
     for (int i = 0; i < isSelected.length; i++) {
       if (isSelected[i]) {
-        selectedStatuses.add(statuses[i]);
+        toggleMemo.add(memo[i]);
       }
     }
 
@@ -237,7 +230,7 @@ class _Input3DigitState extends State<Input3Digit> {
           userName: userState.name,
           type: '입차 요청',
           adjustmentType: selectedAdjustment,
-          statusList: selectedStatuses.isNotEmpty ? selectedStatuses : [],
+          memoList: toggleMemo.isNotEmpty ? toggleMemo : [],
           basicStandard: selectedBasicStandard,
           basicAmount: selectedBasicAmount,
           addStandard: selectedAddStandard,
@@ -254,7 +247,7 @@ class _Input3DigitState extends State<Input3Digit> {
           userName: userState.name,
           type: '입차 완료',
           adjustmentType: selectedAdjustment,
-          statusList: selectedStatuses.isNotEmpty ? selectedStatuses : [],
+          memoList: toggleMemo.isNotEmpty ? toggleMemo : [],
           basicStandard: selectedBasicStandard,
           basicAmount: selectedBasicAmount,
           addStandard: selectedAddStandard,
@@ -305,8 +298,6 @@ class _Input3DigitState extends State<Input3Digit> {
 
     return adjustmentState.adjustments.isNotEmpty;
   }
-
-
 
   // ------------------- dispose -------------------
   @override
@@ -451,21 +442,21 @@ class _Input3DigitState extends State<Input3Digit> {
                           style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 8.0),
-                        statuses.isEmpty
+                        memo.isEmpty
                             ? const Text('등록된 차량 상태가 없습니다.')
                             : Wrap(
                                 spacing: 8.0,
-                                children: List.generate(statuses.length, (index) {
+                                children: List.generate(memo.length, (index) {
                                   return ChoiceChip(
-                                    label: Text(statuses[index]),
+                                    label: Text(memo[index]),
                                     selected: isSelected[index],
                                     onSelected: (selected) {
                                       setState(() {
                                         isSelected[index] = selected;
                                         if (selected) {
-                                          selectedStatuses.add(statuses[index]);
+                                          toggleMemo.add(memo[index]);
                                         } else {
-                                          selectedStatuses.remove(statuses[index]);
+                                          toggleMemo.remove(memo[index]);
                                         }
                                       });
                                     },

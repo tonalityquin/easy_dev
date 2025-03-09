@@ -70,7 +70,7 @@ class PlateContainer extends StatelessWidget {
     return Column(
       children: filteredData.map((item) {
         final backgroundColor = item.isSelected ? Colors.greenAccent : Colors.white;
-        final displayUser = item.isSelected ? item.selectedBy : item.userName;
+        final displayUser = item.isSelected ? item.whoSelected : item.userName;
 
         // ✅ Firestore에서 가져온 데이터가 `String`일 경우 `int`로 변환 (null인 경우 기본값 0 설정)
         int basicStandard = (item.basicStandard is String)
@@ -88,19 +88,19 @@ class PlateContainer extends StatelessWidget {
 
         // 🚗 주차 요금 계산
         int currentFee = calculateParkingFee(
-          entryTimeInMinutes: item.requestTime.hour * 60 + item.requestTime.minute,
+          entryTimeInMinutes: item.entryTime.hour * 60 + item.entryTime.minute,
           currentTimeInMinutes: DateTime.now().hour * 60 + DateTime.now().minute,
           basicStandard: basicStandard,
           // ✅ 변환된 값 사용
           basicAmount: basicAmount,
-          // ✅ 변환된 값 사용
+          // ✅ 변환된 값 사용elapsedMinutes
           addStandard: addStandard,
           // ✅ 변환된 값 사용
           addAmount: addAmount, // ✅ 변환된 값 사용
         ).toInt();
 
         // ✅ 경과 시간 복구
-        int elapsedMinutes = DateTime.now().difference(item.requestTime).inMinutes;
+        int elapsedMinutes = DateTime.now().difference(item.entryTime).inMinutes;
 
         return Column(
           children: [
@@ -110,8 +110,8 @@ class PlateContainer extends StatelessWidget {
               topRightDownText: "${currentFee}원",
               midLeftText: item.location,
               midCenterText: displayUser ?? '기본 사용자',
-              midRightText: CustomDateUtils.formatTimeForUI(item.requestTime),
-              bottomLeftLeftText: item.statusList.isNotEmpty ? item.statusList.join(", ") : "주의사항 없음",
+              midRightText: CustomDateUtils.formatTimeForUI(item.entryTime),
+              bottomLeftLeftText: item.memoList.isNotEmpty ? item.memoList.join(", ") : "주의사항 없음",
               bottomLeftCenterText: "주의사항 수기",
               bottomRightText: "경과 시간: ${elapsedMinutes}분",
               // ✅ 경과 시간 복구

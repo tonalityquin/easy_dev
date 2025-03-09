@@ -6,7 +6,7 @@ import '../screens/secondary_pages/field_mode_pages/wireless.dart';
 import '../screens/secondary_pages/office_mode_pages/adjustment_management.dart';
 import '../screens/secondary_pages/office_mode_pages/calender.dart';
 import '../screens/secondary_pages/office_mode_pages/location_management.dart';
-import '../screens/secondary_pages/office_mode_pages/status_management.dart';
+import '../screens/secondary_pages/office_mode_pages/memo_management.dart';
 import '../screens/secondary_pages/office_mode_pages/user_management.dart';
 import '../screens/secondary_pages/statistics_mode_pages/calendar_type_statistics.dart';
 import '../screens/secondary_pages/statistics_mode_pages/graph_type_statistics.dart';
@@ -33,7 +33,7 @@ final List<SecondaryInfo> officeModePages = [
   SecondaryInfo('유저 관리', UserManagement(), Icon(Icons.people)),
   SecondaryInfo('구역 관리', LocationManagement(), Icon(Icons.location_on)),
   SecondaryInfo('정산 관리', AdjustmentManagement(), Icon(Icons.adjust)),
-  SecondaryInfo('상태 관리', StatusManagement(), Icon(Icons.tune)),
+  SecondaryInfo('메모 관리', MemoManagement(), Icon(Icons.tune)),
   SecondaryInfo('투두 달력', Calendar(), Icon(Icons.calendar_today)),
 ];
 

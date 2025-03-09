@@ -166,7 +166,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
           final userName = context.read<UserState>().name;
 
           parkingCompleted.sort((a, b) {
-            return _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime);
+            return _isSorted ? b.entryTime.compareTo(a.entryTime) : a.entryTime.compareTo(b.entryTime);
           });
 
           return ListView(

@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import '../repositories/status_repository.dart';
+import '../repositories/memo_repository.dart';
 import 'area_state.dart';
 
-class StatusState extends ChangeNotifier {
-  final StatusRepository _repository;
+class MemoState extends ChangeNotifier {
+  final MemoRepository _repository;
   final AreaState _areaState; // 🔄 AreaState 추가
 
-  StatusState(this._repository, this._areaState) {
+  MemoState(this._repository, this._areaState) {
     _fetchStatusToggles(); // Firestore 데이터와 동기화
     _areaState.addListener(_fetchStatusToggles); // 🔄 지역 변경 감지
   }

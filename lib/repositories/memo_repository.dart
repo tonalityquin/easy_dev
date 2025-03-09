@@ -8,7 +8,7 @@ class FirestoreFields {
   static const String area = 'area';
 }
 
-class StatusRepository {
+class MemoRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final String collectionName = 'statusToggles';
 
