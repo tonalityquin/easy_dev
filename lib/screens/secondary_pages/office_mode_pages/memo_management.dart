@@ -6,24 +6,24 @@ import '../../../widgets/navigation/secondary_role_navigation.dart'; // 상단 �
 import '../../../widgets/navigation/secondary_mini_navigation.dart'; // 하단 내비게이션 바
 
 class MemoManagement extends StatelessWidget {
-  const MemoManagement({super.key});
+  const MemoManagement({super.key}); // 위젯을 생성할 때, 기본 키 값(key)을 받아 상수로 선언하여 성능을 최적화한다.
 
   @override
   Widget build(BuildContext context) {
-    final statusState = context.watch<MemoState>();
+    final memoState = context.watch<MemoState>(); // MemoState의 상태를 실시간으로 감지하고 업데이트된 값을 가져온다.
 
     return Scaffold(
-      appBar: const SecondaryRoleNavigation(), // 상단 내비게이션
+      appBar: const SecondaryRoleNavigation(), // 보조 페이지의 항목 선택
       body: Column(
         children: [
-          // 입력 필드와 추가 버튼
+          // 입력 필드
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Row(
               children: [
                 Expanded(
                   child: TextField(
-                    controller: statusState.textController,
+                    controller: memoState.textController,
                     decoration: const InputDecoration(
                       labelText: "항목 이름",
                       border: OutlineInputBorder(),
@@ -31,13 +31,14 @@ class MemoManagement extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
+                // 추가 버튼
                 ElevatedButton(
                   onPressed: () {
-                    if (statusState.textController.text.isNotEmpty) {
-                      statusState.addToggleItem(
-                        statusState.textController.text,
+                    if (memoState.textController.text.isNotEmpty) {
+                      memoState.addToggleItem(
+                        memoState.textController.text,
                       );
-                      statusState.textController.clear();
+                      memoState.textController.clear();
                     }
                   },
                   child: const Text("추가"),
@@ -48,20 +49,35 @@ class MemoManagement extends StatelessWidget {
           // 토글 항목 리스트
           Expanded(
             child: ListView.builder(
-              itemCount: statusState.toggleItems.length,
+              itemCount: memoState.memos.length,
               itemBuilder: (context, index) {
-                final item = statusState.toggleItems[index];
+                final item = memoState.memos[index];
+                final bool isSelected = memoState.selectedItemId == item['id'];
+
                 return ListTile(
-                  title: Text(item['name']),
-                  trailing: Switch(
-                    value: item['isActive'],
-                    onChanged: (value) {
-                      statusState.toggleItem(item['id']);
-                    },
+                  title: Text(
+                    item['name'],
+                    style: TextStyle(
+                      color: isSelected ? Colors.blue : Colors.black, // ✅ 선택된 항목 글자색 변경
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, // ✅ 선택된 항목 강조
+                    ),
                   ),
-                  selected: statusState.selectedItemId == item['id'],
+                  tileColor: isSelected ? Colors.blue.withOpacity(0.2) : Colors.transparent, // ✅ 선택된 항목 배경색 변경
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Switch(
+                        value: item['isActive'],
+                        onChanged: (value) {
+                          memoState.toggleItem(item['id']);
+                        },
+                      ),
+                      if (isSelected) Icon(Icons.check_circle, color: Colors.blue), // ✅ 선택된 경우 체크 아이콘 표시
+                    ],
+                  ),
+                  selected: isSelected,
                   onTap: () {
-                    statusState.selectItem(item['id']);
+                    memoState.selectItem(item['id']);
                   },
                 );
               },
@@ -78,18 +94,18 @@ class MemoManagement extends StatelessWidget {
         onIconTapped: (index) {
           if (index == 0) {
             // 추가 버튼 클릭 시
-            if (statusState.textController.text.isNotEmpty) {
-              statusState.addToggleItem(
-                statusState.textController.text,
+            if (memoState.textController.text.isNotEmpty) {
+              memoState.addToggleItem(
+                memoState.textController.text,
               );
-              statusState.textController.clear();
+              memoState.textController.clear();
             } else {
               showSnackbar(context, "항목 이름을 입력하세요."); // ✅ showSnackbar 적용
             }
           } else if (index == 1) {
             // 삭제 버튼 클릭 시
-            if (statusState.selectedItemId != null) {
-              statusState.removeToggleItem(statusState.selectedItemId!);
+            if (memoState.selectedItemId != null) {
+              memoState.removeToggleItem(memoState.selectedItemId!);
             } else {
               showSnackbar(context, "삭제할 항목을 선택하세요."); // ✅ showSnackbar 적용
             }

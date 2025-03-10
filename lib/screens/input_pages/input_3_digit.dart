@@ -86,14 +86,20 @@ class _Input3DigitState extends State<Input3Digit> {
   }
 
   // ------------------- 주차 구역 상태 목록 불러오기 -------------------
+
+  List<Map<String, dynamic>> get activeMemos {
+    final memoState = context.read<MemoState>(); // 🔥 MemoState 인스턴스 가져오기
+    return memoState.memos.where((memo) => memo['isActive'] == true).toList();
+  }
+
   Future<void> _initializeMemo() async {
     final memoState = context.read<MemoState>();
     final areaState = context.read<AreaState>();
     final currentArea = areaState.currentArea;
 
-    final fetchedMemo = memoState.statuses
-        .where((status) => status['area'] == currentArea)
-        .map((status) => (status['name'] ?? '') as String)
+    final fetchedMemo = memoState.memos
+        .where((memo) => memo['area'] == currentArea && memo['isActive'] == true) // ✅ MemoState에서 데이터 가져오기
+        .map((memo) => (memo['name'] ?? '') as String)
         .toList();
 
     setState(() {
@@ -210,14 +216,6 @@ class _Input3DigitState extends State<Input3Digit> {
     setState(() {
       isLoading = true;
     });
-
-    // 선택된 상태 업데이트
-    toggleMemo = [];
-    for (int i = 0; i < isSelected.length; i++) {
-      if (isSelected[i]) {
-        toggleMemo.add(memo[i]);
-      }
-    }
 
     try {
       if (!isLocationSelected) {

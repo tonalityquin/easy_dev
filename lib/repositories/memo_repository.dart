@@ -10,7 +10,7 @@ class FirestoreFields {
 
 class MemoRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final String collectionName = 'statusToggles';
+  final String collectionName = 'memoToggles';
 
   /// Firestore 컬렉션 참조 반환 (중복 코드 제거)
   CollectionReference<Map<String, dynamic>> _getCollectionRef() {
@@ -18,12 +18,15 @@ class MemoRepository {
   }
 
   /// Firestore 상태 데이터 실시간 스트림 반환 (지역 필터 적용)
-  Stream<List<Map<String, dynamic>>> getStatusStream(String area) {
-    return _getCollectionRef().where(FirestoreFields.area, isEqualTo: area).snapshots().map((snapshot) {
+  Stream<List<Map<String, dynamic>>> getMemoStream(String area) {
+    return _getCollectionRef()
+        .where(FirestoreFields.area, isEqualTo: area) // 🔥 isActive 필터 제거
+        .snapshots()
+        .map((snapshot) {
       return snapshot.docs.map((doc) {
         final data = doc.data();
         return {
-          FirestoreFields.id: doc.id, // ✅ 문서 ID도 FirestoreFields 사용
+          FirestoreFields.id: doc.id,
           FirestoreFields.name: data[FirestoreFields.name] ?? '',
           FirestoreFields.isActive: data[FirestoreFields.isActive] ?? false,
           FirestoreFields.area: data[FirestoreFields.area] ?? '',
@@ -31,6 +34,8 @@ class MemoRepository {
       }).toList();
     });
   }
+
+
 
   /// Firestore에 상태 항목 추가
   Future<void> addToggleItem(Map<String, dynamic> item) async {
@@ -47,7 +52,7 @@ class MemoRepository {
   }
 
   /// Firestore에서 상태 변경
-  Future<void> updateToggleStatus(String id, bool isActive) async {
+  Future<void> updateToggleMemo(String id, bool isActive) async {
     try {
       final docRef = _getCollectionRef().doc(id);
       final docSnapshot = await docRef.get();
@@ -62,10 +67,10 @@ class MemoRepository {
 
       await docRef.update({FirestoreFields.isActive: isActive});
     } on FirebaseException catch (e) {
-      dev.log("🔥 Firestore 업데이트 실패 (updateToggleStatus): ${e.message}", name: "Firestore");
+      dev.log("🔥 Firestore 업데이트 실패 (updateToggleMemo): ${e.message}", name: "Firestore");
       rethrow;
     } catch (e) {
-      dev.log("🔥 알 수 없는 에러 (updateToggleStatus): $e", name: "Firestore");
+      dev.log("🔥 알 수 없는 에러 (updateToggleMemo): $e", name: "Firestore");
       throw FirebaseException(plugin: "Firestore", message: e.toString());
     }
   }
