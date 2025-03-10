@@ -70,7 +70,7 @@ void handleEntryRequest(BuildContext context, String plateNumber, String area) {
   );
 
   // 🔹 location을 '미지정'으로 변경
-  plateState.goBackToParkingRequest(plateNumber, "미지정");
+  plateState.returnParkingRequest(plateNumber, "미지정");
 
   // ✅ 완료 메시지 표시
   showSnackbar(context, "입차 요청이 완료되었습니다.");

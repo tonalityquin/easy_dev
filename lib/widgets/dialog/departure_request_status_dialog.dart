@@ -62,7 +62,7 @@ void handleEntryRequestFromDeparture(BuildContext context, String plateNumber, S
   );
 
   // 🔹 location 값을 초기화 (자동으로 "미지정"이 설정됨)
-  plateState.goBackToParkingRequest(plateNumber, null);
+  plateState.returnParkingRequest(plateNumber, null);
 
   // ✅ 완료 메시지 표시
   showSnackbar(context, "입차 요청이 완료되었습니다.");

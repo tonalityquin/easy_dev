@@ -145,7 +145,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
     );
 
     // ✅ location을 `null`로 설정하여 기본값 "미지정"이 자동 적용되도록 함
-    plateState.goBackToParkingRequest(plateNumber, null);
+    plateState.returnParkingRequest(plateNumber, null);
 
     // ✅ 완료 메시지 표시
     showSnackbar(context, "입차 요청이 완료되었습니다.");
