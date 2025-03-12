@@ -106,7 +106,7 @@ class _AdjustmentManagementState extends State<AdjustmentManagement> {
                     onTap: () {
                       state.toggleSelection(id);
                     },
-                    backgroundColor: isSelected ? Colors.greenAccent : Colors.white,
+                    isSelected: isSelected,
                   ),
                   const Divider(height: 1.0, color: Colors.grey),
                 ],

@@ -64,15 +64,12 @@ class PlateContainer extends StatelessWidget {
         int basicStandard = (item.basicStandard is String)
             ? int.tryParse(item.basicStandard as String) ?? 0
             : (item.basicStandard ?? 0);
-        int basicAmount = (item.basicAmount is String)
-            ? int.tryParse(item.basicAmount as String) ?? 0
-            : (item.basicAmount ?? 0);
-        int addStandard = (item.addStandard is String)
-            ? int.tryParse(item.addStandard as String) ?? 0
-            : (item.addStandard ?? 0);
-        int addAmount = (item.addAmount is String)
-            ? int.tryParse(item.addAmount as String) ?? 0
-            : (item.addAmount ?? 0);
+        int basicAmount =
+            (item.basicAmount is String) ? int.tryParse(item.basicAmount as String) ?? 0 : (item.basicAmount ?? 0);
+        int addStandard =
+            (item.addStandard is String) ? int.tryParse(item.addStandard as String) ?? 0 : (item.addStandard ?? 0);
+        int addAmount =
+            (item.addAmount is String) ? int.tryParse(item.addAmount as String) ?? 0 : (item.addAmount ?? 0);
 
         int currentFee = calculateParkingFee(
           entryTimeInMinutes: item.requestTime.hour * 60 + item.requestTime.minute,
@@ -96,7 +93,7 @@ class PlateContainer extends StatelessWidget {
               bottomLeftLeftText: item.statusList.isNotEmpty ? item.statusList.join(", ") : "주의사항 없음",
               bottomLeftCenterText: "주의사항 수기",
               bottomRightText: "경과 시간: ${elapsedMinutes}분",
-              isSelected: isSelected, // ✅ 추가된 필수 매개변수
+              isSelected: isSelected,
               onTap: () {
                 final plateState = Provider.of<PlateState>(context, listen: false);
                 plateState.toggleIsSelected(

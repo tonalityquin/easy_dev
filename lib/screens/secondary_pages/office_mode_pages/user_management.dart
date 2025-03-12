@@ -79,6 +79,7 @@ class UserManagement extends StatelessWidget {
                       midCenterText: userContainer['phone']!,
                       midRightText: userContainer['area']!,
                       onTap: () => userState.toggleSelection(userContainer['id']!),
+                      isSelected: isSelected,
                       backgroundColor: isSelected ? Colors.green : Colors.white,
                     );
                   },
