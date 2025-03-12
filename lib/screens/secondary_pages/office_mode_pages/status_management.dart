@@ -11,6 +11,7 @@ class StatusManagement extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final statusState = context.watch<StatusState>();
+
     return Scaffold(
       appBar: const SecondaryRoleNavigation(),
       body: Column(
@@ -48,18 +49,56 @@ class StatusManagement extends StatelessWidget {
               itemCount: statusState.toggleItems.length,
               itemBuilder: (context, index) {
                 final item = statusState.toggleItems[index];
-                return ListTile(
-                  title: Text(item['name']),
-                  trailing: Switch(
-                    value: item['isActive'],
-                    onChanged: (value) {
-                      statusState.toggleItem(item['id']);
+
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 300), // 애니메이션 지속 시간
+                  curve: Curves.easeInOut, // 부드러운 애니메이션
+                  margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: statusState.selectedItemId == item['id']
+                        ? Colors.blue.withOpacity(0.2) // 선택된 경우 배경색
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: statusState.selectedItemId == item['id']
+                          ? Colors.blue // 선택된 경우 파란 테두리
+                          : Colors.grey.shade300,
+                      width: 2,
+                    ),
+                  ),
+                  child: ListTile(
+                    title: Text(
+                      item['name'],
+                      style: TextStyle(
+                        color: statusState.selectedItemId == item['id']
+                            ? Colors.blue // 선택된 경우 글자 색상 변경
+                            : Colors.black,
+                        fontWeight: statusState.selectedItemId == item['id']
+                            ? FontWeight.bold // 선택된 경우 글자 굵게
+                            : FontWeight.normal,
+                      ),
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (statusState.selectedItemId == item['id'])
+                          const Icon(Icons.check_circle, color: Colors.blue), // 선택된 항목에 체크 아이콘 표시
+                        Switch(
+                          value: item['isActive'],
+                          onChanged: (value) {
+                            statusState.toggleItem(item['id']);
+                          },
+                        ),
+                      ],
+                    ),
+                    onTap: () {
+                      if (statusState.selectedItemId == item['id']) {
+                        statusState.selectItem(null); // 선택 해제
+                      } else {
+                        statusState.selectItem(item['id']); // 항목 선택
+                      }
                     },
                   ),
-                  selected: statusState.selectedItemId == item['id'],
-                  onTap: () {
-                    statusState.selectItem(item['id']);
-                  },
                 );
               },
             ),
@@ -75,9 +114,7 @@ class StatusManagement extends StatelessWidget {
         onIconTapped: (index) {
           if (index == 0) {
             if (statusState.textController.text.isNotEmpty) {
-              statusState.addToggleItem(
-                statusState.textController.text,
-              );
+              statusState.addToggleItem(statusState.textController.text);
               statusState.textController.clear();
             } else {
               showSnackbar(context, "항목 이름을 입력하세요.");
