@@ -14,7 +14,6 @@ class UserManagement extends StatelessWidget {
   void buildAddUserDialog(
       BuildContext context, void Function(String, String, String, String, String, String, bool) onSave) {
     final currentArea = Provider.of<AreaState>(context, listen: false).currentArea;
-
     showDialog(
       context: context,
       builder: (BuildContext dialogContext) {
@@ -32,7 +31,6 @@ class UserManagement extends StatelessWidget {
 
   void onIconTapped(BuildContext context, int index, UserState userState) {
     final selectedIds = userState.selectedUsers.keys.where((id) => userState.selectedUsers[id] == true).toList();
-
     if (index == 0) {
       buildAddUserDialog(context, (name, phone, email, role, area, password, isWorking) {
         userState.addUser(
@@ -44,7 +42,7 @@ class UserManagement extends StatelessWidget {
           password,
           isWorking,
           onError: (errorMessage) {
-            showSnackbar(context, errorMessage); // ✅ showSnackbar 유틸 적용
+            showSnackbar(context, errorMessage);
           },
         );
       });
@@ -52,7 +50,7 @@ class UserManagement extends StatelessWidget {
       userState.deleteUsers(
         selectedIds,
         onError: (errorMessage) {
-          showSnackbar(context, errorMessage); // ✅ showSnackbar 유틸 적용
+          showSnackbar(context, errorMessage);
         },
       );
     }
@@ -62,9 +60,7 @@ class UserManagement extends StatelessWidget {
   Widget build(BuildContext context) {
     final userState = context.watch<UserState>();
     final currentArea = context.watch<AreaState>().currentArea;
-
     final filteredUsers = userState.users.where((user) => user['area'] == currentArea).toList();
-
     return Scaffold(
       appBar: const SecondaryRoleNavigation(),
       body: userState.isLoading
@@ -76,7 +72,6 @@ class UserManagement extends StatelessWidget {
                   itemBuilder: (context, index) {
                     final userContainer = filteredUsers[index];
                     final isSelected = userState.selectedUsers[userContainer['id']] ?? false;
-
                     return UserCustomBox(
                       topLeftText: userContainer['name']!,
                       topRightText: userContainer['email']!,

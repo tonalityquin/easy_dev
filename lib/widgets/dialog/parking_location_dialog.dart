@@ -16,7 +16,6 @@ class ParkingLocationDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final currentArea = context.watch<AreaState>().currentArea;
-
     return AlertDialog(
       title: const Text('주차 구역 선택'),
       content: FutureBuilder<List<String>>(
@@ -28,7 +27,6 @@ class ParkingLocationDialog extends StatelessWidget {
           if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return const Center(child: Text('사용 가능한 주차 구역이 없습니다.'));
           }
-
           final locations = snapshot.data!;
           return SingleChildScrollView(
             child: Column(

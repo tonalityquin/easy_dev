@@ -15,7 +15,6 @@ import '../repositories/location_repository.dart';
 import '../repositories/plate_repository.dart';
 import '../repositories/user_repository.dart';
 
-// 상태 관리 Providers 정의
 final List<SingleChildWidget> stateProviders = [
   ChangeNotifierProvider(create: (context) => PageState(pages: defaultPages)),
   ChangeNotifierProvider(create: (_) => AreaState()),
@@ -42,7 +41,6 @@ final List<SingleChildWidget> stateProviders = [
     create: (context) {
       final statusRepo = context.read<StatusRepository?>();
       final areaState = context.read<AreaState>();
-
       if (statusRepo == null) {
         return StatusState(StatusRepository(), areaState);
       }

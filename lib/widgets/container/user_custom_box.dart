@@ -1,40 +1,28 @@
 import 'package:flutter/material.dart';
 
-/// **UserCustomBoxStyles**
-/// - 사용자 정보를 표시하는 `UserCustomBox`의 스타일 설정
-/// - 제목 스타일, 부제목 스타일, 공통 Divider 스타일 포함
 class UserCustomBoxStyles {
-  /// 제목 텍스트 스타일 (굵고 큰 텍스트)
   static const TextStyle titleStyle = TextStyle(
     fontWeight: FontWeight.bold,
     fontSize: 16,
     color: Colors.black,
   );
-
-  /// 부제목 텍스트 스타일 (보통 크기)
   static const TextStyle subtitleStyle = TextStyle(
     fontSize: 14,
     fontWeight: FontWeight.w400,
     color: Colors.black,
   );
-
-  /// 공통 Divider 스타일 (회색, 두께 1)
   static const Divider commonDivider = Divider(thickness: 1, color: Colors.grey);
 }
 
-/// **UserCustomBox**
-/// - 사용자 정보를 UI로 표시하는 위젯
-/// - 여러 텍스트와 스타일 옵션 제공
-/// - 탭 이벤트 및 배경색 설정 가능
 class UserCustomBox extends StatelessWidget {
   // **필드 정의**
-  final String topLeftText; // 상단 왼쪽 텍스트 (주요 정보)
-  final String topRightText; // 상단 오른쪽 텍스트 (상태 정보)
-  final String midLeftText; // 중간 왼쪽 텍스트
-  final String midCenterText; // 중간 중앙 텍스트 (옵션)
-  final String midRightText; // 중간 오른쪽 텍스트
-  final VoidCallback onTap; // 탭 이벤트 콜백
-  final Color backgroundColor; // 배경색
+  final String topLeftText;
+  final String topRightText;
+  final String midLeftText;
+  final String midCenterText;
+  final String midRightText;
+  final VoidCallback onTap;
+  final Color backgroundColor;
 
   const UserCustomBox({
     super.key,
@@ -47,8 +35,6 @@ class UserCustomBox extends StatelessWidget {
     this.backgroundColor = Colors.white,
   });
 
-  /// **행(Row) 생성**
-  /// - 텍스트와 구분선을 포함하여 각 행 구성
   Widget buildRow({
     required String leftText,
     String? centerText,
@@ -60,19 +46,17 @@ class UserCustomBox extends StatelessWidget {
     TextStyle? rightTextStyle,
   }) {
     return Expanded(
-      flex: 2, // 행 높이 비율
+      flex: 2,
       child: Row(
         children: [
-          // 왼쪽 텍스트
           Expanded(
             flex: leftFlex,
             child: Center(
               child: Text(leftText, style: leftTextStyle ?? UserCustomBoxStyles.subtitleStyle),
             ),
           ),
-          // 중앙 텍스트 (옵션)
           if (centerText != null) ...[
-            const VerticalDivider(width: 2.0, color: Colors.black), // 구분선
+            const VerticalDivider(width: 2.0, color: Colors.black),
             Expanded(
               flex: centerFlex,
               child: Center(
@@ -80,8 +64,7 @@ class UserCustomBox extends StatelessWidget {
               ),
             ),
           ],
-          // 오른쪽 텍스트
-          const VerticalDivider(width: 2.0, color: Colors.black), // 구분선
+          const VerticalDivider(width: 2.0, color: Colors.black),
           Expanded(
             flex: rightFlex,
             child: Center(
@@ -96,29 +79,27 @@ class UserCustomBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap, // 탭 이벤트 처리
+      onTap: onTap,
       child: Container(
-        width: double.infinity, // 부모 크기에 맞춤
-        height: 80, // 고정된 높이
+        width: double.infinity,
+        height: 80,
         decoration: BoxDecoration(
-          color: backgroundColor, // 배경색 설정
-          border: Border.all(color: Colors.black, width: 2.0), // 테두리 스타일
+          color: backgroundColor,
+          border: Border.all(color: Colors.black, width: 2.0),
         ),
         child: Stack(
           children: [
             Column(
               children: [
-                // 첫 번째 행: 상단 왼쪽 텍스트와 오른쪽 텍스트
                 buildRow(
                   leftText: topLeftText,
                   rightText: topRightText,
                   leftFlex: 3,
-                  centerFlex: 0, // 중앙 텍스트 없음
+                  centerFlex: 0,
                   rightFlex: 7,
-                  leftTextStyle: UserCustomBoxStyles.titleStyle, // bold 스타일 적용
+                  leftTextStyle: UserCustomBoxStyles.titleStyle,
                 ),
-                const Divider(height: 1.0, color: Colors.black), // 구분선
-                // 두 번째 행: 중간 왼쪽 텍스트, 중앙 텍스트, 오른쪽 텍스트
+                const Divider(height: 1.0, color: Colors.black),
                 buildRow(
                   leftText: midLeftText,
                   centerText: midCenterText,
@@ -126,8 +107,8 @@ class UserCustomBox extends StatelessWidget {
                   leftFlex: 3,
                   centerFlex: 5,
                   rightFlex: 2,
-                  leftTextStyle: UserCustomBoxStyles.titleStyle, // 중간 왼쪽 bold
-                  rightTextStyle: const TextStyle(color: Colors.black), // 기본 텍스트 스타일
+                  leftTextStyle: UserCustomBoxStyles.titleStyle,
+                  rightTextStyle: const TextStyle(color: Colors.black),
                 ),
               ],
             ),

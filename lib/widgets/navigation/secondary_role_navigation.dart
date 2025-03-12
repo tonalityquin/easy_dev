@@ -3,11 +3,8 @@ import 'package:provider/provider.dart';
 import '../../states/secondary_access_state.dart';
 import '../../states/user_state.dart';
 
-/// **SecondaryRoleNavigation**
-/// - 역할 기반으로 드롭다운을 통해 현재 모드를 설정할 수 있는 네비게이션 바
-/// - 특정 역할에 따라 모드 선택 제한 가능
 class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWidget {
-  final double height; // AppBar 높이
+  final double height;
 
   const SecondaryRoleNavigation({super.key, this.height = kToolbarHeight});
 
@@ -16,13 +13,10 @@ class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWi
 
   @override
   Widget build(BuildContext context) {
-    final manageState = context.watch<SecondaryAccessState>(); // 모드 상태
-    final userState = context.watch<UserState>(); // 사용자 상태
-    final userRole = userState.role.toLowerCase(); // 사용자 역할
-
-    // 🚀 역할 기반 모드 결정 (중복 제거)
+    final manageState = context.watch<SecondaryAccessState>();
+    final userState = context.watch<UserState>();
+    final userRole = userState.role.toLowerCase();
     final selectedMode = userRole == 'fielder' ? 'Field Mode' : manageState.currentStatus;
-
     return AppBar(
       title: RoleBasedDropdown(
         userRole: userRole,
@@ -30,39 +24,31 @@ class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWi
         availableStatus: _getFilteredAvailableStatus(userRole, manageState.availableStatus),
         onModeChange: (newMode) {
           if (newMode != null && userRole != 'fielder') {
-            manageState.updateManage(newMode); // 새로운 모드 설정
+            manageState.updateManage(newMode);
           }
         },
       ),
-      centerTitle: true, // 타이틀 중앙 정렬
-      backgroundColor: Colors.green, // 배경색
+      centerTitle: true,
+      backgroundColor: Colors.green,
     );
   }
 
-  /// **사용자 역할에 따라 선택 가능한 모드 필터링**
-  /// - `fielder`는 `Field Mode` 고정, `Statistics Mode` 선택 불가
   List<String> _getFilteredAvailableStatus(String userRole, List<String> availableStatus) {
     if (userRole == 'fielder') {
-      return ['Field Mode']; // 🚀 Fielder는 항상 Field Mode
+      return ['Field Mode'];
     }
-
-    // 🚀 dev 직급은 Statistics Mode 사용 가능
     if (userRole == 'dev') {
       return availableStatus;
     }
-
-    // 기본적으로 Statistics Mode는 제외
     return availableStatus.where((mode) => mode != 'Statistics Mode').toList();
   }
 }
 
-/// **RoleBasedDropdown**
-/// - 역할 및 상태에 따라 드롭다운 구성
 class RoleBasedDropdown extends StatelessWidget {
-  final String userRole; // 사용자 역할
-  final String selectedMode; // 현재 선택된 모드
-  final List<String> availableStatus; // 사용 가능한 상태 목록
-  final ValueChanged<String?> onModeChange; // 상태 변경 콜백
+  final String userRole;
+  final String selectedMode;
+  final List<String> availableStatus;
+  final ValueChanged<String?> onModeChange;
 
   const RoleBasedDropdown({
     super.key,
@@ -75,7 +61,7 @@ class RoleBasedDropdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IgnorePointer(
-      ignoring: userRole == 'fielder', // 🚀 Fielder는 드롭다운 비활성화
+      ignoring: userRole == 'fielder',
       child: DropdownButton<String>(
         value: selectedMode,
         underline: Container(),
@@ -88,7 +74,6 @@ class RoleBasedDropdown extends StatelessWidget {
     );
   }
 
-  /// **드롭다운 아이템 빌더**
   List<DropdownMenuItem<String>> _buildDropdownItems() {
     return availableStatus.map((mode) {
       return DropdownMenuItem<String>(

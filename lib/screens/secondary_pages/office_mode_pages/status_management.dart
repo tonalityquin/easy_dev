@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../utils/show_snackbar.dart';
 import '../../../states/status_state.dart';
 import '../../../widgets/navigation/secondary_role_navigation.dart'; // 상단 내비게이션 바
-import '../../../widgets/navigation/secondary_mini_navigation.dart'; // 하단 내비게이션 바
+import '../../../widgets/navigation/secondary_mini_navigation.dart';
 
 class StatusManagement extends StatelessWidget {
   const StatusManagement({Key? key}) : super(key: key);
@@ -11,12 +11,10 @@ class StatusManagement extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final statusState = context.watch<StatusState>();
-
     return Scaffold(
-      appBar: const SecondaryRoleNavigation(), // 상단 내비게이션
+      appBar: const SecondaryRoleNavigation(),
       body: Column(
         children: [
-          // 입력 필드와 추가 버튼
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Row(
@@ -45,7 +43,6 @@ class StatusManagement extends StatelessWidget {
               ],
             ),
           ),
-          // 토글 항목 리스트
           Expanded(
             child: ListView.builder(
               itemCount: statusState.toggleItems.length,
@@ -71,31 +68,28 @@ class StatusManagement extends StatelessWidget {
       ),
       bottomNavigationBar: SecondaryMiniNavigation(
         icons: const [
-          Icons.add, // 추가 버튼
-          Icons.delete, // 삭제 버튼
-          Icons.question_mark, // 도움말 버튼
+          Icons.add,
+          Icons.delete,
+          Icons.question_mark,
         ],
         onIconTapped: (index) {
           if (index == 0) {
-            // 추가 버튼 클릭 시
             if (statusState.textController.text.isNotEmpty) {
               statusState.addToggleItem(
                 statusState.textController.text,
               );
               statusState.textController.clear();
             } else {
-              showSnackbar(context, "항목 이름을 입력하세요."); // ✅ showSnackbar 적용
+              showSnackbar(context, "항목 이름을 입력하세요.");
             }
           } else if (index == 1) {
-            // 삭제 버튼 클릭 시
             if (statusState.selectedItemId != null) {
               statusState.removeToggleItem(statusState.selectedItemId!);
             } else {
-              showSnackbar(context, "삭제할 항목을 선택하세요."); // ✅ showSnackbar 적용
+              showSnackbar(context, "삭제할 항목을 선택하세요.");
             }
           } else if (index == 2) {
-            // 도움말 버튼 클릭 시
-            showSnackbar(context, "도움말 버튼 클릭됨"); // ✅ showSnackbar 적용
+            showSnackbar(context, "도움말 버튼 클릭됨");
           }
         },
       ),

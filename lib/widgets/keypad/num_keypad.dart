@@ -8,7 +8,6 @@ class NumKeypad extends StatelessWidget {
   final Color? backgroundColor;
   final TextStyle? textStyle;
 
-
   const NumKeypad({
     super.key,
     required this.controller,
@@ -60,8 +59,7 @@ class NumKeypad extends StatelessWidget {
             child: Center(
               child: Text(
                 key,
-                style: textStyle ??
-                    const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                style: textStyle ?? const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
             ),
           ),

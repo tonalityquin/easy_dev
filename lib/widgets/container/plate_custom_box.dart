@@ -1,48 +1,36 @@
 import 'package:flutter/material.dart';
 
-/// **PlateCustomBox**
-/// - 번호판 정보를 정리된 UI로 표시하는 위젯
-/// - 다양한 텍스트 정보(번호판, 주차 구역, 상태 등)를 표시하며,
-///   탭 이벤트와 스타일 커스터마이징 기능 제공
 class PlateCustomBoxStyles {
-  /// 제목 텍스트 스타일 (굵고 큰 텍스트)
   static const TextStyle titleStyle = TextStyle(
     fontWeight: FontWeight.bold,
     fontSize: 16,
     color: Colors.black,
   );
-
-  /// 부제목 텍스트 스타일 (보통 크기)
   static const TextStyle subtitleStyle = TextStyle(
     fontSize: 14,
     fontWeight: FontWeight.w400,
     color: Colors.black,
   );
-
-  /// 소형 제목 텍스트 스타일 (작고 굵은 텍스트)
   static const TextStyle miniTitleStyle = TextStyle(
     fontWeight: FontWeight.bold,
     fontSize: 12,
     color: Colors.black,
   );
-
-  /// 공통 Divider 스타일 (회색, 두께 1)
   static const Divider commonDivider = Divider(thickness: 1, color: Colors.grey);
 }
 
 class PlateCustomBox extends StatelessWidget {
-  // **필드 정의**
-  final String topLeftText; // 번호판 숫자
-  final String topRightUpText; // 정산 유형
-  final String topRightDownText; // 정산 금액 현황
-  final String midLeftText; // 주차 구역
-  final String midCenterText; // 중앙 텍스트
-  final String midRightText; // 입차 요청 시간
-  final String bottomLeftLeftText; // 추가 정보
-  final String bottomLeftCenterText; // 추가 정보
-  final String bottomRightText; // 누적 시간
-  final VoidCallback onTap; // 탭 이벤트 콜백
-  final Color backgroundColor; // 배경색
+  final String topLeftText;
+  final String topRightUpText;
+  final String topRightDownText;
+  final String midLeftText;
+  final String midCenterText;
+  final String midRightText;
+  final String bottomLeftLeftText;
+  final String bottomLeftCenterText;
+  final String bottomRightText;
+  final VoidCallback onTap;
+  final Color backgroundColor;
 
   const PlateCustomBox({
     super.key,
@@ -59,8 +47,6 @@ class PlateCustomBox extends StatelessWidget {
     this.backgroundColor = Colors.white,
   });
 
-  /// **행(Row) 생성**
-  /// - 텍스트 간 구분선과 정렬을 포함하여 표시
   Widget buildRow({
     required String leftText,
     String? centerText,
@@ -72,19 +58,17 @@ class PlateCustomBox extends StatelessWidget {
     TextStyle? rightTextStyle,
   }) {
     return Expanded(
-      flex: 2, // 기본 행 높이 비율
+      flex: 2,
       child: Row(
         children: [
-          // 왼쪽 텍스트
           Expanded(
             flex: leftFlex,
             child: Center(
               child: Text(leftText, style: leftTextStyle ?? PlateCustomBoxStyles.subtitleStyle),
             ),
           ),
-          // 중앙 텍스트 (옵션)
           if (centerText != null) ...[
-            const VerticalDivider(width: 2.0, color: Colors.black), // 구분선
+            const VerticalDivider(width: 2.0, color: Colors.black),
             Expanded(
               flex: centerFlex,
               child: Center(
@@ -92,15 +76,14 @@ class PlateCustomBox extends StatelessWidget {
               ),
             ),
           ],
-          // 오른쪽 텍스트
-          const VerticalDivider(width: 2.0, color: Colors.black), // 구분선
+          const VerticalDivider(width: 2.0, color: Colors.black),
           Expanded(
             flex: rightFlex,
             child: Center(
               child: Text(
                 rightText,
                 style: rightTextStyle ?? PlateCustomBoxStyles.subtitleStyle,
-                textAlign: TextAlign.center, // 가운데 정렬 추가
+                textAlign: TextAlign.center,
               ),
             ),
           ),
@@ -112,34 +95,30 @@ class PlateCustomBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap, // 탭 이벤트 처리
+      onTap: onTap,
       child: Container(
-        width: double.infinity, // 부모 크기에 맞춤
-        height: 120, // 고정된 높이
+        width: double.infinity,
+        height: 120,
         decoration: BoxDecoration(
-          color: backgroundColor, // 배경색
-          border: Border.all(color: Colors.black, width: 2.0), // 테두리
+          color: backgroundColor,
+          border: Border.all(color: Colors.black, width: 2.0),
         ),
         child: Stack(
           children: [
             Column(
               children: [
-                // 첫 번째 행: 번호판 숫자와 상태
                 buildRow(
                   leftText: topLeftText,
                   rightText: "$topRightUpText\n$topRightDownText",
-                  // 두 텍스트를 줄바꿈 처리
                   leftFlex: 7,
                   rightFlex: 3,
                   leftTextStyle: PlateCustomBoxStyles.titleStyle,
-                  // 번호판 bold 스타일
                   rightTextStyle: PlateCustomBoxStyles.miniTitleStyle.copyWith(
-                    fontSize: 12, // 글자 크기 12
-                    height: 1.5, // 줄 간격
+                    fontSize: 12,
+                    height: 1.5,
                   ),
                 ),
-                const Divider(height: 1.0, color: Colors.black), // 구분선
-                // 두 번째 행: 주차 구역, 중앙 텍스트, 입차 요청 시간
+                const Divider(height: 1.0, color: Colors.black),
                 buildRow(
                   leftText: midLeftText,
                   centerText: midCenterText,
@@ -148,17 +127,16 @@ class PlateCustomBox extends StatelessWidget {
                   centerFlex: 2,
                   rightFlex: 3,
                   leftTextStyle: PlateCustomBoxStyles.titleStyle,
-                  rightTextStyle: const TextStyle(color: Colors.green), // 초록색 시간
+                  rightTextStyle: const TextStyle(color: Colors.green),
                 ),
-                const Divider(height: 1.0, color: Colors.black), // 구분선
-                // 세 번째 행: 추가 정보와 누적 시간
+                const Divider(height: 1.0, color: Colors.black),
                 buildRow(
                   leftText: "$bottomLeftLeftText, $bottomLeftCenterText",
                   rightText: bottomRightText,
                   leftFlex: 7,
                   rightFlex: 3,
-                  leftTextStyle: PlateCustomBoxStyles.miniTitleStyle, // miniTitleStyle 적용
-                  rightTextStyle: const TextStyle(color: Colors.red), // 붉은색 누적 시간
+                  leftTextStyle: PlateCustomBoxStyles.miniTitleStyle,
+                  rightTextStyle: const TextStyle(color: Colors.red),
                 ),
               ],
             ),

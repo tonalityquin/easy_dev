@@ -9,26 +9,21 @@ import 'kor_keypad/kor_6.dart';
 import 'kor_keypad/kor_7.dart';
 import 'kor_keypad/kor_8.dart';
 import 'kor_keypad/kor_9.dart';
-
 class KorKeypad extends StatefulWidget {
   final TextEditingController controller;
   final VoidCallback? onComplete;
   final VoidCallback? onReset;
-
   const KorKeypad({
     super.key,
     required this.controller,
     this.onComplete,
     this.onReset,
   });
-
   @override
   State<KorKeypad> createState() => _KorKeypadState();
 }
-
 class _KorKeypadState extends State<KorKeypad> {
   String? activeSubLayout;
-
   final Map<String, String> keyToSubLayout = {
     'ㄱ': 'kor1',
     'ㄴ': 'kor2',
@@ -41,7 +36,6 @@ class _KorKeypadState extends State<KorKeypad> {
     'ㅈ': 'kor9',
     'ㅎ': 'kor0',
   };
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -50,7 +44,6 @@ class _KorKeypadState extends State<KorKeypad> {
       child: activeSubLayout == null ? _buildMainLayout() : _buildActiveSubLayout(),
     );
   }
-
   Widget _buildMainLayout() {
     return buildSubLayout(
       [
@@ -62,7 +55,6 @@ class _KorKeypadState extends State<KorKeypad> {
       _handleMainKeyTap,
     );
   }
-
   Widget _buildActiveSubLayout() {
     switch (activeSubLayout) {
       case 'kor0':
@@ -89,7 +81,6 @@ class _KorKeypadState extends State<KorKeypad> {
         return const SizedBox.shrink();
     }
   }
-
   void _handleMainKeyTap(String key) {
     setState(() {
       if (keyToSubLayout.containsKey(key)) {
@@ -106,7 +97,6 @@ class _KorKeypadState extends State<KorKeypad> {
       }
     });
   }
-
   void _handleSubKeyTap(String key) {
     setState(() {
       if (key == 'back') {
@@ -117,7 +107,6 @@ class _KorKeypadState extends State<KorKeypad> {
       }
     });
   }
-
   void _processKeyInput(String key) {
     setState(() {
       widget.controller.text = key;
@@ -130,7 +119,6 @@ class _KorKeypadState extends State<KorKeypad> {
     });
   }
 }
-
 Widget buildSubLayout(List<List<String>> keyRows, Function(String) onKeyTap) {
   return Column(
     mainAxisSize: MainAxisSize.min,
@@ -144,7 +132,6 @@ Widget buildSubLayout(List<List<String>> keyRows, Function(String) onKeyTap) {
     }).toList(),
   );
 }
-
 Widget buildKeyButton(String key, VoidCallback? onTap) {
   return Expanded(
     child: GestureDetector(

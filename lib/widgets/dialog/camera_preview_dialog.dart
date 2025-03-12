@@ -1,11 +1,10 @@
-import 'dart:io'; // ✅ 파일 처리를 위해 import
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
-import '../../utils/camera_helper.dart'; // ✅ CameraHelper 가져오기
+import '../../utils/camera_helper.dart';
 
-/// **카메라 미리보기 및 촬영을 위한 다이얼로그 위젯**
 class CameraPreviewDialog extends StatefulWidget {
-  final CameraHelper cameraHelper; // CameraHelper 인스턴스
+  final CameraHelper cameraHelper;
 
   const CameraPreviewDialog({super.key, required this.cameraHelper});
 
@@ -34,13 +33,13 @@ class _CameraPreviewDialogState extends State<CameraPreviewDialog> {
               ElevatedButton(
                 onPressed: () async {
                   await widget.cameraHelper.captureImage();
-                  setState(() {}); // ✅ UI 갱신
+                  setState(() {});
                 },
                 child: const Text('촬영'),
               ),
               ElevatedButton(
                 onPressed: () {
-                  Navigator.pop(context, true); // ✅ 팝업 닫고 이미지 리스트 갱신
+                  Navigator.pop(context, true);
                 },
                 child: const Text('완료'),
               ),
@@ -63,7 +62,7 @@ class _CameraPreviewDialogState extends State<CameraPreviewDialog> {
                         Padding(
                           padding: const EdgeInsets.all(4.0),
                           child: Image.file(
-                            File(widget.cameraHelper.capturedImages[index].path), // ✅ 올바른 파일 경로 사용
+                            File(widget.cameraHelper.capturedImages[index].path),
                             width: 100,
                             height: 100,
                             fit: BoxFit.cover,
@@ -99,14 +98,12 @@ class _CameraPreviewDialogState extends State<CameraPreviewDialog> {
     );
   }
 
-  /// ✅ **개별 사진 삭제**
   void _removeImage(int index) {
     setState(() {
       widget.cameraHelper.removeImage(index);
     });
   }
 
-  /// ✅ **전체 화면 미리보기**
   void _showFullPreviewDialog(XFile imageFile) {
     showDialog(
       context: context,
@@ -116,7 +113,7 @@ class _CameraPreviewDialogState extends State<CameraPreviewDialog> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Image.file(
-                File(imageFile.path), // ✅ 올바른 경로 전달
+                File(imageFile.path),
                 fit: BoxFit.contain,
               ),
               ElevatedButton(

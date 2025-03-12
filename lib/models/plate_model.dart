@@ -1,13 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// 🔥 숫자 변환 유틸리티 함수
 int parseInt(dynamic value) {
   if (value is int) return value;
   if (value is String) return int.tryParse(value) ?? 0;
   return 0;
 }
 
-/// Firestore 필드명을 상수화하여 관리
 class PlateFields {
   static const String plateNumber = 'plate_number';
   static const String type = 'type';
@@ -25,7 +23,6 @@ class PlateFields {
   static const String addAmount = 'addAmount';
 }
 
-/// 차량 번호판 요청 데이터를 나타내는 모델 클래스
 class PlateModel {
   final String id;
   final String plateNumber;
@@ -61,7 +58,6 @@ class PlateModel {
     this.addAmount,
   });
 
-  /// Firestore 문서 데이터를 PlateModel 객체로 변환
   factory PlateModel.fromDocument(DocumentSnapshot<Map<String, dynamic>> doc) {
     final Map<String, dynamic>? data = doc.data();
     final dynamic timestamp = data?[PlateFields.requestTime];
@@ -85,7 +81,6 @@ class PlateModel {
     );
   }
 
-  /// PlateModel 객체를 Map 형식으로 변환
   Map<String, dynamic> toMap() {
     return {
       PlateFields.plateNumber: plateNumber,
@@ -105,8 +100,6 @@ class PlateModel {
     };
   }
 
-  /// 객체 비교를 위한 `==` 연산자 오버라이딩
-  /// 로그 개발용 셋업 - 서로 다른 컬렉션에 동일 정보의 document가 오가면 다른 객체로 인식하는 걸 오버라이딩을 통해 같은 객체로 인식하도록
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
@@ -129,7 +122,6 @@ class PlateModel {
         other.addAmount == addAmount;
   }
 
-  /// 해시코드 오버라이딩 (객체 비교 최적화)
   @override
   int get hashCode {
     return id.hashCode ^

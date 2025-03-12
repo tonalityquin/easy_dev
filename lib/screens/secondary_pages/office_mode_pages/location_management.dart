@@ -8,19 +8,13 @@ import '../../../widgets/container/location_container.dart';
 import '../../../states/location_state.dart';
 import '../../../states/area_state.dart';
 
-/// 주차 구역 관리 화면
-/// - 현재 선택된 지역에 따라 주차 구역을 필터링하고 표시
-/// - 주차 구역 추가 및 삭제 기능 제공
 class LocationManagement extends StatelessWidget {
   const LocationManagement({Key? key}) : super(key: key);
 
-  /// 특정 아이콘 클릭에 따른 동작 처리 함수
   void handleIconTapped(int index, LocationState locationState, BuildContext context) {
     final selectedIds =
         locationState.selectedLocations.keys.where((id) => locationState.selectedLocations[id] == true).toList();
-
     if (locationState.navigationIcons[index] == Icons.add) {
-      // 주차 구역 추가 다이얼로그 표시
       showDialog(
         context: context,
         builder: (BuildContext dialogContext) {
@@ -31,7 +25,7 @@ class LocationManagement extends StatelessWidget {
                 locationName,
                 currentArea,
                 onError: (error) {
-                  showSnackbar(context, '🚨 주차 구역 추가 실패: $error'); // ✅ showSnackbar 유틸 적용
+                  showSnackbar(context, '🚨 주차 구역 추가 실패: $error');
                 },
               );
             },
@@ -39,33 +33,28 @@ class LocationManagement extends StatelessWidget {
         },
       );
     } else if (locationState.navigationIcons[index] == Icons.delete && selectedIds.isNotEmpty) {
-      // 선택된 주차 구역 삭제
       locationState.deleteLocations(
         selectedIds,
         onError: (error) {
-          showSnackbar(context, '🚨 주차 구역 삭제 실패: $error'); // ✅ showSnackbar 유틸 적용
+          showSnackbar(context, '🚨 주차 구역 삭제 실패: $error');
         },
       );
     } else {
-      // 기본 처리 (예상하지 못한 Index)
-      showSnackbar(context, '⚠️ 지원되지 않는 동작입니다.'); // ✅ showSnackbar 유틸 적용
+      showSnackbar(context, '⚠️ 지원되지 않는 동작입니다.');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final locationState = context.watch<LocationState>(); // 위치 상태 관리
-    final currentArea = context.watch<AreaState>().currentArea; // 현재 선택된 지역
-
-    // 현재 지역에 해당하는 주차 구역 필터링
+    final locationState = context.watch<LocationState>();
+    final currentArea = context.watch<AreaState>().currentArea;
     final filteredLocations = locationState.locations.where((location) => location['area'] == currentArea).toList();
-
     return Scaffold(
-      appBar: const SecondaryRoleNavigation(), // 상단 내비게이션
+      appBar: const SecondaryRoleNavigation(),
       body: locationState.isLoading
-          ? const Center(child: CircularProgressIndicator()) // 로딩 상태 표시
+          ? const Center(child: CircularProgressIndicator())
           : filteredLocations.isEmpty
-              ? const Center(child: Text('No locations in this area.')) // 주차 구역 없음
+              ? const Center(child: Text('No locations in this area.'))
               : ListView.builder(
                   itemCount: filteredLocations.length,
                   itemBuilder: (context, index) {
@@ -74,7 +63,7 @@ class LocationManagement extends StatelessWidget {
                     return LocationContainer(
                       location: location['locationName']!,
                       isSelected: isSelected,
-                      onTap: () => locationState.toggleSelection(location['id']!), // 선택 상태 토글
+                      onTap: () => locationState.toggleSelection(location['id']!),
                     );
                   },
                 ),

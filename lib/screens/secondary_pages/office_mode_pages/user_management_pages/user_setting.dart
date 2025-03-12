@@ -27,7 +27,6 @@ class _UserAccountsState extends State<UserSetting> {
   final FocusNode _nameFocus = FocusNode();
   final FocusNode _phoneFocus = FocusNode();
   final FocusNode _emailFocus = FocusNode();
-
   String _selectedRole = 'Fielder';
   String? _errorMessage;
 

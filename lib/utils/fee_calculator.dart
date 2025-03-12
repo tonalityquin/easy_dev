@@ -23,6 +23,6 @@ double calculateParkingFee({
     return basicAmount.toDouble();
   }
 
-  int extraUnits = ((totalTime - basicStandard) + (addStandard - 1)) ~/ addStandard; // 🔥 반올림 방식 수정
+  int extraUnits = ((totalTime - basicStandard) + (addStandard - 1)) ~/ addStandard;
   return (basicAmount + (extraUnits * addAmount)).toDouble();
 }

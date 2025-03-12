@@ -19,7 +19,6 @@ class _AdjustmentManagementState extends State<AdjustmentManagement> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-
     Future.delayed(Duration.zero, () {
       context.read<AdjustmentState>().syncWithAreaState();
     });
@@ -48,9 +47,9 @@ class _AdjustmentManagementState extends State<AdjustmentManagement> {
                       adjustmentData['addStandard'],
                       adjustmentData['addAmount'],
                     );
-                showSnackbar(context, '정산 데이터가 성공적으로 추가되었습니다.'); // ✅ showSnackbar 적용
+                showSnackbar(context, '정산 데이터가 성공적으로 추가되었습니다.');
               } catch (e) {
-                showSnackbar(context, '데이터 추가 중 오류가 발생했습니다.'); // ✅ showSnackbar 적용
+                showSnackbar(context, '데이터 추가 중 오류가 발생했습니다.');
               }
             },
           ),
@@ -62,17 +61,15 @@ class _AdjustmentManagementState extends State<AdjustmentManagement> {
   Future<void> _deleteSelectedAdjustments(BuildContext context) async {
     final adjustmentState = context.read<AdjustmentState>();
     final selectedIds = _getSelectedIds(adjustmentState);
-
     if (selectedIds.isEmpty) {
-      showSnackbar(context, '삭제할 항목을 선택하세요.'); // ✅ showSnackbar 적용
+      showSnackbar(context, '삭제할 항목을 선택하세요.');
       return;
     }
-
     try {
       await adjustmentState.deleteAdjustments(selectedIds);
-      showSnackbar(context, '선택된 항목이 삭제되었습니다.'); // ✅ showSnackbar 적용
+      showSnackbar(context, '선택된 항목이 삭제되었습니다.');
     } catch (e) {
-      showSnackbar(context, '삭제 중 오류가 발생했습니다.'); // ✅ showSnackbar 적용
+      showSnackbar(context, '삭제 중 오류가 발생했습니다.');
     }
   }
 
@@ -82,15 +79,11 @@ class _AdjustmentManagementState extends State<AdjustmentManagement> {
       appBar: const SecondaryRoleNavigation(),
       body: Consumer<AdjustmentState>(
         builder: (context, state, child) {
-          final currentArea = context.watch<AreaState>().currentArea.trim(); // 🔥 현재 지역 가져오기
-
-          // 🔥 현재 지역과 일치하는 데이터만 필터링
+          final currentArea = context.watch<AreaState>().currentArea.trim();
           final adjustments = state.adjustments.where((adj) => adj['area'].toString().trim() == currentArea).toList();
-
           if (adjustments.isEmpty) {
             return const Center(child: Text('현재 지역에 해당하는 정산 데이터가 없습니다.'));
           }
-
           return ListView.builder(
             itemCount: adjustments.length,
             itemBuilder: (context, index) {
@@ -102,7 +95,6 @@ class _AdjustmentManagementState extends State<AdjustmentManagement> {
               final addStandard = adjustment['addStandard'] ?? 'Unknown';
               final addAmount = adjustment['addAmount'] ?? '0';
               final isSelected = state.selectedAdjustments[id] ?? false;
-
               return Column(
                 children: [
                   AdjustmentCustomBox(

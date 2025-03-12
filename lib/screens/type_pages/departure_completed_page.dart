@@ -6,9 +6,8 @@ import '../../states/area_state.dart';
 import '../../widgets/container/plate_container.dart';
 import '../../widgets/navigation/top_navigation.dart';
 import '../../widgets/dialog/plate_search_dialog.dart';
-import '../../utils/show_snackbar.dart'; // ✅ showSnackbar 유틸 추가
+import '../../utils/show_snackbar.dart';
 
-/// 출차 완료 페이지
 class DepartureCompletedPage extends StatefulWidget {
   const DepartureCompletedPage({super.key});
 
@@ -17,9 +16,8 @@ class DepartureCompletedPage extends StatefulWidget {
 }
 
 class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
-  bool _isSearchMode = false; // 검색 모드 여부
+  bool _isSearchMode = false;
 
-  /// 🔹 검색 다이얼로그 표시
   void _showSearchDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -33,7 +31,6 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
     );
   }
 
-  /// 🔹 plate_number에서 마지막 4자리 필터링
   void _filterPlatesByNumber(BuildContext context, String query) {
     if (query.length == 4) {
       context.read<PlateState>().setSearchQuery(query);
@@ -43,7 +40,6 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
     }
   }
 
-  /// 🔹 검색 초기화
   void _resetSearch(BuildContext context) {
     context.read<PlateState>().clearPlateSearchQuery();
     setState(() {
@@ -51,14 +47,13 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
     });
   }
 
-  /// 🔹 모든 데이터 삭제
   Future<void> _deleteAllData(BuildContext context) async {
     final plateRepository = Provider.of<PlateRepository>(context, listen: false);
     try {
       await plateRepository.deleteAllData();
-      showSnackbar(context, '모든 문서가 삭제되었습니다. 컬렉션은 유지됩니다.'); // ✅ showSnackbar 유틸 적용
+      showSnackbar(context, '모든 문서가 삭제되었습니다. 컬렉션은 유지됩니다.');
     } catch (e) {
-      showSnackbar(context, '문서 삭제 실패: $e'); // ✅ showSnackbar 유틸 적용
+      showSnackbar(context, '문서 삭제 실패: $e');
     }
   }
 
@@ -102,7 +97,6 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
         builder: (context, plateState, areaState, child) {
           final currentArea = areaState.currentArea;
           final departureCompleted = plateState.getPlatesByArea('departure_completed', currentArea);
-
           return ListView(
             padding: const EdgeInsets.all(8.0),
             children: [
@@ -117,7 +111,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                     area: area,
                     userName: '',
                     onError: (errorMessage) {
-                      showSnackbar(context, errorMessage); // ✅ showSnackbar 유틸 적용
+                      showSnackbar(context, errorMessage);
                     },
                   );
                 },
@@ -129,7 +123,6 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
       bottomNavigationBar: Consumer<PlateState>(
         builder: (context, plateState, child) {
           final selectedPlate = plateState.getSelectedPlate('departure_completed', '');
-
           return BottomNavigationBar(
             items: [
               BottomNavigationBarItem(
@@ -156,12 +149,12 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
             onTap: (index) {
               if (index == 0) {
                 if (_isSearchMode) {
-                  _resetSearch(context); // ✅ 검색 초기화
+                  _resetSearch(context);
                 } else {
-                  _showSearchDialog(context); // ✅ 검색 다이얼로그 표시
+                  _showSearchDialog(context);
                 }
               } else if (index == 1 && selectedPlate != null && selectedPlate.isSelected) {
-                showSnackbar(context, '출차 완료가 완료되었습니다.'); // ✅ showSnackbar 유틸 적용
+                showSnackbar(context, '출차 완료가 완료되었습니다.');
                 plateState.setDepartureCompleted(selectedPlate.plateNumber, selectedPlate.area);
               }
             },
