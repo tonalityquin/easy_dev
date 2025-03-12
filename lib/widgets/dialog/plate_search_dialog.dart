@@ -14,20 +14,20 @@ class PlateSearchDialog extends StatefulWidget {
 
 class _PlateSearchDialogState extends State<PlateSearchDialog> {
   final TextEditingController _searchController = TextEditingController();
-  final FocusNode _focusNode = FocusNode(); // ✅ 자동 포커스를 위한 FocusNode 추가
+  final FocusNode _focusNode = FocusNode();
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _focusNode.requestFocus(); // ✅ 다이얼로그가 열리면 자동으로 키보드 올라오게 설정
+      _focusNode.requestFocus();
     });
   }
 
   @override
   void dispose() {
     _searchController.dispose();
-    _focusNode.dispose(); // ✅ FocusNode 해제
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -38,7 +38,6 @@ class _PlateSearchDialogState extends State<PlateSearchDialog> {
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // 🔹 사용자가 입력한 번호를 실시간으로 표시
           Container(
             padding: const EdgeInsets.symmetric(vertical: 8.0),
             alignment: Alignment.center,
@@ -52,13 +51,10 @@ class _PlateSearchDialogState extends State<PlateSearchDialog> {
               },
             ),
           ),
-          // 🔹 입력 필드 (4자리 제한)
           TextField(
             controller: _searchController,
             maxLength: 4,
-            // ✅ 최대 입력 길이 4자리 제한
             focusNode: _focusNode,
-            // ✅ 자동 포커스 적용
             keyboardType: TextInputType.number,
             decoration: const InputDecoration(labelText: '번호판 뒷 4자리 입력'),
           ),
@@ -69,7 +65,6 @@ class _PlateSearchDialogState extends State<PlateSearchDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text('취소'),
         ),
-        // 🔹 입력이 4자리일 때만 검색 버튼 활성화
         ValueListenableBuilder<TextEditingValue>(
           valueListenable: _searchController,
           builder: (context, value, child) {
@@ -79,7 +74,7 @@ class _PlateSearchDialogState extends State<PlateSearchDialog> {
                       widget.onSearch(_searchController.text);
                       Navigator.pop(context);
                     }
-                  : null, // ✅ 4자리 미만 입력 시 버튼 비활성화
+                  : null,
               child: const Text('검색'),
             );
           },

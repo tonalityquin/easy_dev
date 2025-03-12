@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:developer' as dev;
 
-/// 숫자 변환 유틸리티 함수 (문자열이나 동적 데이터를 정수로 변환)
 int parseInt(dynamic value) {
   return int.tryParse(value.toString().replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
 }
@@ -16,26 +15,21 @@ class FirestoreFields {
   static const String addAmount = 'addAmount';
 }
 
-
-/// Firestore 기반 정산 데이터를 관리하는 추상 클래스
 abstract class AdjustmentRepository {
-  /// 특정 지역(currentArea)의 정산 데이터를 스트림으로 가져오는 메서드
   Stream<List<Map<String, dynamic>>> getAdjustmentStream(String currentArea);
 
-  /// Firestore에 새로운 정산 기준을 추가하는 메서드
   Future<void> addAdjustment(Map<String, dynamic> adjustmentData);
 
-  /// Firestore에서 여러 정산 기준을 삭제하는 메서드
   Future<void> deleteAdjustment(List<String> ids);
 }
 
-/// Firestore를 사용한 정산 데이터 관리 구현 클래스
 class FirestoreAdjustmentRepository implements AdjustmentRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   @override
   Stream<List<Map<String, dynamic>>> getAdjustmentStream(String currentArea) {
-    return _firestore.collection('adjustment')
+    return _firestore
+        .collection('adjustment')
         .where(FirestoreFields.area, isEqualTo: currentArea)
         .snapshots()
         .map((snapshot) {
@@ -54,16 +48,10 @@ class FirestoreAdjustmentRepository implements AdjustmentRepository {
     });
   }
 
-
   @override
-
-  /// Firestore에 새로운 정산 기준 데이터를 추가하는 메서드
   Future<void> addAdjustment(Map<String, dynamic> adjustmentData) async {
     try {
-      // 문서 ID를 CountType과 area의 조합으로 설정
       String documentId = '${adjustmentData['CountType']}_${adjustmentData['area']}';
-
-      // Firestore 문서를 생성하거나 업데이트
       await _firestore.collection('adjustment').doc(documentId).set({
         'CountType': adjustmentData['CountType'],
         'area': adjustmentData['area'],
@@ -82,15 +70,12 @@ class FirestoreAdjustmentRepository implements AdjustmentRepository {
   }
 
   @override
-
-  /// Firestore에서 여러 개의 정산 기준 데이터를 삭제하는 메서드
   Future<void> deleteAdjustment(List<String> ids) async {
     try {
       await Future.wait(
         ids.map((id) async {
           final docRef = _firestore.collection('adjustment').doc(id);
           final docSnapshot = await docRef.get();
-
           if (docSnapshot.exists) {
             await docRef.delete();
           } else {

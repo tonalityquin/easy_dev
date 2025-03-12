@@ -1,9 +1,6 @@
-// ------------------- Input3Digit.dart -------------------
-// [원본 코드에서 카메라 관련 로직 분리 후, CameraHelper 호출로 대체]
-import 'dart:io'; // [추가] 이미지 미리보기(File) 사용을 위해 import
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
 import '../../states/adjustment_state.dart';
 import '../../states/status_state.dart';
 import '../../states/user_state.dart';
@@ -17,12 +14,9 @@ import '../../states/area_state.dart';
 import '../../repositories/plate_repository.dart';
 import '../../utils/show_snackbar.dart';
 import '../../widgets/dialog/parking_location_dialog.dart';
-
-// [새로운 코드 추가] camera_helper.dart 불러오기
-import '../../utils/camera_helper.dart'; // CameraHelper를 사용하기 위한 import
+import '../../utils/camera_helper.dart';
 import '../../widgets/dialog/camera_preview_dialog.dart';
 
-/// 번호판 및 주차 구역 입력을 처리하는 화면
 class Input3Digit extends StatefulWidget {
   const Input3Digit({super.key});
 
@@ -31,85 +25,64 @@ class Input3Digit extends StatefulWidget {
 }
 
 class _Input3DigitState extends State<Input3Digit> {
-  // ------------------- 멤버 변수 선언 -------------------
   List<String> selectedStatuses = [];
   List<bool> isSelected = [];
   List<String> statuses = [];
-
-  // 정산 데이터를 저장할 변수
   int selectedBasicStandard = 0;
   int selectedBasicAmount = 0;
   int selectedAddStandard = 0;
   int selectedAddAmount = 0;
-
-  // 입력 컨트롤러
   final TextEditingController controller3digit = TextEditingController();
   final TextEditingController controller1digit = TextEditingController();
   final TextEditingController controller4digit = TextEditingController();
   final TextEditingController locationController = TextEditingController();
-
-  // 현재 활성화된 입력 필드
   late TextEditingController activeController;
-
-  bool showKeypad = true; // 키패드 표시 여부
-  bool isLoading = false; // 로딩 상태
-  bool isLocationSelected = false; // 주차 구역 선택 여부
-
-  // [추가] CameraHelper 인스턴스 생성 (카메라 로직 담당)
+  bool showKeypad = true;
+  bool isLoading = false;
+  bool isLocationSelected = false;
   final CameraHelper _cameraHelper = CameraHelper();
-
   String? selectedAdjustment;
-
   final ButtonStyle commonButtonStyle = ElevatedButton.styleFrom(
     backgroundColor: Colors.grey[300],
     foregroundColor: Colors.black,
     padding: const EdgeInsets.symmetric(horizontal: 150.0, vertical: 15.0),
   );
 
-  // ------------------- initState -------------------
   @override
   void initState() {
     super.initState();
     activeController = controller3digit;
     _addInputListeners();
     isLocationSelected = locationController.text.isNotEmpty;
-
-    // ✅ 모든 비동기 초기화가 끝난 후 로딩 해제
     Future.delayed(Duration(milliseconds: 100), () async {
       try {
         await Future.wait([
-          _initializeStatuses().timeout(Duration(seconds: 3)), // 3초 후 강제 종료
-          _initializeCamera().timeout(Duration(seconds: 3)), // 3초 후 강제 종료
+          _initializeStatuses().timeout(Duration(seconds: 3)),
+          _initializeCamera().timeout(Duration(seconds: 3)),
         ]);
       } catch (e) {
-        debugPrint("초기화 오류 발생: $e"); // 초기화 오류 로그 출력
+        debugPrint("초기화 오류 발생: $e");
       }
-
-      // ✅ setState()를 호출하여 UI 갱신
       if (mounted) {
         setState(() {});
       }
     });
   }
 
-  // ------------------- 주차 구역 상태 목록 불러오기 -------------------
   Future<void> _initializeStatuses() async {
     final statusState = context.read<StatusState>();
     final areaState = context.read<AreaState>();
     final currentArea = areaState.currentArea;
-
     final fetchedStatuses = statusState.statuses
         .where((status) => status['area'] == currentArea)
         .map((status) => (status['name'] ?? '') as String)
         .toList();
-
     setState(() {
       statuses = fetchedStatuses;
       isSelected = List.generate(statuses.length, (index) => false);
     });
   }
 
-  // ------------------- 입력 리스너 관련 메서드 -------------------
   void _addInputListeners() {
     controller3digit.addListener(_handleInputChange);
     controller1digit.addListener(_handleInputChange);
@@ -124,23 +97,20 @@ class _Input3DigitState extends State<Input3Digit> {
 
   void _handleInputChange() {
     if (controller3digit.text.isEmpty && controller1digit.text.isEmpty && controller4digit.text.isEmpty) {
-      return; // 아무것도 입력되지 않은 경우 setState 호출 방지
+      return;
     }
-
     if (!_validateField(controller3digit, 3) ||
         !_validateField(controller1digit, 1) ||
         !_validateField(controller4digit, 4)) {
       showSnackbar(context, '입력값이 유효하지 않습니다. 다시 확인해주세요.');
-      return; // clearInput() 제거하여 무한 루프 방지
+      return;
     }
-
     if (controller3digit.text.length == 3 && controller1digit.text.length == 1 && controller4digit.text.length == 4) {
       setState(() {
         showKeypad = false;
       });
       return;
     }
-
     if (activeController == controller3digit && controller3digit.text.length == 3) {
       _setActiveController(controller1digit);
     } else if (activeController == controller1digit && controller1digit.text.length == 1) {
@@ -148,13 +118,10 @@ class _Input3DigitState extends State<Input3Digit> {
     }
   }
 
-  // ------------------- 카메라 관련 메서드 -------------------
   Future<void> _initializeCamera() async {
     await _cameraHelper.initializeCamera();
   }
 
-  /// 카메라 팝업 표시 (카메라 미리보기 + 촬영 버튼)
-  /// 카메라 미리보기 다이얼로그 표시
   Future<void> _showCameraPreviewDialog() async {
     final bool? isUpdated = await showDialog(
       context: context,
@@ -162,11 +129,10 @@ class _Input3DigitState extends State<Input3Digit> {
     );
 
     if (isUpdated == true) {
-      setState(() {}); // ✅ 촬영된 이미지가 업데이트되었으므로 화면 갱신
+      setState(() {});
     }
   }
 
-  // ------------------- 기타 주요 메서드 -------------------
   void _setActiveController(TextEditingController controller) {
     setState(() {
       activeController = controller;
@@ -195,7 +161,6 @@ class _Input3DigitState extends State<Input3Digit> {
     });
   }
 
-  // ------------------- 입차 요청/입차 완료 처리 -------------------
   Future<void> _handleAction() async {
     final String plateNumber = '${controller3digit.text}-${controller1digit.text}-${controller4digit.text}';
     final plateRepository = context.read<PlateRepository>();
@@ -203,29 +168,22 @@ class _Input3DigitState extends State<Input3Digit> {
     final areaState = context.read<AreaState>();
     final userState = context.read<UserState>();
     String location = locationController.text;
-
-    // 번호판 중복 체크
     if (plateState.isPlateNumberDuplicated(plateNumber, areaState.currentArea)) {
       showSnackbar(context, '이미 등록된 번호판입니다: $plateNumber');
       return;
     }
-
     if (location.isEmpty) {
       location = '미지정';
     }
-
     setState(() {
       isLoading = true;
     });
-
-    // 선택된 상태 업데이트
     selectedStatuses = [];
     for (int i = 0; i < isSelected.length; i++) {
       if (isSelected[i]) {
         selectedStatuses.add(statuses[i]);
       }
     }
-
     try {
       if (!isLocationSelected) {
         // 입차 요청
@@ -273,7 +231,6 @@ class _Input3DigitState extends State<Input3Digit> {
     }
   }
 
-  // ------------------- 주차 구역 선택 팝업 -------------------
   void _selectParkingLocation() {
     showDialog(
       context: context,
@@ -291,24 +248,15 @@ class _Input3DigitState extends State<Input3Digit> {
     );
   }
 
-  // ------------------- Firestore 정산 유형 반영 -------------------
   Future<bool> _refreshAdjustments() async {
     final adjustmentState = context.read<AdjustmentState>();
-
-    // 🔥 위젯 빌드 이후에 실행되도록 변경
     WidgetsBinding.instance.addPostFrameCallback((_) {
       adjustmentState.syncWithAreaState();
     });
-
-    // 상태 반영이 끝날 시간을 확보하기 위해 약간의 지연 추가
     await Future.delayed(const Duration(milliseconds: 500));
-
     return adjustmentState.adjustments.isNotEmpty;
   }
 
-
-
-  // ------------------- dispose -------------------
   @override
   void dispose() {
     _removeInputListeners();
@@ -316,19 +264,16 @@ class _Input3DigitState extends State<Input3Digit> {
     controller1digit.dispose();
     controller4digit.dispose();
     locationController.dispose();
-    // CameraHelper 자원 해제
     _cameraHelper.dispose();
     super.dispose();
   }
 
-  // ------------------- build -------------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.blueAccent,
       ),
-      // 카메라 초기화 여부 체크
       body: !_cameraHelper.isCameraInitialized
           ? const Center(child: CircularProgressIndicator())
           : Stack(
@@ -352,7 +297,7 @@ class _Input3DigitState extends State<Input3Digit> {
                           backController: controller4digit,
                           onKeypadStateChanged: (TextEditingController activeController) {
                             setState(() {
-                              this.activeController = controller3digit; // ✅ 항상 3-digit부터 시작
+                              this.activeController = controller3digit;
                               showKeypad = true;
                             });
                           },
@@ -415,15 +360,11 @@ class _Input3DigitState extends State<Input3Digit> {
                             if (snapshot.data == false) {
                               return const Text('정산 유형 정보를 불러오지 못했습니다.');
                             }
-
-                            // 🔥 Firestore에서 정산 유형 데이터 가져오기
                             final adjustmentState = context.watch<AdjustmentState>();
                             final adjustmentList = adjustmentState.adjustments;
-
                             if (adjustmentList.isEmpty) {
                               return const Text('등록된 정산 유형이 없습니다.');
                             }
-
                             return DropdownButtonFormField<String>(
                               value: selectedAdjustment,
                               onChanged: (newValue) {
@@ -431,10 +372,9 @@ class _Input3DigitState extends State<Input3Digit> {
                                   selectedAdjustment = newValue;
                                 });
                               },
-                              // 🔥 Firestore에서 가져온 데이터로 Dropdown 리스트 생성
                               items: adjustmentList.map((adj) {
                                 return DropdownMenuItem<String>(
-                                  value: adj['countType'], // Firestore의 countType 필드 사용
+                                  value: adj['countType'],
                                   child: Text(adj['countType']),
                                 );
                               }).toList(),

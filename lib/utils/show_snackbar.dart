@@ -2,10 +2,9 @@ import 'package:flutter/material.dart';
 
 void showSnackbar(BuildContext context, String message) {
   final overlay = Overlay.of(context);
-
   final overlayEntry = OverlayEntry(
     builder: (context) => Positioned(
-      top: MediaQuery.of(context).padding.top + 20, // 상태바 아래 20px
+      top: MediaQuery.of(context).padding.top + 20,
       left: 20,
       right: 20,
       child: Material(
@@ -25,10 +24,7 @@ void showSnackbar(BuildContext context, String message) {
       ),
     ),
   );
-
   overlay.insert(overlayEntry);
-
-  // 1초 후 자동 삭제
   Future.delayed(const Duration(seconds: 1), () {
     overlayEntry.remove();
   });

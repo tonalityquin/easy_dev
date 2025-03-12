@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// 주차 구역 추가 및 설정 화면
 class LocationSetting extends StatefulWidget {
-  /// 사용자가 입력한 주차 구역 데이터를 저장하는 콜백
   final Function(String location) onSave;
 
   const LocationSetting({Key? key, required this.onSave}) : super(key: key);
@@ -12,9 +10,9 @@ class LocationSetting extends StatefulWidget {
 }
 
 class _LocationSettingState extends State<LocationSetting> {
-  final TextEditingController _locationController = TextEditingController(); // 입력 필드 컨트롤러
-  final FocusNode _locationFocus = FocusNode(); // 입력 필드 포커스
-  String? _errorMessage; // 에러 메시지 상태
+  final TextEditingController _locationController = TextEditingController();
+  final FocusNode _locationFocus = FocusNode();
+  String? _errorMessage;
 
   @override
   void dispose() {
@@ -23,7 +21,6 @@ class _LocationSettingState extends State<LocationSetting> {
     super.dispose();
   }
 
-  /// 입력값 유효성 검증
   bool _validateInput() {
     final isValid = _locationController.text.isNotEmpty;
     setState(() {
@@ -65,14 +62,14 @@ class _LocationSettingState extends State<LocationSetting> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 ElevatedButton(
-                  onPressed: () => Navigator.pop(context), // 취소 버튼
+                  onPressed: () => Navigator.pop(context),
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton(
                   onPressed: () {
                     if (_validateInput()) {
-                      widget.onSave(_locationController.text); // 유효한 입력값 저장
+                      widget.onSave(_locationController.text);
                       Navigator.pop(context);
                     }
                   },

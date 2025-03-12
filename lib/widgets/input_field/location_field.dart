@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
 
-/// **LocationField 위젯**
-/// - 주차 구역 등의 위치 정보를 입력하거나 표시하는 필드
-/// - 읽기 전용 상태로 표시하며, 너비 비율 조정 가능
 class LocationField extends StatelessWidget {
-  final TextEditingController controller; // 입력 컨트롤러
-  final bool readOnly; // 읽기 전용 여부
-  final double widthFactor; // 필드 너비 비율
+  final TextEditingController controller;
+  final bool readOnly;
+  final double widthFactor;
 
   const LocationField({
     super.key,
@@ -19,21 +16,19 @@ class LocationField extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context).textTheme;
     final screenWidth = MediaQuery.of(context).size.width;
-
     return SizedBox(
-      width: screenWidth * widthFactor, // 필드 너비 설정
+      width: screenWidth * widthFactor,
       child: TextField(
         controller: controller,
-        // 입력값 관리
-        readOnly: true, // 항상 읽기 전용
-        textAlign: TextAlign.center, // 텍스트 중앙 정렬
+        readOnly: true,
+        textAlign: TextAlign.center,
         style: theme.bodyLarge?.copyWith(
           fontSize: 18,
           fontWeight: FontWeight.bold,
-          color: controller.text.isEmpty ? Colors.grey : Colors.black, // 빈 텍스트일 경우 회색
+          color: controller.text.isEmpty ? Colors.grey : Colors.black,
         ),
         decoration: InputDecoration(
-          hintText: controller.text.isEmpty ? '미지정' : null, // 빈 텍스트일 경우 힌트 표시
+          hintText: controller.text.isEmpty ? '미지정' : null,
           hintStyle: theme.bodyLarge?.copyWith(
             fontSize: 18,
             color: Colors.grey,

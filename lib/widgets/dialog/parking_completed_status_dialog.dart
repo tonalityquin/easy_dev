@@ -8,7 +8,7 @@ class ParkingCompletedStatusDialog extends StatelessWidget {
   final VoidCallback onCompleteDeparture;
   final VoidCallback onDelete;
   final String plateNumber;
-  final String area; // ✅ 지역 정보 추가
+  final String area;
 
   const ParkingCompletedStatusDialog({
     super.key,
@@ -16,7 +16,7 @@ class ParkingCompletedStatusDialog extends StatelessWidget {
     required this.onCompleteDeparture,
     required this.onDelete,
     required this.plateNumber,
-    required this.area, // ✅ 지역 정보 추가
+    required this.area,
   });
 
   @override
@@ -26,15 +26,13 @@ class ParkingCompletedStatusDialog extends StatelessWidget {
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // ✅ "입차 요청" 버튼 추가
           ListTile(
             title: Text("입차 요청"),
             onTap: () {
-              Navigator.of(context).pop(); // 다이얼로그 닫기
-              onRequestEntry(); // 입차 요청 실행
+              Navigator.of(context).pop();
+              onRequestEntry();
             },
           ),
-          // ✅ 기존 "출차 완료" 버튼 유지
           ListTile(
             title: Text("출차 완료"),
             onTap: () {
@@ -42,7 +40,6 @@ class ParkingCompletedStatusDialog extends StatelessWidget {
               onCompleteDeparture();
             },
           ),
-          // ✅ 기존 "삭제" 버튼 유지
           ListTile(
             title: Text("삭제"),
             onTap: () {
@@ -56,22 +53,15 @@ class ParkingCompletedStatusDialog extends StatelessWidget {
   }
 }
 
-
 void handleEntryRequest(BuildContext context, String plateNumber, String area) {
   final plateState = context.read<PlateState>();
-
-  // 🔹 'parking_completed'에서 'parking_requests'로 plate 이동
   plateState.updatePlateStatus(
     plateNumber: plateNumber,
     area: area,
-    fromCollection: 'parking_completed', // 🔹 기존 컬렉션: 입차 완료 목록
-    toCollection: 'parking_requests',    // 🔹 이동할 컬렉션: 입차 요청 목록
+    fromCollection: 'parking_completed',
+    toCollection: 'parking_requests',
     newType: '입차 요청',
   );
-
-  // 🔹 location을 '미지정'으로 변경
   plateState.goBackToParkingRequest(plateNumber, "미지정");
-
-  // ✅ 완료 메시지 표시
   showSnackbar(context, "입차 요청이 완료되었습니다.");
 }

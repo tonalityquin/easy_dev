@@ -19,17 +19,15 @@ class ParkingRequestPage extends StatefulWidget {
 }
 
 class _ParkingRequestPageState extends State<ParkingRequestPage> {
-  bool _isSorted = true; // 정렬 아이콘 상태 (최신순: true, 오래된순: false)
-  bool _isSearchMode = false; // 검색 모드 여부
+  bool _isSorted = true;
+  bool _isSearchMode = false;
 
-  /// 🔹 정렬 상태 변경 (최신순 <-> 오래된순)
   void _toggleSortIcon() {
     setState(() {
       _isSorted = !_isSorted;
     });
   }
 
-  /// 🔹 검색 다이얼로그 표시 (NumKeypad 적용)
   void _showSearchDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -43,17 +41,15 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
     );
   }
 
-  /// 🔹 plate_number에서 마지막 4자리 필터링
   void _filterPlatesByNumber(BuildContext context, String query) {
     if (query.length == 4) {
-      context.read<PlateState>().setSearchQuery(query); // ✅ `filterByLastFourDigits()` → `setSearchQuery()` 변경
+      context.read<PlateState>().setSearchQuery(query);
       setState(() {
         _isSearchMode = true;
       });
     }
   }
 
-  /// 🔹 검색 초기화
   void _resetSearch(BuildContext context) {
     context.read<PlateState>().clearPlateSearchQuery();
     setState(() {
@@ -61,7 +57,6 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
     });
   }
 
-  /// 🔹 차량 번호판 클릭 시 선택 상태 변경
   void _handlePlateTap(BuildContext context, String plateNumber, String area) {
     final userName = context.read<UserState>().name;
     context.read<PlateState>().toggleIsSelected(
@@ -75,15 +70,11 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
         );
   }
 
-  /// 🔹 선택된 차량 번호판을 입차 완료 상태로 업데이트
-  /// 🔹 선택된 차량을 입차 완료 처리 (주차 구역 선택 Dialog 적용)
   void _handleParkingCompleted(BuildContext context) {
     final plateState = context.read<PlateState>();
     final userName = context.read<UserState>().name;
     final selectedPlate = plateState.getSelectedPlate('parking_requests', userName);
-
     if (selectedPlate != null) {
-      // ✅ 주차 구역 선택 Dialog 표시
       final TextEditingController locationController = TextEditingController();
       showDialog(
         context: context,
@@ -103,18 +94,14 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
     }
   }
 
-  /// 🔹 주차 구역을 반영하여 '입차 완료' 처리
   void _completeParking(BuildContext context, String plateNumber, String area, String location) {
     final plateState = context.read<PlateState>();
     final plateRepository = context.read<PlateRepository>();
-
     try {
-      // ✅ Firestore 업데이트
       plateRepository.addRequestOrCompleted(
         collection: 'parking_completed',
         plateNumber: plateNumber,
         location: location,
-        // 선택한 주차 구역 반영
         area: area,
         userName: context.read<UserState>().name,
         type: '입차 완료',
@@ -125,10 +112,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
         addStandard: 0,
         addAmount: 0,
       );
-
-      // ✅ PlateState에서 '입차 요청' → '입차 완료'로 이동
       plateState.movePlateToCompleted(plateNumber, location);
-
       showSnackbar(context, "입차 완료: $plateNumber ($location)");
     } catch (e) {
       debugPrint("입차 완료 처리 실패: $e");
@@ -144,12 +128,9 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
         builder: (context, plateState, areaState, child) {
           final currentArea = areaState.currentArea;
           var parkingRequests = plateState.getPlatesByArea('parking_requests', currentArea);
-
-          // 🔹 정렬 적용 (최신순 or 오래된순)
           parkingRequests.sort((a, b) {
             return _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime);
           });
-
           return ListView(
             padding: const EdgeInsets.all(8.0),
             children: [
@@ -170,7 +151,6 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
           final userName = context.read<UserState>().name;
           final selectedPlate = plateState.getSelectedPlate('parking_requests', userName);
           final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
-
           return BottomNavigationBar(
               items: [
                 BottomNavigationBarItem(
@@ -183,11 +163,11 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                   icon: isPlateSelected
                       ? Icon(Icons.check_circle, color: Colors.green)
                       : Image.asset(
-                    'assets/icons/icon_belivussnc.PNG',  // ✅ 파일 경로 확인
-                    width: 24.0,
-                    height: 24.0,
-                    fit: BoxFit.contain,  // ✅ 이미지 왜곡 방지
-                  ),
+                          'assets/icons/icon_belivussnc.PNG',
+                          width: 24.0,
+                          height: 24.0,
+                          fit: BoxFit.contain,
+                        ),
                   label: isPlateSelected ? '입차 완료' : 'Belivus S&C',
                 ),
                 BottomNavigationBarItem(
@@ -203,7 +183,6 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                   ),
                   label: isPlateSelected ? '입차 취소' : (_isSorted ? '최신순' : '오래된순'),
                 ),
-
               ],
               onTap: (index) {
                 if (index == 0) {
@@ -213,10 +192,9 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                     _showSearchDialog(context);
                   }
                 } else if (index == 1 && isPlateSelected) {
-                  _handleParkingCompleted(context); // ✅ 입차 완료 처리
+                  _handleParkingCompleted(context);
                 } else if (index == 2) {
                   if (isPlateSelected) {
-                    // ✅ 다이얼로그 표시하여 삭제 여부 확인
                     showDialog(
                       context: context,
                       builder: (context) {

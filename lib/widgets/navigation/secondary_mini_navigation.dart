@@ -1,16 +1,12 @@
 import 'package:flutter/material.dart';
 
-/// **SecondaryMiniNavigation**
-/// - 하단 미니 내비게이션 위젯
-/// - 정렬 토글 및 아이콘 클릭 이벤트 처리
-/// - 배경색과 아이콘 크기 설정 가능
 class SecondaryMiniNavigation extends StatefulWidget {
-  final double height; // 네비게이션 높이
-  final List<IconData> icons; // 표시할 아이콘 리스트
-  final Function(bool isAscending)? onSortToggle; // 정렬 상태 변경 콜백
-  final void Function(int index)? onIconTapped; // 아이콘 클릭 콜백
-  final Color? backgroundColor; // 배경색
-  final double iconSize; // 아이콘 크기
+  final double height;
+  final List<IconData> icons;
+  final Function(bool isAscending)? onSortToggle;
+  final void Function(int index)? onIconTapped;
+  final Color? backgroundColor;
+  final double iconSize;
 
   const SecondaryMiniNavigation({
     super.key,
@@ -29,7 +25,6 @@ class SecondaryMiniNavigation extends StatefulWidget {
 class _SecondaryMiniNavigation extends State<SecondaryMiniNavigation> {
   bool isAscending = true;
 
-  /// 정렬 상태를 변경하고 콜백 호출
   void toggleSortOrder() {
     setState(() {
       isAscending = !isAscending;
@@ -37,17 +32,15 @@ class _SecondaryMiniNavigation extends State<SecondaryMiniNavigation> {
     widget.onSortToggle?.call(isAscending);
   }
 
-  /// 정렬 아이콘 포함 일반 아이콘 생성
   Widget _buildIcon(IconData iconData, int index) {
     final isSortIcon = iconData == Icons.sort;
-
     return IconButton(
       icon: isSortIcon
           ? Transform(
-        alignment: Alignment.center,
-        transform: Matrix4.rotationX(isAscending ? 0 : 3.14159),
-        child: Icon(Icons.sort),
-      )
+              alignment: Alignment.center,
+              transform: Matrix4.rotationX(isAscending ? 0 : 3.14159),
+              child: Icon(Icons.sort),
+            )
           : Icon(iconData),
       onPressed: () {
         if (isSortIcon) {
