@@ -97,21 +97,19 @@ class PlateCustomBox extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300), // ✅ 애니메이션 지속 시간
-        curve: Curves.easeInOut, // ✅ 부드러운 애니메이션 효과
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
         width: double.infinity,
         height: 120,
-        alignment: Alignment.center, // ✅ 중앙 기준 정렬
-        transformAlignment: Alignment.center, // ✅ 중앙 기준으로 축소
-        transform: isSelected
-            ? (Matrix4.identity()..scale(0.95)) // ✅ 올바른 문법 적용
-            : Matrix4.identity(),
+        alignment: Alignment.center,
+        transformAlignment: Alignment.center,
+        transform: isSelected ? (Matrix4.identity()..scale(0.95)) : Matrix4.identity(),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.blue.withOpacity(0.2) : Colors.white, // ✅ 선택 시 배경색 변경
+          color: isSelected ? Colors.blue.withOpacity(0.2) : Colors.white,
           border: Border.all(color: Colors.black, width: 2.0),
-          borderRadius: BorderRadius.circular(10), // ✅ 모서리 둥글게 처리
+          borderRadius: BorderRadius.circular(10),
           boxShadow: [
-            if (isSelected) // ✅ 선택된 경우 그림자 효과 추가
+            if (isSelected)
               BoxShadow(
                 color: Colors.blue.withOpacity(0.3),
                 blurRadius: 10,

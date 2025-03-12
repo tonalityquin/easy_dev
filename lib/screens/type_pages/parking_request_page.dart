@@ -174,8 +174,8 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                   icon: AnimatedRotation(
                     turns: _isSorted ? 0.5 : 0.0,
                     duration: const Duration(milliseconds: 300),
-                    child: Transform.rotate(
-                      angle: 3.1416, // 180도 회전
+                    child: Transform.scale(
+                      scaleX: _isSorted ? -1 : 1,
                       child: Icon(
                         isPlateSelected ? Icons.delete : Icons.sort,
                       ),
