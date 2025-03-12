@@ -1,189 +1,155 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../repositories/firestore_user_repository.dart';
 import '../repositories/user_repository.dart';
+import '../models/user_model.dart';
 
 class UserState extends ChangeNotifier {
   final UserRepository _repository;
-
-  UserState(this._repository) {
-    loadUser();
-    _fetchUsers();
-  }
-
-  String _name = '';
-  String _phone = '';
-  String _role = '';
-  String _area = '';
-  String _password = '';
-  bool _isLoggedIn = false;
-  bool _isWorking = false;
-  List<Map<String, String>> _users = [];
+  UserModel? _user;
+  List<UserModel> _users = [];
   Map<String, bool> _selectedUsers = {};
   bool _isLoading = true;
 
-  String get name => _name;
+  UserState(this._repository) {
+    loadUser();
+    _initializeUsers();
+  }
 
-  String get phone => _phone;
-
-  String get role => _role;
-
-  String get area => _area;
-
-  String get password => _password;
-
-  bool get isLoggedIn => _isLoggedIn;
-
-  bool get isWorking => _isWorking;
-
-  List<Map<String, String>> get users => _users;
-
+  UserModel? get user => _user;
+  List<UserModel> get users => _users;
   Map<String, bool> get selectedUsers => _selectedUsers;
-
+  bool get isLoggedIn => _user != null;
+  bool get isWorking => _user?.isWorking ?? false;
   bool get isLoading => _isLoading;
+  String get role => _user?.role ?? '';
+  String get area => _user?.area ?? '';
+  String get name => _user?.name ?? '';
+  String get phone => _user?.phone ?? '';
+  String get password => _user?.password ?? '';
+
+  Future<void> saveUserToPreferences(UserModel user) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('phone', user.phone);
+    await prefs.setString('area', user.area);
+    debugPrint("📌 SharedPreferences 저장 완료: phone=${user.phone}, area=${user.area}");
+  }
+
 
   Future<void> loadUser() async {
-    final prefs = await SharedPreferences.getInstance();
-    _isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
-    if (_isLoggedIn) {
-      _name = prefs.getString('name') ?? '';
-      _phone = prefs.getString('phone') ?? '';
-      _role = prefs.getString('role') ?? '';
-      _area = prefs.getString('area') ?? '';
-      _password = prefs.getString('password') ?? '';
-      final userData = await _repository.getUserByPhone(_phone);
-      if (userData != null) {
-        _isWorking = userData['isWorking'] ?? false;
-        await prefs.setBool('isWorking', _isWorking);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final phone = prefs.getString('phone');
+      final area = prefs.getString('area');
+
+      if (phone == null || area == null) {
+        debugPrint("❌ 자동 로그인 실패: 저장된 전화번호 또는 지역 정보가 없습니다.");
+        return;
       }
-      notifyListeners();
-    } else {
-      _clearState();
+
+      final userId = "$phone-$area";
+      if (_repository is FirestoreUserRepository) {
+        final userData = await _repository.getUserById(userId);
+        if (userData == null) {
+          debugPrint("❌ 자동 로그인 실패: Firestore에서 사용자 정보를 찾을 수 없습니다.");
+          return;
+        }
+
+        _user = userData;
+        await saveUserToPreferences(userData); // ✅ SharedPreferences에 사용자 정보 저장
+        notifyListeners();
+        debugPrint("✅ 자동 로그인 성공: ${_user!.name} (${_user!.phone})");
+      }
+    } catch (e) {
+      debugPrint("❌ 자동 로그인 중 오류 발생: $e");
     }
   }
 
-  void _fetchUsers() {
-    _repository.getUsersStream().listen((data) {
-      _users = data
-          .map((user) => {
-                'id': user['id'] as String,
-                'name': user['name'] as String,
-                'phone': user['phone'] as String,
-                'email': user['email'] as String,
-                'role': user['role'] as String,
-                'password': user['password'] as String,
-                'area': user['area'] as String,
-              })
-          .toList();
-      _selectedUsers = {
-        for (var user in data) user['id'] as String: user['isSelected'] as bool,
-      };
-      _isLoading = false;
-      notifyListeners();
-    });
-  }
 
-  Future<void> updateUser({
-    required String name,
-    required String phone,
-    required String role,
-    required String password,
-    required String area,
-  }) async {
-    _name = name;
-    _phone = phone;
-    _role = role;
-    _password = password;
-    _area = area;
-    _isLoggedIn = true;
-    notifyListeners();
-    await _saveToPreferences();
+  void _initializeUsers() {
+    _repository.getUsersStream().listen(
+          (data) {
+        _users = data;
+        _selectedUsers = { for (var user in data) user.id: user.isSelected };
+        _isLoading = false;
+        notifyListeners();
+      },
+      onError: (error) {
+        debugPrint('Error syncing users: \$error');
+      },
+    );
   }
 
   Future<void> toggleWorkStatus() async {
-    _isWorking = !_isWorking;
-    await _repository.updateWorkStatus(_phone, _area, _isWorking);
-    await _saveToPreferences();
-    final userData = await _repository.getUserByPhone(_phone);
-    if (userData != null) {
-      _isWorking = userData['isWorking'] ?? false;
-      await _saveToPreferences();
-    }
+    if (_user == null) return;
+
+    final newStatus = !_user!.isWorking;
+    await _repository.updateWorkStatus(_user!.phone, _user!.area, newStatus);
+    _user = UserModel(
+      id: _user!.id,
+      name: _user!.name,
+      phone: _user!.phone,
+      email: _user!.email,
+      role: _user!.role,
+      password: _user!.password,
+      area: _user!.area,
+      isSelected: _user!.isSelected,
+      isWorking: newStatus,
+    );
     notifyListeners();
-  }
-
-  void listenToUserStatus() {
-    _repository.listenToUserStatus(_phone).listen((userData) {
-      if (userData != null) {
-        _isWorking = userData['isWorking'] ?? false;
-        notifyListeners();
-      }
-    });
-  }
-
-  Future<void> _saveToPreferences() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('name', _name);
-    await prefs.setString('phone', _phone);
-    await prefs.setString('role', _role);
-    await prefs.setString('area', _area);
-    await prefs.setString('password', _password);
-    await prefs.setBool('isLoggedIn', _isLoggedIn);
-    await prefs.setBool('isWorking', _isWorking);
   }
 
   Future<void> clearUser() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
-    _clearState();
+    _user = null;
     notifyListeners();
   }
 
-  void _clearState() {
-    _name = '';
-    _phone = '';
-    _role = '';
-    _area = '';
-    _password = '';
-    _isLoggedIn = false;
-    _isWorking = false;
+  Future<void> updateUser(UserModel updatedUser) async {
+    _user = updatedUser;
+    notifyListeners();
+    await _repository.addUser(updatedUser);
+    await saveUserToPreferences(updatedUser); // ✅ 로그인 성공 후 SharedPreferences 저장
   }
 
-  Future<void> addUser(
-      String name, String phone, String email, String role, String password, String area, bool isWorking,
-      {required void Function(String) onError}) async {
+
+  Future<void> addUser(UserModel user, {void Function(String)? onError}) async {
     try {
-      final id = '$phone-$area';
-      await _repository.addUser(id, {
-        'name': name,
-        'phone': phone,
-        'email': email,
-        'role': role,
-        'password': password,
-        'area': area,
-        'isSelected': false,
-        'isWorking': false,
-      });
+      final correctedUser = UserModel(
+        id: user.id,
+        name: user.name,
+        phone: user.phone,
+        email: user.email,
+        role: user.role,
+        password: user.password,
+        area: user.area,
+        isSelected: user.isSelected,
+        isWorking: user.isWorking,
+      );
+      await _repository.addUser(correctedUser);
     } catch (e) {
-      debugPrint('사용자 추가 실패: $e');
-      onError('사용자 추가 실패: $e');
+      onError?.call('사용자 추가 실패: \$e');
     }
   }
 
-  Future<void> deleteUsers(List<String> ids, {required void Function(String) onError}) async {
+  Future<void> deleteUsers(List<String> ids, {void Function(String)? onError}) async {
     try {
       await _repository.deleteUsers(ids);
     } catch (e) {
-      debugPrint('사용자 삭제 실패: $e');
-      onError('사용자 삭제 실패: $e');
+      onError?.call('사용자 삭제 실패: \$e');
     }
   }
 
   Future<void> toggleSelection(String id) async {
-    final currentState = _selectedUsers[id] ?? false;
+    if (!_selectedUsers.containsKey(id)) return;
     try {
-      await _repository.toggleUserSelection(id, !currentState);
+      final newSelectionState = !_selectedUsers[id]!;
+      await _repository.toggleUserSelection(id, newSelectionState);
+      _selectedUsers[id] = newSelectionState;
+      notifyListeners();
     } catch (e) {
-      debugPrint('사용자 선택 오류: $e');
+      debugPrint('사용자 선택 오류: \$e');
     }
   }
 }

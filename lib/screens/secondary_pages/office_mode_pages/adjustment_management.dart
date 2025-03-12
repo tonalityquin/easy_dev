@@ -80,7 +80,7 @@ class _AdjustmentManagementState extends State<AdjustmentManagement> {
       body: Consumer<AdjustmentState>(
         builder: (context, state, child) {
           final currentArea = context.watch<AreaState>().currentArea.trim();
-          final adjustments = state.adjustments.where((adj) => adj['area'].toString().trim() == currentArea).toList();
+          final adjustments = state.adjustments.where((adj) => adj.area.trim() == currentArea).toList();
           if (adjustments.isEmpty) {
             return const Center(child: Text('현재 지역에 해당하는 정산 데이터가 없습니다.'));
           }
@@ -88,13 +88,14 @@ class _AdjustmentManagementState extends State<AdjustmentManagement> {
             itemCount: adjustments.length,
             itemBuilder: (context, index) {
               final adjustment = adjustments[index];
-              final id = adjustment['id'] ?? '';
-              final countType = adjustment['countType'] ?? 'Unknown';
-              final basicStandard = adjustment['basicStandard'] ?? 'Unknown';
-              final basicAmount = adjustment['basicAmount'] ?? '0';
-              final addStandard = adjustment['addStandard'] ?? 'Unknown';
-              final addAmount = adjustment['addAmount'] ?? '0';
+              final id = adjustment.id;
+              final countType = adjustment.countType;
+              final basicStandard = adjustment.basicStandard.toString();
+              final basicAmount = adjustment.basicAmount.toString();
+              final addStandard = adjustment.addStandard.toString();
+              final addAmount = adjustment.addAmount.toString();
               final isSelected = state.selectedAdjustments[id] ?? false;
+
               return Column(
                 children: [
                   AdjustmentCustomBox(

@@ -1,5 +1,7 @@
 import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
+import '../repositories/firestore_location_repository.dart';
+import '../repositories/firestore_status_repository.dart';
 import '../states/secondary_access_state.dart';
 import '../states/page_state.dart';
 import '../states/plate_state.dart';
@@ -11,7 +13,6 @@ import '../states/adjustment_state.dart';
 import '../states/status_state.dart';
 import '../repositories/adjustment_repository.dart';
 import '../repositories/status_repository.dart';
-import '../repositories/location_repository.dart';
 import '../repositories/plate_repository.dart';
 import '../repositories/user_repository.dart';
 
@@ -42,7 +43,7 @@ final List<SingleChildWidget> stateProviders = [
       final statusRepo = context.read<StatusRepository?>();
       final areaState = context.read<AreaState>();
       if (statusRepo == null) {
-        return StatusState(StatusRepository(), areaState);
+        return StatusState(FirestoreStatusRepository(), areaState);
       }
       return StatusState(statusRepo, areaState);
     },
