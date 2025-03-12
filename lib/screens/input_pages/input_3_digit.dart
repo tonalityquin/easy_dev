@@ -74,7 +74,7 @@ class _Input3DigitState extends State<Input3Digit> {
     final areaState = context.read<AreaState>();
     final currentArea = areaState.currentArea;
     final fetchedStatuses = statusState.statuses
-        .where((status) => status['area'] == currentArea)
+        .where((status) => status['area'] == currentArea && status['isActive'] == true)
         .map((status) => (status['name'] ?? '') as String)
         .toList();
     setState(() {

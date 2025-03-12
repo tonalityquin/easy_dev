@@ -23,6 +23,7 @@ class StatusState extends ChangeNotifier {
     return _toggleItems.where((status) => status['area'] == _areaState.currentArea).toList();
   }
 
+
   void _fetchStatusToggles() {
     final String? currentArea = _areaState.currentArea;
     if (currentArea == null || currentArea.isEmpty) {
@@ -52,15 +53,20 @@ class StatusState extends ChangeNotifier {
     final index = _toggleItems.indexWhere((item) => item['id'] == id);
     if (index != -1) {
       final newState = !_toggleItems[index]['isActive'];
+
+      _toggleItems[index]['isActive'] = newState;
+      notifyListeners();
+
       await _repository.updateToggleStatus(id, newState);
     }
   }
+
 
   Future<void> removeToggleItem(String id) async {
     await _repository.deleteToggleItem(id);
   }
 
-  void selectItem(String id) {
+  void selectItem(String? id) {
     _selectedItemId = (_selectedItemId == id) ? null : id;
     notifyListeners();
   }
