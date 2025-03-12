@@ -64,6 +64,7 @@ class _LoginPageState extends State<LoginPage> {
     final password = _passwordController.text.trim();
     final phoneError = _validatePhone(phone);
     final passwordError = _validatePassword(password);
+
     if (name.isEmpty) {
       showSnackbar(context, '이름을 입력해주세요.');
       return;
@@ -76,9 +77,11 @@ class _LoginPageState extends State<LoginPage> {
       showSnackbar(context, passwordError);
       return;
     }
+
     setState(() {
       _isLoading = true;
     });
+
     if (!await _isInternetConnected()) {
       showSnackbar(context, '인터넷 연결이 필요합니다.');
       setState(() {
@@ -86,21 +89,19 @@ class _LoginPageState extends State<LoginPage> {
       });
       return;
     }
+
     try {
       final userRepository = context.read<UserRepository>();
-
       final user = await userRepository.getUserByPhone(phone);
-      if (user != null && user['name'] == name && user['password'] == password) {
+
+      if (user != null && user.name == name && user.password == password) {
         final userState = Provider.of<UserState>(context, listen: false);
         final areaState = Provider.of<AreaState>(context, listen: false);
-        userState.updateUser(
-          name: user['name'],
-          phone: phone,
-          role: user['role'],
-          password: user['password'],
-          area: user['area'],
-        );
-        areaState.updateArea(user['area']);
+
+        // ✅ `UserModel`을 사용하여 updateUser()에 전달
+        userState.updateUser(user);
+        areaState.updateArea(user.area);
+
         Navigator.pushReplacementNamed(context, '/home');
       } else {
         showSnackbar(context, user == null ? '해당 전화번호가 등록되지 않았습니다.' : '이름 또는 비밀번호가 올바르지 않습니다.');

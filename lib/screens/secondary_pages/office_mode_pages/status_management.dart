@@ -55,39 +55,38 @@ class StatusManagement extends StatelessWidget {
                   curve: Curves.easeInOut,
                   margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: statusState.selectedItemId == item['id'] ? Colors.blue.withOpacity(0.2) : Colors.white,
+                    color: statusState.selectedItemId == item.id ? Colors.blue.withOpacity(0.2) : Colors.white,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: statusState.selectedItemId == item['id'] ? Colors.blue : Colors.grey.shade300,
+                      color: statusState.selectedItemId == item.id ? Colors.blue : Colors.grey.shade300,
                       width: 2,
                     ),
                   ),
                   child: ListTile(
                     title: Text(
-                      item['name'],
+                      item.name, // ✅ 수정됨
                       style: TextStyle(
-                        color: statusState.selectedItemId == item['id'] ? Colors.blue : Colors.black,
-                        fontWeight: statusState.selectedItemId == item['id'] ? FontWeight.bold : FontWeight.normal,
+                        color: statusState.selectedItemId == item.id ? Colors.blue : Colors.black,
+                        fontWeight: statusState.selectedItemId == item.id ? FontWeight.bold : FontWeight.normal,
                       ),
                     ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (statusState.selectedItemId == item['id'])
-                          const Icon(Icons.check_circle, color: Colors.blue),
+                        if (statusState.selectedItemId == item.id) const Icon(Icons.check_circle, color: Colors.blue),
                         Switch(
-                          value: item['isActive'],
+                          value: item.isActive, // ✅ 수정됨
                           onChanged: (value) {
-                            statusState.toggleItem(item['id']);
+                            statusState.toggleItem(item.id); // ✅ 수정됨
                           },
                         ),
                       ],
                     ),
                     onTap: () {
-                      if (statusState.selectedItemId == item['id']) {
+                      if (statusState.selectedItemId == item.id) {
                         statusState.selectItem(null);
                       } else {
-                        statusState.selectItem(item['id']);
+                        statusState.selectItem(item.id);
                       }
                     },
                   ),

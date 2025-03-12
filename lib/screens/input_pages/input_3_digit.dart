@@ -73,10 +73,12 @@ class _Input3DigitState extends State<Input3Digit> {
     final statusState = context.read<StatusState>();
     final areaState = context.read<AreaState>();
     final currentArea = areaState.currentArea;
+
     final fetchedStatuses = statusState.statuses
-        .where((status) => status['area'] == currentArea && status['isActive'] == true)
-        .map((status) => (status['name'] ?? '') as String)
+        .where((status) => status.area == currentArea && status.isActive) // ✅ 수정됨
+        .map((status) => status.name) // ✅ 수정됨
         .toList();
+
     setState(() {
       statuses = fetchedStatuses;
       isSelected = List.generate(statuses.length, (index) => false);
@@ -374,8 +376,8 @@ class _Input3DigitState extends State<Input3Digit> {
                               },
                               items: adjustmentList.map((adj) {
                                 return DropdownMenuItem<String>(
-                                  value: adj['countType'],
-                                  child: Text(adj['countType']),
+                                  value: adj.countType, // ✅ 클래스 속성 방식으로 변경
+                                  child: Text(adj.countType), // ✅ 클래스 속성 방식으로 변경
                                 );
                               }).toList(),
                               decoration: const InputDecoration(

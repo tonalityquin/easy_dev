@@ -1,73 +1,50 @@
 import 'package:flutter/material.dart';
 import '../repositories/location_repository.dart';
+import '../models/location_model.dart';
 
 class LocationState extends ChangeNotifier {
   final LocationRepository _repository;
-
   LocationState(this._repository) {
     _initializeLocations();
   }
 
-  List<Map<String, String>> _locations = [];
+  List<LocationModel> _locations = [];
   Map<String, bool> _selectedLocations = {};
   bool _isLoading = true;
-  List<IconData> _navigationIcons = [Icons.add, Icons.circle, Icons.settings];
+  List<IconData> _navigationIcons = [Icons.add, Icons.delete];
 
-  List<Map<String, String>> get locations => _locations;
-
+  List<LocationModel> get locations => _locations;
   Map<String, bool> get selectedLocations => _selectedLocations;
-
   bool get isLoading => _isLoading;
-
   List<IconData> get navigationIcons => _navigationIcons;
-  final Map<bool, List<IconData>> _iconStates = {
-    true: [Icons.lock, Icons.delete, Icons.edit],
-    false: [Icons.add, Icons.circle, Icons.settings],
-  };
 
   void _initializeLocations() {
     _repository.getLocationsStream().listen(
-      (data) {
-        _updateLocations(data);
+          (data) {
+        _locations = data;
+        _selectedLocations = { for (var loc in data) loc.id: loc.isSelected };
         _isLoading = false;
         notifyListeners();
       },
-      onError: (error) => _handleFirestoreError('Error syncing locations', error),
+      onError: (error) {
+        debugPrint('Error syncing locations: $error');
+      },
     );
-  }
-
-  void _updateLocations(List<Map<String, dynamic>> data) {
-    _locations = data.map((location) {
-      String id = location['id'] as String;
-      return {
-        'id': id,
-        'locationName': location['locationName'] as String,
-        'area': location['area'] as String,
-      };
-    }).toList();
-    _selectedLocations = {
-      for (var location in data) location['id'] as String: location['isSelected'] as bool,
-    };
-    _updateIcons();
-  }
-
-  void _updateIcons() {
-    _navigationIcons = _iconStates[_selectedLocations.values.contains(true)]!;
   }
 
   Future<void> addLocation(String locationName, String area, {void Function(String)? onError}) async {
     try {
-      await _repository.addLocation(locationName, area);
+      await _repository.addLocation(LocationModel(id: locationName, locationName: locationName, area: area, isSelected: false));
     } catch (e) {
-      _handleFirestoreError('Error adding location', e, onError); // 🔥 안전한 전달
+      onError?.call('🚨 주차 구역 추가 실패: $e');
     }
   }
 
-  Future<void> deleteLocations(List<String> ids, {required void Function(String) onError}) async {
+  Future<void> deleteLocations(List<String> ids, {void Function(String)? onError}) async {
     try {
       await _repository.deleteLocations(ids);
     } catch (e) {
-      _handleFirestoreError('Error deleting location', e, onError);
+      onError?.call('🚨 주차 구역 삭제 실패: $e');
     }
   }
 
@@ -82,10 +59,5 @@ class LocationState extends ChangeNotifier {
       _selectedLocations[id] = previousState;
       notifyListeners();
     }
-  }
-
-  void _handleFirestoreError(String message, dynamic error, [void Function(String)? onError]) {
-    debugPrint('$message: $error');
-    onError?.call('🚨 $message: $error');
   }
 }

@@ -205,8 +205,8 @@ class _UserAccountsState extends State<UserSetting> {
                       _phoneController.text,
                       fullEmail,
                       _selectedRole,
-                      _passwordController.text,
                       widget.areaValue,
+                      _passwordController.text,
                       false,
                     );
                     Navigator.pop(context);

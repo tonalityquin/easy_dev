@@ -1,92 +1,43 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import '../repositories/adjustment_repository.dart';
-import 'area_state.dart';
+import '../models/adjustment_model.dart';
+import '../states/area_state.dart';
 
 class AdjustmentState extends ChangeNotifier {
   final AdjustmentRepository _repository;
   final AreaState _areaState;
-  StreamSubscription<List<Map<String, dynamic>>>? _subscription;
 
   AdjustmentState(this._repository, this._areaState) {
     _initializeAdjustments();
   }
 
-  List<Map<String, dynamic>> _adjustments = [];
+  List<AdjustmentModel> _adjustments = [];
   Map<String, bool> _selectedAdjustments = {};
+  bool _isLoading = true;
 
-  List<Map<String, dynamic>> get adjustments => _adjustments;
-
+  List<AdjustmentModel> get adjustments => _adjustments;
   Map<String, bool> get selectedAdjustments => _selectedAdjustments;
-
-  Stream<List<Map<String, dynamic>>> get adjustmentsStream {
-    final currentArea = _areaState.currentArea;
-    return _repository.getAdjustmentStream(currentArea);
-  }
-
-  void syncWithAreaState() {
-    try {
-      final currentArea = _areaState.currentArea.trim();
-      debugPrint('🔥 AdjustmentState: 지역 변경 감지됨 ($currentArea) → 데이터 새로 가져옴');
-      _subscription?.cancel();
-      _initializeAdjustments();
-    } catch (e) {
-      debugPrint("🔥 Error syncing area state: $e");
-    }
-  }
-
-  void _initializeAdjustments() {
-    final currentArea = _areaState.currentArea.trim();
-    _adjustments.clear();
-    _selectedAdjustments.clear();
-    _subscription = _repository.getAdjustmentStream(currentArea).listen((data) {
-      _adjustments = data
-          .where((adj) => adj['area'].toString().trim() == currentArea)
-          .map((adj) => {
-                'id': adj['id'],
-                'countType': adj['CountType']?.toString().trim() ?? adj['countType']?.toString().trim() ?? '',
-                'area': adj['area'],
-                'basicStandard': parseInt(adj['basicStandard']),
-                'basicAmount': parseInt(adj['basicAmount']),
-                'addStandard': parseInt(adj['addStandard']),
-                'addAmount': parseInt(adj['addAmount']),
-              })
-          .where((adj) => adj['countType'].isNotEmpty)
-          .toList();
-      debugPrint('🔥 현재 선택된 지역($currentArea)에 맞는 데이터: $_adjustments');
-      notifyListeners();
-    });
-  }
-
-  int parseInt(dynamic value) {
-    if (value is int) return value;
-    if (value is String) return int.tryParse(value) ?? 0;
-    return 0;
-  }
-
-  void toggleSelection(String id) {
-    _selectedAdjustments[id] = !(_selectedAdjustments[id] ?? false);
-    notifyListeners();
-  }
+  bool get isLoading => _isLoading;
 
   Future<void> addAdjustments(
-    String countType,
-    String area,
-    String basicStandard,
-    String basicAmount,
-    String addStandard,
-    String addAmount,
-  ) async {
+      String countType,
+      String area,
+      String basicStandard,
+      String basicAmount,
+      String addStandard,
+      String addAmount,
+      ) async {
     try {
-      final adjustmentData = {
-        'CountType': countType,
-        'area': area,
-        'basicStandard': basicStandard,
-        'basicAmount': basicAmount,
-        'addStandard': addStandard,
-        'addAmount': addAmount,
-      };
-      await _repository.addAdjustment(adjustmentData);
+      final adjustment = AdjustmentModel(
+        id: '${countType}_$area',
+        countType: countType,
+        area: area,
+        basicStandard: int.tryParse(basicStandard) ?? 0,
+        basicAmount: int.tryParse(basicAmount) ?? 0,
+        addStandard: int.tryParse(addStandard) ?? 0,
+        addAmount: int.tryParse(addAmount) ?? 0,
+      );
+      await _repository.addAdjustment(adjustment);
       syncWithAreaState();
     } catch (e) {
       debugPrint('🔥 Error adding adjustment: $e');
@@ -94,19 +45,50 @@ class AdjustmentState extends ChangeNotifier {
     }
   }
 
-  Future<void> deleteAdjustments(List<String> ids) async {
+
+  void syncWithAreaState() {
     try {
-      await _repository.deleteAdjustment(ids);
-      syncWithAreaState();
+      final currentArea = _areaState.currentArea.trim();
+      debugPrint('🔥 AdjustmentState: 지역 변경 감지됨 ($currentArea) → 데이터 새로 가져옴');
+      _initializeAdjustments();
     } catch (e) {
-      debugPrint('🔥 Error deleting adjustment: $e');
-      rethrow;
+      debugPrint("🔥 Error syncing area state: $e");
     }
   }
 
-  @override
-  void dispose() {
-    _subscription?.cancel();
-    super.dispose();
+  void _initializeAdjustments() {
+    final currentArea = _areaState.currentArea;
+    _repository.getAdjustmentStream(currentArea).listen(
+          (data) {
+        _adjustments = data;
+        _selectedAdjustments = { for (var adj in data) adj.id: false };
+        _isLoading = false;
+        notifyListeners();
+      },
+      onError: (error) {
+        debugPrint('Error syncing adjustments: $error');
+      },
+    );
+  }
+
+  Future<void> addAdjustment(AdjustmentModel adjustment, {void Function(String)? onError}) async {
+    try {
+      await _repository.addAdjustment(adjustment);
+    } catch (e) {
+      onError?.call('🚨 조정 데이터 추가 실패: $e');
+    }
+  }
+
+  Future<void> deleteAdjustments(List<String> ids, {void Function(String)? onError}) async {
+    try {
+      await _repository.deleteAdjustment(ids);
+    } catch (e) {
+      onError?.call('🚨 조정 데이터 삭제 실패: $e');
+    }
+  }
+
+  void toggleSelection(String id) {
+    _selectedAdjustments[id] = !(_selectedAdjustments[id] ?? false);
+    notifyListeners();
   }
 }
