@@ -51,18 +51,14 @@ class StatusManagement extends StatelessWidget {
                 final item = statusState.toggleItems[index];
 
                 return AnimatedContainer(
-                  duration: const Duration(milliseconds: 300), // 애니메이션 지속 시간
-                  curve: Curves.easeInOut, // 부드러운 애니메이션
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
                   margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: statusState.selectedItemId == item['id']
-                        ? Colors.blue.withOpacity(0.2) // 선택된 경우 배경색
-                        : Colors.white,
+                    color: statusState.selectedItemId == item['id'] ? Colors.blue.withOpacity(0.2) : Colors.white,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: statusState.selectedItemId == item['id']
-                          ? Colors.blue // 선택된 경우 파란 테두리
-                          : Colors.grey.shade300,
+                      color: statusState.selectedItemId == item['id'] ? Colors.blue : Colors.grey.shade300,
                       width: 2,
                     ),
                   ),
@@ -70,19 +66,15 @@ class StatusManagement extends StatelessWidget {
                     title: Text(
                       item['name'],
                       style: TextStyle(
-                        color: statusState.selectedItemId == item['id']
-                            ? Colors.blue // 선택된 경우 글자 색상 변경
-                            : Colors.black,
-                        fontWeight: statusState.selectedItemId == item['id']
-                            ? FontWeight.bold // 선택된 경우 글자 굵게
-                            : FontWeight.normal,
+                        color: statusState.selectedItemId == item['id'] ? Colors.blue : Colors.black,
+                        fontWeight: statusState.selectedItemId == item['id'] ? FontWeight.bold : FontWeight.normal,
                       ),
                     ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         if (statusState.selectedItemId == item['id'])
-                          const Icon(Icons.check_circle, color: Colors.blue), // 선택된 항목에 체크 아이콘 표시
+                          const Icon(Icons.check_circle, color: Colors.blue),
                         Switch(
                           value: item['isActive'],
                           onChanged: (value) {
@@ -93,9 +85,9 @@ class StatusManagement extends StatelessWidget {
                     ),
                     onTap: () {
                       if (statusState.selectedItemId == item['id']) {
-                        statusState.selectItem(null); // 선택 해제
+                        statusState.selectItem(null);
                       } else {
-                        statusState.selectItem(item['id']); // 항목 선택
+                        statusState.selectItem(item['id']);
                       }
                     },
                   ),

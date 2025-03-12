@@ -23,7 +23,6 @@ class StatusState extends ChangeNotifier {
     return _toggleItems.where((status) => status['area'] == _areaState.currentArea).toList();
   }
 
-
   void _fetchStatusToggles() {
     final String? currentArea = _areaState.currentArea;
     if (currentArea == null || currentArea.isEmpty) {
@@ -60,7 +59,6 @@ class StatusState extends ChangeNotifier {
       await _repository.updateToggleStatus(id, newState);
     }
   }
-
 
   Future<void> removeToggleItem(String id) async {
     await _repository.deleteToggleItem(id);
