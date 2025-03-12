@@ -46,6 +46,7 @@ class PlateContainer extends StatelessWidget {
     final plateState = Provider.of<PlateState>(context);
     final filteredData = _filterData(data, plateState.searchQuery);
     final userName = Provider.of<UserState>(context, listen: false).name;
+
     if (filteredData.isEmpty) {
       return const Center(
         child: Text(
@@ -54,19 +55,25 @@ class PlateContainer extends StatelessWidget {
         ),
       );
     }
+
     return Column(
       children: filteredData.map((item) {
-        final backgroundColor = item.isSelected ? Colors.greenAccent : Colors.white;
-        final displayUser = item.isSelected ? item.selectedBy : item.userName;
+        final bool isSelected = item.isSelected;
+        final String displayUser = isSelected ? item.selectedBy! : item.userName;
+
         int basicStandard = (item.basicStandard is String)
             ? int.tryParse(item.basicStandard as String) ?? 0
             : (item.basicStandard ?? 0);
-        int basicAmount =
-            (item.basicAmount is String) ? int.tryParse(item.basicAmount as String) ?? 0 : (item.basicAmount ?? 0);
-        int addStandard =
-            (item.addStandard is String) ? int.tryParse(item.addStandard as String) ?? 0 : (item.addStandard ?? 0);
-        int addAmount =
-            (item.addAmount is String) ? int.tryParse(item.addAmount as String) ?? 0 : (item.addAmount ?? 0);
+        int basicAmount = (item.basicAmount is String)
+            ? int.tryParse(item.basicAmount as String) ?? 0
+            : (item.basicAmount ?? 0);
+        int addStandard = (item.addStandard is String)
+            ? int.tryParse(item.addStandard as String) ?? 0
+            : (item.addStandard ?? 0);
+        int addAmount = (item.addAmount is String)
+            ? int.tryParse(item.addAmount as String) ?? 0
+            : (item.addAmount ?? 0);
+
         int currentFee = calculateParkingFee(
           entryTimeInMinutes: item.requestTime.hour * 60 + item.requestTime.minute,
           currentTimeInMinutes: DateTime.now().hour * 60 + DateTime.now().minute,
@@ -76,6 +83,7 @@ class PlateContainer extends StatelessWidget {
           addAmount: addAmount,
         ).toInt();
         int elapsedMinutes = DateTime.now().difference(item.requestTime).inMinutes;
+
         return Column(
           children: [
             PlateCustomBox(
@@ -83,12 +91,12 @@ class PlateContainer extends StatelessWidget {
               topRightUpText: "${item.adjustmentType ?? '없음'}",
               topRightDownText: "${currentFee}원",
               midLeftText: item.location,
-              midCenterText: displayUser ?? '기본 사용자',
+              midCenterText: displayUser,
               midRightText: CustomDateUtils.formatTimeForUI(item.requestTime),
               bottomLeftLeftText: item.statusList.isNotEmpty ? item.statusList.join(", ") : "주의사항 없음",
               bottomLeftCenterText: "주의사항 수기",
               bottomRightText: "경과 시간: ${elapsedMinutes}분",
-              backgroundColor: backgroundColor,
+              isSelected: isSelected, // ✅ 추가된 필수 매개변수
               onTap: () {
                 final plateState = Provider.of<PlateState>(context, listen: false);
                 plateState.toggleIsSelected(

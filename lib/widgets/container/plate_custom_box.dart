@@ -30,7 +30,7 @@ class PlateCustomBox extends StatelessWidget {
   final String bottomLeftCenterText;
   final String bottomRightText;
   final VoidCallback onTap;
-  final Color backgroundColor;
+  final bool isSelected;
 
   const PlateCustomBox({
     super.key,
@@ -44,7 +44,7 @@ class PlateCustomBox extends StatelessWidget {
     required this.bottomLeftCenterText,
     required this.bottomRightText,
     required this.onTap,
-    this.backgroundColor = Colors.white,
+    required this.isSelected,
   });
 
   Widget buildRow({
@@ -96,12 +96,28 @@ class PlateCustomBox extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300), // ✅ 애니메이션 지속 시간
+        curve: Curves.easeInOut, // ✅ 부드러운 애니메이션 효과
         width: double.infinity,
         height: 120,
+        alignment: Alignment.center, // ✅ 중앙 기준 정렬
+        transformAlignment: Alignment.center, // ✅ 중앙 기준으로 축소
+        transform: isSelected
+            ? (Matrix4.identity()..scale(0.95)) // ✅ 올바른 문법 적용
+            : Matrix4.identity(),
         decoration: BoxDecoration(
-          color: backgroundColor,
+          color: isSelected ? Colors.blue.withOpacity(0.2) : Colors.white, // ✅ 선택 시 배경색 변경
           border: Border.all(color: Colors.black, width: 2.0),
+          borderRadius: BorderRadius.circular(10), // ✅ 모서리 둥글게 처리
+          boxShadow: [
+            if (isSelected) // ✅ 선택된 경우 그림자 효과 추가
+              BoxShadow(
+                color: Colors.blue.withOpacity(0.3),
+                blurRadius: 10,
+                spreadRadius: 2,
+              ),
+          ],
         ),
         child: Stack(
           children: [
