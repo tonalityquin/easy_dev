@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../states/plate/plate_state.dart'; // PlateState 상태 관리
 import '../../states/area/area_state.dart'; // AreaState 상태 관리
 import '../../states/user/user_state.dart';
+import '../../states/plate/filter_state.dart';
 import '../../widgets/container/plate_container.dart'; // 번호판 컨테이너 위젯
 import '../../widgets/dialog/departure_request_confirmation_dialog.dart';
 import '../../widgets/dialog/parking_location_dialog.dart';
@@ -47,7 +48,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
 
   void _filterPlatesByNumber(BuildContext context, String query) {
     if (query.length == 4) {
-      context.read<PlateState>().setPlateSearchQuery(query);
+      context.read<FilterState>().setPlateSearchQuery(query);
       setState(() {
         _isSearchMode = true;
       });
@@ -67,7 +68,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
           });
           final area = context.read<AreaState>().currentArea;
           setState(() {
-            context.read<PlateState>().filterByParkingLocation('parking_completed', area, _selectedParkingArea!);
+            context.read<FilterState>().filterByParkingLocation('parking_completed', area, _selectedParkingArea!);
           });
         },
       ),
@@ -80,11 +81,11 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
       _isParkingAreaMode = false;
       _selectedParkingArea = null;
     });
-    context.read<PlateState>().clearLocationSearchQuery();
+    context.read<FilterState>().clearLocationSearchQuery();
   }
 
   void _resetPlateSearch(BuildContext context) {
-    context.read<PlateState>().clearPlateSearchQuery();
+    context.read<FilterState>().clearPlateSearchQuery();
     setState(() {
       _isSearchMode = false;
     });
@@ -133,8 +134,9 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
       body: Consumer2<PlateState, AreaState>(
         builder: (context, plateState, areaState, child) {
           final currentArea = areaState.currentArea;
+          final filterState = context.read<FilterState>();
           var parkingCompleted = _isParkingAreaMode && _selectedParkingArea != null
-              ? plateState.filterByParkingLocation('parking_completed', currentArea, _selectedParkingArea!)
+              ? filterState.filterByParkingLocation('parking_completed', currentArea, _selectedParkingArea!)
               : plateState.getPlatesByArea('parking_completed', currentArea);
           final userName = context.read<UserState>().name;
           parkingCompleted.sort((a, b) {
