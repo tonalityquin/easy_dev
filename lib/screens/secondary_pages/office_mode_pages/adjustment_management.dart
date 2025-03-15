@@ -42,14 +42,15 @@ class _AdjustmentManagementState extends State<AdjustmentManagement> {
                 await context.read<AdjustmentState>().addAdjustments(
                       adjustmentData['CountType'],
                       adjustmentData['area'],
-                      adjustmentData['basicStandard'],
-                      adjustmentData['basicAmount'],
-                      adjustmentData['addStandard'],
-                      adjustmentData['addAmount'],
+                      adjustmentData['basicStandard'].toString(), // 숫자값을 문자열로 변환하여 전달
+                      adjustmentData['basicAmount'].toString(),
+                      adjustmentData['addStandard'].toString(),
+                      adjustmentData['addAmount'].toString(),
                     );
-                showSnackbar(context, '정산 데이터가 성공적으로 추가되었습니다.');
+                showSnackbar(context, '✅ 정산 데이터가 성공적으로 추가되었습니다.');
               } catch (e) {
-                showSnackbar(context, '데이터 추가 중 오류가 발생했습니다.');
+                debugPrint("🔥 데이터 추가 중 예외 발생: $e");
+                showSnackbar(context, '🚨 데이터 추가 중 오류가 발생했습니다: $e');
               }
             },
           ),

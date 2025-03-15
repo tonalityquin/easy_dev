@@ -16,17 +16,19 @@ class AdjustmentState extends ChangeNotifier {
   bool _isLoading = true;
 
   List<AdjustmentModel> get adjustments => _adjustments;
+
   Map<String, bool> get selectedAdjustments => _selectedAdjustments;
+
   bool get isLoading => _isLoading;
 
   Future<void> addAdjustments(
-      String countType,
-      String area,
-      String basicStandard,
-      String basicAmount,
-      String addStandard,
-      String addAmount,
-      ) async {
+    String countType,
+    String area,
+    String basicStandard,
+    String basicAmount,
+    String addStandard,
+    String addAmount,
+  ) async {
     try {
       final adjustment = AdjustmentModel(
         id: '${countType}_$area',
@@ -37,14 +39,22 @@ class AdjustmentState extends ChangeNotifier {
         addStandard: int.tryParse(addStandard) ?? 0,
         addAmount: int.tryParse(addAmount) ?? 0,
       );
+
+      debugPrint("📌 저장할 데이터: $adjustment");
+
       await _repository.addAdjustment(adjustment);
+      debugPrint("✅ 데이터 저장 성공");
+
+      // 🔥 Firestore에서 데이터를 다시 불러오기 전에, UI에 즉시 반영
+      _adjustments.add(adjustment);
+      notifyListeners();
+
       syncWithAreaState();
     } catch (e) {
-      debugPrint('🔥 Error adding adjustment: $e');
+      debugPrint('🔥 데이터 추가 중 오류 발생: $e');
       rethrow;
     }
   }
-
 
   void syncWithAreaState() {
     try {
@@ -58,20 +68,34 @@ class AdjustmentState extends ChangeNotifier {
 
   void _initializeAdjustments() {
     final currentArea = _areaState.currentArea;
+
+    // 기존 스트림을 제거하고 새로운 스트림을 추가
     _repository.getAdjustmentStream(currentArea).listen(
-          (data) {
-        _adjustments = data;
-        _selectedAdjustments = { for (var adj in data) adj.id: false };
+      (data) {
+        _adjustments.clear(); // 기존 데이터 초기화
+
+        for (var adj in data) {
+          debugPrint("📌 Firestore에서 불러온 데이터: $adj");
+        }
+
+        if (data.isNotEmpty) {
+          _adjustments = data;
+        } else {
+          debugPrint("⚠️ Firestore에서 가져온 데이터가 없음. 기존 값 유지");
+        }
+
+        _selectedAdjustments = {for (var adj in _adjustments) adj.id: false};
         _isLoading = false;
         notifyListeners();
       },
       onError: (error) {
-        debugPrint('Error syncing adjustments: $error');
+        debugPrint('🔥 Firestore 데이터 불러오기 오류: $error');
       },
     );
   }
 
   Future<void> addAdjustment(AdjustmentModel adjustment, {void Function(String)? onError}) async {
+    debugPrint("📌 저장하는 데이터: $adjustment");
     try {
       await _repository.addAdjustment(adjustment);
     } catch (e) {
