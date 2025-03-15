@@ -217,10 +217,10 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                       context: context,
                       builder: (context) => DepartureRequestStatusDialog(
                         onRequestEntry: () {
-                          handleEntryRequestFromDeparture(context, selectedPlate.plateNumber, selectedPlate.area);
+                          handleEntryParkingRequest(context, selectedPlate.plateNumber, selectedPlate.area);
                         },
                         onCompleteDeparture: () {
-                          handleParkingCompletedFromDeparture(context, selectedPlate.plateNumber, selectedPlate.area);
+                          handleEntryParkingCompleted(context, selectedPlate.plateNumber, selectedPlate.area);
                         },
                         onDelete: () {
                           showDialog(

@@ -53,7 +53,7 @@ class ParkingCompletedStatusDialog extends StatelessWidget {
   }
 }
 
-void handleEntryRequest(BuildContext context, String plateNumber, String area) {
+void handleEntryParkingRequest(BuildContext context, String plateNumber, String area) {
   final plateState = context.read<PlateState>();
   plateState.updatePlateStatus(
     plateNumber: plateNumber,
@@ -63,5 +63,17 @@ void handleEntryRequest(BuildContext context, String plateNumber, String area) {
     newType: '입차 요청',
   );
   plateState.goBackToParkingRequest(plateNumber, "미지정");
-  showSnackbar(context, "입차 요청이 완료되었습니다.");
+  showSnackbar(context, "입차 요청이 처리되었습니다.");
+}
+
+void handleEntryDepartureCompleted(BuildContext context, String plateNumber, String area) {
+  final plateState = context.read<PlateState>();
+  plateState.updatePlateStatus(
+    plateNumber: plateNumber,
+    area: area,
+    fromCollection: 'parking_completed',
+    toCollection: 'departure_completed',
+    newType: '출차 완료',
+  );
+  showSnackbar(context, "출차 완료가 처리되었습니다.");
 }
