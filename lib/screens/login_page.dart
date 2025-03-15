@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../states/user_state.dart';
 import '../states/area_state.dart';
-import '../repositories/user_repository.dart';
+import '../repositories/user/user_repository.dart';
 import '../utils/show_snackbar.dart';
 import 'dart:io';
 

@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../models/plate_model.dart';
+import '../../models/plate_model.dart';
 import 'plate_repository.dart';
 import 'dart:developer' as dev;
 

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../repositories/status_repository.dart';
+import '../repositories/status/status_repository.dart';
 import '../models/status_model.dart';
 import 'area_state.dart';
 

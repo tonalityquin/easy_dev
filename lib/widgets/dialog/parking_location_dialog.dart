@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../repositories/plate_repository.dart';
+import '../../repositories/plate/plate_repository.dart';
 import '../../states/area_state.dart';
 
 class ParkingLocationDialog extends StatelessWidget {

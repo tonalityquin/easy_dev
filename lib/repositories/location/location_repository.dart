@@ -1,4 +1,4 @@
-import '../models/location_model.dart';
+import '../../models/location_model.dart';
 
 abstract class LocationRepository {
   Stream<List<LocationModel>> getLocationsStream();

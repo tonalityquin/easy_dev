@@ -9,7 +9,7 @@ import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션
 import '../../widgets/dialog/plate_search_dialog.dart';
 import '../../utils/show_snackbar.dart';
 import '../../widgets/dialog/parking_location_dialog.dart';
-import '../../repositories/plate_repository.dart';
+import '../../repositories/plate/plate_repository.dart';
 
 class ParkingRequestPage extends StatefulWidget {
   const ParkingRequestPage({super.key});

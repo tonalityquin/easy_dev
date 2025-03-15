@@ -1,4 +1,4 @@
-import '../models/adjustment_model.dart';
+import '../../models/adjustment_model.dart';
 
 abstract class AdjustmentRepository {
   Stream<List<AdjustmentModel>> getAdjustmentStream(String currentArea);

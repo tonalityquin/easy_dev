@@ -11,7 +11,7 @@ import '../../widgets/keypad/kor_keypad.dart';
 import '../../widgets/navigation/bottom_navigation.dart';
 import '../../states/plate_state.dart';
 import '../../states/area_state.dart';
-import '../../repositories/plate_repository.dart';
+import '../../repositories/plate/plate_repository.dart';
 import '../../utils/show_snackbar.dart';
 import '../../widgets/dialog/parking_location_dialog.dart';
 import '../../utils/camera_helper.dart';

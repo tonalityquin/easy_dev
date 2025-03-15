@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import '../models/adjustment_model.dart';
+import '../../models/adjustment_model.dart';
 import 'adjustment_repository.dart';
 
 class FirestoreAdjustmentRepository implements AdjustmentRepository {
