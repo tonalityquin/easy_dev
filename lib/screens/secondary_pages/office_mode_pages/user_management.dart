@@ -6,8 +6,8 @@ import '../../../widgets/navigation/secondary_role_navigation.dart';
 import '../../../widgets/navigation/secondary_mini_navigation.dart';
 import 'user_management_pages/user_setting.dart';
 import '../../../widgets/container/user_custom_box.dart';
-import '../../../states/user_state.dart';
-import '../../../states/area_state.dart';
+import '../../../states/user/user_state.dart';
+import '../../../states/area/area_state.dart';
 
 class UserManagement extends StatelessWidget {
   const UserManagement({super.key});

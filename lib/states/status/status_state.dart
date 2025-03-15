@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../repositories/status/status_repository.dart';
-import '../models/status_model.dart';
-import 'area_state.dart';
+import '../../repositories/status/status_repository.dart';
+import '../../models/status_model.dart';
+import '../area/area_state.dart';
 
 class StatusState extends ChangeNotifier {
   final StatusRepository _repository;

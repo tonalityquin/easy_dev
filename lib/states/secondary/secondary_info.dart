@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
-import '../screens/secondary_pages/field_mode_pages/dash_board.dart';
-import '../screens/secondary_pages/field_mode_pages/docu_sign.dart';
-import '../screens/secondary_pages/field_mode_pages/chat.dart';
-import '../screens/secondary_pages/field_mode_pages/wireless.dart';
-import '../screens/secondary_pages/office_mode_pages/adjustment_management.dart';
-import '../screens/secondary_pages/office_mode_pages/calender.dart';
-import '../screens/secondary_pages/office_mode_pages/location_management.dart';
-import '../screens/secondary_pages/office_mode_pages/status_management.dart';
-import '../screens/secondary_pages/office_mode_pages/user_management.dart';
-import '../screens/secondary_pages/statistics_mode_pages/calendar_type_statistics.dart';
-import '../screens/secondary_pages/statistics_mode_pages/graph_type_statistics.dart';
+import '../../screens/secondary_pages/field_mode_pages/dash_board.dart';
+import '../../screens/secondary_pages/field_mode_pages/docu_sign.dart';
+import '../../screens/secondary_pages/field_mode_pages/chat.dart';
+import '../../screens/secondary_pages/field_mode_pages/wireless.dart';
+import '../../screens/secondary_pages/office_mode_pages/adjustment_management.dart';
+import '../../screens/secondary_pages/office_mode_pages/calender.dart';
+import '../../screens/secondary_pages/office_mode_pages/location_management.dart';
+import '../../screens/secondary_pages/office_mode_pages/status_management.dart';
+import '../../screens/secondary_pages/office_mode_pages/user_management.dart';
+import '../../screens/secondary_pages/statistics_mode_pages/calendar_type_statistics.dart';
+import '../../screens/secondary_pages/statistics_mode_pages/graph_type_statistics.dart';
 
 class SecondaryInfo {
   final String title;

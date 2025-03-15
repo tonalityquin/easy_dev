@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../states/area_state.dart';
-import '../../states/plate_state.dart';
-import '../../states/user_state.dart';
+import '../../states/area/area_state.dart';
+import '../../states/plate/plate_state.dart';
+import '../../states/user/user_state.dart';
 
 class TopNavigation extends StatelessWidget implements PreferredSizeWidget {
   final double height;

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../repositories/plate/plate_repository.dart';
-import '../../states/plate_state.dart';
-import '../../states/area_state.dart';
+import '../../states/plate/plate_state.dart';
+import '../../states/area/area_state.dart';
 import '../../widgets/container/plate_container.dart';
 import '../../widgets/navigation/top_navigation.dart';
 import '../../widgets/dialog/plate_search_dialog.dart';

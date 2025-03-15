@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../../states/area_state.dart';
+import '../../../../states/area/area_state.dart';
 
 class AdjustmentSetting extends StatefulWidget {
   final Function(Map<String, dynamic> adjustmentData) onSave;

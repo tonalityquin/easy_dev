@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../states/plate_state.dart';
+import '../../states/plate/plate_state.dart';
 import '../../utils/show_snackbar.dart';
 
 class DepartureRequestStatusDialog extends StatelessWidget {
