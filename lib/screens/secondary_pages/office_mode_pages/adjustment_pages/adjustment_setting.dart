@@ -171,12 +171,26 @@ class _AdjustmentSettingState extends State<AdjustmentSetting> {
                   onPressed: () {
                     if (_validateInput()) {
                       final currentArea = context.read<AreaState>().currentArea;
+
+                      // Dropdown에서 선택된 값이 String이므로, 정확히 변환되었는지 확인
+                      final basicStandardInt = _basicStandardValue != null
+                          ? int.tryParse(_basicStandardValue!.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0
+                          : 0;
+                      final addStandardInt = _addStandardValue != null
+                          ? int.tryParse(_addStandardValue!.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0
+                          : 0;
+                      final basicAmountInt = int.tryParse(_basicAmountController.text) ?? 0;
+                      final addAmountInt = int.tryParse(_addAmountController.text) ?? 0;
+
+                      debugPrint(
+                          "📌 저장 전 변환된 값 - basicStandard: $basicStandardInt, addStandard: $addStandardInt, basicAmount: $basicAmountInt, addAmount: $addAmountInt");
+
                       widget.onSave({
                         'CountType': _adjustmentController.text,
-                        'basicStandard': _basicStandardValue,
-                        'basicAmount': _basicAmountController.text,
-                        'addStandard': _addStandardValue,
-                        'addAmount': _addAmountController.text,
+                        'basicStandard': basicStandardInt,
+                        'basicAmount': basicAmountInt,
+                        'addStandard': addStandardInt,
+                        'addAmount': addAmountInt,
                         'area': currentArea,
                         'isSelected': false,
                       });
