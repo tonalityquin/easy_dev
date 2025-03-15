@@ -227,13 +227,13 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                     showDialog(
                       context: context,
                       builder: (context) => ParkingCompletedStatusDialog(
-                        plateNumber: selectedPlate.plateNumber,
-                        area: selectedPlate.area,
+                        plateNumber: selectedPlate.plateNumber,  // ✅ 추가
+                        area: selectedPlate.area,                // ✅ 추가
                         onRequestEntry: () {
-                          handleEntryRequest(context, selectedPlate.plateNumber, selectedPlate.area);
+                          handleEntryParkingRequest(context, selectedPlate.plateNumber, selectedPlate.area);
                         },
                         onCompleteDeparture: () {
-                          _handleDepartureRequested(context);
+                          handleEntryDepartureCompleted(context, selectedPlate.plateNumber, selectedPlate.area);
                         },
                         onDelete: () {
                           showDialog(
