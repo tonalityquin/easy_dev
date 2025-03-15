@@ -100,6 +100,31 @@ class PlateModel {
     };
   }
 
+  factory PlateModel.fromMap(Map<String, dynamic> map, String id) {
+    return PlateModel(
+      id: id,
+      plateNumber: map[PlateFields.plateNumber] ?? '',
+      type: map[PlateFields.type] ?? '',
+      requestTime: (map[PlateFields.requestTime] is Timestamp)
+          ? (map[PlateFields.requestTime] as Timestamp).toDate()
+          : DateTime.now(),
+      location: map[PlateFields.location] ?? '미지정',
+      area: map[PlateFields.area] ?? '미지정',
+      userName: map[PlateFields.userName] ?? 'Unknown',
+      isSelected: map[PlateFields.isSelected] ?? false,
+      selectedBy: map[PlateFields.selectedBy],
+      adjustmentType: map[PlateFields.adjustmentType],
+      statusList: (map[PlateFields.statusList] is List)
+          ? List<String>.from(map[PlateFields.statusList])
+          : [],
+      basicStandard: parseInt(map[PlateFields.basicStandard]),
+      basicAmount: parseInt(map[PlateFields.basicAmount]),
+      addStandard: parseInt(map[PlateFields.addStandard]),
+      addAmount: parseInt(map[PlateFields.addAmount]),
+    );
+  }
+
+
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;

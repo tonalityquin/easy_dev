@@ -7,7 +7,8 @@ import '../states/page/page_state.dart';
 import '../states/plate/filter_state.dart';
 import '../states/plate/input_state.dart';
 import '../states/plate/plate_state.dart';
-import '../states/plate/delete_plate.dart'; // ✅ DeletePlate 추가
+import '../states/plate/delete_plate.dart';
+import '../states/plate/movement_plate.dart'; // ✅ MovementPlate 추가
 import '../states/page/page_info.dart';
 import '../states/area/area_state.dart';
 import '../states/user/user_state.dart';
@@ -18,7 +19,6 @@ import '../repositories/adjustment/adjustment_repository.dart';
 import '../repositories/status/status_repository.dart';
 import '../repositories/plate/plate_repository.dart';
 import '../repositories/user/user_repository.dart';
-
 
 final List<SingleChildWidget> stateProviders = [
   ChangeNotifierProvider(create: (context) => PageState(pages: defaultPages)),
@@ -59,6 +59,9 @@ final List<SingleChildWidget> stateProviders = [
     create: (context) => FilterState(context.read<PlateRepository>()),
   ),
   Provider(
-    create: (context) => DeletePlate(context.read<PlateRepository>(), {}), // ✅ Provider로 변경
+    create: (context) => DeletePlate(context.read<PlateRepository>(), {}),
+  ),
+  Provider(
+    create: (context) => MovementPlate(context.read<PlateRepository>()),
   ),
 ];

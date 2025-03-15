@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../states/plate/movement_plate.dart';
 import '../../states/plate/plate_state.dart';
 import '../../utils/show_snackbar.dart';
 
@@ -50,17 +51,19 @@ class DepartureRequestStatusDialog extends StatelessWidget {
 }
 
 void handleEntryParkingRequest(BuildContext context, String plateNumber, String area) {
-  final plateState = context.read<PlateState>();
-  plateState.updatePlateStatus(
+  final movementPlate = context.read<MovementPlate>(); // ✅ MovementPlate 사용
+
+  movementPlate.goBackToParkingRequest(
+    fromCollection: 'departure_requests', // 🔥 출차 요청에서 입차 요청으로 이동
     plateNumber: plateNumber,
     area: area,
-    fromCollection: 'departure_requests',
-    toCollection: 'parking_requests',
-    newType: '입차 요청',
+    newLocation: "미지정", // ❓ 선택적으로 위치 변경 가능
   );
-  plateState.goBackToParkingRequest(plateNumber, null);
+
   showSnackbar(context, "입차 요청이 처리되었습니다.");
 }
+
+
 
 void handleEntryParkingCompleted(BuildContext context, String plateNumber, String area) {
   final plateState = context.read<PlateState>();
