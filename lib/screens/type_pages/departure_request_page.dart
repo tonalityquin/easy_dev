@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../states/plate/filter_state.dart';
+import '../../states/plate/movement_plate.dart';
 import '../../states/plate/plate_state.dart'; // 번호판 상태 관리
 import '../../states/plate/delete_plate.dart';
 import '../../states/area/area_state.dart'; // 지역 상태 관리
@@ -93,6 +94,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
   }
 
   void _handleDepartureCompleted(BuildContext context) {
+    final movementPlate = context.read<MovementPlate>(); // ✅ MovementPlate 사용
     final plateState = context.read<PlateState>();
     final userName = context.read<UserState>().name;
     final selectedPlate = plateState.getSelectedPlate('departure_requests', userName);
@@ -108,7 +110,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
             showSnackbar(context, "선택 해제에 실패했습니다. 다시 시도해주세요.");
           },
         );
-        plateState.setDepartureCompleted(selectedPlate.plateNumber, selectedPlate.area);
+        movementPlate.setDepartureCompleted(selectedPlate.plateNumber, selectedPlate.area);
         showSnackbar(context, "출차 완료 처리되었습니다.");
       } catch (e) {
         debugPrint("출차 완료 처리 실패: $e");

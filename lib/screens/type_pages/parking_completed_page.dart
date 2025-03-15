@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../states/plate/plate_state.dart'; // PlateState 상태 관리
 import '../../states/plate/delete_plate.dart';
+import '../../states/plate/movement_plate.dart';
 import '../../states/area/area_state.dart'; // AreaState 상태 관리
 import '../../states/user/user_state.dart';
 import '../../states/plate/filter_state.dart';
@@ -93,12 +94,15 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
   }
 
   void _handleDepartureRequested(BuildContext context) {
-    final plateState = context.read<PlateState>();
+    final movementPlate = context.read<MovementPlate>(); // ✅ MovementPlate 사용
     final userName = context.read<UserState>().name;
+    final plateState = context.read<PlateState>();
     final selectedPlate = plateState.getSelectedPlate('parking_completed', userName);
+
     if (selectedPlate != null) {
       try {
-        plateState.setDepartureRequested(selectedPlate.plateNumber, selectedPlate.area).then((_) {
+        movementPlate.setDepartureRequested(selectedPlate.plateNumber, selectedPlate.area).then((_) {
+          // ✅ MovementPlate에서 호출
           Future.delayed(Duration(milliseconds: 300), () {
             if (context.mounted) {
               Navigator.pop(context);
@@ -116,17 +120,18 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
   }
 
   void handleEntryRequest(BuildContext context, String plateNumber, String area) {
-    final plateState = context.read<PlateState>();
-    plateState.updatePlateStatus(
+    final movementPlate = context.read<MovementPlate>(); // ✅ MovementPlate 사용
+
+    movementPlate.goBackToParkingRequest(
+      fromCollection: 'parking_completed', // 🔥 fromCollection을 명시적으로 지정
       plateNumber: plateNumber,
       area: area,
-      fromCollection: 'parking_completed',
-      toCollection: 'parking_requests',
-      newType: '입차 요청',
+      newLocation: "미지정", // ❓ 선택적으로 위치 변경 가능
     );
-    plateState.goBackToParkingRequest(plateNumber, null);
+
     showSnackbar(context, "입차 요청이 완료되었습니다.");
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -227,8 +232,10 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                     showDialog(
                       context: context,
                       builder: (context) => ParkingCompletedStatusDialog(
-                        plateNumber: selectedPlate.plateNumber,  // ✅ 추가
-                        area: selectedPlate.area,                // ✅ 추가
+                        plateNumber: selectedPlate.plateNumber,
+                        // ✅ 추가
+                        area: selectedPlate.area,
+                        // ✅ 추가
                         onRequestEntry: () {
                           handleEntryParkingRequest(context, selectedPlate.plateNumber, selectedPlate.area);
                         },

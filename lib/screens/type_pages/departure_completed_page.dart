@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../repositories/plate/plate_repository.dart';
 import '../../states/plate/filter_state.dart';
+import '../../states/plate/movement_plate.dart';
 import '../../states/plate/plate_state.dart';
 import '../../states/area/area_state.dart';
 import '../../widgets/container/plate_container.dart';
@@ -123,6 +124,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
       ),
       bottomNavigationBar: Consumer<PlateState>(
         builder: (context, plateState, child) {
+          final movementPlate = context.read<MovementPlate>(); // ✅ MovementPlate 사용
           final selectedPlate = plateState.getSelectedPlate('departure_completed', '');
           return BottomNavigationBar(
             items: [
@@ -156,7 +158,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                 }
               } else if (index == 1 && selectedPlate != null && selectedPlate.isSelected) {
                 showSnackbar(context, '출차 완료가 완료되었습니다.');
-                plateState.setDepartureCompleted(selectedPlate.plateNumber, selectedPlate.area);
+                movementPlate.setDepartureCompleted(selectedPlate.plateNumber, selectedPlate.area);
               }
             },
           );

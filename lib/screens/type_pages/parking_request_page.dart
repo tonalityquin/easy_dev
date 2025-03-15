@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../states/plate/plate_state.dart'; // PlateState 상태 관리
 import '../../states/plate/delete_plate.dart';
+import '../../states/plate/movement_plate.dart';
 import '../../states/area/area_state.dart'; // AreaState 상태 관리
 import '../../states/user/user_state.dart';
 import '../../widgets/container/plate_container.dart'; // 번호판 데이터를 표시하는 위젯
@@ -97,8 +98,10 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
   }
 
   void _completeParking(BuildContext context, String plateNumber, String area, String location) {
-    final plateState = context.read<PlateState>();
+    final movementPlate = context.read<MovementPlate>(); // ✅ MovementPlate 사용
+    final plateState = context.read<PlateState>(); // ✅ PlateState 추가
     final plateRepository = context.read<PlateRepository>();
+
     try {
       plateRepository.addRequestOrCompleted(
         collection: 'parking_completed',
@@ -114,13 +117,16 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
         addStandard: 0,
         addAmount: 0,
       );
-      plateState.movePlateToCompleted(plateNumber, location);
+
+      movementPlate.movePlateToCompleted(plateNumber, area, plateState); // ✅ PlateState 추가
       showSnackbar(context, "입차 완료: $plateNumber ($location)");
     } catch (e) {
       debugPrint("입차 완료 처리 실패: $e");
       showSnackbar(context, "입차 완료 처리 중 오류 발생: $e");
     }
   }
+
+
 
   @override
   Widget build(BuildContext context) {

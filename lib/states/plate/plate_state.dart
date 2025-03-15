@@ -138,100 +138,7 @@ class PlateState extends ChangeNotifier {
     );
   }
 
-  PlateModel? _findPlate(String collection, String plateNumber) {
-    try {
-      return _data[collection]?.firstWhere(
-        (plate) => plate.plateNumber == plateNumber,
-      );
-    } catch (e) {
-      debugPrint("🚨 Error in _findPlate: $e");
-      return null;
-    }
-  }
 
-
-
-  void goBackToParkingRequest(String plateNumber, String? newLocation) {
-    for (final collection in _data.keys) {
-      final plates = _data[collection];
-      if (plates != null) {
-        final index = plates.indexWhere((plate) => plate.plateNumber == plateNumber);
-        if (index != -1) {
-          final oldPlate = plates[index];
-          final updatedLocation = (newLocation == null || newLocation.trim().isEmpty) ? "미지정" : newLocation;
-          plates.removeAt(index);
-          final updatedPlate = PlateModel(
-            id: oldPlate.id,
-            plateNumber: oldPlate.plateNumber,
-            type: oldPlate.type,
-            requestTime: oldPlate.requestTime,
-            location: updatedLocation,
-            area: oldPlate.area,
-            userName: oldPlate.userName,
-            isSelected: oldPlate.isSelected,
-            selectedBy: oldPlate.selectedBy,
-            adjustmentType: oldPlate.adjustmentType,
-            statusList: oldPlate.statusList,
-            basicStandard: oldPlate.basicStandard,
-            basicAmount: oldPlate.basicAmount,
-            addStandard: oldPlate.addStandard,
-            addAmount: oldPlate.addAmount,
-          );
-          plates.insert(index, updatedPlate);
-          notifyListeners();
-          return;
-        }
-      }
-    }
-  }
-
-  Future<void> movePlateToCompleted(String plateNumber, String location) async {
-    final selectedPlate = _findPlate('parking_requests', plateNumber);
-    if (selectedPlate != null) {
-      final updatedPlate = PlateModel(
-        id: selectedPlate.id,
-        plateNumber: selectedPlate.plateNumber,
-        type: '입차 완료',
-        requestTime: selectedPlate.requestTime,
-        location: location,
-        area: selectedPlate.area,
-        userName: selectedPlate.userName,
-        isSelected: false,
-        selectedBy: null,
-        adjustmentType: selectedPlate.adjustmentType,
-        statusList: selectedPlate.statusList,
-        basicStandard: selectedPlate.basicStandard,
-        basicAmount: selectedPlate.basicAmount,
-        addStandard: selectedPlate.addStandard,
-        addAmount: selectedPlate.addAmount,
-      );
-      final documentId = '${plateNumber}_${selectedPlate.area}';
-      try {
-        await _repository.deleteDocument('parking_requests', documentId);
-        await _repository.addOrUpdateDocument('parking_completed', documentId, {
-          'plate_number': updatedPlate.plateNumber,
-          'type': updatedPlate.type,
-          'request_time': updatedPlate.requestTime,
-          'location': updatedPlate.location,
-          'area': updatedPlate.area,
-          'userName': updatedPlate.userName,
-          'adjustmentType': updatedPlate.adjustmentType,
-          'statusList': updatedPlate.statusList,
-          'isSelected': updatedPlate.isSelected,
-          'selectedBy': updatedPlate.selectedBy,
-          'basicStandard': updatedPlate.basicStandard,
-          'basicAmount': updatedPlate.basicAmount,
-          'addStandard': updatedPlate.addStandard,
-          'addAmount': updatedPlate.addAmount,
-        });
-        _data['parking_requests']?.removeWhere((plate) => plate.plateNumber == plateNumber);
-        _data['parking_completed']?.add(updatedPlate);
-        notifyListeners();
-      } catch (e) {
-        debugPrint('🚨 Firestore 데이터 이동 실패: $e');
-      }
-    }
-  }
 
   Future<void> updatePlateStatus({
     required String plateNumber,
@@ -246,37 +153,6 @@ class PlateState extends ChangeNotifier {
       plateNumber: plateNumber,
       area: area,
       newType: newType,
-    );
-  }
-
-  Future<void> setParkingCompleted(String plateNumber, String area) async {
-    await updatePlateStatus(
-      plateNumber: plateNumber,
-      area: area,
-      fromCollection: 'parking_requests',
-      toCollection: 'parking_completed',
-      newType: '입차 완료',
-    );
-  }
-
-  Future<void> setDepartureRequested(String plateNumber, String area) async {
-    await updatePlateStatus(
-      plateNumber: plateNumber,
-      area: area,
-      fromCollection: 'parking_completed',
-      toCollection: 'departure_requests',
-      newType: '출차 요청',
-    );
-    notifyListeners();
-  }
-
-  Future<void> setDepartureCompleted(String plateNumber, String area) async {
-    await updatePlateStatus(
-      plateNumber: plateNumber,
-      area: area,
-      fromCollection: 'departure_requests',
-      toCollection: 'departure_completed',
-      newType: '출차 완료',
     );
   }
 
