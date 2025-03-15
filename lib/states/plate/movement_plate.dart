@@ -49,22 +49,6 @@ class MovementPlate {
     }
   }
 
-  Future<void> movePlateToCompleted(String plateNumber, String area, PlateState plateState) async {
-    final selectedPlate = await _findPlate('parking_requests', plateNumber, area);
-    if (selectedPlate != null) {
-      await _repository.deleteDocument('parking_requests', '${plateNumber}_$area');
-      await transferData(
-        fromCollection: 'parking_requests',
-        toCollection: 'parking_completed',
-        plateNumber: plateNumber,
-        area: selectedPlate.area,
-        newType: '입차 완료',
-      );
-
-      plateState.syncWithAreaState(selectedPlate.area);
-    }
-  }
-
   Future<void> updatePlateStatus({
     required String plateNumber,
     required String area,
@@ -81,14 +65,20 @@ class MovementPlate {
     );
   }
 
-  Future<void> setParkingCompleted(String plateNumber, String area) async {
-    await updatePlateStatus(
-      plateNumber: plateNumber,
-      area: area,
-      fromCollection: 'parking_requests',
-      toCollection: 'parking_completed',
-      newType: '입차 완료',
-    );
+  Future<void> setParkingCompleted(String plateNumber, String area, PlateState plateState) async {
+    final selectedPlate = await _findPlate('parking_requests', plateNumber, area);
+    if (selectedPlate != null) {
+      await _repository.deleteDocument('parking_requests', '${plateNumber}_$area');
+      await transferData(
+        fromCollection: 'parking_requests',
+        toCollection: 'parking_completed',
+        plateNumber: plateNumber,
+        area: selectedPlate.area,
+        newType: '입차 완료',
+      );
+
+      plateState.syncWithAreaState(selectedPlate.area);
+    }
   }
 
   Future<void> setDepartureRequested(String plateNumber, String area) async {
@@ -142,7 +132,6 @@ class MovementPlate {
       });
 
       debugPrint("✅ 번호판이 parking_requests로 이동됨: $plateNumber ($updatedLocation)");
-
     } catch (e) {
       debugPrint("🚨 goBackToParkingRequest 실패: $e");
     }

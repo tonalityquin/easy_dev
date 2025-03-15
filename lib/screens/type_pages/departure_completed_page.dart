@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../repositories/plate/plate_repository.dart';
-import '../../states/plate/filter_state.dart';
+import '../../states/plate/filter_plate.dart';
 import '../../states/plate/movement_plate.dart';
 import '../../states/plate/plate_state.dart';
 import '../../states/area/area_state.dart';
@@ -35,7 +35,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
 
   void _filterPlatesByNumber(BuildContext context, String query) {
     if (query.length == 4) {
-      context.read<FilterState>().setPlateSearchQuery(query);
+      context.read<FilterPlate>().setPlateSearchQuery(query);
       setState(() {
         _isSearchMode = true;
       });
@@ -43,7 +43,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
   }
 
   void _resetSearch(BuildContext context) {
-    context.read<FilterState>().clearPlateSearchQuery();
+    context.read<FilterPlate>().clearPlateSearchQuery();
     setState(() {
       _isSearchMode = false;
     });

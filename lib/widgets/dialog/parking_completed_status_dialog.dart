@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../states/plate/movement_plate.dart';
-import '../../states/plate/plate_state.dart';
 import '../../utils/show_snackbar.dart';
 
 class ParkingCompletedStatusDialog extends StatelessWidget {
@@ -68,8 +67,8 @@ void handleEntryParkingRequest(BuildContext context, String plateNumber, String 
 }
 
 void handleEntryDepartureCompleted(BuildContext context, String plateNumber, String area) {
-  final plateState = context.read<PlateState>();
-  plateState.updatePlateStatus(
+  final movementPlate = context.read<MovementPlate>(); // ✅ MovementPlate 사용
+  movementPlate.updatePlateStatus(
     plateNumber: plateNumber,
     area: area,
     fromCollection: 'parking_completed',

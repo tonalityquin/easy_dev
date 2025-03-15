@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import '../../repositories/plate/plate_repository.dart';
 import '../../models/plate_model.dart';
 
-class FilterState extends ChangeNotifier {
+class FilterPlate extends ChangeNotifier {
   final PlateRepository _repository;
 
-  FilterState(this._repository) {
+  FilterPlate(this._repository) {
     _initializeData();
   }
 

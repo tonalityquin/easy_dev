@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../states/plate/filter_state.dart';
+import '../../states/plate/filter_plate.dart';
 import '../../states/plate/movement_plate.dart';
 import '../../states/plate/plate_state.dart'; // 번호판 상태 관리
 import '../../states/plate/delete_plate.dart';
@@ -50,7 +50,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
 
   void _filterPlatesByNumber(BuildContext context, String query) {
     if (query.length == 4) {
-      context.read<FilterState>().setPlateSearchQuery(query);
+      context.read<FilterPlate>().setPlateSearchQuery(query);
       setState(() {
         _isSearchMode = true;
       });
@@ -70,7 +70,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
           });
           final area = context.read<AreaState>().currentArea;
           setState(() {
-            context.read<FilterState>().filterByParkingLocation('departure_requests', area, _selectedParkingArea!);
+            context.read<FilterPlate>().filterByParkingLocation('departure_requests', area, _selectedParkingArea!);
           });
         },
       ),
@@ -83,11 +83,11 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
       _isParkingAreaMode = false;
       _selectedParkingArea = null;
     });
-    context.read<FilterState>().clearLocationSearchQuery();
+    context.read<FilterPlate>().clearLocationSearchQuery();
   }
 
   void _resetSearch(BuildContext context) {
-    context.read<FilterState>().clearPlateSearchQuery();
+    context.read<FilterPlate>().clearPlateSearchQuery();
     setState(() {
       _isSearchMode = false;
     });
@@ -126,7 +126,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
       body: Consumer2<PlateState, AreaState>(
         builder: (context, plateState, areaState, child) {
           final currentArea = areaState.currentArea;
-          final filterState = context.read<FilterState>(); // 🔹 FilterState 가져오기
+          final filterState = context.read<FilterPlate>(); // 🔹 FilterState 가져오기
           var departureRequests = _isParkingAreaMode && _selectedParkingArea != null
               ? filterState.filterByParkingLocation('departure_requests', currentArea, _selectedParkingArea!)
               : plateState.getPlatesByArea('departure_requests', currentArea);

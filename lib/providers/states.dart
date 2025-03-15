@@ -4,8 +4,8 @@ import '../repositories/location/firestore_location_repository.dart';
 import '../repositories/status/firestore_status_repository.dart';
 import '../states/secondary/secondary_access_state.dart';
 import '../states/page/page_state.dart';
-import '../states/plate/filter_state.dart';
-import '../states/plate/input_state.dart';
+import '../states/plate/filter_plate.dart';
+import '../states/plate/input_plate.dart';
 import '../states/plate/plate_state.dart';
 import '../states/plate/delete_plate.dart';
 import '../states/plate/movement_plate.dart'; // ✅ MovementPlate 추가
@@ -25,7 +25,7 @@ final List<SingleChildWidget> stateProviders = [
   ChangeNotifierProvider(create: (_) => AreaState()),
   ChangeNotifierProvider(create: (context) => SecondaryAccessState()),
   ChangeNotifierProvider(
-    create: (context) => InputState(context.read<PlateRepository>()),
+    create: (context) => InputPlate(context.read<PlateRepository>()),
   ),
   ChangeNotifierProvider(
     create: (context) => PlateState(context.read<PlateRepository>()),
@@ -56,7 +56,7 @@ final List<SingleChildWidget> stateProviders = [
     },
   ),
   ChangeNotifierProvider(
-    create: (context) => FilterState(context.read<PlateRepository>()),
+    create: (context) => FilterPlate(context.read<PlateRepository>()),
   ),
   Provider(
     create: (context) => DeletePlate(context.read<PlateRepository>(), {}),

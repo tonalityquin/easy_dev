@@ -41,36 +41,6 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  Future<bool> transferData({
-    required String fromCollection,
-    required String toCollection,
-    required String plateNumber,
-    required String area,
-    required String newType,
-  }) async {
-    final documentId = '${plateNumber}_$area';
-    try {
-      final documentData = await _repository.getDocument(fromCollection, documentId);
-      if (documentData != null) {
-        await _repository.deleteDocument(fromCollection, documentId);
-        final updatedLocation = (toCollection == 'parking_requests') ? "미지정" : documentData.location;
-        await _repository.addOrUpdateDocument(toCollection, documentId, {
-          ...documentData.toMap(),
-          'type': newType,
-          'location': updatedLocation,
-          'isSelected': false,
-          'selectedBy': null,
-        });
-        notifyListeners();
-        return true;
-      }
-      return false;
-    } catch (e) {
-      debugPrint('Error transferring data: $e');
-      return false;
-    }
-  }
-
   Future<void> toggleIsSelected({
     required String collection,
     required String plateNumber,
@@ -135,24 +105,6 @@ class PlateState extends ChangeNotifier {
         isSelected: false,
         statusList: [],
       ),
-    );
-  }
-
-
-
-  Future<void> updatePlateStatus({
-    required String plateNumber,
-    required String area,
-    required String fromCollection,
-    required String toCollection,
-    required String newType,
-  }) async {
-    await transferData(
-      fromCollection: fromCollection,
-      toCollection: toCollection,
-      plateNumber: plateNumber,
-      area: area,
-      newType: newType,
     );
   }
 
