@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../repositories/firestore_user_repository.dart';
-import '../repositories/user_repository.dart';
+import '../repositories/user/firestore_user_repository.dart';
+import '../repositories/user/user_repository.dart';
 import '../models/user_model.dart';
 
 class UserState extends ChangeNotifier {

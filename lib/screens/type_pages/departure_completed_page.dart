@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../repositories/plate_repository.dart';
+import '../../repositories/plate/plate_repository.dart';
 import '../../states/plate_state.dart';
 import '../../states/area_state.dart';
 import '../../widgets/container/plate_container.dart';

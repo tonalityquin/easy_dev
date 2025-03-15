@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../repositories/adjustment_repository.dart';
+import '../repositories/adjustment/adjustment_repository.dart';
 import '../models/adjustment_model.dart';
 import '../states/area_state.dart';
 

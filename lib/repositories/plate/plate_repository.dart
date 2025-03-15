@@ -1,4 +1,4 @@
-import '../models/plate_model.dart';
+import '../../models/plate_model.dart';
 
 abstract class PlateRepository {
   Stream<List<PlateModel>> getCollectionStream(String collectionName);

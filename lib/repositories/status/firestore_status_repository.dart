@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../models/status_model.dart';
+import '../../models/status_model.dart';
 import 'status_repository.dart';
 
 class FirestoreStatusRepository implements StatusRepository {

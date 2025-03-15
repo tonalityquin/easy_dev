@@ -1,4 +1,4 @@
-import '../models/status_model.dart';
+import '../../models/status_model.dart';
 
 abstract class StatusRepository {
   Stream<List<StatusModel>> getStatusStream(String area);
