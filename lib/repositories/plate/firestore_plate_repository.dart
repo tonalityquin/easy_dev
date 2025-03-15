@@ -81,6 +81,23 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
+  Future<List<PlateModel>> getPlatesByArea(String collection, String area) async {
+    try {
+      QuerySnapshot<Map<String, dynamic>> querySnapshot = await _firestore
+          .collection(collection)
+          .where('area', isEqualTo: area)
+          .get();
+
+      return querySnapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList();
+    } catch (e) {
+      dev.log("🔥 Firestore 데이터 가져오기 오류 (getPlatesByArea): $e", name: "Firestore");
+      return [];
+    }
+  }
+
+
+
+  @override
   Future<void> addRequestOrCompleted({
     required String collection,
     required String plateNumber,
@@ -96,6 +113,14 @@ class FirestorePlateRepository implements PlateRepository {
     int? addAmount,
   }) async {
     final documentId = '${plateNumber}_$area';
+
+    // Firestore에서 중복 확인
+    final existingPlate = await getDocument(collection, documentId);
+    if (existingPlate != null) {
+      dev.log("🚨 중복된 번호판 등록 시도: $plateNumber");
+      throw Exception("이미 등록된 번호판입니다: $plateNumber");
+    }
+
     if (adjustmentType != null) {
       try {
         final adjustmentRef = _firestore.collection('adjustment');
@@ -115,6 +140,7 @@ class FirestorePlateRepository implements PlateRepository {
         throw Exception("Firestore 데이터 로드 실패: $e");
       }
     }
+
     final data = {
       'plate_number': plateNumber,
       'type': type,
@@ -131,6 +157,7 @@ class FirestorePlateRepository implements PlateRepository {
       'addStandard': addStandard ?? 0,
       'addAmount': addAmount ?? 0,
     };
+
     dev.log('🔥 Firestore 저장 데이터: $data');
     await _firestore.collection(collection).doc(documentId).set(data);
   }
@@ -160,8 +187,8 @@ class FirestorePlateRepository implements PlateRepository {
   Future<List<String>> getAvailableLocations(String area) async {
     try {
       final querySnapshot = await _firestore
-          .collection('locations') // Firestore의 'locations' 컬렉션
-          .where('area', isEqualTo: area) // area 필터 적용
+          .collection('locations')
+          .where('area', isEqualTo: area)
           .get();
       return querySnapshot.docs.map((doc) => doc['locationName'] as String).toList();
     } catch (e) {

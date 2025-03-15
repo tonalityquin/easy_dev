@@ -2,6 +2,7 @@ import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
 import '../repositories/location/firestore_location_repository.dart';
 import '../repositories/status/firestore_status_repository.dart';
+import '../states/plate/input_state.dart';
 import '../states/secondary/secondary_access_state.dart';
 import '../states/page/page_state.dart';
 import '../states/plate/plate_state.dart';
@@ -20,6 +21,9 @@ final List<SingleChildWidget> stateProviders = [
   ChangeNotifierProvider(create: (context) => PageState(pages: defaultPages)),
   ChangeNotifierProvider(create: (_) => AreaState()),
   ChangeNotifierProvider(create: (context) => SecondaryAccessState()),
+  ChangeNotifierProvider(
+    create: (context) => InputState(context.read<PlateRepository>()), // ✅ 수정
+  ),
   ChangeNotifierProvider(
     create: (context) => PlateState(context.read<PlateRepository>()),
   ),

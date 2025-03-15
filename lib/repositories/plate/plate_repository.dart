@@ -9,6 +9,8 @@ abstract class PlateRepository {
 
   Future<PlateModel?> getDocument(String collection, String documentId);
 
+  Future<List<PlateModel>> getPlatesByArea(String collection, String area);
+
   Future<void> deleteAllData();
 
   Future<void> updatePlateSelection(String collection, String id, bool isSelected, {String? selectedBy});

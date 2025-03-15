@@ -9,13 +9,12 @@ import '../../widgets/input_field/location_field.dart';
 import '../../widgets/keypad/num_keypad.dart';
 import '../../widgets/keypad/kor_keypad.dart';
 import '../../widgets/navigation/bottom_navigation.dart';
-import '../../states/plate/plate_state.dart';
 import '../../states/area/area_state.dart';
-import '../../repositories/plate/plate_repository.dart';
 import '../../utils/show_snackbar.dart';
 import '../../widgets/dialog/parking_location_dialog.dart';
 import '../../utils/camera_helper.dart';
 import '../../widgets/dialog/camera_preview_dialog.dart';
+import '../../states/plate/input_state.dart';
 
 class Input3Digit extends StatefulWidget {
   const Input3Digit({super.key});
@@ -165,73 +164,29 @@ class _Input3DigitState extends State<Input3Digit> {
 
   Future<void> _handleAction() async {
     final String plateNumber = '${controller3digit.text}-${controller1digit.text}-${controller4digit.text}';
-    final plateRepository = context.read<PlateRepository>();
-    final plateState = context.read<PlateState>();
+    final inputState = context.read<InputState>();
     final areaState = context.read<AreaState>();
     final userState = context.read<UserState>();
-    String location = locationController.text;
-    if (plateState.isPlateNumberDuplicated(plateNumber, areaState.currentArea)) {
-      showSnackbar(context, '이미 등록된 번호판입니다: $plateNumber');
-      return;
-    }
-    if (location.isEmpty) {
-      location = '미지정';
-    }
-    setState(() {
-      isLoading = true;
-    });
-    selectedStatuses = [];
-    for (int i = 0; i < isSelected.length; i++) {
-      if (isSelected[i]) {
-        selectedStatuses.add(statuses[i]);
-      }
-    }
-    try {
-      if (!isLocationSelected) {
-        // 입차 요청
-        await plateRepository.addRequestOrCompleted(
-          collection: 'parking_requests',
-          plateNumber: plateNumber,
-          location: location,
-          area: areaState.currentArea,
-          userName: userState.name,
-          type: '입차 요청',
-          adjustmentType: selectedAdjustment,
-          statusList: selectedStatuses.isNotEmpty ? selectedStatuses : [],
-          basicStandard: selectedBasicStandard,
-          basicAmount: selectedBasicAmount,
-          addStandard: selectedAddStandard,
-          addAmount: selectedAddAmount,
-        );
-        showSnackbar(context, '입차 요청 완료');
-      } else {
-        // 입차 완료
-        await plateRepository.addRequestOrCompleted(
-          collection: 'parking_completed',
-          plateNumber: plateNumber,
-          location: location,
-          area: areaState.currentArea,
-          userName: userState.name,
-          type: '입차 완료',
-          adjustmentType: selectedAdjustment,
-          statusList: selectedStatuses.isNotEmpty ? selectedStatuses : [],
-          basicStandard: selectedBasicStandard,
-          basicAmount: selectedBasicAmount,
-          addStandard: selectedAddStandard,
-          addAmount: selectedAddAmount,
-        );
-        showSnackbar(context, '입차 완료');
-      }
-      clearInput();
-      _clearLocation();
-    } catch (error) {
-      showSnackbar(context, '오류 발생: $error');
-    } finally {
-      setState(() {
-        isLoading = false;
-      });
-    }
+
+    await inputState.handlePlateEntry(
+      context: context,
+      plateNumber: plateNumber,
+      location: locationController.text,
+      isLocationSelected: isLocationSelected,
+      areaState: areaState, // ✅ 변경
+      userState: userState, // ✅ 변경
+      adjustmentType: selectedAdjustment,
+      statusList: selectedStatuses,
+      basicStandard: selectedBasicStandard,
+      basicAmount: selectedBasicAmount,
+      addStandard: selectedAddStandard,
+      addAmount: selectedAddAmount,
+    );
+
+    clearInput();
+    _clearLocation();
   }
+
 
   void _selectParkingLocation() {
     showDialog(
