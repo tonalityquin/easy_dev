@@ -19,16 +19,6 @@ class PlateState extends ChangeNotifier {
 
   String get searchQuery => _searchQuery ?? "";
 
-  void setPlateSearchQuery(String query) {
-    _searchQuery = query;
-    notifyListeners();
-  }
-
-  void clearPlateSearchQuery() {
-    _searchQuery = null;
-    notifyListeners();
-  }
-
   List<PlateModel> getPlatesByArea(String collection, String area) {
     final plates = _data[collection]?.where((request) => request.area == area).toList() ?? [];
     if (_searchQuery != null && _searchQuery!.length == 4) {
@@ -49,21 +39,6 @@ class PlateState extends ChangeNotifier {
         notifyListeners();
       });
     }
-  }
-
-  List<PlateModel> filterByParkingLocation(String collection, String area, String parkingLocation) {
-    debugPrint("🚀 filterByParkingLocation() 호출됨: 지역 = $area, 주차 구역 = $parkingLocation");
-    List<PlateModel> plates = _data[collection]?.where((plate) => plate.area == area).toList() ?? [];
-    debugPrint("📌 지역 필터링 후 plate 개수: ${plates.length}");
-    plates = plates.where((plate) => plate.location == parkingLocation).toList();
-    debugPrint("📌 주차 구역 필터링 후 plate 개수: ${plates.length}");
-    return plates;
-  }
-
-  void clearLocationSearchQuery() {
-    debugPrint("🔄 주차 구역 검색 초기화 호출됨");
-    _initializeSubscriptions();
-    notifyListeners();
   }
 
   Future<bool> transferData({
@@ -337,10 +312,6 @@ class PlateState extends ChangeNotifier {
       toCollection: 'departure_completed',
       newType: '출차 완료',
     );
-  }
-
-  Future<List<String>> getAvailableLocations(String area) async {
-    return await _repository.getAvailableLocations(area);
   }
 
   void syncWithAreaState(String area) {

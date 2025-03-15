@@ -6,6 +6,7 @@ import '../states/plate/input_state.dart';
 import '../states/secondary/secondary_access_state.dart';
 import '../states/page/page_state.dart';
 import '../states/plate/plate_state.dart';
+import '../states/plate/filter_state.dart'; // 🔹 Fi
 import '../states/page/page_info.dart';
 import '../states/area/area_state.dart';
 import '../states/user/user_state.dart';
@@ -17,12 +18,13 @@ import '../repositories/status/status_repository.dart';
 import '../repositories/plate/plate_repository.dart';
 import '../repositories/user/user_repository.dart';
 
+
 final List<SingleChildWidget> stateProviders = [
   ChangeNotifierProvider(create: (context) => PageState(pages: defaultPages)),
   ChangeNotifierProvider(create: (_) => AreaState()),
   ChangeNotifierProvider(create: (context) => SecondaryAccessState()),
   ChangeNotifierProvider(
-    create: (context) => InputState(context.read<PlateRepository>()), // ✅ 수정
+    create: (context) => InputState(context.read<PlateRepository>()),
   ),
   ChangeNotifierProvider(
     create: (context) => PlateState(context.read<PlateRepository>()),
@@ -51,5 +53,8 @@ final List<SingleChildWidget> stateProviders = [
       }
       return StatusState(statusRepo, areaState);
     },
+  ),
+  ChangeNotifierProvider(
+    create: (context) => FilterState(context.read<PlateRepository>()), // ✅ 추가된 부분
   ),
 ];
