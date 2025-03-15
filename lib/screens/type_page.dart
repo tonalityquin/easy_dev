@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../utils/app_colors.dart'; // 앱 색상 팔레트
 import '../utils/show_snackbar.dart';
-import '../states/page_state.dart'; // 페이지 상태 관리 클래스
-import '../states/page_info.dart'; // 페이지 정보 관리 클래스
+import '../states/page/page_state.dart'; // 페이지 상태 관리 클래스
+import '../states/page/page_info.dart'; // 페이지 정보 관리 클래스
 import '../screens/input_pages/input_3_digit.dart'; // 3자리 입력 페이지
 import 'secondary_page.dart';
 

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../utils/show_snackbar.dart';
-import '../../../states/adjustment_state.dart';
-import '../../../states/area_state.dart'; // 🔥 지역 상태 추가
+import '../../../states/adjustment/adjustment_state.dart';
+import '../../../states/area/area_state.dart'; // 🔥 지역 상태 추가
 import '../../../widgets/navigation/secondary_role_navigation.dart';
 import '../../../widgets/navigation/secondary_mini_navigation.dart';
 import '../../../widgets/container/adjustment_custom_box.dart';

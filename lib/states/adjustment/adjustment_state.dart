@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../repositories/adjustment/adjustment_repository.dart';
-import '../models/adjustment_model.dart';
-import '../states/area_state.dart';
+import '../../repositories/adjustment/adjustment_repository.dart';
+import '../../models/adjustment_model.dart';
+import '../../states/area/area_state.dart';
 
 class AdjustmentState extends ChangeNotifier {
   final AdjustmentRepository _repository;

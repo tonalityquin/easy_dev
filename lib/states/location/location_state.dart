@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../repositories/location/location_repository.dart';
-import '../models/location_model.dart';
+import '../../repositories/location/location_repository.dart';
+import '../../models/location_model.dart';
 
 class LocationState extends ChangeNotifier {
   final LocationRepository _repository;

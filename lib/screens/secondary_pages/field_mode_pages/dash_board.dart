@@ -4,7 +4,7 @@ import 'dart:io'; // 앱 종료를 위한 패키지 추가
 import '../../../utils/show_snackbar.dart';
 import '../../../widgets/navigation/secondary_role_navigation.dart'; // 상단 내비게이션 바
 import '../../../widgets/navigation/secondary_mini_navigation.dart'; // 하단 내비게이션 바
-import '../../../states/user_state.dart'; // 사용자 상태 가져오기
+import '../../../states/user/user_state.dart'; // 사용자 상태 가져오기
 
 class DashBoard extends StatelessWidget {
   const DashBoard({super.key});

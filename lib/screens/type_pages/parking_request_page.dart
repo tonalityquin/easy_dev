@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../states/plate_state.dart'; // PlateState 상태 관리
-import '../../states/area_state.dart'; // AreaState 상태 관리
-import '../../states/user_state.dart';
+import '../../states/plate/plate_state.dart'; // PlateState 상태 관리
+import '../../states/area/area_state.dart'; // AreaState 상태 관리
+import '../../states/user/user_state.dart';
 import '../../widgets/container/plate_container.dart'; // 번호판 데이터를 표시하는 위젯
 import '../../widgets/dialog/parking_request_delete_dialog.dart';
 import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바

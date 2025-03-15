@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../states/secondary_access_state.dart';
-import '../../states/user_state.dart';
+import '../../states/secondary/secondary_access_state.dart';
+import '../../states/user/user_state.dart';
 
 class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWidget {
   final double height;

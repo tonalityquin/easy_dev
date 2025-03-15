@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../utils/app_colors.dart';
-import '../states/secondary_state.dart';
-import '../states/secondary_access_state.dart';
-import '../states/user_state.dart';
-import '../states/secondary_info.dart';
+import '../states/secondary/secondary_state.dart';
+import '../states/secondary/secondary_access_state.dart';
+import '../states/user/user_state.dart';
+import '../states/secondary/secondary_info.dart';
 
 class SecondaryPage extends StatelessWidget {
   const SecondaryPage({super.key});

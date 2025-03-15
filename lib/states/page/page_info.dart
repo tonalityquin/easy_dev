@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import '../screens/type_pages/parking_request_page.dart';
-import '../screens/type_pages/parking_completed_page.dart';
-import '../screens/type_pages/departure_request_page.dart';
-import '../screens/type_pages/departure_completed_page.dart';
+import '../../screens/type_pages/parking_request_page.dart';
+import '../../screens/type_pages/parking_completed_page.dart';
+import '../../screens/type_pages/departure_request_page.dart';
+import '../../screens/type_pages/departure_completed_page.dart';
 
 class PageInfo {
   final String title;
