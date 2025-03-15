@@ -43,7 +43,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
 
   void _filterPlatesByNumber(BuildContext context, String query) {
     if (query.length == 4) {
-      context.read<PlateState>().setSearchQuery(query);
+      context.read<PlateState>().setPlateSearchQuery(query);
       setState(() {
         _isSearchMode = true;
       });

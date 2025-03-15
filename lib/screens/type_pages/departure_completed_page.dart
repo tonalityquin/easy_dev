@@ -33,7 +33,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
 
   void _filterPlatesByNumber(BuildContext context, String query) {
     if (query.length == 4) {
-      context.read<PlateState>().setSearchQuery(query);
+      context.read<PlateState>().setPlateSearchQuery(query);
       setState(() {
         _isSearchMode = true;
       });

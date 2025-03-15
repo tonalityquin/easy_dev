@@ -47,7 +47,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
 
   void _filterPlatesByNumber(BuildContext context, String query) {
     if (query.length == 4) {
-      context.read<PlateState>().setSearchQuery(query);
+      context.read<PlateState>().setPlateSearchQuery(query);
       setState(() {
         _isSearchMode = true;
       });
@@ -67,7 +67,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
           });
           final area = context.read<AreaState>().currentArea;
           setState(() {
-            context.read<PlateState>().filterByParkingArea('parking_completed', area, _selectedParkingArea!);
+            context.read<PlateState>().filterByParkingLocation('parking_completed', area, _selectedParkingArea!);
           });
         },
       ),
@@ -134,7 +134,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
         builder: (context, plateState, areaState, child) {
           final currentArea = areaState.currentArea;
           var parkingCompleted = _isParkingAreaMode && _selectedParkingArea != null
-              ? plateState.filterByParkingArea('parking_completed', currentArea, _selectedParkingArea!)
+              ? plateState.filterByParkingLocation('parking_completed', currentArea, _selectedParkingArea!)
               : plateState.getPlatesByArea('parking_completed', currentArea);
           final userName = context.read<UserState>().name;
           parkingCompleted.sort((a, b) {

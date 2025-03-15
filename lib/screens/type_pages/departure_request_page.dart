@@ -47,7 +47,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
 
   void _filterPlatesByNumber(BuildContext context, String query) {
     if (query.length == 4) {
-      context.read<PlateState>().setSearchQuery(query);
+      context.read<PlateState>().setPlateSearchQuery(query);
       setState(() {
         _isSearchMode = true;
       });
@@ -67,7 +67,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
           });
           final area = context.read<AreaState>().currentArea;
           setState(() {
-            context.read<PlateState>().filterByParkingArea('departure_requests', area, _selectedParkingArea!);
+            context.read<PlateState>().filterByParkingLocation('departure_requests', area, _selectedParkingArea!);
           });
         },
       ),
@@ -123,7 +123,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
         builder: (context, plateState, areaState, child) {
           final currentArea = areaState.currentArea;
           var departureRequests = _isParkingAreaMode && _selectedParkingArea != null
-              ? plateState.filterByParkingArea('departure_requests', currentArea, _selectedParkingArea!)
+              ? plateState.filterByParkingLocation('departure_requests', currentArea, _selectedParkingArea!)
               : plateState.getPlatesByArea('departure_requests', currentArea);
           final userName = context.read<UserState>().name;
           departureRequests.sort((a, b) {

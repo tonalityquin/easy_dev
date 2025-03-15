@@ -19,7 +19,7 @@ class PlateState extends ChangeNotifier {
 
   String get searchQuery => _searchQuery ?? "";
 
-  void setSearchQuery(String query) {
+  void setPlateSearchQuery(String query) {
     _searchQuery = query;
     notifyListeners();
   }
@@ -51,21 +51,8 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  List<PlateModel> getFilteredPlates(String collection, String area, String? searchDigits) {
-    final plates = getPlatesByArea(collection, area);
-    if (searchDigits == null || searchDigits.isEmpty) {
-      return plates;
-    }
-    return plates.where((plate) {
-      // 🔹 번호판의 마지막 4자리를 추출
-      final last4Digits =
-          plate.plateNumber.length >= 4 ? plate.plateNumber.substring(plate.plateNumber.length - 4) : plate.plateNumber;
-      return last4Digits == searchDigits;
-    }).toList();
-  }
-
-  List<PlateModel> filterByParkingArea(String collection, String area, String parkingLocation) {
-    debugPrint("🚀 filterByParkingArea() 호출됨: 지역 = $area, 주차 구역 = $parkingLocation");
+  List<PlateModel> filterByParkingLocation(String collection, String area, String parkingLocation) {
+    debugPrint("🚀 filterByParkingLocation() 호출됨: 지역 = $area, 주차 구역 = $parkingLocation");
     List<PlateModel> plates = _data[collection]?.where((plate) => plate.area == area).toList() ?? [];
     debugPrint("📌 지역 필터링 후 plate 개수: ${plates.length}");
     plates = plates.where((plate) => plate.location == parkingLocation).toList();
@@ -77,67 +64,6 @@ class PlateState extends ChangeNotifier {
     debugPrint("🔄 주차 구역 검색 초기화 호출됨");
     _initializeSubscriptions();
     notifyListeners();
-  }
-
-  bool isPlateNumberDuplicated(String plateNumber, String area) {
-    final platesInArea = _data.entries
-        .where((entry) => entry.key != 'departure_completed')
-        .expand((entry) => entry.value)
-        .where((request) => request.area == area)
-        .map((request) => request.plateNumber);
-    return platesInArea.contains(plateNumber);
-  }
-
-  Future<bool> addRequestOrCompleted({
-    required String collection,
-    required String plateNumber,
-    required String location,
-    required String area,
-    required String type,
-    required String userName,
-    String? selectedBy,
-    String? adjustmentType,
-    List<String>? statusList,
-  }) async {
-    final documentId = '${plateNumber}_$area';
-    try {
-      int basicStandard = 0;
-      int basicAmount = 0;
-      int addStandard = 0;
-      int addAmount = 0;
-      if (adjustmentType != null) {
-        final adjustmentData = await _repository.getDocument('adjustments', adjustmentType);
-        if (adjustmentData != null) {
-          basicStandard = adjustmentData.basicStandard ?? 0;
-          basicAmount = adjustmentData.basicAmount ?? 0;
-          addStandard = adjustmentData.addStandard ?? 0;
-          addAmount = adjustmentData.addAmount ?? 0;
-        } else {
-          debugPrint('⚠ Firestore에서 adjustmentType=$adjustmentType 데이터를 찾을 수 없음');
-        }
-      }
-      await _repository.addOrUpdateDocument(collection, documentId, {
-        'plate_number': plateNumber,
-        'type': type,
-        'request_time': DateTime.now(),
-        'location': location.isNotEmpty ? location : '미지정',
-        'area': area,
-        'userName': userName,
-        'adjustmentType': adjustmentType,
-        'statusList': statusList ?? [],
-        'isSelected': false,
-        'selectedBy': selectedBy,
-        'basicStandard': basicStandard,
-        'basicAmount': basicAmount,
-        'addStandard': addStandard,
-        'addAmount': addAmount,
-      });
-      notifyListeners();
-      return true;
-    } catch (e) {
-      debugPrint('❌ Error adding request: $e');
-      return false;
-    }
   }
 
   Future<bool> transferData({
