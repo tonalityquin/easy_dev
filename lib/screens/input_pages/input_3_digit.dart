@@ -14,7 +14,7 @@ import '../../utils/show_snackbar.dart';
 import '../../widgets/dialog/parking_location_dialog.dart';
 import '../../utils/camera_helper.dart';
 import '../../widgets/dialog/camera_preview_dialog.dart';
-import '../../states/plate/input_state.dart';
+import '../../states/plate/input_plate.dart';
 
 class Input3Digit extends StatefulWidget {
   const Input3Digit({super.key});
@@ -164,7 +164,7 @@ class _Input3DigitState extends State<Input3Digit> {
 
   Future<void> _handleAction() async {
     final String plateNumber = '${controller3digit.text}-${controller1digit.text}-${controller4digit.text}';
-    final inputState = context.read<InputState>();
+    final inputState = context.read<InputPlate>();
     final areaState = context.read<AreaState>();
     final userState = context.read<UserState>();
 

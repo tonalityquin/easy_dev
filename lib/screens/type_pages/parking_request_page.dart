@@ -1,4 +1,4 @@
-import 'package:easydev/states/plate/filter_state.dart';
+import 'package:easydev/states/plate/filter_plate.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../states/plate/plate_state.dart'; // PlateState 상태 관리
@@ -46,7 +46,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
 
   void _filterPlatesByNumber(BuildContext context, String query) {
     if (query.length == 4) {
-      context.read<FilterState>().setPlateSearchQuery(query);
+      context.read<FilterPlate>().setPlateSearchQuery(query);
       setState(() {
         _isSearchMode = true;
       });
@@ -54,7 +54,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
   }
 
   void _resetSearch(BuildContext context) {
-    context.read<FilterState>().clearPlateSearchQuery();
+    context.read<FilterPlate>().clearPlateSearchQuery();
     setState(() {
       _isSearchMode = false;
     });
@@ -118,7 +118,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
         addAmount: 0,
       );
 
-      movementPlate.movePlateToCompleted(plateNumber, area, plateState); // ✅ PlateState 추가
+      movementPlate.setParkingCompleted(plateNumber, area, plateState); // ✅ PlateState 추가
       showSnackbar(context, "입차 완료: $plateNumber ($location)");
     } catch (e) {
       debugPrint("입차 완료 처리 실패: $e");

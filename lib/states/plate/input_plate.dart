@@ -5,10 +5,10 @@ import '../user/user_state.dart';
 import '../../repositories/plate/plate_repository.dart';
 import 'dart:developer' as dev;
 
-class InputState with ChangeNotifier {
+class InputPlate with ChangeNotifier {
   final PlateRepository _plateRepository;
 
-  InputState(this._plateRepository);
+  InputPlate(this._plateRepository);
 
   Future<bool> isPlateNumberDuplicated(String plateNumber, String area) async {
     final collectionsToCheck = [
