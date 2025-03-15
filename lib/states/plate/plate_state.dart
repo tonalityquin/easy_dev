@@ -149,29 +149,7 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  Future<void> deletePlateFromParkingRequest(String plateNumber, String area) async {
-    final documentId = '${plateNumber}_$area';
-    try {
-      await _repository.deleteDocument('parking_requests', documentId);
-      _data['parking_requests']?.removeWhere((plate) => plate.plateNumber == plateNumber);
-      notifyListeners();
-      debugPrint("✅ 번호판 삭제 완료: $plateNumber");
-    } catch (e) {
-      debugPrint("🚨 번호판 삭제 실패: $e");
-    }
-  }
 
-  Future<void> deletePlateFromParkingCompleted(String plateNumber, String area) async {
-    final documentId = '${plateNumber}_$area';
-    try {
-      await _repository.deleteDocument('parking_completed', documentId);
-      _data['parking_completed']?.removeWhere((plate) => plate.plateNumber == plateNumber);
-      notifyListeners(); // 🔄 UI 갱신
-      debugPrint("✅ 번호판 삭제 완료 (입차 완료 컬렉션): $plateNumber");
-    } catch (e) {
-      debugPrint("🚨 번호판 삭제 실패 (입차 완료 컬렉션): $e");
-    }
-  }
 
   void goBackToParkingRequest(String plateNumber, String? newLocation) {
     for (final collection in _data.keys) {
@@ -204,18 +182,6 @@ class PlateState extends ChangeNotifier {
           return;
         }
       }
-    }
-  }
-
-  Future<void> deletePlateFromDepartureRequest(String plateNumber, String area) async {
-    final documentId = '${plateNumber}_$area';
-    try {
-      await _repository.deleteDocument('departure_requests', documentId);
-      _data['departure_requests']?.removeWhere((plate) => plate.plateNumber == plateNumber);
-      notifyListeners(); // 🔄 UI 갱신
-      debugPrint("✅ 번호판 삭제 완료 (입차 완료 컬렉션): $plateNumber");
-    } catch (e) {
-      debugPrint("🚨 번호판 삭제 실패 (입차 완료 컬렉션): $e");
     }
   }
 

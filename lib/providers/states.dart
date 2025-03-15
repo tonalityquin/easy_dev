@@ -2,11 +2,12 @@ import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
 import '../repositories/location/firestore_location_repository.dart';
 import '../repositories/status/firestore_status_repository.dart';
-import '../states/plate/input_state.dart';
 import '../states/secondary/secondary_access_state.dart';
 import '../states/page/page_state.dart';
+import '../states/plate/filter_state.dart';
+import '../states/plate/input_state.dart';
 import '../states/plate/plate_state.dart';
-import '../states/plate/filter_state.dart'; // 🔹 Fi
+import '../states/plate/delete_plate.dart'; // ✅ DeletePlate 추가
 import '../states/page/page_info.dart';
 import '../states/area/area_state.dart';
 import '../states/user/user_state.dart';
@@ -55,6 +56,9 @@ final List<SingleChildWidget> stateProviders = [
     },
   ),
   ChangeNotifierProvider(
-    create: (context) => FilterState(context.read<PlateRepository>()), // ✅ 추가된 부분
+    create: (context) => FilterState(context.read<PlateRepository>()),
+  ),
+  Provider(
+    create: (context) => DeletePlate(context.read<PlateRepository>(), {}), // ✅ Provider로 변경
   ),
 ];
