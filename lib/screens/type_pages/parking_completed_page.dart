@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../states/plate/plate_state.dart'; // PlateState 상태 관리
+import '../../states/plate/delete_plate.dart';
 import '../../states/area/area_state.dart'; // AreaState 상태 관리
 import '../../states/user/user_state.dart';
 import '../../states/plate/filter_state.dart';
@@ -239,7 +240,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                             context: context,
                             builder: (context) => ParkingRequestDeleteDialog(
                               onConfirm: () {
-                                context.read<PlateState>().deletePlateFromParkingCompleted(
+                                context.read<DeletePlate>().deletePlateFromParkingCompleted(
                                       selectedPlate.plateNumber,
                                       selectedPlate.area,
                                     );

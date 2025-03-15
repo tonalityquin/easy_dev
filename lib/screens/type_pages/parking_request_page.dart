@@ -2,6 +2,7 @@ import 'package:easydev/states/plate/filter_state.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../states/plate/plate_state.dart'; // PlateState 상태 관리
+import '../../states/plate/delete_plate.dart';
 import '../../states/area/area_state.dart'; // AreaState 상태 관리
 import '../../states/user/user_state.dart';
 import '../../widgets/container/plate_container.dart'; // 번호판 데이터를 표시하는 위젯
@@ -202,7 +203,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                         return ParkingRequestDeleteDialog(
                           onConfirm: () {
                             context
-                                .read<PlateState>()
+                                .read<DeletePlate>()
                                 .deletePlateFromParkingRequest(selectedPlate.plateNumber, selectedPlate.area);
                             showSnackbar(context, "삭제 완료: ${selectedPlate.plateNumber}");
                           },
