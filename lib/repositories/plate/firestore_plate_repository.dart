@@ -83,10 +83,8 @@ class FirestorePlateRepository implements PlateRepository {
   @override
   Future<List<PlateModel>> getPlatesByArea(String collection, String area) async {
     try {
-      QuerySnapshot<Map<String, dynamic>> querySnapshot = await _firestore
-          .collection(collection)
-          .where('area', isEqualTo: area)
-          .get();
+      QuerySnapshot<Map<String, dynamic>> querySnapshot =
+          await _firestore.collection(collection).where('area', isEqualTo: area).get();
 
       return querySnapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList();
     } catch (e) {
@@ -94,8 +92,6 @@ class FirestorePlateRepository implements PlateRepository {
       return [];
     }
   }
-
-
 
   @override
   Future<void> addRequestOrCompleted({
@@ -186,10 +182,7 @@ class FirestorePlateRepository implements PlateRepository {
   @override
   Future<List<String>> getAvailableLocations(String area) async {
     try {
-      final querySnapshot = await _firestore
-          .collection('locations')
-          .where('area', isEqualTo: area)
-          .get();
+      final querySnapshot = await _firestore.collection('locations').where('area', isEqualTo: area).get();
       return querySnapshot.docs.map((doc) => doc['locationName'] as String).toList();
     } catch (e) {
       dev.log("🔥 Firestore 에러 (getAvailableLocations): $e", name: "Firestore");
