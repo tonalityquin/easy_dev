@@ -16,13 +16,15 @@ class TopNavigation extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     final areaState = context.watch<AreaState>();
     final userState = context.watch<UserState>();
-    final plateState = context.read<PlateState>();
+    final plateState = context.read<PlateState>(); // 🔹 watch → read로 변경
     final selectedArea = _getSelectedArea(areaState);
     final UserRole userRole = UserRole.values.firstWhere(
-      (role) => role.name == userState.role,
+          (role) => role.name == userState.role,
       orElse: () => UserRole.Admin,
     );
+
     _initializeAreaIfEmpty(areaState, userState);
+
     return AppBar(
       title: DropdownButton<String>(
         value: selectedArea,
@@ -32,11 +34,11 @@ class TopNavigation extends StatelessWidget implements PreferredSizeWidget {
         onChanged: (userRole == UserRole.Fielder || userRole == UserRole.FieldLeader)
             ? null
             : (newArea) {
-                if (newArea != null) {
-                  areaState.updateArea(newArea);
-                  plateState.syncWithAreaState(newArea);
-                }
-              },
+          if (newArea != null) {
+            areaState.updateArea(newArea);
+            plateState.syncWithAreaState(newArea); // 🔹 PlateState에서 자동으로 print() 실행
+          }
+        },
         style: const TextStyle(color: Colors.black),
       ),
       centerTitle: true,
