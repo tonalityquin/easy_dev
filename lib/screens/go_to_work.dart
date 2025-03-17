@@ -6,7 +6,7 @@ class GoToWork extends StatelessWidget {
   const GoToWork({super.key});
 
   void _handleWorkStatus(BuildContext context, UserState userState) {
-    userState.toggleWorkStatus();
+    userState.isHeWorking();
     if (userState.isWorking) {
       Navigator.pushReplacementNamed(context, '/type_page');
     }

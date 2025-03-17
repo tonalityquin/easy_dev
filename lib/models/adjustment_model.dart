@@ -29,9 +29,9 @@ class AdjustmentModel {
             ? data['basicStandard']
             : int.tryParse(data['basicStandard'].toString()) ?? 0,
         basicAmount:
-            (data['basicAmount'] is int) ? data['basicAmount'] : int.tryParse(data['basicAmount'].toString()) ?? 0,
+        (data['basicAmount'] is int) ? data['basicAmount'] : int.tryParse(data['basicAmount'].toString()) ?? 0,
         addStandard:
-            (data['addStandard'] is int) ? data['addStandard'] : int.tryParse(data['addStandard'].toString()) ?? 0,
+        (data['addStandard'] is int) ? data['addStandard'] : int.tryParse(data['addStandard'].toString()) ?? 0,
         addAmount: (data['addAmount'] is int) ? data['addAmount'] : int.tryParse(data['addAmount'].toString()) ?? 0,
       );
     } catch (e) {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart'; // Provider 사용
 import 'dart:io'; // 앱 종료를 위한 패키지 추가
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../utils/show_snackbar.dart';
 import '../../../widgets/navigation/secondary_role_navigation.dart'; // 상단 내비게이션 바
 import '../../../widgets/navigation/secondary_mini_navigation.dart'; // 하단 내비게이션 바
@@ -12,33 +13,50 @@ class DashBoard extends StatelessWidget {
   /// 🔹 출근 / 퇴근 처리
   Future<void> _handleWorkStatus(UserState userState) async {
     if (userState.isWorking) {
-      await userState.toggleWorkStatus(); // Firestore에서 출근 상태 해제 (isWorking = false)
+      await userState.isHeWorking(); // Firestore에서 출근 상태 해제 (isWorking = false)
 
       // 🔹 Firestore 업데이트 확인을 위해 1초 대기
       await Future.delayed(const Duration(seconds: 1));
 
       exit(0); // 🔹 Firestore 반영 후 앱 종료
     } else {
-      userState.toggleWorkStatus(); // 🔹 출근 상태 변경
+      userState.isHeWorking(); // 🔹 출근 상태 변경
     }
   }
 
   /// 🔹 로그아웃 처리
   Future<void> _logout(BuildContext context) async {
     try {
+      print("[DEBUG] 로그아웃 시도");
+
       final userState = Provider.of<UserState>(context, listen: false);
 
-      await userState.toggleWorkStatus(); // 🔹 isWorking을 false로 설정
+      await userState.isHeWorking(); // 🔹 Firestore에서 isWorking을 false로 설정
+      print("[DEBUG] 사용자 업무 상태(isWorking) 업데이트 완료");
 
       // 🔹 Firestore 업데이트 확인을 위해 1초 대기
       await Future.delayed(const Duration(seconds: 1));
 
-      await userState.clearUser(); // 🔹 사용자 데이터 삭제
-      exit(0); // 🔹 앱 종료
+      await userState.clearUserToPhone(); // 🔹 사용자 데이터 삭제
+      print("[DEBUG] UserState 데이터 삭제 완료");
+
+      // 🔹 SharedPreferences 초기화 (자동 로그인 방지)
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('phone');
+      await prefs.remove('area');
+      await prefs.setBool('isLoggedIn', false); // 🔹 자동 로그인 방지를 위해 false 설정
+      print("[DEBUG] SharedPreferences 데이터 삭제 완료");
+
+      // 🔹 로그인 페이지로 이동
+      Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+      print("[DEBUG] 로그인 페이지로 이동 완료");
+
     } catch (e) {
-      showSnackbar(context, '출근 처리가 완료되었습니다.');
+      print("[DEBUG] 로그아웃 중 오류 발생: $e");
+      showSnackbar(context, '로그아웃 실패: $e');
     }
   }
+
 
   /// 🔹 UI 렌더링
   @override

@@ -26,12 +26,18 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _checkLoginState() async {
+    print("[DEBUG] _checkLoginState() 실행됨");
+
     final userState = Provider.of<UserState>(context, listen: false);
-    await userState.loadUser();
+    await userState.loadUserToLogIn();
+
+    print("[DEBUG] 로그인 상태 확인: isLoggedIn = ${userState.isLoggedIn}");
+
     if (userState.isLoggedIn) {
+      print("[DEBUG] 로그인된 상태 - '/home'으로 이동");
       Navigator.pushReplacementNamed(context, '/home');
     } else {
-      debugPrint('자동 로그인 실패: 유효한 사용자 데이터가 없습니다.');
+      print("[DEBUG] 로그인되지 않음 - 로그인 페이지 유지");
     }
   }
 
@@ -59,21 +65,29 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _login() async {
+    print("[DEBUG] 로그인 시도");
+
     final name = _nameController.text.trim();
     final phone = _phoneController.text.trim().replaceAll(RegExp(r'\D'), '');
     final password = _passwordController.text.trim();
+
+    print("[DEBUG] 입력값 - name: $name, phone: $phone, password: (보안상 미출력)");
+
     final phoneError = _validatePhone(phone);
     final passwordError = _validatePassword(password);
 
     if (name.isEmpty) {
+      print("[DEBUG] 로그인 실패 - 이름 미입력");
       showSnackbar(context, '이름을 입력해주세요.');
       return;
     }
     if (phoneError != null) {
+      print("[DEBUG] 로그인 실패 - 전화번호 오류: $phoneError");
       showSnackbar(context, phoneError);
       return;
     }
     if (passwordError != null) {
+      print("[DEBUG] 로그인 실패 - 비밀번호 오류: $passwordError");
       showSnackbar(context, passwordError);
       return;
     }
@@ -83,6 +97,7 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     if (!await _isInternetConnected()) {
+      print("[DEBUG] 로그인 실패 - 인터넷 연결 없음");
       showSnackbar(context, '인터넷 연결이 필요합니다.');
       setState(() {
         _isLoading = false;
@@ -91,27 +106,42 @@ class _LoginPageState extends State<LoginPage> {
     }
 
     try {
+      print("[DEBUG] Firestore에서 사용자 조회 시도 - phone: $phone");
+
       final userRepository = context.read<UserRepository>();
       final user = await userRepository.getUserByPhone(phone);
 
-      if (user != null && user.name == name && user.password == password) {
-        final userState = Provider.of<UserState>(context, listen: false);
-        final areaState = Provider.of<AreaState>(context, listen: false);
+      if (user != null) {
+        print("[DEBUG] 사용자 정보 찾음 - ID: ${user.id}, name: ${user.name}");
 
-        // ✅ `UserModel`을 사용하여 updateUser()에 전달
-        userState.updateUser(user);
-        areaState.updateArea(user.area);
+        if (user.name == name && user.password == password) {
+          print("[DEBUG] 로그인 성공 - 사용자 인증 완료");
 
-        Navigator.pushReplacementNamed(context, '/home');
+          final userState = Provider.of<UserState>(context, listen: false);
+          final areaState = Provider.of<AreaState>(context, listen: false);
+
+          // ✅ `UserModel`을 사용하여 updateUser()에 전달
+          userState.updateUserCard(user);
+          areaState.updateArea(user.area);
+
+          print("[DEBUG] 상태 업데이트 완료 - 이동할 화면: /home");
+          Navigator.pushReplacementNamed(context, '/home');
+        } else {
+          print("[DEBUG] 로그인 실패 - 이름 또는 비밀번호 불일치");
+          showSnackbar(context, '이름 또는 비밀번호가 올바르지 않습니다.');
+        }
       } else {
-        showSnackbar(context, user == null ? '해당 전화번호가 등록되지 않았습니다.' : '이름 또는 비밀번호가 올바르지 않습니다.');
+        print("[DEBUG] 로그인 실패 - 해당 전화번호 등록되지 않음");
+        showSnackbar(context, '해당 전화번호가 등록되지 않았습니다.');
       }
     } catch (e) {
+      print("[DEBUG] 로그인 중 예외 발생: $e");
       showSnackbar(context, '로그인 실패: $e');
     } finally {
       setState(() {
         _isLoading = false;
       });
+      print("[DEBUG] 로그인 프로세스 종료 - _isLoading = false");
     }
   }
 
