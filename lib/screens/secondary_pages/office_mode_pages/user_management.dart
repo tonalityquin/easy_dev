@@ -49,7 +49,7 @@ class UserManagement extends StatelessWidget {
           isWorking: isWorking,
         );
 
-        userState.addUser(
+        userState.addUserCard(
           newUser,
           onError: (errorMessage) {
             showSnackbar(context, errorMessage);
@@ -57,7 +57,7 @@ class UserManagement extends StatelessWidget {
         );
       });
     } else if (index == 1 && selectedIds.isNotEmpty) {
-      userState.deleteUsers(
+      userState.deleteUserCard(
         selectedIds,
         onError: (errorMessage) {
           showSnackbar(context, errorMessage);
@@ -91,7 +91,7 @@ class UserManagement extends StatelessWidget {
             midLeftText: userContainer.role, // ✅ 수정됨
             midCenterText: userContainer.phone, // ✅ 수정됨
             midRightText: userContainer.area, // ✅ 수정됨
-            onTap: () => userState.toggleSelection(userContainer.id), // ✅ 수정됨
+            onTap: () => userState.toggleUserCard(userContainer.id), // ✅ 수정됨
             isSelected: isSelected,
             backgroundColor: isSelected ? Colors.green : Colors.white,
           );
