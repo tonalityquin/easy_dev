@@ -18,9 +18,10 @@ class FirestoreUserRepository implements UserRepository {
 
   @override
   Stream<UserModel?> listenToUserStatus(String phone) {
-    return _getCollectionRef().doc(phone).snapshots().map((doc) =>
-    doc.exists ? UserModel.fromMap(doc.id, doc.data()!) : null
-    );
+    return _getCollectionRef()
+        .doc(phone)
+        .snapshots()
+        .map((doc) => doc.exists ? UserModel.fromMap(doc.id, doc.data()!) : null);
   }
 
   @override
@@ -47,16 +48,20 @@ class FirestoreUserRepository implements UserRepository {
     return null;
   }
 
-
   @override
   Future<void> addUser(UserModel user) async {
     await _getCollectionRef().doc(user.id).set(user.toMap());
   }
 
   @override
-  Future<void> updateWorkStatus(String phone, String area, bool isWorking) async {
+  Future<void> updateUserStatus(String phone, String area, {bool? isWorking, bool? isSaved}) async {
     final userId = '$phone-$area';
-    await _getCollectionRef().doc(userId).update({'isWorking': isWorking});
+
+    Map<String, dynamic> updates = {};
+    if (isWorking != null) updates['isWorking'] = isWorking;
+    if (isSaved != null) updates['isSaved'] = isSaved;
+
+    await _getCollectionRef().doc(userId).update(updates);
   }
 
   @override
@@ -64,12 +69,25 @@ class FirestoreUserRepository implements UserRepository {
     await _getCollectionRef().doc(id).update({'isSelected': isSelected});
   }
 
+  // ✅ 추가된 메서드 (JSON 없이 데이터 직접 매핑)
+  @override
   Future<UserModel?> getUserById(String userId) async {
-    final doc = await _firestore.collection('user_accounts').doc(userId).get();
+    final doc = await _getCollectionRef().doc(userId).get();
     if (!doc.exists) return null;
-    return UserModel.fromMap(doc.id, doc.data()!);
-  }
 
+    return UserModel(
+      id: doc.id,
+      name: doc['name'] ?? '',
+      phone: doc['phone'] ?? '',
+      email: doc['email'] ?? '',
+      role: doc['role'] ?? '',
+      password: doc['password'] ?? '',
+      area: doc['area'] ?? '',
+      isSelected: doc['isSelected'] ?? false,
+      isWorking: doc['isWorking'] ?? false,
+      isSaved: doc['isSaved'] ?? false,
+    );
+  }
 
   @override
   Future<void> deleteUsers(List<String> ids) async {
