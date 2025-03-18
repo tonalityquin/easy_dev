@@ -126,9 +126,13 @@ class _LoginPageState extends State<LoginPage> {
           userState.updateUserCard(updatedUser);  // ✅ isSaved 반영된 updatedUser 사용
           areaState.updateArea(updatedUser.area);
 
+          // ✅ isSaved 값이 변경된 후 로그에 반영
           print("[DEBUG] 상태 업데이트 완료 - 이동할 화면: /home");
+          print("[DEBUG] isSaved 변경 확인: ${userState.user?.isSaved}"); // ✅ 변경 후 로그 확인
+
           Navigator.pushReplacementNamed(context, '/home');
         }
+
         else {
           print("[DEBUG] 로그인 실패 - 이름 또는 비밀번호 불일치");
           showSnackbar(context, '이름 또는 비밀번호가 올바르지 않습니다.');
