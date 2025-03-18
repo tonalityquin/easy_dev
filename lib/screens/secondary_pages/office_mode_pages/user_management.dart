@@ -13,7 +13,7 @@ class UserManagement extends StatelessWidget {
   const UserManagement({super.key});
 
   void buildAddUserDialog(
-      BuildContext context, void Function(String, String, String, String, String, String, bool) onSave) {
+      BuildContext context, void Function(String, String, String, String, String, String, bool, bool) onSave) {
     final currentArea = Provider.of<AreaState>(context, listen: false).currentArea;
     showDialog(
       context: context,
@@ -36,7 +36,7 @@ class UserManagement extends StatelessWidget {
         .toList();
 
     if (index == 0) {
-      buildAddUserDialog(context, (name, phone, email, role, area, password, isWorking) {
+      buildAddUserDialog(context, (name, phone, email, role, area, password, isWorking, isSaved) {
         final newUser = UserModel(
           id: '$phone-$area',
           name: name,
@@ -47,6 +47,7 @@ class UserManagement extends StatelessWidget {
           area: area,
           isSelected: false,
           isWorking: isWorking,
+          isSaved: isSaved,
         );
 
         userState.addUserCard(

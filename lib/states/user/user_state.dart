@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../repositories/user/firestore_user_repository.dart';
 import '../../repositories/user/user_repository.dart';
 import '../../models/user_model.dart';
 
@@ -28,6 +27,8 @@ class UserState extends ChangeNotifier {
 
   bool get isWorking => _user?.isWorking ?? false;
 
+  bool get isSaved => _user?.isSaved ?? false;
+
   bool get isLoading => _isLoading;
 
   String get role => _user?.role ?? '';
@@ -54,14 +55,6 @@ class UserState extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       final phone = prefs.getString('phone');
       final area = prefs.getString('area');
-      final isLoggedIn = prefs.getBool('isLoggedIn') ?? false; // 🔹 로그인 상태 확인
-
-      print("[DEBUG] SharedPreferences에서 불러온 데이터 - phone: $phone, area: $area, isLoggedIn: $isLoggedIn");
-
-      if (!isLoggedIn) {
-        print("[DEBUG] 자동 로그인 중단 - 사용자가 로그아웃한 상태");
-        return;
-      }
 
       if (phone == null || area == null) {
         print("[DEBUG] 자동 로그인 실패 - 저장된 전화번호 또는 지역 정보 없음");
@@ -69,26 +62,22 @@ class UserState extends ChangeNotifier {
       }
 
       final userId = "$phone-$area";
-      print("[DEBUG] Firestore에서 사용자 데이터 조회 시도 - userId: $userId");
+      final userData = await _repository.getUserById(userId);
 
-      if (_repository is FirestoreUserRepository) {
-        final userData = await _repository.getUserById(userId);
-
-        if (userData == null) {
-          print("[DEBUG] 자동 로그인 실패 - Firestore에서 사용자 정보 없음");
-          return;
-        }
-
-        _user = userData;
-        await saveCardToUserPhone(userData); // ✅ SharedPreferences에 사용자 정보 저장
-        notifyListeners();
-
-        print("[DEBUG] 자동 로그인 성공 - 사용자: ${_user!.name} (${_user!.phone})");
+      if (userData == null) {
+        print("[DEBUG] 자동 로그인 실패 - Firestore에서 사용자 정보 없음");
+        return;
       }
+
+      // ✅ 로그인 시 isSaved를 true로 설정
+      await _repository.updateUserStatus(phone, area, isSaved: true);
+      _user = userData.copyWith(isSaved: true);
+      notifyListeners();
     } catch (e) {
       print("[DEBUG] 자동 로그인 중 오류 발생: $e");
     }
   }
+
 
   void _realtimeUsers() {
     _repository.getUsersStream().listen(
@@ -107,28 +96,35 @@ class UserState extends ChangeNotifier {
   Future<void> isHeWorking() async {
     if (_user == null) return;
 
-    final newStatus = !_user!.isWorking;
-    await _repository.updateWorkStatus(_user!.phone, _user!.area, newStatus);
-    _user = UserModel(
-      id: _user!.id,
-      name: _user!.name,
-      phone: _user!.phone,
-      email: _user!.email,
-      role: _user!.role,
-      password: _user!.password,
-      area: _user!.area,
-      isSelected: _user!.isSelected,
-      isWorking: newStatus,
+    final newStatus = !_user!.isWorking; // ✅ isWorking만 토글
+
+    await _repository.updateUserStatus(
+      _user!.phone,
+      _user!.area,
+      isWorking: newStatus, // ✅ isWorking만 업데이트
     );
+
+    _user = _user!.copyWith(isWorking: newStatus); // ✅ isSaved는 변경 없음
     notifyListeners();
   }
 
+
   Future<void> clearUserToPhone() async {
+    if (_user == null) return;
+
+    await _repository.updateUserStatus(
+      _user!.phone,
+      _user!.area,
+      isWorking: false, // ✅ 로그아웃 시 isWorking false
+      isSaved: false,   // ✅ 로그아웃 시 isSaved false
+    );
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
     _user = null;
     notifyListeners();
   }
+
 
   Future<void> updateUserCard(UserModel updatedUser) async {
     _user = updatedUser;
@@ -149,6 +145,7 @@ class UserState extends ChangeNotifier {
         area: user.area,
         isSelected: user.isSelected,
         isWorking: user.isWorking,
+        isSaved: user.isSaved,
       );
       await _repository.addUser(correctedUser);
     } catch (e) {

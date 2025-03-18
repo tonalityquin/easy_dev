@@ -120,13 +120,16 @@ class _LoginPageState extends State<LoginPage> {
           final userState = Provider.of<UserState>(context, listen: false);
           final areaState = Provider.of<AreaState>(context, listen: false);
 
-          // ✅ `UserModel`을 사용하여 updateUser()에 전달
-          userState.updateUserCard(user);
-          areaState.updateArea(user.area);
+          // ✅ isSaved를 true로 변경한 객체 생성
+          final updatedUser = user.copyWith(isSaved: true);
+
+          userState.updateUserCard(updatedUser);  // ✅ isSaved 반영된 updatedUser 사용
+          areaState.updateArea(updatedUser.area);
 
           print("[DEBUG] 상태 업데이트 완료 - 이동할 화면: /home");
           Navigator.pushReplacementNamed(context, '/home');
-        } else {
+        }
+        else {
           print("[DEBUG] 로그인 실패 - 이름 또는 비밀번호 불일치");
           showSnackbar(context, '이름 또는 비밀번호가 올바르지 않습니다.');
         }
