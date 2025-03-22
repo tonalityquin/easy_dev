@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../states/plate/plate_state.dart';
 import '../utils/app_colors.dart'; // 앱 색상 팔레트
 import '../utils/show_snackbar.dart';
 import '../states/page/page_state.dart'; // 페이지 상태 관리 클래스
@@ -75,19 +76,53 @@ class PageBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<PageState>(
-      builder: (context, state, child) {
+    return Consumer2<PageState, PlateState>(
+      builder: (context, pageState, plateState, child) {
         return BottomNavigationBar(
-          currentIndex: state.selectedIndex,
-          onTap: state.onItemTapped,
-          items: state.pages.map((pageInfo) {
+          currentIndex: pageState.selectedIndex,
+          onTap: pageState.onItemTapped,
+          items: List.generate(pageState.pages.length, (index) {
+            final pageInfo = pageState.pages[index];
+            final int count = plateState.getPlatesByCollection(pageInfo.collectionKey).length;
+            final bool isSelected = pageState.selectedIndex == index;
+
+            final textColor = isSelected ? Colors.red : Colors.black;
+            final countColor = isSelected ? Colors.green : Colors.black;
+            final countSize = isSelected ? 26.0 : 20.0;
+
             return BottomNavigationBarItem(
-              icon: Icon(pageInfo.iconData),
-              label: pageInfo.title,
+              icon: AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeInOut,
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    AnimatedDefaultTextStyle(
+                      duration: const Duration(milliseconds: 250),
+                      style: TextStyle(
+                        fontSize: countSize,
+                        fontWeight: FontWeight.bold,
+                        color: countColor,
+                      ),
+                      child: Text('$count'),
+                    ),
+                    const SizedBox(height: 4),
+                    AnimatedDefaultTextStyle(
+                      duration: const Duration(milliseconds: 250),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: textColor,
+                      ),
+                      child: Text(pageInfo.title),
+                    ),
+                  ],
+                ),
+              ),
+              label: '',
             );
-          }).toList(),
-          selectedItemColor: Colors.red,
-          unselectedItemColor: Colors.blue,
+          }),
           backgroundColor: Colors.white,
         );
       },
