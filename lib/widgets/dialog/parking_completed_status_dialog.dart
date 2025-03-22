@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../states/plate/movement_plate.dart';
+import '../../states/plate/plate_state.dart';
 import '../../utils/show_snackbar.dart';
 
 class ParkingCompletedStatusDialog extends StatelessWidget {
@@ -55,11 +56,14 @@ class ParkingCompletedStatusDialog extends StatelessWidget {
 
 void handleEntryParkingRequest(BuildContext context, String plateNumber, String area) {
   final movementPlate = context.read<MovementPlate>(); // ✅ MovementPlate 사용
+  final plateState = context.read<PlateState>();
 
   movementPlate.goBackToParkingRequest(
-    fromCollection: 'parking_completed', // 🔥 어디서 이동하는지 명시
+    fromCollection: 'parking_completed',
+    // 🔥 어디서 이동하는지 명시
     plateNumber: plateNumber,
     area: area,
+    plateState: plateState,
     newLocation: "미지정", // ❓ 선택적으로 위치 변경 가능
   );
 
@@ -68,12 +72,11 @@ void handleEntryParkingRequest(BuildContext context, String plateNumber, String 
 
 void handleEntryDepartureCompleted(BuildContext context, String plateNumber, String area) {
   final movementPlate = context.read<MovementPlate>(); // ✅ MovementPlate 사용
-  movementPlate.updatePlateStatus(
-    plateNumber: plateNumber,
-    area: area,
-    fromCollection: 'parking_completed',
-    toCollection: 'departure_completed',
-    newType: '출차 완료',
+  final plateState = context.read<PlateState>();
+  movementPlate.setDepartureCompleted(
+    plateNumber,
+    area,
+    plateState,
   );
   showSnackbar(context, "출차 완료가 처리되었습니다.");
 }

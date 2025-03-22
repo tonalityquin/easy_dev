@@ -179,8 +179,11 @@ class PlateState extends ChangeNotifier {
     );
   }
 
-  /// 🔁 외부에서 수동으로 재동기화할 경우 호출
+  Future<void> fetchPlateData() async {
+    _initializeSubscriptions(); // 🔁 기존 스트림 초기화 및 재구독
+  }
 
+  /// 🔁 외부에서 수동으로 재동기화할 경우 호출
   @override
   void dispose() {
     _cancelAllSubscriptions();
