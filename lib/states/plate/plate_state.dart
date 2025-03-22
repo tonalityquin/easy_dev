@@ -136,6 +136,22 @@ class PlateState extends ChangeNotifier {
       if (index == -1) throw Exception('🚨 Plate not found');
 
       final plate = plateList[index];
+
+      // 🔐 다른 사용자가 선택한 경우 선택 불가
+      if (plate.isSelected && plate.selectedBy != userName) {
+        throw Exception('⚠️ 이미 다른 사용자가 선택한 번호판입니다.');
+      }
+
+      // 🚫 전 컬렉션에 이미 선택된 다른 plate가 있을 경우
+      final alreadySelectedInOtherCollections = _data.values.any(
+            (plates) => plates.any(
+              (p) => p.isSelected && p.selectedBy == userName && p.id != plateId,
+        ),
+      );
+      if (alreadySelectedInOtherCollections && !plate.isSelected) {
+        throw Exception('⚠️ 이미 다른 번호판을 선택한 상태입니다.');
+      }
+
       final newIsSelected = !plate.isSelected;
       final newSelectedBy = newIsSelected ? userName : null;
 
@@ -157,6 +173,8 @@ class PlateState extends ChangeNotifier {
       onError('🚨 번호판 선택 상태 변경 실패: $e');
     }
   }
+
+
 
   /// 🔍 현재 유저가 선택한 plate 조회
   PlateModel? getSelectedPlate(String collection, String userName) {

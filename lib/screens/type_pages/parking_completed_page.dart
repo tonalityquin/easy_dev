@@ -139,148 +139,165 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: const TopNavigation(),
-      body: Consumer2<PlateState, AreaState>(
-        builder: (context, plateState, areaState, child) {
-          final currentArea = areaState.currentArea;
-          final filterState = context.read<FilterPlate>();
-          var parkingCompleted = _isParkingAreaMode && _selectedParkingArea != null
-              ? filterState.filterByParkingLocation('parking_completed', currentArea, _selectedParkingArea!)
-              : plateState.getPlatesByCollection('parking_completed');
-          final userName = context.read<UserState>().name;
-          parkingCompleted.sort((a, b) {
-            return _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime);
-          });
-          return ListView(
-            padding: const EdgeInsets.all(8.0),
-            children: [
-              PlateContainer(
-                data: parkingCompleted,
-                collection: 'parking_completed',
-                filterCondition: (request) => request.type == '입차 완료',
-                onPlateTap: (plateNumber, area) {
-                  plateState.toggleIsSelected(
-                    collection: 'parking_completed',
-                    plateNumber: plateNumber,
-                    userName: userName,
-                    onError: (errorMessage) {
-                      showSnackbar(context, errorMessage);
-                    },
-                  );
-                },
-              ),
-            ],
-          );
-        },
-      ),
-      bottomNavigationBar: Consumer<PlateState>(
-        builder: (context, plateState, child) {
-          final userName = context.read<UserState>().name;
+    final plateState = context.read<PlateState>();
+    final userName = context.read<UserState>().name;
+
+    return WillPopScope(
+        onWillPop: () async {
           final selectedPlate = plateState.getSelectedPlate('parking_completed', userName);
-          final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
-          return BottomNavigationBar(
-              items: [
-                BottomNavigationBarItem(
-                  icon: Icon(
-                    isPlateSelected ? Icons.highlight_alt : (_isSearchMode ? Icons.cancel : Icons.search),
+          if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
+            await plateState.toggleIsSelected(
+              collection: 'parking_completed',
+              plateNumber: selectedPlate.plateNumber,
+              userName: userName,
+              onError: (msg) => debugPrint(msg),
+            );
+            return false; // 뒤로가기 취소하고 선택만 해제
+          }
+          return true;
+        },
+        child: Scaffold(
+          appBar: const TopNavigation(),
+          body: Consumer2<PlateState, AreaState>(
+            builder: (context, plateState, areaState, child) {
+              final currentArea = areaState.currentArea;
+              final filterState = context.read<FilterPlate>();
+              var parkingCompleted = _isParkingAreaMode && _selectedParkingArea != null
+                  ? filterState.filterByParkingLocation('parking_completed', currentArea, _selectedParkingArea!)
+                  : plateState.getPlatesByCollection('parking_completed');
+              final userName = context.read<UserState>().name;
+              parkingCompleted.sort((a, b) {
+                return _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime);
+              });
+              return ListView(
+                padding: const EdgeInsets.all(8.0),
+                children: [
+                  PlateContainer(
+                    data: parkingCompleted,
+                    collection: 'parking_completed',
+                    filterCondition: (request) => request.type == '입차 완료',
+                    onPlateTap: (plateNumber, area) {
+                      plateState.toggleIsSelected(
+                        collection: 'parking_completed',
+                        plateNumber: plateNumber,
+                        userName: userName,
+                        onError: (errorMessage) {
+                          showSnackbar(context, errorMessage);
+                        },
+                      );
+                    },
                   ),
-                  label: isPlateSelected ? '정보 수정' : (_isSearchMode ? '검색 초기화' : '번호판 검색'),
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(
-                    isPlateSelected ? Icons.check_circle : Icons.local_parking,
-                    color: isPlateSelected ? Colors.green : Colors.grey,
-                  ),
-                  label: isPlateSelected ? '출차 요청' : (_isParkingAreaMode ? '주차 구역 초기화' : '주차 구역'),
-                ),
-                BottomNavigationBarItem(
-                  icon: AnimatedRotation(
-                    turns: _isSorted ? 0.5 : 0.0,
-                    duration: const Duration(milliseconds: 300),
-                    child: Transform.scale(
-                      scaleX: _isSorted ? -1 : 1,
-                      child: Icon(
-                        isPlateSelected ? Icons.arrow_forward : Icons.sort,
+                ],
+              );
+            },
+          ),
+          bottomNavigationBar: Consumer<PlateState>(
+            builder: (context, plateState, child) {
+              final userName = context.read<UserState>().name;
+              final selectedPlate = plateState.getSelectedPlate('parking_completed', userName);
+              final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
+              return BottomNavigationBar(
+                  items: [
+                    BottomNavigationBarItem(
+                      icon: Icon(
+                        isPlateSelected ? Icons.highlight_alt : (_isSearchMode ? Icons.cancel : Icons.search),
                       ),
+                      label: isPlateSelected ? '정보 수정' : (_isSearchMode ? '검색 초기화' : '번호판 검색'),
                     ),
-                  ),
-                  label: isPlateSelected ? '상태 수정' : (_isSorted ? '최신순' : '오래된순'),
-                ),
-              ],
-              onTap: (index) {
-                if (index == 0) {
-                  if (isPlateSelected) {
-                    // 👉 선택된 plate 정보를 수정 페이지로 넘겨줌
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ModifyPlateInfo(
-                          plate: selectedPlate,
-                          collectionKey: 'parking_completed', // 또는 'parking_requests' 등 상황에 맞게
+                    BottomNavigationBarItem(
+                      icon: Icon(
+                        isPlateSelected ? Icons.check_circle : Icons.local_parking,
+                        color: isPlateSelected ? Colors.green : Colors.grey,
+                      ),
+                      label: isPlateSelected ? '출차 요청' : (_isParkingAreaMode ? '주차 구역 초기화' : '주차 구역'),
+                    ),
+                    BottomNavigationBarItem(
+                      icon: AnimatedRotation(
+                        turns: _isSorted ? 0.5 : 0.0,
+                        duration: const Duration(milliseconds: 300),
+                        child: Transform.scale(
+                          scaleX: _isSorted ? -1 : 1,
+                          child: Icon(
+                            isPlateSelected ? Icons.arrow_forward : Icons.sort,
+                          ),
                         ),
                       ),
-                    );
-                  } else {
-                    if (_isSearchMode) {
-                      _resetSearch(context);
-                    } else {
-                      _showSearchDialog(context);
-                    }
-                  }
-                } else if (index == 1) {
-                  if (isPlateSelected) {
-                    showDialog(
-                      context: context,
-                      builder: (context) => DepartureRequestConfirmDialog(
-                        onConfirm: () => _handleDepartureRequested(context),
-                      ),
-                    );
-                  } else {
-                    if (_isParkingAreaMode) {
-                      _resetParkingAreaFilter(context);
-                    } else {
-                      _showParkingAreaDialog(context);
-                    }
-                  }
-                } else if (index == 2) {
-                  if (isPlateSelected) {
-                    showDialog(
-                      context: context,
-                      builder: (context) => ParkingCompletedStatusDialog(
-                        plateNumber: selectedPlate.plateNumber,
-                        // ✅ 추가
-                        area: selectedPlate.area,
-                        // ✅ 추가
-                        onRequestEntry: () {
-                          handleEntryParkingRequest(context, selectedPlate.plateNumber, selectedPlate.area);
-                        },
-                        onCompleteDeparture: () {
-                          handleEntryDepartureCompleted(context, selectedPlate.plateNumber, selectedPlate.area);
-                        },
-                        onDelete: () {
-                          showDialog(
-                            context: context,
-                            builder: (context) => ParkingRequestDeleteDialog(
-                              onConfirm: () {
-                                context.read<DeletePlate>().deletePlateFromParkingCompleted(
-                                      selectedPlate.plateNumber,
-                                      selectedPlate.area,
-                                    );
-                                showSnackbar(context, "삭제 완료: ${selectedPlate.plateNumber}");
-                              },
+                      label: isPlateSelected ? '상태 수정' : (_isSorted ? '최신순' : '오래된순'),
+                    ),
+                  ],
+                  onTap: (index) {
+                    if (index == 0) {
+                      if (isPlateSelected) {
+                        // 👉 선택된 plate 정보를 수정 페이지로 넘겨줌
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ModifyPlateInfo(
+                              plate: selectedPlate,
+                              collectionKey: 'parking_completed', // 또는 'parking_requests' 등 상황에 맞게
                             ),
-                          );
-                        },
-                      ),
-                    );
-                  } else {
-                    _toggleSortIcon();
-                  }
-                }
-              });
-        },
-      ),
-    );
+                          ),
+                        );
+                      } else {
+                        if (_isSearchMode) {
+                          _resetSearch(context);
+                        } else {
+                          _showSearchDialog(context);
+                        }
+                      }
+                    } else if (index == 1) {
+                      if (isPlateSelected) {
+                        showDialog(
+                          context: context,
+                          builder: (context) => DepartureRequestConfirmDialog(
+                            onConfirm: () => _handleDepartureRequested(context),
+                          ),
+                        );
+                      } else {
+                        if (_isParkingAreaMode) {
+                          _resetParkingAreaFilter(context);
+                        } else {
+                          _showParkingAreaDialog(context);
+                        }
+                      }
+                    } else if (index == 2) {
+                      if (isPlateSelected) {
+                        showDialog(
+                          context: context,
+                          builder: (context) => ParkingCompletedStatusDialog(
+                            plateNumber: selectedPlate.plateNumber,
+                            // ✅ 추가
+                            area: selectedPlate.area,
+                            // ✅ 추가
+                            onRequestEntry: () {
+                              handleEntryParkingRequest(context, selectedPlate.plateNumber, selectedPlate.area);
+                            },
+                            onCompleteDeparture: () {
+                              handleEntryDepartureCompleted(context, selectedPlate.plateNumber, selectedPlate.area);
+                            },
+                            onDelete: () {
+                              showDialog(
+                                context: context,
+                                builder: (context) => ParkingRequestDeleteDialog(
+                                  onConfirm: () {
+                                    context.read<DeletePlate>().deletePlateFromParkingCompleted(
+                                          selectedPlate.plateNumber,
+                                          selectedPlate.area,
+                                        );
+                                    showSnackbar(context, "삭제 완료: ${selectedPlate.plateNumber}");
+                                  },
+                                ),
+                              );
+                            },
+                          ),
+                        );
+                      } else {
+                        _toggleSortIcon();
+                      }
+                    }
+                  });
+            },
+          ),
+        ));
   }
 }
