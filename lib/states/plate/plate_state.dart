@@ -22,46 +22,39 @@ class PlateState extends ChangeNotifier {
     'departure_completed': [],
   };
 
-  String? _searchQuery;
-
-  String get searchQuery => _searchQuery ?? "";
-  String get currentArea => _areaState.currentArea;
-
-  /// 🔍 현재 지역에 해당하는 plate 데이터를 가져오는 함수
-  List<PlateModel> getPlatesByCollection(String collection) {
-    final plates = _data[collection] ?? [];
-
-    if (_searchQuery != null && _searchQuery!.length == 4) {
-      return plates.where((plate) {
-        final last4Digits = plate.plateNumber.length >= 4
-            ? plate.plateNumber.substring(plate.plateNumber.length - 4)
-            : plate.plateNumber;
-        return last4Digits == _searchQuery;
-      }).toList();
-    }
-    return plates;
-  }
-
-  /// 🔹 현재 지역 plate 개수를 출력하는 함수
-  void PlateCounts() {
-    final int parkingRequests = _data['parking_requests']?.length ?? 0;
-    final int parkingCompleted = _data['parking_completed']?.length ?? 0;
-    final int departureRequests = _data['departure_requests']?.length ?? 0;
-    final int departureCompleted = _data['departure_completed']?.length ?? 0;
-
-    print('📌 Selected Area: $currentArea');
-    print('🅿️ Parking Requests: $parkingRequests');
-    print('✅ Parking Completed: $parkingCompleted');
-    print('🚗 Departure Requests: $departureRequests');
-    print('🏁 Departure Completed: $departureCompleted');
-  }
-
-  /// 🔄 Firestore 스트림 → 현재 지역 plate만 수신
   final Map<String, Stream<List<PlateModel>>> _activeStreams = {};
   final Map<String, StreamSubscription<List<PlateModel>>> _subscriptions = {};
 
+  String? _searchQuery;
+
+  String get searchQuery => _searchQuery ?? "";
+
+  String get currentArea => _areaState.currentArea;
+
+  bool _isLoading = true;
+
+  bool get isLoading => _isLoading;
+
+  /// 🔹 개수 출력 (로딩 상태 반영)
+  void PlateCounts() {
+    if (_isLoading) {
+      print('🕐 지역 Plate 상태 수신 대기 중...');
+    } else {
+      print('✅ 지역 Plate 상태 수신 완료');
+      print('📌 Selected Area: $currentArea');
+      print('🅿️ Parking Requests: ${_data['parking_requests']?.length ?? 0}');
+      print('✅ Parking Completed: ${_data['parking_completed']?.length ?? 0}');
+      print('🚗 Departure Requests: ${_data['departure_requests']?.length ?? 0}');
+      print('🏁 Departure Completed: ${_data['departure_completed']?.length ?? 0}');
+    }
+  }
+
+  /// 🔄 모든 컬렉션 스트림 재구독 + 로딩 상태 처리
   void _initializeSubscriptions() {
     _cancelAllSubscriptions();
+
+    _isLoading = true;
+    PlateCounts(); // 🕐 출력
 
     int receivedCount = 0;
     final totalCollections = _data.keys.length;
@@ -87,14 +80,14 @@ class PlateState extends ChangeNotifier {
         }
 
         if (receivedCount == totalCollections) {
-          PlateCounts(); // ✅ 모든 컬렉션 데이터 수신 완료 후 단 한 번 호출
+          _isLoading = false;
+          PlateCounts(); // ✅ 모든 스트림 완료 시점에 한 번만 출력
         }
       });
 
       _subscriptions[collectionName] = subscription;
     }
   }
-
 
   void _cancelAllSubscriptions() {
     for (var sub in _subscriptions.values) {
@@ -106,6 +99,26 @@ class PlateState extends ChangeNotifier {
   void _onAreaChanged() {
     print("🔄 지역 변경 감지됨: ${_areaState.currentArea}");
     _initializeSubscriptions(); // ✅ 지역 변경 → 스트림 재설정
+  }
+
+  void syncWithAreaState() {
+    print("🔄 지역 동기화 수동 호출됨(: $currentArea");
+    PlateCounts();
+  }
+
+  /// 🔍 현재 지역에 해당하는 plate 데이터를 가져오는 함수
+  List<PlateModel> getPlatesByCollection(String collection) {
+    final plates = _data[collection] ?? [];
+
+    if (_searchQuery != null && _searchQuery!.length == 4) {
+      return plates.where((plate) {
+        final last4Digits = plate.plateNumber.length >= 4
+            ? plate.plateNumber.substring(plate.plateNumber.length - 4)
+            : plate.plateNumber;
+        return last4Digits == _searchQuery;
+      }).toList();
+    }
+    return plates;
   }
 
   /// ✅ 특정 plate 선택 상태를 토글
@@ -151,7 +164,7 @@ class PlateState extends ChangeNotifier {
     if (plates == null || plates.isEmpty) return null;
 
     return plates.firstWhere(
-          (plate) => plate.isSelected && plate.selectedBy == userName,
+      (plate) => plate.isSelected && plate.selectedBy == userName,
       orElse: () => PlateModel(
         id: '',
         plateNumber: '',
@@ -167,10 +180,6 @@ class PlateState extends ChangeNotifier {
   }
 
   /// 🔁 외부에서 수동으로 재동기화할 경우 호출
-  void syncWithAreaState() {
-    print("🔄 지역 동기화 수동 호출됨(: $currentArea");
-    PlateCounts();
-  }
 
   @override
   void dispose() {
