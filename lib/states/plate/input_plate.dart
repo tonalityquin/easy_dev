@@ -40,6 +40,7 @@ class InputPlate with ChangeNotifier {
     int basicAmount = 0,
     int addStandard = 0,
     int addAmount = 0,
+    required String region,
   }) async {
     // 🔍 입차 요청 전 중복 확인
     if (await isPlateNumberDuplicated(plateNumber, areaState.currentArea)) {
@@ -68,6 +69,7 @@ class InputPlate with ChangeNotifier {
         basicAmount: basicAmount,
         addStandard: addStandard,
         addAmount: addAmount,
+        region: region,
       );
 
       showSnackbar(context, '$type 완료');

@@ -21,6 +21,7 @@ class PlateFields {
   static const String basicAmount = 'basicAmount';
   static const String addStandard = 'addStandard';
   static const String addAmount = 'addAmount';
+  static const String region = 'region';
 }
 
 class PlateModel {
@@ -39,6 +40,7 @@ class PlateModel {
   final int? basicAmount;
   final int? addStandard;
   final int? addAmount;
+  final String? region;
 
   PlateModel({
     required this.id,
@@ -56,6 +58,7 @@ class PlateModel {
     this.basicAmount,
     this.addStandard,
     this.addAmount,
+    this.region,
   });
 
   factory PlateModel.fromDocument(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -78,26 +81,8 @@ class PlateModel {
       basicAmount: parseInt(data?[PlateFields.basicAmount]),
       addStandard: parseInt(data?[PlateFields.addStandard]),
       addAmount: parseInt(data?[PlateFields.addAmount]),
+      region: data?[PlateFields.region],
     );
-  }
-
-  Map<String, dynamic> toMap() {
-    return {
-      PlateFields.plateNumber: plateNumber,
-      PlateFields.type: type,
-      PlateFields.requestTime: requestTime,
-      PlateFields.location: location,
-      PlateFields.area: area,
-      PlateFields.userName: userName,
-      PlateFields.isSelected: isSelected,
-      PlateFields.selectedBy: selectedBy,
-      PlateFields.adjustmentType: adjustmentType,
-      PlateFields.statusList: statusList,
-      PlateFields.basicStandard: basicStandard,
-      PlateFields.basicAmount: basicAmount,
-      PlateFields.addStandard: addStandard,
-      PlateFields.addAmount: addAmount,
-    };
   }
 
   factory PlateModel.fromMap(Map<String, dynamic> map, String id) {
@@ -121,7 +106,28 @@ class PlateModel {
       basicAmount: parseInt(map[PlateFields.basicAmount]),
       addStandard: parseInt(map[PlateFields.addStandard]),
       addAmount: parseInt(map[PlateFields.addAmount]),
+      region: map[PlateFields.region],
     );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      PlateFields.plateNumber: plateNumber,
+      PlateFields.type: type,
+      PlateFields.requestTime: requestTime,
+      PlateFields.location: location,
+      PlateFields.area: area,
+      PlateFields.userName: userName,
+      PlateFields.isSelected: isSelected,
+      PlateFields.selectedBy: selectedBy,
+      PlateFields.adjustmentType: adjustmentType,
+      PlateFields.statusList: statusList,
+      PlateFields.basicStandard: basicStandard,
+      PlateFields.basicAmount: basicAmount,
+      PlateFields.addStandard: addStandard,
+      PlateFields.addAmount: addAmount,
+      PlateFields.region: region,
+    };
   }
 
   PlateModel copyWith({
@@ -140,6 +146,7 @@ class PlateModel {
     int? basicAmount,
     int? addStandard,
     int? addAmount,
+    String? region,
   }) {
     return PlateModel(
       id: id ?? this.id,
@@ -157,6 +164,7 @@ class PlateModel {
       basicAmount: basicAmount ?? this.basicAmount,
       addStandard: addStandard ?? this.addStandard,
       addAmount: addAmount ?? this.addAmount,
+      region: region ?? this.region,
     );
   }
 
@@ -181,7 +189,8 @@ class PlateModel {
         other.basicStandard == basicStandard &&
         other.basicAmount == basicAmount &&
         other.addStandard == addStandard &&
-        other.addAmount == addAmount;
+        other.addAmount == addAmount &&
+        other.region == region;
   }
 
   @override
@@ -200,6 +209,7 @@ class PlateModel {
         basicStandard.hashCode ^
         basicAmount.hashCode ^
         addStandard.hashCode ^
-        addAmount.hashCode;
+        addAmount.hashCode ^
+        region.hashCode;
   }
 }

@@ -85,7 +85,13 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
             locationController: locationController,
             onLocationSelected: (String location) {
               if (location.isNotEmpty) {
-                _completeParking(context, selectedPlate.plateNumber, selectedPlate.area, location);
+                _completeParking(
+                  context,
+                  selectedPlate.plateNumber,
+                  selectedPlate.area,
+                  location,
+                  selectedPlate.region ?? '전국',
+                );
               } else {
                 showSnackbar(context, '주차 구역을 입력해주세요.');
               }
@@ -96,7 +102,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
     }
   }
 
-  void _completeParking(BuildContext context, String plateNumber, String area, String location) {
+  void _completeParking(BuildContext context, String plateNumber, String area, String location, String region) {
     final movementPlate = context.read<MovementPlate>(); // ✅ MovementPlate 사용
     final plateState = context.read<PlateState>(); // ✅ PlateState 추가
     final plateRepository = context.read<PlateRepository>();
@@ -115,6 +121,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
         basicAmount: 0,
         addStandard: 0,
         addAmount: 0,
+        region: region,
       );
 
       movementPlate.setParkingCompleted(plateNumber, area, plateState); // ✅ PlateState 추가
@@ -124,8 +131,6 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
       showSnackbar(context, "입차 완료 처리 중 오류 발생: $e");
     }
   }
-
-
 
   @override
   Widget build(BuildContext context) {
