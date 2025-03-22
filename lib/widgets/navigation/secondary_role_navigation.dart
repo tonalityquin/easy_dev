@@ -20,7 +20,7 @@ class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWi
     final selectedMode = userRole == 'fielder' ? 'Field Mode' : manageState.currentStatus;
 
     return AppBar(
-      backgroundColor: Colors.green,
+      backgroundColor: Colors.white,
       centerTitle: true,
       title: GestureDetector(
         onTap: userRole == 'fielder'
@@ -29,19 +29,19 @@ class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWi
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(CupertinoIcons.settings_solid, size: 18, color: Colors.white),
+            const Icon(CupertinoIcons.settings_solid, size: 18, color: Colors.green),
             const SizedBox(width: 6),
             Text(
               selectedMode,
               style: const TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w600,
-                color: Colors.white,
+                color: Colors.black87,
               ),
             ),
             if (userRole != 'fielder') ...[
               const SizedBox(width: 4),
-              const Icon(CupertinoIcons.chevron_down, size: 14, color: Colors.white),
+              const Icon(CupertinoIcons.chevron_down, size: 14, color: Colors.grey),
             ],
           ],
         ),

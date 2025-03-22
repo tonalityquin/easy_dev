@@ -90,7 +90,7 @@ class TopNavigation extends StatelessWidget implements PreferredSizeWidget {
                         .map((area) => Center(
                       child: Text(
                         area,
-                        style: const TextStyle(fontSize: 16),
+                        style: const TextStyle(fontSize: 24),
                       ),
                     ))
                         .toList(),
