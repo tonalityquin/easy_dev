@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../states/secondary/secondary_access_state.dart';
@@ -17,72 +18,91 @@ class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWi
     final userState = context.watch<UserState>();
     final userRole = userState.role.toLowerCase();
     final selectedMode = userRole == 'fielder' ? 'Field Mode' : manageState.currentStatus;
+
     return AppBar(
-      title: RoleBasedDropdown(
-        userRole: userRole,
-        selectedMode: selectedMode,
-        availableStatus: _getFilteredAvailableStatus(userRole, manageState.availableStatus),
-        onModeChange: (newMode) {
-          if (newMode != null && userRole != 'fielder') {
-            manageState.updateManage(newMode);
-          }
-        },
-      ),
-      centerTitle: true,
       backgroundColor: Colors.green,
+      centerTitle: true,
+      title: GestureDetector(
+        onTap: userRole == 'fielder'
+            ? null
+            : () => _showPickerDialog(context, manageState, selectedMode, _getFilteredAvailableStatus(userRole, manageState.availableStatus)),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(CupertinoIcons.settings_solid, size: 18, color: Colors.white),
+            const SizedBox(width: 6),
+            Text(
+              selectedMode,
+              style: const TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
+            if (userRole != 'fielder') ...[
+              const SizedBox(width: 4),
+              const Icon(CupertinoIcons.chevron_down, size: 14, color: Colors.white),
+            ],
+          ],
+        ),
+      ),
     );
   }
 
   List<String> _getFilteredAvailableStatus(String userRole, List<String> availableStatus) {
-    if (userRole == 'fielder') {
-      return ['Field Mode'];
-    }
-    if (userRole == 'dev') {
-      return availableStatus;
-    }
+    if (userRole == 'fielder') return ['Field Mode'];
+    if (userRole == 'dev') return availableStatus;
     return availableStatus.where((mode) => mode != 'Statistics Mode').toList();
   }
-}
 
-class RoleBasedDropdown extends StatelessWidget {
-  final String userRole;
-  final String selectedMode;
-  final List<String> availableStatus;
-  final ValueChanged<String?> onModeChange;
+  void _showPickerDialog(
+      BuildContext context,
+      SecondaryAccessState manageState,
+      String currentStatus,
+      List<String> availableStatus,
+      ) {
+    String tempSelected = currentStatus;
 
-  const RoleBasedDropdown({
-    super.key,
-    required this.userRole,
-    required this.selectedMode,
-    required this.availableStatus,
-    required this.onModeChange,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      ignoring: userRole == 'fielder',
-      child: DropdownButton<String>(
-        value: selectedMode,
-        underline: Container(),
-        // 밑줄 제거
-        dropdownColor: Colors.white,
-        // 드롭다운 배경색
-        items: _buildDropdownItems(),
-        onChanged: onModeChange,
-      ),
+    showDialog(
+      context: context,
+      builder: (_) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          content: SizedBox(
+            height: 230,
+            child: Column(
+              children: [
+                const Text(
+                  '모드 선택',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                const Divider(),
+                Expanded(
+                  child: CupertinoPicker(
+                    scrollController: FixedExtentScrollController(
+                      initialItem: availableStatus.indexOf(currentStatus),
+                    ),
+                    itemExtent: 36,
+                    onSelectedItemChanged: (index) {
+                      tempSelected = availableStatus[index];
+                    },
+                    children: availableStatus.map((mode) => Center(child: Text(mode))).toList(),
+                  ),
+                ),
+                const Divider(height: 0),
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    manageState.updateManage(tempSelected);
+                  },
+                  child: const Text('확인', style: TextStyle(color: Colors.green)),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
-  }
-
-  List<DropdownMenuItem<String>> _buildDropdownItems() {
-    return availableStatus.map((mode) {
-      return DropdownMenuItem<String>(
-        value: mode,
-        child: Text(
-          mode,
-          style: const TextStyle(color: Colors.black),
-        ),
-      );
-    }).toList();
   }
 }
