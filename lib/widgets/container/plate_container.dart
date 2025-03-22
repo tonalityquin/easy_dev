@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/plate_model.dart';
+import '../../states/plate/filter_plate.dart';
 import '../../utils/fee_calculator.dart';
 import '../../states/plate/plate_state.dart';
 import '../../states/user/user_state.dart';
@@ -43,8 +44,10 @@ class PlateContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final plateState = Provider.of<PlateState>(context);
-    final filteredData = _filterData(data, plateState.searchQuery);
+    final filterPlate = context.watch<FilterPlate>(); // ✅ 검색어 상태 가져오기
+    final searchQuery = filterPlate.searchQuery;
+    final filteredData = _filterData(data, searchQuery);
+
     final userName = Provider.of<UserState>(context, listen: false).name;
 
     if (filteredData.isEmpty) {
@@ -64,12 +67,15 @@ class PlateContainer extends StatelessWidget {
         int basicStandard = (item.basicStandard is String)
             ? int.tryParse(item.basicStandard as String) ?? 0
             : (item.basicStandard ?? 0);
-        int basicAmount =
-            (item.basicAmount is String) ? int.tryParse(item.basicAmount as String) ?? 0 : (item.basicAmount ?? 0);
-        int addStandard =
-            (item.addStandard is String) ? int.tryParse(item.addStandard as String) ?? 0 : (item.addStandard ?? 0);
-        int addAmount =
-            (item.addAmount is String) ? int.tryParse(item.addAmount as String) ?? 0 : (item.addAmount ?? 0);
+        int basicAmount = (item.basicAmount is String)
+            ? int.tryParse(item.basicAmount as String) ?? 0
+            : (item.basicAmount ?? 0);
+        int addStandard = (item.addStandard is String)
+            ? int.tryParse(item.addStandard as String) ?? 0
+            : (item.addStandard ?? 0);
+        int addAmount = (item.addAmount is String)
+            ? int.tryParse(item.addAmount as String) ?? 0
+            : (item.addAmount ?? 0);
 
         int currentFee = calculateParkingFee(
           entryTimeInMinutes: item.requestTime.hour * 60 + item.requestTime.minute,
@@ -79,6 +85,7 @@ class PlateContainer extends StatelessWidget {
           addStandard: addStandard,
           addAmount: addAmount,
         ).toInt();
+
         int elapsedMinutes = DateTime.now().difference(item.requestTime).inMinutes;
 
         return Column(
