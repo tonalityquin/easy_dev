@@ -1,0 +1,32 @@
+Performing hot restart...
+Syncing files to device sdk gphone64 x86 64...
+Restarted application in 1,058ms.
+I/flutter ( 4683): [DEBUG] _checkLoginState() 실행됨
+I/flutter ( 4683): [DEBUG] 자동 로그인 시도
+E/libEGL  ( 4683): called unimplemented OpenGL ES API
+W/DynamiteModule( 4683): Local module descriptor class for com.google.android.gms.providerinstaller.dynamite not found.
+I/DynamiteModule( 4683): Considering local module com.google.android.gms.providerinstaller.dynamite:0 and remote module com.google.android.gms.providerinstaller.dynamite:0
+W/ProviderInstaller( 4683): Failed to load providerinstaller module: No acceptable module com.google.android.gms.providerinstaller.dynamite found. Local version is 0 and remote version is 0.
+W/ProviderInstaller( 4683): Failed to report request stats: com.google.android.gms.common.security.ProviderInstallerImpl.reportRequestStats [class android.content.Context, long, long]
+D/EGL_emulation( 4683): app_time_stats: avg=190.02ms min=1.63ms max=7195.39ms count=41
+D/TrafficStats( 4683): tagSocket(155) with statsTag=0xffffffff, statsUid=-1
+I/flutter ( 4683): [DEBUG] 로그인 상태 확인: isLoggedIn = true
+I/flutter ( 4683): [DEBUG] 로그인된 상태 - '/home'으로 이동
+W/WindowOnBackDispatcher( 4683): OnBackInvokedCallback is not enabled for the application.
+W/WindowOnBackDispatcher( 4683): Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+I/flutter ( 4683): 🔄 지역 동기화: release
+I/flutter ( 4683): 📌 Selected Area: test
+I/flutter ( 4683): 🅿️ Parking Requests: 1
+I/flutter ( 4683): ✅ Parking Completed: 0
+I/flutter ( 4683): 🚗 Departure Requests: 0
+I/flutter ( 4683): 🏁 Departure Completed: 0
+I/flutter ( 4683): 📌 Selected Area: test
+I/flutter ( 4683): 🅿️ Parking Requests: 1
+I/flutter ( 4683): ✅ Parking Completed: 2
+I/flutter ( 4683): 🚗 Departure Requests: 0
+I/flutter ( 4683): 🏁 Departure Completed: 0
+I/flutter ( 4683): 📌 Selected Area: dev
+I/flutter ( 4683): 🅿️ Parking Requests: 1
+I/flutter ( 4683): ✅ Parking Completed: 1
+I/flutter ( 4683): 🚗 Departure Requests: 1
+I/flutter ( 4683): 🏁 Departure Completed: 0
