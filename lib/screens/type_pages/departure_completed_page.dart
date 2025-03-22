@@ -5,6 +5,7 @@ import '../../states/plate/filter_plate.dart';
 import '../../states/plate/movement_plate.dart';
 import '../../states/plate/plate_state.dart';
 import '../../states/area/area_state.dart';
+import '../../states/user/user_state.dart';
 import '../../widgets/container/plate_container.dart';
 import '../../widgets/navigation/top_navigation.dart';
 import '../../widgets/dialog/plate_search_dialog.dart';
@@ -61,7 +62,24 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final plateState = context.read<PlateState>();
+    final userName = context.read<UserState>().name;
+
+    return WillPopScope(
+        onWillPop: () async {
+      final selectedPlate = plateState.getSelectedPlate('departure_completed', userName);
+      if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
+        await plateState.toggleIsSelected(
+          collection: 'departure_completed', // 💡 실제 사용하는 컬렉션 이름으로 변경
+          plateNumber: selectedPlate.plateNumber,
+          userName: userName,
+          onError: (msg) => debugPrint(msg),
+        );
+        return false;
+      }
+      return true;
+    },
+    child: Scaffold(
       appBar: AppBar(
         title: const TopNavigation(),
         backgroundColor: Colors.blue,
@@ -162,6 +180,6 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
           );
         },
       ),
-    );
+    ));
   }
 }
