@@ -103,6 +103,24 @@ class PlateContainer extends StatelessWidget {
               isSelected: isSelected,
               onTap: () {
                 final plateState = Provider.of<PlateState>(context, listen: false);
+
+                // 🔐 다른 사용자가 이미 선택한 경우
+                if (item.isSelected && item.selectedBy != userName) {
+                  showSnackbar(context, "⚠️ 이미 다른 사용자가 선택한 번호판입니다.");
+                  return;
+                }
+
+                // 🚫 사용자가 이미 다른 번호판 선택 중인 경우
+                final alreadySelected = data.any((p) =>
+                p.isSelected && p.selectedBy == userName && p.id != item.id,
+                );
+
+                if (alreadySelected && !item.isSelected) {
+                  showSnackbar(context, "⚠️ 이미 다른 번호판을 선택한 상태입니다.");
+                  return;
+                }
+
+                // ✅ 조건 만족 시 선택 처리
                 plateState.toggleIsSelected(
                   collection: collection,
                   plateNumber: item.plateNumber,
