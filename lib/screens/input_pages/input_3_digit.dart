@@ -14,6 +14,7 @@ import '../../utils/show_snackbar.dart';
 import '../../widgets/dialog/parking_location_dialog.dart';
 import '../../utils/camera_helper.dart';
 import '../../widgets/dialog/camera_preview_dialog.dart';
+import '../../widgets/dialog/region_picker_dialog.dart';
 import '../../states/plate/input_plate.dart';
 
 class Input3Digit extends StatefulWidget {
@@ -24,6 +25,26 @@ class Input3Digit extends StatefulWidget {
 }
 
 class _Input3DigitState extends State<Input3Digit> {
+  final List<String> regions = [
+    '전국',
+    '서울',
+    '경기',
+    '부산',
+    '인천',
+    '대전',
+    '대구',
+    '울산',
+    '광주',
+    '강원',
+    '충북',
+    '충남',
+    '경북',
+    '경남',
+    '전북',
+    '전남',
+    '제주',
+  ];
+  String dropdownValue = '전국'; // ✅ 드롭다운 값 상태 변수
   List<String> selectedStatuses = [];
   List<bool> isSelected = [];
   List<String> statuses = [];
@@ -173,8 +194,10 @@ class _Input3DigitState extends State<Input3Digit> {
       plateNumber: plateNumber,
       location: locationController.text,
       isLocationSelected: isLocationSelected,
-      areaState: areaState, // ✅ 변경
-      userState: userState, // ✅ 변경
+      areaState: areaState,
+      // ✅ 변경
+      userState: userState,
+      // ✅ 변경
       adjustmentType: selectedAdjustment,
       statusList: selectedStatuses,
       basicStandard: selectedBasicStandard,
@@ -186,7 +209,6 @@ class _Input3DigitState extends State<Input3Digit> {
     clearInput();
     _clearLocation();
   }
-
 
   void _selectParkingLocation() {
     showDialog(
@@ -245,19 +267,68 @@ class _Input3DigitState extends State<Input3Digit> {
                           '번호 입력',
                           style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
                         ),
-                        CommonPlateInput(
-                          frontDigitCount: 3,
-                          hasMiddleChar: true,
-                          backDigitCount: 4,
-                          frontController: controller3digit,
-                          middleController: controller1digit,
-                          backController: controller4digit,
-                          onKeypadStateChanged: (TextEditingController activeController) {
-                            setState(() {
-                              this.activeController = controller3digit;
-                              showKeypad = true;
-                            });
-                          },
+                        const SizedBox(height: 8),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center, // 🔹 중앙 정렬로 변경
+                          children: [
+                            // 드롭다운 버튼
+                            GestureDetector(
+                              onTap: () {
+                                showRegionPickerDialog(
+                                  context: context,
+                                  selectedRegion: dropdownValue,
+                                  regions: regions,
+                                  onConfirm: (selected) {
+                                    setState(() {
+                                      dropdownValue = selected;
+                                    });
+                                  },
+                                );
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12), // 🔸 높이 맞춤
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.transparent),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      dropdownValue,
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold, // 🔹 굵게 설정
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(width: 16),
+
+                            // 번호판 입력창
+                            Expanded(
+                              child: Align(
+                                alignment: Alignment.center,
+                                child: CommonPlateInput(
+                                  frontDigitCount: 3,
+                                  hasMiddleChar: true,
+                                  backDigitCount: 4,
+                                  frontController: controller3digit,
+                                  middleController: controller1digit,
+                                  backController: controller4digit,
+                                  onKeypadStateChanged: (TextEditingController activeController) {
+                                    setState(() {
+                                      this.activeController = controller3digit;
+                                      showKeypad = true;
+                                    });
+                                  },
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 32.0),
                         const Text(
