@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../input_pages/modify_plate_info.dart';
 import '../../states/plate/plate_state.dart'; // PlateState 상태 관리
 import '../../states/plate/delete_plate.dart';
 import '../../states/plate/movement_plate.dart';
@@ -86,7 +87,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
     context.read<FilterPlate>().clearLocationSearchQuery();
   }
 
-  void _resetPlateSearch(BuildContext context) {
+  void _resetSearch(BuildContext context) {
     context.read<FilterPlate>().clearPlateSearchQuery();
     setState(() {
       _isSearchMode = false;
@@ -206,10 +207,23 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
               ],
               onTap: (index) {
                 if (index == 0) {
-                  if (_isSearchMode) {
-                    _resetPlateSearch(context);
+                  if (isPlateSelected) {
+                    // 👉 선택된 plate 정보를 수정 페이지로 넘겨줌
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ModifyPlateInfo(
+                          plate: selectedPlate,
+                          collectionKey: 'parking_completed', // 또는 'parking_requests' 등 상황에 맞게
+                        ),
+                      ),
+                    );
                   } else {
-                    _showSearchDialog(context);
+                    if (_isSearchMode) {
+                      _resetSearch(context);
+                    } else {
+                      _showSearchDialog(context);
+                    }
                   }
                 } else if (index == 1) {
                   if (isPlateSelected) {

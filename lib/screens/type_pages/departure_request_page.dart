@@ -14,6 +14,7 @@ import '../../widgets/dialog/plate_search_dialog.dart'; // ✅ PlateSearchDialog
 import '../../widgets/dialog/departure_request_status_dialog.dart';
 import '../../widgets/dialog/parking_request_delete_dialog.dart';
 import '../../utils/show_snackbar.dart';
+import '../input_pages/modify_plate_info.dart';
 
 class DepartureRequestPage extends StatefulWidget {
   const DepartureRequestPage({super.key});
@@ -191,10 +192,23 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
               ],
               onTap: (index) {
                 if (index == 0) {
-                  if (_isSearchMode) {
-                    _resetSearch(context);
+                  if (isPlateSelected) {
+                    // 👉 선택된 plate 정보를 수정 페이지로 넘겨줌
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ModifyPlateInfo(
+                          plate: selectedPlate,
+                          collectionKey: 'departure_requests', // 또는 'parking_requests' 등 상황에 맞게
+                        ),
+                      ),
+                    );
                   } else {
-                    _showSearchDialog(context);
+                    if (_isSearchMode) {
+                      _resetSearch(context);
+                    } else {
+                      _showSearchDialog(context);
+                    }
                   }
                 } else if (index == 1) {
                   if (isPlateSelected) {
