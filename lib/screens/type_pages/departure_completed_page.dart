@@ -97,8 +97,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
       ),
       body: Consumer2<PlateState, AreaState>(
         builder: (context, plateState, areaState, child) {
-          final currentArea = areaState.currentArea;
-          final departureCompleted = plateState.getPlatesByArea('departure_completed', currentArea);
+          final departureCompleted = plateState.getPlatesByCollection('departure_completed');
           return ListView(
             padding: const EdgeInsets.all(8.0),
             children: [
@@ -110,7 +109,6 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                   plateState.toggleIsSelected(
                     collection: 'departure_completed',
                     plateNumber: plateNumber,
-                    area: area,
                     userName: '',
                     onError: (errorMessage) {
                       showSnackbar(context, errorMessage);

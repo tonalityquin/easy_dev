@@ -1,28 +1,30 @@
 Performing hot restart...
 Syncing files to device sdk gphone64 x86 64...
-Restarted application in 1,058ms.
+Restarted application in 1,445ms.
 I/flutter ( 4683): [DEBUG] _checkLoginState() 실행됨
 I/flutter ( 4683): [DEBUG] 자동 로그인 시도
-E/libEGL  ( 4683): called unimplemented OpenGL ES API
 W/DynamiteModule( 4683): Local module descriptor class for com.google.android.gms.providerinstaller.dynamite not found.
+E/libEGL  ( 4683): called unimplemented OpenGL ES API
 I/DynamiteModule( 4683): Considering local module com.google.android.gms.providerinstaller.dynamite:0 and remote module com.google.android.gms.providerinstaller.dynamite:0
 W/ProviderInstaller( 4683): Failed to load providerinstaller module: No acceptable module com.google.android.gms.providerinstaller.dynamite found. Local version is 0 and remote version is 0.
+D/EGL_emulation( 4683): app_time_stats: avg=9263.34ms min=9263.34ms max=9263.34ms count=1
 W/ProviderInstaller( 4683): Failed to report request stats: com.google.android.gms.common.security.ProviderInstallerImpl.reportRequestStats [class android.content.Context, long, long]
-D/EGL_emulation( 4683): app_time_stats: avg=190.02ms min=1.63ms max=7195.39ms count=41
-D/TrafficStats( 4683): tagSocket(155) with statsTag=0xffffffff, statsUid=-1
+D/TrafficStats( 4683): tagSocket(121) with statsTag=0xffffffff, statsUid=-1
 I/flutter ( 4683): [DEBUG] 로그인 상태 확인: isLoggedIn = true
 I/flutter ( 4683): [DEBUG] 로그인된 상태 - '/home'으로 이동
 W/WindowOnBackDispatcher( 4683): OnBackInvokedCallback is not enabled for the application.
 W/WindowOnBackDispatcher( 4683): Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
-I/flutter ( 4683): 🔄 지역 동기화: release
-I/flutter ( 4683): 📌 Selected Area: test
+I/flutter ( 4683): 🔄 지역 동기화: dev
+E/libEGL  ( 4683): called unimplemented OpenGL ES API
+D/EGL_emulation( 4683): app_time_stats: avg=279.47ms min=129.08ms max=424.43ms count=4
+I/flutter ( 4683): 📌 Selected Area: dev
 I/flutter ( 4683): 🅿️ Parking Requests: 1
 I/flutter ( 4683): ✅ Parking Completed: 0
 I/flutter ( 4683): 🚗 Departure Requests: 0
 I/flutter ( 4683): 🏁 Departure Completed: 0
-I/flutter ( 4683): 📌 Selected Area: test
+I/flutter ( 4683): 📌 Selected Area: dev
 I/flutter ( 4683): 🅿️ Parking Requests: 1
-I/flutter ( 4683): ✅ Parking Completed: 2
+I/flutter ( 4683): ✅ Parking Completed: 1
 I/flutter ( 4683): 🚗 Departure Requests: 0
 I/flutter ( 4683): 🏁 Departure Completed: 0
 I/flutter ( 4683): 📌 Selected Area: dev
@@ -30,3 +32,68 @@ I/flutter ( 4683): 🅿️ Parking Requests: 1
 I/flutter ( 4683): ✅ Parking Completed: 1
 I/flutter ( 4683): 🚗 Departure Requests: 1
 I/flutter ( 4683): 🏁 Departure Completed: 0
+E/libEGL  ( 4683): called unimplemented OpenGL ES API
+D/EGL_emulation( 4683): app_time_stats: avg=1341.78ms min=16.67ms max=4955.61ms count=4
+W/WindowOnBackDispatcher( 4683): OnBackInvokedCallback is not enabled for the application.
+W/WindowOnBackDispatcher( 4683): Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+I/flutter ( 4683): 🔄 지역 동기화 실행됨: dev
+I/flutter ( 4683): 📌 Selected Area: dev
+I/flutter ( 4683): 🅿️ Parking Requests: 1
+I/flutter ( 4683): ✅ Parking Completed: 1
+I/flutter ( 4683): 🚗 Departure Requests: 1
+I/flutter ( 4683): 🏁 Departure Completed: 0
+E/libEGL  ( 4683): called unimplemented OpenGL ES API
+W/WindowOnBackDispatcher( 4683): OnBackInvokedCallback is not enabled for the application.
+W/WindowOnBackDispatcher( 4683): Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+D/EGL_emulation( 4683): app_time_stats: avg=29.74ms min=5.19ms max=364.36ms count=30
+I/flutter ( 4683): 🔄 지역 동기화 실행됨: dev
+I/flutter ( 4683): 📌 Selected Area: dev
+I/flutter ( 4683): 🅿️ Parking Requests: 1
+I/flutter ( 4683): ✅ Parking Completed: 1
+I/flutter ( 4683): 🚗 Departure Requests: 1
+I/flutter ( 4683): 🏁 Departure Completed: 0
+E/libEGL  ( 4683): called unimplemented OpenGL ES API
+D/EGL_emulation( 4683): app_time_stats: avg=34.76ms min=3.45ms max=965.92ms count=36
+W/WindowOnBackDispatcher( 4683): OnBackInvokedCallback is not enabled for the application.
+W/WindowOnBackDispatcher( 4683): Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+E/libEGL  ( 4683): called unimplemented OpenGL ES API
+D/EGL_emulation( 4683): app_time_stats: avg=29.75ms min=3.57ms max=518.23ms count=28
+I/flutter ( 4683): ✅ 지역 업데이트: test
+I/flutter ( 4683): 🔄 지역 동기화 실행됨: test
+I/flutter ( 4683): 📌 Selected Area: test
+I/flutter ( 4683): 🅿️ Parking Requests: 1
+I/flutter ( 4683): ✅ Parking Completed: 1
+I/flutter ( 4683): 🚗 Departure Requests: 1
+I/flutter ( 4683): 🏁 Departure Completed: 0
+
+
+
+Performing hot restart...
+Syncing files to device sdk gphone64 x86 64...
+Restarted application in 1,592ms.
+I/flutter ( 6926): [DEBUG] _checkLoginState() 실행됨
+I/flutter ( 6926): [DEBUG] 자동 로그인 시도
+W/DynamiteModule( 6926): Local module descriptor class for com.google.android.gms.providerinstaller.dynamite not found.
+E/libEGL  ( 6926): called unimplemented OpenGL ES API
+I/DynamiteModule( 6926): Considering local module com.google.android.gms.providerinstaller.dynamite:0 and remote module com.google.android.gms.providerinstaller.dynamite:0
+W/ProviderInstaller( 6926): Failed to load providerinstaller module: No acceptable module com.google.android.gms.providerinstaller.dynamite found. Local version is 0 and remote version is 0.
+W/ProviderInstaller( 6926): Failed to report request stats: com.google.android.gms.common.security.ProviderInstallerImpl.reportRequestStats [class android.content.Context, long, long]
+D/TrafficStats( 6926): tagSocket(134) with statsTag=0xffffffff, statsUid=-1
+D/EGL_emulation( 6926): app_time_stats: avg=388.17ms min=12.94ms max=11777.07ms count=32
+I/flutter ( 6926): [DEBUG] 로그인 상태 확인: isLoggedIn = true
+I/flutter ( 6926): [DEBUG] 로그인된 상태 - '/home'으로 이동
+W/WindowOnBackDispatcher( 6926): OnBackInvokedCallback is not enabled for the application.
+W/WindowOnBackDispatcher( 6926): Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+I/flutter ( 6926): 🔄 지역 동기화: test
+E/libEGL  ( 6926): called unimplemented OpenGL ES API
+D/EGL_emulation( 6926): app_time_stats: avg=250.00ms min=76.03ms max=439.11ms count=4
+I/flutter ( 6926): 📌 Selected Area: test
+I/flutter ( 6926): 🅿️ Parking Requests: 1
+I/flutter ( 6926): ✅ Parking Completed: 0
+I/flutter ( 6926): 🚗 Departure Requests: 0
+I/flutter ( 6926): 🏁 Departure Completed: 0
+I/flutter ( 6926): 📌 Selected Area: test
+I/flutter ( 6926): 🅿️ Parking Requests: 1
+I/flutter ( 6926): ✅ Parking Completed: 2
+I/flutter ( 6926): 🚗 Departure Requests: 0
+I/flutter ( 6926): 🏁 Departure Completed: 0

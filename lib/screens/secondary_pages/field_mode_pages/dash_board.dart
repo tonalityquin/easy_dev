@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart'; // Provider 사용
 import 'dart:io'; // 앱 종료를 위한 패키지 추가
 import 'package:shared_preferences/shared_preferences.dart';
@@ -50,13 +51,13 @@ class DashBoard extends StatelessWidget {
       // 🔹 로그인 페이지로 이동
       Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
       print("[DEBUG] 로그인 페이지로 이동 완료");
-
     } catch (e) {
       print("[DEBUG] 로그아웃 중 오류 발생: $e");
       showSnackbar(context, '로그아웃 실패: $e');
     }
-  }
 
+    SystemChannels.platform.invokeMethod('SystemNavigator.pop');
+  }
 
   /// 🔹 UI 렌더링
   @override

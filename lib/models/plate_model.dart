@@ -124,6 +124,43 @@ class PlateModel {
     );
   }
 
+  PlateModel copyWith({
+    String? id,
+    String? plateNumber,
+    String? type,
+    DateTime? requestTime,
+    String? location,
+    String? area,
+    String? userName,
+    bool? isSelected,
+    String? selectedBy,
+    String? adjustmentType,
+    List<String>? statusList,
+    int? basicStandard,
+    int? basicAmount,
+    int? addStandard,
+    int? addAmount,
+  }) {
+    return PlateModel(
+      id: id ?? this.id,
+      plateNumber: plateNumber ?? this.plateNumber,
+      type: type ?? this.type,
+      requestTime: requestTime ?? this.requestTime,
+      location: location ?? this.location,
+      area: area ?? this.area,
+      userName: userName ?? this.userName,
+      isSelected: isSelected ?? this.isSelected,
+      selectedBy: selectedBy ?? this.selectedBy,
+      adjustmentType: adjustmentType ?? this.adjustmentType,
+      statusList: statusList ?? this.statusList,
+      basicStandard: basicStandard ?? this.basicStandard,
+      basicAmount: basicAmount ?? this.basicAmount,
+      addStandard: addStandard ?? this.addStandard,
+      addAmount: addAmount ?? this.addAmount,
+    );
+  }
+
+
 
   @override
   bool operator ==(Object other) {

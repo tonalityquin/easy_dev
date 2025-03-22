@@ -99,7 +99,6 @@ class PlateContainer extends StatelessWidget {
                 plateState.toggleIsSelected(
                   collection: collection,
                   plateNumber: item.plateNumber,
-                  area: item.area,
                   userName: userName,
                   onError: (errorMessage) {
                     showSnackbar(context, errorMessage);

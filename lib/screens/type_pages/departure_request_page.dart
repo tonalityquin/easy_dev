@@ -103,7 +103,6 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
         plateState.toggleIsSelected(
           collection: 'departure_requests',
           plateNumber: selectedPlate.plateNumber,
-          area: selectedPlate.area,
           userName: userName,
           onError: (errorMessage) {
             debugPrint("toggleIsSelected 실패: $errorMessage");
@@ -129,7 +128,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
           final filterState = context.read<FilterPlate>(); // 🔹 FilterState 가져오기
           var departureRequests = _isParkingAreaMode && _selectedParkingArea != null
               ? filterState.filterByParkingLocation('departure_requests', currentArea, _selectedParkingArea!)
-              : plateState.getPlatesByArea('departure_requests', currentArea);
+              : plateState.getPlatesByCollection('departure_requests');
           final userName = context.read<UserState>().name;
           departureRequests.sort((a, b) {
             return _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime);
@@ -145,7 +144,6 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                   plateState.toggleIsSelected(
                     collection: 'departure_requests',
                     plateNumber: plateNumber,
-                    area: area,
                     userName: userName,
                     onError: (errorMessage) {
                       showSnackbar(context, errorMessage);
