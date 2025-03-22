@@ -77,7 +77,7 @@ class MovementPlate {
         newType: '입차 완료',
       );
 
-      plateState.syncWithAreaState(selectedPlate.area);
+      plateState.syncWithAreaState();
     }
   }
 

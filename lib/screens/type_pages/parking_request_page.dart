@@ -65,7 +65,6 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
     context.read<PlateState>().toggleIsSelected(
           collection: 'parking_requests',
           plateNumber: plateNumber,
-          area: area,
           userName: userName,
           onError: (errorMessage) {
             showSnackbar(context, errorMessage);
@@ -134,8 +133,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
       appBar: const TopNavigation(),
       body: Consumer2<PlateState, AreaState>(
         builder: (context, plateState, areaState, child) {
-          final currentArea = areaState.currentArea;
-          var parkingRequests = plateState.getPlatesByArea('parking_requests', currentArea);
+          var parkingRequests = plateState.getPlatesByCollection('parking_requests');
           parkingRequests.sort((a, b) {
             return _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime);
           });

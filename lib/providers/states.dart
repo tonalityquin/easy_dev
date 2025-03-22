@@ -28,7 +28,11 @@ final List<SingleChildWidget> stateProviders = [
     create: (context) => InputPlate(context.read<PlateRepository>()),
   ),
   ChangeNotifierProvider(
-    create: (context) => PlateState(context.read<PlateRepository>()),
+    create: (context) {
+      final repo = context.read<PlateRepository>();
+      final areaState = context.read<AreaState>();
+      return PlateState(repo, areaState);
+    },
   ),
   ChangeNotifierProvider(
     create: (context) => UserState(context.read<UserRepository>()),

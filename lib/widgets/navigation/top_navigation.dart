@@ -36,7 +36,7 @@ class TopNavigation extends StatelessWidget implements PreferredSizeWidget {
             : (newArea) {
           if (newArea != null) {
             areaState.updateArea(newArea);
-            plateState.syncWithAreaState(newArea); // 🔹 PlateState에서 자동으로 print() 실행
+            plateState.syncWithAreaState();
           }
         },
         style: const TextStyle(color: Colors.black),

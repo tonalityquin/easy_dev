@@ -143,7 +143,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
           final filterState = context.read<FilterPlate>();
           var parkingCompleted = _isParkingAreaMode && _selectedParkingArea != null
               ? filterState.filterByParkingLocation('parking_completed', currentArea, _selectedParkingArea!)
-              : plateState.getPlatesByArea('parking_completed', currentArea);
+              : plateState.getPlatesByCollection('parking_completed');
           final userName = context.read<UserState>().name;
           parkingCompleted.sort((a, b) {
             return _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime);
@@ -159,7 +159,6 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                   plateState.toggleIsSelected(
                     collection: 'parking_completed',
                     plateNumber: plateNumber,
-                    area: area,
                     userName: userName,
                     onError: (errorMessage) {
                       showSnackbar(context, errorMessage);
