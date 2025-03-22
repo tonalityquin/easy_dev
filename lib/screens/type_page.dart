@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../states/plate/plate_state.dart';
-import '../utils/app_colors.dart'; // 앱 색상 팔레트
+import '../states/user/user_state.dart';
+import '../utils/app_colors.dart';
 import '../utils/show_snackbar.dart';
-import '../states/page/page_state.dart'; // 페이지 상태 관리 클래스
-import '../states/page/page_info.dart'; // 페이지 정보 관리 클래스
-import '../screens/input_pages/input_3_digit.dart'; // 3자리 입력 페이지
+import '../states/page/page_state.dart';
+import '../states/page/page_info.dart';
+import '../screens/input_pages/input_3_digit.dart';
 import 'secondary_page.dart';
 
 class TypePage extends StatelessWidget {
@@ -15,12 +16,41 @@ class TypePage extends StatelessWidget {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (_) => PageState(pages: defaultPages),
-      child: Scaffold(
-        appBar: AppBar(
-          backgroundColor: AppColors.selectedItemColor,
-        ),
-        body: const RefreshableBody(),
-        bottomNavigationBar: const PageBottomNavigation(),
+      child: Builder(
+        builder: (context) {
+          final plateState = context.read<PlateState>();
+          final pageState = context.read<PageState>();
+          final userName = context.read<UserState>().name;
+
+          return WillPopScope(
+            onWillPop: () async {
+              // 현재 선택된 collection 가져오기
+              final currentPage = pageState.pages[pageState.selectedIndex];
+              final collection = currentPage.collectionKey;
+
+              // 선택된 plate 있는지 확인
+              final selectedPlate = plateState.getSelectedPlate(collection, userName);
+              if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
+                await plateState.toggleIsSelected(
+                  collection: collection,
+                  plateNumber: selectedPlate.plateNumber,
+                  userName: userName,
+                  onError: (msg) => debugPrint(msg),
+                );
+                return false; // plate 해제만 하고 뒤로가기 차단
+              }
+
+              return false; // 선택 없을 경우에도 앱 종료 방지
+            },
+            child: Scaffold(
+              appBar: AppBar(
+                backgroundColor: AppColors.selectedItemColor,
+              ),
+              body: const RefreshableBody(),
+              bottomNavigationBar: const PageBottomNavigation(),
+            ),
+          );
+        },
       ),
     );
   }
