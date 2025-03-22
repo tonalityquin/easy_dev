@@ -110,7 +110,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
             showSnackbar(context, "선택 해제에 실패했습니다. 다시 시도해주세요.");
           },
         );
-        movementPlate.setDepartureCompleted(selectedPlate.plateNumber, selectedPlate.area);
+        movementPlate.setDepartureCompleted(selectedPlate.plateNumber, selectedPlate.area, plateState);
         showSnackbar(context, "출차 완료 처리되었습니다.");
       } catch (e) {
         debugPrint("출차 완료 처리 실패: $e");

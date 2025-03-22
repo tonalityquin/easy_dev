@@ -102,7 +102,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
 
     if (selectedPlate != null) {
       try {
-        movementPlate.setDepartureRequested(selectedPlate.plateNumber, selectedPlate.area).then((_) {
+        movementPlate.setDepartureRequested(selectedPlate.plateNumber, selectedPlate.area, plateState).then((_) {
           // ✅ MovementPlate에서 호출
           Future.delayed(Duration(milliseconds: 300), () {
             if (context.mounted) {
@@ -122,17 +122,20 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
 
   void handleEntryRequest(BuildContext context, String plateNumber, String area) {
     final movementPlate = context.read<MovementPlate>(); // ✅ MovementPlate 사용
+    final plateState = context.read<PlateState>();
 
     movementPlate.goBackToParkingRequest(
-      fromCollection: 'parking_completed', // 🔥 fromCollection을 명시적으로 지정
+      fromCollection: 'parking_completed',
+      // 🔥 fromCollection을 명시적으로 지정
       plateNumber: plateNumber,
       area: area,
-      newLocation: "미지정", // ❓ 선택적으로 위치 변경 가능
+      newLocation: "미지정",
+      // ❓ 선택적으로 위치 변경 가능
+      plateState: plateState,
     );
 
     showSnackbar(context, "입차 요청이 완료되었습니다.");
   }
-
 
   @override
   Widget build(BuildContext context) {

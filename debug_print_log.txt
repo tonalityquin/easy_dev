@@ -1,224 +1,610 @@
 Performing hot restart...
 Syncing files to device sdk gphone64 x86 64...
-E/libEGL  ( 9053): called unimplemented OpenGL ES API
-D/EGL_emulation( 9053): app_time_stats: avg=34.96ms min=11.75ms max=69.19ms count=29
-E/libEGL  ( 9053): called unimplemented OpenGL ES API
-D/EGL_emulation( 9053): app_time_stats: avg=39.17ms min=9.97ms max=95.74ms count=25
-E/libEGL  ( 9053): called unimplemented OpenGL ES API
-D/EGL_emulation( 9053): app_time_stats: avg=32.69ms min=6.14ms max=135.79ms count=29
-Restarted application in 2,794ms.
-I/flutter ( 9053): [DEBUG] _checkLoginState() 실행됨
-I/flutter ( 9053): [DEBUG] 자동 로그인 시도
-E/libEGL  ( 9053): called unimplemented OpenGL ES API
-D/EGL_emulation( 9053): app_time_stats: avg=712.64ms min=32.50ms max=2729.98ms count=4
-W/DynamiteModule( 9053): Local module descriptor class for com.google.android.gms.providerinstaller.dynamite not found.
-I/DynamiteModule( 9053): Considering local module com.google.android.gms.providerinstaller.dynamite:0 and remote module com.google.android.gms.providerinstaller.dynamite:0
-W/ProviderInstaller( 9053): Failed to load providerinstaller module: No acceptable module com.google.android.gms.providerinstaller.dynamite found. Local version is 0 and remote version is 0.
-W/ProviderInstaller( 9053): Failed to report request stats: com.google.android.gms.common.security.ProviderInstallerImpl.reportRequestStats [class android.content.Context, long, long]
-D/TrafficStats( 9053): tagSocket(146) with statsTag=0xffffffff, statsUid=-1
-I/flutter ( 9053): [DEBUG] 로그인 상태 확인: isLoggedIn = true
-I/flutter ( 9053): [DEBUG] 로그인된 상태 - '/home'으로 이동
-E/libEGL  ( 9053): called unimplemented OpenGL ES API
-D/EGL_emulation( 9053): app_time_stats: avg=149.09ms min=29.98ms max=428.73ms count=7
-W/WindowOnBackDispatcher( 9053): OnBackInvokedCallback is not enabled for the application.
-W/WindowOnBackDispatcher( 9053): Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
-I/flutter ( 9053): 🕐 지역 Plate 상태 수신 대기 중...
-I/flutter ( 9053): 🔄 지역 동기화: test
-I/flutter ( 9053): 🔄 지역 변경 감지됨: test
-I/flutter ( 9053): 🕐 지역 Plate 상태 수신 대기 중...
-I/flutter ( 9053): ✅ 지역 Plate 상태 수신 완료
-I/flutter ( 9053): 📌 Selected Area: test
-I/flutter ( 9053): 🅿️ Parking Requests: 2
-I/flutter ( 9053): ✅ Parking Completed: 3
-I/flutter ( 9053): 🚗 Departure Requests: 0
-I/flutter ( 9053): 🏁 Departure Completed: 1
-E/libEGL  ( 9053): called unimplemented OpenGL ES API
-D/EGL_emulation( 9053): app_time_stats: avg=338.72ms min=184.75ms max=561.31ms count=4
-E/libEGL  ( 9053): called unimplemented OpenGL ES API
-D/EGL_emulation( 9053): app_time_stats: avg=46.37ms min=12.11ms max=233.86ms count=23
-W/WindowOnBackDispatcher( 9053): OnBackInvokedCallback is not enabled for the application.
-W/WindowOnBackDispatcher( 9053): Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
-D/DeferrableSurface( 9053): surface closed,  useCount=2 closed=true androidx.camera.core.SurfaceRequest$2@d72a02a
-D/DeferrableSurface( 9053): surface closed,  useCount=0 closed=true androidx.camera.core.processing.SurfaceEdge$SettableSurface@4e0a01e
-D/DeferrableSurface( 9053): Surface terminated[total_surfaces=3, used_surfaces=3](androidx.camera.core.processing.SurfaceEdge$SettableSurface@4e0a01e}
-D/DeferrableSurface( 9053): use count-1,  useCount=1 closed=true androidx.camera.core.SurfaceRequest$2@d72a02a
-W/ScreenFlashWrapper( 9053): completePendingScreenFlashClear: none pending!
-D/ImageCapture( 9053): clearPipeline
-D/DeferrableSurface( 9053): surface closed,  useCount=1 closed=true androidx.camera.core.impl.ImmediateSurface@d232b64
-D/DeferrableSurface( 9053): surface closed,  useCount=1 closed=true androidx.camera.core.impl.ImmediateSurface@cab0a82
-W/ScreenFlashWrapper( 9053): completePendingScreenFlashClear: none pending!
-D/Camera2CameraImpl( 9053): {Camera@dc8c245[id=1]} Use cases [androidx.camera.core.Preview-a7da6a6c-96ee-4594-8686-89b33ad62a1c37083908, androidx.camera.core.ImageCapture-7c0a315a-d4ec-43d9-b5c0-1083086cfc5357730091, androidx.camera.core.ImageAnalysis-929f695c-84ab-4679-aaeb-fc7af81138cc262244897] now DETACHED for camera
-D/UseCaseAttachState( 9053): All use case: [] for camera: 1
-D/Camera2CameraImpl( 9053): {Camera@dc8c245[id=1]} Resetting Capture Session
-D/SyncCaptureSessionImpl( 9053): [androidx.camera.camera2.internal.SynchronizedCaptureSessionImpl@8408aad] Session call close()
-D/Camera2CameraImpl( 9053): {Camera@dc8c245[id=1]} Releasing session in state OPENED
-D/Camera2CameraControlImp( 9053): setActive: isActive = false
-D/UseCaseAttachState( 9053): Active and attached use case: [] for camera: 1
-D/UseCaseAttachState( 9053): Active and attached use case: [] for camera: 1
-D/VideoUsageControl( 9053): resetDirectly: mVideoUsage reset!
-D/Camera2CameraImpl( 9053): {Camera@dc8c245[id=1]} Closing camera.
-D/Camera2CameraImpl( 9053): {Camera@dc8c245[id=1]} Transitioning camera internal state: OPENED --> CLOSING
-D/CameraStateRegistry( 9053): Recalculating open cameras:
-D/CameraStateRegistry( 9053): Camera                                       State                 
-D/CameraStateRegistry( 9053): -------------------------------------------------------------------
-D/CameraStateRegistry( 9053): Camera@dc8c245[id=1]                         CLOSING               
-D/CameraStateRegistry( 9053): Camera@1894966[id=10]                        UNKNOWN               
-D/CameraStateRegistry( 9053): -------------------------------------------------------------------
-D/CameraStateRegistry( 9053): Open count: 1 (Max allowed: 1)
-D/CameraStateMachine( 9053): New public camera state CameraState{type=CLOSING, error=null} from CLOSING and null
-D/CameraStateMachine( 9053): Publishing new public camera state CameraState{type=CLOSING, error=null}
-D/Camera2CameraImpl( 9053): {Camera@dc8c245[id=1]} Resetting Capture Session
-E/ObserverFlutterApi( 9053): The Observer that received a callback has been garbage collected. Please create a new instance to receive any further data changes.
-E/ObserverFlutterApi( 9053): The Observer that received a callback has been garbage collected. Please create a new instance to receive any further data changes.
-D/Camera2CameraImpl( 9053): {Camera@dc8c245[id=1]} Skipping Capture Session state check due to current camera state: CLOSING and previous session status: false
-D/Camera2CameraImpl( 9053): {Camera@dc8c245[id=1]} Releasing session in state CLOSING
-D/SyncCaptureSessionImpl( 9053): [androidx.camera.camera2.internal.SynchronizedCaptureSessionImpl@8408aad] Session call super.close()
-D/CaptureSession( 9053): onSessionFinished()
-D/Camera2CameraImpl( 9053): {Camera@dc8c245[id=1]} closing camera
-D/DynamicRangeResolver( 9053): Resolved dynamic range for use case androidx.camera.core.Preview-fc9bdb42-49a7-4f63-8f34-2d8760b44ef0 to no compatible HDR dynamic ranges.
-D/DynamicRangeResolver( 9053): DynamicRange@6fcb1b9{encoding=UNSPECIFIED, bitDepth=0}
-D/DynamicRangeResolver( 9053): ->
-D/DynamicRangeResolver( 9053): DynamicRange@1ff9780{encoding=SDR, bitDepth=8}
-D/CameraQuirks( 9053): camera2 CameraQuirks = 
-D/CameraQuirks( 9053): camera2 CameraQuirks = 
-D/CameraQuirks( 9053): camera2 CameraQuirks = 
-D/DeferrableSurface( 9053): Surface created[total_surfaces=4, used_surfaces=3](androidx.camera.core.processing.SurfaceEdge$SettableSurface@aa54ce4}
-D/DeferrableSurface( 9053): Surface created[total_surfaces=5, used_surfaces=3](androidx.camera.core.SurfaceRequest$2@1dc5350}
-D/DeferrableSurface( 9053): New surface in use[total_surfaces=5, used_surfaces=4](androidx.camera.core.SurfaceRequest$2@1dc5350}
-D/DeferrableSurface( 9053): use count+1, useCount=1 androidx.camera.core.SurfaceRequest$2@1dc5350
-D/ImageCapture( 9053): createPipeline(cameraId: 1, streamSpec: StreamSpec{resolution=720x480, dynamicRange=DynamicRange@1ff9780{encoding=SDR, bitDepth=8}, expectedFrameRateRange=[0, 0], implementationOptions=androidx.camera.camera2.impl.Camera2ImplConfig@be8f105, zslDisabled=false})
-D/DeferrableSurface( 9053): Surface created[total_surfaces=6, used_surfaces=4](androidx.camera.core.impl.ImmediateSurface@a7c555a}
-D/DeferrableSurface( 9053): Surface created[total_surfaces=7, used_surfaces=4](androidx.camera.core.impl.ImmediateSurface@3273c68}
-D/ImageCapture( 9053): onCameraControlReady
-D/Camera2CameraControlImp( 9053): setFlashMode: mFlashMode = 2
-D/Camera2CameraImpl( 9053): {Camera@dc8c245[id=1]} Use case androidx.camera.core.ImageCapture-3d4b7a48-0aba-4e70-99b3-e748cdcf2560145782745 ACTIVE
-D/UseCaseAttachState( 9053): Active and attached use case: [] for camera: 1
-D/Camera2CameraImpl( 9053): {Camera@dc8c245[id=1]} Use case androidx.camera.core.Preview-fc9bdb42-49a7-4f63-8f34-2d8760b44ef0146621355 ACTIVE
-D/UseCaseAttachState( 9053): Active and attached use case: [] for camera: 1
-D/Camera2CameraImpl( 9053): {Camera@dc8c245[id=1]} Use case androidx.camera.core.ImageCapture-3d4b7a48-0aba-4e70-99b3-e748cdcf2560145782745 ACTIVE
-D/UseCaseAttachState( 9053): Active and attached use case: [] for camera: 1
-D/Camera2CameraImpl( 9053): {Camera@dc8c245[id=1]} Use case androidx.camera.core.ImageAnalysis-9d16647f-52ec-4eb9-a7ae-f8aace66293d94881919 INACTIVE
-D/UseCaseAttachState( 9053): Active and attached use case: [] for camera: 1
-D/UseCaseAttachState( 9053): Active and attached use case: [] for camera: 1
-D/Camera2CameraImpl( 9053): {Camera@dc8c245[id=1]} Use cases [androidx.camera.core.Preview-fc9bdb42-49a7-4f63-8f34-2d8760b44ef0146621355, androidx.camera.core.ImageCapture-3d4b7a48-0aba-4e70-99b3-e748cdcf2560145782745, androidx.camera.core.ImageAnalysis-9d16647f-52ec-4eb9-a7ae-f8aace66293d94881919] now ATTACHED
-D/Camera2CameraControlImp( 9053): setActive: isActive = true
-D/UseCaseAttachState( 9053): All use case: [androidx.camera.core.ImageCapture-3d4b7a48-0aba-4e70-99b3-e748cdcf2560145782745, androidx.camera.core.Preview-fc9bdb42-49a7-4f63-8f34-2d8760b44ef0146621355, androidx.camera.core.ImageAnalysis-9d16647f-52ec-4eb9-a7ae-f8aace66293d94881919] for camera: 1
-D/UseCaseAttachState( 9053): Active and attached use case: [androidx.camera.core.ImageCapture-3d4b7a48-0aba-4e70-99b3-e748cdcf2560145782745, androidx.camera.core.Preview-fc9bdb42-49a7-4f63-8f34-2d8760b44ef0146621355] for camera: 1
-D/Camera2CameraImpl( 9053): {Camera@dc8c245[id=1]} Resetting Capture Session
-D/Camera2CameraImpl( 9053): {Camera@dc8c245[id=1]} Skipping Capture Session state check due to current camera state: CLOSING and previous session status: false
-D/Camera2CameraImpl( 9053): {Camera@dc8c245[id=1]} Releasing session in state CLOSING
-D/Camera2CameraImpl( 9053): {Camera@dc8c245[id=1]} Transitioning camera internal state: CLOSING --> REOPENING
-D/CameraStateRegistry( 9053): Recalculating open cameras:
-D/CameraStateRegistry( 9053): Camera                                       State                 
-D/CameraStateRegistry( 9053): -------------------------------------------------------------------
-D/CameraStateRegistry( 9053): Camera@dc8c245[id=1]                         OPENING               
-D/CameraStateRegistry( 9053): Camera@1894966[id=10]                        UNKNOWN               
-D/CameraStateRegistry( 9053): -------------------------------------------------------------------
-D/CameraStateRegistry( 9053): Open count: 1 (Max allowed: 1)
-D/CameraStateMachine( 9053): New public camera state CameraState{type=OPENING, error=null} from OPENING and null
-D/CameraStateMachine( 9053): Publishing new public camera state CameraState{type=OPENING, error=null}
-D/Camera2CameraImpl( 9053): {Camera@dc8c245[id=1]} Use case androidx.camera.core.Preview-fc9bdb42-49a7-4f63-8f34-2d8760b44ef0146621355 ACTIVE
-D/UseCaseAttachState( 9053): Active and attached use case: [androidx.camera.core.ImageCapture-3d4b7a48-0aba-4e70-99b3-e748cdcf2560145782745, androidx.camera.core.Preview-fc9bdb42-49a7-4f63-8f34-2d8760b44ef0146621355] for camera: 1
-D/Camera2CameraImpl( 9053): {Camera@dc8c245[id=1]} Use case androidx.camera.core.ImageCapture-3d4b7a48-0aba-4e70-99b3-e748cdcf2560145782745 ACTIVE
-D/UseCaseAttachState( 9053): Active and attached use case: [androidx.camera.core.ImageCapture-3d4b7a48-0aba-4e70-99b3-e748cdcf2560145782745, androidx.camera.core.Preview-fc9bdb42-49a7-4f63-8f34-2d8760b44ef0146621355] for camera: 1
-D/Camera2CameraImpl( 9053): {Camera@dc8c245[id=1]} Use case androidx.camera.core.ImageAnalysis-9d16647f-52ec-4eb9-a7ae-f8aace66293d94881919 INACTIVE
-D/UseCaseAttachState( 9053): Active and attached use case: [androidx.camera.core.ImageCapture-3d4b7a48-0aba-4e70-99b3-e748cdcf2560145782745, androidx.camera.core.Preview-fc9bdb42-49a7-4f63-8f34-2d8760b44ef0146621355] for camera: 1
-D/DeferrableSurface( 9053): use count-1,  useCount=0 closed=true androidx.camera.core.SurfaceRequest$2@d72a02a
-D/DeferrableSurface( 9053): Surface no longer in use[total_surfaces=7, used_surfaces=3](androidx.camera.core.SurfaceRequest$2@d72a02a}
-D/DeferrableSurface( 9053): Surface terminated[total_surfaces=6, used_surfaces=3](androidx.camera.core.SurfaceRequest$2@d72a02a}
-D/DeferrableSurface( 9053): use count-1,  useCount=0 closed=true androidx.camera.core.impl.ImmediateSurface@d232b64
-D/DeferrableSurface( 9053): Surface no longer in use[total_surfaces=6, used_surfaces=2](androidx.camera.core.impl.ImmediateSurface@d232b64}
-D/DeferrableSurface( 9053): Surface terminated[total_surfaces=5, used_surfaces=2](androidx.camera.core.impl.ImmediateSurface@d232b64}
-D/DeferrableSurface( 9053): use count-1,  useCount=0 closed=true androidx.camera.core.impl.ImmediateSurface@cab0a82
-D/DeferrableSurface( 9053): Surface no longer in use[total_surfaces=5, used_surfaces=1](androidx.camera.core.impl.ImmediateSurface@cab0a82}
-D/DeferrableSurface( 9053): Surface terminated[total_surfaces=4, used_surfaces=1](androidx.camera.core.impl.ImmediateSurface@cab0a82}
-D/Camera2CameraImpl( 9053): {Camera@dc8c245[id=1]} CameraDevice.onClosed()
-D/Camera2CameraImpl( 9053): {Camera@dc8c245[id=1]} Attempting to open the camera.
-D/CameraStateRegistry( 9053): tryOpenCamera(Camera@dc8c245[id=1]) [Available Cameras: 0, Already Open: true (Previous state: OPENING)] --> SUCCESS
-D/CameraStateRegistry( 9053): Recalculating open cameras:
-D/CameraStateRegistry( 9053): Camera                                       State                 
-D/CameraStateRegistry( 9053): -------------------------------------------------------------------
-D/CameraStateRegistry( 9053): Camera@dc8c245[id=1]                         OPENING               
-D/CameraStateRegistry( 9053): Camera@1894966[id=10]                        UNKNOWN               
-D/CameraStateRegistry( 9053): -------------------------------------------------------------------
-D/CameraStateRegistry( 9053): Open count: 1 (Max allowed: 1)
-D/Camera2CameraImpl( 9053): {Camera@dc8c245[id=1]} Opening camera.
-D/Camera2CameraImpl( 9053): {Camera@dc8c245[id=1]} Transitioning camera internal state: REOPENING --> OPENING
-D/CameraStateMachine( 9053): New public camera state CameraState{type=OPENING, error=null} from OPENING and null
-D/CameraStateMachine( 9053): Publishing new public camera state CameraState{type=OPENING, error=null}
-D/UseCaseAttachState( 9053): All use case: [androidx.camera.core.ImageCapture-3d4b7a48-0aba-4e70-99b3-e748cdcf2560145782745, androidx.camera.core.Preview-fc9bdb42-49a7-4f63-8f34-2d8760b44ef0146621355, androidx.camera.core.ImageAnalysis-9d16647f-52ec-4eb9-a7ae-f8aace66293d94881919] for camera: 1
-E/ObserverFlutterApi( 9053): The Observer that received a callback has been garbage collected. Please create a new instance to receive any further data changes.
-E/ObserverFlutterApi( 9053): The Observer that received a callback has been garbage collected. Please create a new instance to receive any further data changes.
-D/SyncCaptureSessionImpl( 9053): [androidx.camera.camera2.internal.SynchronizedCaptureSessionImpl@8408aad] onClosed()
-D/Camera2CameraImpl( 9053): {Camera@dc8c245[id=1]} CameraDevice.onOpened()
-D/Camera2CameraImpl( 9053): {Camera@dc8c245[id=1]} Transitioning camera internal state: OPENING --> OPENED
-D/CameraStateRegistry( 9053): Recalculating open cameras:
-D/CameraStateRegistry( 9053): Camera                                       State                 
-D/CameraStateRegistry( 9053): -------------------------------------------------------------------
-D/CameraStateRegistry( 9053): Camera@dc8c245[id=1]                         OPEN                  
-D/CameraStateRegistry( 9053): Camera@1894966[id=10]                        UNKNOWN               
-D/CameraStateRegistry( 9053): -------------------------------------------------------------------
-D/CameraStateRegistry( 9053): Open count: 1 (Max allowed: 1)
-D/CameraStateMachine( 9053): New public camera state CameraState{type=OPEN, error=null} from OPEN and null
-D/CameraStateMachine( 9053): Publishing new public camera state CameraState{type=OPEN, error=null}
-D/UseCaseAttachState( 9053): All use case: [androidx.camera.core.ImageCapture-3d4b7a48-0aba-4e70-99b3-e748cdcf2560145782745, androidx.camera.core.Preview-fc9bdb42-49a7-4f63-8f34-2d8760b44ef0146621355, androidx.camera.core.ImageAnalysis-9d16647f-52ec-4eb9-a7ae-f8aace66293d94881919] for camera: 1
-D/UseCaseAttachState( 9053): Active and attached use case: [androidx.camera.core.ImageCapture-3d4b7a48-0aba-4e70-99b3-e748cdcf2560145782745, androidx.camera.core.Preview-fc9bdb42-49a7-4f63-8f34-2d8760b44ef0146621355] for camera: 1
-D/SyncCaptureSessionBase( 9053): [androidx.camera.camera2.internal.SynchronizedCaptureSessionImpl@8d35c9d] getSurface done with results: [Surface(name=null)/@0xc67fafe, Surface(name=null)/@0xa7e7b47, Surface(name=null)/@0x1544f74]
-D/CaptureSession( 9053): Opening capture session.
-D/Camera2CaptureRequestBuilder( 9053): template type = 1
-D/SyncCaptureSessionImpl( 9053): [androidx.camera.camera2.internal.SynchronizedCaptureSessionImpl@8d35c9d] start openCaptureSession
-D/DeferrableSurface( 9053): use count+1, useCount=2 androidx.camera.core.SurfaceRequest$2@1dc5350
-D/DeferrableSurface( 9053): New surface in use[total_surfaces=4, used_surfaces=2](androidx.camera.core.impl.ImmediateSurface@a7c555a}
-D/DeferrableSurface( 9053): use count+1, useCount=1 androidx.camera.core.impl.ImmediateSurface@a7c555a
-D/DeferrableSurface( 9053): New surface in use[total_surfaces=4, used_surfaces=3](androidx.camera.core.impl.ImmediateSurface@3273c68}
-D/DeferrableSurface( 9053): use count+1, useCount=1 androidx.camera.core.impl.ImmediateSurface@3273c68
-
-======== Exception caught by widgets library =======================================================
-The following assertion was thrown building Input3Digit(dirty, state: _Input3DigitState#e0902):
-There should be exactly one item with [DropdownButton]'s value: ddddd. 
-Either zero or 2 or more [DropdownMenuItem]s were detected with the same value
-'package:flutter/src/material/dropdown.dart':
-Failed assertion: line 1001 pos 10: 'items == null ||
-             items.isEmpty ||
-             value == null ||
-             items.where((DropdownMenuItem<T> item) {
-                   return item.value == value;
-                 }).length ==
-                 1'
-
-The relevant error-causing widget was: 
-  Input3Digit Input3Digit:file:///C:/Users/nrit0/Pictures/easydev/lib/screens/type_page.dart:36:55
-When the exception was thrown, this was the stack: 
-#2      new DropdownButton (package:flutter/src/material/dropdown.dart:1001:10)
-#3      _Input3DigitState.build (package:easydev/screens/input_pages/input_3_digit.dart:255:29)
-#4      StatefulElement.build (package:flutter/src/widgets/framework.dart:5841:27)
-#5      ComponentElement.performRebuild (package:flutter/src/widgets/framework.dart:5733:15)
-#6      StatefulElement.performRebuild (package:flutter/src/widgets/framework.dart:5892:11)
-#7      Element.rebuild (package:flutter/src/widgets/framework.dart:5445:7)
-#8      BuildScope._tryRebuild (package:flutter/src/widgets/framework.dart:2704:15)
-#9      BuildScope._flushDirtyElements (package:flutter/src/widgets/framework.dart:2762:11)
-#10     BuildOwner.buildScope (package:flutter/src/widgets/framework.dart:3066:18)
-#11     WidgetsBinding.drawFrame (package:flutter/src/widgets/binding.dart:1229:21)
-#12     RendererBinding._handlePersistentFrameCallback (package:flutter/src/rendering/binding.dart:482:5)
-#13     SchedulerBinding._invokeFrameCallback (package:flutter/src/scheduler/binding.dart:1442:15)
-#14     SchedulerBinding.handleDrawFrame (package:flutter/src/scheduler/binding.dart:1355:9)
-#15     SchedulerBinding._handleDrawFrame (package:flutter/src/scheduler/binding.dart:1208:5)
-#16     _invoke (dart:ui/hooks.dart:316:13)
-#17     PlatformDispatcher._drawFrame (dart:ui/platform_dispatcher.dart:428:5)
-#18     _drawFrame (dart:ui/hooks.dart:288:31)
-(elided 2 frames from class _AssertionError)
-====================================================================================================
-D/SyncCaptureSessionImpl( 9053): [androidx.camera.camera2.internal.SynchronizedCaptureSessionImpl@8d35c9d] Session onConfigured()
-D/CaptureSession( 9053): Attempting to send capture request onConfigured
-D/CaptureSession( 9053): Issuing request for session.
-D/Camera2CaptureRequestBuilder( 9053): createCaptureRequest
-D/CaptureSession( 9053): CameraCaptureSession.onConfigured() mState=OPENED
-D/CaptureSession( 9053): CameraCaptureSession.onReady() OPENED
-E/ObserverFlutterApi( 9053): The Observer that received a callback has been garbage collected. Please create a new instance to receive any further data changes.
-E/ObserverFlutterApi( 9053): The Observer that received a callback has been garbage collected. Please create a new instance to receive any further data changes.
-E/libEGL  ( 9053): called unimplemented OpenGL ES API
-D/EGL_emulation( 9053): app_time_stats: avg=163.99ms min=60.95ms max=795.23ms count=10
-E/libEGL  ( 9053): called unimplemented OpenGL ES API
-D/EGL_emulation( 9053): app_time_stats: avg=37.31ms min=15.54ms max=145.05ms count=27
-E/libEGL  ( 9053): called unimplemented OpenGL ES API
-D/EGL_emulation( 9053): app_time_stats: avg=35.29ms min=27.11ms max=61.48ms count=29
+E/libEGL  ( 4716): called unimplemented OpenGL ES API
+W/DynamiteModule( 4716): Local module descriptor class for com.google.android.gms.providerinstaller.dynamite not found.
+I/DynamiteModule( 4716): Considering local module com.google.android.gms.providerinstaller.dynamite:0 and remote module com.google.android.gms.providerinstaller.dynamite:0
+W/ProviderInstaller( 4716): Failed to load providerinstaller module: No acceptable module com.google.android.gms.providerinstaller.dynamite found. Local version is 0 and remote version is 0.
+W/ProviderInstaller( 4716): Failed to report request stats: com.google.android.gms.common.security.ProviderInstallerImpl.reportRequestStats [class android.content.Context, long, long]
+D/EGL_emulation( 4716): app_time_stats: avg=6065.00ms min=6065.00ms max=6065.00ms count=1
+D/TrafficStats( 4716): tagSocket(139) with statsTag=0xffffffff, statsUid=-1
+I/flutter ( 4716): [DEBUG] 로그인 상태 확인: isLoggedIn = true
+I/flutter ( 4716): [DEBUG] 로그인된 상태 - '/home'으로 이동
+W/WindowOnBackDispatcher( 4716): OnBackInvokedCallback is not enabled for the application.
+W/WindowOnBackDispatcher( 4716): Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+I/flutter ( 4716): 🕐 지역 Plate 상태 수신 대기 중...
+I/flutter ( 4716): 🔄 지역 동기화: test
+E/libEGL  ( 4716): called unimplemented OpenGL ES API
+I/flutter ( 4716): 🔄 지역 변경 감지됨: test
+D/EGL_emulation( 4716): app_time_stats: avg=365.96ms min=100.44ms max=655.10ms count=4
+I/flutter ( 4716): 🕐 지역 Plate 상태 수신 대기 중...
+I/flutter ( 4716): ✅ 지역 Plate 상태 수신 완료
+I/flutter ( 4716): 📌 Selected Area: test
+I/flutter ( 4716): 🅿️ Parking Requests: 0
+I/flutter ( 4716): ✅ Parking Completed: 0
+I/flutter ( 4716): 🚗 Departure Requests: 1
+I/flutter ( 4716): 🏁 Departure Completed: 2
+Restarted application in 2,780ms.
+I/flutter ( 4716): [DEBUG] _checkLoginState() 실행됨
+I/flutter ( 4716): [DEBUG] 자동 로그인 시도
+W/DynamiteModule( 4716): Local module descriptor class for com.google.android.gms.providerinstaller.dynamite not found.
+I/DynamiteModule( 4716): Considering local module com.google.android.gms.providerinstaller.dynamite:0 and remote module com.google.android.gms.providerinstaller.dynamite:0
+W/ProviderInstaller( 4716): Failed to load providerinstaller module: No acceptable module com.google.android.gms.providerinstaller.dynamite found. Local version is 0 and remote version is 0.
+W/ProviderInstaller( 4716): Failed to report request stats: com.google.android.gms.common.security.ProviderInstallerImpl.reportRequestStats [class android.content.Context, long, long]
+E/libEGL  ( 4716): called unimplemented OpenGL ES API
+D/TrafficStats( 4716): tagSocket(139) with statsTag=0xffffffff, statsUid=-1
+D/EGL_emulation( 4716): app_time_stats: avg=766.29ms min=148.03ms max=2294.08ms count=4
+I/flutter ( 4716): [DEBUG] 로그인 상태 확인: isLoggedIn = true
+I/flutter ( 4716): [DEBUG] 로그인된 상태 - '/home'으로 이동
+W/WindowOnBackDispatcher( 4716): OnBackInvokedCallback is not enabled for the application.
+W/WindowOnBackDispatcher( 4716): Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+I/flutter ( 4716): 🕐 지역 Plate 상태 수신 대기 중...
+I/flutter ( 4716): 🔄 지역 동기화: test
+I/flutter ( 4716): 🔄 지역 변경 감지됨: test
+I/flutter ( 4716): 🕐 지역 Plate 상태 수신 대기 중...
+E/libEGL  ( 4716): called unimplemented OpenGL ES API
+D/EGL_emulation( 4716): app_time_stats: avg=181.75ms min=56.46ms max=390.79ms count=6
+I/flutter ( 4716): ✅ 지역 Plate 상태 수신 완료
+I/flutter ( 4716): 📌 Selected Area: test
+I/flutter ( 4716): 🅿️ Parking Requests: 0
+I/flutter ( 4716): ✅ Parking Completed: 0
+I/flutter ( 4716): 🚗 Departure Requests: 1
+I/flutter ( 4716): 🏁 Departure Completed: 2
+W/example.easydev( 4716): Reducing the number of considered missed Gc histogram windows from 129 to 100
+E/libEGL  ( 4716): called unimplemented OpenGL ES API
+D/EGL_emulation( 4716): app_time_stats: avg=1289.13ms min=286.20ms max=2292.05ms count=2
+W/WindowOnBackDispatcher( 4716): OnBackInvokedCallback is not enabled for the application.
+W/WindowOnBackDispatcher( 4716): Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+D/DynamicRangeResolver( 4716): Resolved dynamic range for use case androidx.camera.core.Preview-04d5cec2-5417-42fa-9db5-82e04f42b5a7 to no compatible HDR dynamic ranges.
+D/DynamicRangeResolver( 4716): DynamicRange@31fbb43{encoding=UNSPECIFIED, bitDepth=0}
+D/DynamicRangeResolver( 4716): ->
+D/DynamicRangeResolver( 4716): DynamicRange@64e08f2{encoding=SDR, bitDepth=8}
+D/CameraQuirks( 4716): camera2 CameraQuirks = 
+D/CameraQuirks( 4716): camera2 CameraQuirks = 
+D/CameraQuirks( 4716): camera2 CameraQuirks = 
+D/DeferrableSurface( 4716): Surface created[total_surfaces=1, used_surfaces=0](androidx.camera.core.processing.SurfaceEdge$SettableSurface@7d3f8c4}
+D/DeferrableSurface( 4716): Surface created[total_surfaces=2, used_surfaces=0](androidx.camera.core.SurfaceRequest$2@79dd30}
+D/DeferrableSurface( 4716): New surface in use[total_surfaces=2, used_surfaces=1](androidx.camera.core.SurfaceRequest$2@79dd30}
+D/DeferrableSurface( 4716): use count+1, useCount=1 androidx.camera.core.SurfaceRequest$2@79dd30
+D/ImageCapture( 4716): createPipeline(cameraId: 1, streamSpec: StreamSpec{resolution=720x480, dynamicRange=DynamicRange@64e08f2{encoding=SDR, bitDepth=8}, expectedFrameRateRange=[0, 0], implementationOptions=androidx.camera.camera2.impl.Camera2ImplConfig@c19cb65, zslDisabled=false})
+D/DeferrableSurface( 4716): Surface created[total_surfaces=3, used_surfaces=1](androidx.camera.core.impl.ImmediateSurface@812903a}
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Use case androidx.camera.core.ImageCapture-adf9399c-2b51-4fdb-9a7f-c1ad5d75852893754425 ACTIVE
+D/UseCaseAttachState( 4716): Active and attached use case: [] for camera: 1
+D/DeferrableSurface( 4716): Surface created[total_surfaces=4, used_surfaces=1](androidx.camera.core.impl.ImmediateSurface@6f02248}
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Use case androidx.camera.core.Preview-04d5cec2-5417-42fa-9db5-82e04f42b5a7118549810 ACTIVE
+D/ImageCapture( 4716): onCameraControlReady
+D/Camera2CameraControlImp( 4716): setFlashMode: mFlashMode = 2
+D/UseCaseAttachState( 4716): Active and attached use case: [] for camera: 1
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Use case androidx.camera.core.ImageCapture-adf9399c-2b51-4fdb-9a7f-c1ad5d75852893754425 ACTIVE
+D/UseCaseAttachState( 4716): Active and attached use case: [] for camera: 1
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Use case androidx.camera.core.ImageAnalysis-c9ec525e-f278-489c-b05e-72385cf124b831140831 INACTIVE
+D/UseCaseAttachState( 4716): Active and attached use case: [] for camera: 1
+D/UseCaseAttachState( 4716): Active and attached use case: [] for camera: 1
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Use cases [androidx.camera.core.Preview-04d5cec2-5417-42fa-9db5-82e04f42b5a7118549810, androidx.camera.core.ImageCapture-adf9399c-2b51-4fdb-9a7f-c1ad5d75852893754425, androidx.camera.core.ImageAnalysis-c9ec525e-f278-489c-b05e-72385cf124b831140831] now ATTACHED
+D/Camera2CameraControlImp( 4716): setActive: isActive = true
+D/UseCaseAttachState( 4716): All use case: [androidx.camera.core.ImageCapture-adf9399c-2b51-4fdb-9a7f-c1ad5d75852893754425, androidx.camera.core.Preview-04d5cec2-5417-42fa-9db5-82e04f42b5a7118549810, androidx.camera.core.ImageAnalysis-c9ec525e-f278-489c-b05e-72385cf124b831140831] for camera: 1
+D/UseCaseAttachState( 4716): Active and attached use case: [androidx.camera.core.ImageCapture-adf9399c-2b51-4fdb-9a7f-c1ad5d75852893754425, androidx.camera.core.Preview-04d5cec2-5417-42fa-9db5-82e04f42b5a7118549810] for camera: 1
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Resetting Capture Session
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Skipping Capture Session state check due to current camera state: INITIALIZED and previous session status: false
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Releasing session in state INITIALIZED
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Attempting to force open the camera.
+D/CameraStateRegistry( 4716): tryOpenCamera(Camera@f061ef[id=1]) [Available Cameras: 1, Already Open: false (Previous state: CLOSED)] --> SUCCESS
+D/CameraStateRegistry( 4716): Recalculating open cameras:
+D/CameraStateRegistry( 4716): Camera                                       State                 
+D/CameraStateRegistry( 4716): -------------------------------------------------------------------
+D/CameraStateRegistry( 4716): Camera@ecc24e8[id=10]                        UNKNOWN               
+D/CameraStateRegistry( 4716): Camera@f061ef[id=1]                          OPENING               
+D/CameraStateRegistry( 4716): -------------------------------------------------------------------
+D/CameraStateRegistry( 4716): Open count: 1 (Max allowed: 1)
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Opening camera.
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Transitioning camera internal state: INITIALIZED --> OPENING
+D/CameraStateMachine( 4716): New public camera state CameraState{type=OPENING, error=null} from OPENING and null
+D/CameraStateMachine( 4716): Publishing new public camera state CameraState{type=OPENING, error=null}
+D/UseCaseAttachState( 4716): All use case: [androidx.camera.core.ImageCapture-adf9399c-2b51-4fdb-9a7f-c1ad5d75852893754425, androidx.camera.core.Preview-04d5cec2-5417-42fa-9db5-82e04f42b5a7118549810, androidx.camera.core.ImageAnalysis-c9ec525e-f278-489c-b05e-72385cf124b831140831] for camera: 1
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Use case androidx.camera.core.Preview-04d5cec2-5417-42fa-9db5-82e04f42b5a7118549810 ACTIVE
+D/UseCaseAttachState( 4716): Active and attached use case: [androidx.camera.core.ImageCapture-adf9399c-2b51-4fdb-9a7f-c1ad5d75852893754425, androidx.camera.core.Preview-04d5cec2-5417-42fa-9db5-82e04f42b5a7118549810] for camera: 1
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Use case androidx.camera.core.ImageCapture-adf9399c-2b51-4fdb-9a7f-c1ad5d75852893754425 ACTIVE
+D/UseCaseAttachState( 4716): Active and attached use case: [androidx.camera.core.ImageCapture-adf9399c-2b51-4fdb-9a7f-c1ad5d75852893754425, androidx.camera.core.Preview-04d5cec2-5417-42fa-9db5-82e04f42b5a7118549810] for camera: 1
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Use case androidx.camera.core.ImageAnalysis-c9ec525e-f278-489c-b05e-72385cf124b831140831 INACTIVE
+D/UseCaseAttachState( 4716): Active and attached use case: [androidx.camera.core.ImageCapture-adf9399c-2b51-4fdb-9a7f-c1ad5d75852893754425, androidx.camera.core.Preview-04d5cec2-5417-42fa-9db5-82e04f42b5a7118549810] for camera: 1
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} CameraDevice.onOpened()
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Transitioning camera internal state: OPENING --> OPENED
+D/CameraStateRegistry( 4716): Recalculating open cameras:
+D/CameraStateRegistry( 4716): Camera                                       State                 
+D/CameraStateRegistry( 4716): -------------------------------------------------------------------
+D/CameraStateRegistry( 4716): Camera@ecc24e8[id=10]                        UNKNOWN               
+D/CameraStateRegistry( 4716): Camera@f061ef[id=1]                          OPEN                  
+D/CameraStateRegistry( 4716): -------------------------------------------------------------------
+D/CameraStateRegistry( 4716): Open count: 1 (Max allowed: 1)
+D/CameraStateMachine( 4716): New public camera state CameraState{type=OPEN, error=null} from OPEN and null
+D/CameraStateMachine( 4716): Publishing new public camera state CameraState{type=OPEN, error=null}
+D/UseCaseAttachState( 4716): All use case: [androidx.camera.core.ImageCapture-adf9399c-2b51-4fdb-9a7f-c1ad5d75852893754425, androidx.camera.core.Preview-04d5cec2-5417-42fa-9db5-82e04f42b5a7118549810, androidx.camera.core.ImageAnalysis-c9ec525e-f278-489c-b05e-72385cf124b831140831] for camera: 1
+D/UseCaseAttachState( 4716): Active and attached use case: [androidx.camera.core.ImageCapture-adf9399c-2b51-4fdb-9a7f-c1ad5d75852893754425, androidx.camera.core.Preview-04d5cec2-5417-42fa-9db5-82e04f42b5a7118549810] for camera: 1
+D/SyncCaptureSessionBase( 4716): [androidx.camera.camera2.internal.SynchronizedCaptureSessionImpl@6ca64a8] getSurface done with results: [Surface(name=null)/@0x16f260, Surface(name=null)/@0x136b39a, Surface(name=null)/@0x21f94cb]
+D/CaptureSession( 4716): Opening capture session.
+D/Camera2CaptureRequestBuilder( 4716): template type = 1
+D/SyncCaptureSessionImpl( 4716): [androidx.camera.camera2.internal.SynchronizedCaptureSessionImpl@6ca64a8] start openCaptureSession
+D/DeferrableSurface( 4716): use count+1, useCount=2 androidx.camera.core.SurfaceRequest$2@79dd30
+D/DeferrableSurface( 4716): New surface in use[total_surfaces=4, used_surfaces=2](androidx.camera.core.impl.ImmediateSurface@812903a}
+D/DeferrableSurface( 4716): use count+1, useCount=1 androidx.camera.core.impl.ImmediateSurface@812903a
+D/DeferrableSurface( 4716): New surface in use[total_surfaces=4, used_surfaces=3](androidx.camera.core.impl.ImmediateSurface@6f02248}
+D/DeferrableSurface( 4716): use count+1, useCount=1 androidx.camera.core.impl.ImmediateSurface@6f02248
+I/flutter ( 4716):  AdjustmentState: 지역 변경 감지됨 (test) → 데이터 새로 가져옴
+D/SyncCaptureSessionImpl( 4716): [androidx.camera.camera2.internal.SynchronizedCaptureSessionImpl@6ca64a8] Session onConfigured()
+D/CaptureSession( 4716): Attempting to send capture request onConfigured
+D/CaptureSession( 4716): Issuing request for session.
+D/Camera2CaptureRequestBuilder( 4716): createCaptureRequest
+D/CaptureSession( 4716): CameraCaptureSession.onConfigured() mState=OPENED
+D/CaptureSession( 4716): CameraCaptureSession.onReady() OPENED
+I/flutter ( 4716): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: test_free_test, countType: test_free, area: test, basicStandard: 1, basicAmount: 0, addStandard: 1, addAmount: 0)
+I/flutter ( 4716): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: test_free_test, countType: test_free, area: test, basicStandard: 1, basicAmount: 0, addStandard: 1, addAmount: 0)
+E/libEGL  ( 4716): called unimplemented OpenGL ES API
+I/flutter ( 4716): 키 입력: 2, 현재 텍스트: 
+D/EGL_emulation( 4716): app_time_stats: avg=55.00ms min=5.02ms max=185.78ms count=20
+I/flutter ( 4716): 숫자 추가 후 텍스트: 2
+I/flutter ( 4716): 키 입력: 2, 현재 텍스트: 2
+I/flutter ( 4716): 숫자 추가 후 텍스트: 22
+I/flutter ( 4716): 키 입력: 2, 현재 텍스트: 22
+I/flutter ( 4716): 숫자 추가 후 텍스트: 222
+I/flutter ( 4716): onComplete 호출 - 입력 완료 상태: 222
+I/flutter ( 4716):  AdjustmentState: 지역 변경 감지됨 (test) → 데이터 새로 가져옴
+I/flutter ( 4716): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: test_free_test, countType: test_free, area: test, basicStandard: 1, basicAmount: 0, addStandard: 1, addAmount: 0)
+I/flutter ( 4716): 서브 레이아웃 활성화: kor2
+I/flutter ( 4716): 입력 처리: 노, controller.text = 노
+I/flutter ( 4716):  AdjustmentState: 지역 변경 감지됨 (test) → 데이터 새로 가져옴
+I/flutter ( 4716): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: test_free_test, countType: test_free, area: test, basicStandard: 1, basicAmount: 0, addStandard: 1, addAmount: 0)
+I/flutter ( 4716): 키 입력: 2, 현재 텍스트: 
+I/flutter ( 4716): 숫자 추가 후 텍스트: 2
+I/flutter ( 4716): 키 입력: 2, 현재 텍스트: 2
+I/flutter ( 4716): 숫자 추가 후 텍스트: 22
+I/flutter ( 4716): 키 입력: 2, 현재 텍스트: 22
+I/flutter ( 4716): 숫자 추가 후 텍스트: 222
+E/libEGL  ( 4716): called unimplemented OpenGL ES API
+D/EGL_emulation( 4716): app_time_stats: avg=38.91ms min=11.87ms max=153.31ms count=26
+I/flutter ( 4716): 키 입력: 2, 현재 텍스트: 222
+I/flutter ( 4716): 숫자 추가 후 텍스트: 2222
+I/flutter ( 4716): onComplete 호출 - 입력 완료 상태: 2222
+I/flutter ( 4716):  AdjustmentState: 지역 변경 감지됨 (test) → 데이터 새로 가져옴
+I/flutter ( 4716): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: test_free_test, countType: test_free, area: test, basicStandard: 1, basicAmount: 0, addStandard: 1, addAmount: 0)
+E/libEGL  ( 4716): called unimplemented OpenGL ES API
+D/EGL_emulation( 4716): app_time_stats: avg=21.95ms min=5.43ms max=77.28ms count=42
+W/Firestore( 4716): (25.1.1) [WatchChangeAggregator]: Applying bloom filter failed: (Invalid hash count: 0); ignoring the bloom filter and falling back to full re-query.
+[log] 🚨 중복된 번호판 발견: 222-노-2222 (컬렉션: departure_requests)
+I/flutter ( 4716):  AdjustmentState: 지역 변경 감지됨 (test) → 데이터 새로 가져옴
+I/flutter ( 4716): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: test_free_test, countType: test_free, area: test, basicStandard: 1, basicAmount: 0, addStandard: 1, addAmount: 0)
+E/libEGL  ( 4716): called unimplemented OpenGL ES API
+D/EGL_emulation( 4716): app_time_stats: avg=21.40ms min=4.15ms max=114.65ms count=39
+D/DeferrableSurface( 4716): surface closed,  useCount=2 closed=true androidx.camera.core.SurfaceRequest$2@79dd30
+D/DeferrableSurface( 4716): surface closed,  useCount=0 closed=true androidx.camera.core.processing.SurfaceEdge$SettableSurface@7d3f8c4
+D/DeferrableSurface( 4716): Surface terminated[total_surfaces=3, used_surfaces=3](androidx.camera.core.processing.SurfaceEdge$SettableSurface@7d3f8c4}
+D/DeferrableSurface( 4716): use count-1,  useCount=1 closed=true androidx.camera.core.SurfaceRequest$2@79dd30
+W/ScreenFlashWrapper( 4716): completePendingScreenFlashClear: none pending!
+D/ImageCapture( 4716): clearPipeline
+D/DeferrableSurface( 4716): surface closed,  useCount=1 closed=true androidx.camera.core.impl.ImmediateSurface@812903a
+E/BufferQueueProducer( 4716): [ImageReader-720x480f22m5-4716-59](id:126c0000003d,api:4,p:470,c:4716) dequeueBuffer: BufferQueue has been abandoned
+D/DeferrableSurface( 4716): surface closed,  useCount=1 closed=true androidx.camera.core.impl.ImmediateSurface@6f02248
+W/ScreenFlashWrapper( 4716): completePendingScreenFlashClear: none pending!
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Use cases [androidx.camera.core.Preview-04d5cec2-5417-42fa-9db5-82e04f42b5a7118549810, androidx.camera.core.ImageCapture-adf9399c-2b51-4fdb-9a7f-c1ad5d75852893754425, androidx.camera.core.ImageAnalysis-c9ec525e-f278-489c-b05e-72385cf124b831140831] now DETACHED for camera
+D/UseCaseAttachState( 4716): All use case: [] for camera: 1
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Resetting Capture Session
+D/SyncCaptureSessionImpl( 4716): [androidx.camera.camera2.internal.SynchronizedCaptureSessionImpl@6ca64a8] Session call close()
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Releasing session in state OPENED
+D/Camera2CameraControlImp( 4716): setActive: isActive = false
+D/UseCaseAttachState( 4716): Active and attached use case: [] for camera: 1
+D/UseCaseAttachState( 4716): Active and attached use case: [] for camera: 1
+D/VideoUsageControl( 4716): resetDirectly: mVideoUsage reset!
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Closing camera.
+E/BufferQueueProducer( 4716): [ImageReader-720x480f22m5-4716-59](id:126c0000003d,api:4,p:470,c:4716) queueBuffer: BufferQueue has been abandoned
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Transitioning camera internal state: OPENED --> CLOSING
+D/CameraStateRegistry( 4716): Recalculating open cameras:
+D/CameraStateRegistry( 4716): Camera                                       State                 
+D/CameraStateRegistry( 4716): -------------------------------------------------------------------
+D/CameraStateRegistry( 4716): Camera@ecc24e8[id=10]                        UNKNOWN               
+D/CameraStateRegistry( 4716): Camera@f061ef[id=1]                          CLOSING               
+D/CameraStateRegistry( 4716): -------------------------------------------------------------------
+D/CameraStateRegistry( 4716): Open count: 1 (Max allowed: 1)
+D/CameraStateMachine( 4716): New public camera state CameraState{type=CLOSING, error=null} from CLOSING and null
+D/CameraStateMachine( 4716): Publishing new public camera state CameraState{type=CLOSING, error=null}
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Resetting Capture Session
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Skipping Capture Session state check due to current camera state: CLOSING and previous session status: false
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Releasing session in state CLOSING
+D/SyncCaptureSessionImpl( 4716): [androidx.camera.camera2.internal.SynchronizedCaptureSessionImpl@6ca64a8] Session call super.close()
+D/UseCaseAttachState( 4716): Active and attached use case: [] for camera: 1
+D/CaptureSession( 4716): onSessionFinished()
+E/BufferQueueProducer( 4716): [ImageReader-720x480f22m5-4716-59](id:126c0000003d,api:4,p:470,c:4716) queueBuffer: BufferQueue has been abandoned
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} closing camera
+E/BufferQueueProducer( 4716): [ImageReader-720x480f22m5-4716-59](id:126c0000003d,api:4,p:470,c:4716) queueBuffer: BufferQueue has been abandoned
+E/BufferQueueProducer( 4716): [ImageReader-720x480f22m5-4716-59](id:126c0000003d,api:4,p:470,c:4716) queueBuffer: BufferQueue has been abandoned
+E/BufferQueueProducer( 4716): [ImageReader-720x480f22m5-4716-59](id:126c0000003d,api:4,p:470,c:4716) cancelBuffer: BufferQueue has been abandoned
+E/BufferQueueProducer( 4716): [ImageReader-720x480f22m5-4716-59](id:126c0000003d,api:4,p:470,c:4716) cancelBuffer: BufferQueue has been abandoned
+E/libEGL  ( 4716): called unimplemented OpenGL ES API
+D/EGL_emulation( 4716): app_time_stats: avg=95.30ms min=2.75ms max=823.21ms count=11
+D/DeferrableSurface( 4716): use count-1,  useCount=0 closed=true androidx.camera.core.SurfaceRequest$2@79dd30
+D/DeferrableSurface( 4716): Surface no longer in use[total_surfaces=3, used_surfaces=2](androidx.camera.core.SurfaceRequest$2@79dd30}
+D/DeferrableSurface( 4716): Surface terminated[total_surfaces=2, used_surfaces=2](androidx.camera.core.SurfaceRequest$2@79dd30}
+D/DeferrableSurface( 4716): use count-1,  useCount=0 closed=true androidx.camera.core.impl.ImmediateSurface@812903a
+D/DeferrableSurface( 4716): Surface no longer in use[total_surfaces=2, used_surfaces=1](androidx.camera.core.impl.ImmediateSurface@812903a}
+D/DeferrableSurface( 4716): Surface terminated[total_surfaces=1, used_surfaces=1](androidx.camera.core.impl.ImmediateSurface@812903a}
+D/DeferrableSurface( 4716): use count-1,  useCount=0 closed=true androidx.camera.core.impl.ImmediateSurface@6f02248
+D/DeferrableSurface( 4716): Surface no longer in use[total_surfaces=1, used_surfaces=0](androidx.camera.core.impl.ImmediateSurface@6f02248}
+D/DeferrableSurface( 4716): Surface terminated[total_surfaces=0, used_surfaces=0](androidx.camera.core.impl.ImmediateSurface@6f02248}
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} CameraDevice.onClosed()
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Transitioning camera internal state: CLOSING --> INITIALIZED
+D/CameraStateRegistry( 4716): Recalculating open cameras:
+D/CameraStateRegistry( 4716): Camera                                       State                 
+D/CameraStateRegistry( 4716): -------------------------------------------------------------------
+D/CameraStateRegistry( 4716): Camera@ecc24e8[id=10]                        UNKNOWN               
+D/CameraStateRegistry( 4716): Camera@f061ef[id=1]                          CLOSED                
+D/CameraStateRegistry( 4716): -------------------------------------------------------------------
+D/CameraStateRegistry( 4716): Open count: 0 (Max allowed: 1)
+D/CameraStateMachine( 4716): New public camera state CameraState{type=CLOSED, error=null} from CLOSED and null
+D/CameraStateMachine( 4716): Publishing new public camera state CameraState{type=CLOSED, error=null}
+D/SyncCaptureSessionImpl( 4716): [androidx.camera.camera2.internal.SynchronizedCaptureSessionImpl@6ca64a8] onClosed()
+E/libEGL  ( 4716): called unimplemented OpenGL ES API
+D/EGL_emulation( 4716): app_time_stats: avg=413.84ms min=13.33ms max=9732.35ms count=25
+E/libEGL  ( 4716): called unimplemented OpenGL ES API
+D/EGL_emulation( 4716): app_time_stats: avg=22.86ms min=4.64ms max=59.27ms count=41
+E/libEGL  ( 4716): called unimplemented OpenGL ES API
+D/EGL_emulation( 4716): app_time_stats: avg=24.99ms min=12.88ms max=133.41ms count=44
+E/libEGL  ( 4716): called unimplemented OpenGL ES API
+D/EGL_emulation( 4716): app_time_stats: avg=33.25ms min=12.49ms max=368.03ms count=30
+W/WindowOnBackDispatcher( 4716): OnBackInvokedCallback is not enabled for the application.
+W/WindowOnBackDispatcher( 4716): Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+D/DynamicRangeResolver( 4716): Resolved dynamic range for use case androidx.camera.core.Preview-23060a04-adf0-4e0a-900c-8ce0a8343610 to no compatible HDR dynamic ranges.
+D/DynamicRangeResolver( 4716): DynamicRange@31fbb43{encoding=UNSPECIFIED, bitDepth=0}
+D/DynamicRangeResolver( 4716): ->
+D/DynamicRangeResolver( 4716): DynamicRange@64e08f2{encoding=SDR, bitDepth=8}
+D/CameraQuirks( 4716): camera2 CameraQuirks = 
+D/CameraQuirks( 4716): camera2 CameraQuirks = 
+D/CameraQuirks( 4716): camera2 CameraQuirks = 
+D/DeferrableSurface( 4716): Surface created[total_surfaces=1, used_surfaces=0](androidx.camera.core.processing.SurfaceEdge$SettableSurface@e9b44bd}
+D/DeferrableSurface( 4716): Surface created[total_surfaces=2, used_surfaces=0](androidx.camera.core.SurfaceRequest$2@83c6fb9}
+D/DeferrableSurface( 4716): New surface in use[total_surfaces=2, used_surfaces=1](androidx.camera.core.SurfaceRequest$2@83c6fb9}
+D/DeferrableSurface( 4716): use count+1, useCount=1 androidx.camera.core.SurfaceRequest$2@83c6fb9
+D/ImageCapture( 4716): createPipeline(cameraId: 1, streamSpec: StreamSpec{resolution=720x480, dynamicRange=DynamicRange@64e08f2{encoding=SDR, bitDepth=8}, expectedFrameRateRange=[0, 0], implementationOptions=androidx.camera.camera2.impl.Camera2ImplConfig@9d63e0a, zslDisabled=false})
+D/DeferrableSurface( 4716): Surface created[total_surfaces=3, used_surfaces=1](androidx.camera.core.impl.ImmediateSurface@cdba67b}
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Use case androidx.camera.core.ImageCapture-40da22bc-7125-4278-b0f4-710fc5c7f2f5115951438 ACTIVE
+D/UseCaseAttachState( 4716): Active and attached use case: [] for camera: 1
+D/DeferrableSurface( 4716): Surface created[total_surfaces=4, used_surfaces=1](androidx.camera.core.impl.ImmediateSurface@bef5cf1}
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Use case androidx.camera.core.Preview-23060a04-adf0-4e0a-900c-8ce0a834361065037843 ACTIVE
+D/UseCaseAttachState( 4716): Active and attached use case: [] for camera: 1
+D/ImageCapture( 4716): onCameraControlReady
+D/Camera2CameraControlImp( 4716): setFlashMode: mFlashMode = 2
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Use case androidx.camera.core.ImageCapture-40da22bc-7125-4278-b0f4-710fc5c7f2f5115951438 ACTIVE
+D/UseCaseAttachState( 4716): Active and attached use case: [] for camera: 1
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Use case androidx.camera.core.ImageAnalysis-1c058194-e9c9-4fbb-8bdf-8045bb52cd2b164315516 INACTIVE
+D/UseCaseAttachState( 4716): Active and attached use case: [] for camera: 1
+D/UseCaseAttachState( 4716): Active and attached use case: [] for camera: 1
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Use cases [androidx.camera.core.Preview-23060a04-adf0-4e0a-900c-8ce0a834361065037843, androidx.camera.core.ImageCapture-40da22bc-7125-4278-b0f4-710fc5c7f2f5115951438, androidx.camera.core.ImageAnalysis-1c058194-e9c9-4fbb-8bdf-8045bb52cd2b164315516] now ATTACHED
+D/Camera2CameraControlImp( 4716): setActive: isActive = true
+D/UseCaseAttachState( 4716): All use case: [androidx.camera.core.ImageCapture-40da22bc-7125-4278-b0f4-710fc5c7f2f5115951438, androidx.camera.core.Preview-23060a04-adf0-4e0a-900c-8ce0a834361065037843, androidx.camera.core.ImageAnalysis-1c058194-e9c9-4fbb-8bdf-8045bb52cd2b164315516] for camera: 1
+D/UseCaseAttachState( 4716): Active and attached use case: [androidx.camera.core.ImageCapture-40da22bc-7125-4278-b0f4-710fc5c7f2f5115951438, androidx.camera.core.Preview-23060a04-adf0-4e0a-900c-8ce0a834361065037843] for camera: 1
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Resetting Capture Session
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Skipping Capture Session state check due to current camera state: INITIALIZED and previous session status: false
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Releasing session in state INITIALIZED
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Attempting to force open the camera.
+D/CameraStateRegistry( 4716): tryOpenCamera(Camera@f061ef[id=1]) [Available Cameras: 1, Already Open: false (Previous state: CLOSED)] --> SUCCESS
+D/CameraStateRegistry( 4716): Recalculating open cameras:
+D/CameraStateRegistry( 4716): Camera                                       State                 
+D/CameraStateRegistry( 4716): -------------------------------------------------------------------
+D/CameraStateRegistry( 4716): Camera@ecc24e8[id=10]                        UNKNOWN               
+D/CameraStateRegistry( 4716): Camera@f061ef[id=1]                          OPENING               
+D/CameraStateRegistry( 4716): -------------------------------------------------------------------
+D/CameraStateRegistry( 4716): Open count: 1 (Max allowed: 1)
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Opening camera.
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Transitioning camera internal state: INITIALIZED --> OPENING
+D/CameraStateMachine( 4716): New public camera state CameraState{type=OPENING, error=null} from OPENING and null
+D/CameraStateMachine( 4716): Publishing new public camera state CameraState{type=OPENING, error=null}
+D/UseCaseAttachState( 4716): All use case: [androidx.camera.core.ImageCapture-40da22bc-7125-4278-b0f4-710fc5c7f2f5115951438, androidx.camera.core.Preview-23060a04-adf0-4e0a-900c-8ce0a834361065037843, androidx.camera.core.ImageAnalysis-1c058194-e9c9-4fbb-8bdf-8045bb52cd2b164315516] for camera: 1
+I/flutter ( 4716):  AdjustmentState: 지역 변경 감지됨 (test) → 데이터 새로 가져옴
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Use case androidx.camera.core.Preview-23060a04-adf0-4e0a-900c-8ce0a834361065037843 ACTIVE
+D/UseCaseAttachState( 4716): Active and attached use case: [androidx.camera.core.ImageCapture-40da22bc-7125-4278-b0f4-710fc5c7f2f5115951438, androidx.camera.core.Preview-23060a04-adf0-4e0a-900c-8ce0a834361065037843] for camera: 1
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Use case androidx.camera.core.ImageCapture-40da22bc-7125-4278-b0f4-710fc5c7f2f5115951438 ACTIVE
+D/UseCaseAttachState( 4716): Active and attached use case: [androidx.camera.core.ImageCapture-40da22bc-7125-4278-b0f4-710fc5c7f2f5115951438, androidx.camera.core.Preview-23060a04-adf0-4e0a-900c-8ce0a834361065037843] for camera: 1
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Use case androidx.camera.core.ImageAnalysis-1c058194-e9c9-4fbb-8bdf-8045bb52cd2b164315516 INACTIVE
+D/UseCaseAttachState( 4716): Active and attached use case: [androidx.camera.core.ImageCapture-40da22bc-7125-4278-b0f4-710fc5c7f2f5115951438, androidx.camera.core.Preview-23060a04-adf0-4e0a-900c-8ce0a834361065037843] for camera: 1
+I/flutter ( 4716): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: test_free_test, countType: test_free, area: test, basicStandard: 1, basicAmount: 0, addStandard: 1, addAmount: 0)
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} CameraDevice.onOpened()
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Transitioning camera internal state: OPENING --> OPENED
+D/CameraStateRegistry( 4716): Recalculating open cameras:
+D/CameraStateRegistry( 4716): Camera                                       State                 
+D/CameraStateRegistry( 4716): -------------------------------------------------------------------
+D/CameraStateRegistry( 4716): Camera@ecc24e8[id=10]                        UNKNOWN               
+D/CameraStateRegistry( 4716): Camera@f061ef[id=1]                          OPEN                  
+D/CameraStateRegistry( 4716): -------------------------------------------------------------------
+D/CameraStateRegistry( 4716): Open count: 1 (Max allowed: 1)
+D/CameraStateMachine( 4716): New public camera state CameraState{type=OPEN, error=null} from OPEN and null
+D/CameraStateMachine( 4716): Publishing new public camera state CameraState{type=OPEN, error=null}
+D/UseCaseAttachState( 4716): All use case: [androidx.camera.core.ImageCapture-40da22bc-7125-4278-b0f4-710fc5c7f2f5115951438, androidx.camera.core.Preview-23060a04-adf0-4e0a-900c-8ce0a834361065037843, androidx.camera.core.ImageAnalysis-1c058194-e9c9-4fbb-8bdf-8045bb52cd2b164315516] for camera: 1
+D/UseCaseAttachState( 4716): Active and attached use case: [androidx.camera.core.ImageCapture-40da22bc-7125-4278-b0f4-710fc5c7f2f5115951438, androidx.camera.core.Preview-23060a04-adf0-4e0a-900c-8ce0a834361065037843] for camera: 1
+D/SyncCaptureSessionBase( 4716): [androidx.camera.camera2.internal.SynchronizedCaptureSessionImpl@9c5896a] getSurface done with results: [Surface(name=null)/@0xe6156b0, Surface(name=null)/@0xe55c60c, Surface(name=null)/@0x6252b55]
+D/CaptureSession( 4716): Opening capture session.
+D/Camera2CaptureRequestBuilder( 4716): template type = 1
+D/SyncCaptureSessionImpl( 4716): [androidx.camera.camera2.internal.SynchronizedCaptureSessionImpl@9c5896a] start openCaptureSession
+D/DeferrableSurface( 4716): use count+1, useCount=2 androidx.camera.core.SurfaceRequest$2@83c6fb9
+D/DeferrableSurface( 4716): New surface in use[total_surfaces=4, used_surfaces=2](androidx.camera.core.impl.ImmediateSurface@cdba67b}
+D/DeferrableSurface( 4716): use count+1, useCount=1 androidx.camera.core.impl.ImmediateSurface@cdba67b
+D/DeferrableSurface( 4716): New surface in use[total_surfaces=4, used_surfaces=3](androidx.camera.core.impl.ImmediateSurface@bef5cf1}
+D/DeferrableSurface( 4716): use count+1, useCount=1 androidx.camera.core.impl.ImmediateSurface@bef5cf1
+D/SyncCaptureSessionImpl( 4716): [androidx.camera.camera2.internal.SynchronizedCaptureSessionImpl@9c5896a] Session onConfigured()
+D/CaptureSession( 4716): Attempting to send capture request onConfigured
+D/CaptureSession( 4716): Issuing request for session.
+D/Camera2CaptureRequestBuilder( 4716): createCaptureRequest
+D/CaptureSession( 4716): CameraCaptureSession.onConfigured() mState=OPENED
+D/CaptureSession( 4716): CameraCaptureSession.onReady() OPENED
+E/libEGL  ( 4716): called unimplemented OpenGL ES API
+D/EGL_emulation( 4716): app_time_stats: avg=31.81ms min=2.81ms max=73.60ms count=30
+I/flutter ( 4716): 키 입력: 4, 현재 텍스트: 
+I/flutter ( 4716): 숫자 추가 후 텍스트: 4
+I/flutter ( 4716): 키 입력: 4, 현재 텍스트: 4
+I/flutter ( 4716): 숫자 추가 후 텍스트: 44
+I/flutter ( 4716): 키 입력: 4, 현재 텍스트: 44
+I/flutter ( 4716): 숫자 추가 후 텍스트: 444
+I/flutter ( 4716): onComplete 호출 - 입력 완료 상태: 444
+I/flutter ( 4716):  AdjustmentState: 지역 변경 감지됨 (test) → 데이터 새로 가져옴
+I/flutter ( 4716): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: test_free_test, countType: test_free, area: test, basicStandard: 1, basicAmount: 0, addStandard: 1, addAmount: 0)
+I/flutter ( 4716): 서브 레이아웃 활성화: kor4
+I/flutter ( 4716): 입력 처리: 러, controller.text = 러
+I/flutter ( 4716):  AdjustmentState: 지역 변경 감지됨 (test) → 데이터 새로 가져옴
+I/flutter ( 4716): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: test_free_test, countType: test_free, area: test, basicStandard: 1, basicAmount: 0, addStandard: 1, addAmount: 0)
+I/flutter ( 4716): 키 입력: 4, 현재 텍스트: 
+I/flutter ( 4716): 숫자 추가 후 텍스트: 4
+I/flutter ( 4716): 키 입력: 4, 현재 텍스트: 4
+I/flutter ( 4716): 숫자 추가 후 텍스트: 44
+E/libEGL  ( 4716): called unimplemented OpenGL ES API
+D/EGL_emulation( 4716): app_time_stats: avg=19.19ms min=3.79ms max=87.08ms count=45
+I/flutter ( 4716): 키 입력: 4, 현재 텍스트: 44
+I/flutter ( 4716): 숫자 추가 후 텍스트: 444
+I/flutter ( 4716): 키 입력: 4, 현재 텍스트: 444
+I/flutter ( 4716): 숫자 추가 후 텍스트: 4444
+I/flutter ( 4716): onComplete 호출 - 입력 완료 상태: 4444
+I/flutter ( 4716):  AdjustmentState: 지역 변경 감지됨 (test) → 데이터 새로 가져옴
+E/libEGL  ( 4716): called unimplemented OpenGL ES API
+D/EGL_emulation( 4716): app_time_stats: avg=31.62ms min=14.53ms max=67.38ms count=33
+I/flutter ( 4716): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: test_free_test, countType: test_free, area: test, basicStandard: 1, basicAmount: 0, addStandard: 1, addAmount: 0)
+E/libEGL  ( 4716): called unimplemented OpenGL ES API
+D/EGL_emulation( 4716): app_time_stats: avg=11.26ms min=3.38ms max=52.94ms count=53
+[log] 🔥 Firestore 저장 데이터: {plate_number: 444-러-4444, type: 입차 요청, request_time: 2025-03-22 16:34:38.750942, location: 미지정, area: test, userName: testuser, adjustmentType: null, statusList: [], isSelected: false, selectedBy: null, basicStandard: 0, basicAmount: 0, addStandard: 0, addAmount: 0, region: 전국}
+I/flutter ( 4716): ✅ 지역 Plate 상태 수신 완료
+I/flutter ( 4716): 📌 Selected Area: test
+I/flutter ( 4716): 🅿️ Parking Requests: 1
+I/flutter ( 4716): ✅ Parking Completed: 0
+I/flutter ( 4716): 🚗 Departure Requests: 1
+I/flutter ( 4716): 🏁 Departure Completed: 2
+I/BpBinder( 4716): onLastStrongRef automatically unlinking death recipients: 
+I/BpBinder( 4716): onLastStrongRef automatically unlinking death recipients: 
+I/BpBinder( 4716): onLastStrongRef automatically unlinking death recipients: 
+I/BpBinder( 4716): onLastStrongRef automatically unlinking death recipients: 
+I/flutter ( 4716):  AdjustmentState: 지역 변경 감지됨 (test) → 데이터 새로 가져옴
+I/flutter ( 4716): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: test_free_test, countType: test_free, area: test, basicStandard: 1, basicAmount: 0, addStandard: 1, addAmount: 0)
+E/BufferQueueProducer( 4716): [ImageReader-720x480f22m5-4716-63](id:126c00000041,api:4,p:470,c:4716) dequeueBuffer: BufferQueue has been abandoned
+D/DeferrableSurface( 4716): surface closed,  useCount=2 closed=true androidx.camera.core.SurfaceRequest$2@83c6fb9
+D/DeferrableSurface( 4716): surface closed,  useCount=0 closed=true androidx.camera.core.processing.SurfaceEdge$SettableSurface@e9b44bd
+D/DeferrableSurface( 4716): Surface terminated[total_surfaces=3, used_surfaces=3](androidx.camera.core.processing.SurfaceEdge$SettableSurface@e9b44bd}
+D/DeferrableSurface( 4716): use count-1,  useCount=1 closed=true androidx.camera.core.SurfaceRequest$2@83c6fb9
+W/ScreenFlashWrapper( 4716): completePendingScreenFlashClear: none pending!
+D/ImageCapture( 4716): clearPipeline
+D/DeferrableSurface( 4716): surface closed,  useCount=1 closed=true androidx.camera.core.impl.ImmediateSurface@cdba67b
+D/DeferrableSurface( 4716): surface closed,  useCount=1 closed=true androidx.camera.core.impl.ImmediateSurface@bef5cf1
+W/ScreenFlashWrapper( 4716): completePendingScreenFlashClear: none pending!
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Use cases [androidx.camera.core.Preview-23060a04-adf0-4e0a-900c-8ce0a834361065037843, androidx.camera.core.ImageCapture-40da22bc-7125-4278-b0f4-710fc5c7f2f5115951438, androidx.camera.core.ImageAnalysis-1c058194-e9c9-4fbb-8bdf-8045bb52cd2b164315516] now DETACHED for camera
+D/UseCaseAttachState( 4716): All use case: [] for camera: 1
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Resetting Capture Session
+D/SyncCaptureSessionImpl( 4716): [androidx.camera.camera2.internal.SynchronizedCaptureSessionImpl@9c5896a] Session call close()
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Releasing session in state OPENED
+D/Camera2CameraControlImp( 4716): setActive: isActive = false
+D/UseCaseAttachState( 4716): Active and attached use case: [] for camera: 1
+D/UseCaseAttachState( 4716): Active and attached use case: [] for camera: 1
+D/VideoUsageControl( 4716): resetDirectly: mVideoUsage reset!
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Closing camera.
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Transitioning camera internal state: OPENED --> CLOSING
+D/CameraStateRegistry( 4716): Recalculating open cameras:
+D/CameraStateRegistry( 4716): Camera                                       State                 
+D/CameraStateRegistry( 4716): -------------------------------------------------------------------
+D/CameraStateRegistry( 4716): Camera@ecc24e8[id=10]                        UNKNOWN               
+D/CameraStateRegistry( 4716): Camera@f061ef[id=1]                          CLOSING               
+D/CameraStateRegistry( 4716): -------------------------------------------------------------------
+D/CameraStateRegistry( 4716): Open count: 1 (Max allowed: 1)
+E/BufferQueueProducer( 4716): [ImageReader-720x480f22m5-4716-63](id:126c00000041,api:4,p:470,c:4716) queueBuffer: BufferQueue has been abandoned
+D/CameraStateMachine( 4716): New public camera state CameraState{type=CLOSING, error=null} from CLOSING and null
+D/CameraStateMachine( 4716): Publishing new public camera state CameraState{type=CLOSING, error=null}
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Resetting Capture Session
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Skipping Capture Session state check due to current camera state: CLOSING and previous session status: false
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Releasing session in state CLOSING
+D/SyncCaptureSessionImpl( 4716): [androidx.camera.camera2.internal.SynchronizedCaptureSessionImpl@9c5896a] Session call super.close()
+D/CaptureSession( 4716): onSessionFinished()
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} closing camera
+E/BufferQueueProducer( 4716): [ImageReader-720x480f22m5-4716-63](id:126c00000041,api:4,p:470,c:4716) queueBuffer: BufferQueue has been abandoned
+E/BufferQueueProducer( 4716): [ImageReader-720x480f22m5-4716-63](id:126c00000041,api:4,p:470,c:4716) queueBuffer: BufferQueue has been abandoned
+E/libEGL  ( 4716): called unimplemented OpenGL ES API
+D/EGL_emulation( 4716): app_time_stats: avg=31.71ms min=3.21ms max=281.60ms count=35
+E/BufferQueueProducer( 4716): [ImageReader-720x480f22m5-4716-63](id:126c00000041,api:4,p:470,c:4716) cancelBuffer: BufferQueue has been abandoned
+E/BufferQueueProducer( 4716): [ImageReader-720x480f22m5-4716-63](id:126c00000041,api:4,p:470,c:4716) cancelBuffer: BufferQueue has been abandoned
+E/BufferQueueProducer( 4716): [ImageReader-720x480f22m5-4716-63](id:126c00000041,api:4,p:470,c:4716) cancelBuffer: BufferQueue has been abandoned
+D/DeferrableSurface( 4716): use count-1,  useCount=0 closed=true androidx.camera.core.SurfaceRequest$2@83c6fb9
+D/DeferrableSurface( 4716): Surface no longer in use[total_surfaces=3, used_surfaces=2](androidx.camera.core.SurfaceRequest$2@83c6fb9}
+D/DeferrableSurface( 4716): Surface terminated[total_surfaces=2, used_surfaces=2](androidx.camera.core.SurfaceRequest$2@83c6fb9}
+D/DeferrableSurface( 4716): use count-1,  useCount=0 closed=true androidx.camera.core.impl.ImmediateSurface@cdba67b
+D/DeferrableSurface( 4716): Surface no longer in use[total_surfaces=2, used_surfaces=1](androidx.camera.core.impl.ImmediateSurface@cdba67b}
+D/DeferrableSurface( 4716): Surface terminated[total_surfaces=1, used_surfaces=1](androidx.camera.core.impl.ImmediateSurface@cdba67b}
+D/DeferrableSurface( 4716): use count-1,  useCount=0 closed=true androidx.camera.core.impl.ImmediateSurface@bef5cf1
+D/DeferrableSurface( 4716): Surface no longer in use[total_surfaces=1, used_surfaces=0](androidx.camera.core.impl.ImmediateSurface@bef5cf1}
+D/DeferrableSurface( 4716): Surface terminated[total_surfaces=0, used_surfaces=0](androidx.camera.core.impl.ImmediateSurface@bef5cf1}
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} CameraDevice.onClosed()
+D/Camera2CameraImpl( 4716): {Camera@f061ef[id=1]} Transitioning camera internal state: CLOSING --> INITIALIZED
+D/CameraStateRegistry( 4716): Recalculating open cameras:
+D/CameraStateRegistry( 4716): Camera                                       State                 
+D/CameraStateRegistry( 4716): -------------------------------------------------------------------
+D/CameraStateRegistry( 4716): Camera@ecc24e8[id=10]                        UNKNOWN               
+D/CameraStateRegistry( 4716): Camera@f061ef[id=1]                          CLOSED                
+D/CameraStateRegistry( 4716): -------------------------------------------------------------------
+D/CameraStateRegistry( 4716): Open count: 0 (Max allowed: 1)
+D/CameraStateMachine( 4716): New public camera state CameraState{type=CLOSED, error=null} from CLOSED and null
+D/CameraStateMachine( 4716): Publishing new public camera state CameraState{type=CLOSED, error=null}
+D/SyncCaptureSessionImpl( 4716): [androidx.camera.camera2.internal.SynchronizedCaptureSessionImpl@9c5896a] onClosed()
+E/libEGL  ( 4716): called unimplemented OpenGL ES API
+D/EGL_emulation( 4716): app_time_stats: avg=8514.04ms min=8514.04ms max=8514.04ms count=1
+I/flutter ( 4716): ✅ 지역 Plate 상태 수신 완료
+I/flutter ( 4716): 📌 Selected Area: test
+I/flutter ( 4716): 🅿️ Parking Requests: 1
+I/flutter ( 4716): ✅ Parking Completed: 0
+I/flutter ( 4716): 🚗 Departure Requests: 1
+I/flutter ( 4716): 🏁 Departure Completed: 2
+W/WindowOnBackDispatcher( 4716): OnBackInvokedCallback is not enabled for the application.
+W/WindowOnBackDispatcher( 4716): Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+E/libEGL  ( 4716): called unimplemented OpenGL ES API
+D/EGL_emulation( 4716): app_time_stats: avg=49.03ms min=6.77ms max=333.25ms count=20
+[log] 🔥 Firestore 저장 데이터: {plate_number: 444-러-4444, type: 입차 완료, request_time: 2025-03-22 16:34:50.263302, location: test AA, area: test, userName: testuser, adjustmentType: null, statusList: [], isSelected: false, selectedBy: null, basicStandard: 0, basicAmount: 0, addStandard: 0, addAmount: 0, region: 전국}
+I/flutter ( 4716): ✅ 지역 Plate 상태 수신 완료
+I/flutter ( 4716): 📌 Selected Area: test
+I/flutter ( 4716): 🅿️ Parking Requests: 1
+I/flutter ( 4716): ✅ Parking Completed: 1
+I/flutter ( 4716): 🚗 Departure Requests: 1
+I/flutter ( 4716): 🏁 Departure Completed: 2
+E/libEGL  ( 4716): called unimplemented OpenGL ES API
+D/EGL_emulation( 4716): app_time_stats: avg=24.91ms min=7.83ms max=203.08ms count=39
+I/flutter ( 4716): ✅ 지역 Plate 상태 수신 완료
+I/flutter ( 4716): 📌 Selected Area: test
+I/flutter ( 4716): 🅿️ Parking Requests: 0
+I/flutter ( 4716): ✅ Parking Completed: 1
+I/flutter ( 4716): 🚗 Departure Requests: 1
+I/flutter ( 4716): 🏁 Departure Completed: 2
+I/flutter ( 4716): ✅ 지역 Plate 상태 수신 완료
+I/flutter ( 4716): 📌 Selected Area: test
+I/flutter ( 4716): 🅿️ Parking Requests: 0
+I/flutter ( 4716): ✅ Parking Completed: 1
+I/flutter ( 4716): 🚗 Departure Requests: 1
+I/flutter ( 4716): 🏁 Departure Completed: 2
+I/flutter ( 4716): ✅ 문서 이동 완료: parking_requests → parking_completed (444-러-4444)
+[Firestore] DB 문서 저장 완료: 444-러-4444_test
+I/flutter ( 4716): 🕐 지역 Plate 상태 수신 대기 중...
+I/flutter ( 4716): ✅ 지역 Plate 상태 수신 완료
+I/flutter ( 4716): 📌 Selected Area: test
+I/flutter ( 4716): 🅿️ Parking Requests: 0
+I/flutter ( 4716): ✅ Parking Completed: 1
+I/flutter ( 4716): 🚗 Departure Requests: 1
+I/flutter ( 4716): 🏁 Departure Completed: 2
+E/libEGL  ( 4716): called unimplemented OpenGL ES API
+D/EGL_emulation( 4716): app_time_stats: avg=33.45ms min=14.01ms max=146.12ms count=30
+I/flutter ( 4716): ✅ 지역 Plate 상태 수신 완료
+I/flutter ( 4716): 📌 Selected Area: test
+I/flutter ( 4716): 🅿️ Parking Requests: 0
+I/flutter ( 4716): ✅ Parking Completed: 1
+I/flutter ( 4716): 🚗 Departure Requests: 1
+I/flutter ( 4716): 🏁 Departure Completed: 2
+W/WindowOnBackDispatcher( 4716): OnBackInvokedCallback is not enabled for the application.
+W/WindowOnBackDispatcher( 4716): Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+E/libEGL  ( 4716): called unimplemented OpenGL ES API
+D/EGL_emulation( 4716): app_time_stats: avg=55.66ms min=5.46ms max=610.85ms count=21
+I/flutter ( 4716): ✅ 지역 Plate 상태 수신 완료
+I/flutter ( 4716): 📌 Selected Area: test
+I/flutter ( 4716): 🅿️ Parking Requests: 0
+I/flutter ( 4716): ✅ Parking Completed: 0
+I/flutter ( 4716): 🚗 Departure Requests: 1
+I/flutter ( 4716): 🏁 Departure Completed: 2
+I/flutter ( 4716): ✅ 지역 Plate 상태 수신 완료
+I/flutter ( 4716): 📌 Selected Area: test
+I/flutter ( 4716): 🅿️ Parking Requests: 0
+I/flutter ( 4716): ✅ Parking Completed: 0
+I/flutter ( 4716): 🚗 Departure Requests: 2
+I/flutter ( 4716): 🏁 Departure Completed: 2
+I/flutter ( 4716): ✅ 문서 이동 완료: parking_completed → departure_requests (444-러-4444)
+[Firestore] DB 문서 저장 완료: 444-러-4444_test
+I/flutter ( 4716): 🕐 지역 Plate 상태 수신 대기 중...
+I/flutter ( 4716): ✅ 지역 Plate 상태 수신 완료
+I/flutter ( 4716): 📌 Selected Area: test
+I/flutter ( 4716): 🅿️ Parking Requests: 0
+I/flutter ( 4716): ✅ Parking Completed: 0
+I/flutter ( 4716): 🚗 Departure Requests: 2
+I/flutter ( 4716): 🏁 Departure Completed: 2
+E/libEGL  ( 4716): called unimplemented OpenGL ES API
+D/EGL_emulation( 4716): app_time_stats: avg=19.14ms min=4.52ms max=142.63ms count=48
+I/flutter ( 4716): ✅ 지역 Plate 상태 수신 완료
+I/flutter ( 4716): 📌 Selected Area: test
+I/flutter ( 4716): 🅿️ Parking Requests: 0
+I/flutter ( 4716): ✅ Parking Completed: 0
+I/flutter ( 4716): 🚗 Departure Requests: 2
+I/flutter ( 4716): 🏁 Departure Completed: 2
+E/libEGL  ( 4716): called unimplemented OpenGL ES API
+D/EGL_emulation( 4716): app_time_stats: avg=35.71ms min=9.45ms max=180.04ms count=28
+W/WindowOnBackDispatcher( 4716): OnBackInvokedCallback is not enabled for the application.
+W/WindowOnBackDispatcher( 4716): Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+E/libEGL  ( 4716): called unimplemented OpenGL ES API
+D/EGL_emulation( 4716): app_time_stats: avg=17.18ms min=4.02ms max=292.52ms count=43
+I/flutter ( 4716): ✅ 지역 Plate 상태 수신 완료
+I/flutter ( 4716): 📌 Selected Area: test
+I/flutter ( 4716): 🅿️ Parking Requests: 0
+I/flutter ( 4716): ✅ Parking Completed: 0
+I/flutter ( 4716): 🚗 Departure Requests: 1
+I/flutter ( 4716): 🏁 Departure Completed: 2
+I/flutter ( 4716): ✅ 지역 Plate 상태 수신 완료
+I/flutter ( 4716): 📌 Selected Area: test
+I/flutter ( 4716): 🅿️ Parking Requests: 0
+I/flutter ( 4716): ✅ Parking Completed: 0
+I/flutter ( 4716): 🚗 Departure Requests: 1
+I/flutter ( 4716): 🏁 Departure Completed: 3
+I/flutter ( 4716): ✅ 문서 이동 완료: departure_requests → departure_completed (444-러-4444)
+[Firestore] DB 문서 저장 완료: 444-러-4444_test
+I/flutter ( 4716): 🕐 지역 Plate 상태 수신 대기 중...
+I/flutter ( 4716): ✅ 지역 Plate 상태 수신 완료
+I/flutter ( 4716): 📌 Selected Area: test
+I/flutter ( 4716): 🅿️ Parking Requests: 0
+I/flutter ( 4716): ✅ Parking Completed: 0
+I/flutter ( 4716): 🚗 Departure Requests: 1
+I/flutter ( 4716): 🏁 Departure Completed: 3
+E/libEGL  ( 4716): called unimplemented OpenGL ES API
+D/EGL_emulation( 4716): app_time_stats: avg=98.81ms min=8.09ms max=680.77ms count=16
+I/flutter ( 4716): ✅ 지역 Plate 상태 수신 완료
+I/flutter ( 4716): 📌 Selected Area: test
+I/flutter ( 4716): 🅿️ Parking Requests: 0
+I/flutter ( 4716): ✅ Parking Completed: 0
+I/flutter ( 4716): 🚗 Departure Requests: 1
+I/flutter ( 4716): 🏁 Departure Completed: 3
+W/WindowOnBackDispatcher( 4716): OnBackInvokedCallback is not enabled for the application.
+W/WindowOnBackDispatcher( 4716): Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+E/libEGL  ( 4716): called unimplemented OpenGL ES API
+D/EGL_emulation( 4716): app_time_stats: avg=17.24ms min=4.07ms max=314.81ms count=39
+I/flutter ( 4716): ✅ 지역 Plate 상태 수신 완료
+I/flutter ( 4716): 📌 Selected Area: test
+I/flutter ( 4716): 🅿️ Parking Requests: 0
+I/flutter ( 4716): ✅ Parking Completed: 0
+I/flutter ( 4716): 🚗 Departure Requests: 1
+I/flutter ( 4716): 🏁 Departure Completed: 3
+I/flutter ( 4716): ✅ 지역 Plate 상태 수신 완료
+I/flutter ( 4716): 📌 Selected Area: test
+I/flutter ( 4716): 🅿️ Parking Requests: 0
+I/flutter ( 4716): ✅ Parking Completed: 0
+I/flutter ( 4716): 🚗 Departure Requests: 0
+I/flutter ( 4716): 🏁 Departure Completed: 3
+I/flutter ( 4716): ❌ Error toggling isSelected: RangeError (index): Invalid value: Valid value range is empty: 0
+I/flutter ( 4716): toggleIsSelected 실패: 🚨 번호판 선택 상태 변경 실패: RangeError (index): Invalid value: Valid value range is empty: 0
+E/flutter ( 4716): [ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: Looking up a deactivated widget's ancestor is unsafe.
+E/flutter ( 4716): At this point the state of the widget's element tree is no longer stable.
+E/flutter ( 4716): To safely refer to a widget's ancestor in its dispose() method, save a reference to the ancestor by calling dependOnInheritedWidgetOfExactType() in the widget's didChangeDependencies() method.
+E/flutter ( 4716): #0      Element._debugCheckStateIsActiveForAncestorLookup.<anonymous closure> (package:flutter/src/widgets/framework.dart:4963:9)
+E/flutter ( 4716): #1      Element._debugCheckStateIsActiveForAncestorLookup (package:flutter/src/widgets/framework.dart:4977:6)
+E/flutter ( 4716): #2      Element.visitAncestorElements (package:flutter/src/widgets/framework.dart:5089:12)
+E/flutter ( 4716): #3      LookupBoundary.findAncestorStateOfType (package:flutter/src/widgets/lookup_boundary.dart:175:13)
+E/flutter ( 4716): #4      Overlay.maybeOf (package:flutter/src/widgets/overlay.dart:609:26)
+E/flutter ( 4716): #5      Overlay.of (package:flutter/src/widgets/overlay.dart:547:34)
+E/flutter ( 4716): #6      showSnackbar (package:easydev/utils/show_snackbar.dart:4:27)
+E/flutter ( 4716): #7      _DepartureRequestPageState._handleDepartureCompleted.<anonymous closure> (package:easydev/screens/type_pages/departure_request_page.dart:110:13)
+E/flutter ( 4716): #8      PlateState.toggleIsSelected (package:easydev/states/plate/plate_state.dart:157:14)
+E/flutter ( 4716): <asynchronous suspension>
+E/flutter ( 4716): 
+I/flutter ( 4716): ✅ 지역 Plate 상태 수신 완료
+I/flutter ( 4716): 📌 Selected Area: test
+I/flutter ( 4716): 🅿️ Parking Requests: 0
+I/flutter ( 4716): ✅ Parking Completed: 0
+I/flutter ( 4716): 🚗 Departure Requests: 0
+I/flutter ( 4716): 🏁 Departure Completed: 4
+I/flutter ( 4716): ✅ 문서 이동 완료: departure_requests → departure_completed (222-노-2222)
+[Firestore] DB 문서 저장 완료: 222-노-2222_test
+I/flutter ( 4716): 🕐 지역 Plate 상태 수신 대기 중...
+I/flutter ( 4716): ✅ 지역 Plate 상태 수신 완료
+I/flutter ( 4716): 📌 Selected Area: test
+I/flutter ( 4716): 🅿️ Parking Requests: 0
+I/flutter ( 4716): ✅ Parking Completed: 0
+I/flutter ( 4716): 🚗 Departure Requests: 0
+I/flutter ( 4716): 🏁 Departure Completed: 4
+E/libEGL  ( 4716): called unimplemented OpenGL ES API
+D/EGL_emulation( 4716): app_time_stats: avg=37.27ms min=3.83ms max=409.35ms count=32

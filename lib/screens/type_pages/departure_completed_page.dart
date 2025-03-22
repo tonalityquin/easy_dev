@@ -156,7 +156,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                 }
               } else if (index == 1 && selectedPlate != null && selectedPlate.isSelected) {
                 showSnackbar(context, '출차 완료가 완료되었습니다.');
-                movementPlate.setDepartureCompleted(selectedPlate.plateNumber, selectedPlate.area);
+                movementPlate.setDepartureCompleted(selectedPlate.plateNumber, selectedPlate.area, plateState);
               }
             },
           );
