@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../../models/user_model.dart';
 import '../../../utils/show_snackbar.dart';
 import '../../../widgets/navigation/secondary_role_navigation.dart';
@@ -9,11 +10,29 @@ import '../../../widgets/container/user_custom_box.dart';
 import '../../../states/user/user_state.dart';
 import '../../../states/area/area_state.dart';
 
-class UserManagement extends StatelessWidget {
+class UserManagement extends StatefulWidget {
   const UserManagement({super.key});
 
+  @override
+  State<UserManagement> createState() => _UserManagementState();
+}
+
+class _UserManagementState extends State<UserManagement> {
+  @override
+  void initState() {
+    super.initState();
+
+    // UserState 초기화 (자동 로그인 및 실시간 유저 수신)
+    Future.microtask(() {
+      final userState = context.read<UserState>();
+      userState.initialize();
+    });
+  }
+
   void buildAddUserDialog(
-      BuildContext context, void Function(String, String, String, String, String, String, bool, bool) onSave) {
+      BuildContext context,
+      void Function(String, String, String, String, String, String, bool, bool) onSave,
+      ) {
     final currentArea = Provider.of<AreaState>(context, listen: false).currentArea;
     showDialog(
       context: context,
@@ -67,12 +86,13 @@ class UserManagement extends StatelessWidget {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     final userState = context.watch<UserState>();
     final currentArea = context.watch<AreaState>().currentArea;
-    final filteredUsers = userState.users.where((user) => user.area == currentArea).toList();
+    final filteredUsers = userState.users
+        .where((user) => user.area == currentArea)
+        .toList();
 
     return Scaffold(
       appBar: const SecondaryRoleNavigation(),
@@ -87,12 +107,12 @@ class UserManagement extends StatelessWidget {
           final isSelected = userState.selectedUsers[userContainer.id] ?? false;
 
           return UserCustomBox(
-            topLeftText: userContainer.name, // ✅ 수정됨
-            topRightText: userContainer.email, // ✅ 수정됨
-            midLeftText: userContainer.role, // ✅ 수정됨
-            midCenterText: userContainer.phone, // ✅ 수정됨
-            midRightText: userContainer.area, // ✅ 수정됨
-            onTap: () => userState.toggleUserCard(userContainer.id), // ✅ 수정됨
+            topLeftText: userContainer.name,
+            topRightText: userContainer.email,
+            midLeftText: userContainer.role,
+            midCenterText: userContainer.phone,
+            midRightText: userContainer.area,
+            onTap: () => userState.toggleUserCard(userContainer.id),
             isSelected: isSelected,
             backgroundColor: isSelected ? Colors.green : Colors.white,
           );
