@@ -204,6 +204,7 @@ class _Input3DigitState extends State<Input3Digit> {
       basicAmount: selectedBasicAmount,
       addStandard: selectedAddStandard,
       addAmount: selectedAddAmount,
+      region: dropdownValue,
     );
 
     clearInput();

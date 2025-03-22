@@ -107,6 +107,7 @@ class FirestorePlateRepository implements PlateRepository {
     int? basicAmount,
     int? addStandard,
     int? addAmount,
+    required String region,
   }) async {
     final documentId = '${plateNumber}_$area';
 
@@ -152,6 +153,7 @@ class FirestorePlateRepository implements PlateRepository {
       'basicAmount': basicAmount ?? 0,
       'addStandard': addStandard ?? 0,
       'addAmount': addAmount ?? 0,
+      'region': region,
     };
 
     dev.log('🔥 Firestore 저장 데이터: $data');
