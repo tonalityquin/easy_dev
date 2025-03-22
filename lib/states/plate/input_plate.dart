@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../models/plate_model.dart';
 import '../../utils/show_snackbar.dart';
 import '../area/area_state.dart';
 import '../user/user_state.dart';
@@ -76,6 +77,51 @@ class InputPlate with ChangeNotifier {
       notifyListeners();
     } catch (error) {
       showSnackbar(context, '오류 발생: $error');
+    }
+  }
+
+  Future<void> updatePlateInfo({
+    required BuildContext context,
+    required PlateModel plate,
+    required String newPlateNumber,
+    required String location,
+    required AreaState areaState,
+    required UserState userState,
+    required String collectionKey,
+    String? adjustmentType,
+    List<String>? statusList,
+    int? basicStandard,
+    int? basicAmount,
+    int? addStandard,
+    int? addAmount,
+    String? region,
+  }) async {
+    try {
+      final documentId = '${plate.plateNumber}_${plate.area}'; // 기존 문서 ID
+
+      final updatedPlate = plate.copyWith(
+        plateNumber: newPlateNumber,
+        location: location,
+        userName: userState.name,
+        adjustmentType: adjustmentType,
+        statusList: statusList,
+        basicStandard: basicStandard,
+        basicAmount: basicAmount,
+        addStandard: addStandard,
+        addAmount: addAmount,
+        region: region,
+      );
+
+      await _plateRepository.addOrUpdateDocument(
+        collectionKey,
+        documentId,
+        updatedPlate.toMap(),
+      );
+
+      showSnackbar(context, '정보 수정 완료');
+      notifyListeners();
+    } catch (e) {
+      showSnackbar(context, '정보 수정 실패: $e');
     }
   }
 }
