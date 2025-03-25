@@ -62,27 +62,27 @@ class TopNavigation extends StatelessWidget implements PreferredSizeWidget {
 
     showDialog(
       context: context,
+      barrierDismissible: true,
       builder: (context) {
-        return AlertDialog(
+        return Dialog(
+          insetPadding: EdgeInsets.zero, // ✅ 여백 제거
           backgroundColor: Colors.white,
-          contentPadding: const EdgeInsets.only(top: 12, left: 8, right: 8),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          content: SizedBox(
-            height: 230,
-            width: double.maxFinite,
-            child: Column(
+          child: Scaffold(
+            appBar: AppBar(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              title: const Text('', style: TextStyle(color: Colors.black)),
+              centerTitle: true,
+              iconTheme: const IconThemeData(color: Colors.black),
+            ),
+            body: Column(
               children: [
-                const Text(
-                  '지역 선택',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                const Divider(),
                 Expanded(
                   child: CupertinoPicker(
                     scrollController: FixedExtentScrollController(
                       initialItem: areas.indexOf(areaState.currentArea),
                     ),
-                    itemExtent: 36,
+                    itemExtent: 50,
                     onSelectedItemChanged: (index) {
                       tempSelected = areas[index];
                     },
@@ -97,14 +97,20 @@ class TopNavigation extends StatelessWidget implements PreferredSizeWidget {
                   ),
                 ),
                 const Divider(height: 0),
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    areaState.updateArea(tempSelected);
-                    plateState.syncWithAreaState();
-                  },
-                  child: const Text('확인', style: TextStyle(color: Colors.blue)),
-                ),
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        areaState.updateArea(tempSelected);
+                        plateState.syncWithAreaState();
+                      },
+                      child: const Text('확인', style: TextStyle(fontSize: 16)),
+                    ),
+                  ),
+                )
               ],
             ),
           ),
@@ -112,6 +118,7 @@ class TopNavigation extends StatelessWidget implements PreferredSizeWidget {
       },
     );
   }
+
 
   String _getSelectedArea(AreaState areaState) {
     return areaState.availableAreas.contains(areaState.currentArea)
