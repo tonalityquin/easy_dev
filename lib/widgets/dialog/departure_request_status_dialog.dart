@@ -66,13 +66,14 @@ void handleEntryParkingRequest(BuildContext context, String plateNumber, String 
   showSnackbar(context, "입차 요청이 처리되었습니다.");
 }
 
-void handleEntryParkingCompleted(BuildContext context, String plateNumber, String area) {
+void handleEntryParkingCompleted(BuildContext context, String plateNumber, String area, String location) {
   final movementPlate = context.read<MovementPlate>(); // ✅ MovementPlate 사용
   final plateState = context.read<PlateState>();
   movementPlate.setDepartureCompleted(
     plateNumber,
     area,
     plateState,
+    location,
   );
   showSnackbar(context, "입차 완료가 처리되었습니다.");
 }

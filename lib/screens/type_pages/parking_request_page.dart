@@ -125,7 +125,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
         region: region,
       );
 
-      movementPlate.setParkingCompleted(plateNumber, area, plateState); // ✅ PlateState 추가
+      movementPlate.setParkingCompleted(plateNumber, area, plateState, location); // ✅ PlateState 추가
       showSnackbar(context, "입차 완료: $plateNumber ($location)");
     } catch (e) {
       debugPrint("입차 완료 처리 실패: $e");

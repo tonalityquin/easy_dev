@@ -243,7 +243,7 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
     final areaState = context.read<AreaState>();
     final userState = context.read<UserState>();
 
-    await inputState.updatePlateInfo(
+    final success = await inputState.updatePlateInfo(
       context: context,
       plate: widget.plate,
       newPlateNumber: plateNumber,
@@ -259,6 +259,10 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
       addAmount: selectedAddAmount,
       region: dropdownValue,
     );
+
+    if (success) {
+      Navigator.pop(context); // ✅ 성공 시에만 화면 닫기
+    }
 
     clearInput();
     _clearLocation();
@@ -404,24 +408,24 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
                     child: _capturedImages.isEmpty
                         ? const Center(child: Text('촬영된 사진 없음'))
                         : ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: _capturedImages.length,
-                      itemBuilder: (context, index) {
-                        final imageFile = _capturedImages[index];
-                        return GestureDetector(
-                          onTap: () => showFullScreenImageViewer(context, _capturedImages, index),
-                          child: Padding(
-                            padding: const EdgeInsets.all(4.0),
-                            child: Image.file(
-                              File(imageFile.path),
-                              width: 100,
-                              height: 100,
-                              fit: BoxFit.cover,
-                            ),
+                            scrollDirection: Axis.horizontal,
+                            itemCount: _capturedImages.length,
+                            itemBuilder: (context, index) {
+                              final imageFile = _capturedImages[index];
+                              return GestureDetector(
+                                onTap: () => showFullScreenImageViewer(context, _capturedImages, index),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(4.0),
+                                  child: Image.file(
+                                    File(imageFile.path),
+                                    width: 100,
+                                    height: 100,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              );
+                            },
                           ),
-                        );
-                      },
-                    ),
                   ),
                   const SizedBox(height: 32.0),
                   const Text(
