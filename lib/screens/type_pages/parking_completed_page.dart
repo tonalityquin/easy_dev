@@ -102,7 +102,9 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
 
     if (selectedPlate != null) {
       try {
-        movementPlate.setDepartureRequested(selectedPlate.plateNumber, selectedPlate.area, plateState).then((_) {
+        movementPlate
+            .setDepartureRequested(selectedPlate.plateNumber, selectedPlate.area, plateState, selectedPlate.location)
+            .then((_) {
           // ✅ MovementPlate에서 호출
           Future.delayed(Duration(milliseconds: 300), () {
             if (context.mounted) {
@@ -273,7 +275,8 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                               handleEntryParkingRequest(context, selectedPlate.plateNumber, selectedPlate.area);
                             },
                             onCompleteDeparture: () {
-                              handleEntryDepartureCompleted(context, selectedPlate.plateNumber, selectedPlate.area);
+                              handleEntryDepartureCompleted(
+                                  context, selectedPlate.plateNumber, selectedPlate.area, selectedPlate.location);
                             },
                             onDelete: () {
                               showDialog(

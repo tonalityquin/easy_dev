@@ -129,6 +129,7 @@ class PlateState extends ChangeNotifier {
     required void Function(String) onError,
   }) async {
     final plateId = '${plateNumber}_$currentArea';
+
     try {
       final plateList = _data[collection];
       if (plateList == null) throw Exception('🚨 Collection not found');
@@ -143,13 +144,27 @@ class PlateState extends ChangeNotifier {
       }
 
       // 🚫 전 컬렉션에 이미 선택된 다른 plate가 있을 경우
-      final alreadySelectedInOtherCollections = _data.values.any(
-            (plates) => plates.any(
-              (p) => p.isSelected && p.selectedBy == userName && p.id != plateId,
-        ),
-      );
-      if (alreadySelectedInOtherCollections && !plate.isSelected) {
-        throw Exception('⚠️ 이미 다른 번호판을 선택한 상태입니다.');
+      final alreadySelected = _data.entries.expand((entry) => entry.value).firstWhere(
+            (p) => p.isSelected && p.selectedBy == userName && p.id != plateId,
+            orElse: () => PlateModel(
+              id: '',
+              plateNumber: '',
+              type: '',
+              requestTime: DateTime.now(),
+              location: '',
+              area: '',
+              userName: '',
+              isSelected: false,
+              statusList: [],
+            ),
+          );
+
+      if (alreadySelected.id.isNotEmpty && !plate.isSelected) {
+        final collectionLabel = _getCollectionLabelForType(alreadySelected.type);
+        throw Exception('⚠️ 이미 다른 번호판을 선택한 상태입니다.\n'
+            '• 선택된 번호판: ${alreadySelected.plateNumber}\n'
+            '• 위치: $collectionLabel\n'
+            '선택을 해제한 후 다시 시도해주세요.');
       }
 
       final newIsSelected = !plate.isSelected;
@@ -170,11 +185,25 @@ class PlateState extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       debugPrint('❌ Error toggling isSelected: $e');
-      onError('🚨 번호판 선택 상태 변경 실패: $e');
+      onError('🚨 번호판 선택 상태 변경 실패:\n$e');
     }
   }
 
-
+  String _getCollectionLabelForType(String type) {
+    switch (type) {
+      case '입차 요청':
+      case '입차 중':
+        return '입차 요청';
+      case '입차 완료':
+        return '입차 완료';
+      case '출차 요청':
+        return '출차 요청';
+      case '출차 완료':
+        return '출차 완료';
+      default:
+        return '알 수 없음';
+    }
+  }
 
   /// 🔍 현재 유저가 선택한 plate 조회
   PlateModel? getSelectedPlate(String collection, String userName) {

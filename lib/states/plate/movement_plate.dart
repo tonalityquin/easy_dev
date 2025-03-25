@@ -14,6 +14,7 @@ class MovementPlate {
     required String plateNumber,
     required String area,
     required String newType,
+    required String location,
   }) async {
     final documentId = '${plateNumber}_$area';
     try {
@@ -30,6 +31,7 @@ class MovementPlate {
       await _repository.addOrUpdateDocument(toCollection, documentId, {
         ...document.toMap(),
         'type': newType,
+        'location': location,
         'isSelected': false,
         'selectedBy': null,
       });
@@ -47,6 +49,7 @@ class MovementPlate {
     String plateNumber,
     String area,
     PlateState plateState,
+    String location,
   ) async {
     final success = await _transferData(
       fromCollection: 'parking_requests',
@@ -54,6 +57,7 @@ class MovementPlate {
       plateNumber: plateNumber,
       area: area,
       newType: '입차 완료',
+      location: location, // ✅ 전달
     );
 
     if (success) await plateState.fetchPlateData();
@@ -64,6 +68,7 @@ class MovementPlate {
     String plateNumber,
     String area,
     PlateState plateState,
+    String location,
   ) async {
     final success = await _transferData(
       fromCollection: 'parking_completed',
@@ -71,6 +76,7 @@ class MovementPlate {
       plateNumber: plateNumber,
       area: area,
       newType: '출차 요청',
+      location: location,
     );
 
     if (success) await plateState.fetchPlateData();
@@ -81,12 +87,14 @@ class MovementPlate {
     String plateNumber,
     String area,
     PlateState plateState,
+    String location,
   ) async {
     final success = await _transferData(
       fromCollection: 'departure_requests',
       toCollection: 'departure_completed',
       plateNumber: plateNumber,
       area: area,
+      location: location,
       newType: '출차 완료',
     );
 
@@ -134,12 +142,14 @@ class MovementPlate {
     required String fromCollection,
     required String toCollection,
     required String newType,
+    required String location,
   }) async {
     final success = await _transferData(
       fromCollection: fromCollection,
       toCollection: toCollection,
       plateNumber: plateNumber,
       area: area,
+      location: location,
       newType: newType,
     );
 

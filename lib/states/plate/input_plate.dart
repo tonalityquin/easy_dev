@@ -80,7 +80,7 @@ class InputPlate with ChangeNotifier {
     }
   }
 
-  Future<void> updatePlateInfo({
+  Future<bool> updatePlateInfo({
     required BuildContext context,
     required PlateModel plate,
     required String newPlateNumber,
@@ -120,8 +120,11 @@ class InputPlate with ChangeNotifier {
 
       showSnackbar(context, '정보 수정 완료');
       notifyListeners();
+
+      return true; // ✅ 성공 시 true 반환
     } catch (e) {
       showSnackbar(context, '정보 수정 실패: $e');
+      return false; // ✅ 실패 시 false 반환
     }
   }
 }
