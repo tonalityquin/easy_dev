@@ -6,13 +6,13 @@ import '../../utils/show_snackbar.dart';
 
 class DepartureRequestStatusDialog extends StatelessWidget {
   final VoidCallback onRequestEntry;
-  final VoidCallback onCompleteDeparture;
+  final VoidCallback onCompleteEntry;
   final VoidCallback onDelete;
 
   const DepartureRequestStatusDialog({
     super.key,
     required this.onRequestEntry,
-    required this.onCompleteDeparture,
+    required this.onCompleteEntry,
     required this.onDelete,
   });
 
@@ -34,7 +34,7 @@ class DepartureRequestStatusDialog extends StatelessWidget {
             title: const Text("입차 완료"),
             onTap: () {
               Navigator.pop(context);
-              onCompleteDeparture();
+              onCompleteEntry();
             },
           ),
           ListTile(
@@ -69,7 +69,7 @@ void handleEntryParkingRequest(BuildContext context, String plateNumber, String 
 void handleEntryParkingCompleted(BuildContext context, String plateNumber, String area, String location) {
   final movementPlate = context.read<MovementPlate>(); // ✅ MovementPlate 사용
   final plateState = context.read<PlateState>();
-  movementPlate.setDepartureCompleted(
+  movementPlate.moveDepartureToParkingCompleted(
     plateNumber,
     area,
     plateState,

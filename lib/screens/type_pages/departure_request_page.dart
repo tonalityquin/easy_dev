@@ -251,7 +251,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                             onRequestEntry: () {
                               handleEntryParkingRequest(context, selectedPlate.plateNumber, selectedPlate.area);
                             },
-                            onCompleteDeparture: () {
+                            onCompleteEntry: () {
                               handleEntryParkingCompleted(
                                   context, selectedPlate.plateNumber, selectedPlate.area, selectedPlate.location);
                             },

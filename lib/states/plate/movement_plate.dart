@@ -134,6 +134,29 @@ class MovementPlate {
     }
   }
 
+  Future<void> moveDepartureToParkingCompleted(
+      String plateNumber,
+      String area,
+      PlateState plateState,
+      String location,
+      ) async {
+    final success = await _transferData(
+      fromCollection: 'departure_requests',
+      toCollection: 'parking_completed',
+      plateNumber: plateNumber,
+      area: area,
+      newType: '입차 완료',
+      location: location,
+    );
+
+    if (success) {
+      await plateState.fetchPlateData();
+    } else {
+      debugPrint("🚫 출차 요청 → 입차 완료 이동 실패");
+    }
+  }
+
+
   /// 범용 업데이트 지원 (선택적으로 사용 가능)
   Future<void> updatePlateStatus({
     required String plateNumber,
