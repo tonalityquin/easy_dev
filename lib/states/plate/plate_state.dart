@@ -1,10 +1,9 @@
 import 'dart:async';
-
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import '../../repositories/plate/plate_repository.dart';
 import '../../models/plate_model.dart';
 import '../area/area_state.dart';
+
 
 class PlateState extends ChangeNotifier {
   final PlateRepository _repository;
@@ -12,7 +11,7 @@ class PlateState extends ChangeNotifier {
 
   PlateState(this._repository, this._areaState) {
     _initializeSubscriptions();
-    _areaState.addListener(_onAreaChanged); // ✅ 지역 변경 감지 리스너
+    _areaState.addListener(_onAreaChanged);
   }
 
   final Map<String, List<PlateModel>> _data = {
@@ -28,14 +27,11 @@ class PlateState extends ChangeNotifier {
   String? _searchQuery;
 
   String get searchQuery => _searchQuery ?? "";
-
   String get currentArea => _areaState.currentArea;
 
   bool _isLoading = true;
-
   bool get isLoading => _isLoading;
 
-  /// 🔹 개수 출력 (로딩 상태 반영)
   void PlateCounts() {
     if (_isLoading) {
       print('🕐 지역 Plate 상태 수신 대기 중...');
@@ -49,12 +45,11 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  /// 🔄 모든 컬렉션 스트림 재구독 + 로딩 상태 처리
   void _initializeSubscriptions() {
     _cancelAllSubscriptions();
 
     _isLoading = true;
-    PlateCounts(); // 🕐 출력
+    PlateCounts();
 
     int receivedCount = 0;
     final totalCollections = _data.keys.length;
@@ -81,7 +76,7 @@ class PlateState extends ChangeNotifier {
 
         if (receivedCount == totalCollections) {
           _isLoading = false;
-          PlateCounts(); // ✅ 모든 스트림 완료 시점에 한 번만 출력
+          PlateCounts();
         }
       });
 
@@ -98,7 +93,7 @@ class PlateState extends ChangeNotifier {
 
   void _onAreaChanged() {
     print("🔄 지역 변경 감지됨: ${_areaState.currentArea}");
-    _initializeSubscriptions(); // ✅ 지역 변경 → 스트림 재설정
+    _initializeSubscriptions();
   }
 
   void syncWithAreaState() {
@@ -106,7 +101,6 @@ class PlateState extends ChangeNotifier {
     PlateCounts();
   }
 
-  /// 🔍 현재 지역에 해당하는 plate 데이터를 가져오는 함수
   List<PlateModel> getPlatesByCollection(String collection) {
     final plates = _data[collection] ?? [];
 
@@ -121,7 +115,6 @@ class PlateState extends ChangeNotifier {
     return plates;
   }
 
-  /// ✅ 특정 plate 선택 상태를 토글
   Future<void> toggleIsSelected({
     required String collection,
     required String plateNumber,
@@ -138,26 +131,24 @@ class PlateState extends ChangeNotifier {
 
       final plate = plateList[index];
 
-      // 🔐 다른 사용자가 선택한 경우 선택 불가
       if (plate.isSelected && plate.selectedBy != userName) {
         throw Exception('⚠️ 이미 다른 사용자가 선택한 번호판입니다.');
       }
 
-      // 🚫 전 컬렉션에 이미 선택된 다른 plate가 있을 경우
       final alreadySelected = _data.entries.expand((entry) => entry.value).firstWhere(
             (p) => p.isSelected && p.selectedBy == userName && p.id != plateId,
-            orElse: () => PlateModel(
-              id: '',
-              plateNumber: '',
-              type: '',
-              requestTime: DateTime.now(),
-              location: '',
-              area: '',
-              userName: '',
-              isSelected: false,
-              statusList: [],
-            ),
-          );
+        orElse: () => PlateModel(
+          id: '',
+          plateNumber: '',
+          type: '',
+          requestTime: DateTime.now(),
+          location: '',
+          area: '',
+          userName: '',
+          isSelected: false,
+          statusList: [],
+        ),
+      );
 
       if (alreadySelected.id.isNotEmpty && !plate.isSelected) {
         final collectionLabel = _getCollectionLabelForType(alreadySelected.type);
@@ -189,6 +180,7 @@ class PlateState extends ChangeNotifier {
     }
   }
 
+
   String _getCollectionLabelForType(String type) {
     switch (type) {
       case '입차 요청':
@@ -205,13 +197,12 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  /// 🔍 현재 유저가 선택한 plate 조회
   PlateModel? getSelectedPlate(String collection, String userName) {
     final plates = _data[collection];
     if (plates == null || plates.isEmpty) return null;
 
     return plates.firstWhere(
-      (plate) => plate.isSelected && plate.selectedBy == userName,
+          (plate) => plate.isSelected && plate.selectedBy == userName,
       orElse: () => PlateModel(
         id: '',
         plateNumber: '',
@@ -227,10 +218,9 @@ class PlateState extends ChangeNotifier {
   }
 
   Future<void> fetchPlateData() async {
-    _initializeSubscriptions(); // 🔁 기존 스트림 초기화 및 재구독
+    _initializeSubscriptions();
   }
 
-  /// 🔁 외부에서 수동으로 재동기화할 경우 호출
   @override
   void dispose() {
     _cancelAllSubscriptions();

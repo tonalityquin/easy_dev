@@ -268,9 +268,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                           context: context,
                           builder: (context) => ParkingCompletedStatusDialog(
                             plateNumber: selectedPlate.plateNumber,
-                            // ✅ 추가
                             area: selectedPlate.area,
-                            // ✅ 추가
                             onRequestEntry: () {
                               handleEntryParkingRequest(context, selectedPlate.plateNumber, selectedPlate.area);
                             },

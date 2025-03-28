@@ -12,10 +12,7 @@ class FirestoreStatusRepository implements StatusRepository {
 
   @override
   Stream<List<StatusModel>> getStatusStream(String area) {
-    return _getCollectionRef()
-        .where('area', isEqualTo: area)
-        .snapshots()
-        .map((snapshot) {
+    return _getCollectionRef().where('area', isEqualTo: area).snapshots().map((snapshot) {
       return snapshot.docs.map((doc) => StatusModel.fromMap(doc.id, doc.data())).toList();
     });
   }

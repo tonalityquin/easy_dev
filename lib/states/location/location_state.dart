@@ -4,6 +4,7 @@ import '../../models/location_model.dart';
 
 class LocationState extends ChangeNotifier {
   final LocationRepository _repository;
+
   LocationState(this._repository) {
     _initializeLocations();
   }
@@ -14,15 +15,18 @@ class LocationState extends ChangeNotifier {
   List<IconData> _navigationIcons = [Icons.add, Icons.delete];
 
   List<LocationModel> get locations => _locations;
+
   Map<String, bool> get selectedLocations => _selectedLocations;
+
   bool get isLoading => _isLoading;
+
   List<IconData> get navigationIcons => _navigationIcons;
 
   void _initializeLocations() {
     _repository.getLocationsStream().listen(
-          (data) {
+      (data) {
         _locations = data;
-        _selectedLocations = { for (var loc in data) loc.id: loc.isSelected };
+        _selectedLocations = {for (var loc in data) loc.id: loc.isSelected};
         _isLoading = false;
         notifyListeners();
       },
@@ -34,7 +38,8 @@ class LocationState extends ChangeNotifier {
 
   Future<void> addLocation(String locationName, String area, {void Function(String)? onError}) async {
     try {
-      await _repository.addLocation(LocationModel(id: locationName, locationName: locationName, area: area, isSelected: false));
+      await _repository
+          .addLocation(LocationModel(id: locationName, locationName: locationName, area: area, isSelected: false));
     } catch (e) {
       onError?.call('🚨 주차 구역 추가 실패: $e');
     }
