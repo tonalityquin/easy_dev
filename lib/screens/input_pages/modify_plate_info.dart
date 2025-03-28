@@ -16,9 +16,12 @@ import 'package:easydev/widgets/dialog/parking_location_dialog.dart';
 import 'package:easydev/utils/camera_helper.dart';
 import 'package:easydev/widgets/dialog/camera_preview_dialog.dart';
 import 'package:easydev/widgets/dialog/region_picker_dialog.dart';
-import 'package:easydev/states/plate/input_plate.dart';
+import 'package:easydev/states/plate/modify_plate.dart';
 import 'package:easydev/models/plate_model.dart';
 import 'package:easydev/utils/fullscreen_viewer.dart';
+
+import 'package:easydev/models/plate_log_model.dart';
+import 'package:easydev/states/plate/log_plate.dart';
 
 class ModifyPlateInfo extends StatefulWidget {
   final PlateModel plate; // ✅ plate 파라미터 추가
@@ -239,19 +242,32 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
 
   Future<void> _handleAction() async {
     final String plateNumber = '${controller3digit.text}-${controller1digit.text}-${controller4digit.text}';
-    final inputState = context.read<InputPlate>();
+    final modifyState = context.read<ModifyPlate>();
     final areaState = context.read<AreaState>();
     final userState = context.read<UserState>();
+    final logState = context.read<LogPlateState>();
 
-    final success = await inputState.updatePlateInfo(
+    final originalPlate = widget.plate;
+
+    // 🔍 변경 전 정보
+    final String oldLocation = originalPlate.location;
+    final String? oldAdjustmentType = originalPlate.adjustmentType;
+
+    final String newLocation = locationController.text;
+    final String? newAdjustmentType = selectedAdjustment;
+
+    final bool locationChanged = oldLocation != newLocation;
+    final bool adjustmentChanged = oldAdjustmentType != newAdjustmentType;
+
+    final success = await modifyState.updatePlateInfo(
       context: context,
-      plate: widget.plate,
+      plate: originalPlate,
       newPlateNumber: plateNumber,
-      location: locationController.text,
+      location: newLocation,
       areaState: areaState,
       userState: userState,
       collectionKey: widget.collectionKey,
-      adjustmentType: selectedAdjustment,
+      adjustmentType: newAdjustmentType,
       statusList: selectedStatuses,
       basicStandard: selectedBasicStandard,
       basicAmount: selectedBasicAmount,
@@ -259,6 +275,25 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
       addAmount: selectedAddAmount,
       region: dropdownValue,
     );
+
+    // ✅ 성공 & 변화 감지 시 로그 저장
+    if (success && (locationChanged || adjustmentChanged)) {
+      final log = PlateLogModel(
+        plateNumber: plateNumber,
+        area: areaState.currentArea,
+        from: locationChanged ? oldLocation : (adjustmentChanged ? oldAdjustmentType ?? '-' : '-'),
+        to: locationChanged ? newLocation : (adjustmentChanged ? newAdjustmentType ?? '-' : '-'),
+        action: locationChanged && adjustmentChanged
+            ? '위치/할인 수정'
+            : locationChanged
+                ? '위치 수정'
+                : '할인 수정',
+        performedBy: userState.user?.name ?? 'Unknown',
+        timestamp: DateTime.now(),
+      );
+
+      await logState.saveLog(log);
+    }
 
     if (success) {
       Navigator.pop(context); // ✅ 성공 시에만 화면 닫기

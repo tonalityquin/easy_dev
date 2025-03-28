@@ -14,6 +14,7 @@ import '../repositories/log/firestore_plate_log_repository.dart'; // ✅ 로그�
 import '../states/area/area_state.dart';
 import '../states/page/page_info.dart';
 import '../states/page/page_state.dart';
+import '../states/plate/modify_plate.dart';
 import '../states/user/user_state.dart';
 import '../states/location/location_state.dart';
 import '../states/adjustment/adjustment_state.dart';
@@ -49,8 +50,13 @@ final List<SingleChildWidget> stateProviders = [
       context.read<AreaState>(), // ✅ 현재 지역 상태 주입
     ),
   ),
-
-
+  // 🔧 차량 정보 수정 상태
+  ChangeNotifierProvider(
+    create: (context) => ModifyPlate(
+      context.read<PlateRepository>(),
+      context.read<LogPlateState>(), // 로그 주입
+    ),
+  ),
   // 🚘 차량 입차 처리 상태
   ChangeNotifierProvider(
     create: (context) => InputPlate(

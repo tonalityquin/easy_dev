@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class PlateLogModel {
   final String plateNumber;
   final String area;
@@ -26,4 +28,16 @@ class PlateLogModel {
     'performedBy': performedBy,
     'timestamp': timestamp,
   };
+
+  factory PlateLogModel.fromMap(Map<String, dynamic> map) {
+    return PlateLogModel(
+      plateNumber: map['plateNumber'] ?? '',
+      area: map['area'] ?? '',
+      from: map['from'] ?? '',
+      to: map['to'] ?? '',
+      action: map['action'] ?? '',
+      performedBy: map['performedBy'] ?? '',
+      timestamp: (map['timestamp'] as Timestamp).toDate(),
+    );
+  }
 }
