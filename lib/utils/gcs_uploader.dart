@@ -6,7 +6,7 @@ import 'package:googleapis/storage/v1.dart';
 class GCSUploader {
   final String bucketName = 'easydev-image'; // GCS 버킷 이름
   final String projectId = 'easydev-97fb6';  // GCP 프로젝트 ID
-  final String serviceAccountPath = 'assets/keys/easydev-97fb6-967c8fd3f926.json'; // assets 내 JSON 키 경로
+  final String serviceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json'; // assets 내 JSON 키 경로
 
   Future<String?> uploadImage(File imageFile, String destinationPath) async {
     try {

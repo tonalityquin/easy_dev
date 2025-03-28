@@ -257,7 +257,7 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
 
     final originalPlate = widget.plate;
 
-    // 🔍 변경 전 정보
+    // 변경 전 정보
     final String oldLocation = originalPlate.location;
     final String? oldAdjustmentType = originalPlate.adjustmentType;
 
@@ -267,11 +267,10 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
     final bool locationChanged = oldLocation != newLocation;
     final bool adjustmentChanged = oldAdjustmentType != newAdjustmentType;
 
-    /// 1. GCS 업로더 생성
+    // GCS 업로드
     final uploader = GCSUploader();
     final List<String> uploadedImageUrls = [];
 
-    /// 2. 이미지 업로드
     for (var image in _capturedImages) {
       final file = File(image.path);
       final fileName = '${plateNumber}_${DateTime.now().millisecondsSinceEpoch}.jpg';
@@ -285,6 +284,10 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
       }
     }
 
+    /// ✅ 여기서 기존 + 신규 이미지 병합
+    final List<String> mergedImageUrls = [..._existingImageUrls, ...uploadedImageUrls];
+
+    /// Plate 정보 업데이트 (이제 imageUrls 포함!)
     final success = await modifyState.updatePlateInfo(
       context: context,
       plate: originalPlate,
@@ -300,9 +303,9 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
       addStandard: selectedAddStandard,
       addAmount: selectedAddAmount,
       region: dropdownValue,
+      imageUrls: mergedImageUrls, // ✅ 꼭 포함되어야 함!
     );
 
-    // ✅ 성공 & 변화 감지 시 로그 저장
     if (success && (locationChanged || adjustmentChanged)) {
       final log = PlateLogModel(
         plateNumber: plateNumber,
@@ -312,8 +315,8 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
         action: locationChanged && adjustmentChanged
             ? '위치/할인 수정'
             : locationChanged
-                ? '위치 수정'
-                : '할인 수정',
+            ? '위치 수정'
+            : '할인 수정',
         performedBy: userState.user?.name ?? 'Unknown',
         timestamp: DateTime.now(),
       );
@@ -322,12 +325,13 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
     }
 
     if (success) {
-      Navigator.pop(context); // ✅ 성공 시에만 화면 닫기
+      Navigator.pop(context);
     }
 
     clearInput();
     _clearLocation();
   }
+
 
   void _selectParkingLocation() {
     showDialog(
@@ -469,46 +473,46 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
                     child: _capturedImages.isEmpty && _existingImageUrls.isEmpty
                         ? const Center(child: Text('촬영된 사진 없음'))
                         : ListView(
-                      scrollDirection: Axis.horizontal,
-                      children: [
-                        // ✅ 기존 GCS 이미지 (URL)
-                        ..._existingImageUrls.asMap().entries.map((entry) {
-                          final index = entry.key;
-                          final url = entry.value;
-                          return GestureDetector(
-                            onTap: () => showFullScreenImageViewerFromUrls(context, _existingImageUrls, index),
-                            child: Padding(
-                              padding: const EdgeInsets.all(4.0),
-                              child: Image.network(
-                                url,
-                                width: 100,
-                                height: 100,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) =>
-                                const Icon(Icons.broken_image, size: 50),
-                              ),
-                            ),
-                          );
-                        }),
-                        // ✅ 새로 촬영한 로컬 이미지 (File)
-                        ..._capturedImages.asMap().entries.map((entry) {
-                          final index = entry.key;
-                          final image = entry.value;
-                          return GestureDetector(
-                            onTap: () => showFullScreenImageViewer(context, _capturedImages, index),
-                            child: Padding(
-                              padding: const EdgeInsets.all(4.0),
-                              child: Image.file(
-                                File(image.path),
-                                width: 100,
-                                height: 100,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                          );
-                        }),
-                      ],
-                    ),
+                            scrollDirection: Axis.horizontal,
+                            children: [
+                              // ✅ 기존 GCS 이미지 (URL)
+                              ..._existingImageUrls.asMap().entries.map((entry) {
+                                final index = entry.key;
+                                final url = entry.value;
+                                return GestureDetector(
+                                  onTap: () => showFullScreenImageViewerFromUrls(context, _existingImageUrls, index),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(4.0),
+                                    child: Image.network(
+                                      url,
+                                      width: 100,
+                                      height: 100,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) =>
+                                          const Icon(Icons.broken_image, size: 50),
+                                    ),
+                                  ),
+                                );
+                              }),
+                              // ✅ 새로 촬영한 로컬 이미지 (File)
+                              ..._capturedImages.asMap().entries.map((entry) {
+                                final index = entry.key;
+                                final image = entry.value;
+                                return GestureDetector(
+                                  onTap: () => showFullScreenImageViewer(context, _capturedImages, index),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(4.0),
+                                    child: Image.file(
+                                      File(image.path),
+                                      width: 100,
+                                      height: 100,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                );
+                              }),
+                            ],
+                          ),
                   ),
                   const SizedBox(height: 32.0),
                   const Text(
