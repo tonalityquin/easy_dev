@@ -72,7 +72,13 @@ class _PlateLogViewerPageState extends State<PlateLogViewerPage> {
           return ListTile(
             leading: const Icon(Icons.directions_car),
             title: Text('${log.plateNumber} | ${log.action}'),
-            subtitle: Text('${log.from} → ${log.to}'),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${log.from} → ${log.to}'),
+                Text('담당자: ${log.performedBy}', style: const TextStyle(fontSize: 12)),
+              ],
+            ),
             trailing: Text(
               log.timestamp.toString().substring(0, 19),
               style: const TextStyle(fontSize: 12),

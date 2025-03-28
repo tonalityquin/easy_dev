@@ -146,19 +146,6 @@ class ModifyPlate with ChangeNotifier {
           changes.add('정산: $fromAdj → $toAdj');
         }
 
-        final changeSummary = changes.join(', ');
-
-        await _logState.saveLog(
-          PlateLogModel(
-            plateNumber: newPlateNumber,
-            area: areaState.currentArea,
-            from: collectionKey,
-            to: collectionKey,
-            action: '정보 수정 ($changeSummary)',
-            performedBy: userState.name,
-            timestamp: DateTime.now(),
-          ),
-        );
       }
 
       showSnackbar(context, '정보 수정 완료');

@@ -21,6 +21,7 @@ class MovementPlate {
     String performedBy = '시스템',
   }) async {
     final documentId = '${plateNumber}_$area';
+
     try {
       final document = await _repository.getDocument(fromCollection, documentId);
       if (document == null) {
@@ -28,19 +29,27 @@ class MovementPlate {
         return false;
       }
 
+      // 🔍 실제 plate 데이터를 가져옴
+      final plateData = document.toMap();
+
+      // 👤 담당자 추출: selectedBy 또는 기본값
+      final selectedBy = plateData['selectedBy'] ?? '시스템';
+
+      // 🔄 from → to 컬렉션으로 이동
       await _repository.deleteDocument(fromCollection, documentId);
 
       await _repository.addOrUpdateDocument(toCollection, documentId, {
-        ...document.toMap(),
+        ...plateData,
         'type': newType,
         'location': location,
+        'userName': selectedBy, // ✅ 사용자 이름 갱신
         'isSelected': false,
         'selectedBy': null,
       });
 
       debugPrint("✅ 문서 이동 완료: $fromCollection → $toCollection ($plateNumber)");
 
-      // ✅ 로그 저장
+      // 📝 로그 저장
       await _logState.saveLog(
         PlateLogModel(
           plateNumber: plateNumber,
@@ -48,7 +57,7 @@ class MovementPlate {
           from: fromCollection,
           to: toCollection,
           action: newType,
-          performedBy: performedBy,
+          performedBy: selectedBy, // ✅ 로그에도 담당자 반영
           timestamp: DateTime.now(),
         ),
       );
@@ -59,6 +68,7 @@ class MovementPlate {
       return false;
     }
   }
+
 
   Future<void> setParkingCompleted(
       String plateNumber,
