@@ -21,10 +21,12 @@ class LogPlateState with ChangeNotifier {
 
   // 🔹 로딩 여부
   bool _isLoading = true;
+
   bool get isLoading => _isLoading;
 
   // 🔹 필터 값 (번호판)
   String? _filterPlateNumber;
+
   String? get filterPlateNumber => _filterPlateNumber;
 
   // 🔹 필터된 로그 반환
