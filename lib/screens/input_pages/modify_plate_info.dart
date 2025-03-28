@@ -207,7 +207,7 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
         onImageCaptured: (image) {
           setState(() {
             _capturedImages.add(image);
-            debugPrint('📸 이미지 1장 실시간 반영됨: ${image.path}');
+            debugPrint('📸 이미지 1장이 실시간 반영됨: ${image.path}');
           });
         },
       ),
