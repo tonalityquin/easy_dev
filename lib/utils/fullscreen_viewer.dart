@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+
 void showFullScreenImageViewer(BuildContext context, List<XFile> images, int initialIndex) {
   showDialog(
     context: context,
@@ -45,8 +46,7 @@ void showFullScreenImageViewer(BuildContext context, List<XFile> images, int ini
   );
 }
 
-void showFullScreenImageViewerFromUrls(
-    BuildContext context, List<String> imageUrls, int initialIndex) {
+void showFullScreenImageViewerFromUrls(BuildContext context, List<String> imageUrls, int initialIndex) {
   showDialog(
     context: context,
     builder: (_) {
@@ -96,4 +96,3 @@ void showFullScreenImageViewerFromUrls(
     },
   );
 }
-

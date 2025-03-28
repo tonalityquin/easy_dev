@@ -26,40 +26,55 @@ class NumKeypad extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          buildRow(['1', '2', '3']),
-          buildRow(['4', '5', '6']),
-          buildRow(['7', '8', '9']),
-          buildRow(['지우기', '0', 'Reset']),
+          _buildRow(['1', '2', '3']),
+          _buildRow(['4', '5', '6']),
+          _buildRow(['7', '8', '9']),
+          _buildRow(['지우기', '0', 'Reset']),
         ],
       ),
     );
   }
 
-  Widget buildRow(List<String> keys) {
+  Widget _buildRow(List<String> keys) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: keys.map((key) => buildKeyButton(key)).toList(),
+      children: keys.map((key) => _buildKeyButton(key)).toList(),
     );
   }
 
-  Widget buildKeyButton(String key) {
+  Widget _buildKeyButton(String key) {
+    final isReset = key == 'Reset';
+    final isErase = key == '지우기';
+
     return Expanded(
-      child: GestureDetector(
-        onTap: () => _handleKeyTap(key),
-        child: Semantics(
-          label: '키패드 버튼: $key',
-          child: Container(
-            margin: const EdgeInsets.all(4.0),
-            padding: const EdgeInsets.symmetric(vertical: 16.0),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8.0),
-              border: Border.all(color: Colors.grey),
-            ),
-            child: Center(
-              child: Text(
-                key,
-                style: textStyle ?? const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+      child: Padding(
+        padding: const EdgeInsets.all(4.0),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => _handleKeyTap(key),
+            borderRadius: BorderRadius.circular(8.0),
+            splashColor: Colors.purple.withOpacity(0.2),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 16.0),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8.0),
+                border: Border.all(color: Colors.grey),
+              ),
+              child: Center(
+                child: Text(
+                  key,
+                  style: (textStyle ??
+                      const TextStyle(fontSize: 20, fontWeight: FontWeight.bold))
+                      .copyWith(
+                    color: isReset
+                        ? Colors.red
+                        : isErase
+                        ? Colors.orange
+                        : Colors.black,
+                  ),
+                ),
               ),
             ),
           ),
@@ -70,6 +85,7 @@ class NumKeypad extends StatelessWidget {
 
   void _handleKeyTap(String key) {
     print('키 입력: $key, 현재 텍스트: ${controller.text}');
+
     if (key == '지우기') {
       if (controller.text.isNotEmpty) {
         controller.text = controller.text.substring(0, controller.text.length - 1);

@@ -19,23 +19,38 @@ class KorKeypadUtils {
   }
 
   static Widget buildKeyButton(String key, VoidCallback? onTap) {
+    final isReset = key == 'Reset';
+    final isErase = key == '지우기';
+
     return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          margin: const EdgeInsets.all(4.0),
-          padding: const EdgeInsets.all(16.0),
-          decoration: BoxDecoration(
-            color: Colors.grey[200],
+      child: Padding(
+        padding: const EdgeInsets.all(4.0),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
             borderRadius: BorderRadius.circular(8.0),
-            border: Border.all(color: Colors.black, width: 2.0),
-          ),
-          child: Center(
-            child: Text(
-              key,
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
+            splashColor: Colors.purple.withOpacity(0.2),
+            child: Container(
+              padding: const EdgeInsets.all(16.0),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8.0),
+                border: Border.all(color: Colors.grey),
+              ),
+              child: Center(
+                child: Text(
+                  key,
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: isReset
+                        ? Colors.red
+                        : isErase
+                        ? Colors.orange
+                        : Colors.black,
+                  ),
+                ),
               ),
             ),
           ),

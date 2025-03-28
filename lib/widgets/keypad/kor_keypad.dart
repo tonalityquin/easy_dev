@@ -9,21 +9,26 @@ import 'kor_keypad/kor_6.dart';
 import 'kor_keypad/kor_7.dart';
 import 'kor_keypad/kor_8.dart';
 import 'kor_keypad/kor_9.dart';
+
 class KorKeypad extends StatefulWidget {
   final TextEditingController controller;
   final VoidCallback? onComplete;
   final VoidCallback? onReset;
+
   const KorKeypad({
     super.key,
     required this.controller,
     this.onComplete,
     this.onReset,
   });
+
   @override
   State<KorKeypad> createState() => _KorKeypadState();
 }
+
 class _KorKeypadState extends State<KorKeypad> {
   String? activeSubLayout;
+
   final Map<String, String> keyToSubLayout = {
     'ㄱ': 'kor1',
     'ㄴ': 'kor2',
@@ -36,14 +41,18 @@ class _KorKeypadState extends State<KorKeypad> {
     'ㅈ': 'kor9',
     'ㅎ': 'kor0',
   };
+
   @override
   Widget build(BuildContext context) {
     return Container(
       color: const Color(0xFFFef7FF),
       padding: const EdgeInsets.symmetric(vertical: 10.0),
-      child: activeSubLayout == null ? _buildMainLayout() : _buildActiveSubLayout(),
+      child: activeSubLayout == null
+          ? _buildMainLayout()
+          : _buildActiveSubLayout(),
     );
   }
+
   Widget _buildMainLayout() {
     return buildSubLayout(
       [
@@ -55,6 +64,7 @@ class _KorKeypadState extends State<KorKeypad> {
       _handleMainKeyTap,
     );
   }
+
   Widget _buildActiveSubLayout() {
     switch (activeSubLayout) {
       case 'kor0':
@@ -81,36 +91,34 @@ class _KorKeypadState extends State<KorKeypad> {
         return const SizedBox.shrink();
     }
   }
+
   void _handleMainKeyTap(String key) {
     setState(() {
       if (keyToSubLayout.containsKey(key)) {
         activeSubLayout = keyToSubLayout[key];
-        print('서브 레이아웃 활성화: $activeSubLayout');
       } else if (key == '지우기') {
         widget.controller.clear();
-        print('지우기 버튼 눌림, controller 초기화');
       } else if (key == 'Reset' && widget.onReset != null) {
         widget.onReset!();
-        print('Reset 호출');
       } else {
         _processKeyInput(key);
       }
     });
   }
+
   void _handleSubKeyTap(String key) {
     setState(() {
       if (key == 'back') {
         activeSubLayout = null;
-        print('서브 레이아웃 복귀: 메인 레이아웃으로 전환');
       } else {
         _processKeyInput(key);
       }
     });
   }
+
   void _processKeyInput(String key) {
     setState(() {
-      widget.controller.text = key;
-      print('입력 처리: $key, controller.text = ${widget.controller.text}');
+      widget.controller.text += key;
       if (widget.controller.text.isNotEmpty && widget.onComplete != null) {
         Future.microtask(() {
           widget.onComplete!();
@@ -119,6 +127,7 @@ class _KorKeypadState extends State<KorKeypad> {
     });
   }
 }
+
 Widget buildSubLayout(List<List<String>> keyRows, Function(String) onKeyTap) {
   return Column(
     mainAxisSize: MainAxisSize.min,
@@ -132,22 +141,41 @@ Widget buildSubLayout(List<List<String>> keyRows, Function(String) onKeyTap) {
     }).toList(),
   );
 }
+
 Widget buildKeyButton(String key, VoidCallback? onTap) {
+  final isReset = key == 'Reset';
+  final isErase = key == '지우기';
+
   return Expanded(
-    child: GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.all(4.0),
-        padding: const EdgeInsets.all(16.0),
-        decoration: BoxDecoration(
-          color: Colors.white,
+    child: Padding(
+      padding: const EdgeInsets.all(4.0),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
           borderRadius: BorderRadius.circular(8.0),
-          border: Border.all(color: Colors.grey),
-        ),
-        child: Center(
-          child: Text(
-            key,
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          splashColor: Colors.purple.withOpacity(0.2),
+          child: Container(
+            padding: const EdgeInsets.all(16.0),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8.0),
+              border: Border.all(color: Colors.grey),
+            ),
+            child: Center(
+              child: Text(
+                key,
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: isReset
+                      ? Colors.red
+                      : isErase
+                      ? Colors.orange
+                      : Colors.black,
+                ),
+              ),
+            ),
           ),
         ),
       ),
