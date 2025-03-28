@@ -27,6 +27,7 @@ class LogPlateState with ChangeNotifier {
   String? _filterPlateNumber;
   String? get filterPlateNumber => _filterPlateNumber;
 
+  // 🔹 필터된 로그 반환
   List<PlateLogModel> get filteredLogs {
     final currentArea = _areaState.currentArea;
     var filtered = _logs.where((log) => log.area == currentArea).toList();
@@ -43,12 +44,10 @@ class LogPlateState with ChangeNotifier {
     return filtered;
   }
 
-
   /// 🔧 번호판 문자열을 정규화 (공백/하이픈 제거)
   String _normalizePlate(String input) {
     return input.replaceAll(RegExp(r'[-\s]'), '');
   }
-
 
   /// ✅ Firestore 실시간 로그 수신
   void _listenToLogs() {
@@ -99,8 +98,6 @@ class LogPlateState with ChangeNotifier {
     debugPrint('[DEBUG] setFilterPlateNumber 호출됨: $plateNumber');
     notifyListeners();
   }
-
-
 
   /// 🔄 필터 초기화
   void clearFilters() {
