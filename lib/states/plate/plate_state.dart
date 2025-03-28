@@ -4,7 +4,6 @@ import '../../repositories/plate/plate_repository.dart';
 import '../../models/plate_model.dart';
 import '../area/area_state.dart';
 
-
 class PlateState extends ChangeNotifier {
   final PlateRepository _repository;
   final AreaState _areaState;
@@ -27,9 +26,11 @@ class PlateState extends ChangeNotifier {
   String? _searchQuery;
 
   String get searchQuery => _searchQuery ?? "";
+
   String get currentArea => _areaState.currentArea;
 
   bool _isLoading = true;
+
   bool get isLoading => _isLoading;
 
   void PlateCounts() {
@@ -137,18 +138,18 @@ class PlateState extends ChangeNotifier {
 
       final alreadySelected = _data.entries.expand((entry) => entry.value).firstWhere(
             (p) => p.isSelected && p.selectedBy == userName && p.id != plateId,
-        orElse: () => PlateModel(
-          id: '',
-          plateNumber: '',
-          type: '',
-          requestTime: DateTime.now(),
-          location: '',
-          area: '',
-          userName: '',
-          isSelected: false,
-          statusList: [],
-        ),
-      );
+            orElse: () => PlateModel(
+              id: '',
+              plateNumber: '',
+              type: '',
+              requestTime: DateTime.now(),
+              location: '',
+              area: '',
+              userName: '',
+              isSelected: false,
+              statusList: [],
+            ),
+          );
 
       if (alreadySelected.id.isNotEmpty && !plate.isSelected) {
         final collectionLabel = _getCollectionLabelForType(alreadySelected.type);
@@ -180,7 +181,6 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-
   String _getCollectionLabelForType(String type) {
     switch (type) {
       case '입차 요청':
@@ -202,7 +202,7 @@ class PlateState extends ChangeNotifier {
     if (plates == null || plates.isEmpty) return null;
 
     return plates.firstWhere(
-          (plate) => plate.isSelected && plate.selectedBy == userName,
+      (plate) => plate.isSelected && plate.selectedBy == userName,
       orElse: () => PlateModel(
         id: '',
         plateNumber: '',

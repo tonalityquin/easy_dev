@@ -74,5 +74,4 @@ class CameraHelper {
       _isDisposing = false;
     }
   }
-
 }

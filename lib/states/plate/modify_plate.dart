@@ -106,6 +106,7 @@ class ModifyPlate with ChangeNotifier {
     int? addStandard,
     int? addAmount,
     String? region,
+    List<String>? imageUrls,
   }) async {
     try {
       final documentId = '${plate.plateNumber}_${plate.area}';
@@ -121,6 +122,7 @@ class ModifyPlate with ChangeNotifier {
         addStandard: addStandard,
         addAmount: addAmount,
         region: region,
+        imageUrls: imageUrls,
       );
 
       await _plateRepository.addOrUpdateDocument(
@@ -145,7 +147,6 @@ class ModifyPlate with ChangeNotifier {
           final toAdj = adjustmentType ?? '-';
           changes.add('정산: $fromAdj → $toAdj');
         }
-
       }
 
       showSnackbar(context, '정보 수정 완료');

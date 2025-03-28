@@ -108,6 +108,7 @@ class FirestorePlateRepository implements PlateRepository {
     int? addStandard,
     int? addAmount,
     required String region,
+    List<String>? imageUrls,
   }) async {
     final documentId = '${plateNumber}_$area';
 
@@ -154,6 +155,7 @@ class FirestorePlateRepository implements PlateRepository {
       'addStandard': addStandard ?? 0,
       'addAmount': addAmount ?? 0,
       'region': region,
+      'imageUrls': imageUrls ?? [],
     };
 
     dev.log('🔥 Firestore 저장 데이터: $data');

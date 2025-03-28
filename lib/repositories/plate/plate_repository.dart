@@ -29,6 +29,7 @@ abstract class PlateRepository {
     int addStandard,
     int addAmount,
     required String region,
+    List<String>? imageUrls,
   });
 
   Future<List<String>> getAvailableLocations(String area);

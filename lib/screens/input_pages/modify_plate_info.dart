@@ -23,6 +23,8 @@ import 'package:easydev/utils/fullscreen_viewer.dart';
 import 'package:easydev/models/plate_log_model.dart';
 import 'package:easydev/states/plate/log_plate.dart';
 
+import 'package:easydev/utils/gcs_uploader.dart';
+
 class ModifyPlateInfo extends StatefulWidget {
   final PlateModel plate; // ✅ plate 파라미터 추가
   final String collectionKey; // ✅ 추가
@@ -81,11 +83,15 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
   );
   late CameraHelper _cameraHelper;
   final List<XFile> _capturedImages = [];
+  final List<String> _existingImageUrls = [];
 
   @override
   void initState() {
     super.initState();
     isLoading = true;
+    if (widget.plate.imageUrls != null) {
+      _existingImageUrls.addAll(widget.plate.imageUrls!);
+    }
     _cameraHelper = CameraHelper();
     _cameraHelper.initializeCamera().then((_) {
       if (mounted) setState(() {}); // 초기화 완료 후 UI 갱신
@@ -198,9 +204,11 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
     await showDialog(
       context: context,
       builder: (context) => CameraPreviewDialog(
-        onCaptureComplete: (capturedList) {
-          debugPrint('📸 이미지 콜백 실행됨: ${capturedList.length}장');
-          _capturedImages.addAll(capturedList);
+        onImageCaptured: (image) {
+          setState(() {
+            _capturedImages.add(image);
+            debugPrint('📸 이미지 1장 실시간 반영됨: ${image.path}');
+          });
         },
       ),
     );
@@ -258,6 +266,24 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
 
     final bool locationChanged = oldLocation != newLocation;
     final bool adjustmentChanged = oldAdjustmentType != newAdjustmentType;
+
+    /// 1. GCS 업로더 생성
+    final uploader = GCSUploader();
+    final List<String> uploadedImageUrls = [];
+
+    /// 2. 이미지 업로드
+    for (var image in _capturedImages) {
+      final file = File(image.path);
+      final fileName = '${plateNumber}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final gcsUrl = await uploader.uploadImage(file, 'plates/$fileName');
+
+      if (gcsUrl != null) {
+        debugPrint('✅ 이미지 업로드 완료: $gcsUrl');
+        uploadedImageUrls.add(gcsUrl);
+      } else {
+        debugPrint('❌ 이미지 업로드 실패: ${file.path}');
+      }
+    }
 
     final success = await modifyState.updatePlateInfo(
       context: context,
@@ -440,27 +466,49 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
                   const SizedBox(height: 8.0),
                   SizedBox(
                     height: 100,
-                    child: _capturedImages.isEmpty
+                    child: _capturedImages.isEmpty && _existingImageUrls.isEmpty
                         ? const Center(child: Text('촬영된 사진 없음'))
-                        : ListView.builder(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: _capturedImages.length,
-                            itemBuilder: (context, index) {
-                              final imageFile = _capturedImages[index];
-                              return GestureDetector(
-                                onTap: () => showFullScreenImageViewer(context, _capturedImages, index),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(4.0),
-                                  child: Image.file(
-                                    File(imageFile.path),
-                                    width: 100,
-                                    height: 100,
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
+                        : ListView(
+                      scrollDirection: Axis.horizontal,
+                      children: [
+                        // ✅ 기존 GCS 이미지 (URL)
+                        ..._existingImageUrls.asMap().entries.map((entry) {
+                          final index = entry.key;
+                          final url = entry.value;
+                          return GestureDetector(
+                            onTap: () => showFullScreenImageViewerFromUrls(context, _existingImageUrls, index),
+                            child: Padding(
+                              padding: const EdgeInsets.all(4.0),
+                              child: Image.network(
+                                url,
+                                width: 100,
+                                height: 100,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) =>
+                                const Icon(Icons.broken_image, size: 50),
+                              ),
+                            ),
+                          );
+                        }),
+                        // ✅ 새로 촬영한 로컬 이미지 (File)
+                        ..._capturedImages.asMap().entries.map((entry) {
+                          final index = entry.key;
+                          final image = entry.value;
+                          return GestureDetector(
+                            onTap: () => showFullScreenImageViewer(context, _capturedImages, index),
+                            child: Padding(
+                              padding: const EdgeInsets.all(4.0),
+                              child: Image.file(
+                                File(image.path),
+                                width: 100,
+                                height: 100,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 32.0),
                   const Text(

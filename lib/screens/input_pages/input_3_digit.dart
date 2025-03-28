@@ -18,6 +18,7 @@ import '../../widgets/dialog/camera_preview_dialog.dart';
 import '../../widgets/dialog/region_picker_dialog.dart';
 import '../../states/plate/input_plate.dart';
 import 'package:camera/camera.dart';
+import '../../utils/gcs_uploader.dart';
 
 class Input3Digit extends StatefulWidget {
   const Input3Digit({super.key});
@@ -82,11 +83,12 @@ class _Input3DigitState extends State<Input3Digit> {
     _addInputListeners();
     isLocationSelected = locationController.text.isNotEmpty;
 
-    Future.delayed(const Duration(milliseconds: 100), () async { try {
-      await Future.wait([
-        _initializeStatuses().timeout(Duration(seconds: 3)),
-      ]);
-    } catch (e) {
+    Future.delayed(const Duration(milliseconds: 100), () async {
+      try {
+        await Future.wait([
+          _initializeStatuses().timeout(Duration(seconds: 3)),
+        ]);
+      } catch (e) {
         debugPrint("초기화 오류 발생: $e");
       }
 
@@ -157,9 +159,11 @@ class _Input3DigitState extends State<Input3Digit> {
     await showDialog(
       context: context,
       builder: (context) => CameraPreviewDialog(
-        onCaptureComplete: (capturedList) {
-          debugPrint('📸 이미지 콜백 실행됨: ${capturedList.length}장');
-          _capturedImages.addAll(capturedList);
+        onImageCaptured: (image) {
+          setState(() {
+            _capturedImages.add(image);
+            debugPrint('📸 이미지 1장 실시간 반영됨: ${image.path}');
+          });
         },
       ),
     );
@@ -205,6 +209,25 @@ class _Input3DigitState extends State<Input3Digit> {
     final areaState = context.read<AreaState>();
     final userState = context.read<UserState>();
 
+    /// 1. GCS 업로더 생성
+    final uploader = GCSUploader();
+    final List<String> uploadedImageUrls = [];
+
+    /// 2. 이미지 업로드
+    for (var image in _capturedImages) {
+      final file = File(image.path);
+      final fileName = '${plateNumber}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final gcsUrl = await uploader.uploadImage(file, 'plates/$fileName');
+
+      if (gcsUrl != null) {
+        debugPrint('✅ 이미지 업로드 완료: $gcsUrl');
+        uploadedImageUrls.add(gcsUrl);
+      } else {
+        debugPrint('❌ 이미지 업로드 실패: ${file.path}');
+      }
+    }
+
+    /// 3. 번호판 처리
     await inputState.handlePlateEntry(
       context: context,
       plateNumber: plateNumber,
@@ -219,10 +242,15 @@ class _Input3DigitState extends State<Input3Digit> {
       addStandard: selectedAddStandard,
       addAmount: selectedAddAmount,
       region: dropdownValue,
+      imageUrls: uploadedImageUrls,
     );
 
     clearInput();
     _clearLocation();
+
+    /// 4. 이미지 리스트 비우기 (선택)
+    _capturedImages.clear();
+    setState(() {});
   }
 
   void _selectParkingLocation() {
