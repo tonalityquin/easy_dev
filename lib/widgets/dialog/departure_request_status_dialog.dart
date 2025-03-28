@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../screens/logs/plate_log_viewer_page.dart';
 import '../../states/plate/movement_plate.dart';
 import '../../states/plate/plate_state.dart';
 import '../../utils/show_snackbar.dart';
@@ -8,12 +9,17 @@ class DepartureRequestStatusDialog extends StatelessWidget {
   final VoidCallback onRequestEntry;
   final VoidCallback onCompleteEntry;
   final VoidCallback onDelete;
+  final String plateNumber;
+  final String area;
+
 
   const DepartureRequestStatusDialog({
     super.key,
     required this.onRequestEntry,
     required this.onCompleteEntry,
     required this.onDelete,
+    required this.plateNumber,
+    required this.area,
   });
 
   @override
@@ -23,6 +29,17 @@ class DepartureRequestStatusDialog extends StatelessWidget {
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          ListTile(
+            title: Text("로그 확인"),
+            onTap: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => PlateLogViewerPage(initialPlateNumber: plateNumber),
+                ),
+              );
+            },
+          ),
           ListTile(
             title: const Text("입차 요청"),
             onTap: () {

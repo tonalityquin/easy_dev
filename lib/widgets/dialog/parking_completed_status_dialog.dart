@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../screens/logs/plate_log_viewer_page.dart';
 import '../../states/plate/movement_plate.dart';
 import '../../states/plate/plate_state.dart';
 import '../../utils/show_snackbar.dart';
@@ -27,6 +28,17 @@ class ParkingCompletedStatusDialog extends StatelessWidget {
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          ListTile(
+            title: Text("로그 확인"),
+            onTap: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => PlateLogViewerPage(initialPlateNumber: plateNumber),
+                ),
+              );
+            },
+          ),
           ListTile(
             title: Text("입차 요청"),
             onTap: () {

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'secondary_info.dart';
 
-class SecondaryAccessState with ChangeNotifier {
+class SecondaryMode with ChangeNotifier {
   String _currentStatus = 'Field Mode';
   final List<String> _availableStatus = ['Field Mode', 'Office Mode', 'Statistics Mode'];
   String? _currentArea;

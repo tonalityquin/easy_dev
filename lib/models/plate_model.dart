@@ -99,9 +99,7 @@ class PlateModel {
       isSelected: map[PlateFields.isSelected] ?? false,
       selectedBy: map[PlateFields.selectedBy],
       adjustmentType: map[PlateFields.adjustmentType],
-      statusList: (map[PlateFields.statusList] is List)
-          ? List<String>.from(map[PlateFields.statusList])
-          : [],
+      statusList: (map[PlateFields.statusList] is List) ? List<String>.from(map[PlateFields.statusList]) : [],
       basicStandard: parseInt(map[PlateFields.basicStandard]),
       basicAmount: parseInt(map[PlateFields.basicAmount]),
       addStandard: parseInt(map[PlateFields.addStandard]),
@@ -168,8 +166,6 @@ class PlateModel {
     );
   }
 
-
-
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
@@ -212,4 +208,7 @@ class PlateModel {
         addAmount.hashCode ^
         region.hashCode;
   }
+
+  @override
+  String toString() => 'PlateModel(id: $id, plateNumber: $plateNumber, user: $userName, area: $area)';
 }

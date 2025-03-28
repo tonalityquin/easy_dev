@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import '../../models/plate_model.dart';
+import '../../models/plate_log_model.dart';
 import '../../utils/show_snackbar.dart';
 import '../area/area_state.dart';
 import '../user/user_state.dart';
+import 'log_plate.dart';
 import '../../repositories/plate/plate_repository.dart';
 import 'dart:developer' as dev;
 
 class InputPlate with ChangeNotifier {
   final PlateRepository _plateRepository;
+  final LogPlateState _logState; // ✅ 로그 주입
 
-  InputPlate(this._plateRepository);
+  InputPlate(this._plateRepository, this._logState);
 
   Future<bool> isPlateNumberDuplicated(String plateNumber, String area) async {
     final collectionsToCheck = [
@@ -22,10 +25,10 @@ class InputPlate with ChangeNotifier {
       final plates = await _plateRepository.getPlatesByArea(collection, area);
       if (plates.any((plate) => plate.plateNumber == plateNumber)) {
         dev.log("🚨 중복된 번호판 발견: $plateNumber (컬렉션: $collection)");
-        return true; // 중복 발견 → 입차 불가
+        return true;
       }
     }
-    return false; // 중복 없음 → 입차 가능
+    return false;
   }
 
   Future<void> handlePlateEntry({
@@ -43,15 +46,12 @@ class InputPlate with ChangeNotifier {
     int addAmount = 0,
     required String region,
   }) async {
-    // 🔍 입차 요청 전 중복 확인
     if (await isPlateNumberDuplicated(plateNumber, areaState.currentArea)) {
       showSnackbar(context, '이미 등록된 번호판입니다: $plateNumber');
       return;
     }
 
-    if (location.isEmpty) {
-      location = '미지정';
-    }
+    final correctedLocation = location.isEmpty ? '미지정' : location;
 
     final collection = isLocationSelected ? 'parking_completed' : 'parking_requests';
     final type = isLocationSelected ? '입차 완료' : '입차 요청';
@@ -60,7 +60,7 @@ class InputPlate with ChangeNotifier {
       await _plateRepository.addRequestOrCompleted(
         collection: collection,
         plateNumber: plateNumber,
-        location: location,
+        location: correctedLocation,
         area: areaState.currentArea,
         userName: userState.name,
         type: type,
@@ -71,6 +71,19 @@ class InputPlate with ChangeNotifier {
         addStandard: addStandard,
         addAmount: addAmount,
         region: region,
+      );
+
+      // ✅ 로그 저장
+      await _logState.saveLog(
+        PlateLogModel(
+          plateNumber: plateNumber,
+          area: areaState.currentArea,
+          from: '-',
+          to: collection,
+          action: type,
+          performedBy: userState.name,
+          timestamp: DateTime.now(),
+        ),
       );
 
       showSnackbar(context, '$type 완료');
@@ -97,7 +110,7 @@ class InputPlate with ChangeNotifier {
     String? region,
   }) async {
     try {
-      final documentId = '${plate.plateNumber}_${plate.area}'; // 기존 문서 ID
+      final documentId = '${plate.plateNumber}_${plate.area}';
 
       final updatedPlate = plate.copyWith(
         plateNumber: newPlateNumber,
@@ -121,10 +134,10 @@ class InputPlate with ChangeNotifier {
       showSnackbar(context, '정보 수정 완료');
       notifyListeners();
 
-      return true; // ✅ 성공 시 true 반환
+      return true;
     } catch (e) {
       showSnackbar(context, '정보 수정 실패: $e');
-      return false; // ✅ 실패 시 false 반환
+      return false;
     }
   }
 }

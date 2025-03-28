@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../utils/app_colors.dart';
 import '../states/secondary/secondary_state.dart';
-import '../states/secondary/secondary_access_state.dart';
+import '../states/secondary/secondary_mode.dart';
 import '../states/user/user_state.dart';
 import '../states/secondary/secondary_info.dart';
 
 class SecondaryPage extends StatelessWidget {
   const SecondaryPage({super.key});
 
-  List<SecondaryInfo> _getUpdatedPages(String userRole, SecondaryAccessState roleState) {
+  List<SecondaryInfo> _getUpdatedPages(String userRole, SecondaryMode roleState) {
     if (userRole == 'User') {
       return fieldModePages;
     } else {
@@ -32,8 +32,8 @@ class SecondaryPage extends StatelessWidget {
     final userRole = userState.role;
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => SecondaryAccessState()),
-        ChangeNotifierProxyProvider<SecondaryAccessState, SecondaryState>(
+        ChangeNotifierProvider(create: (_) => SecondaryMode()),
+        ChangeNotifierProxyProvider<SecondaryMode, SecondaryState>(
           create: (_) => SecondaryState(pages: fieldModePages),
           update: (_, roleState, secondaryState) {
             final newPages = _getUpdatedPages(userRole, roleState);

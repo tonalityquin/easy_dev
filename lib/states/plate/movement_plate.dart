@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import '../../repositories/plate/plate_repository.dart';
 import 'plate_state.dart';
+import '../../models/plate_log_model.dart';
+import 'log_plate.dart';
 
 class MovementPlate {
   final PlateRepository _repository;
+  final LogPlateState _logState;
 
-  MovementPlate(this._repository);
+  MovementPlate(this._repository, this._logState);
 
-  /// 공통 Plate 데이터 이동 처리
+  /// 공통 Plate 데이터 이동 처리 + 로그 기록
   Future<bool> _transferData({
     required String fromCollection,
     required String toCollection,
@@ -15,6 +18,7 @@ class MovementPlate {
     required String area,
     required String newType,
     required String location,
+    String performedBy = '시스템',
   }) async {
     final documentId = '${plateNumber}_$area';
     try {
@@ -24,10 +28,8 @@ class MovementPlate {
         return false;
       }
 
-      // 원본 삭제
       await _repository.deleteDocument(fromCollection, documentId);
 
-      // 대상 컬렉션에 저장 (선택 해제 상태로)
       await _repository.addOrUpdateDocument(toCollection, documentId, {
         ...document.toMap(),
         'type': newType,
@@ -37,6 +39,20 @@ class MovementPlate {
       });
 
       debugPrint("✅ 문서 이동 완료: $fromCollection → $toCollection ($plateNumber)");
+
+      // ✅ 로그 저장
+      await _logState.saveLog(
+        PlateLogModel(
+          plateNumber: plateNumber,
+          area: area,
+          from: fromCollection,
+          to: toCollection,
+          action: newType,
+          performedBy: performedBy,
+          timestamp: DateTime.now(),
+        ),
+      );
+
       return true;
     } catch (e) {
       debugPrint('🚨 문서 이동 오류: $e');
@@ -44,32 +60,33 @@ class MovementPlate {
     }
   }
 
-  /// 입차 요청 → 입차 완료
   Future<void> setParkingCompleted(
-    String plateNumber,
-    String area,
-    PlateState plateState,
-    String location,
-  ) async {
+      String plateNumber,
+      String area,
+      PlateState plateState,
+      String location, {
+        String performedBy = '시스템',
+      }) async {
     final success = await _transferData(
       fromCollection: 'parking_requests',
       toCollection: 'parking_completed',
       plateNumber: plateNumber,
       area: area,
       newType: '입차 완료',
-      location: location, // ✅ 전달
+      location: location,
+      performedBy: performedBy,
     );
 
     if (success) await plateState.fetchPlateData();
   }
 
-  /// 입차 완료 → 출차 요청
   Future<void> setDepartureRequested(
-    String plateNumber,
-    String area,
-    PlateState plateState,
-    String location,
-  ) async {
+      String plateNumber,
+      String area,
+      PlateState plateState,
+      String location,
+      {String performedBy = '시스템',
+      }) async {
     final success = await _transferData(
       fromCollection: 'parking_completed',
       toCollection: 'departure_requests',
@@ -77,37 +94,39 @@ class MovementPlate {
       area: area,
       newType: '출차 요청',
       location: location,
+      performedBy: performedBy,
     );
 
     if (success) await plateState.fetchPlateData();
   }
 
-  /// 출차 요청 → 출차 완료
   Future<void> setDepartureCompleted(
-    String plateNumber,
-    String area,
-    PlateState plateState,
-    String location,
-  ) async {
+      String plateNumber,
+      String area,
+      PlateState plateState,
+      String location,
+      {String performedBy = '시스템',}
+      ) async {
     final success = await _transferData(
       fromCollection: 'departure_requests',
       toCollection: 'departure_completed',
       plateNumber: plateNumber,
       area: area,
-      location: location,
       newType: '출차 완료',
+      location: location,
+      performedBy: performedBy,
     );
 
     if (success) await plateState.fetchPlateData();
   }
 
-  /// 어떤 상태에서든 입차 요청 상태로 되돌리기
   Future<void> goBackToParkingRequest({
     required String fromCollection,
     required String plateNumber,
     required String area,
     required PlateState plateState,
     String newLocation = "미지정",
+    String performedBy = '시스템',
   }) async {
     final documentId = '${plateNumber}_$area';
 
@@ -128,6 +147,19 @@ class MovementPlate {
       });
 
       debugPrint("🔄 $fromCollection → parking_requests 이동 완료: $plateNumber");
+
+      await _logState.saveLog(
+        PlateLogModel(
+          plateNumber: plateNumber,
+          area: area,
+          from: fromCollection,
+          to: 'parking_requests',
+          action: '입차 요청 복원',
+          performedBy: performedBy,
+          timestamp: DateTime.now(),
+        ),
+      );
+
       await plateState.fetchPlateData();
     } catch (e) {
       debugPrint("🚨 goBackToParkingRequest 오류: $e");
@@ -139,6 +171,7 @@ class MovementPlate {
       String area,
       PlateState plateState,
       String location,
+      {String performedBy = '시스템',}
       ) async {
     final success = await _transferData(
       fromCollection: 'departure_requests',
@@ -147,6 +180,7 @@ class MovementPlate {
       area: area,
       newType: '입차 완료',
       location: location,
+      performedBy: performedBy,
     );
 
     if (success) {
@@ -156,8 +190,6 @@ class MovementPlate {
     }
   }
 
-
-  /// 범용 업데이트 지원 (선택적으로 사용 가능)
   Future<void> updatePlateStatus({
     required String plateNumber,
     required String area,
@@ -166,14 +198,16 @@ class MovementPlate {
     required String toCollection,
     required String newType,
     required String location,
+    String performedBy = '시스템',
   }) async {
     final success = await _transferData(
       fromCollection: fromCollection,
       toCollection: toCollection,
       plateNumber: plateNumber,
       area: area,
-      location: location,
       newType: newType,
+      location: location,
+      performedBy: performedBy,
     );
 
     if (success) await plateState.fetchPlateData();

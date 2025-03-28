@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../states/secondary/secondary_access_state.dart';
+import '../../states/secondary/secondary_mode.dart';
 import '../../states/user/user_state.dart';
 
 class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWidget {
@@ -14,7 +14,7 @@ class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWi
 
   @override
   Widget build(BuildContext context) {
-    final manageState = context.watch<SecondaryAccessState>();
+    final manageState = context.watch<SecondaryMode>();
     final userState = context.watch<UserState>();
     final userRole = userState.role.toLowerCase();
     final selectedMode = userRole == 'fielder' ? 'Field Mode' : manageState.currentStatus;
@@ -57,7 +57,7 @@ class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWi
 
   void _showPickerDialog(
       BuildContext context,
-      SecondaryAccessState manageState,
+      SecondaryMode manageState,
       String currentStatus,
       List<String> availableStatus,
       ) {

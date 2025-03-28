@@ -17,6 +17,7 @@ class StatusState extends ChangeNotifier {
   String? _selectedItemId;
 
   List<StatusModel> get toggleItems => _toggleItems;
+
   String? get selectedItemId => _selectedItemId;
 
   List<StatusModel> get statuses {

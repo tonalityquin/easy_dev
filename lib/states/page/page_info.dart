@@ -16,7 +16,6 @@ class PageInfo {
   });
 }
 
-
 const List<PageInfo> defaultPages = [
   PageInfo(
     title: '입차 요청',

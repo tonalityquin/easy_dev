@@ -78,7 +78,6 @@ class UserState extends ChangeNotifier {
     }
   }
 
-
   void _realtimeUsers() {
     _repository.getUsersStream().listen(
       (data) {
@@ -108,7 +107,6 @@ class UserState extends ChangeNotifier {
     notifyListeners();
   }
 
-
   Future<void> clearUserToPhone() async {
     if (_user == null) return;
 
@@ -116,7 +114,7 @@ class UserState extends ChangeNotifier {
       _user!.phone,
       _user!.area,
       isWorking: false, // ✅ 로그아웃 시 isWorking false
-      isSaved: false,   // ✅ 로그아웃 시 isSaved false
+      isSaved: false, // ✅ 로그아웃 시 isSaved false
     );
 
     final prefs = await SharedPreferences.getInstance();
@@ -124,7 +122,6 @@ class UserState extends ChangeNotifier {
     _user = null;
     notifyListeners();
   }
-
 
   Future<void> updateUserCard(UserModel updatedUser) async {
     _user = updatedUser;
