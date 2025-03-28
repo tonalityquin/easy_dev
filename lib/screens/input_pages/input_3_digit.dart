@@ -30,22 +30,22 @@ class Input3Digit extends StatefulWidget {
 class _Input3DigitState extends State<Input3Digit> {
   final List<String> regions = [
     '전국',
-    '서울',
-    '경기',
-    '부산',
-    '인천',
-    '대전',
-    '대구',
-    '울산',
-    '광주',
     '강원',
-    '충북',
-    '충남',
-    '경북',
+    '경기',
     '경남',
-    '전북',
+    '경북',
+    '광주',
+    '대구',
+    '대전',
+    '부산',
+    '서울',
+    '울산',
+    '인천',
     '전남',
+    '전북',
     '제주',
+    '충남',
+    '충북'
   ];
   String dropdownValue = '전국'; // ✅ 드롭다운 값 상태 변수
   List<String> selectedStatuses = [];

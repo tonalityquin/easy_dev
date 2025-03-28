@@ -7,22 +7,86 @@ class DepartureCompletedConfirmDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('출차 완료 확인'),
-      content: const Text('정말로 출차 완료 처리를 하시겠습니까?'),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('취소'),
+    return Center(
+      child: ScaleTransitionDialog(
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: const [
+              Icon(Icons.check_circle_outline, color: Colors.redAccent, size: 28),
+              SizedBox(width: 8),
+              Text('출차 완료 확인', style: TextStyle(fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              '정말로 출차 완료 처리를 하시겠습니까?',
+              style: TextStyle(fontSize: 16),
+            ),
+          ),
+          actionsAlignment: MainAxisAlignment.center,
+          // ✅ 버튼 중앙 정렬
+          actions: [
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(context);
+                onConfirm();
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                minimumSize: const Size(120, 48),
+                textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('확인'),
+            ),
+          ],
         ),
-        TextButton(
-          onPressed: () {
-            Navigator.pop(context);
-            onConfirm();
-          },
-          child: const Text('확인', style: TextStyle(color: Colors.red)),
-        ),
-      ],
+      ),
+    );
+  }
+}
+
+class ScaleTransitionDialog extends StatefulWidget {
+  final Widget child;
+
+  const ScaleTransitionDialog({super.key, required this.child});
+
+  @override
+  State<ScaleTransitionDialog> createState() => _ScaleTransitionDialogState();
+}
+
+class _ScaleTransitionDialogState extends State<ScaleTransitionDialog> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 250),
+      vsync: this,
+    );
+    _scaleAnimation = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutBack,
+    );
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(
+      scale: _scaleAnimation,
+      child: widget.child,
     );
   }
 }

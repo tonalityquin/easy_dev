@@ -41,22 +41,22 @@ class ModifyPlateInfo extends StatefulWidget {
 class _ModifyPlateInfo extends State<ModifyPlateInfo> {
   final List<String> regions = [
     '전국',
-    '서울',
-    '경기',
-    '부산',
-    '인천',
-    '대전',
-    '대구',
-    '울산',
-    '광주',
     '강원',
-    '충북',
-    '충남',
-    '경북',
+    '경기',
     '경남',
-    '전북',
+    '경북',
+    '광주',
+    '대구',
+    '대전',
+    '부산',
+    '서울',
+    '울산',
+    '인천',
     '전남',
+    '전북',
     '제주',
+    '충남',
+    '충북'
   ];
   String dropdownValue = '전국'; // ✅ 드롭다운 값 상태 변수
   List<String> selectedStatuses = [];
@@ -315,8 +315,8 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
         action: locationChanged && adjustmentChanged
             ? '위치/할인 수정'
             : locationChanged
-            ? '위치 수정'
-            : '할인 수정',
+                ? '위치 수정'
+                : '할인 수정',
         performedBy: userState.user?.name ?? 'Unknown',
         timestamp: DateTime.now(),
       );
@@ -331,7 +331,6 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
     clearInput();
     _clearLocation();
   }
-
 
   void _selectParkingLocation() {
     showDialog(

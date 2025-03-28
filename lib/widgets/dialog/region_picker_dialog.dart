@@ -1,5 +1,3 @@
-// lib/widgets/dialog/region_picker_dialog.dart
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
@@ -11,38 +9,62 @@ Future<void> showRegionPickerDialog({
 }) async {
   String tempSelected = selectedRegion;
 
-  await showDialog(
+  await showGeneralDialog(
     context: context,
-    builder: (context) {
-      return AlertDialog(
+    barrierDismissible: true,
+    barrierLabel: "지역 선택",
+    transitionDuration: const Duration(milliseconds: 300),
+    pageBuilder: (context, animation, secondaryAnimation) {
+      return Scaffold(
         backgroundColor: Colors.white,
-        contentPadding: const EdgeInsets.only(top: 12, left: 8, right: 8),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        content: SizedBox(
-          height: 230,
+        body: SafeArea(
           child: Column(
             children: [
-              const Text('지역 선택', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              const Divider(),
+              const SizedBox(height: 24),
+              const Text(
+                '지역 선택',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              const Divider(height: 1),
               Expanded(
                 child: CupertinoPicker(
                   scrollController: FixedExtentScrollController(
                     initialItem: regions.indexOf(selectedRegion),
                   ),
-                  itemExtent: 36,
+                  itemExtent: 48,
                   onSelectedItemChanged: (index) {
                     tempSelected = regions[index];
                   },
-                  children: regions.map((region) => Center(child: Text(region))).toList(),
+                  children: regions
+                      .map((region) => Center(
+                    child: Text(
+                      region,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold, // ✅ 여기 추가
+                      ),
+                    ),
+                  ))
+                      .toList(),
                 ),
               ),
-              const Divider(height: 0),
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  onConfirm(tempSelected);
-                },
-                child: const Text('확인', style: TextStyle(color: Colors.blue)),
+              const Divider(height: 1),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 24, top: 12),
+                child: Center(
+                  child: CupertinoButton.filled(
+                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      onConfirm(tempSelected);
+                    },
+                    child: const Text(
+                      '확인',
+                      style: TextStyle(fontSize: 16),
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
