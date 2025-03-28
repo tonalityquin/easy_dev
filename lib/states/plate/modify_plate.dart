@@ -111,6 +111,12 @@ class ModifyPlate with ChangeNotifier {
     try {
       final documentId = '${plate.plateNumber}_${plate.area}';
 
+      // 🔍 디버깅 로그
+      dev.log("📝 updatePlateInfo() 호출됨");
+      dev.log("📌 documentId: $documentId");
+      dev.log("📌 newPlateNumber: $newPlateNumber");
+      dev.log("📌 imageUrls: $imageUrls");
+
       final updatedPlate = plate.copyWith(
         plateNumber: newPlateNumber,
         location: location,
@@ -122,7 +128,7 @@ class ModifyPlate with ChangeNotifier {
         addStandard: addStandard,
         addAmount: addAmount,
         region: region,
-        imageUrls: imageUrls,
+        imageUrls: imageUrls, // ✅ 꼭 포함되어야 함!
       );
 
       await _plateRepository.addOrUpdateDocument(
@@ -147,6 +153,8 @@ class ModifyPlate with ChangeNotifier {
           final toAdj = adjustmentType ?? '-';
           changes.add('정산: $fromAdj → $toAdj');
         }
+
+        dev.log('🗂 변경 내역: ${changes.join(', ')}');
       }
 
       showSnackbar(context, '정보 수정 완료');
@@ -154,6 +162,7 @@ class ModifyPlate with ChangeNotifier {
 
       return true;
     } catch (e) {
+      dev.log('❌ 정보 수정 실패: $e');
       showSnackbar(context, '정보 수정 실패: $e');
       return false;
     }
