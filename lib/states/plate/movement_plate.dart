@@ -57,7 +57,8 @@ class MovementPlate {
           from: fromCollection,
           to: toCollection,
           action: newType,
-          performedBy: selectedBy, // ✅ 로그에도 담당자 반영
+          performedBy: selectedBy,
+          // ✅ 로그에도 담당자 반영
           timestamp: DateTime.now(),
         ),
       );
@@ -69,14 +70,13 @@ class MovementPlate {
     }
   }
 
-
   Future<void> setParkingCompleted(
-      String plateNumber,
-      String area,
-      PlateState plateState,
-      String location, {
-        String performedBy = '시스템',
-      }) async {
+    String plateNumber,
+    String area,
+    PlateState plateState,
+    String location, {
+    String performedBy = '시스템',
+  }) async {
     final success = await _transferData(
       fromCollection: 'parking_requests',
       toCollection: 'parking_completed',
@@ -91,12 +91,12 @@ class MovementPlate {
   }
 
   Future<void> setDepartureRequested(
-      String plateNumber,
-      String area,
-      PlateState plateState,
-      String location,
-      {String performedBy = '시스템',
-      }) async {
+    String plateNumber,
+    String area,
+    PlateState plateState,
+    String location, {
+    String performedBy = '시스템',
+  }) async {
     final success = await _transferData(
       fromCollection: 'parking_completed',
       toCollection: 'departure_requests',
@@ -111,12 +111,12 @@ class MovementPlate {
   }
 
   Future<void> setDepartureCompleted(
-      String plateNumber,
-      String area,
-      PlateState plateState,
-      String location,
-      {String performedBy = '시스템',}
-      ) async {
+    String plateNumber,
+    String area,
+    PlateState plateState,
+    String location, {
+    String performedBy = '시스템',
+  }) async {
     final success = await _transferData(
       fromCollection: 'departure_requests',
       toCollection: 'departure_completed',
@@ -177,12 +177,12 @@ class MovementPlate {
   }
 
   Future<void> moveDepartureToParkingCompleted(
-      String plateNumber,
-      String area,
-      PlateState plateState,
-      String location,
-      {String performedBy = '시스템',}
-      ) async {
+    String plateNumber,
+    String area,
+    PlateState plateState,
+    String location, {
+    String performedBy = '시스템',
+  }) async {
     final success = await _transferData(
       fromCollection: 'departure_requests',
       toCollection: 'parking_completed',

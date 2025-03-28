@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import '../../utils/camera_helper.dart';
@@ -7,9 +6,13 @@ class CameraPreviewDialog extends StatefulWidget {
   /// 촬영 완료 후 전체 이미지 리스트를 콜백으로 전달
   final void Function(List<XFile>)? onCaptureComplete;
 
+  /// 📸 이미지 한 장이 촬영될 때마다 호출되는 콜백 (선택 사항)
+  final void Function(XFile)? onImageCaptured;
+
   const CameraPreviewDialog({
     super.key,
     this.onCaptureComplete,
+    this.onImageCaptured,
   });
 
   @override
@@ -38,10 +41,7 @@ class _CameraPreviewDialogState extends State<CameraPreviewDialog> {
   @override
   void dispose() {
     debugPrint('🧹 CameraHelper: dispose() 호출');
-
-    /// ✅ 다이얼로그가 닫힐 때 이미지 리스트 전달
     widget.onCaptureComplete?.call(_capturedImages);
-
     _cameraHelper.dispose();
     super.dispose();
   }
@@ -52,48 +52,11 @@ class _CameraPreviewDialogState extends State<CameraPreviewDialog> {
 
     if (image != null) {
       debugPrint('✅ CameraHelper: 사진 촬영 성공 - ${image.path}');
-      setState(() {
-        _capturedImages.add(image);
-      });
+      _capturedImages.add(image);
+      widget.onImageCaptured?.call(image);
     } else {
       debugPrint('⚠️ 이미지 촬영 실패 또는 null');
     }
-  }
-
-  void _showFullScreenViewer(int index) {
-    showDialog(
-      context: context,
-      builder: (_) => Dialog(
-        backgroundColor: Colors.black,
-        insetPadding: EdgeInsets.zero,
-        child: Stack(
-          children: [
-            PageView.builder(
-              controller: PageController(initialPage: index),
-              itemCount: _capturedImages.length,
-              itemBuilder: (context, i) {
-                return InteractiveViewer(
-                  minScale: 0.8,
-                  maxScale: 4.0,
-                  child: Image.file(
-                    File(_capturedImages[i].path),
-                    fit: BoxFit.contain,
-                  ),
-                );
-              },
-            ),
-            Positioned(
-              top: 30,
-              right: 20,
-              child: IconButton(
-                icon: const Icon(Icons.close, color: Colors.white, size: 30),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   @override
@@ -133,35 +96,6 @@ class _CameraPreviewDialogState extends State<CameraPreviewDialog> {
                 ),
               ),
             ),
-
-            // ✅ 하단 썸네일 리스트
-            if (_capturedImages.isNotEmpty)
-              Positioned(
-                bottom: 100,
-                left: 0,
-                right: 0,
-                height: 100,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  itemCount: _capturedImages.length,
-                  itemBuilder: (context, index) {
-                    final image = _capturedImages[index];
-                    return GestureDetector(
-                      onTap: () => _showFullScreenViewer(index),
-                      child: Padding(
-                        padding: const EdgeInsets.all(4.0),
-                        child: Image.file(
-                          File(image.path),
-                          width: 80,
-                          height: 80,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
           ],
         ),
       ),

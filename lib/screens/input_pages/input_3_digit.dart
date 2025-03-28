@@ -82,11 +82,12 @@ class _Input3DigitState extends State<Input3Digit> {
     _addInputListeners();
     isLocationSelected = locationController.text.isNotEmpty;
 
-    Future.delayed(const Duration(milliseconds: 100), () async { try {
-      await Future.wait([
-        _initializeStatuses().timeout(Duration(seconds: 3)),
-      ]);
-    } catch (e) {
+    Future.delayed(const Duration(milliseconds: 100), () async {
+      try {
+        await Future.wait([
+          _initializeStatuses().timeout(Duration(seconds: 3)),
+        ]);
+      } catch (e) {
         debugPrint("초기화 오류 발생: $e");
       }
 
@@ -157,9 +158,11 @@ class _Input3DigitState extends State<Input3Digit> {
     await showDialog(
       context: context,
       builder: (context) => CameraPreviewDialog(
-        onCaptureComplete: (capturedList) {
-          debugPrint('📸 이미지 콜백 실행됨: ${capturedList.length}장');
-          _capturedImages.addAll(capturedList);
+        onImageCaptured: (image) {
+          setState(() {
+            _capturedImages.add(image);
+            debugPrint('📸 이미지 1장 실시간 반영됨: ${image.path}');
+          });
         },
       ),
     );

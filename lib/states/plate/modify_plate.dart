@@ -145,7 +145,6 @@ class ModifyPlate with ChangeNotifier {
           final toAdj = adjustmentType ?? '-';
           changes.add('정산: $fromAdj → $toAdj');
         }
-
       }
 
       showSnackbar(context, '정보 수정 완료');
