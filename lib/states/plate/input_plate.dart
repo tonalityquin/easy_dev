@@ -45,6 +45,7 @@ class InputPlate with ChangeNotifier {
     int addStandard = 0,
     int addAmount = 0,
     required String region,
+    List<String>? imageUrls,
   }) async {
     if (await isPlateNumberDuplicated(plateNumber, areaState.currentArea)) {
       showSnackbar(context, '이미 등록된 번호판입니다: $plateNumber');
@@ -71,6 +72,7 @@ class InputPlate with ChangeNotifier {
         addStandard: addStandard,
         addAmount: addAmount,
         region: region,
+        imageUrls: imageUrls,
       );
 
       // ✅ 로그 저장
@@ -108,6 +110,7 @@ class InputPlate with ChangeNotifier {
     int? addStandard,
     int? addAmount,
     String? region,
+    List<String>? imageUrls,
   }) async {
     try {
       final documentId = '${plate.plateNumber}_${plate.area}';
@@ -123,6 +126,7 @@ class InputPlate with ChangeNotifier {
         addStandard: addStandard,
         addAmount: addAmount,
         region: region,
+        imageUrls: imageUrls,
       );
 
       await _plateRepository.addOrUpdateDocument(

@@ -22,6 +22,8 @@ class PlateFields {
   static const String addStandard = 'addStandard';
   static const String addAmount = 'addAmount';
   static const String region = 'region';
+  static const String imageUrls = 'imageUrls';
+
 }
 
 class PlateModel {
@@ -41,6 +43,7 @@ class PlateModel {
   final int? addStandard;
   final int? addAmount;
   final String? region;
+  final List<String>? imageUrls;
 
   PlateModel({
     required this.id,
@@ -59,6 +62,7 @@ class PlateModel {
     this.addStandard,
     this.addAmount,
     this.region,
+    this.imageUrls,
   });
 
   factory PlateModel.fromDocument(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -82,6 +86,9 @@ class PlateModel {
       addStandard: parseInt(data?[PlateFields.addStandard]),
       addAmount: parseInt(data?[PlateFields.addAmount]),
       region: data?[PlateFields.region],
+      imageUrls: (data?[PlateFields.imageUrls] is List)
+          ? List<String>.from(data?[PlateFields.imageUrls])
+          : null,
     );
   }
 
@@ -105,6 +112,9 @@ class PlateModel {
       addStandard: parseInt(map[PlateFields.addStandard]),
       addAmount: parseInt(map[PlateFields.addAmount]),
       region: map[PlateFields.region],
+      imageUrls: (map[PlateFields.imageUrls] is List)
+          ? List<String>.from(map[PlateFields.imageUrls])
+          : null,
     );
   }
 
@@ -125,6 +135,7 @@ class PlateModel {
       PlateFields.addStandard: addStandard,
       PlateFields.addAmount: addAmount,
       PlateFields.region: region,
+      if (imageUrls != null) PlateFields.imageUrls: imageUrls,
     };
   }
 
@@ -145,6 +156,7 @@ class PlateModel {
     int? addStandard,
     int? addAmount,
     String? region,
+    List<String>? imageUrls,
   }) {
     return PlateModel(
       id: id ?? this.id,
@@ -163,6 +175,7 @@ class PlateModel {
       addStandard: addStandard ?? this.addStandard,
       addAmount: addAmount ?? this.addAmount,
       region: region ?? this.region,
+      imageUrls: imageUrls ?? this.imageUrls,
     );
   }
 
@@ -186,27 +199,29 @@ class PlateModel {
         other.basicAmount == basicAmount &&
         other.addStandard == addStandard &&
         other.addAmount == addAmount &&
-        other.region == region;
+        other.region == region &&
+        other.imageUrls == imageUrls;
   }
 
   @override
   int get hashCode {
     return id.hashCode ^
-        plateNumber.hashCode ^
-        type.hashCode ^
-        requestTime.hashCode ^
-        location.hashCode ^
-        area.hashCode ^
-        userName.hashCode ^
-        isSelected.hashCode ^
-        selectedBy.hashCode ^
-        adjustmentType.hashCode ^
-        statusList.hashCode ^
-        basicStandard.hashCode ^
-        basicAmount.hashCode ^
-        addStandard.hashCode ^
-        addAmount.hashCode ^
-        region.hashCode;
+    plateNumber.hashCode ^
+    type.hashCode ^
+    requestTime.hashCode ^
+    location.hashCode ^
+    area.hashCode ^
+    userName.hashCode ^
+    isSelected.hashCode ^
+    selectedBy.hashCode ^
+    adjustmentType.hashCode ^
+    statusList.hashCode ^
+    basicStandard.hashCode ^
+    basicAmount.hashCode ^
+    addStandard.hashCode ^
+    addAmount.hashCode ^
+    region.hashCode ^
+    imageUrls.hashCode;
   }
 
   @override
