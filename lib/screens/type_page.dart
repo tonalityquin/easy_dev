@@ -24,11 +24,9 @@ class TypePage extends StatelessWidget {
 
           return WillPopScope(
             onWillPop: () async {
-              // 현재 선택된 collection 가져오기
               final currentPage = pageState.pages[pageState.selectedIndex];
               final collection = currentPage.collectionKey;
 
-              // 선택된 plate 있는지 확인
               final selectedPlate = plateState.getSelectedPlate(collection, userName);
               if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
                 await plateState.toggleIsSelected(
@@ -37,14 +35,31 @@ class TypePage extends StatelessWidget {
                   userName: userName,
                   onError: (msg) => debugPrint(msg),
                 );
-                return false; // plate 해제만 하고 뒤로가기 차단
+                return false;
               }
 
-              return false; // 선택 없을 경우에도 앱 종료 방지
+              return false;
             },
             child: Scaffold(
               appBar: AppBar(
-                backgroundColor: AppColors.selectedItemColor,
+                backgroundColor: Colors.white,
+                foregroundColor: Colors.black,
+                elevation: 1,
+                centerTitle: true,
+                title: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.arrow_back_ios, size: 16, color: Colors.grey),
+                    SizedBox(width: 4),
+                    Text(
+                      " 번호 등록 | 업무 보조 ",
+                      style: TextStyle(color: Colors.grey, fontSize: 16),
+                    ),
+                    SizedBox(width: 4),
+                    Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                  ],
+                ),
               ),
               body: const RefreshableBody(),
               bottomNavigationBar: const PageBottomNavigation(),
@@ -61,18 +76,25 @@ class RefreshableBody extends StatelessWidget {
 
   void _handleDrag(BuildContext context, double velocity) {
     if (velocity > 0) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => const Input3Digit()),
-      );
+      Navigator.of(context).push(_slidePage(const Input3Digit(), fromLeft: true));
     } else if (velocity < 0) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => const SecondaryPage()),
-      );
+      Navigator.of(context).push(_slidePage(const SecondaryPage(), fromLeft: false));
     } else {
       showSnackbar(context, '드래그 동작이 감지되지 않았습니다.');
     }
+  }
+
+  PageRouteBuilder _slidePage(Widget page, {required bool fromLeft}) {
+    return PageRouteBuilder(
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (_, __, ___) => page,
+      transitionsBuilder: (_, animation, __, child) {
+        final begin = Offset(fromLeft ? -1.0 : 1.0, 0);
+        final end = Offset.zero;
+        final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeInOut));
+        return SlideTransition(position: animation.drive(tween), child: child);
+      },
+    );
   }
 
   @override
@@ -85,13 +107,17 @@ class RefreshableBody extends StatelessWidget {
         builder: (context, state, child) {
           return Stack(
             children: [
+              // ✅ 애니메이션 제거, 즉시 전환
               IndexedStack(
                 index: state.selectedIndex,
                 children: state.pages.map((pageInfo) => pageInfo.page).toList(),
               ),
               if (state.isLoading)
-                const Center(
-                  child: CircularProgressIndicator(),
+                Container(
+                  color: Colors.black.withOpacity(0.2),
+                  child: const Center(
+                    child: CircularProgressIndicator(),
+                  ),
                 ),
             ],
           );
@@ -108,22 +134,24 @@ class PageBottomNavigation extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer2<PageState, PlateState>(
       builder: (context, pageState, plateState, child) {
+        final selectedColor = AppColors.selectedItemColor;
+        final unselectedColor = Colors.grey;
+
         return BottomNavigationBar(
           currentIndex: pageState.selectedIndex,
           onTap: pageState.onItemTapped,
+          selectedItemColor: selectedColor,
+          unselectedItemColor: unselectedColor,
+          showUnselectedLabels: true,
+          type: BottomNavigationBarType.fixed,
           items: List.generate(pageState.pages.length, (index) {
             final pageInfo = pageState.pages[index];
             final int count = plateState.getPlatesByCollection(pageInfo.collectionKey).length;
             final bool isSelected = pageState.selectedIndex == index;
 
-            final textColor = isSelected ? Colors.red : Colors.black;
-            final countColor = isSelected ? Colors.green : Colors.black;
-            final countSize = isSelected ? 26.0 : 20.0;
-
             return BottomNavigationBarItem(
               icon: AnimatedContainer(
                 duration: const Duration(milliseconds: 250),
-                curve: Curves.easeInOut,
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -131,9 +159,9 @@ class PageBottomNavigation extends StatelessWidget {
                     AnimatedDefaultTextStyle(
                       duration: const Duration(milliseconds: 250),
                       style: TextStyle(
-                        fontSize: countSize,
+                        fontSize: isSelected ? 26 : 20,
                         fontWeight: FontWeight.bold,
-                        color: countColor,
+                        color: isSelected ? selectedColor : unselectedColor,
                       ),
                       child: Text('$count'),
                     ),
@@ -143,7 +171,7 @@ class PageBottomNavigation extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
-                        color: textColor,
+                        color: isSelected ? selectedColor : unselectedColor,
                       ),
                       child: Text(pageInfo.title),
                     ),

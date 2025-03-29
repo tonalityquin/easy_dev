@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../utils/app_colors.dart';
 import '../states/secondary/secondary_state.dart';
 import '../states/secondary/secondary_mode.dart';
 import '../states/user/user_state.dart';
@@ -43,7 +42,24 @@ class SecondaryPage extends StatelessWidget {
       ],
       child: Scaffold(
         appBar: AppBar(
-          backgroundColor: AppColors.selectedItemColor,
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
+          elevation: 1,
+          centerTitle: true,
+          title: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.arrow_back_ios, size: 16, color: Colors.grey),
+              SizedBox(width: 4),
+              Text(
+                " 업무 현황 | 비어 있음 ",
+                style: TextStyle(color: Colors.grey, fontSize: 16),
+              ),
+              SizedBox(width: 4),
+              Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+            ],
+          ),
         ),
         body: const RefreshableBody(),
         bottomNavigationBar: Column(
