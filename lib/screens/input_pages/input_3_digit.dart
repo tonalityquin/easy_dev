@@ -19,6 +19,11 @@ import '../../widgets/dialog/region_picker_dialog.dart';
 import '../../states/plate/input_plate.dart';
 import 'package:camera/camera.dart';
 import '../../utils/gcs_uploader.dart';
+import '../../services/input_plate_service.dart';
+import '../../utils/button/animated_parking_button.dart';
+import '../../utils/button/animated_photo_button.dart';
+import '../../utils/button/animated_action_button.dart';
+import '../../utils/button/custom_adjustment_dropdown.dart';
 
 class Input3Digit extends StatefulWidget {
   const Input3Digit({super.key});
@@ -158,14 +163,15 @@ class _Input3DigitState extends State<Input3Digit> {
 
     await showDialog(
       context: context,
-      builder: (context) => CameraPreviewDialog(
-        onImageCaptured: (image) {
-          setState(() {
-            _capturedImages.add(image);
-            debugPrint('📸 이미지 1장 실시간 반영됨: ${image.path}');
-          });
-        },
-      ),
+      builder: (context) =>
+          CameraPreviewDialog(
+            onImageCaptured: (image) {
+              setState(() {
+                _capturedImages.add(image);
+                debugPrint('📸 이미지 1장 실시간 반영됨: ${image.path}');
+              });
+            },
+          ),
     );
 
     debugPrint('📸 다이얼로그 닫힘 → dispose() 호출 전');
@@ -203,54 +209,41 @@ class _Input3DigitState extends State<Input3Digit> {
     });
   }
 
+  String _buildPlateNumber() {
+    return '${controller3digit.text}-${controller1digit.text}-${controller4digit.text}';
+  }
+
+  void _resetInputForm() {
+    clearInput();
+    _clearLocation();
+    _capturedImages.clear();
+    setState(() {});
+  }
+
   Future<void> _handleAction() async {
-    final String plateNumber = '${controller3digit.text}-${controller1digit.text}-${controller4digit.text}';
-    final inputState = context.read<InputPlate>();
-    final areaState = context.read<AreaState>();
-    final userState = context.read<UserState>();
+    final plateNumber = _buildPlateNumber();
 
-    /// 1. GCS 업로더 생성
-    final uploader = GCSUploader();
-    final List<String> uploadedImageUrls = [];
+    final uploadedImageUrls = await InputPlateService.uploadCapturedImages(
+      _capturedImages,
+      plateNumber,
+    );
 
-    /// 2. 이미지 업로드
-    for (var image in _capturedImages) {
-      final file = File(image.path);
-      final fileName = '${plateNumber}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final gcsUrl = await uploader.uploadImage(file, 'plates/$fileName');
-
-      if (gcsUrl != null) {
-        debugPrint('✅ 이미지 업로드 완료: $gcsUrl');
-        uploadedImageUrls.add(gcsUrl);
-      } else {
-        debugPrint('❌ 이미지 업로드 실패: ${file.path}');
-      }
-    }
-
-    /// 3. 번호판 처리
-    await inputState.handlePlateEntry(
+    await InputPlateService.savePlateEntry(
       context: context,
       plateNumber: plateNumber,
       location: locationController.text,
       isLocationSelected: isLocationSelected,
-      areaState: areaState,
-      userState: userState,
-      adjustmentType: selectedAdjustment,
-      statusList: selectedStatuses,
+      imageUrls: uploadedImageUrls,
+      selectedAdjustment: selectedAdjustment,
+      selectedStatuses: selectedStatuses,
       basicStandard: selectedBasicStandard,
       basicAmount: selectedBasicAmount,
       addStandard: selectedAddStandard,
       addAmount: selectedAddAmount,
       region: dropdownValue,
-      imageUrls: uploadedImageUrls,
     );
 
-    clearInput();
-    _clearLocation();
-
-    /// 4. 이미지 리스트 비우기 (선택)
-    _capturedImages.clear();
-    setState(() {});
+    _resetInputForm();
   }
 
   void _selectParkingLocation() {
@@ -377,9 +370,10 @@ class _Input3DigitState extends State<Input3Digit> {
                             frontController: controller3digit,
                             middleController: controller1digit,
                             backController: controller4digit,
-                            onKeypadStateChanged: (TextEditingController activeController) {
+                            activeController: activeController,
+                            onKeypadStateChanged: (TextEditingController newController) {
                               setState(() {
-                                this.activeController = controller3digit;
+                                activeController = newController;
                                 showKeypad = true;
                               });
                             },
@@ -416,25 +410,36 @@ class _Input3DigitState extends State<Input3Digit> {
                     child: _capturedImages.isEmpty
                         ? const Center(child: Text('촬영된 사진 없음'))
                         : ListView.builder(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: _capturedImages.length,
-                            itemBuilder: (context, index) {
-                              final imageFile = _capturedImages[index];
-                              return GestureDetector(
-                                onTap: () => showFullScreenImageViewer(context, _capturedImages, index),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(4.0),
-                                  child: Image.file(
-                                    File(imageFile.path),
-                                    width: 100,
-                                    height: 100,
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                              );
-                            },
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _capturedImages.length,
+                      itemBuilder: (context, index) {
+                        final imageFile = _capturedImages[index];
+                        return GestureDetector(
+                          onTap: () => showFullScreenImageViewer(context, _capturedImages, index),
+                          child: Padding(
+                            padding: const EdgeInsets.all(4.0),
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 400),
+                              transitionBuilder: (child, animation) {
+                                return ScaleTransition(
+                                  scale: CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
+                                  child: FadeTransition(opacity: animation, child: child),
+                                );
+                              },
+                              child: Image.file(
+                                File(imageFile.path),
+                                key: ValueKey(imageFile.path),
+                                width: 100,
+                                height: 100,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
                           ),
+                        );
+                      },
+                    ),
                   ),
+
                   const SizedBox(height: 32.0),
                   const Text(
                     '정산 유형',
@@ -442,36 +447,43 @@ class _Input3DigitState extends State<Input3Digit> {
                   ),
                   const SizedBox(height: 8.0),
                   FutureBuilder<bool>(
-                    future: _refreshAdjustments().timeout(Duration(seconds: 3), onTimeout: () => false),
+                    future: _refreshAdjustments().timeout(const Duration(seconds: 3), onTimeout: () => false),
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 24),
+                          child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                        );
                       }
-                      if (snapshot.data == false) {
-                        return const Text('정산 유형 정보를 불러오지 못했습니다.');
+                      if (!snapshot.hasData || snapshot.data == false) {
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: Center(
+                            child: Text(
+                              '설정된 정산 유형이 없어 무료입니다.',
+                              style: TextStyle(color: Colors.green),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        );
                       }
+
                       final adjustmentState = context.watch<AdjustmentState>();
                       final adjustmentList = adjustmentState.adjustments;
                       if (adjustmentList.isEmpty) {
                         return const Text('등록된 정산 유형이 없습니다.');
                       }
-                      return DropdownButtonFormField<String>(
-                        value: selectedAdjustment,
+
+                      final dropdownItems = adjustmentList.map((adj) => adj.countType).toList();
+
+                      return CustomAdjustmentDropdown(
+                        items: dropdownItems,
+                        selectedValue: selectedAdjustment,
                         onChanged: (newValue) {
                           setState(() {
                             selectedAdjustment = newValue;
                           });
                         },
-                        items: adjustmentList.map((adj) {
-                          return DropdownMenuItem<String>(
-                            value: adj.countType, // ✅ 클래스 속성 방식으로 변경
-                            child: Text(adj.countType), // ✅ 클래스 속성 방식으로 변경
-                          );
-                        }).toList(),
-                        decoration: const InputDecoration(
-                          labelText: '정산 유형 선택',
-                          border: OutlineInputBorder(),
-                        ),
                       );
                     },
                   ),
@@ -484,24 +496,24 @@ class _Input3DigitState extends State<Input3Digit> {
                   statuses.isEmpty
                       ? const Text('등록된 차량 상태가 없습니다.')
                       : Wrap(
-                          spacing: 8.0,
-                          children: List.generate(statuses.length, (index) {
-                            return ChoiceChip(
-                              label: Text(statuses[index]),
-                              selected: isSelected[index],
-                              onSelected: (selected) {
-                                setState(() {
-                                  isSelected[index] = selected;
-                                  if (selected) {
-                                    selectedStatuses.add(statuses[index]);
-                                  } else {
-                                    selectedStatuses.remove(statuses[index]);
-                                  }
-                                });
-                              },
-                            );
-                          }),
-                        ),
+                    spacing: 8.0,
+                    children: List.generate(statuses.length, (index) {
+                      return ChoiceChip(
+                        label: Text(statuses[index]),
+                        selected: isSelected[index],
+                        onSelected: (selected) {
+                          setState(() {
+                            isSelected[index] = selected;
+                            if (selected) {
+                              selectedStatuses.add(statuses[index]);
+                            } else {
+                              selectedStatuses.remove(statuses[index]);
+                            }
+                          });
+                        },
+                      );
+                    }),
+                  ),
                 ],
               ),
             ),
@@ -512,20 +524,20 @@ class _Input3DigitState extends State<Input3Digit> {
         showKeypad: showKeypad,
         keypad: activeController == controller3digit
             ? NumKeypad(
-                controller: controller3digit,
-                maxLength: 3,
-                onComplete: () => _setActiveController(controller1digit),
-              )
+          controller: controller3digit,
+          maxLength: 3,
+          onComplete: () => _setActiveController(controller1digit),
+        )
             : activeController == controller1digit
-                ? KorKeypad(
-                    controller: controller1digit,
-                    onComplete: () => _setActiveController(controller4digit),
-                  )
-                : NumKeypad(
-                    controller: controller4digit,
-                    maxLength: 4,
-                    onComplete: () => setState(() => showKeypad = false),
-                  ),
+            ? KorKeypad(
+          controller: controller1digit,
+          onComplete: () => _setActiveController(controller4digit),
+        )
+            : NumKeypad(
+          controller: controller4digit,
+          maxLength: 4,
+          onComplete: () => setState(() => showKeypad = false),
+        ),
         actionButton: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -533,51 +545,30 @@ class _Input3DigitState extends State<Input3Digit> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
-                  child: ElevatedButton(
+                  child: AnimatedPhotoButton(
                     onPressed: _showCameraPreviewDialog,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.grey[300],
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(vertical: 15.0),
-                    ),
-                    child: const Text(
-                      '사진 촬영',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 16),
-                    ),
                   ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: ElevatedButton(
+                  child: AnimatedParkingButton(
+                    isLocationSelected: isLocationSelected,
                     onPressed: isLocationSelected ? _clearLocation : _selectParkingLocation,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.grey[300],
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(vertical: 15.0),
-                    ),
-                    child: Text(
-                      isLocationSelected ? '구역 초기화' : '주차 구역 선택',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 16),
-                    ),
                   ),
+
                 ),
               ],
             ),
             const SizedBox(height: 15),
-            ElevatedButton(
-              onPressed: isLoading ? null : _handleAction,
-              style: commonButtonStyle,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  isLocationSelected ? '입차 완료' : '입차 요청',
-                  softWrap: false,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 16),
-                ),
-              ),
+            AnimatedActionButton(
+              isLoading: isLoading,
+              isLocationSelected: isLocationSelected,
+              onPressed: () async {
+                setState(() => isLoading = true);
+                await _handleAction();
+                if (!mounted) return;
+                setState(() => isLoading = false);
+              },
             ),
           ],
         ),

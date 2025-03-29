@@ -88,7 +88,6 @@ class InputPlate with ChangeNotifier {
         ),
       );
 
-      showSnackbar(context, '$type 완료');
       notifyListeners();
     } catch (error) {
       showSnackbar(context, '오류 발생: $error');
