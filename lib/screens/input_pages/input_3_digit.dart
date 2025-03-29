@@ -294,7 +294,24 @@ class _Input3DigitState extends State<Input3Digit> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.blueAccent,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 1,
+        centerTitle: true,
+        title: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.arrow_back_ios, size: 16, color: Colors.grey),
+            SizedBox(width: 4),
+            Text(
+              " 번호 등록 | 업무 현황 ",
+              style: TextStyle(color: Colors.grey, fontSize: 16),
+            ),
+            SizedBox(width: 4),
+            Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+          ],
+        ),
       ),
       body: Stack(
         children: [

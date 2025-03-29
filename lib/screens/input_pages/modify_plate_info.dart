@@ -373,7 +373,22 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.blueAccent,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 1,
+        centerTitle: true,
+        title: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(width: 4),
+            Text(
+              " 번호판 수정 ",
+              style: TextStyle(color: Colors.grey, fontSize: 16),
+            ),
+            SizedBox(width: 4),
+          ],
+        ),
       ),
       body: Stack(
         children: [
