@@ -127,7 +127,7 @@ class _LoginPageState extends State<LoginPage> {
           userState.updateUserCard(updatedUser);
           areaState.updateArea(updatedUser.area);
 
-          Navigator.of(context).pop(); // close loading
+          Navigator.of(context).pop();
           Navigator.pushReplacementNamed(context, '/home');
         } else {
           Navigator.of(context).pop();
@@ -145,6 +145,71 @@ class _LoginPageState extends State<LoginPage> {
         _isLoading = false;
       });
     }
+  }
+
+  InputDecoration _inputDecoration({
+    required String label,
+    IconData? icon,
+    Widget? suffixIcon,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: label,
+      prefixIcon: icon != null ? Icon(icon) : null,
+      suffixIcon: suffixIcon,
+      contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
+      filled: true,
+      fillColor: Colors.grey.shade100,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: Colors.indigo, width: 2),
+      ),
+    );
+  }
+
+  Widget _buildLoginButton() {
+    return InkWell(
+      onTap: _isLoading ? null : _login,
+      borderRadius: BorderRadius.circular(24),
+      child: Container(
+        height: 55,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          gradient: const LinearGradient(
+            colors: [Color(0xFF4F93E6), Color(0xFF1976D2)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 6,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Center(
+          child: _isLoading
+              ? const CircularProgressIndicator(
+            color: Colors.white,
+            strokeWidth: 2,
+          )
+              : const Text(
+            "로그인",
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.2,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -166,11 +231,9 @@ class _LoginPageState extends State<LoginPage> {
                   controller: _nameController,
                   focusNode: _nameFocus,
                   textInputAction: TextInputAction.next,
-                  onSubmitted: (_) => FocusScope.of(context).requestFocus(_phoneFocus),
-                  decoration: const InputDecoration(
-                    labelText: "이름",
-                    border: OutlineInputBorder(),
-                  ),
+                  onSubmitted: (_) =>
+                      FocusScope.of(context).requestFocus(_phoneFocus),
+                  decoration: _inputDecoration(label: "이름", icon: Icons.person),
                 ),
                 const SizedBox(height: 16),
                 TextField(
@@ -178,11 +241,10 @@ class _LoginPageState extends State<LoginPage> {
                   focusNode: _phoneFocus,
                   keyboardType: TextInputType.phone,
                   textInputAction: TextInputAction.next,
-                  onSubmitted: (_) => FocusScope.of(context).requestFocus(_passwordFocus),
-                  decoration: const InputDecoration(
-                    labelText: "전화번호",
-                    border: OutlineInputBorder(),
-                  ),
+                  onSubmitted: (_) =>
+                      FocusScope.of(context).requestFocus(_passwordFocus),
+                  decoration:
+                  _inputDecoration(label: "전화번호", icon: Icons.phone),
                 ),
                 const SizedBox(height: 16),
                 TextField(
@@ -191,12 +253,14 @@ class _LoginPageState extends State<LoginPage> {
                   obscureText: _obscurePassword,
                   textInputAction: TextInputAction.done,
                   onSubmitted: (_) => _login(),
-                  decoration: InputDecoration(
-                    labelText: "비밀번호(5자리 이상)",
-                    border: const OutlineInputBorder(),
+                  decoration: _inputDecoration(
+                    label: "비밀번호(5자리 이상)",
+                    icon: Icons.lock,
                     suffixIcon: IconButton(
                       icon: Icon(
-                        _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                        _obscurePassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
                       ),
                       onPressed: () {
                         setState(() {
@@ -206,14 +270,8 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: _isLoading ? null : _login,
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(48),
-                  ),
-                  child: const Text("로그인"),
-                ),
+                const SizedBox(height: 32),
+                _buildLoginButton(),
               ],
             ),
           ),
