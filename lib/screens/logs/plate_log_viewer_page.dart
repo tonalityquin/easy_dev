@@ -16,6 +16,14 @@ class PlateLogViewerPage extends StatefulWidget {
 
 class _PlateLogViewerPageState extends State<PlateLogViewerPage> {
   bool _appliedInitialFilter = false;
+  LogPlateState? _logState;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // dispose에서 사용할 LogPlateState를 안전하게 저장
+    _logState ??= context.read<LogPlateState>();
+  }
 
   @override
   void initState() {
@@ -38,10 +46,11 @@ class _PlateLogViewerPageState extends State<PlateLogViewerPage> {
   void dispose() {
     if (_appliedInitialFilter) {
       debugPrint('[DEBUG] PlateLogViewerPage 종료 - 필터 초기화');
-      context.read<LogPlateState>().clearFilters();
+      Future.microtask(() => _logState?.clearFilters()); // 👈 안전하게 마이크로태스크로 이동
     }
     super.dispose();
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -50,15 +59,22 @@ class _PlateLogViewerPageState extends State<PlateLogViewerPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("번호판 로그 기록"),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () {
-              logState.clearFilters(); // ✅ 번호판 필터 초기화
-            },
-          ),
-        ],
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 1,
+        centerTitle: true,
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(width: 4),
+            Text(
+              logs.isNotEmpty ? logs.first.plateNumber : "번호판 로그",
+              style: const TextStyle(color: Colors.black, fontSize: 16),
+            ),
+            const SizedBox(width: 4),
+          ],
+        ),
       ),
       body: logState.isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -71,7 +87,7 @@ class _PlateLogViewerPageState extends State<PlateLogViewerPage> {
           final log = logs[index];
           return ListTile(
             leading: const Icon(Icons.directions_car),
-            title: Text('${log.plateNumber} | ${log.action}'),
+            title: Text('${log.action}'),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
