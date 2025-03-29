@@ -22,8 +22,14 @@ import 'package:easydev/utils/fullscreen_viewer.dart';
 
 import 'package:easydev/models/plate_log_model.dart';
 import 'package:easydev/states/plate/log_plate.dart';
+import 'package:easydev/services/modify_plate_service.dart';
 
 import 'package:easydev/utils/gcs_uploader.dart';
+import 'package:easydev/utils/button/animated_parking_button.dart';
+import 'package:easydev/utils/button/animated_photo_button.dart';
+import 'package:easydev/utils/button/animated_action_button.dart';
+import 'package:easydev/utils/button/custom_adjustment_dropdown.dart';
+
 
 class ModifyPlateInfo extends StatefulWidget {
   final PlateModel plate; // ✅ plate 파라미터 추가
@@ -150,6 +156,12 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
     final areaState = context.read<AreaState>();
     final currentArea = areaState.currentArea;
 
+    int retry = 0;
+    while (statusState.statuses.isEmpty && retry < 5) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      retry++;
+    }
+
     final fetchedStatuses = statusState.statuses
         .where((status) => status.area == currentArea && status.isActive) // ✅ 수정됨
         .map((status) => status.name) // ✅ 수정됨
@@ -203,14 +215,15 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
 
     await showDialog(
       context: context,
-      builder: (context) => CameraPreviewDialog(
-        onImageCaptured: (image) {
-          setState(() {
-            _capturedImages.add(image);
-            debugPrint('📸 이미지 1장이 실시간 반영됨: ${image.path}');
-          });
-        },
-      ),
+      builder: (context) =>
+          CameraPreviewDialog(
+            onImageCaptured: (image) {
+              setState(() {
+                _capturedImages.add(image);
+                debugPrint('📸 이미지 1장이 실시간 반영됨: ${image.path}');
+              });
+            },
+          ),
     );
 
     debugPrint('📸 다이얼로그 닫힘 → dispose() 호출 전');
@@ -249,88 +262,64 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
   }
 
   Future<void> _handleAction() async {
-    final String plateNumber = '${controller3digit.text}-${controller1digit.text}-${controller4digit.text}';
-    final modifyState = context.read<ModifyPlate>();
-    final areaState = context.read<AreaState>();
-    final userState = context.read<UserState>();
-    final logState = context.read<LogPlateState>();
-
-    final originalPlate = widget.plate;
-
-    // 변경 전 정보
-    final String oldLocation = originalPlate.location;
-    final String? oldAdjustmentType = originalPlate.adjustmentType;
-
-    final String newLocation = locationController.text;
-    final String? newAdjustmentType = selectedAdjustment;
-
-    final bool locationChanged = oldLocation != newLocation;
-    final bool adjustmentChanged = oldAdjustmentType != newAdjustmentType;
-
-    // GCS 업로드
-    final uploader = GCSUploader();
-    final List<String> uploadedImageUrls = [];
-
-    for (var image in _capturedImages) {
-      final file = File(image.path);
-      final fileName = '${plateNumber}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final gcsUrl = await uploader.uploadImage(file, 'plates/$fileName');
-
-      if (gcsUrl != null) {
-        debugPrint('✅ 이미지 업로드 완료: $gcsUrl');
-        uploadedImageUrls.add(gcsUrl);
-      } else {
-        debugPrint('❌ 이미지 업로드 실패: ${file.path}');
-      }
-    }
-
-    /// ✅ 여기서 기존 + 신규 이미지 병합
-    final List<String> mergedImageUrls = [..._existingImageUrls, ...uploadedImageUrls];
-
-    /// Plate 정보 업데이트 (이제 imageUrls 포함!)
-    final success = await modifyState.updatePlateInfo(
+    final service = ModifyPlateService(
       context: context,
-      plate: originalPlate,
-      newPlateNumber: plateNumber,
-      location: newLocation,
-      areaState: areaState,
-      userState: userState,
+      capturedImages: _capturedImages,
+      existingImageUrls: _existingImageUrls,
       collectionKey: widget.collectionKey,
-      adjustmentType: newAdjustmentType,
-      statusList: selectedStatuses,
-      basicStandard: selectedBasicStandard,
-      basicAmount: selectedBasicAmount,
-      addStandard: selectedAddStandard,
-      addAmount: selectedAddAmount,
-      region: dropdownValue,
-      imageUrls: mergedImageUrls, // ✅ 꼭 포함되어야 함!
+      originalPlate: widget.plate,
+      controller3digit: controller3digit,
+      controller1digit: controller1digit,
+      controller4digit: controller4digit,
+      locationController: locationController,
+      selectedStatuses: selectedStatuses,
+      selectedBasicStandard: selectedBasicStandard,
+      selectedBasicAmount: selectedBasicAmount,
+      selectedAddStandard: selectedAddStandard,
+      selectedAddAmount: selectedAddAmount,
+      selectedAdjustment: selectedAdjustment,
+      dropdownValue: dropdownValue,
+    );
+
+    final plateNumber = service.composePlateNumber();
+
+    final oldLocation = widget.plate.location;
+    final oldAdjustmentType = widget.plate.adjustmentType;
+
+    final newLocation = locationController.text;
+    final newAdjustmentType = selectedAdjustment;
+
+    final locationChanged = oldLocation != newLocation;
+    final adjustmentChanged = oldAdjustmentType != newAdjustmentType;
+
+    final mergedImageUrls = await service.uploadAndMergeImages(plateNumber);
+
+    final success = await service.updatePlateInfo(
+      plateNumber: plateNumber,
+      imageUrls: mergedImageUrls,
+      newLocation: newLocation,
+      newAdjustmentType: newAdjustmentType,
     );
 
     if (success && (locationChanged || adjustmentChanged)) {
-      final log = PlateLogModel(
+      await service.logPlateChange(
         plateNumber: plateNumber,
-        area: areaState.currentArea,
         from: locationChanged ? oldLocation : (adjustmentChanged ? oldAdjustmentType ?? '-' : '-'),
         to: locationChanged ? newLocation : (adjustmentChanged ? newAdjustmentType ?? '-' : '-'),
         action: locationChanged && adjustmentChanged
             ? '위치/할인 수정'
             : locationChanged
-                ? '위치 수정'
-                : '할인 수정',
-        performedBy: userState.user?.name ?? 'Unknown',
-        timestamp: DateTime.now(),
+            ? '위치 수정'
+            : '할인 수정',
       );
-
-      await logState.saveLog(log);
     }
 
-    if (success) {
-      Navigator.pop(context);
-    }
+    if (success) Navigator.pop(context);
 
     clearInput();
     _clearLocation();
   }
+
 
   void _selectParkingLocation() {
     showDialog(
@@ -487,46 +476,52 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
                     child: _capturedImages.isEmpty && _existingImageUrls.isEmpty
                         ? const Center(child: Text('촬영된 사진 없음'))
                         : ListView(
-                            scrollDirection: Axis.horizontal,
-                            children: [
-                              // ✅ 기존 GCS 이미지 (URL)
-                              ..._existingImageUrls.asMap().entries.map((entry) {
-                                final index = entry.key;
-                                final url = entry.value;
-                                return GestureDetector(
-                                  onTap: () => showFullScreenImageViewerFromUrls(context, _existingImageUrls, index),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(4.0),
-                                    child: Image.network(
-                                      url,
-                                      width: 100,
-                                      height: 100,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (context, error, stackTrace) =>
-                                          const Icon(Icons.broken_image, size: 50),
-                                    ),
-                                  ),
-                                );
-                              }),
-                              // ✅ 새로 촬영한 로컬 이미지 (File)
-                              ..._capturedImages.asMap().entries.map((entry) {
-                                final index = entry.key;
-                                final image = entry.value;
-                                return GestureDetector(
-                                  onTap: () => showFullScreenImageViewer(context, _capturedImages, index),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(4.0),
-                                    child: Image.file(
-                                      File(image.path),
-                                      width: 100,
-                                      height: 100,
-                                      fit: BoxFit.cover,
-                                    ),
-                                  ),
-                                );
-                              }),
-                            ],
-                          ),
+                      scrollDirection: Axis.horizontal,
+                      children: [
+                        // ✅ 기존 GCS 이미지 (URL)
+                        ..._existingImageUrls
+                            .asMap()
+                            .entries
+                            .map((entry) {
+                          final index = entry.key;
+                          final url = entry.value;
+                          return GestureDetector(
+                            onTap: () => showFullScreenImageViewerFromUrls(context, _existingImageUrls, index),
+                            child: Padding(
+                              padding: const EdgeInsets.all(4.0),
+                              child: Image.network(
+                                url,
+                                width: 100,
+                                height: 100,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) =>
+                                const Icon(Icons.broken_image, size: 50),
+                              ),
+                            ),
+                          );
+                        }),
+                        // ✅ 새로 촬영한 로컬 이미지 (File)
+                        ..._capturedImages
+                            .asMap()
+                            .entries
+                            .map((entry) {
+                          final index = entry.key;
+                          final image = entry.value;
+                          return GestureDetector(
+                            onTap: () => showFullScreenImageViewer(context, _capturedImages, index),
+                            child: Padding(
+                              padding: const EdgeInsets.all(4.0),
+                              child: Image.file(
+                                File(image.path),
+                                width: 100,
+                                height: 100,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 32.0),
                   const Text(
@@ -577,24 +572,24 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
                   statuses.isEmpty
                       ? const Text('등록된 차량 상태가 없습니다.')
                       : Wrap(
-                          spacing: 8.0,
-                          children: List.generate(statuses.length, (index) {
-                            return ChoiceChip(
-                              label: Text(statuses[index]),
-                              selected: isSelected[index],
-                              onSelected: (selected) {
-                                setState(() {
-                                  isSelected[index] = selected;
-                                  if (selected) {
-                                    selectedStatuses.add(statuses[index]);
-                                  } else {
-                                    selectedStatuses.remove(statuses[index]);
-                                  }
-                                });
-                              },
-                            );
-                          }),
-                        ),
+                    spacing: 8.0,
+                    children: List.generate(statuses.length, (index) {
+                      return ChoiceChip(
+                        label: Text(statuses[index]),
+                        selected: isSelected[index],
+                        onSelected: (selected) {
+                          setState(() {
+                            isSelected[index] = selected;
+                            if (selected) {
+                              selectedStatuses.add(statuses[index]);
+                            } else {
+                              selectedStatuses.remove(statuses[index]);
+                            }
+                          });
+                        },
+                      );
+                    }),
+                  ),
                 ],
               ),
             ),
@@ -605,20 +600,20 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
         showKeypad: showKeypad,
         keypad: activeController == controller3digit
             ? NumKeypad(
-                controller: controller3digit,
-                maxLength: 3,
-                onComplete: () => _setActiveController(controller1digit),
-              )
+          controller: controller3digit,
+          maxLength: 3,
+          onComplete: () => _setActiveController(controller1digit),
+        )
             : activeController == controller1digit
-                ? KorKeypad(
-                    controller: controller1digit,
-                    onComplete: () => _setActiveController(controller4digit),
-                  )
-                : NumKeypad(
-                    controller: controller4digit,
-                    maxLength: 4,
-                    onComplete: () => setState(() => showKeypad = false),
-                  ),
+            ? KorKeypad(
+          controller: controller1digit,
+          onComplete: () => _setActiveController(controller4digit),
+        )
+            : NumKeypad(
+          controller: controller4digit,
+          maxLength: 4,
+          onComplete: () => setState(() => showKeypad = false),
+        ),
         actionButton: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -626,53 +621,49 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
-                  child: ElevatedButton(
+                  child: AnimatedPhotoButton(
                     onPressed: _showCameraPreviewDialog,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.grey[300],
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(vertical: 15.0),
-                    ),
-                    child: const Text(
-                      '사진 촬영',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 16),
-                    ),
                   ),
                 ),
                 const SizedBox(width: 10),
                 // ✅ 1. 주차 구역 선택 버튼 (초기화 제거)
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _selectParkingLocation, // 항상 선택만 허용
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.grey[300],
-                      foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(vertical: 15.0),
-                    ),
-                    child: const Text(
-                      '주차 구역 선택',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 16),
-                    ),
+                Expanded( // ✅ 폭 동일하게 설정
+                  child: AnimatedParkingButton(
+                    isLocationSelected: true,
+                    onPressed: _selectParkingLocation,
+                    buttonLabel: '구역 수정',
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 15),
             // ✅ 2. 수정 완료 버튼
-            ElevatedButton(
-              onPressed: isLoading ? null : _handleAction, // 기존 입차 로직 재사용 가능
-              style: commonButtonStyle,
-              child: const FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  '수정 완료',
-                  softWrap: false,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 16),
-                ),
-              ),
+            AnimatedActionButton(
+              isLoading: isLoading,
+              isLocationSelected: isLocationSelected, // 필요 시 false 고정 가능
+              buttonLabel: '수정 완료',
+              onPressed: () async {
+                setState(() => isLoading = true);
+                await _handleAction();
+                if (!mounted) return;
+                setState(() => isLoading = false);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Row(
+                      children: [
+                        Icon(Icons.check_circle_outline, color: Colors.white),
+                        SizedBox(width: 12),
+                        Text("수정이 완료되었습니다!", style: TextStyle(fontSize: 15)),
+                      ],
+                    ),
+                    backgroundColor: Colors.green,
+                    behavior: SnackBarBehavior.floating,
+                    duration: const Duration(seconds: 2),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    margin: const EdgeInsets.all(16),
+                  ),
+                );
+              },
             ),
           ],
         ),
