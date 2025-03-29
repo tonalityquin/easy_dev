@@ -20,7 +20,9 @@ class TypePage extends StatelessWidget {
         builder: (context) {
           final plateState = context.read<PlateState>();
           final pageState = context.read<PageState>();
-          final userName = context.read<UserState>().name;
+          final userName = context
+              .read<UserState>()
+              .name;
 
           return WillPopScope(
             onWillPop: () async {
@@ -107,7 +109,6 @@ class RefreshableBody extends StatelessWidget {
         builder: (context, state, child) {
           return Stack(
             children: [
-              // ✅ 애니메이션 제거, 즉시 전환
               IndexedStack(
                 index: state.selectedIndex,
                 children: state.pages.map((pageInfo) => pageInfo.page).toList(),
@@ -144,9 +145,12 @@ class PageBottomNavigation extends StatelessWidget {
           unselectedItemColor: unselectedColor,
           showUnselectedLabels: true,
           type: BottomNavigationBarType.fixed,
+          backgroundColor: Colors.white,
           items: List.generate(pageState.pages.length, (index) {
             final pageInfo = pageState.pages[index];
-            final int count = plateState.getPlatesByCollection(pageInfo.collectionKey).length;
+            final int count = plateState
+                .getPlatesByCollection(pageInfo.collectionKey)
+                .length;
             final bool isSelected = pageState.selectedIndex == index;
 
             return BottomNavigationBarItem(
@@ -156,14 +160,29 @@ class PageBottomNavigation extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    AnimatedDefaultTextStyle(
-                      duration: const Duration(milliseconds: 250),
-                      style: TextStyle(
-                        fontSize: isSelected ? 26 : 20,
-                        fontWeight: FontWeight.bold,
-                        color: isSelected ? selectedColor : unselectedColor,
+                    // ✅ 숫자 튐 + 색상 보간 강조
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 300),
+                      transitionBuilder: (child, animation) =>
+                          ScaleTransition(scale: animation, child: child),
+                      child: TweenAnimationBuilder<Color?>(
+                        key: ValueKey(count),
+                        duration: const Duration(milliseconds: 300),
+                        tween: ColorTween(
+                          begin: Colors.redAccent,
+                          end: isSelected ? selectedColor : unselectedColor,
+                        ),
+                        builder: (context, color, child) {
+                          return Text(
+                            '$count',
+                            style: TextStyle(
+                              fontSize: isSelected ? 26 : 20,
+                              fontWeight: FontWeight.bold,
+                              color: color,
+                            ),
+                          );
+                        },
                       ),
-                      child: Text('$count'),
                     ),
                     const SizedBox(height: 4),
                     AnimatedDefaultTextStyle(
@@ -181,7 +200,6 @@ class PageBottomNavigation extends StatelessWidget {
               label: '',
             );
           }),
-          backgroundColor: Colors.white,
         );
       },
     );
