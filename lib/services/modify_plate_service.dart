@@ -57,13 +57,17 @@ class ModifyPlateService {
   Future<List<String>> uploadAndMergeImages(String plateNumber) async {
     final uploader = GCSUploader();
     final uploadedImageUrls = <String>[];
+    final area = context.read<AreaState>().currentArea;
+    final user = context.read<UserState>().user;
+    final now = DateTime.now();
+    final date = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+
+    final performedBy = user?.name ?? 'Unknown';
 
     for (var image in capturedImages) {
       final file = File(image.path);
-      final fileName = '${plateNumber}_${DateTime
-          .now()
-          .millisecondsSinceEpoch}.jpg';
-      final gcsUrl = await uploader.uploadImage(file, 'plates/$fileName');
+      final fileName = '${date}_${area}_${plateNumber}_${performedBy}.jpg';
+      final gcsUrl = await uploader.uploadImageFromModify(file, 'plates/$fileName');
 
       if (gcsUrl != null) {
         debugPrint('✅ 이미지 업로드 완료: $gcsUrl');
@@ -75,6 +79,7 @@ class ModifyPlateService {
 
     return [...existingImageUrls, ...uploadedImageUrls];
   }
+
 
   Future<bool> updatePlateInfo({
     required String plateNumber,

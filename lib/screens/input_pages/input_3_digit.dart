@@ -16,9 +16,7 @@ import '../../widgets/dialog/parking_location_dialog.dart';
 import '../../utils/camera_helper.dart';
 import '../../widgets/dialog/camera_preview_dialog.dart';
 import '../../widgets/dialog/region_picker_dialog.dart';
-import '../../states/plate/input_plate.dart';
 import 'package:camera/camera.dart';
-import '../../utils/gcs_uploader.dart';
 import '../../services/input_plate_service.dart';
 import '../../utils/button/animated_parking_button.dart';
 import '../../utils/button/animated_photo_button.dart';
@@ -222,11 +220,16 @@ class _Input3DigitState extends State<Input3Digit> {
 
   Future<void> _handleAction() async {
     final plateNumber = _buildPlateNumber();
+    final area = context.read<AreaState>().currentArea;
+    final userName = context.read<UserState>().name;
 
     final uploadedImageUrls = await InputPlateService.uploadCapturedImages(
       _capturedImages,
       plateNumber,
+      area,
+      userName,
     );
+
 
     await InputPlateService.savePlateEntry(
       context: context,

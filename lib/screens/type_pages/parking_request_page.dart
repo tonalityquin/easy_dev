@@ -183,8 +183,16 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
               return BottomNavigationBar(
                   items: [
                     BottomNavigationBarItem(
-                      icon: Icon(
-                        isPlateSelected ? Icons.highlight_alt : (_isSearchMode ? Icons.cancel : Icons.search),
+                      icon: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 300),
+                        transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+                        child: isPlateSelected
+                            ? const Icon(Icons.highlight_alt, key: ValueKey('highlight'), color: Colors.indigo)
+                            : Icon(
+                          _isSearchMode ? Icons.cancel : Icons.search,
+                          key: ValueKey(_isSearchMode),
+                          color: _isSearchMode ? Colors.orange : Colors.grey,
+                        ),
                       ),
                       label: isPlateSelected ? '정보 수정' : (_isSearchMode ? '검색 초기화' : '번호판 검색'),
                     ),

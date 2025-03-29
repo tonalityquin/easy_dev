@@ -66,6 +66,8 @@ class FirestorePlateRepository implements PlateRepository {
         'departure_requests',
         'departure_completed',
       ];
+
+      // 1. 일반 컬렉션 문서 삭제
       await Future.wait(collections.map((collection) async {
         final snapshot = await _firestore.collection(collection).get();
         final batch = _firestore.batch();
@@ -74,11 +76,27 @@ class FirestorePlateRepository implements PlateRepository {
         }
         await batch.commit();
       }));
+
+      // 2. 🔥 logs/plate_movements/entries 문서 삭제
+      final entriesSnapshot = await _firestore
+          .collection('logs')
+          .doc('plate_movements')
+          .collection('entries')
+          .get();
+
+      final entriesBatch = _firestore.batch();
+      for (var doc in entriesSnapshot.docs) {
+        entriesBatch.delete(doc.reference);
+      }
+      await entriesBatch.commit();
+
     } catch (e) {
       dev.log('❌ Firestore 전체 데이터 삭제 실패: $e');
       throw Exception("전체 데이터 삭제 실패: $e");
     }
   }
+
+
 
   @override
   Future<List<PlateModel>> getPlatesByArea(String collection, String area) async {

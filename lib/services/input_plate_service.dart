@@ -12,14 +12,18 @@ class InputPlateService {
   static Future<List<String>> uploadCapturedImages(
       List<XFile> images,
       String plateNumber,
+      String area,
+      String userName,
       ) async {
     final uploader = GCSUploader();
     final List<String> uploadedUrls = [];
+    final now = DateTime.now();
+    final date = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
 
     for (var image in images) {
       final file = File(image.path);
-      final fileName = '${plateNumber}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final gcsUrl = await uploader.uploadImage(file, 'plates/$fileName');
+      final fileName = '${date}_${area}_${plateNumber}_${userName}.jpg';
+      final gcsUrl = await uploader.uploadImageFromInput(file, 'plates/$fileName');
 
       if (gcsUrl != null) {
         debugPrint('✅ 이미지 업로드 완료: $gcsUrl');
@@ -31,6 +35,7 @@ class InputPlateService {
 
     return uploadedUrls;
   }
+
 
   /// plate 저장 처리
   static Future<void> savePlateEntry({

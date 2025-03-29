@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:easydev/states/adjustment/adjustment_state.dart';
 import 'package:easydev/states/status/status_state.dart';
-import 'package:easydev/states/user/user_state.dart';
 import 'package:easydev/widgets/input_field/modify_plate_field.dart';
 import 'package:easydev/widgets/input_field/location_field.dart';
 import 'package:easydev/widgets/keypad/num_keypad.dart';
@@ -16,19 +15,14 @@ import 'package:easydev/widgets/dialog/parking_location_dialog.dart';
 import 'package:easydev/utils/camera_helper.dart';
 import 'package:easydev/widgets/dialog/camera_preview_dialog.dart';
 import 'package:easydev/widgets/dialog/region_picker_dialog.dart';
-import 'package:easydev/states/plate/modify_plate.dart';
 import 'package:easydev/models/plate_model.dart';
 import 'package:easydev/utils/fullscreen_viewer.dart';
 
-import 'package:easydev/models/plate_log_model.dart';
-import 'package:easydev/states/plate/log_plate.dart';
 import 'package:easydev/services/modify_plate_service.dart';
 
-import 'package:easydev/utils/gcs_uploader.dart';
 import 'package:easydev/utils/button/animated_parking_button.dart';
 import 'package:easydev/utils/button/animated_photo_button.dart';
 import 'package:easydev/utils/button/animated_action_button.dart';
-import 'package:easydev/utils/button/custom_adjustment_dropdown.dart';
 
 
 class ModifyPlateInfo extends StatefulWidget {

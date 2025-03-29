@@ -1,0 +1,74 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../states/plate/plate_state.dart';
+import '../states/plate/delete_plate.dart';
+import '../states/plate/movement_plate.dart';
+import '../states/user/user_state.dart';
+import '../repositories/plate/plate_repository.dart';
+import '../models/plate_model.dart';
+import '../utils/show_snackbar.dart';
+
+class ParkingRequestService {
+  final BuildContext context;
+
+  ParkingRequestService(this.context);
+
+  void togglePlateSelection(String plateNumber) {
+    final userName = context.read<UserState>().name;
+    context.read<PlateState>().toggleIsSelected(
+      collection: 'parking_requests',
+      plateNumber: plateNumber,
+      userName: userName,
+      onError: (msg) => showSnackbar(context, msg),
+    );
+  }
+
+  Future<void> completeParking({
+    required PlateModel selectedPlate,
+    required String location,
+  }) async {
+    final userState = context.read<UserState>();
+    final plateState = context.read<PlateState>();
+    final movementPlate = context.read<MovementPlate>();
+    final plateRepo = context.read<PlateRepository>();
+
+    try {
+      await plateRepo.addRequestOrCompleted(
+        collection: 'parking_completed',
+        plateNumber: selectedPlate.plateNumber,
+        location: location,
+        area: selectedPlate.area,
+        userName: userState.name,
+        type: '입차 완료',
+        adjustmentType: null,
+        statusList: [],
+        basicStandard: 0,
+        basicAmount: 0,
+        addStandard: 0,
+        addAmount: 0,
+        region: selectedPlate.region ?? '전국',
+      );
+
+      movementPlate.setParkingCompleted(
+        selectedPlate.plateNumber,
+        selectedPlate.area,
+        plateState,
+        location,
+      );
+
+      showSnackbar(context, '입차 완료: ${selectedPlate.plateNumber} ($location)');
+    } catch (e) {
+      debugPrint('입차 완료 실패: $e');
+      showSnackbar(context, '입차 완료 중 오류 발생: $e');
+    }
+  }
+
+  void deletePlate(PlateModel plate) {
+    context.read<DeletePlate>().deletePlateFromParkingRequest(
+      plate.plateNumber,
+      plate.area,
+    );
+    showSnackbar(context, '삭제 완료: ${plate.plateNumber}');
+  }
+}
