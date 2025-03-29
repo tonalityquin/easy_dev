@@ -22,7 +22,11 @@ class InputPlateService {
 
     for (var image in images) {
       final file = File(image.path);
-      final fileName = '${date}_${area}_${plateNumber}_${userName}.jpg';
+      final now = DateTime.now();
+      final formattedDate = '${now.year.toString().padLeft(4, '0')}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}'
+          '_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
+
+      final fileName = '${formattedDate}_${area}_${plateNumber}_${userName}.jpg';
       final gcsUrl = await uploader.uploadImageFromInput(file, 'plates/$fileName');
 
       if (gcsUrl != null) {
