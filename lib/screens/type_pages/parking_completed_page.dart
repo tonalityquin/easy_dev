@@ -220,7 +220,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                         child: Transform.scale(
                           scaleX: _isSorted ? -1 : 1,
                           child: Icon(
-                            isPlateSelected ? Icons.arrow_forward : Icons.sort,
+                            isPlateSelected ? Icons.settings : Icons.sort,
                           ),
                         ),
                       ),
@@ -273,8 +273,10 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                               handleEntryParkingRequest(context, selectedPlate.plateNumber, selectedPlate.area);
                             },
                             onCompleteDeparture: () {
-                              handleEntryDepartureCompleted(
-                                  context, selectedPlate.plateNumber, selectedPlate.area, selectedPlate.location);
+                              handleEntryDepartureCompleted(context, selectedPlate.plateNumber, selectedPlate.area, selectedPlate.location);
+                            },
+                            onPrePayment: () {
+                              handlePrePayment(context, selectedPlate.plateNumber, selectedPlate.area, selectedPlate.location);
                             },
                             onDelete: () {
                               showDialog(

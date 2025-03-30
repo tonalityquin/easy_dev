@@ -63,7 +63,7 @@ class ParkingRequestStatusDialog extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               ElevatedButton.icon(
-                icon: const Icon(Icons.exit_to_app),
+                icon: const Icon(Icons.payments),
                 label: const Text("사전 정산"),
                 onPressed: () {
                   Navigator.pop(context);
@@ -151,4 +151,18 @@ void handleEntryDepartureCompleted(BuildContext context, String plateNumber, Str
   );
 
   showSnackbar(context, "출차 완료가 처리되었습니다.");
+}
+
+void handlePrePayment(BuildContext context, String plateNumber, String area, String location) {
+  final movementPlate = context.read<MovementPlate>();
+  final plateState = context.read<PlateState>();
+
+  movementPlate.setDepartureRequested(
+    plateNumber,
+    area,
+    plateState,
+    location,
+  );
+
+  showSnackbar(context, "사전 정산이 처리되었습니다.");
 }

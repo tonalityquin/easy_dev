@@ -8,6 +8,7 @@ import '../../utils/show_snackbar.dart';
 class ParkingCompletedStatusDialog extends StatelessWidget {
   final VoidCallback onRequestEntry;
   final VoidCallback onCompleteDeparture;
+  final VoidCallback onPrePayment; // ✅ 사전 정산 콜백 추가
   final VoidCallback onDelete;
   final String plateNumber;
   final String area;
@@ -16,6 +17,7 @@ class ParkingCompletedStatusDialog extends StatelessWidget {
     super.key,
     required this.onRequestEntry,
     required this.onCompleteDeparture,
+    required this.onPrePayment, // ✅ 추가
     required this.onDelete,
     required this.plateNumber,
     required this.area,
@@ -49,9 +51,7 @@ class ParkingCompletedStatusDialog extends StatelessWidget {
                     ),
                   );
                 },
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 48),
-                ),
+                style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
               ),
               const SizedBox(height: 8),
               ElevatedButton.icon(
@@ -61,9 +61,7 @@ class ParkingCompletedStatusDialog extends StatelessWidget {
                   Navigator.pop(context);
                   onRequestEntry();
                 },
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 48),
-                ),
+                style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
               ),
               const SizedBox(height: 8),
               ElevatedButton.icon(
@@ -73,9 +71,17 @@ class ParkingCompletedStatusDialog extends StatelessWidget {
                   Navigator.pop(context);
                   onCompleteDeparture();
                 },
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 48),
-                ),
+                style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
+              ),
+              const SizedBox(height: 8),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.payments),
+                label: const Text("사전 정산"),
+                onPressed: () {
+                  Navigator.pop(context);
+                  onPrePayment(); // ✅ 콜백 호출
+                },
+                style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
               ),
               const SizedBox(height: 8),
               TextButton.icon(
@@ -94,7 +100,6 @@ class ParkingCompletedStatusDialog extends StatelessWidget {
   }
 }
 
-/// 재사용 가능한 다이얼로그 애니메이션 위젯
 class ScaleTransitionDialog extends StatefulWidget {
   final Widget child;
 
@@ -167,4 +172,19 @@ void handleEntryDepartureCompleted(BuildContext context, String plateNumber, Str
   );
 
   showSnackbar(context, "출차 완료가 처리되었습니다.");
+}
+
+/// ✅ 사전 정산 처리 (입차 완료 → 출차 요청)
+void handlePrePayment(BuildContext context, String plateNumber, String area, String location) {
+  final movementPlate = context.read<MovementPlate>();
+  final plateState = context.read<PlateState>();
+
+  movementPlate.setDepartureRequested(
+    plateNumber,
+    area,
+    plateState,
+    location,
+  );
+
+  showSnackbar(context, "사전 정산이 처리되었습니다.");
 }

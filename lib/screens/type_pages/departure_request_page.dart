@@ -228,7 +228,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                         child: Transform.scale(
                           scaleX: _isSorted ? -1 : 1,
                           child: Icon(
-                            isPlateSelected ? Icons.arrow_forward : Icons.sort,
+                            isPlateSelected ? Icons.settings : Icons.sort,
                           ),
                         ),
                       ),
@@ -281,25 +281,40 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                                 plateNumber: selectedPlate.plateNumber,
                                 area: selectedPlate.area,
                                 onRequestEntry: () {
-                                  handleEntryParkingRequest(context, selectedPlate.plateNumber, selectedPlate.area);
+                                  handleEntryParkingRequest(
+                                    context,
+                                    selectedPlate.plateNumber,
+                                    selectedPlate.area,
+                                  );
                                 },
                                 onCompleteEntry: () {
                                   handleEntryParkingCompleted(
-                                      context, selectedPlate.plateNumber, selectedPlate.area, selectedPlate.location);
+                                    context,
+                                    selectedPlate.plateNumber,
+                                    selectedPlate.area,
+                                    selectedPlate.location,
+                                  );
+                                },
+                                onPrePayment: () {
+                                  handlePrePayment(
+                                    context,
+                                    selectedPlate.plateNumber,
+                                    selectedPlate.area,
+                                    selectedPlate.location,
+                                  );
                                 },
                                 onDelete: () {
                                   showDialog(
                                     context: context,
-                                    builder: (context) =>
-                                        ParkingRequestDeleteDialog(
-                                          onConfirm: () {
-                                            context.read<DeletePlate>().deletePlateFromDepartureRequest(
-                                              selectedPlate.plateNumber,
-                                              selectedPlate.area,
-                                            );
-                                            showSnackbar(context, "삭제 완료: ${selectedPlate.plateNumber}");
-                                          },
-                                        ),
+                                    builder: (context) => ParkingRequestDeleteDialog(
+                                      onConfirm: () {
+                                        context.read<DeletePlate>().deletePlateFromDepartureRequest(
+                                          selectedPlate.plateNumber,
+                                          selectedPlate.area,
+                                        );
+                                        showSnackbar(context, "삭제 완료: ${selectedPlate.plateNumber}");
+                                      },
+                                    ),
                                   );
                                 },
                               ),

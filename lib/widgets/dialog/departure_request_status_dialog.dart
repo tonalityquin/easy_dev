@@ -8,6 +8,7 @@ import '../../utils/show_snackbar.dart';
 class DepartureRequestStatusDialog extends StatelessWidget {
   final VoidCallback onRequestEntry;
   final VoidCallback onCompleteEntry;
+  final VoidCallback onPrePayment; // ✅ 추가
   final VoidCallback onDelete;
   final String plateNumber;
   final String area;
@@ -16,6 +17,7 @@ class DepartureRequestStatusDialog extends StatelessWidget {
     super.key,
     required this.onRequestEntry,
     required this.onCompleteEntry,
+    required this.onPrePayment, // ✅ 추가
     required this.onDelete,
     required this.plateNumber,
     required this.area,
@@ -29,6 +31,7 @@ class DepartureRequestStatusDialog extends StatelessWidget {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Row(
             children: const [
+              Icon(Icons.settings, color: Colors.blueAccent),
               SizedBox(width: 8),
               Text('출차 요청 상태 처리', style: TextStyle(fontWeight: FontWeight.bold)),
             ],
@@ -48,9 +51,7 @@ class DepartureRequestStatusDialog extends StatelessWidget {
                     ),
                   );
                 },
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 48),
-                ),
+                style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
               ),
               const SizedBox(height: 8),
               ElevatedButton.icon(
@@ -60,9 +61,7 @@ class DepartureRequestStatusDialog extends StatelessWidget {
                   Navigator.pop(context);
                   onRequestEntry();
                 },
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 48),
-                ),
+                style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
               ),
               const SizedBox(height: 8),
               ElevatedButton.icon(
@@ -72,9 +71,17 @@ class DepartureRequestStatusDialog extends StatelessWidget {
                   Navigator.pop(context);
                   onCompleteEntry();
                 },
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 48),
-                ),
+                style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
+              ),
+              const SizedBox(height: 8),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.payments),
+                label: const Text("사전 정산"),
+                onPressed: () {
+                  Navigator.pop(context);
+                  onPrePayment(); // ✅ 콜백 호출
+                },
+                style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
               ),
               const SizedBox(height: 8),
               TextButton.icon(
@@ -136,7 +143,11 @@ class _ScaleTransitionDialogState extends State<ScaleTransitionDialog>
   }
 }
 
-/// 출차 요청 → 입차 요청으로 되돌리기
+//
+// ✅ 상태 변경 핸들러들
+//
+
+/// 출차 요청 → 입차 요청
 void handleEntryParkingRequest(BuildContext context, String plateNumber, String area) {
   final movementPlate = context.read<MovementPlate>();
   final plateState = context.read<PlateState>();
@@ -152,7 +163,7 @@ void handleEntryParkingRequest(BuildContext context, String plateNumber, String 
   showSnackbar(context, "입차 요청이 처리되었습니다.");
 }
 
-/// 출차 요청 → 입차 완료 처리
+/// 출차 요청 → 입차 완료
 void handleEntryParkingCompleted(BuildContext context, String plateNumber, String area, String location) {
   final movementPlate = context.read<MovementPlate>();
   final plateState = context.read<PlateState>();
@@ -165,4 +176,19 @@ void handleEntryParkingCompleted(BuildContext context, String plateNumber, Strin
   );
 
   showSnackbar(context, "입차 완료가 처리되었습니다.");
+}
+
+/// 출차 요청 → 출차 완료 (사전 정산)
+void handlePrePayment(BuildContext context, String plateNumber, String area, String location) {
+  final movementPlate = context.read<MovementPlate>();
+  final plateState = context.read<PlateState>();
+
+  movementPlate.setDepartureRequested(
+    plateNumber,
+    area,
+    plateState,
+    location,
+  );
+
+  showSnackbar(context, "사전 정산이 처리되었습니다.");
 }
