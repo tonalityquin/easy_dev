@@ -7,7 +7,7 @@ import '../../states/plate/movement_plate.dart';
 import '../../states/area/area_state.dart'; // AreaState 상태 관리
 import '../../states/user/user_state.dart';
 import '../../widgets/container/plate_container.dart'; // 번호판 데이터를 표시하는 위젯
-import '../../widgets/dialog/parking_request_delete_dialog.dart';
+import '../../widgets/dialog/parking_request_status_dialog.dart';
 import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바
 import '../../widgets/dialog/plate_search_dialog.dart';
 import '../../utils/show_snackbar.dart';
@@ -214,11 +214,11 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                         child: Transform.scale(
                           scaleX: _isSorted ? -1 : 1,
                           child: Icon(
-                            isPlateSelected ? Icons.delete : Icons.sort,
+                            isPlateSelected ? Icons.settings : Icons.sort, // 🔁 상태 수정 아이콘
                           ),
                         ),
                       ),
-                      label: isPlateSelected ? '입차 취소' : (_isSorted ? '최신순' : '오래된순'),
+                      label: isPlateSelected ? '상태 수정' : (_isSorted ? '최신순' : '오래된순'),
                     ),
                   ],
                   onTap: (index) {
@@ -245,24 +245,39 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                       _handleParkingCompleted(context);
                     } else if (index == 2) {
                       if (isPlateSelected) {
-                        showDialog(
-                          context: context,
-                          builder: (context) {
-                            return ParkingRequestDeleteDialog(
-                              onConfirm: () {
-                                context.read<DeletePlate>().deletePlateFromParkingRequest(
-                                      selectedPlate.plateNumber,
-                                      selectedPlate.area,
-                                    );
-                                showSnackbar(context, "삭제 완료: ${selectedPlate.plateNumber}");
-                              },
-                            );
-                          },
-                        );
+                        final selectedPlate = plateState.getSelectedPlate('parking_requests', userName);
+                        if (selectedPlate != null) {
+                          showDialog(
+                            context: context,
+                            builder: (context) {
+                              return ParkingRequestStatusDialog(
+                                plateNumber: selectedPlate.plateNumber,
+                                area: selectedPlate.area,
+                                onCancelEntryRequest: () {
+                                  context.read<DeletePlate>().deletePlateFromParkingRequest(
+                                    selectedPlate.plateNumber,
+                                    selectedPlate.area,
+                                  );
+                                  showSnackbar(context, "입차 요청이 취소되었습니다: ${selectedPlate.plateNumber}");
+                                },
+                                onPrePayment: () {
+                                  handleEntryDepartureCompleted(
+                                    context,
+                                    selectedPlate.plateNumber,
+                                    selectedPlate.area,
+                                    selectedPlate.location,
+                                  );
+                                },
+                                onDelete: () {}, // ❗삭제는 현재는 사용되지 않지만 인터페이스 유지
+                              );
+                            },
+                          );
+                        }
                       } else {
                         _toggleSortIcon();
                       }
                     }
+
                   });
             },
           ),
