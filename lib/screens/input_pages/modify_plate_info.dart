@@ -17,6 +17,7 @@ import 'package:easydev/widgets/dialog/camera_preview_dialog.dart';
 import 'package:easydev/widgets/dialog/region_picker_dialog.dart';
 import 'package:easydev/models/plate_model.dart';
 import 'package:easydev/utils/fullscreen_viewer.dart';
+import 'package:easydev/utils/button/custom_adjustment_dropdown.dart';
 
 import 'package:easydev/services/modify_plate_service.dart';
 
@@ -27,7 +28,6 @@ import 'package:easydev/utils/button/animated_action_button.dart';
 import 'package:easydev/states/plate/plate_state.dart';
 
 import 'package:easydev/models/adjustment_model.dart';
-
 
 class ModifyPlateInfo extends StatefulWidget {
   final PlateModel plate; // ✅ plate 파라미터 추가
@@ -213,15 +213,14 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
 
     await showDialog(
       context: context,
-      builder: (context) =>
-          CameraPreviewDialog(
-            onImageCaptured: (image) {
-              setState(() {
-                _capturedImages.add(image);
-                debugPrint('📸 이미지 1장이 실시간 반영됨: ${image.path}');
-              });
-            },
-          ),
+      builder: (context) => CameraPreviewDialog(
+        onImageCaptured: (image) {
+          setState(() {
+            _capturedImages.add(image);
+            debugPrint('📸 이미지 1장이 실시간 반영됨: ${image.path}');
+          });
+        },
+      ),
     );
 
     debugPrint('📸 다이얼로그 닫힘 → dispose() 호출 전');
@@ -260,6 +259,14 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
   }
 
   Future<void> _handleAction() async {
+    final adjustmentList = context.read<AdjustmentState>().adjustments;
+
+    // ✅ 정산 타입이 존재하는데 선택 안 한 경우 → 중단 + 스낵바 알림
+    if (adjustmentList.isNotEmpty && (selectedAdjustment == null || selectedAdjustment!.isEmpty)) {
+      showSnackbar(context, '정산 유형을 선택해주세요');
+      return;
+    }
+
     final service = ModifyPlateService(
       context: context,
       capturedImages: _capturedImages,
@@ -280,7 +287,6 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
     );
 
     final plateNumber = service.composePlateNumber();
-
     final oldLocation = widget.plate.location;
     final oldAdjustmentType = widget.plate.adjustmentType;
 
@@ -307,8 +313,8 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
         action: locationChanged && adjustmentChanged
             ? '위치/할인 수정'
             : locationChanged
-            ? '위치 수정'
-            : '할인 수정',
+                ? '위치 수정'
+                : '할인 수정',
       );
     }
 
@@ -325,7 +331,6 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
         imageUrls: mergedImageUrls,
       );
 
-      // 🔥 PlateState에 수정된 plate 반영
       final plateState = context.read<PlateState>();
       await plateState.updatePlateLocally(widget.collectionKey, updatedPlate);
 
@@ -335,8 +340,6 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
     clearInput();
     _clearLocation();
   }
-
-
 
   void _selectParkingLocation() {
     showDialog(
@@ -493,52 +496,46 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
                     child: _capturedImages.isEmpty && _existingImageUrls.isEmpty
                         ? const Center(child: Text('촬영된 사진 없음'))
                         : ListView(
-                      scrollDirection: Axis.horizontal,
-                      children: [
-                        // ✅ 기존 GCS 이미지 (URL)
-                        ..._existingImageUrls
-                            .asMap()
-                            .entries
-                            .map((entry) {
-                          final index = entry.key;
-                          final url = entry.value;
-                          return GestureDetector(
-                            onTap: () => showFullScreenImageViewerFromUrls(context, _existingImageUrls, index),
-                            child: Padding(
-                              padding: const EdgeInsets.all(4.0),
-                              child: Image.network(
-                                url,
-                                width: 100,
-                                height: 100,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) =>
-                                const Icon(Icons.broken_image, size: 50),
-                              ),
-                            ),
-                          );
-                        }),
-                        // ✅ 새로 촬영한 로컬 이미지 (File)
-                        ..._capturedImages
-                            .asMap()
-                            .entries
-                            .map((entry) {
-                          final index = entry.key;
-                          final image = entry.value;
-                          return GestureDetector(
-                            onTap: () => showFullScreenImageViewer(context, _capturedImages, index),
-                            child: Padding(
-                              padding: const EdgeInsets.all(4.0),
-                              child: Image.file(
-                                File(image.path),
-                                width: 100,
-                                height: 100,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                          );
-                        }),
-                      ],
-                    ),
+                            scrollDirection: Axis.horizontal,
+                            children: [
+                              // ✅ 기존 GCS 이미지 (URL)
+                              ..._existingImageUrls.asMap().entries.map((entry) {
+                                final index = entry.key;
+                                final url = entry.value;
+                                return GestureDetector(
+                                  onTap: () => showFullScreenImageViewerFromUrls(context, _existingImageUrls, index),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(4.0),
+                                    child: Image.network(
+                                      url,
+                                      width: 100,
+                                      height: 100,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) =>
+                                          const Icon(Icons.broken_image, size: 50),
+                                    ),
+                                  ),
+                                );
+                              }),
+                              // ✅ 새로 촬영한 로컬 이미지 (File)
+                              ..._capturedImages.asMap().entries.map((entry) {
+                                final index = entry.key;
+                                final image = entry.value;
+                                return GestureDetector(
+                                  onTap: () => showFullScreenImageViewer(context, _capturedImages, index),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(4.0),
+                                    child: Image.file(
+                                      File(image.path),
+                                      width: 100,
+                                      height: 100,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                );
+                              }),
+                            ],
+                          ),
                   ),
                   const SizedBox(height: 32.0),
                   const Text(
@@ -547,24 +544,46 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
                   ),
                   const SizedBox(height: 8.0),
                   FutureBuilder<bool>(
-                    future: _refreshAdjustments().timeout(Duration(seconds: 3), onTimeout: () => false),
+                    future: _refreshAdjustments().timeout(const Duration(seconds: 3), onTimeout: () => false),
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 24),
+                          child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                        );
                       }
-                      if (snapshot.data == false) {
-                        return const Text('정산 유형 정보를 불러오지 못했습니다.');
+
+                      if (!snapshot.hasData || snapshot.data == false) {
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: Text(
+                            '정산 유형 정보를 불러오지 못했습니다.',
+                            style: TextStyle(color: Colors.red),
+                          ),
+                        );
                       }
+
                       final adjustmentState = context.watch<AdjustmentState>();
                       final adjustmentList = adjustmentState.adjustments;
+
                       if (adjustmentList.isEmpty) {
-                        return const Text('등록된 정산 유형이 없습니다.');
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: Text(
+                            '등록된 정산 유형이 없습니다.',
+                            style: TextStyle(color: Colors.green),
+                          ),
+                        );
                       }
-                      return DropdownButtonFormField<String>(
-                        value: selectedAdjustment,
+
+                      final dropdownItems = adjustmentList.map((adj) => adj.countType).toList();
+
+                      return CustomAdjustmentDropdown(
+                        items: dropdownItems,
+                        selectedValue: selectedAdjustment,
                         onChanged: (newValue) {
                           final adjustment = adjustmentList.firstWhere(
-                                (adj) => adj.countType == newValue,
+                            (adj) => adj.countType == newValue,
                             orElse: () => AdjustmentModel(
                               id: 'empty',
                               countType: '',
@@ -579,7 +598,6 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
                           setState(() {
                             selectedAdjustment = newValue;
 
-                            // 빈 값이면 변경하지 않음
                             if (adjustment.countType.isNotEmpty) {
                               selectedBasicStandard = adjustment.basicStandard;
                               selectedBasicAmount = adjustment.basicAmount;
@@ -592,16 +610,6 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
                             }
                           });
                         },
-                        items: adjustmentList.map((adj) {
-                          return DropdownMenuItem<String>(
-                            value: adj.countType,
-                            child: Text(adj.countType),
-                          );
-                        }).toList(),
-                        decoration: const InputDecoration(
-                          labelText: '정산 유형 선택',
-                          border: OutlineInputBorder(),
-                        ),
                       );
                     },
                   ),
@@ -614,24 +622,24 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
                   statuses.isEmpty
                       ? const Text('등록된 차량 상태가 없습니다.')
                       : Wrap(
-                    spacing: 8.0,
-                    children: List.generate(statuses.length, (index) {
-                      return ChoiceChip(
-                        label: Text(statuses[index]),
-                        selected: isSelected[index],
-                        onSelected: (selected) {
-                          setState(() {
-                            isSelected[index] = selected;
-                            if (selected) {
-                              selectedStatuses.add(statuses[index]);
-                            } else {
-                              selectedStatuses.remove(statuses[index]);
-                            }
-                          });
-                        },
-                      );
-                    }),
-                  ),
+                          spacing: 8.0,
+                          children: List.generate(statuses.length, (index) {
+                            return ChoiceChip(
+                              label: Text(statuses[index]),
+                              selected: isSelected[index],
+                              onSelected: (selected) {
+                                setState(() {
+                                  isSelected[index] = selected;
+                                  if (selected) {
+                                    selectedStatuses.add(statuses[index]);
+                                  } else {
+                                    selectedStatuses.remove(statuses[index]);
+                                  }
+                                });
+                              },
+                            );
+                          }),
+                        ),
                 ],
               ),
             ),
@@ -642,20 +650,20 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
         showKeypad: showKeypad,
         keypad: activeController == controller3digit
             ? NumKeypad(
-          controller: controller3digit,
-          maxLength: 3,
-          onComplete: () => _setActiveController(controller1digit),
-        )
+                controller: controller3digit,
+                maxLength: 3,
+                onComplete: () => _setActiveController(controller1digit),
+              )
             : activeController == controller1digit
-            ? KorKeypad(
-          controller: controller1digit,
-          onComplete: () => _setActiveController(controller4digit),
-        )
-            : NumKeypad(
-          controller: controller4digit,
-          maxLength: 4,
-          onComplete: () => setState(() => showKeypad = false),
-        ),
+                ? KorKeypad(
+                    controller: controller1digit,
+                    onComplete: () => _setActiveController(controller4digit),
+                  )
+                : NumKeypad(
+                    controller: controller4digit,
+                    maxLength: 4,
+                    onComplete: () => setState(() => showKeypad = false),
+                  ),
         actionButton: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -669,7 +677,8 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
                 ),
                 const SizedBox(width: 10),
                 // ✅ 1. 주차 구역 선택 버튼 (초기화 제거)
-                Expanded( // ✅ 폭 동일하게 설정
+                Expanded(
+                  // ✅ 폭 동일하게 설정
                   child: AnimatedParkingButton(
                     isLocationSelected: true,
                     onPressed: _selectParkingLocation,

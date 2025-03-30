@@ -222,6 +222,13 @@ class _Input3DigitState extends State<Input3Digit> {
     final plateNumber = _buildPlateNumber();
     final area = context.read<AreaState>().currentArea;
     final userName = context.read<UserState>().name;
+    final adjustmentList = context.read<AdjustmentState>().adjustments;
+
+    // ✅ 정산 타입이 있을 경우, 선택하지 않았으면 경고 후 중단
+    if (adjustmentList.isNotEmpty && selectedAdjustment == null) {
+      showSnackbar(context, '정산 유형을 선택해주세요');
+      return;
+    }
 
     final uploadedImageUrls = await InputPlateService.uploadCapturedImages(
       _capturedImages,
@@ -230,14 +237,13 @@ class _Input3DigitState extends State<Input3Digit> {
       userName,
     );
 
-
     await InputPlateService.savePlateEntry(
       context: context,
       plateNumber: plateNumber,
       location: locationController.text,
       isLocationSelected: isLocationSelected,
       imageUrls: uploadedImageUrls,
-      selectedAdjustment: selectedAdjustment,
+      selectedAdjustment: selectedAdjustment, // ✅ 선택 안 되어 있으면 null 전달됨
       selectedStatuses: selectedStatuses,
       basicStandard: selectedBasicStandard,
       basicAmount: selectedBasicAmount,
@@ -248,6 +254,7 @@ class _Input3DigitState extends State<Input3Digit> {
 
     _resetInputForm();
   }
+
 
   void _selectParkingLocation() {
     showDialog(
