@@ -12,6 +12,8 @@ import '../../widgets/dialog/plate_search_dialog.dart';
 import '../../widgets/dialog/adjustment_completed_confirm_dialog.dart';
 import '../../utils/show_snackbar.dart';
 import '../input_pages/modify_plate_info.dart';
+import '../mini_calendars/mini_calendar.dart';
+
 
 class DepartureCompletedPage extends StatefulWidget {
   const DepartureCompletedPage({super.key});
@@ -230,21 +232,11 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                       ),
                     );
                   } else {
-                    // 아직 기능 미구현: 안내 다이얼로그
-                    showDialog(
-                      context: context,
-                      builder: (context) {
-                        return const AlertDialog(
-                          title: Text('달력 기능 안내'),
-                          content: Text('달력 페이지 기능은 곧 구현될 예정입니다.'),
-                          actions: [
-                            TextButton(
-                              onPressed: null,
-                              child: Text('확인'),
-                            ),
-                          ],
-                        );
-                      },
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const MiniCalendarPage(),
+                      ),
                     );
                   }
                 }
