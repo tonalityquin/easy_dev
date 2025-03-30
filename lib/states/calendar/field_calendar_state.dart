@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-class MiniCalendarState extends ChangeNotifier {
+class FieldCalendarState extends ChangeNotifier {
   DateTime currentMonth = DateTime(DateTime.now().year, DateTime.now().month);
   DateTime selectedDate = DateTime.now();
 

@@ -12,7 +12,7 @@ import '../../widgets/dialog/plate_search_dialog.dart';
 import '../../widgets/dialog/adjustment_completed_confirm_dialog.dart';
 import '../../utils/show_snackbar.dart';
 import '../input_pages/modify_plate_info.dart';
-import '../mini_calendars/mini_calendar.dart';
+import '../mini_calendars/field_calendar.dart';
 
 
 class DepartureCompletedPage extends StatefulWidget {
@@ -235,7 +235,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const MiniCalendarPage(),
+                        builder: (_) => const FieldCalendarPage(),
                       ),
                     );
                   }

@@ -1,27 +1,26 @@
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-import '../../states/calendar/mini_calendar_state.dart';
+import '../../states/calendar/field_calendar_state.dart';
+import '../../widgets/dialog/calendar/calendar_dialogs.dart';
 import '../../utils/show_snackbar.dart';
 
-class MiniCalendarPage extends StatefulWidget {
-  const MiniCalendarPage({super.key});
+class FieldCalendarPage extends StatefulWidget {
+  const FieldCalendarPage({super.key});
 
   @override
-  State<MiniCalendarPage> createState() => _MiniCalendarPageState();
+  State<FieldCalendarPage> createState() => _FieldCalendarPage();
 }
 
-class _MiniCalendarPageState extends State<MiniCalendarPage> {
-  late MiniCalendarState calendar;
+class _FieldCalendarPage extends State<FieldCalendarPage> {
+  late FieldCalendarState calendar;
   Map<String, String> _memoMap = {};
   String? _memoKey;
 
   @override
   void initState() {
     super.initState();
-    calendar = MiniCalendarState();
+    calendar = FieldCalendarState();
     _initUserMemoKey();
   }
 
@@ -67,7 +66,7 @@ class _MiniCalendarPageState extends State<MiniCalendarPage> {
         elevation: 1,
         centerTitle: true,
         title: const Text(
-          "달력 기능 테스트 페이지",
+          "직원용 달력 페이지",
           style: TextStyle(color: Colors.grey, fontSize: 16),
         ),
       ),
@@ -230,74 +229,32 @@ class _MiniCalendarPageState extends State<MiniCalendarPage> {
   }
 
   void _showMemoDialog() {
-    String tempMemo = '';
     final key = calendar.dateKey(calendar.selectedDate);
 
-    showDialog(
+    showAddMemoDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('메모 입력'),
-        content: TextField(
-          autofocus: true,
-          maxLines: 3,
-          onChanged: (value) => tempMemo = value,
-          decoration: const InputDecoration(
-            hintText: '메모를 입력하세요',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
-          TextButton(
-            onPressed: () {
-              setState(() {
-                _memoMap[key] = tempMemo;
-              });
-              _saveMemoData();
-              Navigator.pop(context);
-              showSnackbar(context, '메모가 저장되었습니다!');
-            },
-            child: const Text('완료'),
-          ),
-        ],
-      ),
+      onSave: (tempMemo) {
+        setState(() {
+          _memoMap[key] = tempMemo;
+        });
+        _saveMemoData();
+      },
     );
   }
 
   void _showEditMemoDialog() {
     final key = calendar.dateKey(calendar.selectedDate);
-    String tempMemo = _memoMap[key] ?? '';
-    final controller = TextEditingController(text: tempMemo);
+    final currentMemo = _memoMap[key] ?? '';
 
-    showDialog(
+    showEditMemoDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('메모 수정'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLines: 3,
-          onChanged: (value) => tempMemo = value,
-          decoration: const InputDecoration(
-            hintText: '메모를 수정하세요',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
-          TextButton(
-            onPressed: () {
-              setState(() {
-                _memoMap[key] = tempMemo;
-              });
-              _saveMemoData();
-              Navigator.pop(context);
-              showSnackbar(context, '메모가 수정되었습니다!');
-            },
-            child: const Text('저장'),
-          ),
-        ],
-      ),
+      initialMemo: currentMemo,
+      onSave: (tempMemo) {
+        setState(() {
+          _memoMap[key] = tempMemo;
+        });
+        _saveMemoData();
+      },
     );
   }
 

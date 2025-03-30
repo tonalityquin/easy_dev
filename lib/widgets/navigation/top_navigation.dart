@@ -60,23 +60,27 @@ class TopNavigation extends StatelessWidget implements PreferredSizeWidget {
     final areas = areaState.availableAreas;
     String tempSelected = areaState.currentArea;
 
-    showDialog(
+    showGeneralDialog(
       context: context,
       barrierDismissible: true,
-      builder: (context) {
-        return Dialog(
-          insetPadding: EdgeInsets.zero, // ✅ 여백 제거
+      barrierLabel: "지역 선택",
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (_, __, ___) {
+        return Scaffold(
           backgroundColor: Colors.white,
-          child: Scaffold(
-            appBar: AppBar(
-              backgroundColor: Colors.white,
-              elevation: 0,
-              title: const Text('', style: TextStyle(color: Colors.black)),
-              centerTitle: true,
-              iconTheme: const IconThemeData(color: Colors.black),
-            ),
-            body: Column(
+          body: SafeArea(
+            child: Column(
               children: [
+                const SizedBox(height: 24),
+                const Text(
+                  '지역 선택',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black,
+                  ),
+                ),
+                const SizedBox(height: 16),
                 Expanded(
                   child: CupertinoPicker(
                     scrollController: FixedExtentScrollController(
@@ -90,27 +94,49 @@ class TopNavigation extends StatelessWidget implements PreferredSizeWidget {
                         .map((area) => Center(
                       child: Text(
                         area,
-                        style: const TextStyle(fontSize: 24),
+                        style: const TextStyle(fontSize: 18),
                       ),
                     ))
                         .toList(),
                   ),
                 ),
-                const Divider(height: 0),
+                const Divider(height: 1),
                 Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
+                  padding: const EdgeInsets.only(bottom: 40, top: 20),
+                  child: Center(
+                    child: GestureDetector(
+                      onTap: () {
                         Navigator.of(context).pop();
                         areaState.updateArea(tempSelected);
                         plateState.syncWithAreaState();
                       },
-                      child: const Text('확인', style: TextStyle(fontSize: 16)),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(30),
+                          border: Border.all(color: Colors.green, width: 2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black12,
+                              blurRadius: 8,
+                              offset: Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: const Text(
+                          '확인',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.green,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                )
+                ),
               ],
             ),
           ),
@@ -118,6 +144,7 @@ class TopNavigation extends StatelessWidget implements PreferredSizeWidget {
       },
     );
   }
+
 
 
   String _getSelectedArea(AreaState areaState) {
