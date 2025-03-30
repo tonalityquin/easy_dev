@@ -44,7 +44,7 @@ class PlateContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final filterPlate = context.watch<FilterPlate>(); // ✅ 검색어 상태 가져오기
+    final filterPlate = context.watch<FilterPlate>();
     final searchQuery = filterPlate.searchQuery;
     final filteredData = _filterData(data, searchQuery);
 
@@ -68,22 +68,23 @@ class PlateContainer extends StatelessWidget {
             ? int.tryParse(item.basicStandard as String) ?? 0
             : (item.basicStandard ?? 0);
         int basicAmount =
-            (item.basicAmount is String) ? int.tryParse(item.basicAmount as String) ?? 0 : (item.basicAmount ?? 0);
+        (item.basicAmount is String) ? int.tryParse(item.basicAmount as String) ?? 0 : (item.basicAmount ?? 0);
         int addStandard =
-            (item.addStandard is String) ? int.tryParse(item.addStandard as String) ?? 0 : (item.addStandard ?? 0);
+        (item.addStandard is String) ? int.tryParse(item.addStandard as String) ?? 0 : (item.addStandard ?? 0);
         int addAmount =
-            (item.addAmount is String) ? int.tryParse(item.addAmount as String) ?? 0 : (item.addAmount ?? 0);
+        (item.addAmount is String) ? int.tryParse(item.addAmount as String) ?? 0 : (item.addAmount ?? 0);
 
         int currentFee = calculateParkingFee(
-          entryTimeInMinutes: item.requestTime.hour * 60 + item.requestTime.minute,
-          currentTimeInMinutes: DateTime.now().hour * 60 + DateTime.now().minute,
+          entryTimeInSeconds: item.requestTime.millisecondsSinceEpoch ~/ 1000,
+          currentTimeInSeconds: DateTime.now().millisecondsSinceEpoch ~/ 1000,
           basicStandard: basicStandard,
           basicAmount: basicAmount,
           addStandard: addStandard,
           addAmount: addAmount,
         ).toInt();
 
-        int elapsedMinutes = DateTime.now().difference(item.requestTime).inMinutes;
+        final duration = DateTime.now().difference(item.requestTime);
+        final elapsedText = "${duration.inMinutes}분 ${duration.inSeconds % 60}초";
 
         return Column(
           children: [
@@ -96,20 +97,18 @@ class PlateContainer extends StatelessWidget {
               midRightText: CustomDateUtils.formatTimeForUI(item.requestTime),
               bottomLeftLeftText: item.statusList.isNotEmpty ? item.statusList.join(", ") : "주의사항 없음",
               bottomLeftCenterText: "주의사항 수기",
-              bottomRightText: "경과 시간: ${elapsedMinutes}분",
+              bottomRightText: "$elapsedText",
               isSelected: isSelected,
               onTap: () {
                 final plateState = Provider.of<PlateState>(context, listen: false);
 
-                // 🔐 다른 사용자가 이미 선택한 경우
                 if (item.isSelected && item.selectedBy != userName) {
                   showSnackbar(context, "⚠️ 이미 다른 사용자가 선택한 번호판입니다.");
                   return;
                 }
 
-                // 🚫 사용자가 이미 다른 번호판 선택 중인 경우
                 final alreadySelected = data.any(
-                  (p) => p.isSelected && p.selectedBy == userName && p.id != item.id,
+                      (p) => p.isSelected && p.selectedBy == userName && p.id != item.id,
                 );
 
                 if (alreadySelected && !item.isSelected) {
@@ -117,7 +116,6 @@ class PlateContainer extends StatelessWidget {
                   return;
                 }
 
-                // ✅ 조건 만족 시 선택 처리
                 plateState.toggleIsSelected(
                   collection: collection,
                   plateNumber: item.plateNumber,

@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../utils/show_snackbar.dart';
-import '../../../widgets/navigation/secondary_role_navigation.dart';
 import '../../../widgets/navigation/secondary_mini_navigation.dart';
 import '../../../states/user/user_state.dart';
 
@@ -67,9 +66,7 @@ class DashBoard extends StatelessWidget {
     final isWorking = userState.isWorking;
     final label = isWorking ? '퇴근하기' : '출근하기';
     final icon = isWorking ? Icons.logout : Icons.login;
-    final colors = isWorking
-        ? [Colors.redAccent, Colors.deepOrange]
-        : [Colors.green.shade400, Colors.teal];
+    final colors = isWorking ? [Colors.redAccent, Colors.deepOrange] : [Colors.green.shade400, Colors.teal];
 
     return InkWell(
       onTap: () => _handleWorkStatus(userState),
@@ -101,6 +98,53 @@ class DashBoard extends StatelessWidget {
               Text(
                 label,
                 style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.1,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 🔹 휴게 인증 버튼
+  Widget _buildBreakButton(BuildContext context) {
+    return InkWell(
+      onTap: () {
+        showSnackbar(context, '휴게 사용 확인됐습니다'); // 추후 userState에 연결 가능
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        height: 55,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: const LinearGradient(
+            colors: [Color(0xFF90CAF9), Color(0xFF42A5F5)], // 파란 계열
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 6,
+              offset: Offset(0, 3),
+            ),
+          ],
+        ),
+        child: const Center(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.coffee, color: Colors.white),
+              SizedBox(width: 8),
+              Text(
+                '휴게 사용 확인',
+                style: TextStyle(
                   color: Colors.white,
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -164,7 +208,6 @@ class DashBoard extends StatelessWidget {
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 16),
-
                     Card(
                       elevation: 4,
                       shape: RoundedRectangleBorder(
@@ -184,9 +227,10 @@ class DashBoard extends StatelessWidget {
                         ),
                       ),
                     ),
-
                     const SizedBox(height: 32),
-                    _buildWorkButton(userState, context),
+                    _buildBreakButton(context), // 🔹 추가된 휴게시작 버튼
+                    const SizedBox(height: 16),
+                    _buildWorkButton(userState, context), // 🔹 기존 퇴근/출근 버튼
                     const SizedBox(height: 32),
                   ],
                 ),
