@@ -26,4 +26,12 @@ class MiniCalendarState extends ChangeNotifier {
   }
 
   String get formattedMonth => "${currentMonth.year}년 ${currentMonth.month}월";
+
+  String dateKey(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
+  String formatDate(DateTime date) {
+    return '${date.year}년 ${date.month}월 ${date.day}일';
+  }
 }

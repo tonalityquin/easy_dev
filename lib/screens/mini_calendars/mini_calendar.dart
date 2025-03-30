@@ -1,9 +1,10 @@
-import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../states/calendar/mini_calendar_state.dart';
 import '../../utils/show_snackbar.dart';
-import '../../states/calendar/calendar_state.dart';
 
 class MiniCalendarPage extends StatefulWidget {
   const MiniCalendarPage({super.key});
@@ -28,8 +29,8 @@ class _MiniCalendarPageState extends State<MiniCalendarPage> {
     final prefs = await SharedPreferences.getInstance();
     final phone = prefs.getString('phone') ?? 'unknown';
     final area = prefs.getString('area') ?? 'unknown';
-
     final key = 'memoMap_${phone}_$area';
+
     setState(() {
       _memoKey = key;
     });
@@ -57,7 +58,7 @@ class _MiniCalendarPageState extends State<MiniCalendarPage> {
 
   @override
   Widget build(BuildContext context) {
-    final selectedMemo = _memoMap[_dateKey(calendar.selectedDate)];
+    final selectedMemo = _memoMap[calendar.dateKey(calendar.selectedDate)];
 
     return Scaffold(
       appBar: AppBar(
@@ -77,9 +78,7 @@ class _MiniCalendarPageState extends State<MiniCalendarPage> {
             _buildMonthNavigation(),
             _buildDayHeaders(context),
             _buildDateGrid(context),
-
             const SizedBox(height: 16),
-
             TextField(
               readOnly: true,
               controller: TextEditingController(text: selectedMemo ?? ''),
@@ -89,23 +88,39 @@ class _MiniCalendarPageState extends State<MiniCalendarPage> {
                 border: OutlineInputBorder(),
               ),
             ),
-
             const SizedBox(height: 16),
-
             Wrap(
               spacing: 8,
               runSpacing: 8,
               alignment: WrapAlignment.center,
               children: [
                 ElevatedButton(
-                  onPressed: _showMemoDialog,
-                  child: const Text('메모 추가'),
+                  onPressed: selectedMemo == null || selectedMemo.isEmpty ? _showMemoDialog : _showEditMemoDialog,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: selectedMemo == null || selectedMemo.isEmpty ? Colors.white : Colors.grey.shade200,
+                    foregroundColor: selectedMemo == null || selectedMemo.isEmpty ? Colors.black : Colors.blue,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    side: selectedMemo == null || selectedMemo.isEmpty
+                        ? const BorderSide(color: Colors.grey)
+                        : BorderSide.none,
+                  ),
+                  child: Text(
+                    selectedMemo == null || selectedMemo.isEmpty ? '메모 추가' : '메모 수정',
+                    style: const TextStyle(fontSize: 15),
+                  ),
                 ),
                 if (selectedMemo != null && selectedMemo.isNotEmpty)
                   ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
                     onPressed: _deleteMemo,
-                    child: const Text('삭제', style: TextStyle(color: Colors.white)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.redAccent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    child: const Text('삭제', style: TextStyle(fontSize: 15)),
                   ),
               ],
             ),
@@ -140,7 +155,6 @@ class _MiniCalendarPageState extends State<MiniCalendarPage> {
 
   Widget _buildDayHeaders(BuildContext context) {
     const days = ['일', '월', '화', '수', '목', '금', '토'];
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Row(
@@ -160,7 +174,6 @@ class _MiniCalendarPageState extends State<MiniCalendarPage> {
     );
   }
 
-
   Widget _buildDateGrid(BuildContext context) {
     final firstDay = DateTime(calendar.currentMonth.year, calendar.currentMonth.month, 1);
     final firstWeekday = firstDay.weekday % 7;
@@ -178,14 +191,14 @@ class _MiniCalendarPageState extends State<MiniCalendarPage> {
         final day = index - firstWeekday + 1;
         final currentDate = DateTime(calendar.currentMonth.year, calendar.currentMonth.month, day);
         final isSelected = calendar.isSelected(currentDate);
-        final hasMemo = _memoMap.containsKey(_dateKey(currentDate));
+        final hasMemo = _memoMap.containsKey(calendar.dateKey(currentDate));
 
         return GestureDetector(
           onTap: () {
             setState(() {
               calendar.selectDate(currentDate);
             });
-            showSnackbar(context, '선택된 날짜: ${_formatDate(currentDate)}');
+            showSnackbar(context, '선택된 날짜: ${calendar.formatDate(currentDate)}');
           },
           child: Container(
             margin: const EdgeInsets.all(4),
@@ -206,8 +219,7 @@ class _MiniCalendarPageState extends State<MiniCalendarPage> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  if (hasMemo)
-                    const Icon(Icons.push_pin, size: 14),
+                  if (hasMemo) const Icon(Icons.push_pin, size: 14),
                 ],
               ),
             ),
@@ -219,7 +231,7 @@ class _MiniCalendarPageState extends State<MiniCalendarPage> {
 
   void _showMemoDialog() {
     String tempMemo = '';
-    final key = _dateKey(calendar.selectedDate);
+    final key = calendar.dateKey(calendar.selectedDate);
 
     showDialog(
       context: context,
@@ -235,11 +247,8 @@ class _MiniCalendarPageState extends State<MiniCalendarPage> {
           ),
         ),
         actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('취소'),
-          ),
-          ElevatedButton(
             onPressed: () {
               setState(() {
                 _memoMap[key] = tempMemo;
@@ -255,20 +264,49 @@ class _MiniCalendarPageState extends State<MiniCalendarPage> {
     );
   }
 
+  void _showEditMemoDialog() {
+    final key = calendar.dateKey(calendar.selectedDate);
+    String tempMemo = _memoMap[key] ?? '';
+    final controller = TextEditingController(text: tempMemo);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('메모 수정'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: 3,
+          onChanged: (value) => tempMemo = value,
+          decoration: const InputDecoration(
+            hintText: '메모를 수정하세요',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _memoMap[key] = tempMemo;
+              });
+              _saveMemoData();
+              Navigator.pop(context);
+              showSnackbar(context, '메모가 수정되었습니다!');
+            },
+            child: const Text('저장'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _deleteMemo() {
-    final key = _dateKey(calendar.selectedDate);
+    final key = calendar.dateKey(calendar.selectedDate);
     setState(() {
       _memoMap.remove(key);
     });
     _saveMemoData();
     showSnackbar(context, '메모가 삭제되었습니다');
-  }
-
-  String _dateKey(DateTime date) {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-  }
-
-  String _formatDate(DateTime date) {
-    return '${date.year}년 ${date.month}월 ${date.day}일';
   }
 }
