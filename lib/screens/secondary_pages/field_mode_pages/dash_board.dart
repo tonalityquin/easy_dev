@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart'; // Provider 사용
-import 'dart:io'; // 앱 종료를 위한 패키지 추가
+import 'package:provider/provider.dart';
+import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../utils/show_snackbar.dart';
-import '../../../widgets/navigation/secondary_role_navigation.dart'; // 상단 내비게이션 바
-import '../../../widgets/navigation/secondary_mini_navigation.dart'; // 하단 내비게이션 바
-import '../../../states/user/user_state.dart'; // 사용자 상태 가져오기
+import '../../../widgets/navigation/secondary_role_navigation.dart';
+import '../../../widgets/navigation/secondary_mini_navigation.dart';
+import '../../../states/user/user_state.dart';
 
 class DashBoard extends StatelessWidget {
   const DashBoard({super.key});
@@ -14,93 +14,183 @@ class DashBoard extends StatelessWidget {
   /// 🔹 출근 / 퇴근 처리
   Future<void> _handleWorkStatus(UserState userState) async {
     if (userState.isWorking) {
-      await userState.isHeWorking(); // Firestore에서 출근 상태 해제 (isWorking = false)
-
-      // 🔹 Firestore 업데이트 확인을 위해 1초 대기
+      await userState.isHeWorking();
       await Future.delayed(const Duration(seconds: 1));
-
-      exit(0); // 🔹 Firestore 반영 후 앱 종료
+      exit(0);
     } else {
-      userState.isHeWorking(); // 🔹 출근 상태 변경
+      await userState.isHeWorking();
     }
   }
 
   /// 🔹 로그아웃 처리
   Future<void> _logout(BuildContext context) async {
     try {
-      print("[DEBUG] 로그아웃 시도");
-
       final userState = Provider.of<UserState>(context, listen: false);
 
-      await userState.isHeWorking(); // 🔹 Firestore에서 isWorking을 false로 설정
-      print("[DEBUG] 사용자 업무 상태(isWorking) 업데이트 완료");
-
-      // 🔹 Firestore 업데이트 확인을 위해 1초 대기
+      await userState.isHeWorking();
       await Future.delayed(const Duration(seconds: 1));
+      await userState.clearUserToPhone();
 
-      await userState.clearUserToPhone(); // 🔹 사용자 데이터 삭제
-      print("[DEBUG] UserState 데이터 삭제 완료");
-
-      // 🔹 SharedPreferences 초기화 (자동 로그인 방지)
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('phone');
       await prefs.remove('area');
-      await prefs.setBool('isLoggedIn', false); // 🔹 자동 로그인 방지를 위해 false 설정
-      print("[DEBUG] SharedPreferences 데이터 삭제 완료");
+      await prefs.setBool('isLoggedIn', false);
 
-      // 🔹 로그인 페이지로 이동
       Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
-      print("[DEBUG] 로그인 페이지로 이동 완료");
     } catch (e) {
-      print("[DEBUG] 로그아웃 중 오류 발생: $e");
       showSnackbar(context, '로그아웃 실패: $e');
     }
 
     SystemChannels.platform.invokeMethod('SystemNavigator.pop');
   }
 
-  /// 🔹 UI 렌더링
+  /// 🔹 사용자 정보 출력
+  Widget _infoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Text(
+            '$label: ',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          Expanded(
+            child: Text(value, overflow: TextOverflow.ellipsis),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 🔹 출근 / 퇴근 버튼
+  Widget _buildWorkButton(UserState userState, BuildContext context) {
+    final isWorking = userState.isWorking;
+    final label = isWorking ? '퇴근하기' : '출근하기';
+    final icon = isWorking ? Icons.logout : Icons.login;
+    final colors = isWorking
+        ? [Colors.redAccent, Colors.deepOrange]
+        : [Colors.green.shade400, Colors.teal];
+
+    return InkWell(
+      onTap: () => _handleWorkStatus(userState),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        height: 55,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: LinearGradient(
+            colors: colors,
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 6,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Center(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: Colors.white),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.1,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const SecondaryRoleNavigation(), // 상단 내비게이션
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        foregroundColor: Colors.black87,
+        title: const Text(
+          '대시보드',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        centerTitle: true,
+        automaticallyImplyLeading: false,
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'logout') {
+                _logout(context);
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem<String>(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    Icon(Icons.logout, color: Colors.redAccent),
+                    SizedBox(width: 8),
+                    Text('로그아웃'),
+                  ],
+                ),
+              ),
+            ],
+            icon: const Icon(Icons.more_vert),
+          )
+        ],
+      ),
       body: Consumer<UserState>(
         builder: (context, userState, _) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  '사용자 정보',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 10),
-                Text('이름: ${userState.name}'),
-                Text('전화번호: ${userState.phone}'),
-                Text('역할: ${userState.role}'),
-                Text('지역: ${userState.area}'),
-                const SizedBox(height: 20),
+          return SafeArea(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 32),
+                    Text(
+                      '사용자 정보',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 16),
 
-                // 🔹 출근 / 퇴근 버튼
-                ElevatedButton(
-                  onPressed: () => _handleWorkStatus(userState),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: userState.isWorking ? Colors.white : Colors.white,
-                  ),
-                  child: Text(userState.isWorking ? '퇴근' : '출근'),
-                ),
+                    Card(
+                      elevation: 4,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      margin: const EdgeInsets.symmetric(vertical: 8),
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _infoRow('이름', userState.name),
+                            _infoRow('전화번호', userState.phone),
+                            _infoRow('역할', userState.role),
+                            _infoRow('지역', userState.area),
+                          ],
+                        ),
+                      ),
+                    ),
 
-                const SizedBox(height: 20),
-
-                // 🔹 로그아웃 버튼
-                ElevatedButton(
-                  onPressed: () => _logout(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                  ),
-                  child: const Text('로그아웃'),
+                    const SizedBox(height: 32),
+                    _buildWorkButton(userState, context),
+                    const SizedBox(height: 32),
+                  ],
                 ),
-              ],
+              ),
             ),
           );
         },
