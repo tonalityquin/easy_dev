@@ -9,7 +9,6 @@ import '../../states/user/user_state.dart';
 import '../../widgets/container/plate_container.dart';
 import '../../widgets/navigation/top_navigation.dart';
 import '../../widgets/dialog/plate_search_dialog.dart';
-import '../../widgets/dialog/parking_location_dialog.dart';
 import '../../widgets/dialog/adjustment_completed_confirm_dialog.dart';
 import '../../utils/show_snackbar.dart';
 import '../input_pages/modify_plate_info.dart';
@@ -27,7 +26,6 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
   bool _isLoading = false;
   bool _isParkingAreaMode = false;
   String? _selectedParkingArea;
-  final TextEditingController _locationController = TextEditingController();
 
   void _showSearchDialog(BuildContext context) {
     showDialog(
@@ -56,31 +54,6 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
     setState(() {
       _isSearchMode = false;
     });
-  }
-
-  void _showParkingAreaDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => ParkingLocationDialog(
-        locationController: _locationController,
-        onLocationSelected: (selectedLocation) {
-          setState(() {
-            _isParkingAreaMode = true;
-            _selectedParkingArea = selectedLocation;
-          });
-          final area = context.read<AreaState>().currentArea;
-          context.read<FilterPlate>().filterByParkingLocation('departure_completed', area, _selectedParkingArea!);
-        },
-      ),
-    );
-  }
-
-  void _resetParkingAreaFilter(BuildContext context) {
-    setState(() {
-      _isParkingAreaMode = false;
-      _selectedParkingArea = null;
-    });
-    context.read<FilterPlate>().clearLocationSearchQuery();
   }
 
   Future<void> _deleteAllData(BuildContext context) async {
@@ -172,16 +145,21 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                 BottomNavigationBarItem(
                   icon: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 300),
-                    transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+                    transitionBuilder: (child, animation) =>
+                        ScaleTransition(scale: animation, child: child),
                     child: isPlateSelected
-                        ? const Icon(Icons.check_circle, key: ValueKey('selected'), color: Colors.green)
-                        : Icon(
-                      _isParkingAreaMode ? Icons.clear : Icons.local_parking,
-                      key: ValueKey(_isParkingAreaMode),
-                      color: _isParkingAreaMode ? Colors.orange : Colors.grey,
+                        ? const Icon(
+                      Icons.check_circle,
+                      key: ValueKey('selected'),
+                      color: Colors.green,
+                    )
+                        : const Icon(
+                      Icons.delete_forever,
+                      key: ValueKey('delete'),
+                      color: Colors.redAccent,
                     ),
                   ),
-                  label: isPlateSelected ? '요금 정산' : (_isParkingAreaMode ? '주차 구역 초기화' : '주차 구역'),
+                  label: isPlateSelected ? '요금 정산' : '전체 삭제',
                 ),
                 BottomNavigationBarItem(
                   icon: AnimatedSwitcher(
@@ -220,17 +198,6 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                       ),
                     );
                   } else {
-                    _isParkingAreaMode ? _resetParkingAreaFilter(context) : _showParkingAreaDialog(context);
-                  }
-                } else if (index == 2) {
-                  if (isPlateSelected) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => PlateLogViewerPage(initialPlateNumber: selectedPlate.plateNumber),
-                      ),
-                    );
-                  } else {
                     final confirm = await showDialog<bool>(
                       context: context,
                       builder: (BuildContext context) {
@@ -253,6 +220,32 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                     if (confirm == true) {
                       await _deleteAllData(context);
                     }
+                  }
+                } else if (index == 2) {
+                  if (isPlateSelected) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => PlateLogViewerPage(initialPlateNumber: selectedPlate.plateNumber),
+                      ),
+                    );
+                  } else {
+                    // 아직 기능 미구현: 안내 다이얼로그
+                    showDialog(
+                      context: context,
+                      builder: (context) {
+                        return const AlertDialog(
+                          title: Text('달력 기능 안내'),
+                          content: Text('달력 페이지 기능은 곧 구현될 예정입니다.'),
+                          actions: [
+                            TextButton(
+                              onPressed: null,
+                              child: Text('확인'),
+                            ),
+                          ],
+                        );
+                      },
+                    );
                   }
                 }
               },

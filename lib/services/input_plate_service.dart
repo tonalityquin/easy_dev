@@ -17,8 +17,6 @@ class InputPlateService {
       ) async {
     final uploader = GCSUploader();
     final List<String> uploadedUrls = [];
-    final now = DateTime.now();
-    final date = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
 
     for (var image in images) {
       final file = File(image.path);

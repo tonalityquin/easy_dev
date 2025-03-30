@@ -59,8 +59,6 @@ class ModifyPlateService {
     final uploadedImageUrls = <String>[];
     final area = context.read<AreaState>().currentArea;
     final user = context.read<UserState>().user;
-    final now = DateTime.now();
-    final date = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
 
     final performedBy = user?.name ?? 'Unknown';
 
