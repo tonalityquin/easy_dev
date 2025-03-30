@@ -8,8 +8,6 @@ import '../../screens/secondary_pages/office_mode_pages/calender.dart';
 import '../../screens/secondary_pages/office_mode_pages/location_management.dart';
 import '../../screens/secondary_pages/office_mode_pages/status_management.dart';
 import '../../screens/secondary_pages/office_mode_pages/user_management.dart';
-import '../../screens/secondary_pages/statistics_mode_pages/calendar_type_statistics.dart';
-import '../../screens/secondary_pages/statistics_mode_pages/graph_type_statistics.dart';
 
 class SecondaryInfo {
   final String title;
@@ -33,6 +31,4 @@ final List<SecondaryInfo> officeModePages = [
   SecondaryInfo('투두 달력', Calendar(), Icon(Icons.calendar_today)),
 ];
 final List<SecondaryInfo> statisticsPages = [
-  SecondaryInfo('달력 타입', CalendarTypeStatistics(), Icon(Icons.calendar_month)),
-  SecondaryInfo('그래프 타입', GraphTypeStatistics(), Icon(Icons.auto_graph_sharp)),
 ];
