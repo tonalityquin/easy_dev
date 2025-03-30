@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../models/plate_model.dart';
 import '../../models/plate_log_model.dart';
 import '../../utils/show_snackbar.dart';
 import '../area/area_state.dart';
 import '../user/user_state.dart';
+import '../plate/plate_state.dart'; // ✅ PlateState import
 import 'log_plate.dart';
 import '../../repositories/plate/plate_repository.dart';
 import 'dart:developer' as dev;
@@ -128,7 +130,7 @@ class ModifyPlate with ChangeNotifier {
         addStandard: addStandard,
         addAmount: addAmount,
         region: region,
-        imageUrls: imageUrls, // ✅ 꼭 포함되어야 함!
+        imageUrls: imageUrls,
       );
 
       await _plateRepository.addOrUpdateDocument(
@@ -137,7 +139,6 @@ class ModifyPlate with ChangeNotifier {
         updatedPlate.toMap(),
       );
 
-      // ✅ 변경 감지 및 로그 기록
       final isLocationChanged = plate.location != location;
       final isAdjustmentChanged = plate.adjustmentType != adjustmentType;
 
@@ -157,8 +158,11 @@ class ModifyPlate with ChangeNotifier {
         dev.log('🗂 변경 내역: ${changes.join(', ')}');
       }
 
-      notifyListeners();
+      // ✅ PlateState 최신화 → 요금 재계산 반영
+      final plateState = context.read<PlateState>();
+      await plateState.fetchPlateData(); // 🔥 강제 fetch
 
+      notifyListeners();
       return true;
     } catch (e) {
       dev.log('❌ 정보 수정 실패: $e');

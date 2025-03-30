@@ -30,7 +30,6 @@ class PlateState extends ChangeNotifier {
   String get currentArea => _areaState.currentArea;
 
   bool _isLoading = true;
-
   bool get isLoading => _isLoading;
 
   void PlateCounts() {
@@ -138,18 +137,18 @@ class PlateState extends ChangeNotifier {
 
       final alreadySelected = _data.entries.expand((entry) => entry.value).firstWhere(
             (p) => p.isSelected && p.selectedBy == userName && p.id != plateId,
-            orElse: () => PlateModel(
-              id: '',
-              plateNumber: '',
-              type: '',
-              requestTime: DateTime.now(),
-              location: '',
-              area: '',
-              userName: '',
-              isSelected: false,
-              statusList: [],
-            ),
-          );
+        orElse: () => PlateModel(
+          id: '',
+          plateNumber: '',
+          type: '',
+          requestTime: DateTime.now(),
+          location: '',
+          area: '',
+          userName: '',
+          isSelected: false,
+          statusList: [],
+        ),
+      );
 
       if (alreadySelected.id.isNotEmpty && !plate.isSelected) {
         final collectionLabel = _getCollectionLabelForType(alreadySelected.type);
@@ -202,7 +201,7 @@ class PlateState extends ChangeNotifier {
     if (plates == null || plates.isEmpty) return null;
 
     return plates.firstWhere(
-      (plate) => plate.isSelected && plate.selectedBy == userName,
+          (plate) => plate.isSelected && plate.selectedBy == userName,
       orElse: () => PlateModel(
         id: '',
         plateNumber: '',
@@ -219,6 +218,18 @@ class PlateState extends ChangeNotifier {
 
   Future<void> fetchPlateData() async {
     _initializeSubscriptions();
+  }
+
+  /// ✅ 요금 변경, 위치 변경 등 수정을 로컬에 반영 (즉시 UI 업데이트)
+  Future<void> updatePlateLocally(String collection, PlateModel updatedPlate) async {
+    final list = _data[collection];
+    if (list == null) return;
+
+    final index = list.indexWhere((p) => p.id == updatedPlate.id);
+    if (index != -1) {
+      _data[collection]![index] = updatedPlate;
+      notifyListeners();
+    }
   }
 
   @override

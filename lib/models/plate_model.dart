@@ -23,7 +23,6 @@ class PlateFields {
   static const String addAmount = 'addAmount';
   static const String region = 'region';
   static const String imageUrls = 'imageUrls';
-
 }
 
 class PlateModel {
@@ -66,29 +65,27 @@ class PlateModel {
   });
 
   factory PlateModel.fromDocument(DocumentSnapshot<Map<String, dynamic>> doc) {
-    final Map<String, dynamic>? data = doc.data();
-    final dynamic timestamp = data?[PlateFields.requestTime];
+    final data = doc.data() ?? {};
+    final timestamp = data[PlateFields.requestTime];
 
     return PlateModel(
       id: doc.id,
-      plateNumber: data?[PlateFields.plateNumber] ?? '',
-      type: data?[PlateFields.type] ?? '',
+      plateNumber: data[PlateFields.plateNumber] ?? '',
+      type: data[PlateFields.type] ?? '',
       requestTime: (timestamp is Timestamp) ? timestamp.toDate() : DateTime.now(),
-      location: data?[PlateFields.location] ?? '미지정',
-      area: data?[PlateFields.area] ?? '미지정',
-      userName: data?[PlateFields.userName] ?? 'Unknown',
-      isSelected: data?[PlateFields.isSelected] ?? false,
-      selectedBy: data?[PlateFields.selectedBy],
-      adjustmentType: data?[PlateFields.adjustmentType],
-      statusList: (data?[PlateFields.statusList] is List) ? List<String>.from(data?[PlateFields.statusList]) : [],
-      basicStandard: parseInt(data?[PlateFields.basicStandard]),
-      basicAmount: parseInt(data?[PlateFields.basicAmount]),
-      addStandard: parseInt(data?[PlateFields.addStandard]),
-      addAmount: parseInt(data?[PlateFields.addAmount]),
-      region: data?[PlateFields.region],
-      imageUrls: (data?[PlateFields.imageUrls] is List)
-          ? List<String>.from(data?[PlateFields.imageUrls])
-          : null,
+      location: data[PlateFields.location] ?? '미지정',
+      area: data[PlateFields.area] ?? '미지정',
+      userName: data[PlateFields.userName] ?? 'Unknown',
+      isSelected: data[PlateFields.isSelected] ?? false,
+      selectedBy: data[PlateFields.selectedBy],
+      adjustmentType: data[PlateFields.adjustmentType],
+      statusList: List<String>.from(data[PlateFields.statusList] ?? []),
+      basicStandard: parseInt(data[PlateFields.basicStandard]),
+      basicAmount: parseInt(data[PlateFields.basicAmount]),
+      addStandard: parseInt(data[PlateFields.addStandard]),
+      addAmount: parseInt(data[PlateFields.addAmount]),
+      region: data[PlateFields.region],
+      imageUrls: List<String>.from(data[PlateFields.imageUrls] ?? []),
     );
   }
 
@@ -106,15 +103,13 @@ class PlateModel {
       isSelected: map[PlateFields.isSelected] ?? false,
       selectedBy: map[PlateFields.selectedBy],
       adjustmentType: map[PlateFields.adjustmentType],
-      statusList: (map[PlateFields.statusList] is List) ? List<String>.from(map[PlateFields.statusList]) : [],
+      statusList: List<String>.from(map[PlateFields.statusList] ?? []),
       basicStandard: parseInt(map[PlateFields.basicStandard]),
       basicAmount: parseInt(map[PlateFields.basicAmount]),
       addStandard: parseInt(map[PlateFields.addStandard]),
       addAmount: parseInt(map[PlateFields.addAmount]),
       region: map[PlateFields.region],
-      imageUrls: (map[PlateFields.imageUrls] is List)
-          ? List<String>.from(map[PlateFields.imageUrls])
-          : null,
+      imageUrls: List<String>.from(map[PlateFields.imageUrls] ?? []),
     );
   }
 
@@ -194,13 +189,13 @@ class PlateModel {
         other.isSelected == isSelected &&
         other.selectedBy == selectedBy &&
         other.adjustmentType == adjustmentType &&
-        other.statusList == statusList &&
+        other.statusList.toString() == statusList.toString() &&
         other.basicStandard == basicStandard &&
         other.basicAmount == basicAmount &&
         other.addStandard == addStandard &&
         other.addAmount == addAmount &&
         other.region == region &&
-        other.imageUrls == imageUrls;
+        other.imageUrls.toString() == imageUrls.toString();
   }
 
   @override
@@ -225,5 +220,6 @@ class PlateModel {
   }
 
   @override
-  String toString() => 'PlateModel(id: $id, plateNumber: $plateNumber, user: $userName, area: $area)';
+  String toString() =>
+      'PlateModel(id: $id, plateNumber: $plateNumber, user: $userName, area: $area)';
 }

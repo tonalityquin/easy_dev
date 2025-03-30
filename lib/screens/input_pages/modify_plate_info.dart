@@ -24,6 +24,10 @@ import 'package:easydev/utils/button/animated_parking_button.dart';
 import 'package:easydev/utils/button/animated_photo_button.dart';
 import 'package:easydev/utils/button/animated_action_button.dart';
 
+import 'package:easydev/states/plate/plate_state.dart';
+
+import 'package:easydev/models/adjustment_model.dart';
+
 
 class ModifyPlateInfo extends StatefulWidget {
   final PlateModel plate; // ✅ plate 파라미터 추가
@@ -308,11 +312,30 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
       );
     }
 
-    if (success) Navigator.pop(context);
+    if (success) {
+      final updatedPlate = widget.plate.copyWith(
+        adjustmentType: newAdjustmentType,
+        basicStandard: selectedBasicStandard,
+        basicAmount: selectedBasicAmount,
+        addStandard: selectedAddStandard,
+        addAmount: selectedAddAmount,
+        location: newLocation,
+        statusList: selectedStatuses,
+        region: dropdownValue,
+        imageUrls: mergedImageUrls,
+      );
+
+      // 🔥 PlateState에 수정된 plate 반영
+      final plateState = context.read<PlateState>();
+      await plateState.updatePlateLocally(widget.collectionKey, updatedPlate);
+
+      Navigator.pop(context);
+    }
 
     clearInput();
     _clearLocation();
   }
+
 
 
   void _selectParkingLocation() {
@@ -540,14 +563,39 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
                       return DropdownButtonFormField<String>(
                         value: selectedAdjustment,
                         onChanged: (newValue) {
+                          final adjustment = adjustmentList.firstWhere(
+                                (adj) => adj.countType == newValue,
+                            orElse: () => AdjustmentModel(
+                              id: 'empty',
+                              countType: '',
+                              area: '',
+                              basicStandard: 0,
+                              basicAmount: 0,
+                              addStandard: 0,
+                              addAmount: 0,
+                            ),
+                          );
+
                           setState(() {
                             selectedAdjustment = newValue;
+
+                            // 빈 값이면 변경하지 않음
+                            if (adjustment.countType.isNotEmpty) {
+                              selectedBasicStandard = adjustment.basicStandard;
+                              selectedBasicAmount = adjustment.basicAmount;
+                              selectedAddStandard = adjustment.addStandard;
+                              selectedAddAmount = adjustment.addAmount;
+
+                              debugPrint("✅ 정산 타입 변경됨: $selectedAdjustment");
+                              debugPrint("→ 기본 ${selectedBasicStandard}분 / ${selectedBasicAmount}원");
+                              debugPrint("→ 추가 ${selectedAddStandard}분 / ${selectedAddAmount}원");
+                            }
                           });
                         },
                         items: adjustmentList.map((adj) {
                           return DropdownMenuItem<String>(
-                            value: adj.countType, // ✅ 클래스 속성 방식으로 변경
-                            child: Text(adj.countType), // ✅ 클래스 속성 방식으로 변경
+                            value: adj.countType,
+                            child: Text(adj.countType),
                           );
                         }).toList(),
                         decoration: const InputDecoration(
