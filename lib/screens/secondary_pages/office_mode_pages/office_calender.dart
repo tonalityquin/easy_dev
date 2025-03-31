@@ -62,13 +62,14 @@ class _OfficeCalenderPage extends State<OfficeCalenderPage> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 1,
-        centerTitle: true,
+        elevation: 0,
+        foregroundColor: Colors.black87,
         title: const Text(
-          "달력 기능 테스트 페이지",
-          style: TextStyle(color: Colors.grey, fontSize: 16),
+          '달력(기능 미정)',
+          style: TextStyle(fontWeight: FontWeight.bold),
         ),
+        centerTitle: true,
+        automaticallyImplyLeading: false,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
