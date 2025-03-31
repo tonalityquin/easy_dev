@@ -122,6 +122,7 @@ class FirestorePlateRepository implements PlateRepository {
     List<String>? imageUrls,
     bool isLockedFee = false, // 🔐 추가
     int? lockedAtTimeInSeconds, // ⏱️ 추가
+    int? lockedFeeAmount,
   }) async {
     final documentId = '${plateNumber}_$area';
 
@@ -171,6 +172,7 @@ class FirestorePlateRepository implements PlateRepository {
       'imageUrls': imageUrls ?? [],
       'isLockedFee': isLockedFee,                    // ✅
       'lockedAtTimeInSeconds': lockedAtTimeInSeconds, // ✅
+      if (lockedFeeAmount != null) 'lockedFeeAmount': lockedFeeAmount,
     };
 
     dev.log('🔥 Firestore 저장 데이터: $data');

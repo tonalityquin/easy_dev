@@ -108,8 +108,6 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
           plateNumber: selectedPlate.plateNumber,
           userName: userName,
           onError: (errorMessage) {
-            debugPrint("toggleIsSelected 실패: $errorMessage");
-            showFailedSnackbar(context, "선택 해제에 실패했습니다. 다시 시도해주세요.");
           },
         );
         movementPlate.setDepartureCompleted(
@@ -256,6 +254,8 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                           final updatedPlate = selectedPlate.copyWith(
                             isLockedFee: false,
                             lockedAtTimeInSeconds: null,
+                            lockedFeeAmount: null,
+
                           );
 
                           await context.read<PlateRepository>().addOrUpdateDocument(
@@ -283,6 +283,8 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                         final updatedPlate = selectedPlate.copyWith(
                           isLockedFee: true,
                           lockedAtTimeInSeconds: currentTime,
+                          lockedFeeAmount: lockedFee, // ✅ 사전 정산 금액 저장
+
                         );
 
                         await context.read<PlateRepository>().addOrUpdateDocument(

@@ -23,8 +23,11 @@ class PlateFields {
   static const String addAmount = 'addAmount';
   static const String region = 'region';
   static const String imageUrls = 'imageUrls';
-  static const String isLockedFee = 'isLockedFee';               // ✅ 정산 잠금 여부
-  static const String lockedAtTimeInSeconds = 'lockedAtTimeInSeconds'; // ✅ 정산 시점
+  static const String isLockedFee = 'isLockedFee';
+  static const String lockedAtTimeInSeconds = 'lockedAtTimeInSeconds';
+  static const String lockedFeeAmount = 'lockedFeeAmount'; // ✅ 추가
+
+
 }
 
 class PlateModel {
@@ -45,8 +48,10 @@ class PlateModel {
   final int? addAmount;
   final String? region;
   final List<String>? imageUrls;
-  final bool isLockedFee;                 // ✅ 사전 정산 여부
-  final int? lockedAtTimeInSeconds;       // ✅ 정산 고정 시간 (초)
+  final bool isLockedFee; // ✅ 사전 정산 여부
+  final int? lockedAtTimeInSeconds; // ✅ 정산 고정 시간 (초)
+  final int? lockedFeeAmount; // ✅ 추가
+
 
   PlateModel({
     required this.id,
@@ -68,6 +73,8 @@ class PlateModel {
     this.imageUrls,
     this.isLockedFee = false,
     this.lockedAtTimeInSeconds,
+    this.lockedFeeAmount, // ✅
+
   });
 
   factory PlateModel.fromDocument(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -93,7 +100,9 @@ class PlateModel {
       region: data[PlateFields.region],
       imageUrls: List<String>.from(data[PlateFields.imageUrls] ?? []),
       isLockedFee: data[PlateFields.isLockedFee] ?? false,
-      lockedAtTimeInSeconds: parseInt(data[PlateFields.lockedAtTimeInSeconds]),    );
+      lockedAtTimeInSeconds: parseInt(data[PlateFields.lockedAtTimeInSeconds]),
+      lockedFeeAmount: parseInt(data[PlateFields.lockedFeeAmount]),
+    );
   }
 
   factory PlateModel.fromMap(Map<String, dynamic> map, String id) {
@@ -117,13 +126,11 @@ class PlateModel {
       addAmount: parseInt(map[PlateFields.addAmount]),
       region: map[PlateFields.region],
       imageUrls: List<String>.from(map[PlateFields.imageUrls] ?? []),
-
-      // ✅ 새 필드 반영
       isLockedFee: map[PlateFields.isLockedFee] ?? false,
       lockedAtTimeInSeconds: parseInt(map[PlateFields.lockedAtTimeInSeconds]),
+      lockedFeeAmount: parseInt(map[PlateFields.lockedFeeAmount]),
     );
   }
-
 
   Map<String, dynamic> toMap() {
     return {
@@ -145,6 +152,8 @@ class PlateModel {
       PlateFields.isLockedFee: isLockedFee,
       if (lockedAtTimeInSeconds != null)
         PlateFields.lockedAtTimeInSeconds: lockedAtTimeInSeconds,
+      if (lockedFeeAmount != null)
+        PlateFields.lockedFeeAmount: lockedFeeAmount,
     };
   }
 
@@ -168,6 +177,7 @@ class PlateModel {
     List<String>? imageUrls,
     bool? isLockedFee,
     int? lockedAtTimeInSeconds,
+    int? lockedFeeAmount,
   }) {
     return PlateModel(
       id: id ?? this.id,
@@ -188,6 +198,7 @@ class PlateModel {
       region: region ?? this.region,
       isLockedFee: isLockedFee ?? this.isLockedFee,
       lockedAtTimeInSeconds: lockedAtTimeInSeconds ?? this.lockedAtTimeInSeconds,
+      lockedFeeAmount: lockedFeeAmount ?? this.lockedFeeAmount,
     );
   }
 

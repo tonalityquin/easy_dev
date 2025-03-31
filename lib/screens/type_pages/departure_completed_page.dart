@@ -203,6 +203,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                     final updatedPlate = selectedPlate.copyWith(
                       isLockedFee: true,
                       lockedAtTimeInSeconds: currentTime,
+                        lockedFeeAmount: lockedFee,
                     );
 
                     await context.read<PlateRepository>().addOrUpdateDocument(

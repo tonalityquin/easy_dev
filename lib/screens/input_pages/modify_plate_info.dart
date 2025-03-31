@@ -581,9 +581,12 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
                       return CustomAdjustmentDropdown(
                         items: dropdownItems,
                         selectedValue: selectedAdjustment,
-                        onChanged: (newValue) {
+                        onChanged: widget.collectionKey == 'departure_completed'
+                            ? null // ❌ 출차 완료일 경우 수정 불가
+                            : (newValue) {
+                          // ✅ 기존 onChanged 로직
                           final adjustment = adjustmentList.firstWhere(
-                            (adj) => adj.countType == newValue,
+                                (adj) => adj.countType == newValue,
                             orElse: () => AdjustmentModel(
                               id: 'empty',
                               countType: '',
@@ -605,8 +608,6 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
                               selectedAddAmount = adjustment.addAmount;
 
                               debugPrint("✅ 정산 타입 변경됨: $selectedAdjustment");
-                              debugPrint("→ 기본 ${selectedBasicStandard}분 / ${selectedBasicAmount}원");
-                              debugPrint("→ 추가 ${selectedAddStandard}분 / ${selectedAddAmount}원");
                             }
                           });
                         },

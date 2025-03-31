@@ -240,39 +240,36 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                         final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
                         final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
 
+                        // ✅ lockedFee를 미리 선언
+                        int lockedFee = 0;
+
                         if (selectedPlate.isLockedFee) {
-                          // ✅ 정산 취소 시도 전 확인 다이얼로그
                           final confirm = await showDialog<bool>(
                             context: context,
                             builder: (context) => const ConfirmCancelFeeDialog(),
                           );
-
-                          if (confirm == true) {
-                            // 정산 취소 실행
-                          }
-
-
 
                           if (confirm != true) return;
 
                           final updatedPlate = selectedPlate.copyWith(
                             isLockedFee: false,
                             lockedAtTimeInSeconds: null,
+                            lockedFeeAmount: null,
                           );
 
                           await context.read<PlateRepository>().addOrUpdateDocument(
-                                'parking_requests',
-                                selectedPlate.id,
-                                updatedPlate.toMap(),
-                              );
+                            'parking_requests',
+                            selectedPlate.id,
+                            updatedPlate.toMap(),
+                          );
 
                           await context.read<PlateState>().updatePlateLocally('parking_requests', updatedPlate);
                           showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
                           return;
                         }
 
-                        // ✅ 사전 정산 수행
-                        final lockedFee = calculateParkingFee(
+                        // ✅ 사전 정산 요금 계산 및 적용
+                        lockedFee = calculateParkingFee(
                           entryTimeInSeconds: entryTime,
                           currentTimeInSeconds: currentTime,
                           basicStandard: selectedPlate.basicStandard ?? 0,
@@ -284,20 +281,22 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                         final updatedPlate = selectedPlate.copyWith(
                           isLockedFee: true,
                           lockedAtTimeInSeconds: currentTime,
+                          lockedFeeAmount: lockedFee, // ✅ 사전 정산 금액 저장
                         );
 
                         await context.read<PlateRepository>().addOrUpdateDocument(
-                              'parking_requests',
-                              selectedPlate.id,
-                              updatedPlate.toMap(),
-                            );
+                          'parking_requests',
+                          selectedPlate.id,
+                          updatedPlate.toMap(),
+                        );
 
                         await context.read<PlateState>().updatePlateLocally('parking_requests', updatedPlate);
                         showSuccessSnackbar(context, '사전 정산 완료: ₩$lockedFee');
                       } else {
                         _isSearchMode ? _resetSearch(context) : _showSearchDialog(context);
                       }
-                    } else if (index == 1 && isPlateSelected) {
+                    }
+                    else if (index == 1 && isPlateSelected) {
                       _handleParkingCompleted(context);
                     } else if (index == 2) {
                       if (isPlateSelected) {
