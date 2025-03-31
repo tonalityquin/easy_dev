@@ -47,6 +47,8 @@ class ModifyPlate with ChangeNotifier {
     int addStandard = 0,
     int addAmount = 0,
     required String region,
+    bool isLockedFee = false,               // ✅ 추가
+    int? lockedAtTimeInSeconds,            // ✅ 추가
   }) async {
     if (await isPlateNumberDuplicated(plateNumber, areaState.currentArea)) {
       showFailedSnackbar(context, '이미 등록된 번호판입니다: $plateNumber');
@@ -72,6 +74,8 @@ class ModifyPlate with ChangeNotifier {
         addStandard: addStandard,
         addAmount: addAmount,
         region: region,
+        isLockedFee: isLockedFee,
+        lockedAtTimeInSeconds: lockedAtTimeInSeconds,
       );
 
       await _logState.saveLog(
@@ -109,6 +113,8 @@ class ModifyPlate with ChangeNotifier {
     int? addAmount,
     String? region,
     List<String>? imageUrls,
+    bool? isLockedFee, // ✅ 추가
+    int? lockedAtTimeInSeconds, // ✅ 추가
   }) async {
     try {
       final documentId = '${plate.plateNumber}_${plate.area}';
@@ -131,6 +137,8 @@ class ModifyPlate with ChangeNotifier {
         addAmount: addAmount,
         region: region,
         imageUrls: imageUrls,
+        isLockedFee: isLockedFee ?? plate.isLockedFee,
+        lockedAtTimeInSeconds: lockedAtTimeInSeconds ?? plate.lockedAtTimeInSeconds,
       );
 
       await _plateRepository.addOrUpdateDocument(

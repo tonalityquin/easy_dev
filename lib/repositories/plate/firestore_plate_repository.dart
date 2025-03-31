@@ -78,25 +78,18 @@ class FirestorePlateRepository implements PlateRepository {
       }));
 
       // 2. 🔥 logs/plate_movements/entries 문서 삭제
-      final entriesSnapshot = await _firestore
-          .collection('logs')
-          .doc('plate_movements')
-          .collection('entries')
-          .get();
+      final entriesSnapshot = await _firestore.collection('logs').doc('plate_movements').collection('entries').get();
 
       final entriesBatch = _firestore.batch();
       for (var doc in entriesSnapshot.docs) {
         entriesBatch.delete(doc.reference);
       }
       await entriesBatch.commit();
-
     } catch (e) {
       dev.log('❌ Firestore 전체 데이터 삭제 실패: $e');
       throw Exception("전체 데이터 삭제 실패: $e");
     }
   }
-
-
 
   @override
   Future<List<PlateModel>> getPlatesByArea(String collection, String area) async {
@@ -127,6 +120,8 @@ class FirestorePlateRepository implements PlateRepository {
     int? addAmount,
     required String region,
     List<String>? imageUrls,
+    bool isLockedFee = false, // 🔐 추가
+    int? lockedAtTimeInSeconds, // ⏱️ 추가
   }) async {
     final documentId = '${plateNumber}_$area';
 
@@ -174,6 +169,8 @@ class FirestorePlateRepository implements PlateRepository {
       'addAmount': addAmount ?? 0,
       'region': region,
       'imageUrls': imageUrls ?? [],
+      'isLockedFee': isLockedFee,                    // ✅
+      'lockedAtTimeInSeconds': lockedAtTimeInSeconds, // ✅
     };
 
     dev.log('🔥 Firestore 저장 데이터: $data');

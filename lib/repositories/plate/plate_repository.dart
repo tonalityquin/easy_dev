@@ -30,7 +30,10 @@ abstract class PlateRepository {
     int addAmount,
     required String region,
     List<String>? imageUrls,
+    bool isLockedFee, // ✅ 사전 정산 여부
+    int? lockedAtTimeInSeconds, // ✅ 정산 시각 (초 단위)
   });
+
 
   Future<List<String>> getAvailableLocations(String area);
 }

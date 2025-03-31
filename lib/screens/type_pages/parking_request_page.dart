@@ -13,7 +13,7 @@ import '../../widgets/dialog/plate_search_dialog.dart';
 import '../../utils/snackbar_helper.dart';
 import '../../widgets/dialog/parking_location_dialog.dart';
 import '../../repositories/plate/plate_repository.dart';
-import '../input_pages//modify_plate_info.dart';
+import '../../utils/fee_calculator.dart';
 
 class ParkingRequestPage extends StatefulWidget {
   const ParkingRequestPage({super.key});
@@ -187,14 +187,18 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                         duration: const Duration(milliseconds: 300),
                         transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
                         child: isPlateSelected
-                            ? const Icon(Icons.highlight_alt, key: ValueKey('highlight'), color: Colors.indigo)
+                            ? (selectedPlate.isLockedFee
+                                ? const Icon(Icons.lock_open, key: ValueKey('unlock'), color: Colors.grey)
+                                : const Icon(Icons.lock, key: ValueKey('lock'), color: Colors.grey))
                             : Icon(
-                          _isSearchMode ? Icons.cancel : Icons.search,
-                          key: ValueKey(_isSearchMode),
-                          color: _isSearchMode ? Colors.orange : Colors.grey,
-                        ),
+                                _isSearchMode ? Icons.cancel : Icons.search,
+                                key: ValueKey(_isSearchMode),
+                                color: _isSearchMode ? Colors.orange : Colors.grey,
+                              ),
                       ),
-                      label: isPlateSelected ? '정보 수정' : (_isSearchMode ? '검색 초기화' : '번호판 검색'),
+                      label: isPlateSelected
+                          ? (selectedPlate.isLockedFee ? '정산 취소' : '사전 정산')
+                          : (_isSearchMode ? '검색 초기화' : '번호판 검색'),
                     ),
                     BottomNavigationBarItem(
                       icon: isPlateSelected
@@ -221,19 +225,56 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                       label: isPlateSelected ? '상태 수정' : (_isSorted ? '최신순' : '오래된순'),
                     ),
                   ],
-                  onTap: (index) {
+                  onTap: (index) async {
                     if (index == 0) {
                       if (isPlateSelected) {
-                        // 👉 선택된 plate 정보를 수정 페이지로 넘겨줌
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => ModifyPlateInfo(
-                              plate: selectedPlate,
-                              collectionKey: 'parking_requests', // 또는 'parking_requests' 등 상황에 맞게
-                            ),
-                          ),
+                        final now = DateTime.now();
+                        final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
+                        final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
+
+                        // 이미 정산된 경우 → 정산 취소
+                        if (selectedPlate.isLockedFee) {
+                          final updatedPlate = selectedPlate.copyWith(
+                            isLockedFee: false,
+                            lockedAtTimeInSeconds: null,
+                          );
+
+                          await context.read<PlateRepository>().addOrUpdateDocument(
+                                'parking_requests',
+                                selectedPlate.id,
+                                updatedPlate.toMap(),
+                              );
+
+                          await context.read<PlateState>().updatePlateLocally('parking_requests', updatedPlate);
+
+                          showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
+                          return;
+                        }
+
+                        // 아직 정산되지 않은 경우 → 사전 정산 수행
+                        final lockedFee = calculateParkingFee(
+                          entryTimeInSeconds: entryTime,
+                          currentTimeInSeconds: currentTime,
+                          basicStandard: selectedPlate.basicStandard ?? 0,
+                          basicAmount: selectedPlate.basicAmount ?? 0,
+                          addStandard: selectedPlate.addStandard ?? 0,
+                          addAmount: selectedPlate.addAmount ?? 0,
+                        ).round();
+
+                        final updatedPlate = selectedPlate.copyWith(
+                          isLockedFee: true,
+                          lockedAtTimeInSeconds: currentTime,
                         );
+
+                        await context.read<PlateRepository>().addOrUpdateDocument(
+                              'parking_requests',
+                              selectedPlate.id,
+                              updatedPlate.toMap(),
+                            );
+
+                        await context.read<PlateState>().updatePlateLocally('parking_requests', updatedPlate);
+
+                        showSuccessSnackbar(context, '사전 정산 완료: ₩$lockedFee');
                       } else {
                         if (_isSearchMode) {
                           _resetSearch(context);
@@ -256,9 +297,9 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                                 area: selectedPlate.area,
                                 onCancelEntryRequest: () {
                                   context.read<DeletePlate>().deletePlateFromParkingRequest(
-                                    selectedPlate.plateNumber,
-                                    selectedPlate.area,
-                                  );
+                                        selectedPlate.plateNumber,
+                                        selectedPlate.area,
+                                      );
                                   showSuccessSnackbar(context, "입차 요청이 취소되었습니다: ${selectedPlate.plateNumber}");
                                 },
                                 onPrePayment: () {
@@ -278,7 +319,6 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                         _toggleSortIcon();
                       }
                     }
-
                   });
             },
           ),

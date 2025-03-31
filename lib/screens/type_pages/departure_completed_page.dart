@@ -5,16 +5,14 @@ import '../../states/plate/filter_plate.dart';
 import '../../states/plate/plate_state.dart';
 import '../../states/area/area_state.dart';
 import '../../states/user/user_state.dart';
+import '../../utils/fee_calculator.dart';
 import '../../widgets/container/plate_container.dart';
 import '../../widgets/dialog/departure_completed_status_dialog.dart';
 import '../../widgets/navigation/top_navigation.dart';
 import '../../widgets/dialog/plate_search_dialog.dart';
 import '../../widgets/dialog/adjustment_completed_confirm_dialog.dart';
 import '../../utils/snackbar_helper.dart';
-import '../input_pages/modify_plate_info.dart';
 import '../mini_calendars/field_calendar.dart';
-
-
 
 class DepartureCompletedPage extends StatefulWidget {
   const DepartureCompletedPage({super.key});
@@ -93,35 +91,36 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
         body: Consumer2<PlateState, AreaState>(
           builder: (context, plateState, areaState, child) {
             var departureCompleted = _isParkingAreaMode && _selectedParkingArea != null
-                ? context.read<FilterPlate>().filterByParkingLocation('departure_completed', areaState.currentArea, _selectedParkingArea!)
+                ? context
+                    .read<FilterPlate>()
+                    .filterByParkingLocation('departure_completed', areaState.currentArea, _selectedParkingArea!)
                 : plateState.getPlatesByCollection('departure_completed');
 
-            departureCompleted.sort((a, b) => _isSorted
-                ? b.requestTime.compareTo(a.requestTime)
-                : a.requestTime.compareTo(b.requestTime));
+            departureCompleted.sort(
+                (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime));
 
             return _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : ListView(
-              padding: const EdgeInsets.all(8.0),
-              children: [
-                PlateContainer(
-                  data: departureCompleted,
-                  collection: 'departure_completed',
-                  filterCondition: (p) => p.type == '출차 완료',
-                  onPlateTap: (plateNumber, area) {
-                    plateState.toggleIsSelected(
-                      collection: 'departure_completed',
-                      plateNumber: plateNumber,
-                      userName: userName,
-                      onError: (errorMessage) {
-                        showFailedSnackbar(context, errorMessage);
-                      },
-                    );
-                  },
-                ),
-              ],
-            );
+                    padding: const EdgeInsets.all(8.0),
+                    children: [
+                      PlateContainer(
+                        data: departureCompleted,
+                        collection: 'departure_completed',
+                        filterCondition: (p) => p.type == '출차 완료',
+                        onPlateTap: (plateNumber, area) {
+                          plateState.toggleIsSelected(
+                            collection: 'departure_completed',
+                            plateNumber: plateNumber,
+                            userName: userName,
+                            onError: (errorMessage) {
+                              showFailedSnackbar(context, errorMessage);
+                            },
+                          );
+                        },
+                      ),
+                    ],
+                  );
           },
         ),
         bottomNavigationBar: Consumer<PlateState>(
@@ -136,31 +135,34 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                     duration: const Duration(milliseconds: 300),
                     transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
                     child: isPlateSelected
-                        ? const Icon(Icons.highlight_alt, key: ValueKey('highlight'), color: Colors.indigo)
+                        ? (selectedPlate.isLockedFee
+                            ? const Icon(Icons.lock_open, key: ValueKey('unlock'), color: Colors.grey)
+                            : const Icon(Icons.lock, key: ValueKey('lock'), color: Colors.grey))
                         : Icon(
-                      _isSearchMode ? Icons.cancel : Icons.search,
-                      key: ValueKey(_isSearchMode),
-                      color: _isSearchMode ? Colors.orange : Colors.grey,
-                    ),
+                            _isSearchMode ? Icons.cancel : Icons.search,
+                            key: ValueKey(_isSearchMode),
+                            color: _isSearchMode ? Colors.orange : Colors.grey,
+                          ),
                   ),
-                  label: isPlateSelected ? '정보 수정' : (_isSearchMode ? '검색 초기화' : '번호판 검색'),
+                  label: isPlateSelected
+                      ? (selectedPlate.isLockedFee ? '정산 취소' : '사전 정산')
+                      : (_isSearchMode ? '검색 초기화' : '번호판 검색'),
                 ),
                 BottomNavigationBarItem(
                   icon: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 300),
-                    transitionBuilder: (child, animation) =>
-                        ScaleTransition(scale: animation, child: child),
+                    transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
                     child: isPlateSelected
                         ? const Icon(
-                      Icons.check_circle,
-                      key: ValueKey('selected'),
-                      color: Colors.green,
-                    )
+                            Icons.check_circle,
+                            key: ValueKey('selected'),
+                            color: Colors.green,
+                          )
                         : const Icon(
-                      Icons.delete_forever,
-                      key: ValueKey('delete'),
-                      color: Colors.redAccent,
-                    ),
+                            Icons.delete_forever,
+                            key: ValueKey('delete'),
+                            color: Colors.redAccent,
+                          ),
                   ),
                   label: isPlateSelected ? '요금 정산' : '전체 삭제',
                 ),
@@ -178,15 +180,53 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
               onTap: (index) async {
                 if (index == 0) {
                   if (isPlateSelected) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ModifyPlateInfo(
-                          plate: selectedPlate,
-                          collectionKey: 'departure_completed',
-                        ),
-                      ),
+                    final now = DateTime.now();
+                    final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
+                    final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
+
+                    if (selectedPlate.isLockedFee) {
+                      // 🔓 정산 취소
+                      final updatedPlate = selectedPlate.copyWith(
+                        isLockedFee: false,
+                        lockedAtTimeInSeconds: null,
+                      );
+
+                      await context.read<PlateRepository>().addOrUpdateDocument(
+                            'departure_completed',
+                            selectedPlate.id,
+                            updatedPlate.toMap(),
+                          );
+
+                      await context.read<PlateState>().updatePlateLocally('departure_completed', updatedPlate);
+
+                      showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
+                      return;
+                    }
+
+                    // ✅ 사전 정산
+                    final lockedFee = calculateParkingFee(
+                      entryTimeInSeconds: entryTime,
+                      currentTimeInSeconds: currentTime,
+                      basicStandard: selectedPlate.basicStandard ?? 0,
+                      basicAmount: selectedPlate.basicAmount ?? 0,
+                      addStandard: selectedPlate.addStandard ?? 0,
+                      addAmount: selectedPlate.addAmount ?? 0,
+                    ).round();
+
+                    final updatedPlate = selectedPlate.copyWith(
+                      isLockedFee: true,
+                      lockedAtTimeInSeconds: currentTime,
                     );
+
+                    await context.read<PlateRepository>().addOrUpdateDocument(
+                          'departure_completed',
+                          selectedPlate.id,
+                          updatedPlate.toMap(),
+                        );
+
+                    await context.read<PlateState>().updatePlateLocally('departure_completed', updatedPlate);
+
+                    showSuccessSnackbar(context, '사전 정산 완료: ₩$lockedFee');
                   } else {
                     _isSearchMode ? _resetSearch(context) : _showSearchDialog(context);
                   }

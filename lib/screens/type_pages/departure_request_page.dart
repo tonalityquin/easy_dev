@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../repositories/plate/plate_repository.dart';
 import '../../states/plate/filter_plate.dart';
 import '../../states/plate/movement_plate.dart';
 import '../../states/plate/plate_state.dart'; // 번호판 상태 관리
 import '../../states/plate/delete_plate.dart';
 import '../../states/area/area_state.dart'; // 지역 상태 관리
 import '../../states/user/user_state.dart';
+import '../../utils/fee_calculator.dart';
 import '../../widgets/container/plate_container.dart'; // 번호판 컨테이너 위젯
 import '../../widgets/dialog/departure_completed_confirm_dialog.dart';
 import '../../widgets/dialog/parking_location_dialog.dart';
@@ -14,7 +16,6 @@ import '../../widgets/dialog/plate_search_dialog.dart'; // ✅ PlateSearchDialog
 import '../../widgets/dialog/departure_request_status_dialog.dart';
 import '../../widgets/dialog/parking_request_delete_dialog.dart';
 import '../../utils/snackbar_helper.dart';
-import '../input_pages/modify_plate_info.dart';
 
 class DepartureRequestPage extends StatefulWidget {
   const DepartureRequestPage({super.key});
@@ -61,23 +62,20 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
   void _showParkingAreaDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) =>
-          ParkingLocationDialog(
-            locationController: _locationController,
-            onLocationSelected: (selectedLocation) {
-              debugPrint("✅ 선택된 주차 구역: $selectedLocation");
-              setState(() {
-                _isParkingAreaMode = true;
-                _selectedParkingArea = selectedLocation;
-              });
-              final area = context
-                  .read<AreaState>()
-                  .currentArea;
-              setState(() {
-                context.read<FilterPlate>().filterByParkingLocation('departure_requests', area, _selectedParkingArea!);
-              });
-            },
-          ),
+      builder: (context) => ParkingLocationDialog(
+        locationController: _locationController,
+        onLocationSelected: (selectedLocation) {
+          debugPrint("✅ 선택된 주차 구역: $selectedLocation");
+          setState(() {
+            _isParkingAreaMode = true;
+            _selectedParkingArea = selectedLocation;
+          });
+          final area = context.read<AreaState>().currentArea;
+          setState(() {
+            context.read<FilterPlate>().filterByParkingLocation('departure_requests', area, _selectedParkingArea!);
+          });
+        },
+      ),
     );
   }
 
@@ -100,9 +98,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
   void _handleDepartureCompleted(BuildContext context) {
     final movementPlate = context.read<MovementPlate>(); // ✅ MovementPlate 사용
     final plateState = context.read<PlateState>();
-    final userName = context
-        .read<UserState>()
-        .name;
+    final userName = context.read<UserState>().name;
     final selectedPlate = plateState.getSelectedPlate('departure_requests', userName);
     if (selectedPlate != null) {
       try {
@@ -128,9 +124,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
   @override
   Widget build(BuildContext context) {
     final plateState = context.read<PlateState>();
-    final userName = context
-        .read<UserState>()
-        .name;
+    final userName = context.read<UserState>().name;
 
     return WillPopScope(
         onWillPop: () async {
@@ -155,9 +149,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
               var departureRequests = _isParkingAreaMode && _selectedParkingArea != null
                   ? filterState.filterByParkingLocation('departure_requests', currentArea, _selectedParkingArea!)
                   : plateState.getPlatesByCollection('departure_requests');
-              final userName = context
-                  .read<UserState>()
-                  .name;
+              final userName = context.read<UserState>().name;
               departureRequests.sort((a, b) {
                 return _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime);
               });
@@ -185,9 +177,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
           ),
           bottomNavigationBar: Consumer<PlateState>(
             builder: (context, plateState, child) {
-              final userName = context
-                  .read<UserState>()
-                  .name;
+              final userName = context.read<UserState>().name;
               final selectedPlate = plateState.getSelectedPlate('departure_requests', userName);
               final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
               return BottomNavigationBar(
@@ -197,14 +187,18 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                         duration: const Duration(milliseconds: 300),
                         transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
                         child: isPlateSelected
-                            ? const Icon(Icons.highlight_alt, key: ValueKey('highlight'), color: Colors.indigo)
+                            ? (selectedPlate.isLockedFee
+                                ? const Icon(Icons.lock_open, key: ValueKey('unlock'), color: Colors.grey)
+                                : const Icon(Icons.lock, key: ValueKey('lock'), color: Colors.grey))
                             : Icon(
-                          _isSearchMode ? Icons.cancel : Icons.search,
-                          key: ValueKey(_isSearchMode),
-                          color: _isSearchMode ? Colors.orange : Colors.grey,
-                        ),
+                                _isSearchMode ? Icons.cancel : Icons.search,
+                                key: ValueKey(_isSearchMode),
+                                color: _isSearchMode ? Colors.orange : Colors.grey,
+                              ),
                       ),
-                      label: isPlateSelected ? '정보 수정' : (_isSearchMode ? '검색 초기화' : '번호판 검색'),
+                      label: isPlateSelected
+                          ? (selectedPlate.isLockedFee ? '정산 취소' : '사전 정산')
+                          : (_isSearchMode ? '검색 초기화' : '번호판 검색'),
                     ),
                     BottomNavigationBarItem(
                       icon: AnimatedSwitcher(
@@ -213,14 +207,13 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                         child: isPlateSelected
                             ? const Icon(Icons.check_circle, key: ValueKey('selected'), color: Colors.green)
                             : Icon(
-                          _isParkingAreaMode ? Icons.clear : Icons.local_parking,
-                          key: ValueKey(_isParkingAreaMode),
-                          color: _isParkingAreaMode ? Colors.orange : Colors.grey,
-                        ),
+                                _isParkingAreaMode ? Icons.clear : Icons.local_parking,
+                                key: ValueKey(_isParkingAreaMode),
+                                color: _isParkingAreaMode ? Colors.orange : Colors.grey,
+                              ),
                       ),
                       label: isPlateSelected ? '출차 완료' : (_isParkingAreaMode ? '주차 구역 초기화' : '주차 구역'),
                     ),
-
                     BottomNavigationBarItem(
                       icon: AnimatedRotation(
                         turns: _isSorted ? 0.5 : 0.0,
@@ -235,20 +228,56 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                       label: isPlateSelected ? '상태 수정' : (_isSorted ? '최신순' : '오래된순'),
                     ),
                   ],
-                  onTap: (index) {
+                  onTap: (index) async {
                     if (index == 0) {
                       if (isPlateSelected) {
-                        // 👉 선택된 plate 정보를 수정 페이지로 넘겨줌
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                ModifyPlateInfo(
-                                  plate: selectedPlate,
-                                  collectionKey: 'departure_requests', // 또는 'parking_requests' 등 상황에 맞게
-                                ),
-                          ),
+                        final now = DateTime.now();
+                        final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
+                        final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
+
+                        if (selectedPlate.isLockedFee) {
+                          // 🔓 정산 취소
+                          final updatedPlate = selectedPlate.copyWith(
+                            isLockedFee: false,
+                            lockedAtTimeInSeconds: null,
+                          );
+
+                          await context.read<PlateRepository>().addOrUpdateDocument(
+                                'departure_requests',
+                                selectedPlate.id,
+                                updatedPlate.toMap(),
+                              );
+
+                          await context.read<PlateState>().updatePlateLocally('departure_requests', updatedPlate);
+
+                          showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
+                          return;
+                        }
+
+                        // ✅ 사전 정산 수행
+                        final lockedFee = calculateParkingFee(
+                          entryTimeInSeconds: entryTime,
+                          currentTimeInSeconds: currentTime,
+                          basicStandard: selectedPlate.basicStandard ?? 0,
+                          basicAmount: selectedPlate.basicAmount ?? 0,
+                          addStandard: selectedPlate.addStandard ?? 0,
+                          addAmount: selectedPlate.addAmount ?? 0,
+                        ).round();
+
+                        final updatedPlate = selectedPlate.copyWith(
+                          isLockedFee: true,
+                          lockedAtTimeInSeconds: currentTime,
                         );
+
+                        await context.read<PlateRepository>().addOrUpdateDocument(
+                              'departure_requests',
+                              selectedPlate.id,
+                              updatedPlate.toMap(),
+                            );
+
+                        await context.read<PlateState>().updatePlateLocally('departure_requests', updatedPlate);
+
+                        showSuccessSnackbar(context, '사전 정산 완료: ₩$lockedFee');
                       } else {
                         if (_isSearchMode) {
                           _resetSearch(context);
@@ -260,10 +289,9 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                       if (isPlateSelected) {
                         showDialog(
                           context: context,
-                          builder: (context) =>
-                              DepartureCompletedConfirmDialog(
-                                onConfirm: () => _handleDepartureCompleted(context),
-                              ),
+                          builder: (context) => DepartureCompletedConfirmDialog(
+                            onConfirm: () => _handleDepartureCompleted(context),
+                          ),
                         );
                       } else {
                         if (_isParkingAreaMode) {
@@ -276,49 +304,48 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                       if (isPlateSelected) {
                         showDialog(
                           context: context,
-                          builder: (context) =>
-                              DepartureRequestStatusDialog(
-                                plate: selectedPlate,
-                                plateNumber: selectedPlate.plateNumber,
-                                area: selectedPlate.area,
-                                onRequestEntry: () {
-                                  handleEntryParkingRequest(
-                                    context,
-                                    selectedPlate.plateNumber,
-                                    selectedPlate.area,
-                                  );
-                                },
-                                onCompleteEntry: () {
-                                  handleEntryParkingCompleted(
-                                    context,
-                                    selectedPlate.plateNumber,
-                                    selectedPlate.area,
-                                    selectedPlate.location,
-                                  );
-                                },
-                                onPrePayment: () {
-                                  handlePrePayment(
-                                    context,
-                                    selectedPlate.plateNumber,
-                                    selectedPlate.area,
-                                    selectedPlate.location,
-                                  );
-                                },
-                                onDelete: () {
-                                  showDialog(
-                                    context: context,
-                                    builder: (context) => ParkingRequestDeleteDialog(
-                                      onConfirm: () {
-                                        context.read<DeletePlate>().deletePlateFromDepartureRequest(
+                          builder: (context) => DepartureRequestStatusDialog(
+                            plate: selectedPlate,
+                            plateNumber: selectedPlate.plateNumber,
+                            area: selectedPlate.area,
+                            onRequestEntry: () {
+                              handleEntryParkingRequest(
+                                context,
+                                selectedPlate.plateNumber,
+                                selectedPlate.area,
+                              );
+                            },
+                            onCompleteEntry: () {
+                              handleEntryParkingCompleted(
+                                context,
+                                selectedPlate.plateNumber,
+                                selectedPlate.area,
+                                selectedPlate.location,
+                              );
+                            },
+                            onPrePayment: () {
+                              handlePrePayment(
+                                context,
+                                selectedPlate.plateNumber,
+                                selectedPlate.area,
+                                selectedPlate.location,
+                              );
+                            },
+                            onDelete: () {
+                              showDialog(
+                                context: context,
+                                builder: (context) => ParkingRequestDeleteDialog(
+                                  onConfirm: () {
+                                    context.read<DeletePlate>().deletePlateFromDepartureRequest(
                                           selectedPlate.plateNumber,
                                           selectedPlate.area,
                                         );
-                                        showSuccessSnackbar(context, "삭제 완료: ${selectedPlate.plateNumber}");
-                                      },
-                                    ),
-                                  );
-                                },
-                              ),
+                                    showSuccessSnackbar(context, "삭제 완료: ${selectedPlate.plateNumber}");
+                                  },
+                                ),
+                              );
+                            },
+                          ),
                         );
                       } else {
                         _toggleSortIcon();

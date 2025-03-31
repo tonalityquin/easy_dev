@@ -64,15 +64,10 @@ class PlateContainer extends StatelessWidget {
         final bool isSelected = item.isSelected;
         final String displayUser = isSelected ? item.selectedBy! : item.userName;
 
-        int basicStandard = (item.basicStandard is String)
-            ? int.tryParse(item.basicStandard as String) ?? 0
-            : (item.basicStandard ?? 0);
-        int basicAmount =
-        (item.basicAmount is String) ? int.tryParse(item.basicAmount as String) ?? 0 : (item.basicAmount ?? 0);
-        int addStandard =
-        (item.addStandard is String) ? int.tryParse(item.addStandard as String) ?? 0 : (item.addStandard ?? 0);
-        int addAmount =
-        (item.addAmount is String) ? int.tryParse(item.addAmount as String) ?? 0 : (item.addAmount ?? 0);
+        int basicStandard = item.basicStandard ?? 0;
+        int basicAmount = item.basicAmount ?? 0;
+        int addStandard = item.addStandard ?? 0;
+        int addAmount = item.addAmount ?? 0;
 
         int currentFee = calculateParkingFee(
           entryTimeInSeconds: item.requestTime.millisecondsSinceEpoch ~/ 1000,
@@ -81,10 +76,20 @@ class PlateContainer extends StatelessWidget {
           basicAmount: basicAmount,
           addStandard: addStandard,
           addAmount: addAmount,
+          isLockedFee: item.isLockedFee,
+          lockedAtTimeInSeconds: item.lockedAtTimeInSeconds,
         ).toInt();
 
         final duration = DateTime.now().difference(item.requestTime);
         final elapsedText = "${duration.inMinutes}분 ${duration.inSeconds % 60}초";
+
+        // ✅ 배경색 조건 처리
+        Color? backgroundColor;
+        if (item.adjustmentType == null || item.adjustmentType!.trim().isEmpty) {
+          backgroundColor = Colors.white;
+        } else {
+          backgroundColor = item.isLockedFee ? Colors.orange[50] : Colors.white;
+        }
 
         return Column(
           children: [
@@ -97,8 +102,9 @@ class PlateContainer extends StatelessWidget {
               midRightText: CustomDateUtils.formatTimeForUI(item.requestTime),
               bottomLeftLeftText: item.statusList.isNotEmpty ? item.statusList.join(", ") : "주의사항 없음",
               bottomLeftCenterText: "주의사항 수기",
-              bottomRightText: "$elapsedText",
+              bottomRightText: elapsedText,
               isSelected: isSelected,
+              backgroundColor: backgroundColor,
               onTap: () {
                 final plateState = Provider.of<PlateState>(context, listen: false);
 
@@ -108,7 +114,7 @@ class PlateContainer extends StatelessWidget {
                 }
 
                 final alreadySelected = data.any(
-                      (p) => p.isSelected && p.selectedBy == userName && p.id != item.id,
+                  (p) => p.isSelected && p.selectedBy == userName && p.id != item.id,
                 );
 
                 if (alreadySelected && !item.isSelected) {

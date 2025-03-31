@@ -31,6 +31,7 @@ class PlateCustomBox extends StatelessWidget {
   final String bottomRightText;
   final VoidCallback onTap;
   final bool isSelected;
+  final Color? backgroundColor;
 
   const PlateCustomBox({
     super.key,
@@ -45,6 +46,7 @@ class PlateCustomBox extends StatelessWidget {
     required this.bottomRightText,
     required this.onTap,
     required this.isSelected,
+    this.backgroundColor,
   });
 
   Widget buildRow({
@@ -105,7 +107,7 @@ class PlateCustomBox extends StatelessWidget {
         transformAlignment: Alignment.center,
         transform: isSelected ? (Matrix4.identity()..scale(0.95)) : Matrix4.identity(),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.blue.withOpacity(0.2) : Colors.white,
+          color: backgroundColor ?? (isSelected ? Colors.blue.withOpacity(0.2) : Colors.white),
           border: Border.all(color: Colors.black, width: 2.0),
           borderRadius: BorderRadius.circular(10),
           boxShadow: [

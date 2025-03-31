@@ -3,7 +3,6 @@ import '../../repositories/plate/plate_repository.dart';
 import 'plate_state.dart';
 import '../../models/plate_log_model.dart';
 import 'log_plate.dart';
-
 class MovementPlate {
   final PlateRepository _repository;
   final LogPlateState _logState;

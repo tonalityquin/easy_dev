@@ -23,6 +23,8 @@ class PlateFields {
   static const String addAmount = 'addAmount';
   static const String region = 'region';
   static const String imageUrls = 'imageUrls';
+  static const String isLockedFee = 'isLockedFee';               // ✅ 정산 잠금 여부
+  static const String lockedAtTimeInSeconds = 'lockedAtTimeInSeconds'; // ✅ 정산 시점
 }
 
 class PlateModel {
@@ -43,6 +45,8 @@ class PlateModel {
   final int? addAmount;
   final String? region;
   final List<String>? imageUrls;
+  final bool isLockedFee;                 // ✅ 사전 정산 여부
+  final int? lockedAtTimeInSeconds;       // ✅ 정산 고정 시간 (초)
 
   PlateModel({
     required this.id,
@@ -62,6 +66,8 @@ class PlateModel {
     this.addAmount,
     this.region,
     this.imageUrls,
+    this.isLockedFee = false,
+    this.lockedAtTimeInSeconds,
   });
 
   factory PlateModel.fromDocument(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -86,7 +92,8 @@ class PlateModel {
       addAmount: parseInt(data[PlateFields.addAmount]),
       region: data[PlateFields.region],
       imageUrls: List<String>.from(data[PlateFields.imageUrls] ?? []),
-    );
+      isLockedFee: data[PlateFields.isLockedFee] ?? false,
+      lockedAtTimeInSeconds: parseInt(data[PlateFields.lockedAtTimeInSeconds]),    );
   }
 
   factory PlateModel.fromMap(Map<String, dynamic> map, String id) {
@@ -110,8 +117,13 @@ class PlateModel {
       addAmount: parseInt(map[PlateFields.addAmount]),
       region: map[PlateFields.region],
       imageUrls: List<String>.from(map[PlateFields.imageUrls] ?? []),
+
+      // ✅ 새 필드 반영
+      isLockedFee: map[PlateFields.isLockedFee] ?? false,
+      lockedAtTimeInSeconds: parseInt(map[PlateFields.lockedAtTimeInSeconds]),
     );
   }
+
 
   Map<String, dynamic> toMap() {
     return {
@@ -130,7 +142,9 @@ class PlateModel {
       PlateFields.addStandard: addStandard,
       PlateFields.addAmount: addAmount,
       PlateFields.region: region,
-      if (imageUrls != null) PlateFields.imageUrls: imageUrls,
+      PlateFields.isLockedFee: isLockedFee,
+      if (lockedAtTimeInSeconds != null)
+        PlateFields.lockedAtTimeInSeconds: lockedAtTimeInSeconds,
     };
   }
 
@@ -152,6 +166,8 @@ class PlateModel {
     int? addAmount,
     String? region,
     List<String>? imageUrls,
+    bool? isLockedFee,
+    int? lockedAtTimeInSeconds,
   }) {
     return PlateModel(
       id: id ?? this.id,
@@ -170,53 +186,9 @@ class PlateModel {
       addStandard: addStandard ?? this.addStandard,
       addAmount: addAmount ?? this.addAmount,
       region: region ?? this.region,
-      imageUrls: imageUrls ?? this.imageUrls,
+      isLockedFee: isLockedFee ?? this.isLockedFee,
+      lockedAtTimeInSeconds: lockedAtTimeInSeconds ?? this.lockedAtTimeInSeconds,
     );
-  }
-
-  @override
-  bool operator ==(Object other) {
-    if (identical(this, other)) return true;
-
-    return other is PlateModel &&
-        other.id == id &&
-        other.plateNumber == plateNumber &&
-        other.type == type &&
-        other.requestTime == requestTime &&
-        other.location == location &&
-        other.area == area &&
-        other.userName == userName &&
-        other.isSelected == isSelected &&
-        other.selectedBy == selectedBy &&
-        other.adjustmentType == adjustmentType &&
-        other.statusList.toString() == statusList.toString() &&
-        other.basicStandard == basicStandard &&
-        other.basicAmount == basicAmount &&
-        other.addStandard == addStandard &&
-        other.addAmount == addAmount &&
-        other.region == region &&
-        other.imageUrls.toString() == imageUrls.toString();
-  }
-
-  @override
-  int get hashCode {
-    return id.hashCode ^
-    plateNumber.hashCode ^
-    type.hashCode ^
-    requestTime.hashCode ^
-    location.hashCode ^
-    area.hashCode ^
-    userName.hashCode ^
-    isSelected.hashCode ^
-    selectedBy.hashCode ^
-    adjustmentType.hashCode ^
-    statusList.hashCode ^
-    basicStandard.hashCode ^
-    basicAmount.hashCode ^
-    addStandard.hashCode ^
-    addAmount.hashCode ^
-    region.hashCode ^
-    imageUrls.hashCode;
   }
 
   @override

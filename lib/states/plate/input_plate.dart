@@ -46,6 +46,9 @@ class InputPlate with ChangeNotifier {
     int addAmount = 0,
     required String region,
     List<String>? imageUrls,
+    int? lockedFee,
+    bool isLockedFee = false,               // ✅ 추가
+    int? lockedAtTimeInSeconds,            // ✅ 추가
   }) async {
     if (await isPlateNumberDuplicated(plateNumber, areaState.currentArea)) {
       showFailedSnackbar(context, '이미 등록된 번호판입니다: $plateNumber');
@@ -73,7 +76,9 @@ class InputPlate with ChangeNotifier {
         addAmount: addAmount,
         region: region,
         imageUrls: imageUrls,
-      );
+        isLockedFee: isLockedFee,
+        lockedAtTimeInSeconds: lockedAtTimeInSeconds,
+    );
 
       // ✅ 로그 저장
       await _logState.saveLog(
@@ -110,6 +115,8 @@ class InputPlate with ChangeNotifier {
     int? addAmount,
     String? region,
     List<String>? imageUrls,
+    bool? isLockedFee,
+    int? lockedAtTimeInSeconds,
   }) async {
     try {
       final documentId = '${plate.plateNumber}_${plate.area}';
@@ -126,6 +133,8 @@ class InputPlate with ChangeNotifier {
         addAmount: addAmount,
         region: region,
         imageUrls: imageUrls,
+        isLockedFee: isLockedFee ?? plate.isLockedFee,
+        lockedAtTimeInSeconds: lockedAtTimeInSeconds ?? plate.lockedAtTimeInSeconds,
       );
 
       await _plateRepository.addOrUpdateDocument(
@@ -133,6 +142,25 @@ class InputPlate with ChangeNotifier {
         documentId,
         updatedPlate.toMap(),
       );
+
+      // ✅ 정산 변경 여부 감지 후 로그 저장
+      if ((plate.isLockedFee != updatedPlate.isLockedFee)) {
+        final actionLog = updatedPlate.isLockedFee
+            ? '사전 정산 완료'
+            : '사전 정산 취소';
+
+        await _logState.saveLog(
+          PlateLogModel(
+            plateNumber: plate.plateNumber,
+            area: plate.area,
+            from: collectionKey,
+            to: collectionKey,
+            action: actionLog,
+            performedBy: userState.name,
+            timestamp: DateTime.now(),
+          ),
+        );
+      }
 
       showSuccessSnackbar(context, '정보 수정 완료');
       notifyListeners();
