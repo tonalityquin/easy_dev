@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart'; // 💡 추가
 import '../../states/calendar/field_calendar_state.dart';
+import '../../states/calendar/selected_date_state.dart'; // 💡 추가
 import '../../widgets/dialog/calendar/calendar_dialogs.dart';
 import '../../utils/snackbar_helper.dart';
 
@@ -76,7 +78,7 @@ class _FieldCalendarPage extends State<FieldCalendarPage> {
           children: [
             _buildMonthNavigation(),
             _buildDayHeaders(context),
-            _buildDateGrid(context),
+            _buildDateGrid(context), // 💡 날짜 선택 처리 포함됨
             const SizedBox(height: 16),
             TextField(
               readOnly: true,
@@ -197,6 +199,7 @@ class _FieldCalendarPage extends State<FieldCalendarPage> {
             setState(() {
               calendar.selectDate(currentDate);
             });
+            context.read<SelectedDateState>().setSelectedDate(currentDate); // 💡 상태에 저장
             showSelectedSnackbar(context, '선택된 날짜: ${calendar.formatDate(currentDate)}');
           },
           child: Container(

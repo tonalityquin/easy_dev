@@ -33,6 +33,7 @@ abstract class PlateRepository {
     bool isLockedFee,
     int? lockedAtTimeInSeconds,
     int? lockedFeeAmount,
+    DateTime? endTime,
   });
 
 

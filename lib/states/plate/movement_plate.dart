@@ -44,6 +44,7 @@ class MovementPlate {
         'userName': selectedBy, // ✅ 사용자 이름 갱신
         'isSelected': false,
         'selectedBy': null,
+        if (newType == '출차 완료') 'end_time': DateTime.now(),
       });
 
       debugPrint("✅ 문서 이동 완료: $fromCollection → $toCollection ($plateNumber)");
@@ -118,6 +119,26 @@ class MovementPlate {
   }) async {
     final success = await _transferData(
       fromCollection: 'departure_requests',
+      toCollection: 'departure_completed',
+      plateNumber: plateNumber,
+      area: area,
+      newType: '출차 완료',
+      location: location,
+      performedBy: performedBy,
+    );
+
+    if (success) await plateState.fetchPlateData();
+  }
+
+  Future<void> doubleParkingCompletedToDepartureCompleted(
+      String plateNumber,
+      String area,
+      PlateState plateState,
+      String location, {
+        String performedBy = '시스템',
+      }) async {
+    final success = await _transferData(
+      fromCollection: 'parking_completed',
       toCollection: 'departure_completed',
       plateNumber: plateNumber,
       area: area,

@@ -123,6 +123,7 @@ class FirestorePlateRepository implements PlateRepository {
     bool isLockedFee = false, // 🔐 추가
     int? lockedAtTimeInSeconds, // ⏱️ 추가
     int? lockedFeeAmount,
+    DateTime? endTime,
   }) async {
     final documentId = '${plateNumber}_$area';
 
@@ -173,6 +174,7 @@ class FirestorePlateRepository implements PlateRepository {
       'isLockedFee': isLockedFee,                    // ✅
       'lockedAtTimeInSeconds': lockedAtTimeInSeconds, // ✅
       if (lockedFeeAmount != null) 'lockedFeeAmount': lockedFeeAmount,
+      if (endTime != null) 'end_time': endTime,
     };
 
     dev.log('🔥 Firestore 저장 데이터: $data');

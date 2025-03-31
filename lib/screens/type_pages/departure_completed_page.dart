@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../repositories/plate/plate_repository.dart';
+import '../../states/calendar/selected_date_state.dart';
 import '../../states/plate/filter_plate.dart';
 import '../../states/plate/plate_state.dart';
 import '../../states/area/area_state.dart';
@@ -127,6 +128,10 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
           builder: (context, plateState, child) {
             final selectedPlate = plateState.getSelectedPlate('departure_completed', userName);
             final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
+            final selectedDate = context.watch<SelectedDateState>().selectedDate;
+            final formattedDate = selectedDate != null
+                ? '${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}'
+                : '달력 열기';
 
             return BottomNavigationBar(
               items: [
@@ -169,12 +174,13 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                 BottomNavigationBarItem(
                   icon: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 300),
-                    transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+                    transitionBuilder: (child, animation) =>
+                        ScaleTransition(scale: animation, child: child),
                     child: isPlateSelected
                         ? const Icon(Icons.settings, key: ValueKey('setting'))
                         : const Icon(Icons.calendar_today, key: ValueKey('calendar'), color: Colors.grey),
                   ),
-                  label: isPlateSelected ? '상태 수정' : '달력 열기',
+                  label: isPlateSelected ? '상태 수정' : formattedDate,
                 ),
               ],
               onTap: (index) async {

@@ -10,6 +10,8 @@ class PlateFields {
   static const String plateNumber = 'plate_number';
   static const String type = 'type';
   static const String requestTime = 'request_time';
+  static const String endTime = 'end_time'; // ✅ 출차 완료 시간 필드 추가
+
   static const String location = 'location';
   static const String area = 'area';
   static const String userName = 'userName';
@@ -35,6 +37,8 @@ class PlateModel {
   final String plateNumber;
   final String type;
   final DateTime requestTime;
+  final DateTime? endTime; // ✅ 출차 완료 시간
+
   final String location;
   final String area;
   final String userName;
@@ -58,6 +62,7 @@ class PlateModel {
     required this.plateNumber,
     required this.type,
     required this.requestTime,
+    this.endTime, // ✅ 생성자에 추가
     required this.location,
     required this.area,
     required this.userName,
@@ -80,12 +85,15 @@ class PlateModel {
   factory PlateModel.fromDocument(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data() ?? {};
     final timestamp = data[PlateFields.requestTime];
+    final endTimestamp = data[PlateFields.endTime]; // ✅
+
 
     return PlateModel(
       id: doc.id,
       plateNumber: data[PlateFields.plateNumber] ?? '',
       type: data[PlateFields.type] ?? '',
       requestTime: (timestamp is Timestamp) ? timestamp.toDate() : DateTime.now(),
+      endTime: (endTimestamp is Timestamp) ? endTimestamp.toDate() : null, // ✅
       location: data[PlateFields.location] ?? '미지정',
       area: data[PlateFields.area] ?? '미지정',
       userName: data[PlateFields.userName] ?? 'Unknown',
@@ -113,6 +121,9 @@ class PlateModel {
       requestTime: (map[PlateFields.requestTime] is Timestamp)
           ? (map[PlateFields.requestTime] as Timestamp).toDate()
           : DateTime.now(),
+      endTime: (map[PlateFields.endTime] is Timestamp)
+          ? (map[PlateFields.endTime] as Timestamp).toDate()
+          : null, // ✅
       location: map[PlateFields.location] ?? '미지정',
       area: map[PlateFields.area] ?? '미지정',
       userName: map[PlateFields.userName] ?? 'Unknown',
@@ -137,6 +148,7 @@ class PlateModel {
       PlateFields.plateNumber: plateNumber,
       PlateFields.type: type,
       PlateFields.requestTime: requestTime,
+      if (endTime != null) PlateFields.endTime: endTime,
       PlateFields.location: location,
       PlateFields.area: area,
       PlateFields.userName: userName,
@@ -162,6 +174,7 @@ class PlateModel {
     String? plateNumber,
     String? type,
     DateTime? requestTime,
+    DateTime? endTime,
     String? location,
     String? area,
     String? userName,
@@ -184,6 +197,7 @@ class PlateModel {
       plateNumber: plateNumber ?? this.plateNumber,
       type: type ?? this.type,
       requestTime: requestTime ?? this.requestTime,
+      endTime: endTime ?? this.endTime,
       location: location ?? this.location,
       area: area ?? this.area,
       userName: userName ?? this.userName,

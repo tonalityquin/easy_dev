@@ -26,6 +26,7 @@ import '../states/plate/delete_plate.dart';
 import '../states/plate/movement_plate.dart';
 import '../states/plate/log_plate.dart'; // ✅ 로그 상태 추가
 import '../states/secondary/secondary_mode.dart';
+import '../states/calendar/selected_date_state.dart';
 
 final List<SingleChildWidget> stateProviders = [
   // 🌐 전역 페이지 상태
@@ -122,5 +123,9 @@ final List<SingleChildWidget> stateProviders = [
       final area = context.read<AreaState>();
       return StatusState(repo, area);
     },
+  ),
+  // 📅 선택된 날짜 상태
+  ChangeNotifierProvider(
+    create: (_) => SelectedDateState(),
   ),
 ];
