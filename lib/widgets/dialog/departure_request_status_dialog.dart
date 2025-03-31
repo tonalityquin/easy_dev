@@ -10,7 +10,6 @@ import '../../utils/snackbar_helper.dart';
 class DepartureRequestStatusDialog extends StatelessWidget {
   final VoidCallback onRequestEntry;
   final VoidCallback onCompleteEntry;
-  final VoidCallback onPrePayment; // ✅ 추가
   final VoidCallback onDelete;
   final String plateNumber;
   final String area;
@@ -21,7 +20,6 @@ class DepartureRequestStatusDialog extends StatelessWidget {
     super.key,
     required this.onRequestEntry,
     required this.onCompleteEntry,
-    required this.onPrePayment, // ✅ 추가
     required this.onDelete,
     required this.plateNumber,
     required this.area,
@@ -93,16 +91,6 @@ class DepartureRequestStatusDialog extends StatelessWidget {
                 onPressed: () {
                   Navigator.pop(context);
                   onCompleteEntry();
-                },
-                style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
-              ),
-              const SizedBox(height: 8),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.payments),
-                label: const Text("사전 정산"),
-                onPressed: () {
-                  Navigator.pop(context);
-                  onPrePayment(); // ✅ 콜백 호출
                 },
                 style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
               ),

@@ -336,14 +336,6 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                                 selectedPlate.location,
                               );
                             },
-                            onPrePayment: () {
-                              handlePrePayment(
-                                context,
-                                selectedPlate.plateNumber,
-                                selectedPlate.area,
-                                selectedPlate.location,
-                              );
-                            },
                             onDelete: () {
                               showDialog(
                                 context: context,

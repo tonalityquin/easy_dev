@@ -10,7 +10,6 @@ import '../../utils/snackbar_helper.dart';
 class ParkingCompletedStatusDialog extends StatelessWidget {
   final VoidCallback onRequestEntry;
   final VoidCallback onCompleteDeparture;
-  final VoidCallback onPrePayment;
   final VoidCallback onDelete;
   final String plateNumber;
   final String area;
@@ -21,7 +20,6 @@ class ParkingCompletedStatusDialog extends StatelessWidget {
     required this.plate,
     required this.onRequestEntry,
     required this.onCompleteDeparture,
-    required this.onPrePayment,
     required this.onDelete,
     required this.plateNumber,
     required this.area,
@@ -96,16 +94,6 @@ class ParkingCompletedStatusDialog extends StatelessWidget {
                 style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
               ),
               const SizedBox(height: 8),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.payments),
-                label: const Text("사전 정산"),
-                onPressed: () {
-                  Navigator.pop(context);
-                  onPrePayment();
-                },
-                style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
-              ),
-              const SizedBox(height: 8),
               TextButton.icon(
                 icon: const Icon(Icons.delete_forever, color: Colors.red),
                 label: const Text("삭제", style: TextStyle(color: Colors.red)),
@@ -122,7 +110,6 @@ class ParkingCompletedStatusDialog extends StatelessWidget {
   }
 }
 
-
 class ScaleTransitionDialog extends StatefulWidget {
   final Widget child;
 
@@ -132,8 +119,7 @@ class ScaleTransitionDialog extends StatefulWidget {
   State<ScaleTransitionDialog> createState() => _ScaleTransitionDialogState();
 }
 
-class _ScaleTransitionDialogState extends State<ScaleTransitionDialog>
-    with SingleTickerProviderStateMixin {
+class _ScaleTransitionDialogState extends State<ScaleTransitionDialog> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
 

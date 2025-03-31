@@ -8,7 +8,6 @@ import '../../states/plate/plate_state.dart';
 import '../../utils/snackbar_helper.dart';
 
 class DepartureCompletedStatusDialog extends StatelessWidget {
-  final VoidCallback onPrePayment;
   final VoidCallback onDelete;
   final String plateNumber;
   final String area;
@@ -17,7 +16,6 @@ class DepartureCompletedStatusDialog extends StatelessWidget {
   const DepartureCompletedStatusDialog({
     super.key,
     required this.plate,
-    required this.onPrePayment,
     required this.onDelete,
     required this.plateNumber,
     required this.area,
@@ -54,19 +52,6 @@ class DepartureCompletedStatusDialog extends StatelessWidget {
                       ),
                     ),
                   );
-                },
-                style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
-              ),
-
-              const SizedBox(height: 8),
-
-              // ✅ 2. 사전 정산
-              ElevatedButton.icon(
-                icon: const Icon(Icons.payments),
-                label: const Text("사전 정산"),
-                onPressed: () {
-                  Navigator.pop(context);
-                  onPrePayment();
                 },
                 style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
               ),

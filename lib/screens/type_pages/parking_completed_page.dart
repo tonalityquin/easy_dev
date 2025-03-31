@@ -270,10 +270,10 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                             );
 
                             await context.read<PlateRepository>().addOrUpdateDocument(
-                              'parking_completed',
-                              selectedPlate.id,
-                              updatedPlate.toMap(),
-                            );
+                                  'parking_completed',
+                                  selectedPlate.id,
+                                  updatedPlate.toMap(),
+                                );
 
                             await context.read<PlateState>().updatePlateLocally('parking_completed', updatedPlate);
 
@@ -299,10 +299,10 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                         );
 
                         await context.read<PlateRepository>().addOrUpdateDocument(
-                          'parking_completed',
-                          selectedPlate.id,
-                          updatedPlate.toMap(),
-                        );
+                              'parking_completed',
+                              selectedPlate.id,
+                              updatedPlate.toMap(),
+                            );
 
                         await context.read<PlateState>().updatePlateLocally('parking_completed', updatedPlate);
 
@@ -310,8 +310,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                       } else {
                         _isSearchMode ? _resetSearch(context) : _showSearchDialog(context);
                       }
-                    }
-                    else if (index == 1) {
+                    } else if (index == 1) {
                       if (isPlateSelected) {
                         showDialog(
                           context: context,
@@ -339,10 +338,6 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                             },
                             onCompleteDeparture: () {
                               handleEntryDepartureCompleted(
-                                  context, selectedPlate.plateNumber, selectedPlate.area, selectedPlate.location);
-                            },
-                            onPrePayment: () {
-                              handlePrePayment(
                                   context, selectedPlate.plateNumber, selectedPlate.area, selectedPlate.location);
                             },
                             onDelete: () {

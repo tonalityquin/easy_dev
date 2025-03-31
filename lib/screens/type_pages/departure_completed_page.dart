@@ -206,10 +206,10 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                     );
 
                     await context.read<PlateRepository>().addOrUpdateDocument(
-                      'departure_completed',
-                      selectedPlate.id,
-                      updatedPlate.toMap(),
-                    );
+                          'departure_completed',
+                          selectedPlate.id,
+                          updatedPlate.toMap(),
+                        );
 
                     await context.read<PlateState>().updatePlateLocally('departure_completed', updatedPlate);
 
@@ -217,8 +217,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                   } else {
                     _isSearchMode ? _resetSearch(context) : _showSearchDialog(context);
                   }
-                }
-                else if (index == 1) {
+                } else if (index == 1) {
                   if (isPlateSelected) {
                     showDialog(
                       context: context,
@@ -260,14 +259,6 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                         plate: selectedPlate,
                         plateNumber: selectedPlate.plateNumber,
                         area: selectedPlate.area,
-                        onPrePayment: () {
-                          handlePrePayment(
-                            context,
-                            selectedPlate.plateNumber,
-                            selectedPlate.area,
-                            selectedPlate.location,
-                          );
-                        },
                         onDelete: () {
                           // 삭제 다이얼로그 등 필요한 처리
                         },
