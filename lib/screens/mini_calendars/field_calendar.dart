@@ -23,8 +23,18 @@ class _FieldCalendarPage extends State<FieldCalendarPage> {
   void initState() {
     super.initState();
     calendar = FieldCalendarState();
+
+    // ✅ 선택 날짜를 오늘로 초기화
+    calendar.selectDate(DateTime.now());
+
+    // ✅ 전역 Provider 상태도 초기화
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<SelectedDateState>().setSelectedDate(DateTime.now());
+    });
+
     _initUserMemoKey();
   }
+
 
   Future<void> _initUserMemoKey() async {
     final prefs = await SharedPreferences.getInstance();

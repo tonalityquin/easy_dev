@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../states/area/area_state.dart';
+import '../states/calendar/selected_date_state.dart';
 import '../states/plate/plate_state.dart';
 import '../states/user/user_state.dart';
 import '../utils/app_colors.dart';
@@ -133,10 +135,13 @@ class PageBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer2<PageState, PlateState>(
-      builder: (context, pageState, plateState, child) {
+    return Consumer3<PageState, PlateState, SelectedDateState>(
+      builder: (context, pageState, plateState, selectedDateState, child) {
         final selectedColor = AppColors.selectedItemColor;
         final unselectedColor = Colors.grey;
+
+        final selectedDate = selectedDateState.selectedDate ?? DateTime.now();
+        final currentArea = context.read<AreaState>().currentArea;
 
         return BottomNavigationBar(
           currentIndex: pageState.selectedIndex,
@@ -148,10 +153,23 @@ class PageBottomNavigation extends StatelessWidget {
           backgroundColor: Colors.white,
           items: List.generate(pageState.pages.length, (index) {
             final pageInfo = pageState.pages[index];
-            final int count = plateState
-                .getPlatesByCollection(pageInfo.collectionKey)
-                .length;
             final bool isSelected = pageState.selectedIndex == index;
+
+            int count;
+            if (pageInfo.collectionKey == 'departure_completed') {
+              count = plateState
+                  .getPlatesByCollection('departure_completed')
+                  .where((p) =>
+              p.type == '출차 완료' &&
+                  p.area == currentArea &&
+                  p.endTime != null &&
+                  p.endTime!.year == selectedDate.year &&
+                  p.endTime!.month == selectedDate.month &&
+                  p.endTime!.day == selectedDate.day)
+                  .length;
+            } else {
+              count = plateState.getPlatesByCollection(pageInfo.collectionKey).length;
+            }
 
             return BottomNavigationBarItem(
               icon: AnimatedContainer(
@@ -160,7 +178,6 @@ class PageBottomNavigation extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // ✅ 숫자 튐 + 색상 보간 강조
                     AnimatedSwitcher(
                       duration: const Duration(milliseconds: 300),
                       transitionBuilder: (child, animation) =>

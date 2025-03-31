@@ -28,8 +28,6 @@ class PlateFields {
   static const String isLockedFee = 'isLockedFee';
   static const String lockedAtTimeInSeconds = 'lockedAtTimeInSeconds';
   static const String lockedFeeAmount = 'lockedFeeAmount'; // ✅ 추가
-
-
 }
 
 class PlateModel {
@@ -56,7 +54,6 @@ class PlateModel {
   final int? lockedAtTimeInSeconds; // ✅ 정산 고정 시간 (초)
   final int? lockedFeeAmount; // ✅ 추가
 
-
   PlateModel({
     required this.id,
     required this.plateNumber,
@@ -79,7 +76,6 @@ class PlateModel {
     this.isLockedFee = false,
     this.lockedAtTimeInSeconds,
     this.lockedFeeAmount, // ✅
-
   });
 
   factory PlateModel.fromDocument(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -87,13 +83,13 @@ class PlateModel {
     final timestamp = data[PlateFields.requestTime];
     final endTimestamp = data[PlateFields.endTime]; // ✅
 
-
     return PlateModel(
       id: doc.id,
       plateNumber: data[PlateFields.plateNumber] ?? '',
       type: data[PlateFields.type] ?? '',
       requestTime: (timestamp is Timestamp) ? timestamp.toDate() : DateTime.now(),
-      endTime: (endTimestamp is Timestamp) ? endTimestamp.toDate() : null, // ✅
+      endTime: (endTimestamp is Timestamp) ? endTimestamp.toDate() : null,
+      // ✅
       location: data[PlateFields.location] ?? '미지정',
       area: data[PlateFields.area] ?? '미지정',
       userName: data[PlateFields.userName] ?? 'Unknown',
@@ -121,9 +117,8 @@ class PlateModel {
       requestTime: (map[PlateFields.requestTime] is Timestamp)
           ? (map[PlateFields.requestTime] as Timestamp).toDate()
           : DateTime.now(),
-      endTime: (map[PlateFields.endTime] is Timestamp)
-          ? (map[PlateFields.endTime] as Timestamp).toDate()
-          : null, // ✅
+      endTime: (map[PlateFields.endTime] is Timestamp) ? (map[PlateFields.endTime] as Timestamp).toDate() : null,
+      // ✅
       location: map[PlateFields.location] ?? '미지정',
       area: map[PlateFields.area] ?? '미지정',
       userName: map[PlateFields.userName] ?? 'Unknown',
@@ -162,10 +157,8 @@ class PlateModel {
       PlateFields.addAmount: addAmount,
       PlateFields.region: region,
       PlateFields.isLockedFee: isLockedFee,
-      if (lockedAtTimeInSeconds != null)
-        PlateFields.lockedAtTimeInSeconds: lockedAtTimeInSeconds,
-      if (lockedFeeAmount != null)
-        PlateFields.lockedFeeAmount: lockedFeeAmount,
+      if (lockedAtTimeInSeconds != null) PlateFields.lockedAtTimeInSeconds: lockedAtTimeInSeconds,
+      if (lockedFeeAmount != null) PlateFields.lockedFeeAmount: lockedFeeAmount,
     };
   }
 
@@ -217,6 +210,5 @@ class PlateModel {
   }
 
   @override
-  String toString() =>
-      'PlateModel(id: $id, plateNumber: $plateNumber, user: $userName, area: $area)';
+  String toString() => 'PlateModel(id: $id, plateNumber: $plateNumber, user: $userName, area: $area)';
 }

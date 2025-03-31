@@ -67,13 +67,38 @@ class FilterPlate extends ChangeNotifier {
   List<PlateModel> filterByParkingLocation(String collection, String area, String parkingLocation) {
     debugPrint("🚀 filterByParkingLocation() 호출됨: 지역 = $area, 주차 구역 = $parkingLocation");
 
-    List<PlateModel> plates = _data[collection]?.where((plate) => plate.area == area).toList() ?? [];
-    debugPrint("📌 지역 필터링 후 plate 개수: ${plates.length}");
+    List<PlateModel> plates;
+
+    if (collection == 'departure_completed') {
+      // ✅ 출차 완료만: area + end_time 필터
+      plates = _data[collection]?.where((plate) => plate.area == area && plate.endTime != null).toList() ?? [];
+    } else {
+      // 나머지 컬렉션은 기존대로
+      plates = _data[collection]?.where((plate) => plate.area == area).toList() ?? [];
+    }
+
+    debugPrint("📌 지역 및 end_time 필터링 후 plate 개수: ${plates.length}");
 
     plates = plates.where((plate) => plate.location == parkingLocation).toList();
+
     debugPrint("📌 주차 구역 필터링 후 plate 개수: ${plates.length}");
 
     return plates;
+  }
+
+  List<PlateModel> filterDepartureCompletedByDate({
+    required String area,
+    required DateTime selectedDate,
+  }) {
+    return _data['departure_completed']
+            ?.where((plate) =>
+                plate.area == area &&
+                plate.endTime != null &&
+                plate.endTime!.year == selectedDate.year &&
+                plate.endTime!.month == selectedDate.month &&
+                plate.endTime!.day == selectedDate.day)
+            .toList() ??
+        [];
   }
 
   Future<List<String>> getAvailableLocations(String area) async {

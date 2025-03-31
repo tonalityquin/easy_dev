@@ -30,6 +30,7 @@ class PlateState extends ChangeNotifier {
   String get currentArea => _areaState.currentArea;
 
   bool _isLoading = true;
+
   bool get isLoading => _isLoading;
 
   void PlateCounts() {
@@ -43,6 +44,17 @@ class PlateState extends ChangeNotifier {
       print('🚗 Departure Requests: ${_data['departure_requests']?.length ?? 0}');
       print('🏁 Departure Completed: ${_data['departure_completed']?.length ?? 0}');
     }
+  }
+
+  int getDepartureCompletedCountByDate(DateTime selectedDate) {
+    return _data['departure_completed']
+            ?.where((p) =>
+                p.endTime != null &&
+                p.endTime!.year == selectedDate.year &&
+                p.endTime!.month == selectedDate.month &&
+                p.endTime!.day == selectedDate.day)
+            .length ??
+        0;
   }
 
   void _initializeSubscriptions() {
@@ -101,19 +113,34 @@ class PlateState extends ChangeNotifier {
     PlateCounts();
   }
 
-  List<PlateModel> getPlatesByCollection(String collection) {
-    final plates = _data[collection] ?? [];
+  List<PlateModel> getPlatesByCollection(String collection, {DateTime? selectedDate}) {
+    List<PlateModel> plates = _data[collection] ?? [];
 
+    // ✅ 출차 완료일 경우만 end_time + 날짜 필터 적용
+    if (collection == 'departure_completed') {
+      plates = plates.where((plate) {
+        if (plate.endTime == null) return false;
+        if (selectedDate == null) return true;
+
+        return plate.endTime!.year == selectedDate.year &&
+            plate.endTime!.month == selectedDate.month &&
+            plate.endTime!.day == selectedDate.day;
+      }).toList();
+    }
+
+    // ✅ 번호판 검색 필터 적용
     if (_searchQuery != null && _searchQuery!.length == 4) {
-      return plates.where((plate) {
+      plates = plates.where((plate) {
         final last4Digits = plate.plateNumber.length >= 4
             ? plate.plateNumber.substring(plate.plateNumber.length - 4)
             : plate.plateNumber;
         return last4Digits == _searchQuery;
       }).toList();
     }
+
     return plates;
   }
+
 
   Future<void> toggleIsSelected({
     required String collection,
@@ -137,18 +164,18 @@ class PlateState extends ChangeNotifier {
 
       final alreadySelected = _data.entries.expand((entry) => entry.value).firstWhere(
             (p) => p.isSelected && p.selectedBy == userName && p.id != plateId,
-        orElse: () => PlateModel(
-          id: '',
-          plateNumber: '',
-          type: '',
-          requestTime: DateTime.now(),
-          location: '',
-          area: '',
-          userName: '',
-          isSelected: false,
-          statusList: [],
-        ),
-      );
+            orElse: () => PlateModel(
+              id: '',
+              plateNumber: '',
+              type: '',
+              requestTime: DateTime.now(),
+              location: '',
+              area: '',
+              userName: '',
+              isSelected: false,
+              statusList: [],
+            ),
+          );
 
       if (alreadySelected.id.isNotEmpty && !plate.isSelected) {
         final collectionLabel = _getCollectionLabelForType(alreadySelected.type);
@@ -201,7 +228,7 @@ class PlateState extends ChangeNotifier {
     if (plates == null || plates.isEmpty) return null;
 
     return plates.firstWhere(
-          (plate) => plate.isSelected && plate.selectedBy == userName,
+      (plate) => plate.isSelected && plate.selectedBy == userName,
       orElse: () => PlateModel(
         id: '',
         plateNumber: '',

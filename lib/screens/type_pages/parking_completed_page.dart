@@ -268,7 +268,6 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                               isLockedFee: false,
                               lockedAtTimeInSeconds: null,
                               lockedFeeAmount: null,
-
                             );
 
                             await context.read<PlateRepository>().addOrUpdateDocument(
@@ -299,7 +298,6 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                           isLockedFee: true,
                           lockedAtTimeInSeconds: currentTime,
                           lockedFeeAmount: lockedFee, // ✅ 사전 정산 금액 저장
-
                         );
 
                         await context.read<PlateRepository>().addOrUpdateDocument(

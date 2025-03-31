@@ -26,8 +26,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
   bool _isSearchMode = false;
   bool _isSorted = true;
   bool _isLoading = false;
-  bool _isParkingAreaMode = false;
-  String? _selectedParkingArea;
+  bool _hasCalendarBeenReset = false;
 
   void _showSearchDialog(BuildContext context) {
     showDialog(
@@ -89,16 +88,26 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
       },
       child: Scaffold(
         appBar: const TopNavigation(),
-        body: Consumer2<PlateState, AreaState>(
-          builder: (context, plateState, areaState, child) {
-            var departureCompleted = _isParkingAreaMode && _selectedParkingArea != null
-                ? context
-                    .read<FilterPlate>()
-                    .filterByParkingLocation('departure_completed', areaState.currentArea, _selectedParkingArea!)
-                : plateState.getPlatesByCollection('departure_completed');
+        body: Consumer3<PlateState, AreaState, SelectedDateState>(
+          builder: (context, plateState, areaState, selectedDateState, child) {
+            final selectedDate = selectedDateState.selectedDate ?? DateTime.now();
+            final area = areaState.currentArea;
 
+            // 🔍 날짜 & 지역 기준으로 출차 완료 Plate 필터링
+            final departureCompleted = plateState.getPlatesByCollection('departure_completed').where((p) {
+              final endTime = p.endTime;
+              return p.type == '출차 완료' &&
+                  endTime != null &&
+                  p.area == area &&
+                  endTime.year == selectedDate.year &&
+                  endTime.month == selectedDate.month &&
+                  endTime.day == selectedDate.day;
+            }).toList();
+
+            // ✅ 정렬 처리
             departureCompleted.sort(
-                (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime));
+              (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime),
+            );
 
             return _isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -108,12 +117,12 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                       PlateContainer(
                         data: departureCompleted,
                         collection: 'departure_completed',
-                        filterCondition: (p) => p.type == '출차 완료',
+                        filterCondition: (_) => true, // 이미 위에서 필터링 완료됨
                         onPlateTap: (plateNumber, area) {
                           plateState.toggleIsSelected(
                             collection: 'departure_completed',
                             plateNumber: plateNumber,
-                            userName: userName,
+                            userName: context.read<UserState>().name,
                             onError: (errorMessage) {
                               showFailedSnackbar(context, errorMessage);
                             },
@@ -128,10 +137,9 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
           builder: (context, plateState, child) {
             final selectedPlate = plateState.getSelectedPlate('departure_completed', userName);
             final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
-            final selectedDate = context.watch<SelectedDateState>().selectedDate;
-            final formattedDate = selectedDate != null
-                ? '${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}'
-                : '달력 열기';
+            final selectedDate = context.watch<SelectedDateState>().selectedDate ?? DateTime.now(); // ← null 대비
+            final formattedDate =
+                '${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}';
 
             return BottomNavigationBar(
               items: [
@@ -174,8 +182,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                 BottomNavigationBarItem(
                   icon: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 300),
-                    transitionBuilder: (child, animation) =>
-                        ScaleTransition(scale: animation, child: child),
+                    transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
                     child: isPlateSelected
                         ? const Icon(Icons.settings, key: ValueKey('setting'))
                         : const Icon(Icons.calendar_today, key: ValueKey('calendar'), color: Colors.grey),
@@ -209,7 +216,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                     final updatedPlate = selectedPlate.copyWith(
                       isLockedFee: true,
                       lockedAtTimeInSeconds: currentTime,
-                        lockedFeeAmount: lockedFee,
+                      lockedFeeAmount: lockedFee,
                     );
 
                     await context.read<PlateRepository>().addOrUpdateDocument(
@@ -266,18 +273,26 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                         plate: selectedPlate,
                         plateNumber: selectedPlate.plateNumber,
                         area: selectedPlate.area,
-                        onDelete: () {
-                          // 삭제 다이얼로그 등 필요한 처리
-                        },
+                        onDelete: () {},
                       ),
                     );
                   } else {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const FieldCalendarPage(),
-                      ),
-                    );
+                    if (!_hasCalendarBeenReset) {
+                      // ✅ 첫 클릭: 오늘 날짜로 리셋만 함
+                      context.read<SelectedDateState>().setSelectedDate(DateTime.now());
+                      setState(() {
+                        _hasCalendarBeenReset = true;
+                      });
+                    } else {
+                      // ✅ 두 번째 클릭: 달력 페이지 이동
+                      setState(() {
+                        _hasCalendarBeenReset = false; // 초기화
+                      });
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const FieldCalendarPage()),
+                      );
+                    }
                   }
                 }
               },
