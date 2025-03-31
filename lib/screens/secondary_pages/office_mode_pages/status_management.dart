@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../states/status/status_state.dart';
-import '../../../widgets/navigation/secondary_role_navigation.dart'; // 상단 내비게이션 바
 import '../../../widgets/navigation/secondary_mini_navigation.dart';
 
 class StatusManagement extends StatelessWidget {

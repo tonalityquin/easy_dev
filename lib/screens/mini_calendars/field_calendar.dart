@@ -73,12 +73,13 @@ class _FieldCalendarPage extends State<FieldCalendarPage> {
 
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 1,
         centerTitle: true,
         title: const Text(
-          "직원용 달력 페이지",
+          "출차 기록은 2주일까지만 보관",
           style: TextStyle(color: Colors.grey, fontSize: 16),
         ),
       ),

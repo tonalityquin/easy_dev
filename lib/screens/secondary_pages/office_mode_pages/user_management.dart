@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 
 import '../../../models/user_model.dart';
 import '../../../utils/snackbar_helper.dart';
-import '../../../widgets/navigation/secondary_role_navigation.dart';
 import '../../../widgets/navigation/secondary_mini_navigation.dart';
 import 'user_management_pages/user_setting.dart';
 import '../../../widgets/container/user_custom_box.dart';

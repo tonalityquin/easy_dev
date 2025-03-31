@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../states/adjustment/adjustment_state.dart';
 import '../../../states/area/area_state.dart'; // 🔥 지역 상태 추가
-import '../../../widgets/navigation/secondary_role_navigation.dart';
 import '../../../widgets/navigation/secondary_mini_navigation.dart';
 import '../../../widgets/container/adjustment_custom_box.dart';
 import 'adjustment_pages/adjustment_setting.dart';

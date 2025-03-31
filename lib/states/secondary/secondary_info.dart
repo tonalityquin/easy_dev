@@ -8,6 +8,8 @@ import '../../screens/secondary_pages/office_mode_pages/office_calender.dart';
 import '../../screens/secondary_pages/office_mode_pages/location_management.dart';
 import '../../screens/secondary_pages/office_mode_pages/status_management.dart';
 import '../../screens/secondary_pages/office_mode_pages/user_management.dart';
+import '../../screens/secondary_pages/statistics_mode_pages/car_in_out_management.dart';
+import '../../screens/secondary_pages/statistics_mode_pages/worker_management.dart';
 
 class SecondaryInfo {
   final String title;
@@ -31,4 +33,6 @@ final List<SecondaryInfo> officeModePages = [
   SecondaryInfo('투두 달력', OfficeCalenderPage(), Icon(Icons.calendar_today)),
 ];
 final List<SecondaryInfo> statisticsPages = [
+  SecondaryInfo('출퇴근 관리', WorkerManagementPage(), Icon(Icons.calendar_today)),
+  SecondaryInfo('차량 입출차 관리', CarInOutManagement(), Icon(Icons.calendar_today)),
 ];

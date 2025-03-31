@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../states/break_log_state.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../widgets/navigation/secondary_mini_navigation.dart';
 import '../../../states/user/user_state.dart';
@@ -115,7 +116,12 @@ class DashBoard extends StatelessWidget {
   Widget _buildBreakButton(BuildContext context) {
     return InkWell(
       onTap: () {
-        showSuccessSnackbar(context, '휴게 사용 확인됐습니다'); // 추후 userState에 연결 가능
+        final userState = context.read<UserState>();
+        final logState = context.read<BreakLogState>();
+
+        logState.addLog(userState.name); // ✅ 로그 추가
+
+        showSuccessSnackbar(context, '휴게 사용 확인됐습니다');
       },
       borderRadius: BorderRadius.circular(16),
       child: Container(
@@ -124,7 +130,7 @@ class DashBoard extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           gradient: const LinearGradient(
-            colors: [Color(0xFF90CAF9), Color(0xFF42A5F5)], // 파란 계열
+            colors: [Color(0xFF90CAF9), Color(0xFF42A5F5)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -157,6 +163,7 @@ class DashBoard extends StatelessWidget {
       ),
     );
   }
+
 
   @override
   Widget build(BuildContext context) {
