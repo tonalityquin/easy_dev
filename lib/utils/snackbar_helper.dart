@@ -53,7 +53,7 @@ void showFailedSnackbar(BuildContext context, String message) {
           ),
           child: Row(
             children: [
-              const Icon(Icons.dangerous_outlined, color: Colors.white),
+              const Icon(Icons.error_outline, color: Colors.white),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(message, style: const TextStyle(color: Colors.white, fontSize: 15)),
