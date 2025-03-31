@@ -9,6 +9,7 @@ import '../../states/area/area_state.dart'; // 지역 상태 관리
 import '../../states/user/user_state.dart';
 import '../../utils/fee_calculator.dart';
 import '../../widgets/container/plate_container.dart'; // 번호판 컨테이너 위젯
+import '../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 import '../../widgets/dialog/departure_completed_confirm_dialog.dart';
 import '../../widgets/dialog/parking_location_dialog.dart';
 import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바
@@ -231,22 +232,37 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                   onTap: (index) async {
                     if (index == 0) {
                       if (isPlateSelected) {
+                        final adjustmentType = selectedPlate.adjustmentType;
+
+                        // ✅ 정산 타입이 없는 경우 → 사전 정산 불가
+                        if (adjustmentType == null || adjustmentType.trim().isEmpty) {
+                          showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
+                          return;
+                        }
+
                         final now = DateTime.now();
                         final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
                         final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
 
                         if (selectedPlate.isLockedFee) {
-                          // 🔓 정산 취소
+                          // ✅ 정산 취소 전 확인 다이얼로그
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (context) => const ConfirmCancelFeeDialog(), // ✅ 별도 다이얼로그로 분리 필요
+                          );
+
+                          if (confirm != true) return;
+
                           final updatedPlate = selectedPlate.copyWith(
                             isLockedFee: false,
                             lockedAtTimeInSeconds: null,
                           );
 
                           await context.read<PlateRepository>().addOrUpdateDocument(
-                                'departure_requests',
-                                selectedPlate.id,
-                                updatedPlate.toMap(),
-                              );
+                            'departure_requests',
+                            selectedPlate.id,
+                            updatedPlate.toMap(),
+                          );
 
                           await context.read<PlateState>().updatePlateLocally('departure_requests', updatedPlate);
 
@@ -270,22 +286,19 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                         );
 
                         await context.read<PlateRepository>().addOrUpdateDocument(
-                              'departure_requests',
-                              selectedPlate.id,
-                              updatedPlate.toMap(),
-                            );
+                          'departure_requests',
+                          selectedPlate.id,
+                          updatedPlate.toMap(),
+                        );
 
                         await context.read<PlateState>().updatePlateLocally('departure_requests', updatedPlate);
 
                         showSuccessSnackbar(context, '사전 정산 완료: ₩$lockedFee');
                       } else {
-                        if (_isSearchMode) {
-                          _resetSearch(context);
-                        } else {
-                          _showSearchDialog(context);
-                        }
+                        _isSearchMode ? _resetSearch(context) : _showSearchDialog(context);
                       }
-                    } else if (index == 1) {
+                    }
+                    else if (index == 1) {
                       if (isPlateSelected) {
                         showDialog(
                           context: context,

@@ -9,6 +9,7 @@ import '../../states/area/area_state.dart'; // AreaState 상태 관리
 import '../../states/user/user_state.dart';
 import '../../states/plate/filter_plate.dart';
 import '../../widgets/container/plate_container.dart'; // 번호판 컨테이너 위젯
+import '../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 import '../../widgets/dialog/departure_request_confirmation_dialog.dart';
 import '../../widgets/dialog/parking_location_dialog.dart';
 import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바
@@ -243,29 +244,46 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                   onTap: (index) async {
                     if (index == 0) {
                       if (isPlateSelected) {
+                        final adjustmentType = selectedPlate.adjustmentType;
+
+                        // ✅ 정산 타입이 없는 경우 → 사전 정산 불가
+                        if (adjustmentType == null || adjustmentType.trim().isEmpty) {
+                          showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
+                          return;
+                        }
+
                         final now = DateTime.now();
                         final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
                         final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
 
+                        // ✅ 정산 취소 시 확인 다이얼로그
                         if (selectedPlate.isLockedFee) {
-                          // 🔓 정산 취소
-                          final updatedPlate = selectedPlate.copyWith(
-                            isLockedFee: false,
-                            lockedAtTimeInSeconds: null,
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (context) => const ConfirmCancelFeeDialog(),
                           );
 
-                          await context.read<PlateRepository>().addOrUpdateDocument(
-                                'parking_completed',
-                                selectedPlate.id,
-                                updatedPlate.toMap(),
-                              );
+                          if (confirm == true) {
+                            final updatedPlate = selectedPlate.copyWith(
+                              isLockedFee: false,
+                              lockedAtTimeInSeconds: null,
+                            );
 
-                          await context.read<PlateState>().updatePlateLocally('parking_completed', updatedPlate);
-                          showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
+                            await context.read<PlateRepository>().addOrUpdateDocument(
+                              'parking_completed',
+                              selectedPlate.id,
+                              updatedPlate.toMap(),
+                            );
+
+                            await context.read<PlateState>().updatePlateLocally('parking_completed', updatedPlate);
+
+                            showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
+                          }
+
                           return;
                         }
 
-                        // ✅ 정산이 안 되어 있을 경우 → 사전 정산 수행
+                        // ✅ 사전 정산 수행
                         final lockedFee = calculateParkingFee(
                           entryTimeInSeconds: entryTime,
                           currentTimeInSeconds: currentTime,
@@ -281,22 +299,19 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                         );
 
                         await context.read<PlateRepository>().addOrUpdateDocument(
-                              'parking_completed',
-                              selectedPlate.id,
-                              updatedPlate.toMap(),
-                            );
+                          'parking_completed',
+                          selectedPlate.id,
+                          updatedPlate.toMap(),
+                        );
 
                         await context.read<PlateState>().updatePlateLocally('parking_completed', updatedPlate);
 
                         showSuccessSnackbar(context, '사전 정산 완료: ₩$lockedFee');
                       } else {
-                        if (_isSearchMode) {
-                          _resetSearch(context);
-                        } else {
-                          _showSearchDialog(context);
-                        }
+                        _isSearchMode ? _resetSearch(context) : _showSearchDialog(context);
                       }
-                    } else if (index == 1) {
+                    }
+                    else if (index == 1) {
                       if (isPlateSelected) {
                         showDialog(
                           context: context,

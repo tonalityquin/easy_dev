@@ -185,25 +185,12 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                     final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
 
                     if (selectedPlate.isLockedFee) {
-                      // 🔓 정산 취소
-                      final updatedPlate = selectedPlate.copyWith(
-                        isLockedFee: false,
-                        lockedAtTimeInSeconds: null,
-                      );
-
-                      await context.read<PlateRepository>().addOrUpdateDocument(
-                            'departure_completed',
-                            selectedPlate.id,
-                            updatedPlate.toMap(),
-                          );
-
-                      await context.read<PlateState>().updatePlateLocally('departure_completed', updatedPlate);
-
-                      showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
+                      // ❌ 정산 취소 불가능 (departure_completed는 정산 완료 상태로 간주)
+                      showFailedSnackbar(context, '정산 완료된 항목은 취소할 수 없습니다.');
                       return;
                     }
 
-                    // ✅ 사전 정산
+                    // ✅ 사전 정산 수행
                     final lockedFee = calculateParkingFee(
                       entryTimeInSeconds: entryTime,
                       currentTimeInSeconds: currentTime,
@@ -219,10 +206,10 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                     );
 
                     await context.read<PlateRepository>().addOrUpdateDocument(
-                          'departure_completed',
-                          selectedPlate.id,
-                          updatedPlate.toMap(),
-                        );
+                      'departure_completed',
+                      selectedPlate.id,
+                      updatedPlate.toMap(),
+                    );
 
                     await context.read<PlateState>().updatePlateLocally('departure_completed', updatedPlate);
 
@@ -230,7 +217,8 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                   } else {
                     _isSearchMode ? _resetSearch(context) : _showSearchDialog(context);
                   }
-                } else if (index == 1) {
+                }
+                else if (index == 1) {
                   if (isPlateSelected) {
                     showDialog(
                       context: context,
