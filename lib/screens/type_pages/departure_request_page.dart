@@ -278,6 +278,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                           context: context,
                           builder: (context) =>
                               DepartureRequestStatusDialog(
+                                plate: selectedPlate,
                                 plateNumber: selectedPlate.plateNumber,
                                 area: selectedPlate.area,
                                 onRequestEntry: () {

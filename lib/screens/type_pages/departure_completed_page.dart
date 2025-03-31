@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../repositories/plate/plate_repository.dart';
-import '../../screens/logs/plate_log_viewer_page.dart';
 import '../../states/plate/filter_plate.dart';
 import '../../states/plate/plate_state.dart';
 import '../../states/area/area_state.dart';
 import '../../states/user/user_state.dart';
 import '../../widgets/container/plate_container.dart';
+import '../../widgets/dialog/departure_completed_status_dialog.dart';
 import '../../widgets/navigation/top_navigation.dart';
 import '../../widgets/dialog/plate_search_dialog.dart';
 import '../../widgets/dialog/adjustment_completed_confirm_dialog.dart';
 import '../../utils/snackbar_helper.dart';
 import '../input_pages/modify_plate_info.dart';
 import '../mini_calendars/field_calendar.dart';
+
 
 
 class DepartureCompletedPage extends StatefulWidget {
@@ -168,10 +169,10 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                     duration: const Duration(milliseconds: 300),
                     transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
                     child: isPlateSelected
-                        ? const Icon(Icons.menu_book, key: ValueKey('log'))
+                        ? const Icon(Icons.settings, key: ValueKey('setting'))
                         : const Icon(Icons.calendar_today, key: ValueKey('calendar'), color: Colors.grey),
                   ),
-                  label: isPlateSelected ? '로그 확인' : '달력 열기',
+                  label: isPlateSelected ? '상태 수정' : '달력 열기',
                 ),
               ],
               onTap: (index) async {
@@ -225,10 +226,23 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                   }
                 } else if (index == 2) {
                   if (isPlateSelected) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => PlateLogViewerPage(initialPlateNumber: selectedPlate.plateNumber),
+                    showDialog(
+                      context: context,
+                      builder: (context) => DepartureCompletedStatusDialog(
+                        plate: selectedPlate,
+                        plateNumber: selectedPlate.plateNumber,
+                        area: selectedPlate.area,
+                        onPrePayment: () {
+                          handlePrePayment(
+                            context,
+                            selectedPlate.plateNumber,
+                            selectedPlate.area,
+                            selectedPlate.location,
+                          );
+                        },
+                        onDelete: () {
+                          // 삭제 다이얼로그 등 필요한 처리
+                        },
                       ),
                     );
                   } else {

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../models/plate_model.dart';
+import '../../screens/input_pages/modify_plate_info.dart'; // ✅ 정보 수정 화면
 import '../../screens/logs/plate_log_viewer_page.dart';
 import '../../states/plate/movement_plate.dart';
 import '../../states/plate/plate_state.dart';
@@ -8,16 +10,18 @@ import '../../utils/snackbar_helper.dart';
 class ParkingCompletedStatusDialog extends StatelessWidget {
   final VoidCallback onRequestEntry;
   final VoidCallback onCompleteDeparture;
-  final VoidCallback onPrePayment; // ✅ 사전 정산 콜백 추가
+  final VoidCallback onPrePayment;
   final VoidCallback onDelete;
   final String plateNumber;
   final String area;
+  final PlateModel plate; // ✅ plate 전달 추가
 
   const ParkingCompletedStatusDialog({
     super.key,
+    required this.plate,
     required this.onRequestEntry,
     required this.onCompleteDeparture,
-    required this.onPrePayment, // ✅ 추가
+    required this.onPrePayment,
     required this.onDelete,
     required this.plateNumber,
     required this.area,
@@ -55,6 +59,24 @@ class ParkingCompletedStatusDialog extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               ElevatedButton.icon(
+                icon: const Icon(Icons.edit_note_outlined),
+                label: const Text("정보 수정"),
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ModifyPlateInfo(
+                        plate: plate,
+                        collectionKey: 'parking_completed',
+                      ),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
+              ),
+              const SizedBox(height: 8),
+              ElevatedButton.icon(
                 icon: const Icon(Icons.assignment_return),
                 label: const Text("입차 요청으로 되돌리기"),
                 onPressed: () {
@@ -79,7 +101,7 @@ class ParkingCompletedStatusDialog extends StatelessWidget {
                 label: const Text("사전 정산"),
                 onPressed: () {
                   Navigator.pop(context);
-                  onPrePayment(); // ✅ 콜백 호출
+                  onPrePayment();
                 },
                 style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
               ),
@@ -99,6 +121,7 @@ class ParkingCompletedStatusDialog extends StatelessWidget {
     );
   }
 }
+
 
 class ScaleTransitionDialog extends StatefulWidget {
   final Widget child;

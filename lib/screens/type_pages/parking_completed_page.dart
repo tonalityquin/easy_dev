@@ -267,6 +267,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                         showDialog(
                           context: context,
                           builder: (context) => ParkingCompletedStatusDialog(
+                            plate: selectedPlate,
                             plateNumber: selectedPlate.plateNumber,
                             area: selectedPlate.area,
                             onRequestEntry: () {

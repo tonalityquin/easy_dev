@@ -7,25 +7,20 @@ import '../../states/plate/movement_plate.dart';
 import '../../states/plate/plate_state.dart';
 import '../../utils/snackbar_helper.dart';
 
-class DepartureRequestStatusDialog extends StatelessWidget {
-  final VoidCallback onRequestEntry;
-  final VoidCallback onCompleteEntry;
-  final VoidCallback onPrePayment; // ✅ 추가
+class DepartureCompletedStatusDialog extends StatelessWidget {
+  final VoidCallback onPrePayment;
   final VoidCallback onDelete;
   final String plateNumber;
   final String area;
   final PlateModel plate;
 
-
-  const DepartureRequestStatusDialog({
+  const DepartureCompletedStatusDialog({
     super.key,
-    required this.onRequestEntry,
-    required this.onCompleteEntry,
-    required this.onPrePayment, // ✅ 추가
+    required this.plate,
+    required this.onPrePayment,
     required this.onDelete,
     required this.plateNumber,
     required this.area,
-    required this.plate,
   });
 
   @override
@@ -38,12 +33,13 @@ class DepartureRequestStatusDialog extends StatelessWidget {
             children: const [
               Icon(Icons.settings, color: Colors.blueAccent),
               SizedBox(width: 8),
-              Text('출차 요청 상태 처리', style: TextStyle(fontWeight: FontWeight.bold)),
+              Text('출차 완료 상태 처리', style: TextStyle(fontWeight: FontWeight.bold)),
             ],
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // ✅ 1. 정보 수정
               ElevatedButton.icon(
                 icon: const Icon(Icons.edit_note_outlined),
                 label: const Text("정보 수정"),
@@ -54,14 +50,30 @@ class DepartureRequestStatusDialog extends StatelessWidget {
                     MaterialPageRoute(
                       builder: (_) => ModifyPlateInfo(
                         plate: plate,
-                        collectionKey: 'departure_requests',
+                        collectionKey: 'departure_completed',
                       ),
                     ),
                   );
                 },
                 style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
               ),
+
               const SizedBox(height: 8),
+
+              // ✅ 2. 사전 정산
+              ElevatedButton.icon(
+                icon: const Icon(Icons.payments),
+                label: const Text("사전 정산"),
+                onPressed: () {
+                  Navigator.pop(context);
+                  onPrePayment();
+                },
+                style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
+              ),
+
+              const SizedBox(height: 8),
+
+              // ✅ 3. 로그 확인
               ElevatedButton.icon(
                 icon: const Icon(Icons.history),
                 label: const Text("로그 확인"),
@@ -75,45 +87,6 @@ class DepartureRequestStatusDialog extends StatelessWidget {
                   );
                 },
                 style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
-              ),
-              const SizedBox(height: 8),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.assignment_return),
-                label: const Text("입차 요청으로 되돌리기"),
-                onPressed: () {
-                  Navigator.pop(context);
-                  onRequestEntry();
-                },
-                style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
-              ),
-              const SizedBox(height: 8),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.check_circle_outline),
-                label: const Text("입차 완료 처리"),
-                onPressed: () {
-                  Navigator.pop(context);
-                  onCompleteEntry();
-                },
-                style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
-              ),
-              const SizedBox(height: 8),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.payments),
-                label: const Text("사전 정산"),
-                onPressed: () {
-                  Navigator.pop(context);
-                  onPrePayment(); // ✅ 콜백 호출
-                },
-                style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
-              ),
-              const SizedBox(height: 8),
-              TextButton.icon(
-                icon: const Icon(Icons.delete_forever, color: Colors.red),
-                label: const Text("삭제", style: TextStyle(color: Colors.red)),
-                onPressed: () {
-                  Navigator.pop(context);
-                  onDelete();
-                },
               ),
             ],
           ),
@@ -132,8 +105,7 @@ class ScaleTransitionDialog extends StatefulWidget {
   State<ScaleTransitionDialog> createState() => _ScaleTransitionDialogState();
 }
 
-class _ScaleTransitionDialogState extends State<ScaleTransitionDialog>
-    with SingleTickerProviderStateMixin {
+class _ScaleTransitionDialogState extends State<ScaleTransitionDialog> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
 
@@ -167,41 +139,8 @@ class _ScaleTransitionDialogState extends State<ScaleTransitionDialog>
 }
 
 //
-// ✅ 상태 변경 핸들러들
+// ✅ 사전 정산 핸들러 (재사용 가능)
 //
-
-/// 출차 요청 → 입차 요청
-void handleEntryParkingRequest(BuildContext context, String plateNumber, String area) {
-  final movementPlate = context.read<MovementPlate>();
-  final plateState = context.read<PlateState>();
-
-  movementPlate.goBackToParkingRequest(
-    fromCollection: 'departure_requests',
-    plateNumber: plateNumber,
-    area: area,
-    plateState: plateState,
-    newLocation: "미지정",
-  );
-
-  showSuccessSnackbar(context, "입차 요청이 처리되었습니다.");
-}
-
-/// 출차 요청 → 입차 완료
-void handleEntryParkingCompleted(BuildContext context, String plateNumber, String area, String location) {
-  final movementPlate = context.read<MovementPlate>();
-  final plateState = context.read<PlateState>();
-
-  movementPlate.moveDepartureToParkingCompleted(
-    plateNumber,
-    area,
-    plateState,
-    location,
-  );
-
-  showSuccessSnackbar(context, "입차 완료가 처리되었습니다.");
-}
-
-/// 출차 요청 → 출차 완료 (사전 정산)
 void handlePrePayment(BuildContext context, String plateNumber, String area, String location) {
   final movementPlate = context.read<MovementPlate>();
   final plateState = context.read<PlateState>();

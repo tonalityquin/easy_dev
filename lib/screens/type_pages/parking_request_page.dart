@@ -251,6 +251,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                             context: context,
                             builder: (context) {
                               return ParkingRequestStatusDialog(
+                                plate: selectedPlate,
                                 plateNumber: selectedPlate.plateNumber,
                                 area: selectedPlate.area,
                                 onCancelEntryRequest: () {

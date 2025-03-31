@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../models/plate_model.dart'; // ✅ PlateModel import
+import '../../screens/input_pages/modify_plate_info.dart'; // ✅ 정보 수정 화면 import
 import '../../screens/logs/plate_log_viewer_page.dart';
 import '../../states/plate/movement_plate.dart';
 import '../../states/plate/plate_state.dart';
@@ -11,9 +13,11 @@ class ParkingRequestStatusDialog extends StatelessWidget {
   final VoidCallback onDelete;
   final String plateNumber;
   final String area;
+  final PlateModel plate; // ✅ plate 전달용
 
   const ParkingRequestStatusDialog({
     super.key,
+    required this.plate,
     required this.onCancelEntryRequest,
     required this.onPrePayment,
     required this.onDelete,
@@ -53,6 +57,24 @@ class ParkingRequestStatusDialog extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               ElevatedButton.icon(
+                icon: const Icon(Icons.edit_note_outlined),
+                label: const Text("정보 수정"), // ✅ 정보 수정 버튼
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ModifyPlateInfo(
+                        plate: plate,
+                        collectionKey: 'parking_requests',
+                      ),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
+              ),
+              const SizedBox(height: 8),
+              ElevatedButton.icon(
                 icon: const Icon(Icons.assignment_return),
                 label: const Text("입차 요청 취소"),
                 onPressed: () {
@@ -78,6 +100,7 @@ class ParkingRequestStatusDialog extends StatelessWidget {
     );
   }
 }
+
 
 class ScaleTransitionDialog extends StatefulWidget {
   final Widget child;
