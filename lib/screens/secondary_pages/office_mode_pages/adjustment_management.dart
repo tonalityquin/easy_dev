@@ -77,7 +77,17 @@ class _AdjustmentManagementState extends State<AdjustmentManagement> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const SecondaryRoleNavigation(),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        foregroundColor: Colors.black87,
+        title: const Text(
+          '정산유형',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        centerTitle: true,
+        automaticallyImplyLeading: false,
+      ),
       body: Consumer<AdjustmentState>(
         builder: (context, state, child) {
           final currentArea = context.watch<AreaState>().currentArea.trim();

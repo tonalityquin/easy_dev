@@ -50,7 +50,17 @@ class LocationManagement extends StatelessWidget {
     final filteredLocations = locationState.locations.where((location) => location.area == currentArea).toList();
 
     return Scaffold(
-      appBar: const SecondaryRoleNavigation(),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        foregroundColor: Colors.black87,
+        title: const Text(
+          '주차구역',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        centerTitle: true,
+        automaticallyImplyLeading: false,
+      ),
       body: locationState.isLoading
           ? const Center(child: CircularProgressIndicator())
           : filteredLocations.isEmpty

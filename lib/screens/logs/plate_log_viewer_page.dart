@@ -59,6 +59,7 @@ class _PlateLogViewerPageState extends State<PlateLogViewerPage> {
 
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 1,

@@ -13,7 +13,17 @@ class StatusManagement extends StatelessWidget {
     final statusState = context.watch<StatusState>();
 
     return Scaffold(
-      appBar: const SecondaryRoleNavigation(),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        foregroundColor: Colors.black87,
+        title: const Text(
+          '차량상태',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        centerTitle: true,
+        automaticallyImplyLeading: false,
+      ),
       body: Column(
         children: [
           Padding(
