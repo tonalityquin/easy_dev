@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../utils/show_snackbar.dart';
+import '../../../utils/snackbar_helper.dart';
 import '../../../states/status/status_state.dart';
 import '../../../widgets/navigation/secondary_role_navigation.dart'; // 상단 내비게이션 바
 import '../../../widgets/navigation/secondary_mini_navigation.dart';
@@ -108,16 +108,16 @@ class StatusManagement extends StatelessWidget {
               statusState.addToggleItem(statusState.textController.text);
               statusState.textController.clear();
             } else {
-              showSnackbar(context, "항목 이름을 입력하세요.");
+              showFailedSnackbar(context, "항목 이름을 입력하세요.");
             }
           } else if (index == 1) {
             if (statusState.selectedItemId != null) {
               statusState.removeToggleItem(statusState.selectedItemId!);
             } else {
-              showSnackbar(context, "삭제할 항목을 선택하세요.");
+              showFailedSnackbar(context, "삭제할 항목을 선택하세요.");
             }
           } else if (index == 2) {
-            showSnackbar(context, "도움말 버튼 클릭됨");
+            showSelectedSnackbar(context, "도움말 버튼 클릭됨");
           }
         },
       ),

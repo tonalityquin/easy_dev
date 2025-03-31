@@ -6,7 +6,7 @@ import '../../utils/fee_calculator.dart';
 import '../../states/plate/plate_state.dart';
 import '../../states/user/user_state.dart';
 import '../../utils/date_utils.dart';
-import '../../utils/show_snackbar.dart';
+import '../../utils/snackbar_helper.dart';
 import 'plate_custom_box.dart';
 
 class PlateContainer extends StatelessWidget {
@@ -103,7 +103,7 @@ class PlateContainer extends StatelessWidget {
                 final plateState = Provider.of<PlateState>(context, listen: false);
 
                 if (item.isSelected && item.selectedBy != userName) {
-                  showSnackbar(context, "⚠️ 이미 다른 사용자가 선택한 번호판입니다.");
+                  showFailedSnackbar(context, "⚠️ 이미 다른 사용자가 선택한 번호판입니다.");
                   return;
                 }
 
@@ -112,7 +112,7 @@ class PlateContainer extends StatelessWidget {
                 );
 
                 if (alreadySelected && !item.isSelected) {
-                  showSnackbar(context, "⚠️ 이미 다른 번호판을 선택한 상태입니다.");
+                  showFailedSnackbar(context, "⚠️ 이미 다른 번호판을 선택한 상태입니다.");
                   return;
                 }
 
@@ -121,7 +121,7 @@ class PlateContainer extends StatelessWidget {
                   plateNumber: item.plateNumber,
                   userName: userName,
                   onError: (errorMessage) {
-                    showSnackbar(context, errorMessage);
+                    showFailedSnackbar(context, errorMessage);
                   },
                 );
               },

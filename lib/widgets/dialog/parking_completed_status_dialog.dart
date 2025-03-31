@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../../screens/logs/plate_log_viewer_page.dart';
 import '../../states/plate/movement_plate.dart';
 import '../../states/plate/plate_state.dart';
-import '../../utils/show_snackbar.dart';
+import '../../utils/snackbar_helper.dart';
 
 class ParkingCompletedStatusDialog extends StatelessWidget {
   final VoidCallback onRequestEntry;
@@ -156,7 +156,7 @@ void handleEntryParkingRequest(BuildContext context, String plateNumber, String 
     newLocation: "미지정",
   );
 
-  showSnackbar(context, "입차 요청이 처리되었습니다.");
+  showSuccessSnackbar(context, "입차 요청이 처리되었습니다.");
 }
 
 /// ✅ 출차 완료 처리 (입차 완료 → 출차 완료)
@@ -171,7 +171,7 @@ void handleEntryDepartureCompleted(BuildContext context, String plateNumber, Str
     location,
   );
 
-  showSnackbar(context, "출차 완료가 처리되었습니다.");
+  showSuccessSnackbar(context, "출차 완료가 처리되었습니다.");
 }
 
 /// ✅ 사전 정산 처리 (입차 완료 → 출차 요청)
@@ -186,5 +186,5 @@ void handlePrePayment(BuildContext context, String plateNumber, String area, Str
     location,
   );
 
-  showSnackbar(context, "사전 정산이 처리되었습니다.");
+  showSuccessSnackbar(context, "사전 정산이 처리되었습니다.");
 }

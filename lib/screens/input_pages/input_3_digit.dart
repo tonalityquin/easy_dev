@@ -11,7 +11,7 @@ import '../../widgets/keypad/num_keypad.dart';
 import '../../widgets/keypad/kor_keypad.dart';
 import '../../widgets/navigation/bottom_navigation.dart';
 import '../../states/area/area_state.dart';
-import '../../utils/show_snackbar.dart';
+import '../../utils/snackbar_helper.dart';
 import '../../widgets/dialog/parking_location_dialog.dart';
 import '../../utils/camera_helper.dart';
 import '../../widgets/dialog/camera_preview_dialog.dart';
@@ -138,9 +138,10 @@ class _Input3DigitState extends State<Input3Digit> {
     if (!_validateField(controller3digit, 3) ||
         !_validateField(controller1digit, 1) ||
         !_validateField(controller4digit, 4)) {
-      showSnackbar(context, '입력값이 유효하지 않습니다. 다시 확인해주세요.');
+      showFailedSnackbar(context, '입력값이 유효하지 않습니다. 다시 확인해주세요.');
       return;
     }
+
     if (controller3digit.text.length == 3 && controller1digit.text.length == 1 && controller4digit.text.length == 4) {
       setState(() {
         showKeypad = false;
@@ -226,7 +227,7 @@ class _Input3DigitState extends State<Input3Digit> {
 
     // ✅ 정산 타입이 있을 경우, 선택하지 않았으면 경고 후 중단
     if (adjustmentList.isNotEmpty && selectedAdjustment == null) {
-      showSnackbar(context, '정산 유형을 선택해주세요');
+      showFailedSnackbar(context, '정산 유형을 선택해주세요');
       return;
     }
 

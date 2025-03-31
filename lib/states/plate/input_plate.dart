@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/plate_model.dart';
 import '../../models/plate_log_model.dart';
-import '../../utils/show_snackbar.dart';
+import '../../utils/snackbar_helper.dart';
 import '../area/area_state.dart';
 import '../user/user_state.dart';
 import 'log_plate.dart';
@@ -48,7 +48,7 @@ class InputPlate with ChangeNotifier {
     List<String>? imageUrls,
   }) async {
     if (await isPlateNumberDuplicated(plateNumber, areaState.currentArea)) {
-      showSnackbar(context, '이미 등록된 번호판입니다: $plateNumber');
+      showFailedSnackbar(context, '이미 등록된 번호판입니다: $plateNumber');
       return;
     }
 
@@ -90,7 +90,7 @@ class InputPlate with ChangeNotifier {
 
       notifyListeners();
     } catch (error) {
-      showSnackbar(context, '오류 발생: $error');
+      showFailedSnackbar(context, '오류 발생: $error');
     }
   }
 
@@ -134,12 +134,12 @@ class InputPlate with ChangeNotifier {
         updatedPlate.toMap(),
       );
 
-      showSnackbar(context, '정보 수정 완료');
+      showSuccessSnackbar(context, '정보 수정 완료');
       notifyListeners();
 
       return true;
     } catch (e) {
-      showSnackbar(context, '정보 수정 실패: $e');
+      showFailedSnackbar(context, '정보 수정 실패: $e');
       return false;
     }
   }

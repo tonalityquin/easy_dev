@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/plate_model.dart';
 import '../../models/plate_log_model.dart';
-import '../../utils/show_snackbar.dart';
+import '../../utils/snackbar_helper.dart';
 import '../area/area_state.dart';
 import '../user/user_state.dart';
 import '../plate/plate_state.dart'; // ✅ PlateState import
@@ -49,7 +49,7 @@ class ModifyPlate with ChangeNotifier {
     required String region,
   }) async {
     if (await isPlateNumberDuplicated(plateNumber, areaState.currentArea)) {
-      showSnackbar(context, '이미 등록된 번호판입니다: $plateNumber');
+      showFailedSnackbar(context, '이미 등록된 번호판입니다: $plateNumber');
       return;
     }
 
@@ -86,10 +86,10 @@ class ModifyPlate with ChangeNotifier {
         ),
       );
 
-      showSnackbar(context, '$type 완료');
+      showSuccessSnackbar(context, '$type 완료');
       notifyListeners();
     } catch (error) {
-      showSnackbar(context, '오류 발생: $error');
+      showFailedSnackbar(context, '오류 발생: $error');
     }
   }
 
@@ -166,7 +166,7 @@ class ModifyPlate with ChangeNotifier {
       return true;
     } catch (e) {
       dev.log('❌ 정보 수정 실패: $e');
-      showSnackbar(context, '정보 수정 실패: $e');
+      showFailedSnackbar(context, '정보 수정 실패: $e');
       return false;
     }
   }

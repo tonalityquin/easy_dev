@@ -10,7 +10,7 @@ import '../../widgets/container/plate_container.dart'; // 번호판 데이터를
 import '../../widgets/dialog/parking_request_status_dialog.dart';
 import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바
 import '../../widgets/dialog/plate_search_dialog.dart';
-import '../../utils/show_snackbar.dart';
+import '../../utils/snackbar_helper.dart';
 import '../../widgets/dialog/parking_location_dialog.dart';
 import '../../repositories/plate/plate_repository.dart';
 import '../input_pages//modify_plate_info.dart';
@@ -68,7 +68,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
           plateNumber: plateNumber,
           userName: userName,
           onError: (errorMessage) {
-            showSnackbar(context, errorMessage);
+            showFailedSnackbar(context, errorMessage);
           },
         );
   }
@@ -94,7 +94,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                   selectedPlate.region ?? '전국',
                 );
               } else {
-                showSnackbar(context, '주차 구역을 입력해주세요.');
+                showFailedSnackbar(context, '주차 구역을 입력해주세요.');
               }
             },
           );
@@ -126,10 +126,10 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
       );
 
       movementPlate.setParkingCompleted(plateNumber, area, plateState, location); // ✅ PlateState 추가
-      showSnackbar(context, "입차 완료: $plateNumber ($location)");
+      showSuccessSnackbar(context, "입차 완료: $plateNumber ($location)");
     } catch (e) {
       debugPrint("입차 완료 처리 실패: $e");
-      showSnackbar(context, "입차 완료 처리 중 오류 발생: $e");
+      showFailedSnackbar(context, "입차 완료 처리 중 오류 발생: $e");
     }
   }
 
@@ -258,7 +258,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                                     selectedPlate.plateNumber,
                                     selectedPlate.area,
                                   );
-                                  showSnackbar(context, "입차 요청이 취소되었습니다: ${selectedPlate.plateNumber}");
+                                  showSuccessSnackbar(context, "입차 요청이 취소되었습니다: ${selectedPlate.plateNumber}");
                                 },
                                 onPrePayment: () {
                                   handleEntryDepartureCompleted(

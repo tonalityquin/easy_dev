@@ -10,7 +10,7 @@ import '../../widgets/container/plate_container.dart';
 import '../../widgets/navigation/top_navigation.dart';
 import '../../widgets/dialog/plate_search_dialog.dart';
 import '../../widgets/dialog/adjustment_completed_confirm_dialog.dart';
-import '../../utils/show_snackbar.dart';
+import '../../utils/snackbar_helper.dart';
 import '../input_pages/modify_plate_info.dart';
 import '../mini_calendars/field_calendar.dart';
 
@@ -62,9 +62,9 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
     final plateRepository = Provider.of<PlateRepository>(context, listen: false);
     try {
       await plateRepository.deleteAllData();
-      showSnackbar(context, '모든 문서가 삭제되었습니다. 컬렉션은 유지됩니다.');
+      showSuccessSnackbar(context, '모든 문서가 삭제되었습니다. 컬렉션은 유지됩니다.');
     } catch (e) {
-      showSnackbar(context, '문서 삭제 실패: $e');
+      showFailedSnackbar(context, '문서 삭제 실패: $e');
     }
   }
 
@@ -114,7 +114,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                       plateNumber: plateNumber,
                       userName: userName,
                       onError: (errorMessage) {
-                        showSnackbar(context, errorMessage);
+                        showFailedSnackbar(context, errorMessage);
                       },
                     );
                   },
@@ -195,7 +195,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                       context: context,
                       builder: (context) => AdjustmentCompletedConfirmDialog(
                         onConfirm: () {
-                          showSnackbar(context, "정산 완료 처리가 실행되었습니다."); // 이후 실제 처리 로직 연결
+                          showSuccessSnackbar(context, "정산 완료 처리가 실행되었습니다."); // 이후 실제 처리 로직 연결
                         },
                       ),
                     );

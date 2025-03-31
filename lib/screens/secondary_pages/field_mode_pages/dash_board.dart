@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../../utils/show_snackbar.dart';
+import '../../../utils/snackbar_helper.dart';
 import '../../../widgets/navigation/secondary_mini_navigation.dart';
 import '../../../states/user/user_state.dart';
 
@@ -37,7 +37,7 @@ class DashBoard extends StatelessWidget {
 
       Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
     } catch (e) {
-      showSnackbar(context, '로그아웃 실패: $e');
+      showFailedSnackbar(context, '로그아웃 실패: $e');
     }
 
     SystemChannels.platform.invokeMethod('SystemNavigator.pop');
@@ -115,7 +115,7 @@ class DashBoard extends StatelessWidget {
   Widget _buildBreakButton(BuildContext context) {
     return InkWell(
       onTap: () {
-        showSnackbar(context, '휴게 사용 확인됐습니다'); // 추후 userState에 연결 가능
+        showSuccessSnackbar(context, '휴게 사용 확인됐습니다'); // 추후 userState에 연결 가능
       },
       borderRadius: BorderRadius.circular(16),
       child: Container(

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../utils/show_snackbar.dart';
+import '../../../utils/snackbar_helper.dart';
 import '../../../widgets/navigation/secondary_role_navigation.dart';
 import '../../../widgets/navigation/secondary_mini_navigation.dart';
 import 'location_management_pages/location_setting.dart';
@@ -24,7 +24,7 @@ class LocationManagement extends StatelessWidget {
                 locationName,
                 currentArea,
                 onError: (error) {
-                  showSnackbar(context, '🚨 주차 구역 추가 실패: $error');
+                  showFailedSnackbar(context, '🚨 주차 구역 추가 실패: $error');
                 },
               );
             },
@@ -35,11 +35,11 @@ class LocationManagement extends StatelessWidget {
       locationState.deleteLocations(
         selectedIds,
         onError: (error) {
-          showSnackbar(context, '🚨 주차 구역 삭제 실패: $error');
+          showFailedSnackbar(context, '🚨 주차 구역 삭제 실패: $error');
         },
       );
     } else {
-      showSnackbar(context, '⚠️ 지원되지 않는 동작입니다.');
+      showFailedSnackbar(context, '⚠️ 지원되지 않는 동작입니다.');
     }
   }
 

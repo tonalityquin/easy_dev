@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../states/plate/plate_state.dart';
 import '../states/user/user_state.dart';
 import '../utils/app_colors.dart';
-import '../utils/show_snackbar.dart';
+import '../utils/snackbar_helper.dart';
 import '../states/page/page_state.dart';
 import '../states/page/page_info.dart';
 import '../screens/input_pages/input_3_digit.dart';
@@ -82,7 +82,7 @@ class RefreshableBody extends StatelessWidget {
     } else if (velocity < 0) {
       Navigator.of(context).push(_slidePage(const SecondaryPage(), fromLeft: false));
     } else {
-      showSnackbar(context, '드래그 동작이 감지되지 않았습니다.');
+      showFailedSnackbar(context, '드래그 동작이 감지되지 않았습니다.');
     }
   }
 

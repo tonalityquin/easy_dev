@@ -7,7 +7,7 @@ import '../states/plate/movement_plate.dart';
 import '../states/user/user_state.dart';
 import '../repositories/plate/plate_repository.dart';
 import '../models/plate_model.dart';
-import '../utils/show_snackbar.dart';
+import '../utils/snackbar_helper.dart';
 
 class ParkingRequestService {
   final BuildContext context;
@@ -20,7 +20,7 @@ class ParkingRequestService {
       collection: 'parking_requests',
       plateNumber: plateNumber,
       userName: userName,
-      onError: (msg) => showSnackbar(context, msg),
+      onError: (msg) => showFailedSnackbar(context, msg),
     );
   }
 
@@ -57,10 +57,10 @@ class ParkingRequestService {
         location,
       );
 
-      showSnackbar(context, '입차 완료: ${selectedPlate.plateNumber} ($location)');
+      showSuccessSnackbar(context, '입차 완료: ${selectedPlate.plateNumber} ($location)');
     } catch (e) {
       debugPrint('입차 완료 실패: $e');
-      showSnackbar(context, '입차 완료 중 오류 발생: $e');
+      showFailedSnackbar(context, '입차 완료 중 오류 발생: $e');
     }
   }
 
@@ -69,6 +69,6 @@ class ParkingRequestService {
       plate.plateNumber,
       plate.area,
     );
-    showSnackbar(context, '삭제 완료: ${plate.plateNumber}');
+    showSuccessSnackbar(context, '삭제 완료: ${plate.plateNumber}');
   }
 }

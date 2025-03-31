@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../models/user_model.dart';
-import '../../../utils/show_snackbar.dart';
+import '../../../utils/snackbar_helper.dart';
 import '../../../widgets/navigation/secondary_role_navigation.dart';
 import '../../../widgets/navigation/secondary_mini_navigation.dart';
 import 'user_management_pages/user_setting.dart';
@@ -72,7 +72,7 @@ class _UserManagementState extends State<UserManagement> {
         userState.addUserCard(
           newUser,
           onError: (errorMessage) {
-            showSnackbar(context, errorMessage);
+            showFailedSnackbar(context, errorMessage);
           },
         );
       });
@@ -80,7 +80,7 @@ class _UserManagementState extends State<UserManagement> {
       userState.deleteUserCard(
         selectedIds,
         onError: (errorMessage) {
-          showSnackbar(context, errorMessage);
+          showFailedSnackbar(context, errorMessage);
         },
       );
     }

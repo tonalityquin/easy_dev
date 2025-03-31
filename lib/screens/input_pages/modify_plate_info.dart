@@ -10,7 +10,7 @@ import 'package:easydev/widgets/keypad/num_keypad.dart';
 import 'package:easydev/widgets/keypad/kor_keypad.dart';
 import 'package:easydev/widgets/navigation/bottom_navigation.dart';
 import 'package:easydev/states/area/area_state.dart';
-import 'package:easydev/utils/show_snackbar.dart';
+import 'package:easydev/utils/snackbar_helper.dart';
 import 'package:easydev/widgets/dialog/parking_location_dialog.dart';
 import 'package:easydev/utils/camera_helper.dart';
 import 'package:easydev/widgets/dialog/camera_preview_dialog.dart';
@@ -190,7 +190,7 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
     if (!_validateField(controller3digit, 3) ||
         !_validateField(controller1digit, 1) ||
         !_validateField(controller4digit, 4)) {
-      showSnackbar(context, '입력값이 유효하지 않습니다. 다시 확인해주세요.');
+      showFailedSnackbar(context, '입력값이 유효하지 않습니다. 다시 확인해주세요.');
       return;
     }
     if (controller3digit.text.length == 3 && controller1digit.text.length == 1 && controller4digit.text.length == 4) {
@@ -263,7 +263,7 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
 
     // ✅ 정산 타입이 존재하는데 선택 안 한 경우 → 중단 + 스낵바 알림
     if (adjustmentList.isNotEmpty && (selectedAdjustment == null || selectedAdjustment!.isEmpty)) {
-      showSnackbar(context, '정산 유형을 선택해주세요');
+      showFailedSnackbar(context, '정산 유형을 선택해주세요');
       return;
     }
 
@@ -698,22 +698,8 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
                 await _handleAction();
                 if (!mounted) return;
                 setState(() => isLoading = false);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Row(
-                      children: [
-                        Icon(Icons.check_circle_outline, color: Colors.white),
-                        SizedBox(width: 12),
-                        Text("수정이 완료되었습니다!", style: TextStyle(fontSize: 15)),
-                      ],
-                    ),
-                    backgroundColor: Colors.green,
-                    behavior: SnackBarBehavior.floating,
-                    duration: const Duration(seconds: 2),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    margin: const EdgeInsets.all(16),
-                  ),
-                );
+
+                showSuccessSnackbar(context, "수정이 완료되었습니다!");
               },
             ),
           ],

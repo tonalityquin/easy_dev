@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../states/calendar/field_calendar_state.dart';
 import '../../widgets/dialog/calendar/calendar_dialogs.dart';
-import '../../utils/show_snackbar.dart';
+import '../../utils/snackbar_helper.dart';
 
 class FieldCalendarPage extends StatefulWidget {
   const FieldCalendarPage({super.key});
@@ -197,7 +197,7 @@ class _FieldCalendarPage extends State<FieldCalendarPage> {
             setState(() {
               calendar.selectDate(currentDate);
             });
-            showSnackbar(context, '선택된 날짜: ${calendar.formatDate(currentDate)}');
+            showSelectedSnackbar(context, '선택된 날짜: ${calendar.formatDate(currentDate)}');
           },
           child: Container(
             margin: const EdgeInsets.all(4),
@@ -264,6 +264,6 @@ class _FieldCalendarPage extends State<FieldCalendarPage> {
       _memoMap.remove(key);
     });
     _saveMemoData();
-    showSnackbar(context, '메모가 삭제되었습니다');
+    showSuccessSnackbar(context, '메모가 삭제되었습니다');
   }
 }

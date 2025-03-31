@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../states/user/user_state.dart';
 import '../states/area/area_state.dart';
 import '../repositories/user/user_repository.dart';
-import '../utils/show_snackbar.dart';
+import '../utils/snackbar_helper.dart';
 import 'dart:io';
 
 class LoginPage extends StatefulWidget {
@@ -83,15 +83,15 @@ class _LoginPageState extends State<LoginPage> {
     final passwordError = _validatePassword(password);
 
     if (name.isEmpty) {
-      showSnackbar(context, '이름을 입력해주세요.');
+      showFailedSnackbar(context, '이름을 입력해주세요.');
       return;
     }
     if (phoneError != null) {
-      showSnackbar(context, phoneError);
+      showFailedSnackbar(context, phoneError);
       return;
     }
     if (passwordError != null) {
-      showSnackbar(context, passwordError);
+      showFailedSnackbar(context, passwordError);
       return;
     }
 
@@ -107,7 +107,7 @@ class _LoginPageState extends State<LoginPage> {
 
     if (!await _isInternetConnected()) {
       Navigator.of(context).pop();
-      showSnackbar(context, '인터넷 연결이 필요합니다.');
+      showFailedSnackbar(context, '인터넷 연결이 필요합니다.');
       setState(() {
         _isLoading = false;
       });
@@ -131,15 +131,15 @@ class _LoginPageState extends State<LoginPage> {
           Navigator.pushReplacementNamed(context, '/home');
         } else {
           Navigator.of(context).pop();
-          showSnackbar(context, '이름 또는 비밀번호가 올바르지 않습니다.');
+          showFailedSnackbar(context, '이름 또는 비밀번호가 올바르지 않습니다.');
         }
       } else {
         Navigator.of(context).pop();
-        showSnackbar(context, '해당 전화번호가 등록되지 않았습니다.');
+        showFailedSnackbar(context, '해당 전화번호가 등록되지 않았습니다.');
       }
     } catch (e) {
       Navigator.of(context).pop();
-      showSnackbar(context, '로그인 실패: $e');
+      showFailedSnackbar(context, '로그인 실패: $e');
     } finally {
       setState(() {
         _isLoading = false;

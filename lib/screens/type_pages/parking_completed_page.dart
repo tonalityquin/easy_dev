@@ -14,7 +14,7 @@ import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션
 import '../../widgets/dialog/plate_search_dialog.dart'; // ✅ PlateSearchDialog 추가
 import '../../widgets/dialog/parking_completed_status_dialog.dart';
 import '../../widgets/dialog/parking_request_delete_dialog.dart';
-import '../../utils/show_snackbar.dart';
+import '../../utils/snackbar_helper.dart';
 
 class ParkingCompletedPage extends StatefulWidget {
   const ParkingCompletedPage({super.key});
@@ -109,14 +109,14 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
           Future.delayed(Duration(milliseconds: 300), () {
             if (context.mounted) {
               Navigator.pop(context);
-              showSnackbar(context, "출차 요청이 완료되었습니다.");
+              showSuccessSnackbar(context, "출차 요청이 완료되었습니다.");
             }
           });
         });
       } catch (e) {
         debugPrint("출차 요청 처리 실패: $e");
         if (context.mounted) {
-          showSnackbar(context, "출차 요청 처리 중 오류 발생: $e");
+          showFailedSnackbar(context, "출차 요청 처리 중 오류 발생: $e");
         }
       }
     }
@@ -136,7 +136,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
       plateState: plateState,
     );
 
-    showSnackbar(context, "입차 요청이 완료되었습니다.");
+    showSuccessSnackbar(context, "입차 요청이 완료되었습니다.");
   }
 
   @override
@@ -184,7 +184,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                         plateNumber: plateNumber,
                         userName: userName,
                         onError: (errorMessage) {
-                          showSnackbar(context, errorMessage);
+                          showFailedSnackbar(context, errorMessage);
                         },
                       );
                     },
@@ -287,7 +287,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                                           selectedPlate.plateNumber,
                                           selectedPlate.area,
                                         );
-                                    showSnackbar(context, "삭제 완료: ${selectedPlate.plateNumber}");
+                                    showSuccessSnackbar(context, "삭제 완료: ${selectedPlate.plateNumber}");
                                   },
                                 ),
                               );

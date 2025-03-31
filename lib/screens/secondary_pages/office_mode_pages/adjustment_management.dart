@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../utils/show_snackbar.dart';
+import '../../../utils/snackbar_helper.dart';
 import '../../../states/adjustment/adjustment_state.dart';
 import '../../../states/area/area_state.dart'; // 🔥 지역 상태 추가
 import '../../../widgets/navigation/secondary_role_navigation.dart';
@@ -47,10 +47,10 @@ class _AdjustmentManagementState extends State<AdjustmentManagement> {
                       adjustmentData['addStandard'].toString(),
                       adjustmentData['addAmount'].toString(),
                     );
-                showSnackbar(context, '✅ 정산 데이터가 성공적으로 추가되었습니다.');
+                showSuccessSnackbar(context, '✅ 정산 데이터가 성공적으로 추가되었습니다.');
               } catch (e) {
                 debugPrint("🔥 데이터 추가 중 예외 발생: $e");
-                showSnackbar(context, '🚨 데이터 추가 중 오류가 발생했습니다: $e');
+                showFailedSnackbar(context, '🚨 데이터 추가 중 오류가 발생했습니다: $e');
               }
             },
           ),
@@ -63,14 +63,14 @@ class _AdjustmentManagementState extends State<AdjustmentManagement> {
     final adjustmentState = context.read<AdjustmentState>();
     final selectedIds = _getSelectedIds(adjustmentState);
     if (selectedIds.isEmpty) {
-      showSnackbar(context, '삭제할 항목을 선택하세요.');
+      showFailedSnackbar(context, '삭제할 항목을 선택하세요.');
       return;
     }
     try {
       await adjustmentState.deleteAdjustments(selectedIds);
-      showSnackbar(context, '선택된 항목이 삭제되었습니다.');
+      showSuccessSnackbar(context, '선택된 항목이 삭제되었습니다.');
     } catch (e) {
-      showSnackbar(context, '삭제 중 오류가 발생했습니다.');
+      showFailedSnackbar(context, '삭제 중 오류가 발생했습니다.');
     }
   }
 
