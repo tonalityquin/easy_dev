@@ -7,7 +7,7 @@ import 'theme.dart'; // 테마 설정을 분리한 파일
 import 'dart:developer' as dev;
 
 // 초기 라우트 상수 정의
-const String initialRoute = '/login';
+const String initialRoute = AppRoutes.login;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,7 +17,7 @@ void main() async {
     runApp(const MyApp());
   } catch (e) {
     dev.log("DB 초기화 실패: $e");
-    runApp(ErrorApp(message: 'DB 초기화 실패. 앱을 다시 시작해주세요.'));
+    runApp(const ErrorApp(message: 'DB 초기화 실패. 앱을 다시 시작해주세요.'));
   }
 }
 
@@ -33,10 +33,11 @@ class MyApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         title: 'easyvalet',
         theme: appTheme,
-        // theme.dart에서 정의된 테마 사용
-        initialRoute: initialRoute,
-        // 초기 라우트 값을 상수로 사용
+        initialRoute: initialRoute, // 초기 라우트 값을 상수로 사용
         routes: appRoutes, // routes.dart에서 정의된 라우팅 정보
+        onUnknownRoute: (settings) => MaterialPageRoute(
+          builder: (context) => const NotFoundPage(),
+        ),
       ),
     );
   }
@@ -60,6 +61,25 @@ class ErrorApp extends StatelessWidget {
             style: const TextStyle(color: Colors.red, fontSize: 16),
             textAlign: TextAlign.center,
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// 정의되지 않은 경로 접근 시 보여줄 페이지
+class NotFoundPage extends StatelessWidget {
+  const NotFoundPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('404 - 페이지 없음')),
+      body: const Center(
+        child: Text(
+          '요청하신 페이지를 찾을 수 없습니다.',
+          style: TextStyle(fontSize: 18, color: Colors.grey),
+          textAlign: TextAlign.center,
         ),
       ),
     );
