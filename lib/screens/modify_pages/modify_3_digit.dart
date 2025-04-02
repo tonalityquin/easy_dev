@@ -1,11 +1,13 @@
-import 'dart:io';
 import 'package:camera/camera.dart';
+import 'package:easydev/screens/modify_pages/sections/adjustment_section.dart';
+import 'package:easydev/screens/modify_pages/sections/parking_location_section.dart';
+import 'package:easydev/screens/modify_pages/sections/photo_section.dart';
+import 'package:easydev/screens/modify_pages/sections/plate_input_section.dart';
+import 'package:easydev/screens/modify_pages/sections/status_chip_section.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:easydev/states/adjustment/adjustment_state.dart';
 import 'package:easydev/states/status/status_state.dart';
-import 'package:easydev/widgets/input_field/modify_plate_field.dart';
-import 'package:easydev/widgets/input_field/location_field.dart';
 import 'package:easydev/widgets/keypad/num_keypad.dart';
 import 'package:easydev/widgets/keypad/kor_keypad.dart';
 import 'package:easydev/widgets/navigation/bottom_navigation.dart';
@@ -14,10 +16,7 @@ import 'package:easydev/utils/snackbar_helper.dart';
 import 'package:easydev/widgets/dialog/parking_location_dialog.dart';
 import 'package:easydev/utils/camera_helper.dart';
 import 'package:easydev/widgets/dialog/camera_preview_dialog.dart';
-import 'package:easydev/widgets/dialog/region_picker_dialog.dart';
 import 'package:easydev/models/plate_model.dart';
-import 'package:easydev/utils/fullscreen_viewer.dart';
-import 'package:easydev/utils/button/custom_adjustment_dropdown.dart';
 
 import 'package:easydev/services/modify_plate_service.dart';
 
@@ -27,22 +26,20 @@ import 'package:easydev/utils/button/animated_action_button.dart';
 
 import 'package:easydev/states/plate/plate_state.dart';
 
-import 'package:easydev/models/adjustment_model.dart';
-
-class ModifyPlateInfo extends StatefulWidget {
+class Modify3Digit extends StatefulWidget {
   final PlateModel plate; // ✅ plate 파라미터 추가
   final String collectionKey; // ✅ 추가
 
-  const ModifyPlateInfo({
+  const Modify3Digit({
     super.key,
     required this.plate,
     required this.collectionKey,
   }); // ✅ 생성자에 추가
   @override
-  State<ModifyPlateInfo> createState() => _ModifyPlateInfo();
+  State<Modify3Digit> createState() => _Modify3Digit();
 }
 
-class _ModifyPlateInfo extends State<ModifyPlateInfo> {
+class _Modify3Digit extends State<Modify3Digit> {
   final List<String> regions = [
     '전국',
     '강원',
@@ -391,10 +388,7 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
           mainAxisSize: MainAxisSize.min,
           children: [
             SizedBox(width: 4),
-            Text(
-              " 번호판 수정 ",
-              style: TextStyle(color: Colors.grey, fontSize: 16),
-            ),
+            Text(" 번호판 수정 ", style: TextStyle(color: Colors.grey, fontSize: 16)),
             SizedBox(width: 4),
           ],
         ),
@@ -407,240 +401,53 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    '번호 입력',
-                    style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center, // 🔹 중앙 정렬로 변경
-                    children: [
-                      // 드롭다운 버튼
-                      GestureDetector(
-                        onTap: () {
-                          showRegionPickerDialog(
-                            context: context,
-                            selectedRegion: dropdownValue,
-                            regions: regions,
-                            onConfirm: (selected) {
-                              setState(() {
-                                dropdownValue = selected;
-                              });
-                            },
-                          );
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12), // 🔸 높이 맞춤
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.transparent),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                dropdownValue,
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold, // 🔹 굵게 설정
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(width: 16),
-
-                      // 번호판 입력창
-                      Expanded(
-                        child: Align(
-                            alignment: Alignment.center,
-                            child: ModifyPlateInput(
-                              frontDigitCount: 3,
-                              hasMiddleChar: true,
-                              backDigitCount: 4,
-                              frontController: controller3digit,
-                              middleController: controller1digit,
-                              backController: controller4digit,
-                              isEditable: false, // 이 값으로 번호판 수정 불가 설정
-                            )),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 32.0),
-                  const Text(
-                    '주차 구역',
-                    style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8.0),
-                  Center(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        LocationField(
-                          controller: locationController,
-                          widthFactor: 0.7,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 32.0),
-                  const Text(
-                    '촬영 사진',
-                    style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8.0),
-                  SizedBox(
-                    height: 100,
-                    child: _capturedImages.isEmpty && _existingImageUrls.isEmpty
-                        ? const Center(child: Text('촬영된 사진 없음'))
-                        : ListView(
-                            scrollDirection: Axis.horizontal,
-                            children: [
-                              // ✅ 기존 GCS 이미지 (URL)
-                              ..._existingImageUrls.asMap().entries.map((entry) {
-                                final index = entry.key;
-                                final url = entry.value;
-                                return GestureDetector(
-                                  onTap: () => showFullScreenImageViewerFromUrls(context, _existingImageUrls, index),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(4.0),
-                                    child: Image.network(
-                                      url,
-                                      width: 100,
-                                      height: 100,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (context, error, stackTrace) =>
-                                          const Icon(Icons.broken_image, size: 50),
-                                    ),
-                                  ),
-                                );
-                              }),
-                              // ✅ 새로 촬영한 로컬 이미지 (File)
-                              ..._capturedImages.asMap().entries.map((entry) {
-                                final index = entry.key;
-                                final image = entry.value;
-                                return GestureDetector(
-                                  onTap: () => showFullScreenImageViewer(context, _capturedImages, index),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(4.0),
-                                    child: Image.file(
-                                      File(image.path),
-                                      width: 100,
-                                      height: 100,
-                                      fit: BoxFit.cover,
-                                    ),
-                                  ),
-                                );
-                              }),
-                            ],
-                          ),
-                  ),
-                  const SizedBox(height: 32.0),
-                  const Text(
-                    '정산 유형',
-                    style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8.0),
-                  FutureBuilder<bool>(
-                    future: _refreshAdjustments().timeout(const Duration(seconds: 3), onTimeout: () => false),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 24),
-                          child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                        );
-                      }
-
-                      if (!snapshot.hasData || snapshot.data == false) {
-                        return const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 8),
-                          child: Text(
-                            '정산 유형 정보를 불러오지 못했습니다.',
-                            style: TextStyle(color: Colors.red),
-                          ),
-                        );
-                      }
-
-                      final adjustmentState = context.watch<AdjustmentState>();
-                      final adjustmentList = adjustmentState.adjustments;
-
-                      if (adjustmentList.isEmpty) {
-                        return const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 8),
-                          child: Text(
-                            '등록된 정산 유형이 없습니다.',
-                            style: TextStyle(color: Colors.green),
-                          ),
-                        );
-                      }
-
-                      final dropdownItems = adjustmentList.map((adj) => adj.countType).toList();
-
-                      return CustomAdjustmentDropdown(
-                        items: dropdownItems,
-                        selectedValue: selectedAdjustment,
-                        onChanged: widget.collectionKey == 'departure_completed'
-                            ? null // ❌ 출차 완료일 경우 수정 불가
-                            : (newValue) {
-                          // ✅ 기존 onChanged 로직
-                          final adjustment = adjustmentList.firstWhere(
-                                (adj) => adj.countType == newValue,
-                            orElse: () => AdjustmentModel(
-                              id: 'empty',
-                              countType: '',
-                              area: '',
-                              basicStandard: 0,
-                              basicAmount: 0,
-                              addStandard: 0,
-                              addAmount: 0,
-                            ),
-                          );
-
-                          setState(() {
-                            selectedAdjustment = newValue;
-
-                            if (adjustment.countType.isNotEmpty) {
-                              selectedBasicStandard = adjustment.basicStandard;
-                              selectedBasicAmount = adjustment.basicAmount;
-                              selectedAddStandard = adjustment.addStandard;
-                              selectedAddAmount = adjustment.addAmount;
-
-                              debugPrint("✅ 정산 타입 변경됨: $selectedAdjustment");
-                            }
-                          });
-                        },
-                      );
+                  PlateInputSection(
+                    dropdownValue: dropdownValue,
+                    regions: regions,
+                    controller3digit: controller3digit,
+                    controller1digit: controller1digit,
+                    controller4digit: controller4digit,
+                    isEditable: false,
+                    onRegionChanged: (region) {
+                      setState(() => dropdownValue = region);
                     },
                   ),
                   const SizedBox(height: 32.0),
-                  const Text(
-                    '차량 상태',
-                    style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
+                  ParkingLocationSection(locationController: locationController),
+                  const SizedBox(height: 32.0),
+                  PhotoSection(
+                    capturedImages: _capturedImages,
+                    existingImageUrls: _existingImageUrls,
                   ),
-                  const SizedBox(height: 8.0),
-                  statuses.isEmpty
-                      ? const Text('등록된 차량 상태가 없습니다.')
-                      : Wrap(
-                          spacing: 8.0,
-                          children: List.generate(statuses.length, (index) {
-                            return ChoiceChip(
-                              label: Text(statuses[index]),
-                              selected: isSelected[index],
-                              onSelected: (selected) {
-                                setState(() {
-                                  isSelected[index] = selected;
-                                  if (selected) {
-                                    selectedStatuses.add(statuses[index]);
-                                  } else {
-                                    selectedStatuses.remove(statuses[index]);
-                                  }
-                                });
-                              },
-                            );
-                          }),
-                        ),
+                  const SizedBox(height: 32.0),
+                  AdjustmentSection(
+                    collectionKey: widget.collectionKey,
+                    selectedAdjustment: selectedAdjustment,
+                    onChanged: (value) => setState(() => selectedAdjustment = value),
+                    onRefresh: _refreshAdjustments,
+                    onAutoFill: (adj) {
+                      setState(() {
+                        selectedBasicStandard = adj.basicStandard;
+                        selectedBasicAmount = adj.basicAmount;
+                        selectedAddStandard = adj.addStandard;
+                        selectedAddAmount = adj.addAmount;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 32.0),
+                  StatusChipSection(
+                    statuses: statuses,
+                    isSelected: isSelected,
+                    onToggle: (index) {
+                      setState(() {
+                        isSelected[index] = !isSelected[index];
+                        final status = statuses[index];
+                        isSelected[index]
+                            ? selectedStatuses.add(status)
+                            : selectedStatuses.remove(status);
+                      });
+                    },
+                  ),
                 ],
               ),
             ),
@@ -651,20 +458,20 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
         showKeypad: showKeypad,
         keypad: activeController == controller3digit
             ? NumKeypad(
-                controller: controller3digit,
-                maxLength: 3,
-                onComplete: () => _setActiveController(controller1digit),
-              )
+          controller: controller3digit,
+          maxLength: 3,
+          onComplete: () => _setActiveController(controller1digit),
+        )
             : activeController == controller1digit
-                ? KorKeypad(
-                    controller: controller1digit,
-                    onComplete: () => _setActiveController(controller4digit),
-                  )
-                : NumKeypad(
-                    controller: controller4digit,
-                    maxLength: 4,
-                    onComplete: () => setState(() => showKeypad = false),
-                  ),
+            ? KorKeypad(
+          controller: controller1digit,
+          onComplete: () => _setActiveController(controller4digit),
+        )
+            : NumKeypad(
+          controller: controller4digit,
+          maxLength: 4,
+          onComplete: () => setState(() => showKeypad = false),
+        ),
         actionButton: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -672,14 +479,10 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
-                  child: AnimatedPhotoButton(
-                    onPressed: _showCameraPreviewDialog,
-                  ),
+                  child: AnimatedPhotoButton(onPressed: _showCameraPreviewDialog),
                 ),
                 const SizedBox(width: 10),
-                // ✅ 1. 주차 구역 선택 버튼 (초기화 제거)
                 Expanded(
-                  // ✅ 폭 동일하게 설정
                   child: AnimatedParkingButton(
                     isLocationSelected: true,
                     onPressed: _selectParkingLocation,
@@ -689,17 +492,15 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
               ],
             ),
             const SizedBox(height: 15),
-            // ✅ 2. 수정 완료 버튼
             AnimatedActionButton(
               isLoading: isLoading,
-              isLocationSelected: isLocationSelected, // 필요 시 false 고정 가능
+              isLocationSelected: isLocationSelected,
               buttonLabel: '수정 완료',
               onPressed: () async {
                 setState(() => isLoading = true);
                 await _handleAction();
                 if (!mounted) return;
                 setState(() => isLoading = false);
-
                 showSuccessSnackbar(context, "수정이 완료되었습니다!");
               },
             ),
@@ -708,4 +509,5 @@ class _ModifyPlateInfo extends State<ModifyPlateInfo> {
       ),
     );
   }
+
 }

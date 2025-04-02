@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/plate_model.dart';
-import '../../screens/modify_pages/modify_plate_info.dart';
+import '../../screens/modify_pages/modify_3_digit.dart';
 import '../../screens/logs/plate_log_viewer_page.dart';
 import '../../states/plate/movement_plate.dart';
 import '../../states/plate/plate_state.dart';
@@ -46,7 +46,7 @@ class DepartureCompletedStatusDialog extends StatelessWidget {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => ModifyPlateInfo(
+                      builder: (_) => Modify3Digit(
                         plate: plate,
                         collectionKey: 'departure_completed',
                       ),
