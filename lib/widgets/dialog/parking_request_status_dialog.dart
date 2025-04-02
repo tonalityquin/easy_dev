@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/plate_model.dart'; // ✅ PlateModel import
-import '../../screens/input_pages/modify_plate_info.dart'; // ✅ 정보 수정 화면 import
+import '../../screens/modify_pages/modify_plate_info.dart'; // ✅ 정보 수정 화면 import
 import '../../screens/logs/plate_log_viewer_page.dart';
 import '../../states/plate/movement_plate.dart';
 import '../../states/plate/plate_state.dart';

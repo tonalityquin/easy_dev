@@ -24,19 +24,20 @@ class InputPlateService {
       final formattedDate = '${now.year.toString().padLeft(4, '0')}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}'
           '_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
 
-      final fileName = '${formattedDate}_${area}_${plateNumber}_${userName}.jpg';
+      final fileName = '${formattedDate}_${area}_${plateNumber}_$userName.jpg';
+
       final gcsUrl = await uploader.uploadImageFromInput(file, 'plates/$fileName');
 
-      if (gcsUrl != null) {
-        debugPrint('✅ 이미지 업로드 완료: $gcsUrl');
-        uploadedUrls.add(gcsUrl);
-      } else {
-        debugPrint('❌ 이미지 업로드 실패: ${file.path}');
+      if (gcsUrl == null) {
+        throw Exception('이미지 업로드 실패: ${file.path}');
       }
+
+      uploadedUrls.add(gcsUrl);
     }
 
     return uploadedUrls;
   }
+
 
 
   /// plate 저장 처리

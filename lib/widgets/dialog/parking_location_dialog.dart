@@ -17,60 +17,59 @@ class ParkingLocationDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final currentArea = context.watch<AreaState>().currentArea;
 
-    return Center(
-      child: ScaleTransitionDialog(
-        child: AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Row(
-            children: const [
-              Icon(Icons.location_on, color: Colors.green),
-              SizedBox(width: 8),
-              Text('주차 구역 선택', style: TextStyle(fontWeight: FontWeight.bold)),
-            ],
-          ),
-          content: FutureBuilder<List<String>>(
-            future: context.read<PlateRepository>().getAvailableLocations(currentArea),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const SizedBox(
-                  height: 80,
-                  child: Center(child: CircularProgressIndicator()),
-                );
-              }
-
-              if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return const Padding(
-                  padding: EdgeInsets.all(8.0),
-                  child: Text('사용 가능한 주차 구역이 없습니다.'),
-                );
-              }
-
-              final locations = snapshot.data!;
-              return SizedBox(
-                width: double.maxFinite,
-                height: 300,
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: locations.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final location = locations[index];
-                    return ListTile(
-                      title: Text(location),
-                      leading: const Icon(Icons.local_parking),
-                      onTap: () {
-                        onLocationSelected(location);
-                        Navigator.pop(context);
-                      },
-                    );
-                  },
-                ),
+    return ScaleTransitionDialog(
+      child: AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: const [
+            Icon(Icons.location_on, color: Colors.green),
+            SizedBox(width: 8),
+            Text('주차 구역 선택', style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: FutureBuilder<List<String>>(
+          future: context.read<PlateRepository>().getAvailableLocations(currentArea),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const SizedBox(
+                height: 80,
+                child: Center(child: CircularProgressIndicator()),
               );
-            },
-          ),
+            }
+
+            if (!snapshot.hasData || snapshot.data!.isEmpty) {
+              return const Padding(
+                padding: EdgeInsets.all(8.0),
+                child: Text('사용 가능한 주차 구역이 없습니다.'),
+              );
+            }
+
+            final locations = snapshot.data!;
+            return SizedBox(
+              width: double.maxFinite,
+              height: 300,
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: locations.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final location = locations[index];
+                  return ListTile(
+                    title: Text(location),
+                    leading: const Icon(Icons.local_parking),
+                    onTap: () {
+                      onLocationSelected(location);
+                      Navigator.pop(context);
+                    },
+                  );
+                },
+              ),
+            );
+          },
         ),
       ),
     );
+
   }
 }
 
