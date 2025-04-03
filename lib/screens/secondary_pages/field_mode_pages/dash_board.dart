@@ -117,9 +117,6 @@ class DashBoard extends StatelessWidget {
     return InkWell(
       onTap: () {
         final userState = context.read<UserState>();
-        final logState = context.read<BreakLogState>();
-
-        logState.addLog(userState.name); // ✅ 로그 추가
 
         showSuccessSnackbar(context, '휴게 사용 확인됐습니다');
       },

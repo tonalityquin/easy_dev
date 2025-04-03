@@ -129,8 +129,4 @@ final List<SingleChildWidget> stateProviders = [
   ChangeNotifierProvider(
     create: (_) => SelectedDateState(),
   ),
-  ChangeNotifierProvider(
-    create: (_) => BreakLogState(),
-  ),
-
 ];
