@@ -98,6 +98,15 @@ class LoginController {
       final userRepository = context.read<UserRepository>();
       final user = await userRepository.getUserByPhone(phone);
 
+      // ✅ 디버깅 출력
+      print("[DEBUG] 입력값 → name: $name, phone: $phone, password: $password");
+
+      if (user != null) {
+        print("[DEBUG] DB 유저 → name: ${user.name}, phone: ${user.phone}, password: ${user.password}");
+      } else {
+        print("[DEBUG] Firestore에서 user가 null로 반환됨");
+      }
+
       if (user != null && user.name == name && user.password == password) {
         final userState = context.read<UserState>();
         final areaState = context.read<AreaState>();
@@ -115,8 +124,6 @@ class LoginController {
     } catch (e) {
       Navigator.of(context).pop();
       showFailedSnackbar(context, '로그인 실패: $e');
-    } finally {
-      setState(() => isLoading = false);
     }
   }
 }

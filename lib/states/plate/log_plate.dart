@@ -8,28 +8,21 @@ class LogPlateState with ChangeNotifier {
   final PlateLogRepository _repository;
   final AreaState _areaState;
 
+  bool _initialized = false; // ✅ 최초 1회 호출 여부 플래그
+
   LogPlateState(this._repository, this._areaState) {
-    _listenToLogs(); // ✅ 앱 실행 시 로그 실시간 수신
-    _areaState.addListener(_onAreaChanged); // ✅ 지역 변경 감지
+    _areaState.addListener(_onAreaChanged); // ✅ 자동 fetch 제거
   }
 
-  // 🔹 전체 로그 리스트
   List<PlateLogModel> _logs = [];
-
-  // 🔹 외부에서 접근 가능한 전체 로그 (필터 X)
   List<PlateLogModel> get logs => _logs;
 
-  // 🔹 로딩 여부
   bool _isLoading = true;
-
   bool get isLoading => _isLoading;
 
-  // 🔹 필터 값 (번호판)
   String? _filterPlateNumber;
-
   String? get filterPlateNumber => _filterPlateNumber;
 
-  // 🔹 필터된 로그 반환
   List<PlateLogModel> get filteredLogs {
     final currentArea = _areaState.currentArea;
     var filtered = _logs.where((log) => log.area == currentArea).toList();
@@ -46,20 +39,23 @@ class LogPlateState with ChangeNotifier {
     return filtered;
   }
 
-  /// 🔧 번호판 문자열을 정규화 (공백/하이픈 제거)
   String _normalizePlate(String input) {
     return input.replaceAll(RegExp(r'[-\s]'), '');
   }
 
-  /// ✅ Firestore 실시간 로그 수신
-  void _listenToLogs() {
-    FirebaseFirestore.instance
-        .collection('logs')
-        .doc('plate_movements')
-        .collection('entries')
-        .orderBy('timestamp', descending: true)
-        .snapshots()
-        .listen((snapshot) {
+  /// 🔄 단건 조회로 로그 가져오기
+  Future<void> _fetchLogs() async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('logs')
+          .doc('plate_movements')
+          .collection('entries')
+          .orderBy('timestamp', descending: true)
+          .get();
+
       _logs = snapshot.docs.map((doc) {
         final data = doc.data();
         return PlateLogModel(
@@ -73,14 +69,20 @@ class LogPlateState with ChangeNotifier {
         );
       }).toList();
 
-      _isLoading = false;
-      notifyListeners(); // 데이터 수신 → UI 갱신
-    }, onError: (error) {
-      debugPrint("❌ 로그 스트림 오류: $error");
-    });
+      _initialized = true; // ✅ 불러온 적 있음
+    } catch (e) {
+      debugPrint("❌ 로그 가져오기 실패: $e");
+    }
+
+    _isLoading = false;
+    notifyListeners();
   }
 
-  /// ✅ 로그 저장
+  /// 🔄 외부에서 호출 가능한 새로고침 함수
+  Future<void> refreshLogs() async => _fetchLogs();
+
+  bool get isInitialized => _initialized;
+
   Future<void> saveLog(PlateLogModel log) async {
     try {
       await _repository.savePlateLog(log);
@@ -89,25 +91,20 @@ class LogPlateState with ChangeNotifier {
     }
   }
 
-  /// 🔄 지역 변경 시 UI 갱신
   void _onAreaChanged() {
-    notifyListeners(); // 필터 적용 갱신
-  }
-
-  /// 🔍 번호판 필터 적용
-  void setFilterPlateNumber(String? plateNumber) {
-    _filterPlateNumber = plateNumber;
-    debugPrint('[DEBUG] setFilterPlateNumber 호출됨: $plateNumber');
     notifyListeners();
   }
 
-  /// 🔄 필터 초기화
+  void setFilterPlateNumber(String? plateNumber) {
+    _filterPlateNumber = plateNumber;
+    notifyListeners();
+  }
+
   void clearFilters() {
     _filterPlateNumber = null;
     notifyListeners();
   }
 
-  /// 🧹 리스너 제거
   @override
   void dispose() {
     _areaState.removeListener(_onAreaChanged);

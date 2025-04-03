@@ -29,8 +29,10 @@ class InputPlateService {
       final gcsUrl = await uploader.uploadImageFromInput(file, 'plates/$fileName');
 
       if (gcsUrl == null) {
-        throw Exception('이미지 업로드 실패: ${file.path}');
+        debugPrint('이미지 업로드 실패 (파일 경로: ${file.path})');
+        throw Exception('이미지 업로드에 실패했습니다. 다시 시도해주세요.');
       }
+
 
       uploadedUrls.add(gcsUrl);
     }

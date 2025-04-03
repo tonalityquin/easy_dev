@@ -118,13 +118,14 @@ class ModifyPlateService {
     required String to,
     required String action,
   }) async {
-    final area = context
-        .read<AreaState>()
-        .currentArea;
-    final user = context
-        .read<UserState>()
-        .user;
+    final area = context.read<AreaState>().currentArea;
+    final user = context.read<UserState>().user;
     final logState = context.read<LogPlateState>();
+
+    if (user == null) {
+      debugPrint("❗️logPlateChange 호출 시 유저 정보가 없음 → 로그 저장 생략");
+      return;
+    }
 
     final log = PlateLogModel(
       plateNumber: plateNumber,
@@ -132,10 +133,11 @@ class ModifyPlateService {
       from: from,
       to: to,
       action: action,
-      performedBy: user?.name ?? 'Unknown',
+      performedBy: user.name, // ✅ 명확한 사용자 이름
       timestamp: DateTime.now(),
     );
 
     await logState.saveLog(log);
   }
+
 }

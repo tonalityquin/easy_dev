@@ -48,9 +48,10 @@ class GCSUploader {
 
       // ✅ 업로드된 파일의 공개 URL 반환
       return 'https://storage.googleapis.com/$bucketName/${object.name}';
-    } catch (e) {
+    } catch (e, stack) {
       print('🔥 GCS 업로드 실패: $e');
-      return null;
+      print('🔥 Stack Trace: $stack');
+      rethrow; // ⛔ 또는 showFailedSnackbar()로 스낵바 출력도 가능
     }
   }
 }

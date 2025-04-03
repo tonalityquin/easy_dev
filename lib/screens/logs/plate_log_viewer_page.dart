@@ -21,15 +21,18 @@ class _PlateLogViewerPageState extends State<PlateLogViewerPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // dispose에서 사용할 LogPlateState를 안전하게 저장
     _logState ??= context.read<LogPlateState>();
   }
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       final logState = context.read<LogPlateState>();
+
+      if (!logState.isInitialized) {
+        await logState.refreshLogs(); // ✅ 진입 시 수동 fetch
+      }
 
       if (widget.initialPlateNumber != null) {
         final normalized = widget.initialPlateNumber!.replaceAll(RegExp(r'[-\s]'), '');
@@ -46,11 +49,10 @@ class _PlateLogViewerPageState extends State<PlateLogViewerPage> {
   void dispose() {
     if (_appliedInitialFilter) {
       debugPrint('[DEBUG] PlateLogViewerPage 종료 - 필터 초기화');
-      Future.microtask(() => _logState?.clearFilters()); // 👈 안전하게 마이크로태스크로 이동
+      Future.microtask(() => _logState?.clearFilters());
     }
     super.dispose();
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -103,6 +105,18 @@ class _PlateLogViewerPageState extends State<PlateLogViewerPage> {
             isThreeLine: true,
           );
         },
+      ),
+      bottomNavigationBar: Padding(
+        padding: const EdgeInsets.all(12),
+        child: ElevatedButton.icon(
+          onPressed: () => logState.refreshLogs(),
+          icon: const Icon(Icons.refresh),
+          label: const Text("새로고침"),
+          style: ElevatedButton.styleFrom(
+            minimumSize: const Size.fromHeight(48),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        ),
       ),
     );
   }
