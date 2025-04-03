@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../../states/break_log_state.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../widgets/navigation/secondary_mini_navigation.dart';
 import '../../../states/user/user_state.dart';
