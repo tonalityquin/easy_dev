@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../repositories/plate/plate_repository.dart';
-import '../../states/calendar/selected_date_state.dart';
+import '../../states/calendar/field_selected_date_state.dart';
 import '../../states/plate/filter_plate.dart';
 import '../../states/plate/plate_state.dart';
 import '../../states/area/area_state.dart';
@@ -88,7 +88,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
       },
       child: Scaffold(
         appBar: const TopNavigation(),
-        body: Consumer3<PlateState, AreaState, SelectedDateState>(
+        body: Consumer3<PlateState, AreaState, FieldSelectedDateState>(
           builder: (context, plateState, areaState, selectedDateState, child) {
             final selectedDate = selectedDateState.selectedDate ?? DateTime.now();
             final area = areaState.currentArea;
@@ -137,7 +137,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
           builder: (context, plateState, child) {
             final selectedPlate = plateState.getSelectedPlate('departure_completed', userName);
             final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
-            final selectedDate = context.watch<SelectedDateState>().selectedDate ?? DateTime.now(); // ← null 대비
+            final selectedDate = context.watch<FieldSelectedDateState>().selectedDate ?? DateTime.now(); // ← null 대비
             final formattedDate =
                 '${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}';
 
@@ -279,7 +279,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                   } else {
                     if (!_hasCalendarBeenReset) {
                       // ✅ 첫 클릭: 오늘 날짜로 리셋만 함
-                      context.read<SelectedDateState>().setSelectedDate(DateTime.now());
+                      context.read<FieldSelectedDateState>().setSelectedDate(DateTime.now());
                       setState(() {
                         _hasCalendarBeenReset = true;
                       });

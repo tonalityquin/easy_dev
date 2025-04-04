@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../states/calendar/statistics_calendar_state.dart';
-import '../../../states/calendar/selected_date_state.dart';
+import '../../../states/calendar/statistics_selected_date_state.dart';
 import '../../../utils/snackbar_helper.dart';
 
 class StatisticsDocument extends StatefulWidget {
@@ -20,7 +20,7 @@ class _StatisticsDocumentState extends State<StatisticsDocument> {
     calendar = StatisticsCalendarState();
     calendar.selectDate(DateTime.now());
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<SelectedDateState>().setSelectedDate(DateTime.now());
+      context.read<StatisticsSelectedDateState>().setSelectedDate(DateTime.now());
     });
   }
 
@@ -113,7 +113,7 @@ class _StatisticsDocumentState extends State<StatisticsDocument> {
             setState(() {
               calendar.selectDate(currentDate);
             });
-            context.read<SelectedDateState>().setSelectedDate(currentDate);
+            context.read<StatisticsSelectedDateState>().setSelectedDate(currentDate);
             showSelectedSnackbar(context, '선택된 날짜: ${calendar.formatDate(currentDate)}');
           },
           child: Container(

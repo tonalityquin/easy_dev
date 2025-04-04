@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../states/area/area_state.dart';
-import '../states/calendar/selected_date_state.dart';
+import '../states/calendar/field_selected_date_state.dart';
 import '../states/plate/plate_state.dart';
 import '../states/user/user_state.dart';
 import '../utils/app_colors.dart';
@@ -135,7 +135,7 @@ class PageBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer3<PageState, PlateState, SelectedDateState>(
+    return Consumer3<PageState, PlateState, FieldSelectedDateState>(
       builder: (context, pageState, plateState, selectedDateState, child) {
         final selectedColor = AppColors.selectedItemColor;
         final unselectedColor = Colors.grey;
