@@ -18,7 +18,6 @@ class _FieldCalendarPage extends State<FieldCalendarPage> {
   late FieldCalendarState calendar;
   Map<String, String> _memoMap = {};
   String? _memoKey;
-
   @override
   void initState() {
     super.initState();
