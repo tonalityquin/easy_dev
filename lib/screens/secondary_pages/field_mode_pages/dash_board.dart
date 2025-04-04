@@ -115,8 +115,6 @@ class DashBoard extends StatelessWidget {
   Widget _buildBreakButton(BuildContext context) {
     return InkWell(
       onTap: () {
-        final userState = context.read<UserState>();
-
         showSuccessSnackbar(context, '휴게 사용 확인됐습니다');
       },
       borderRadius: BorderRadius.circular(16),
@@ -159,7 +157,6 @@ class DashBoard extends StatelessWidget {
       ),
     );
   }
-
 
   @override
   Widget build(BuildContext context) {

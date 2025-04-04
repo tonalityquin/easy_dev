@@ -18,8 +18,8 @@ class SecondaryPage extends StatelessWidget {
           return fieldModePages;
         case 'Office Mode':
           return officeModePages;
-        case 'Statistics Mode':
-        //  return statisticsPages;
+        case 'Document Mode':
+          return documentPages;
         default:
           return fieldModePages;
       }

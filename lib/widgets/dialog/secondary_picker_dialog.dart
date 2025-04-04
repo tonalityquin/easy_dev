@@ -56,8 +56,9 @@ void secondaryPickerDialog({
                 child: Center(
                   child: GestureDetector(
                     onTap: () {
-                      Navigator.of(context).pop();
+                      // ✅ 모드 변경 적용
                       manageState.updateManage(tempSelected);
+                      Navigator.of(context).pop();
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 16),

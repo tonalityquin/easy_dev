@@ -3,7 +3,7 @@ import 'secondary_info.dart';
 
 class SecondaryMode with ChangeNotifier {
   String _currentStatus = 'Field Mode';
-  final List<String> _availableStatus = ['Field Mode', 'Office Mode', 'Statistics Mode'];
+  final List<String> _availableStatus = ['Field Mode', 'Office Mode', 'Document Mode'];
   String? _currentArea;
 
   String get currentStatus => _currentStatus;
@@ -16,8 +16,8 @@ class SecondaryMode with ChangeNotifier {
     switch (_currentStatus) {
       case 'Office Mode':
         return officeModePages;
-      case 'Statistics Mode':
-      //  return statisticsPages;
+      case 'Document Mode':
+        return documentPages; // ✅ 수정됨: document 모드일 때 해당 페이지 반환
       default:
         return fieldModePages;
     }

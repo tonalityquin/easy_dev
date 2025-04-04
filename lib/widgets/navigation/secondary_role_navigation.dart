@@ -58,6 +58,6 @@ class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWi
   List<String> _getFilteredAvailableStatus(String userRole, List<String> availableStatus) {
     if (userRole == 'fielder') return ['Field Mode'];
     if (userRole == 'dev') return availableStatus;
-    return availableStatus.where((mode) => mode != 'Statistics Mode').toList();
+    return availableStatus.where((mode) => mode != 'Document Mode').toList();
   }
 }
