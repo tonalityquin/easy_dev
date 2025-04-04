@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../models/user_model.dart';
+import '../../../states/area/area_state.dart';
 import '../../../utils/snackbar_helper.dart';
 
 class WorkerDocument extends StatefulWidget {
@@ -39,7 +43,7 @@ class _WorkerDocumentState extends State<WorkerDocument>
     setState(() {
       _savedText = updatedText;
       _controller.clear();
-      _menuOpen = false; // ✅ 메뉴 닫기
+      _menuOpen = false;
     });
 
     showSuccessSnackbar(context, '저장 완료');
@@ -50,14 +54,49 @@ class _WorkerDocumentState extends State<WorkerDocument>
     await prefs.remove('worker_text');
     setState(() {
       _savedText = '';
-      _menuOpen = false; // ✅ 메뉴 닫기
+      _menuOpen = false;
     });
 
     showSuccessSnackbar(context, '전체 삭제 완료');
   }
 
+  /// Firestore에서 선택된 지역에 해당하는 직원 목록 가져오기
+  Future<List<UserModel>> getUsersByArea(String area) async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('user_accounts')
+        .where('area', isEqualTo: area)
+        .get();
+
+    return snapshot.docs
+        .map((doc) => UserModel.fromMap(doc.id, doc.data()))
+        .toList();
+  }
+
+  /// 셀 위젯 생성
+  Widget _buildCell(String text, {bool isHeader = false}) {
+    return Container(
+      width: 60,
+      height: 40,
+      alignment: Alignment.center,
+      margin: const EdgeInsets.symmetric(horizontal: 2),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade300),
+        color: isHeader ? Colors.grey.shade200 : Colors.white,
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontWeight: isHeader ? FontWeight.bold : FontWeight.normal,
+          fontSize: 14,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final selectedArea = context.watch<AreaState>().currentArea;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('직원 문서'),
@@ -84,7 +123,8 @@ class _WorkerDocumentState extends State<WorkerDocument>
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             const SizedBox(height: 8),
-            Expanded(
+            SizedBox(
+              height: 40,
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
@@ -97,11 +137,65 @@ class _WorkerDocumentState extends State<WorkerDocument>
                 ),
               ),
             ),
+            const SizedBox(height: 32),
+            Text(
+              '직원 근무 테이블 (${selectedArea.isNotEmpty ? selectedArea : "지역 미선택"})',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            FutureBuilder<List<UserModel>>(
+              future: getUsersByArea(selectedArea),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: CircularProgressIndicator(),
+                  );
+                }
+                if (snapshot.hasError) {
+                  return Text('에러 발생: ${snapshot.error}');
+                }
+
+                final users = snapshot.data ?? [];
+
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Column(
+                    children: [
+                      // 날짜 헤더
+                      Row(
+                        children: List.generate(33, (index) {
+                          if (index == 0 || index == 32) {
+                            return _buildCell('');
+                          } else {
+                            return _buildCell('$index', isHeader: true);
+                          }
+                        }),
+                      ),
+                      const SizedBox(height: 8),
+                      // 사용자별 행 생성
+                      ...users.map((user) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Row(
+                            children: List.generate(33, (index) {
+                              if (index == 0) {
+                                return _buildCell(user.name, isHeader: true);
+                              } else {
+                                return _buildCell('');
+                              }
+                            }),
+                          ),
+                        );
+                      }).toList(),
+                    ],
+                  ),
+                );
+              },
+            ),
           ],
         ),
       ),
-
-      /// ✅ 하단 FAB + 애니메이션 메뉴
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
