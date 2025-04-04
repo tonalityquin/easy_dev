@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../states/calendar/statistics_calendar_state.dart';
 import '../../../states/calendar/statistics_selected_date_state.dart';
 import '../../../utils/snackbar_helper.dart';
+import '../../../widgets/dialog/calendar/statistics_view_dialog.dart'; // ✅ 다이얼로그 임포트
 
 class StatisticsDocument extends StatefulWidget {
   const StatisticsDocument({super.key});
@@ -18,10 +19,6 @@ class _StatisticsDocumentState extends State<StatisticsDocument> {
   void initState() {
     super.initState();
     calendar = StatisticsCalendarState();
-    calendar.selectDate(DateTime.now());
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<StatisticsSelectedDateState>().setSelectedDate(DateTime.now());
-    });
   }
 
   @override
@@ -40,6 +37,8 @@ class _StatisticsDocumentState extends State<StatisticsDocument> {
             _buildMonthNavigation(),
             _buildDayHeaders(),
             _buildDateGrid(),
+            const SizedBox(height: 16),
+            _buildOpenButton(context), // ✅ 열람 버튼 추가
           ],
         ),
       ),
@@ -111,10 +110,24 @@ class _StatisticsDocumentState extends State<StatisticsDocument> {
         return GestureDetector(
           onTap: () {
             setState(() {
-              calendar.selectDate(currentDate);
+              if (isSelected) {
+                calendar.selectDate(currentDate); // 내부에서 toggle 되도록 이미 구현됨
+              } else {
+                calendar.selectDate(currentDate);
+              }
+
+              // 선택된 목록 전체를 상태에 반영
+              context.read<StatisticsSelectedDateState>().setSelectedDates(calendar.selectedDates);
+
+              if (calendar.selectedDates.isEmpty) {
+                showSelectedSnackbar(context, '선택이 해제되었습니다');
+              } else {
+                showSelectedSnackbar(
+                  context,
+                  '선택된 날짜: ${calendar.formatDate(currentDate)}',
+                );
+              }
             });
-            context.read<StatisticsSelectedDateState>().setSelectedDate(currentDate);
-            showSelectedSnackbar(context, '선택된 날짜: ${calendar.formatDate(currentDate)}');
           },
           child: Container(
             margin: const EdgeInsets.all(4),
@@ -133,6 +146,25 @@ class _StatisticsDocumentState extends State<StatisticsDocument> {
           ),
         );
       }),
+    );
+  }
+
+  Widget _buildOpenButton(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: () {
+          showDialog(
+            context: context,
+            builder: (_) => const StatisticsViewDialog(), // ✅ 팝업 열기
+          );
+        },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.indigo,
+          foregroundColor: Colors.white,
+        ),
+        child: const Text('열람'),
+      ),
     );
   }
 }

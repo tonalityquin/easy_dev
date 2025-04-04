@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 
 class StatisticsSelectedDateState extends ChangeNotifier {
-  DateTime? _selectedDate;
+  List<DateTime> _selectedDates = [];
 
-  DateTime? get selectedDate => _selectedDate;
+  List<DateTime> get selectedDates => _selectedDates;
 
-  void setSelectedDate(DateTime date) {
-    _selectedDate = date;
+  void setSelectedDates(List<DateTime> dates) {
+    _selectedDates = dates;
+    notifyListeners();
+  }
+
+  void clearSelectedDates() {
+    _selectedDates.clear();
     notifyListeners();
   }
 }
