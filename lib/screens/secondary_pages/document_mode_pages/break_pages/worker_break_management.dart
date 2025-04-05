@@ -206,8 +206,8 @@ class _WorkerBreakManagementState extends State<WorkerBreakManagement> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadUsersFromPrefs();
+      _loadCellDataFromPrefs(); // ✅ 휴게시간 데이터 새로 로드
     });
-
     return BreakDocumentBody(
       controller: _controller,
       menuOpen: _menuOpen,

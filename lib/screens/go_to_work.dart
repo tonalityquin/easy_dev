@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import '../../../states/user/user_state.dart';
+import '../../../utils/snackbar_helper.dart';
 
 class GoToWork extends StatefulWidget {
   const GoToWork({super.key});
@@ -18,7 +21,13 @@ class _GoToWorkState extends State<GoToWork> {
     });
 
     try {
+      // ✅ 출근 시 출석 시간 기록
+      if (!userState.isWorking) {
+        await _recordAttendance(context);
+      }
+
       await userState.isHeWorking(); // 상태 전환 (출근/퇴근 처리)
+
       if (userState.isWorking && mounted) {
         Navigator.pushReplacementNamed(context, '/type_page');
       }
@@ -39,6 +48,53 @@ class _GoToWorkState extends State<GoToWork> {
         });
       }
     }
+  }
+
+  /// ✅ 출근 시간 저장 (덮어쓰기 방지)
+  Future<void> _recordAttendance(BuildContext context) async {
+    final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now();
+    final int dayColumn = now.day;
+    final userState = Provider.of<UserState>(context, listen: false);
+    final String userId = userState.user?.id ?? "unknown";
+    final String time =
+        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    final String cellDataKey = 'cell_data_${now.year}_${now.month}';
+
+    final jsonStr = prefs.getString(cellDataKey);
+    Map<String, Map<int, String>> cellData = {};
+
+    if (jsonStr != null) {
+      final decoded = jsonDecode(jsonStr);
+      cellData = Map<String, Map<int, String>>.from(
+        decoded.map((rowKey, colMap) => MapEntry(
+          rowKey,
+          Map<int, String>.from(
+            (colMap as Map).map((k, v) => MapEntry(int.parse(k), v)),
+          ),
+        )),
+      );
+    }
+
+    // ✅ 이미 출근 기록이 존재하면 저장하지 않음
+    final existing = cellData[userId]?[dayColumn];
+    if (existing != null && existing.trim().isNotEmpty) {
+      showFailedSnackbar(context, '이미 출근 기록이 있습니다.');
+      return;
+    }
+
+    cellData[userId] ??= {};
+    cellData[userId]![dayColumn] = time;
+
+    final encoded = jsonEncode(
+      cellData.map((rowKey, colMap) => MapEntry(
+        rowKey,
+        colMap.map((col, v) => MapEntry(col.toString(), v)),
+      )),
+    );
+    await prefs.setString(cellDataKey, encoded);
+
+    showSuccessSnackbar(context, '출근 시간 기록 완료: $time');
   }
 
   Widget _buildWorkButton(UserState userState) {
@@ -122,13 +178,11 @@ class _GoToWorkState extends State<GoToWork> {
                         child: Image.asset('assets/images/belivus_logo.PNG'),
                       ),
                       const SizedBox(height: 96),
-
                       Text(
                         '출근 전 사용자 정보 확인',
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const SizedBox(height: 16),
-
                       Card(
                         elevation: 4,
                         shape: RoundedRectangleBorder(
@@ -148,7 +202,6 @@ class _GoToWorkState extends State<GoToWork> {
                           ),
                         ),
                       ),
-
                       const SizedBox(height: 32),
                       _buildWorkButton(userState),
                       const SizedBox(height: 32),

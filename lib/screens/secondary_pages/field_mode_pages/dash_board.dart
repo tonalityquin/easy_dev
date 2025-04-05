@@ -1,7 +1,10 @@
+// 생략 없이 전체 코드 — 변경된 부분: _handleWorkStatus, _recordLeaveTime 추가 및 적용
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'dart:io';
+import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../widgets/navigation/secondary_mini_navigation.dart';
@@ -10,9 +13,64 @@ import '../../../states/user/user_state.dart';
 class DashBoard extends StatelessWidget {
   const DashBoard({super.key});
 
-  /// 🔹 출근 / 퇴근 처리
-  Future<void> _handleWorkStatus(UserState userState) async {
+  /// ✅ 퇴근 시간 기록 함수 (두 번째 줄만 허용)
+  Future<void> _recordLeaveTime(BuildContext context) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final now = DateTime.now();
+      final int dayColumn = now.day;
+      final String currentTime =
+          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+
+      final userState = Provider.of<UserState>(context, listen: false);
+      final String userId = userState.user?.id ?? "unknown";
+      final String cellDataKey = 'cell_data_${now.year}_${now.month}';
+
+      final jsonStr = prefs.getString(cellDataKey);
+      Map<String, Map<int, String>> cellData = {};
+
+      if (jsonStr != null) {
+        final decoded = jsonDecode(jsonStr);
+        cellData = Map<String, Map<int, String>>.from(
+          decoded.map((rowKey, colMap) => MapEntry(
+            rowKey,
+            Map<int, String>.from(
+              (colMap as Map).map((k, v) => MapEntry(int.parse(k), v)),
+            ),
+          )),
+        );
+      }
+
+      final existing = cellData[userId]?[dayColumn];
+      if (existing == null || existing.trim().isEmpty) {
+        showFailedSnackbar(context, '출근 기록이 없습니다. 먼저 출근하세요.');
+        return;
+      } else if (existing.split('\n').length >= 2) {
+        showFailedSnackbar(context, '이미 퇴근 기록이 존재합니다.');
+        return;
+      }
+
+      // 두 번째 줄로 퇴근 시간 추가
+      cellData[userId]![dayColumn] = '$existing\n$currentTime';
+
+      final encoded = jsonEncode(
+        cellData.map((rowKey, colMap) => MapEntry(
+          rowKey,
+          colMap.map((col, v) => MapEntry(col.toString(), v)),
+        )),
+      );
+      await prefs.setString(cellDataKey, encoded);
+
+      showSuccessSnackbar(context, '퇴근 시간 기록 완료: $currentTime');
+    } catch (e) {
+      showFailedSnackbar(context, '퇴근 시간 저장 실패: $e');
+    }
+  }
+
+  /// 🔹 출근 / 퇴근 처리 + 퇴근 시간 기록
+  Future<void> _handleWorkStatus(UserState userState, BuildContext context) async {
     if (userState.isWorking) {
+      await _recordLeaveTime(context); // ✅ 퇴근 시간 기록 먼저 시도
       await userState.isHeWorking();
       await Future.delayed(const Duration(seconds: 1));
       exit(0);
@@ -61,61 +119,65 @@ class DashBoard extends StatelessWidget {
     );
   }
 
-  /// 🔹 출근 / 퇴근 버튼
-  Widget _buildWorkButton(UserState userState, BuildContext context) {
-    final isWorking = userState.isWorking;
-    final label = isWorking ? '퇴근하기' : '출근하기';
-    final icon = isWorking ? Icons.logout : Icons.login;
-    final colors = isWorking ? [Colors.redAccent, Colors.deepOrange] : [Colors.green.shade400, Colors.teal];
+  /// ✅ 휴게 시간 기록 함수
+  Future<void> _recordBreakTime(BuildContext context) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final now = DateTime.now();
+      final dayColumn = now.day;
+      final currentTime =
+          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
 
-    return InkWell(
-      onTap: () => _handleWorkStatus(userState),
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        height: 55,
-        width: double.infinity,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          gradient: LinearGradient(
-            colors: colors,
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.15),
-              blurRadius: 6,
-              offset: const Offset(0, 3),
+      final userState = Provider.of<UserState>(context, listen: false);
+      final userId = userState.user?.id ?? "unknown";
+
+      final cellDataKey = 'break_cell_data_${now.year}_${now.month}';
+      final jsonStr = prefs.getString(cellDataKey);
+
+      Map<String, Map<int, String>> cellData = {};
+
+      if (jsonStr != null) {
+        final decoded = jsonDecode(jsonStr);
+        cellData = Map<String, Map<int, String>>.from(
+          decoded.map((rowKey, colMap) => MapEntry(
+            rowKey,
+            Map<int, String>.from(
+              (colMap as Map).map((k, v) => MapEntry(int.parse(k), v)),
             ),
-          ],
-        ),
-        child: Center(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: Colors.white),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.1,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+          )),
+        );
+      }
+
+      // ✅ 이미 값이 존재하는지 확인
+      final existing = cellData[userId]?[dayColumn];
+      if (existing != null && existing.trim().isNotEmpty) {
+        showFailedSnackbar(context, '이미 기록된 휴게 시간이 있습니다.');
+        return;
+      }
+
+      // 시간 기록
+      cellData[userId] ??= {};
+      cellData[userId]![dayColumn] = currentTime;
+
+      final encoded = jsonEncode(
+        cellData.map((rowKey, colMap) => MapEntry(
+          rowKey,
+          colMap.map((col, v) => MapEntry(col.toString(), v)),
+        )),
+      );
+      await prefs.setString(cellDataKey, encoded);
+
+      showSuccessSnackbar(context, '휴게 시간 저장 완료: $currentTime');
+    } catch (e) {
+      showFailedSnackbar(context, '휴게 시간 저장 실패: $e');
+    }
   }
 
   /// 🔹 휴게 인증 버튼
   Widget _buildBreakButton(BuildContext context) {
     return InkWell(
-      onTap: () {
-        showSuccessSnackbar(context, '휴게 사용 확인됐습니다');
+      onTap: () async {
+        await _recordBreakTime(context);
       },
       borderRadius: BorderRadius.circular(16),
       child: Container(
@@ -145,6 +207,56 @@ class DashBoard extends StatelessWidget {
               Text(
                 '휴게 사용 확인',
                 style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.1,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 🔹 출근 / 퇴근 버튼
+  Widget _buildWorkButton(UserState userState, BuildContext context) {
+    final isWorking = userState.isWorking;
+    final label = isWorking ? '퇴근하기' : '출근하기';
+    final icon = isWorking ? Icons.logout : Icons.login;
+    final colors = isWorking ? [Colors.redAccent, Colors.deepOrange] : [Colors.green.shade400, Colors.teal];
+
+    return InkWell(
+      onTap: () => _handleWorkStatus(userState, context),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        height: 55,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: LinearGradient(
+            colors: colors,
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 6,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Center(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: Colors.white),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -228,9 +340,9 @@ class DashBoard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 32),
-                    _buildBreakButton(context), // 🔹 추가된 휴게시작 버튼
+                    _buildBreakButton(context),
                     const SizedBox(height: 16),
-                    _buildWorkButton(userState, context), // 🔹 기존 퇴근/출근 버튼
+                    _buildWorkButton(userState, context),
                     const SizedBox(height: 32),
                   ],
                 ),
