@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'package:provider/provider.dart';
 
 import '../../../../models/user_model.dart';
+import '../../../../states/area/area_state.dart';
 import '../../../../utils/snackbar_helper.dart';
 import 'break_document_body.dart';
 
@@ -21,14 +23,33 @@ class _WorkerBreakManagementState extends State<WorkerBreakManagement> {
   int? selectedRow;
   int? selectedCol;
 
+  late int selectedYear;
+  late int selectedMonth;
+
   Map<String, Map<int, String>> cellData = {};
   List<UserModel> users = [];
+
+  String currentArea = '';
 
   @override
   void initState() {
     super.initState();
+    final now = DateTime.now();
+    selectedYear = now.year;
+    selectedMonth = now.month;
     _loadCellDataFromPrefs();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final area = context.read<AreaState>().currentArea;
+      if (area.isNotEmpty) {
+        currentArea = area;
+        _loadUsersFromPrefs();
+      }
+    });
   }
+
+  String get cellDataKey => 'break_cell_data_${selectedYear}_${selectedMonth}';
+  String get userCacheKey => 'user_list_$currentArea';
 
   Future<List<UserModel>> getUsersByArea(String area) async {
     final snapshot = await FirebaseFirestore.instance
@@ -41,12 +62,50 @@ class _WorkerBreakManagementState extends State<WorkerBreakManagement> {
   Future<void> _reloadUsers(String area) async {
     try {
       final updatedUsers = await getUsersByArea(area);
-      setState(() {
-        users = updatedUsers;
-      });
-      showSuccessSnackbar(context, '최신 사용자 목록으로 갱신되었습니다');
+
+      final currentIds = users.map((u) => u.id).toSet();
+      final newIds = updatedUsers.map((u) => u.id).toSet();
+
+      final hasChanged = currentIds.length != newIds.length || !currentIds.containsAll(newIds);
+
+      if (hasChanged) {
+        setState(() {
+          users = updatedUsers;
+        });
+        await _saveUsersToPrefs();
+        showSuccessSnackbar(context, '최신 사용자 목록으로 갱신되었습니다');
+      } else {
+        showSuccessSnackbar(context, '변경 사항 없음');
+      }
     } catch (e) {
       showFailedSnackbar(context, '사용자 목록을 불러오지 못했습니다');
+    }
+  }
+
+  Future<void> _saveUsersToPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final userJsonList = users
+        .where((u) => u.id.isNotEmpty)
+        .map((u) => u.toJson())
+        .toList();
+    await prefs.setString(userCacheKey, jsonEncode(userJsonList));
+  }
+
+  Future<void> _loadUsersFromPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonStr = prefs.getString(userCacheKey);
+    if (jsonStr != null) {
+      final List<dynamic> jsonList = jsonDecode(jsonStr);
+      setState(() {
+        users = jsonList
+            .where((map) => map['id'] != null && map['id'] is String)
+            .map((map) => UserModel.fromJson(Map<String, dynamic>.from(map)))
+            .toList();
+      });
+    } else {
+      setState(() {
+        users = [];
+      });
     }
   }
 
@@ -102,12 +161,12 @@ class _WorkerBreakManagementState extends State<WorkerBreakManagement> {
       colMap.map((colIndex, value) => MapEntry(colIndex.toString(), value)),
     ));
     final encoded = jsonEncode(stringified);
-    await prefs.setString('cell_data', encoded);
+    await prefs.setString(cellDataKey, encoded);
   }
 
   Future<void> _loadCellDataFromPrefs() async {
     final prefs = await SharedPreferences.getInstance();
-    final jsonStr = prefs.getString('cell_data');
+    final jsonStr = prefs.getString(cellDataKey);
     if (jsonStr != null) {
       final decoded = jsonDecode(jsonStr);
       setState(() {
@@ -120,11 +179,35 @@ class _WorkerBreakManagementState extends State<WorkerBreakManagement> {
           )),
         );
       });
+    } else {
+      setState(() {
+        cellData = {};
+      });
     }
+  }
+
+  void _onChangeYear(int year) {
+    setState(() {
+      selectedYear = year;
+    });
+    _loadCellDataFromPrefs();
+  }
+
+  void _onChangeMonth(int month) {
+    setState(() {
+      selectedMonth = month;
+    });
+    _loadCellDataFromPrefs();
   }
 
   @override
   Widget build(BuildContext context) {
+    currentArea = context.watch<AreaState>().currentArea;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadUsersFromPrefs();
+    });
+
     return BreakDocumentBody(
       controller: _controller,
       menuOpen: _menuOpen,
@@ -132,12 +215,16 @@ class _WorkerBreakManagementState extends State<WorkerBreakManagement> {
       selectedCol: selectedCol,
       users: users,
       cellData: cellData,
+      selectedYear: selectedYear,
+      selectedMonth: selectedMonth,
+      onYearChanged: _onChangeYear,
+      onMonthChanged: _onChangeMonth,
       onCellTapped: _onCellTapped,
       appendText: _appendText,
       clearText: _clearText,
       toggleMenu: () => setState(() => _menuOpen = !_menuOpen),
       getUsersByArea: getUsersByArea,
-      reloadUsers: _reloadUsers, // ✅ 전달
+      reloadUsers: _reloadUsers,
     );
   }
 }

@@ -10,7 +10,7 @@ class UserModel {
   final bool isWorking;
   final bool isSaved;
 
-  UserModel({
+  const UserModel({
     required this.id,
     required this.name,
     required this.phone,
@@ -23,7 +23,7 @@ class UserModel {
     required this.isSaved,
   });
 
-  // ✅ JSON 없이 copyWith 추가
+  /// ✅ 복사
   UserModel copyWith({
     String? id,
     String? name,
@@ -50,6 +50,7 @@ class UserModel {
     );
   }
 
+  /// ✅ Firestore에서 불러오기 (id는 문서 ID로 전달됨)
   factory UserModel.fromMap(String id, Map<String, dynamic> data) {
     return UserModel(
       id: id,
@@ -58,23 +59,54 @@ class UserModel {
       email: data['email'] ?? '',
       role: data['role'] ?? '',
       password: data['password'] ?? '',
-      // ✅ password가 올바르게 매핑되었는지 확인
       area: data['area'] ?? '',
-      // ✅ area가 올바르게 매핑되었는지 확인
       isSelected: data['isSelected'] ?? false,
       isWorking: data['isWorking'] ?? false,
       isSaved: data['isSaved'] ?? false,
     );
   }
 
+  /// ✅ Firestore 저장용 (id 제외)
   Map<String, dynamic> toMap() {
     return {
       'name': name,
       'phone': phone,
       'email': email,
       'role': role,
-      'password': password, // ✅ Firestore에 올바른 값 저장
-      'area': area, // ✅ Firestore에 올바른 값 저장
+      'password': password,
+      'area': area,
+      'isSelected': isSelected,
+      'isWorking': isWorking,
+      'isSaved': isSaved,
+    };
+  }
+
+  /// ✅ SharedPreferences에서 복원용 (id 포함)
+  factory UserModel.fromJson(Map<String, dynamic> json) {
+    return UserModel(
+      id: json['id'] ?? '', // null-safe
+      name: json['name'] ?? '',
+      phone: json['phone'] ?? '',
+      email: json['email'] ?? '',
+      role: json['role'] ?? '',
+      password: json['password'] ?? '',
+      area: json['area'] ?? '',
+      isSelected: json['isSelected'] ?? false,
+      isWorking: json['isWorking'] ?? false,
+      isSaved: json['isSaved'] ?? false,
+    );
+  }
+
+  /// ✅ SharedPreferences 저장용 (id 포함)
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'phone': phone,
+      'email': email,
+      'role': role,
+      'password': password,
+      'area': area,
       'isSelected': isSelected,
       'isWorking': isWorking,
       'isSaved': isSaved,

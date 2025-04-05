@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../../../models/user_model.dart';
 import '../../../../states/area/area_state.dart';
-import '../../../../utils/snackbar_helper.dart'; // ✅ Snackbar 유틸 추가
+import '../../../../utils/snackbar_helper.dart';
 
 class BreakDocumentBody extends StatelessWidget {
   final TextEditingController controller;
@@ -12,12 +12,16 @@ class BreakDocumentBody extends StatelessWidget {
   final int? selectedCol;
   final List<UserModel> users;
   final Map<String, Map<int, String>> cellData;
+  final int selectedYear;
+  final int selectedMonth;
   final void Function(int rowIndex, int colIndex, String rowKey) onCellTapped;
   final Future<void> Function(String rowKey) appendText;
   final Future<void> Function(String rowKey) clearText;
   final VoidCallback toggleMenu;
   final Future<List<UserModel>> Function(String area) getUsersByArea;
-  final Future<void> Function(String area) reloadUsers; // ✅ 추가
+  final Future<void> Function(String area) reloadUsers;
+  final void Function(int year) onYearChanged;
+  final void Function(int month) onMonthChanged;
 
   const BreakDocumentBody({
     super.key,
@@ -27,12 +31,16 @@ class BreakDocumentBody extends StatelessWidget {
     required this.selectedCol,
     required this.users,
     required this.cellData,
+    required this.selectedYear,
+    required this.selectedMonth,
     required this.onCellTapped,
     required this.appendText,
     required this.clearText,
     required this.toggleMenu,
     required this.getUsersByArea,
-    required this.reloadUsers, // ✅ 추가
+    required this.reloadUsers,
+    required this.onYearChanged,
+    required this.onMonthChanged,
   });
 
   Widget _buildCell({
@@ -57,7 +65,7 @@ class BreakDocumentBody extends StatelessWidget {
               ? Colors.lightBlue.shade100
               : Colors.white,
         ),
-        child: (text.contains('\n'))
+        child: text.contains('\n')
             ? Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: text.split('\n').map((line) {
@@ -88,6 +96,9 @@ class BreakDocumentBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selectedArea = context.watch<AreaState>().currentArea;
+    final now = DateTime.now();
+    final yearList = List.generate(20, (i) => now.year - 5 + i);
+    final monthList = List.generate(12, (i) => i + 1);
 
     return Scaffold(
       appBar: AppBar(
@@ -125,71 +136,84 @@ class BreakDocumentBody extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 24),
-            Text(
-              '직원 휴게 테이블 (${selectedArea.isNotEmpty ? selectedArea : "지역 미선택"})',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '직원 휴게 테이블 (${selectedArea.isNotEmpty ? selectedArea : "지역 미선택"})',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                Row(
+                  children: [
+                    DropdownButton<int>(
+                      value: selectedYear,
+                      items: yearList
+                          .map((y) => DropdownMenuItem(value: y, child: Text('$y년')))
+                          .toList(),
+                      onChanged: (value) {
+                        if (value != null) onYearChanged(value);
+                      },
+                    ),
+                    const SizedBox(width: 12),
+                    DropdownButton<int>(
+                      value: selectedMonth,
+                      items: monthList
+                          .map((m) => DropdownMenuItem(value: m, child: Text('$m월')))
+                          .toList(),
+                      onChanged: (value) {
+                        if (value != null) onMonthChanged(value);
+                      },
+                    ),
+                  ],
+                ),
+              ],
             ),
             const SizedBox(height: 8),
             Expanded(
               child: SingleChildScrollView(
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
-                  child: FutureBuilder<List<UserModel>>(
-                    future: getUsersByArea(selectedArea),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: List.generate(33, (index) {
+                          if (index == 0) return _buildCell(text: '', isHeader: true, isSelected: false);
+                          if (index == 32) return _buildCell(text: '사인란', isHeader: true, isSelected: false, width: 120);
+                          return _buildCell(text: '$index', isHeader: true, isSelected: false);
+                        }),
+                      ),
+                      const SizedBox(height: 8),
+                      ...users.asMap().entries.map((entry) {
+                        final rowIndex = entry.key;
+                        final user = entry.value;
+                        final rowKey = user.id;
 
-                      if (snapshot.hasError) {
-                        return Text('에러: ${snapshot.error}');
-                      }
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Row(
+                            children: List.generate(33, (colIndex) {
+                              if (colIndex == 0) {
+                                return _buildCell(text: user.name, isHeader: true, isSelected: false);
+                              }
+                              if (colIndex == 32) {
+                                return _buildCell(text: '', isHeader: false, isSelected: false, width: 120);
+                              }
 
-                      final userList = snapshot.data ?? [];
+                              final isSel = selectedRow == rowIndex && selectedCol == colIndex;
+                              final text = cellData[rowKey]?[colIndex] ?? '';
 
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: List.generate(33, (index) {
-                              if (index == 0) return _buildCell(text: '', isHeader: true, isSelected: false);
-                              if (index == 32) return _buildCell(text: '사인란', isHeader: true, isSelected: false, width: 120);
-                              return _buildCell(text: '$index', isHeader: true, isSelected: false);
+                              return _buildCell(
+                                text: text,
+                                isHeader: false,
+                                isSelected: isSel,
+                                onTap: () => onCellTapped(rowIndex, colIndex, rowKey),
+                              );
                             }),
                           ),
-                          const SizedBox(height: 8),
-                          ...userList.asMap().entries.map((entry) {
-                            final rowIndex = entry.key;
-                            final user = entry.value;
-                            final rowKey = user.id;
-
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 4),
-                              child: Row(
-                                children: List.generate(33, (colIndex) {
-                                  if (colIndex == 0) {
-                                    return _buildCell(text: user.name, isHeader: true, isSelected: false);
-                                  }
-                                  if (colIndex == 32) {
-                                    return _buildCell(text: '', isHeader: false, isSelected: false, width: 120);
-                                  }
-
-                                  final isSel = selectedRow == rowIndex && selectedCol == colIndex;
-                                  final text = cellData[rowKey]?[colIndex] ?? '';
-
-                                  return _buildCell(
-                                    text: text,
-                                    isHeader: false,
-                                    isSelected: isSel,
-                                    onTap: () => onCellTapped(rowIndex, colIndex, rowKey),
-                                  );
-                                }),
-                              ),
-                            );
-                          }),
-                        ],
-                      );
-                    },
+                        );
+                      }),
+                    ],
                   ),
                 ),
               ),
