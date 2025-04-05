@@ -1,22 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../models/user_model.dart';
 import '../../../../states/area/area_state.dart';
+import '../../../../states/user/user_state.dart';
 import '../../../../utils/snackbar_helper.dart';
+import '../../../../utils/excel_helper.dart';
 
 class BreakDocumentBody extends StatelessWidget {
   final TextEditingController controller;
   final bool menuOpen;
   final int? selectedRow;
   final int? selectedCol;
+  final Set<String> selectedCells;
   final List<UserModel> users;
   final Map<String, Map<int, String>> cellData;
   final int selectedYear;
   final int selectedMonth;
   final void Function(int rowIndex, int colIndex, String rowKey) onCellTapped;
   final Future<void> Function(String rowKey) appendText;
-  final Future<void> Function(String rowKey) clearText;
+  final Future<void> Function(String rowKey, [List<int>? colIndices]) clearText;
   final VoidCallback toggleMenu;
   final Future<List<UserModel>> Function(String area) getUsersByArea;
   final Future<void> Function(String area) reloadUsers;
@@ -29,6 +33,7 @@ class BreakDocumentBody extends StatelessWidget {
     required this.menuOpen,
     required this.selectedRow,
     required this.selectedCol,
+    required this.selectedCells,
     required this.users,
     required this.cellData,
     required this.selectedYear,
@@ -62,33 +67,36 @@ class BreakDocumentBody extends StatelessWidget {
           color: isHeader
               ? Colors.grey.shade200
               : isSelected
-              ? Colors.lightBlue.shade100
-              : Colors.white,
+                  ? Colors.lightBlue.shade100
+                  : Colors.white,
         ),
         child: text.contains('\n')
             ? Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: text.split('\n').map((line) {
-            return Text(
-              line,
-              style: TextStyle(
-                fontWeight: isHeader ? FontWeight.bold : FontWeight.normal,
-                fontSize: 13,
-                height: 1.3,
-              ),
-              textAlign: TextAlign.center,
-            );
-          }).toList(),
-        )
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: text
+                    .split('\n')
+                    .map(
+                      (line) => Text(
+                        line,
+                        style: TextStyle(
+                          fontWeight: isHeader ? FontWeight.bold : FontWeight.normal,
+                          fontSize: 13,
+                          height: 1.3,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    )
+                    .toList(),
+              )
             : Text(
-          text,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontWeight: isHeader ? FontWeight.bold : FontWeight.normal,
-            fontSize: 13,
-            height: 1.3,
-          ),
-        ),
+                text,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontWeight: isHeader ? FontWeight.bold : FontWeight.normal,
+                  fontSize: 13,
+                  height: 1.3,
+                ),
+              ),
       ),
     );
   }
@@ -110,6 +118,40 @@ class BreakDocumentBody extends StatelessWidget {
         automaticallyImplyLeading: false,
         actions: [
           IconButton(
+            icon: const Icon(Icons.download),
+            tooltip: '엑셀 다운로드',
+            onPressed: () async {
+              if (selectedArea.isEmpty) {
+                showFailedSnackbar(context, '지역을 먼저 선택하세요');
+                return;
+              }
+
+              showSuccessSnackbar(context, '엑셀 파일 생성 중...');
+              final uploader = ExcelUploader();
+              final userIds = users.map((u) => u.id).toList();
+              final idToName = {for (var u in users) u.id: u.name};
+              final userState = context.read<UserState>();
+              final generatedByName = userState.user?.name ?? 'unknown';
+              final generatedByArea = userState.user?.area ?? 'unknown';
+
+              final url = await uploader.uploadAttendanceAndBreakExcel(
+                userIdsInOrder: userIds,
+                userIdToName: idToName,
+                year: selectedYear,
+                month: selectedMonth,
+                generatedByName: generatedByName,
+                generatedByArea: generatedByArea,
+              );
+
+              if (url != null) {
+                await Clipboard.setData(ClipboardData(text: url));
+                showSuccessSnackbar(context, '엑셀 다운로드 링크가 복사되었습니다!');
+              } else {
+                showFailedSnackbar(context, '엑셀 생성 또는 업로드에 실패했습니다.');
+              }
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: '사용자 목록 새로고침',
             onPressed: () async {
@@ -125,7 +167,6 @@ class BreakDocumentBody extends StatelessWidget {
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             TextField(
               controller: controller,
@@ -147,9 +188,7 @@ class BreakDocumentBody extends StatelessWidget {
                   children: [
                     DropdownButton<int>(
                       value: selectedYear,
-                      items: yearList
-                          .map((y) => DropdownMenuItem(value: y, child: Text('$y년')))
-                          .toList(),
+                      items: yearList.map((y) => DropdownMenuItem(value: y, child: Text('$y년'))).toList(),
                       onChanged: (value) {
                         if (value != null) onYearChanged(value);
                       },
@@ -157,9 +196,7 @@ class BreakDocumentBody extends StatelessWidget {
                     const SizedBox(width: 12),
                     DropdownButton<int>(
                       value: selectedMonth,
-                      items: monthList
-                          .map((m) => DropdownMenuItem(value: m, child: Text('$m월')))
-                          .toList(),
+                      items: monthList.map((m) => DropdownMenuItem(value: m, child: Text('$m월'))).toList(),
                       onChanged: (value) {
                         if (value != null) onMonthChanged(value);
                       },
@@ -174,44 +211,24 @@ class BreakDocumentBody extends StatelessWidget {
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
-                        children: List.generate(33, (index) {
+                        children: List.generate(34, (index) {
                           if (index == 0) return _buildCell(text: '', isHeader: true, isSelected: false);
-                          if (index == 32) return _buildCell(text: '사인란', isHeader: true, isSelected: false, width: 120);
-                          return _buildCell(text: '$index', isHeader: true, isSelected: false);
+                          if (index == 1) return _buildCell(text: '출근/퇴근', isHeader: true, isSelected: false);
+                          if (index == 33)
+                            return _buildCell(text: '사인란', isHeader: true, isSelected: false, width: 120);
+                          return _buildCell(text: '${index - 1}', isHeader: true, isSelected: false);
                         }),
                       ),
                       const SizedBox(height: 8),
-                      ...users.asMap().entries.map((entry) {
-                        final rowIndex = entry.key;
+                      ...users.asMap().entries.expand((entry) {
                         final user = entry.value;
                         final rowKey = user.id;
-
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
-                          child: Row(
-                            children: List.generate(33, (colIndex) {
-                              if (colIndex == 0) {
-                                return _buildCell(text: user.name, isHeader: true, isSelected: false);
-                              }
-                              if (colIndex == 32) {
-                                return _buildCell(text: '', isHeader: false, isSelected: false, width: 120);
-                              }
-
-                              final isSel = selectedRow == rowIndex && selectedCol == colIndex;
-                              final text = cellData[rowKey]?[colIndex] ?? '';
-
-                              return _buildCell(
-                                text: text,
-                                isHeader: false,
-                                isSelected: isSel,
-                                onTap: () => onCellTapped(rowIndex, colIndex, rowKey),
-                              );
-                            }),
-                          ),
-                        );
+                        return [
+                          _buildDataRow(user.name, '시작', rowKey, 0),
+                          _buildDataRow('', '종료', rowKey, 1),
+                        ];
                       }),
                     ],
                   ),
@@ -231,8 +248,8 @@ class BreakDocumentBody extends StatelessWidget {
                   heroTag: 'saveBtn',
                   mini: true,
                   onPressed: () {
-                    if (selectedRow != null && selectedRow! < users.length) {
-                      final rowKey = users[selectedRow!].id;
+                    if (selectedRow != null && selectedRow! ~/ 2 < users.length) {
+                      final rowKey = users[selectedRow! ~/ 2].id;
                       appendText(rowKey);
                     }
                   },
@@ -244,9 +261,19 @@ class BreakDocumentBody extends StatelessWidget {
                   heroTag: 'clearBtn',
                   mini: true,
                   onPressed: () {
-                    if (selectedRow != null && selectedRow! < users.length) {
-                      final rowKey = users[selectedRow!].id;
-                      clearText(rowKey);
+                    final Map<String, List<int>> rows = {};
+                    for (final cell in selectedCells) {
+                      final parts = cell.split(':');
+                      if (parts.length == 2) {
+                        final key = parts[0];
+                        final col = int.tryParse(parts[1]);
+                        if (col != null) {
+                          rows.putIfAbsent(key, () => []).add(col);
+                        }
+                      }
+                    }
+                    for (final entry in rows.entries) {
+                      clearText(entry.key, entry.value);
                     }
                   },
                   backgroundColor: Colors.redAccent,
@@ -266,6 +293,39 @@ class BreakDocumentBody extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDataRow(String name, String label, String rowKey, int offset) {
+    final rowIndex = users.indexWhere((u) => u.id == rowKey) * 2 + offset;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: List.generate(34, (colIndex) {
+          if (colIndex == 0) {
+            return _buildCell(text: name, isHeader: offset == 0, isSelected: false);
+          }
+          if (colIndex == 1) {
+            return _buildCell(text: label, isHeader: false, isSelected: false);
+          }
+          if (colIndex == 33) {
+            return _buildCell(text: '', isHeader: false, isSelected: false, width: 120);
+          }
+
+          final day = colIndex - 1;
+          final key = '$rowKey:$day';
+          final text = cellData[rowKey]?[day] ?? '';
+          final isSel = selectedCells.contains(key);
+
+          return _buildCell(
+            text: text,
+            isHeader: false,
+            isSelected: isSel,
+            onTap: offset == 0 // 시작 행만 탭 가능
+                ? () => onCellTapped(rowIndex, colIndex, rowKey)
+                : null,          );
+        }),
       ),
     );
   }

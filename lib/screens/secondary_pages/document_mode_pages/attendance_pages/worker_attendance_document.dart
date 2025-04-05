@@ -39,21 +39,16 @@ class _WorkerDocumentState extends State<WorkerAttendanceDocument> {
     selectedMonth = now.month;
     _loadCellDataFromPrefs();
 
-    // ✅ 지역 정보가 있는 경우 즉시 유저 불러오기
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final area = context
-          .read<AreaState>()
-          .currentArea;
+      final area = context.read<AreaState>().currentArea;
       if (area.isNotEmpty) {
         currentArea = area;
-        _loadUsersFromPrefs(); // SharedPreferences에서 유저 목록 로드
+        _loadUsersFromPrefs();
       }
     });
   }
 
-
-  String get cellDataKey => 'cell_data_${selectedYear}_${selectedMonth}';
-
+  String get cellDataKey => 'attendance_cell_data_${selectedYear}_${selectedMonth}';
   String get userCacheKey => 'user_list_$currentArea';
 
   Future<List<UserModel>> getUsersByArea(String area) async {
@@ -77,7 +72,7 @@ class _WorkerDocumentState extends State<WorkerAttendanceDocument> {
         setState(() {
           users = updatedUsers;
         });
-        await _saveUsersToPrefs(); // ✅ 지역별 저장
+        await _saveUsersToPrefs();
         showSuccessSnackbar(context, '최신 사용자 목록으로 갱신되었습니다');
       } else {
         showSuccessSnackbar(context, '변경 사항 없음');
@@ -90,12 +85,11 @@ class _WorkerDocumentState extends State<WorkerAttendanceDocument> {
   Future<void> _saveUsersToPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     final userJsonList = users
-        .where((u) => u.id.isNotEmpty) // ✅ id가 비어있는 유저 제외
-        .map((u) => u.toJson()) // 🔄 toJson()은 이미 id 포함
+        .where((u) => u.id.isNotEmpty)
+        .map((u) => u.toJson())
         .toList();
     await prefs.setString(userCacheKey, jsonEncode(userJsonList));
   }
-
 
   Future<void> _loadUsersFromPrefs() async {
     final prefs = await SharedPreferences.getInstance();
@@ -104,7 +98,7 @@ class _WorkerDocumentState extends State<WorkerAttendanceDocument> {
       final List<dynamic> jsonList = jsonDecode(jsonStr);
       setState(() {
         users = jsonList
-            .where((map) => map['id'] != null && map['id'] is String) // ✅ null 방지
+            .where((map) => map['id'] != null && map['id'] is String)
             .map((map) => UserModel.fromJson(Map<String, dynamic>.from(map)))
             .toList();
       });
@@ -114,7 +108,6 @@ class _WorkerDocumentState extends State<WorkerAttendanceDocument> {
       });
     }
   }
-
 
   void _onCellTapped(int rowIndex, int colIndex, String rowKey) {
     if (colIndex == 0 || colIndex == 32) return;
@@ -135,14 +128,9 @@ class _WorkerDocumentState extends State<WorkerAttendanceDocument> {
 
     setState(() {
       cellData[rowKey] ??= {};
-      final existing = cellData[rowKey]![selectedCol!];
-      if (existing != null && existing
-          .split('\n')
-          .length < 2) {
-        cellData[rowKey]![selectedCol!] = "$existing\n$value";
-      } else {
-        cellData[rowKey]![selectedCol!] = value;
-      }
+      // ✅ 덮어쓰기 방식으로 값 입력 (단일 셀만 쓰는 구조)
+      cellData[rowKey]![selectedCol!] = value;
+
       _controller.clear();
       _menuOpen = false;
     });
@@ -150,6 +138,8 @@ class _WorkerDocumentState extends State<WorkerAttendanceDocument> {
     await _saveCellDataToPrefs();
     showSuccessSnackbar(context, '저장 완료');
   }
+
+
 
   Future<void> _clearText(String rowKey) async {
     if (selectedRow == null || selectedCol == null) return;
@@ -165,32 +155,53 @@ class _WorkerDocumentState extends State<WorkerAttendanceDocument> {
 
   Future<void> _saveCellDataToPrefs() async {
     final prefs = await SharedPreferences.getInstance();
-    final key = cellDataKey;
     final stringified = cellData.map((rowKey, colMap) =>
-        MapEntry(
-          rowKey,
-          colMap.map((colIndex, value) => MapEntry(colIndex.toString(), value)),
-        ));
+        MapEntry(rowKey, colMap.map((colIndex, value) => MapEntry(colIndex.toString(), value))));
     final encoded = jsonEncode(stringified);
-    await prefs.setString(key, encoded);
+    await prefs.setString(cellDataKey, encoded);
   }
 
   Future<void> _loadCellDataFromPrefs() async {
     final prefs = await SharedPreferences.getInstance();
-    final key = cellDataKey;
-    final jsonStr = prefs.getString(key);
+    final jsonStr = prefs.getString(cellDataKey);
+
     if (jsonStr != null) {
       final decoded = jsonDecode(jsonStr);
       setState(() {
-        cellData = Map<String, Map<int, String>>.from(
-          decoded.map((rowKey, colMap) =>
-              MapEntry(
-                rowKey,
-                Map<int, String>.from(
-                  (colMap as Map).map((key, value) => MapEntry(int.parse(key), value)),
-                ),
-              )),
-        );
+        cellData = {}; // 기존 값 초기화
+
+        decoded.forEach((rowKey, colMap) {
+          final parsedMap = Map<int, String>.from(
+            (colMap as Map).map(
+                  (k, v) => MapEntry(int.parse(k.toString()), v.toString()),
+            ),
+          );
+
+          // ✅ 출근/퇴근이 한 셀에 들어간 경우 분리
+          if (rowKey.endsWith('_out') == false) {
+            for (final entry in parsedMap.entries) {
+              final day = entry.key;
+              final value = entry.value;
+              final parts = value.split('\n');
+
+              // 출근 기록
+              if (parts.isNotEmpty && parts[0].trim().isNotEmpty) {
+                cellData[rowKey] ??= {};
+                cellData[rowKey]![day] = parts[0].trim();
+              }
+
+              // 퇴근 기록이 함께 포함된 경우 → rowKey + '_out' 으로 분리 저장
+              if (parts.length > 1 && parts[1].trim().isNotEmpty) {
+                final outKey = '${rowKey}_out';
+                cellData[outKey] ??= {};
+                cellData[outKey]![day] = parts[1].trim();
+              }
+            }
+          } else {
+            // ✅ 이미 퇴근용 rowKey로 저장된 경우는 그대로 복사
+            cellData[rowKey] = parsedMap;
+          }
+        });
       });
     } else {
       setState(() {
@@ -198,6 +209,9 @@ class _WorkerDocumentState extends State<WorkerAttendanceDocument> {
       });
     }
   }
+
+
+
 
   void _onChangeYear(int year) {
     setState(() {
@@ -215,9 +229,7 @@ class _WorkerDocumentState extends State<WorkerAttendanceDocument> {
 
   @override
   Widget build(BuildContext context) {
-    currentArea = context
-        .watch<AreaState>()
-        .currentArea;
+    currentArea = context.watch<AreaState>().currentArea;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadUsersFromPrefs();

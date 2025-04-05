@@ -59,7 +59,7 @@ class _GoToWorkState extends State<GoToWork> {
     final String userId = userState.user?.id ?? "unknown";
     final String time =
         '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
-    final String cellDataKey = 'cell_data_${now.year}_${now.month}';
+    final String cellDataKey = 'attendance_cell_data_${now.year}_${now.month}';
 
     final jsonStr = prefs.getString(cellDataKey);
     Map<String, Map<int, String>> cellData = {};

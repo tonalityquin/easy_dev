@@ -1,517 +1,387 @@
-Performing hot restart...
-Syncing files to device sdk gphone64 x86 64...
-Restarted application in 1,400ms.
-I/flutter ( 6933): [DEBUG] 자동 로그인 시도
-E/libEGL  ( 6933): called unimplemented OpenGL ES API
-D/EGL_emulation( 6933): app_time_stats: avg=594675.62ms min=594675.62ms max=594675.62ms count=1
-W/DynamiteModule( 6933): Local module descriptor class for com.google.android.gms.providerinstaller.dynamite not found.
-I/DynamiteModule( 6933): Considering local module com.google.android.gms.providerinstaller.dynamite:0 and remote module com.google.android.gms.providerinstaller.dynamite:0
-W/ProviderInstaller( 6933): Failed to load providerinstaller module: No acceptable module com.google.android.gms.providerinstaller.dynamite found. Local version is 0 and remote version is 0.
-W/ProviderInstaller( 6933): Failed to report request stats: com.google.android.gms.common.security.ProviderInstallerImpl.reportRequestStats [class android.content.Context, long, long]
-D/TrafficStats( 6933): tagSocket(137) with statsTag=0xffffffff, statsUid=-1
-W/WindowOnBackDispatcher( 6933): OnBackInvokedCallback is not enabled for the application.
-W/WindowOnBackDispatcher( 6933): Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
-I/flutter ( 6933): 🕐 지역 Plate 상태 수신 대기 중...
-I/flutter ( 6933): 🔄 지역 동기화: dev
-I/flutter ( 6933): 🔄 지역 변경 감지됨: dev
-I/flutter ( 6933): 🕐 지역 Plate 상태 수신 대기 중...
-I/flutter ( 6933): ✅ 지역 Plate 상태 수신 완료
-I/flutter ( 6933): 📌 Selected Area: dev
-I/flutter ( 6933): 🅿️ Parking Requests: 2
-I/flutter ( 6933): ✅ Parking Completed: 1
-I/flutter ( 6933): 🚗 Departure Requests: 0
-I/flutter ( 6933): 🏁 Departure Completed: 0
-E/libEGL  ( 6933): called unimplemented OpenGL ES API
-D/EGL_emulation( 6933): app_time_stats: avg=194.07ms min=8.68ms max=356.09ms count=6
-I/flutter ( 6933): 📸 CameraHelper: initializeCamera() 호출
-E/libEGL  ( 6933): called unimplemented OpenGL ES API
-D/EGL_emulation( 6933): app_time_stats: avg=163.52ms min=14.64ms max=1747.41ms count=12
-I/flutter ( 6933):  AdjustmentState: 지역 변경 감지됨 (dev) → 데이터 새로 가져옴
-I/flutter ( 6933):  AdjustmentState: 지역 변경 감지됨 (dev) → 데이터 새로 가져옴
-W/WindowOnBackDispatcher( 6933): OnBackInvokedCallback is not enabled for the application.
-W/WindowOnBackDispatcher( 6933): Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev 1&5_dev, countType: dev 1&5, area: dev, basicStandard: 1, basicAmount: 1000, addStandard: 1, addAmount: 1500)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev 5m&500,1m&100_dev, countType: dev 5m&500,1m&100, area: dev, basicStandard: 5, basicAmount: 500, addStandard: 1, addAmount: 100)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev_1&1_dev, countType: dev_1&1, area: dev, basicStandard: 1, basicAmount: 500, addStandard: 1, addAmount: 100)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev_free_dev, countType: dev_free, area: dev, basicStandard: 1, basicAmount: 0, addStandard: 1, addAmount: 0)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev 1&5_dev, countType: dev 1&5, area: dev, basicStandard: 1, basicAmount: 1000, addStandard: 1, addAmount: 1500)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev 5m&500,1m&100_dev, countType: dev 5m&500,1m&100, area: dev, basicStandard: 5, basicAmount: 500, addStandard: 1, addAmount: 100)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev_1&1_dev, countType: dev_1&1, area: dev, basicStandard: 1, basicAmount: 500, addStandard: 1, addAmount: 100)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev_free_dev, countType: dev_free, area: dev, basicStandard: 1, basicAmount: 0, addStandard: 1, addAmount: 0)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev 1&5_dev, countType: dev 1&5, area: dev, basicStandard: 1, basicAmount: 1000, addStandard: 1, addAmount: 1500)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev 5m&500,1m&100_dev, countType: dev 5m&500,1m&100, area: dev, basicStandard: 5, basicAmount: 500, addStandard: 1, addAmount: 100)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev_1&1_dev, countType: dev_1&1, area: dev, basicStandard: 1, basicAmount: 500, addStandard: 1, addAmount: 100)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev_free_dev, countType: dev_free, area: dev, basicStandard: 1, basicAmount: 0, addStandard: 1, addAmount: 0)
-D/DynamicRangeResolver( 6933): Resolved dynamic range for use case androidx.camera.core.Preview-58e4ec9d-0e2f-4887-a2bd-abdfed6acee0 to no compatible HDR dynamic ranges.
-D/DynamicRangeResolver( 6933): DynamicRange@7b5b836{encoding=UNSPECIFIED, bitDepth=0}
-D/DynamicRangeResolver( 6933): ->
-D/DynamicRangeResolver( 6933): DynamicRange@a48e5d1{encoding=SDR, bitDepth=8}
-D/CameraQuirks( 6933): camera2 CameraQuirks = 
-D/CameraQuirks( 6933): camera2 CameraQuirks = 
-D/CameraQuirks( 6933): camera2 CameraQuirks = 
-D/DeferrableSurface( 6933): Surface created[total_surfaces=1, used_surfaces=0](androidx.camera.core.processing.SurfaceEdge$SettableSurface@aecdff1}
-D/DeferrableSurface( 6933): Surface created[total_surfaces=2, used_surfaces=0](androidx.camera.core.SurfaceRequest$2@de8a2d}
-D/DeferrableSurface( 6933): New surface in use[total_surfaces=2, used_surfaces=1](androidx.camera.core.SurfaceRequest$2@de8a2d}
-D/DeferrableSurface( 6933): use count+1, useCount=1 androidx.camera.core.SurfaceRequest$2@de8a2d
-D/ImageCapture( 6933): createPipeline(cameraId: 1, streamSpec: StreamSpec{resolution=720x480, dynamicRange=DynamicRange@a48e5d1{encoding=SDR, bitDepth=8}, expectedFrameRateRange=[0, 0], implementationOptions=androidx.camera.camera2.impl.Camera2ImplConfig@edb2bae, zslDisabled=false})
-D/DeferrableSurface( 6933): Surface created[total_surfaces=3, used_surfaces=1](androidx.camera.core.impl.ImmediateSurface@134cd4f}
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Use case androidx.camera.core.ImageCapture-88d5f625-cab3-47ed-b390-58708d6351e649316274 ACTIVE
-D/UseCaseAttachState( 6933): Active and attached use case: [] for camera: 1
-D/DeferrableSurface( 6933): Surface created[total_surfaces=4, used_surfaces=1](androidx.camera.core.impl.ImmediateSurface@3d1e5}
-D/ImageCapture( 6933): onCameraControlReady
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Use case androidx.camera.core.Preview-58e4ec9d-0e2f-4887-a2bd-abdfed6acee0249616743 ACTIVE
-D/Camera2CameraControlImp( 6933): setFlashMode: mFlashMode = 2
-D/UseCaseAttachState( 6933): Active and attached use case: [] for camera: 1
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Use case androidx.camera.core.ImageCapture-88d5f625-cab3-47ed-b390-58708d6351e649316274 ACTIVE
-D/UseCaseAttachState( 6933): Active and attached use case: [] for camera: 1
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Use case androidx.camera.core.ImageAnalysis-94863f8e-109f-42f9-a10e-6d037896bb20220880000 INACTIVE
-D/UseCaseAttachState( 6933): Active and attached use case: [] for camera: 1
-D/UseCaseAttachState( 6933): Active and attached use case: [] for camera: 1
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Use cases [androidx.camera.core.Preview-58e4ec9d-0e2f-4887-a2bd-abdfed6acee0249616743, androidx.camera.core.ImageCapture-88d5f625-cab3-47ed-b390-58708d6351e649316274, androidx.camera.core.ImageAnalysis-94863f8e-109f-42f9-a10e-6d037896bb20220880000] now ATTACHED
-D/Camera2CameraControlImp( 6933): setActive: isActive = true
-D/UseCaseAttachState( 6933): All use case: [androidx.camera.core.ImageCapture-88d5f625-cab3-47ed-b390-58708d6351e649316274, androidx.camera.core.Preview-58e4ec9d-0e2f-4887-a2bd-abdfed6acee0249616743, androidx.camera.core.ImageAnalysis-94863f8e-109f-42f9-a10e-6d037896bb20220880000] for camera: 1
-D/UseCaseAttachState( 6933): Active and attached use case: [androidx.camera.core.ImageCapture-88d5f625-cab3-47ed-b390-58708d6351e649316274, androidx.camera.core.Preview-58e4ec9d-0e2f-4887-a2bd-abdfed6acee0249616743] for camera: 1
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Resetting Capture Session
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Skipping Capture Session state check due to current camera state: INITIALIZED and previous session status: false
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Releasing session in state INITIALIZED
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Attempting to force open the camera.
-D/CameraStateRegistry( 6933): tryOpenCamera(Camera@f944152[id=1]) [Available Cameras: 1, Already Open: false (Previous state: CLOSED)] --> SUCCESS
-D/CameraStateRegistry( 6933): Recalculating open cameras:
-D/CameraStateRegistry( 6933): Camera                                       State                 
-D/CameraStateRegistry( 6933): -------------------------------------------------------------------
-D/CameraStateRegistry( 6933): Camera@ef377f[id=10]                         UNKNOWN               
-D/CameraStateRegistry( 6933): Camera@f944152[id=1]                         OPENING               
-D/CameraStateRegistry( 6933): -------------------------------------------------------------------
-D/CameraStateRegistry( 6933): Open count: 1 (Max allowed: 1)
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Opening camera.
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Transitioning camera internal state: INITIALIZED --> OPENING
-D/CameraStateMachine( 6933): New public camera state CameraState{type=OPENING, error=null} from OPENING and null
-D/CameraStateMachine( 6933): Publishing new public camera state CameraState{type=OPENING, error=null}
-D/UseCaseAttachState( 6933): All use case: [androidx.camera.core.ImageCapture-88d5f625-cab3-47ed-b390-58708d6351e649316274, androidx.camera.core.Preview-58e4ec9d-0e2f-4887-a2bd-abdfed6acee0249616743, androidx.camera.core.ImageAnalysis-94863f8e-109f-42f9-a10e-6d037896bb20220880000] for camera: 1
-I/flutter ( 6933): ✅ CameraHelper: 카메라 초기화 완료
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Use case androidx.camera.core.Preview-58e4ec9d-0e2f-4887-a2bd-abdfed6acee0249616743 ACTIVE
-D/UseCaseAttachState( 6933): Active and attached use case: [androidx.camera.core.ImageCapture-88d5f625-cab3-47ed-b390-58708d6351e649316274, androidx.camera.core.Preview-58e4ec9d-0e2f-4887-a2bd-abdfed6acee0249616743] for camera: 1
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Use case androidx.camera.core.ImageCapture-88d5f625-cab3-47ed-b390-58708d6351e649316274 ACTIVE
-D/UseCaseAttachState( 6933): Active and attached use case: [androidx.camera.core.ImageCapture-88d5f625-cab3-47ed-b390-58708d6351e649316274, androidx.camera.core.Preview-58e4ec9d-0e2f-4887-a2bd-abdfed6acee0249616743] for camera: 1
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Use case androidx.camera.core.ImageAnalysis-94863f8e-109f-42f9-a10e-6d037896bb20220880000 INACTIVE
-D/UseCaseAttachState( 6933): Active and attached use case: [androidx.camera.core.ImageCapture-88d5f625-cab3-47ed-b390-58708d6351e649316274, androidx.camera.core.Preview-58e4ec9d-0e2f-4887-a2bd-abdfed6acee0249616743] for camera: 1
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} CameraDevice.onOpened()
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Transitioning camera internal state: OPENING --> OPENED
-D/CameraStateRegistry( 6933): Recalculating open cameras:
-D/CameraStateRegistry( 6933): Camera                                       State                 
-D/CameraStateRegistry( 6933): -------------------------------------------------------------------
-D/CameraStateRegistry( 6933): Camera@ef377f[id=10]                         UNKNOWN               
-D/CameraStateRegistry( 6933): Camera@f944152[id=1]                         OPEN                  
-D/CameraStateRegistry( 6933): -------------------------------------------------------------------
-D/CameraStateRegistry( 6933): Open count: 1 (Max allowed: 1)
-D/CameraStateMachine( 6933): New public camera state CameraState{type=OPEN, error=null} from OPEN and null
-D/CameraStateMachine( 6933): Publishing new public camera state CameraState{type=OPEN, error=null}
-D/UseCaseAttachState( 6933): All use case: [androidx.camera.core.ImageCapture-88d5f625-cab3-47ed-b390-58708d6351e649316274, androidx.camera.core.Preview-58e4ec9d-0e2f-4887-a2bd-abdfed6acee0249616743, androidx.camera.core.ImageAnalysis-94863f8e-109f-42f9-a10e-6d037896bb20220880000] for camera: 1
-D/UseCaseAttachState( 6933): Active and attached use case: [androidx.camera.core.ImageCapture-88d5f625-cab3-47ed-b390-58708d6351e649316274, androidx.camera.core.Preview-58e4ec9d-0e2f-4887-a2bd-abdfed6acee0249616743] for camera: 1
-D/SyncCaptureSessionBase( 6933): [androidx.camera.camera2.internal.SynchronizedCaptureSessionImpl@a426c5] getSurface done with results: [Surface(name=null)/@0xd7ac112, Surface(name=null)/@0x9031f2f, Surface(name=null)/@0x72ec93c]
-D/CaptureSession( 6933): Opening capture session.
-D/Camera2CaptureRequestBuilder( 6933): template type = 1
-D/SyncCaptureSessionImpl( 6933): [androidx.camera.camera2.internal.SynchronizedCaptureSessionImpl@a426c5] start openCaptureSession
-D/DeferrableSurface( 6933): use count+1, useCount=2 androidx.camera.core.SurfaceRequest$2@de8a2d
-D/DeferrableSurface( 6933): New surface in use[total_surfaces=4, used_surfaces=2](androidx.camera.core.impl.ImmediateSurface@134cd4f}
-D/DeferrableSurface( 6933): use count+1, useCount=1 androidx.camera.core.impl.ImmediateSurface@134cd4f
-D/DeferrableSurface( 6933): New surface in use[total_surfaces=4, used_surfaces=3](androidx.camera.core.impl.ImmediateSurface@3d1e5}
-D/DeferrableSurface( 6933): use count+1, useCount=1 androidx.camera.core.impl.ImmediateSurface@3d1e5
-D/SyncCaptureSessionImpl( 6933): [androidx.camera.camera2.internal.SynchronizedCaptureSessionImpl@a426c5] Session onConfigured()
-D/CaptureSession( 6933): Attempting to send capture request onConfigured
-D/CaptureSession( 6933): Issuing request for session.
-D/Camera2CaptureRequestBuilder( 6933): createCaptureRequest
-I/flutter ( 6933):  AdjustmentState: 지역 변경 감지됨 (dev) → 데이터 새로 가져옴
-D/CaptureSession( 6933): CameraCaptureSession.onConfigured() mState=OPENED
-D/CaptureSession( 6933): CameraCaptureSession.onReady() OPENED
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev 1&5_dev, countType: dev 1&5, area: dev, basicStandard: 1, basicAmount: 1000, addStandard: 1, addAmount: 1500)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev 5m&500,1m&100_dev, countType: dev 5m&500,1m&100, area: dev, basicStandard: 5, basicAmount: 500, addStandard: 1, addAmount: 100)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev_1&1_dev, countType: dev_1&1, area: dev, basicStandard: 1, basicAmount: 500, addStandard: 1, addAmount: 100)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev_free_dev, countType: dev_free, area: dev, basicStandard: 1, basicAmount: 0, addStandard: 1, addAmount: 0)
-I/flutter ( 6933): 키 입력: 2, 현재 텍스트: 
-I/flutter ( 6933): 숫자 추가 후 텍스트: 2
-E/libEGL  ( 6933): called unimplemented OpenGL ES API
-D/EGL_emulation( 6933): app_time_stats: avg=74.19ms min=14.37ms max=215.46ms count=15
-I/flutter ( 6933): 키 입력: 2, 현재 텍스트: 2
-I/flutter ( 6933): 숫자 추가 후 텍스트: 22
-I/flutter ( 6933): 키 입력: 2, 현재 텍스트: 22
-I/flutter ( 6933): 숫자 추가 후 텍스트: 222
-I/flutter ( 6933): onComplete 호출 - 입력 완료 상태: 222
-I/flutter ( 6933):  AdjustmentState: 지역 변경 감지됨 (dev) → 데이터 새로 가져옴
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev 1&5_dev, countType: dev 1&5, area: dev, basicStandard: 1, basicAmount: 1000, addStandard: 1, addAmount: 1500)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev 5m&500,1m&100_dev, countType: dev 5m&500,1m&100, area: dev, basicStandard: 5, basicAmount: 500, addStandard: 1, addAmount: 100)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev_1&1_dev, countType: dev_1&1, area: dev, basicStandard: 1, basicAmount: 500, addStandard: 1, addAmount: 100)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev_free_dev, countType: dev_free, area: dev, basicStandard: 1, basicAmount: 0, addStandard: 1, addAmount: 0)
-I/BpBinder( 6933): onLastStrongRef automatically unlinking death recipients: 
-I/flutter ( 6933):  AdjustmentState: 지역 변경 감지됨 (dev) → 데이터 새로 가져옴
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev 1&5_dev, countType: dev 1&5, area: dev, basicStandard: 1, basicAmount: 1000, addStandard: 1, addAmount: 1500)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev 5m&500,1m&100_dev, countType: dev 5m&500,1m&100, area: dev, basicStandard: 5, basicAmount: 500, addStandard: 1, addAmount: 100)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev_1&1_dev, countType: dev_1&1, area: dev, basicStandard: 1, basicAmount: 500, addStandard: 1, addAmount: 100)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev_free_dev, countType: dev_free, area: dev, basicStandard: 1, basicAmount: 0, addStandard: 1, addAmount: 0)
-E/libEGL  ( 6933): called unimplemented OpenGL ES API
-D/EGL_emulation( 6933): app_time_stats: avg=17.46ms min=2.20ms max=91.75ms count=41
-I/flutter ( 6933): 키 입력: 8, 현재 텍스트: 
-I/flutter ( 6933): 숫자 추가 후 텍스트: 8
-I/flutter ( 6933): 키 입력: 9, 현재 텍스트: 8
-I/flutter ( 6933): 숫자 추가 후 텍스트: 89
-I/flutter ( 6933): 키 입력: 6, 현재 텍스트: 89
-I/flutter ( 6933): 숫자 추가 후 텍스트: 896
-E/libEGL  ( 6933): called unimplemented OpenGL ES API
-D/EGL_emulation( 6933): app_time_stats: avg=18.02ms min=10.09ms max=34.98ms count=56
-I/flutter ( 6933): 키 입력: 6, 현재 텍스트: 896
-I/flutter ( 6933): 숫자 추가 후 텍스트: 8966
-I/flutter ( 6933): onComplete 호출 - 입력 완료 상태: 8966
-I/flutter ( 6933):  AdjustmentState: 지역 변경 감지됨 (dev) → 데이터 새로 가져옴
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev 1&5_dev, countType: dev 1&5, area: dev, basicStandard: 1, basicAmount: 1000, addStandard: 1, addAmount: 1500)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev 5m&500,1m&100_dev, countType: dev 5m&500,1m&100, area: dev, basicStandard: 5, basicAmount: 500, addStandard: 1, addAmount: 100)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev_1&1_dev, countType: dev_1&1, area: dev, basicStandard: 1, basicAmount: 500, addStandard: 1, addAmount: 100)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev_free_dev, countType: dev_free, area: dev, basicStandard: 1, basicAmount: 0, addStandard: 1, addAmount: 0)
-E/libEGL  ( 6933): called unimplemented OpenGL ES API
-D/EGL_emulation( 6933): app_time_stats: avg=21.39ms min=2.02ms max=52.78ms count=46
-I/flutter ( 6933): 📸 _showCameraPreviewDialog() 호출됨
-I/flutter ( 6933): 📸 CameraHelper: initializeCamera() 호출
-D/DeferrableSurface( 6933): surface closed,  useCount=2 closed=true androidx.camera.core.SurfaceRequest$2@de8a2d
-D/DeferrableSurface( 6933): surface closed,  useCount=0 closed=true androidx.camera.core.processing.SurfaceEdge$SettableSurface@aecdff1
-D/DeferrableSurface( 6933): Surface terminated[total_surfaces=3, used_surfaces=3](androidx.camera.core.processing.SurfaceEdge$SettableSurface@aecdff1}
-D/DeferrableSurface( 6933): use count-1,  useCount=1 closed=true androidx.camera.core.SurfaceRequest$2@de8a2d
-W/ScreenFlashWrapper( 6933): completePendingScreenFlashClear: none pending!
-D/ImageCapture( 6933): clearPipeline
-D/DeferrableSurface( 6933): surface closed,  useCount=1 closed=true androidx.camera.core.impl.ImmediateSurface@134cd4f
-D/DeferrableSurface( 6933): surface closed,  useCount=1 closed=true androidx.camera.core.impl.ImmediateSurface@3d1e5
-W/ScreenFlashWrapper( 6933): completePendingScreenFlashClear: none pending!
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Use cases [androidx.camera.core.Preview-58e4ec9d-0e2f-4887-a2bd-abdfed6acee0249616743, androidx.camera.core.ImageCapture-88d5f625-cab3-47ed-b390-58708d6351e649316274, androidx.camera.core.ImageAnalysis-94863f8e-109f-42f9-a10e-6d037896bb20220880000] now DETACHED for camera
-D/UseCaseAttachState( 6933): All use case: [] for camera: 1
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Resetting Capture Session
-D/SyncCaptureSessionImpl( 6933): [androidx.camera.camera2.internal.SynchronizedCaptureSessionImpl@a426c5] Session call close()
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Releasing session in state OPENED
-D/Camera2CameraControlImp( 6933): setActive: isActive = false
-D/UseCaseAttachState( 6933): Active and attached use case: [] for camera: 1
-D/UseCaseAttachState( 6933): Active and attached use case: [] for camera: 1
-D/VideoUsageControl( 6933): resetDirectly: mVideoUsage reset!
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Closing camera.
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Transitioning camera internal state: OPENED --> CLOSING
-D/CameraStateRegistry( 6933): Recalculating open cameras:
-D/CameraStateRegistry( 6933): Camera                                       State                 
-D/CameraStateRegistry( 6933): -------------------------------------------------------------------
-D/CameraStateRegistry( 6933): Camera@ef377f[id=10]                         UNKNOWN               
-D/CameraStateRegistry( 6933): Camera@f944152[id=1]                         CLOSING               
-D/CameraStateRegistry( 6933): -------------------------------------------------------------------
-D/CameraStateRegistry( 6933): Open count: 1 (Max allowed: 1)
-D/CameraStateMachine( 6933): New public camera state CameraState{type=CLOSING, error=null} from CLOSING and null
-D/CameraStateMachine( 6933): Publishing new public camera state CameraState{type=CLOSING, error=null}
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Resetting Capture Session
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Skipping Capture Session state check due to current camera state: CLOSING and previous session status: false
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Releasing session in state CLOSING
-D/SyncCaptureSessionImpl( 6933): [androidx.camera.camera2.internal.SynchronizedCaptureSessionImpl@a426c5] Session call super.close()
-D/UseCaseAttachState( 6933): Active and attached use case: [] for camera: 1
-D/CaptureSession( 6933): onSessionFinished()
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} closing camera
-D/DynamicRangeResolver( 6933): Resolved dynamic range for use case androidx.camera.core.Preview-ef67a0d5-b6a8-48fd-b278-f4f7a020a085 to no compatible HDR dynamic ranges.
-D/DynamicRangeResolver( 6933): DynamicRange@7b5b836{encoding=UNSPECIFIED, bitDepth=0}
-D/DynamicRangeResolver( 6933): ->
-D/DynamicRangeResolver( 6933): DynamicRange@a48e5d1{encoding=SDR, bitDepth=8}
-D/CameraQuirks( 6933): camera2 CameraQuirks = 
-D/CameraQuirks( 6933): camera2 CameraQuirks = 
-D/CameraQuirks( 6933): camera2 CameraQuirks = 
-D/DeferrableSurface( 6933): Surface created[total_surfaces=4, used_surfaces=3](androidx.camera.core.processing.SurfaceEdge$SettableSurface@4c683ce}
-D/DeferrableSurface( 6933): Surface created[total_surfaces=5, used_surfaces=3](androidx.camera.core.SurfaceRequest$2@dcb0eda}
-D/DeferrableSurface( 6933): New surface in use[total_surfaces=5, used_surfaces=4](androidx.camera.core.SurfaceRequest$2@dcb0eda}
-D/DeferrableSurface( 6933): use count+1, useCount=1 androidx.camera.core.SurfaceRequest$2@dcb0eda
-D/ImageCapture( 6933): createPipeline(cameraId: 1, streamSpec: StreamSpec{resolution=720x480, dynamicRange=DynamicRange@a48e5d1{encoding=SDR, bitDepth=8}, expectedFrameRateRange=[0, 0], implementationOptions=androidx.camera.camera2.impl.Camera2ImplConfig@85470e7, zslDisabled=false})
-D/DeferrableSurface( 6933): Surface created[total_surfaces=6, used_surfaces=4](androidx.camera.core.impl.ImmediateSurface@4a494}
-D/DeferrableSurface( 6933): Surface created[total_surfaces=7, used_surfaces=4](androidx.camera.core.impl.ImmediateSurface@e6c9f32}
-D/ImageCapture( 6933): onCameraControlReady
-D/Camera2CameraControlImp( 6933): setFlashMode: mFlashMode = 2
-I/flutter ( 6933): ✅ CameraHelper: 카메라 초기화 완료
-I/flutter ( 6933): 📸 CameraHelper: initializeCamera() 호출
-I/flutter ( 6933): 📸 CameraHelper: initializeCamera() 호출
-D/DeferrableSurface( 6933): surface closed,  useCount=1 closed=true androidx.camera.core.SurfaceRequest$2@dcb0eda
-D/DeferrableSurface( 6933): surface closed,  useCount=0 closed=true androidx.camera.core.processing.SurfaceEdge$SettableSurface@4c683ce
-D/DeferrableSurface( 6933): Surface terminated[total_surfaces=6, used_surfaces=4](androidx.camera.core.processing.SurfaceEdge$SettableSurface@4c683ce}
-D/DeferrableSurface( 6933): use count-1,  useCount=0 closed=true androidx.camera.core.SurfaceRequest$2@dcb0eda
-D/DeferrableSurface( 6933): Surface no longer in use[total_surfaces=6, used_surfaces=3](androidx.camera.core.SurfaceRequest$2@dcb0eda}
-D/DeferrableSurface( 6933): Surface terminated[total_surfaces=5, used_surfaces=3](androidx.camera.core.SurfaceRequest$2@dcb0eda}
-W/ScreenFlashWrapper( 6933): completePendingScreenFlashClear: none pending!
-D/ImageCapture( 6933): clearPipeline
-D/DeferrableSurface( 6933): surface closed,  useCount=0 closed=true androidx.camera.core.impl.ImmediateSurface@4a494
-D/DeferrableSurface( 6933): Surface terminated[total_surfaces=4, used_surfaces=3](androidx.camera.core.impl.ImmediateSurface@4a494}
-D/DeferrableSurface( 6933): surface closed,  useCount=0 closed=true androidx.camera.core.impl.ImmediateSurface@e6c9f32
-D/DeferrableSurface( 6933): Surface terminated[total_surfaces=3, used_surfaces=3](androidx.camera.core.impl.ImmediateSurface@e6c9f32}
-W/ScreenFlashWrapper( 6933): completePendingScreenFlashClear: none pending!
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Use case androidx.camera.core.ImageCapture-c5477a0e-1eba-4bac-b6fb-dd21522eca89117868827 ACTIVE
-D/UseCaseAttachState( 6933): Active and attached use case: [] for camera: 1
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Use case androidx.camera.core.Preview-ef67a0d5-b6a8-48fd-b278-f4f7a020a08514656838 ACTIVE
-D/UseCaseAttachState( 6933): Active and attached use case: [] for camera: 1
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Use case androidx.camera.core.ImageCapture-c5477a0e-1eba-4bac-b6fb-dd21522eca89117868827 ACTIVE
-D/UseCaseAttachState( 6933): Active and attached use case: [] for camera: 1
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Use case androidx.camera.core.ImageAnalysis-f5e09796-a231-4a8b-a782-8f36f7758cd7219844753 INACTIVE
-D/UseCaseAttachState( 6933): Active and attached use case: [] for camera: 1
-D/UseCaseAttachState( 6933): Active and attached use case: [] for camera: 1
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Use cases [androidx.camera.core.Preview-ef67a0d5-b6a8-48fd-b278-f4f7a020a08514656838, androidx.camera.core.ImageCapture-c5477a0e-1eba-4bac-b6fb-dd21522eca89117868827, androidx.camera.core.ImageAnalysis-f5e09796-a231-4a8b-a782-8f36f7758cd7219844753] now ATTACHED
-D/Camera2CameraControlImp( 6933): setActive: isActive = true
-D/UseCaseAttachState( 6933): All use case: [androidx.camera.core.ImageCapture-c5477a0e-1eba-4bac-b6fb-dd21522eca89117868827, androidx.camera.core.Preview-ef67a0d5-b6a8-48fd-b278-f4f7a020a08514656838, androidx.camera.core.ImageAnalysis-f5e09796-a231-4a8b-a782-8f36f7758cd7219844753] for camera: 1
-D/UseCaseAttachState( 6933): Active and attached use case: [androidx.camera.core.ImageCapture-c5477a0e-1eba-4bac-b6fb-dd21522eca89117868827, androidx.camera.core.Preview-ef67a0d5-b6a8-48fd-b278-f4f7a020a08514656838] for camera: 1
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Resetting Capture Session
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Skipping Capture Session state check due to current camera state: CLOSING and previous session status: false
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Releasing session in state CLOSING
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Transitioning camera internal state: CLOSING --> REOPENING
-D/DynamicRangeResolver( 6933): Resolved dynamic range for use case androidx.camera.core.Preview-f129ef02-14c3-4a9a-9679-f556d6f4f6c4 to no compatible HDR dynamic ranges.
-D/DynamicRangeResolver( 6933): DynamicRange@7b5b836{encoding=UNSPECIFIED, bitDepth=0}
-D/DynamicRangeResolver( 6933): ->
-D/DynamicRangeResolver( 6933): DynamicRange@a48e5d1{encoding=SDR, bitDepth=8}
-D/CameraStateRegistry( 6933): Recalculating open cameras:
-D/CameraStateRegistry( 6933): Camera                                       State                 
-D/CameraStateRegistry( 6933): -------------------------------------------------------------------
-D/CameraStateRegistry( 6933): Camera@ef377f[id=10]                         UNKNOWN               
-D/CameraStateRegistry( 6933): Camera@f944152[id=1]                         OPENING               
-D/CameraStateRegistry( 6933): -------------------------------------------------------------------
-D/CameraStateRegistry( 6933): Open count: 1 (Max allowed: 1)
-D/CameraStateMachine( 6933): New public camera state CameraState{type=OPENING, error=null} from OPENING and null
-D/CameraStateMachine( 6933): Publishing new public camera state CameraState{type=OPENING, error=null}
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Use case androidx.camera.core.Preview-ef67a0d5-b6a8-48fd-b278-f4f7a020a08514656838 ACTIVE
-D/UseCaseAttachState( 6933): Active and attached use case: [androidx.camera.core.ImageCapture-c5477a0e-1eba-4bac-b6fb-dd21522eca89117868827, androidx.camera.core.Preview-ef67a0d5-b6a8-48fd-b278-f4f7a020a08514656838] for camera: 1
-D/CameraQuirks( 6933): camera2 CameraQuirks = 
-D/CameraQuirks( 6933): camera2 CameraQuirks = 
-D/CameraQuirks( 6933): camera2 CameraQuirks = 
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Use case androidx.camera.core.ImageCapture-c5477a0e-1eba-4bac-b6fb-dd21522eca89117868827 ACTIVE
-D/UseCaseAttachState( 6933): Active and attached use case: [androidx.camera.core.ImageCapture-c5477a0e-1eba-4bac-b6fb-dd21522eca89117868827, androidx.camera.core.Preview-ef67a0d5-b6a8-48fd-b278-f4f7a020a08514656838] for camera: 1
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Use case androidx.camera.core.ImageAnalysis-f5e09796-a231-4a8b-a782-8f36f7758cd7219844753 INACTIVE
-D/UseCaseAttachState( 6933): Active and attached use case: [androidx.camera.core.ImageCapture-c5477a0e-1eba-4bac-b6fb-dd21522eca89117868827, androidx.camera.core.Preview-ef67a0d5-b6a8-48fd-b278-f4f7a020a08514656838] for camera: 1
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Use cases [androidx.camera.core.Preview-ef67a0d5-b6a8-48fd-b278-f4f7a020a08514656838, androidx.camera.core.ImageCapture-c5477a0e-1eba-4bac-b6fb-dd21522eca89117868827, androidx.camera.core.ImageAnalysis-f5e09796-a231-4a8b-a782-8f36f7758cd7219844753] now DETACHED for camera
-D/UseCaseAttachState( 6933): All use case: [] for camera: 1
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Resetting Capture Session
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Skipping Capture Session state check due to current camera state: REOPENING and previous session status: false
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Releasing session in state REOPENING
-D/Camera2CameraControlImp( 6933): setActive: isActive = false
-D/UseCaseAttachState( 6933): Active and attached use case: [] for camera: 1
-D/UseCaseAttachState( 6933): Active and attached use case: [] for camera: 1
-D/DeferrableSurface( 6933): Surface created[total_surfaces=4, used_surfaces=3](androidx.camera.core.processing.SurfaceEdge$SettableSurface@d91ecb}
-D/VideoUsageControl( 6933): resetDirectly: mVideoUsage reset!
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Closing camera.
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Transitioning camera internal state: REOPENING --> CLOSING
-D/CameraStateRegistry( 6933): Recalculating open cameras:
-D/CameraStateRegistry( 6933): Camera                                       State                 
-D/CameraStateRegistry( 6933): -------------------------------------------------------------------
-D/CameraStateRegistry( 6933): Camera@ef377f[id=10]                         UNKNOWN               
-D/CameraStateRegistry( 6933): Camera@f944152[id=1]                         CLOSING               
-D/CameraStateRegistry( 6933): -------------------------------------------------------------------
-D/CameraStateRegistry( 6933): Open count: 1 (Max allowed: 1)
-D/CameraStateMachine( 6933): New public camera state CameraState{type=CLOSING, error=null} from CLOSING and null
-D/DeferrableSurface( 6933): use count-1,  useCount=0 closed=true androidx.camera.core.SurfaceRequest$2@de8a2d
-D/DeferrableSurface( 6933): Surface no longer in use[total_surfaces=4, used_surfaces=2](androidx.camera.core.SurfaceRequest$2@de8a2d}
-D/DeferrableSurface( 6933): Surface terminated[total_surfaces=3, used_surfaces=2](androidx.camera.core.SurfaceRequest$2@de8a2d}
-D/DeferrableSurface( 6933): Surface created[total_surfaces=4, used_surfaces=2](androidx.camera.core.SurfaceRequest$2@dd8dca7}
-D/DeferrableSurface( 6933): use count-1,  useCount=0 closed=true androidx.camera.core.impl.ImmediateSurface@134cd4f
-D/DeferrableSurface( 6933): Surface no longer in use[total_surfaces=4, used_surfaces=1](androidx.camera.core.impl.ImmediateSurface@134cd4f}
-D/DeferrableSurface( 6933): Surface terminated[total_surfaces=3, used_surfaces=1](androidx.camera.core.impl.ImmediateSurface@134cd4f}
-D/DeferrableSurface( 6933): use count-1,  useCount=0 closed=true androidx.camera.core.impl.ImmediateSurface@3d1e5
-D/DeferrableSurface( 6933): Surface no longer in use[total_surfaces=3, used_surfaces=0](androidx.camera.core.impl.ImmediateSurface@3d1e5}
-D/DeferrableSurface( 6933): Surface terminated[total_surfaces=2, used_surfaces=0](androidx.camera.core.impl.ImmediateSurface@3d1e5}
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} CameraDevice.onClosed()
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Transitioning camera internal state: CLOSING --> INITIALIZED
-D/DeferrableSurface( 6933): New surface in use[total_surfaces=2, used_surfaces=1](androidx.camera.core.SurfaceRequest$2@dd8dca7}
-D/DeferrableSurface( 6933): use count+1, useCount=1 androidx.camera.core.SurfaceRequest$2@dd8dca7
-D/CameraStateRegistry( 6933): Recalculating open cameras:
-D/CameraStateRegistry( 6933): Camera                                       State                 
-D/CameraStateRegistry( 6933): -------------------------------------------------------------------
-D/CameraStateRegistry( 6933): Camera@ef377f[id=10]                         UNKNOWN               
-D/CameraStateRegistry( 6933): Camera@f944152[id=1]                         CLOSED                
-D/CameraStateRegistry( 6933): -------------------------------------------------------------------
-D/CameraStateRegistry( 6933): Open count: 0 (Max allowed: 1)
-D/CameraStateMachine( 6933): New public camera state CameraState{type=CLOSED, error=null} from CLOSED and null
-D/CameraStateMachine( 6933): Publishing new public camera state CameraState{type=CLOSED, error=null}
-D/SyncCaptureSessionImpl( 6933): [androidx.camera.camera2.internal.SynchronizedCaptureSessionImpl@a426c5] onClosed()
-D/UseCaseAttachState( 6933): Active and attached use case: [] for camera: 1
-D/ImageCapture( 6933): createPipeline(cameraId: 1, streamSpec: StreamSpec{resolution=720x480, dynamicRange=DynamicRange@a48e5d1{encoding=SDR, bitDepth=8}, expectedFrameRateRange=[0, 0], implementationOptions=androidx.camera.camera2.impl.Camera2ImplConfig@631deb5, zslDisabled=false})
-D/DeferrableSurface( 6933): Surface created[total_surfaces=3, used_surfaces=1](androidx.camera.core.impl.ImmediateSurface@a15294a}
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Use case androidx.camera.core.ImageCapture-84588bd4-fc1a-4e8b-a173-ce4f5ef1a06a26981969 ACTIVE
-D/UseCaseAttachState( 6933): Active and attached use case: [] for camera: 1
-D/DeferrableSurface( 6933): Surface created[total_surfaces=4, used_surfaces=1](androidx.camera.core.impl.ImmediateSurface@b6eb131}
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Use case androidx.camera.core.Preview-f129ef02-14c3-4a9a-9679-f556d6f4f6c4118517226 ACTIVE
-D/ImageCapture( 6933): onCameraControlReady
-D/UseCaseAttachState( 6933): Active and attached use case: [] for camera: 1
-D/Camera2CameraControlImp( 6933): setFlashMode: mFlashMode = 2
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Use case androidx.camera.core.ImageCapture-84588bd4-fc1a-4e8b-a173-ce4f5ef1a06a26981969 ACTIVE
-D/UseCaseAttachState( 6933): Active and attached use case: [] for camera: 1
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Use case androidx.camera.core.ImageAnalysis-b1155ff2-4e07-43ec-b090-0a8375d5bec3162043831 INACTIVE
-D/UseCaseAttachState( 6933): Active and attached use case: [] for camera: 1
-D/UseCaseAttachState( 6933): Active and attached use case: [] for camera: 1
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Use cases [androidx.camera.core.Preview-f129ef02-14c3-4a9a-9679-f556d6f4f6c4118517226, androidx.camera.core.ImageCapture-84588bd4-fc1a-4e8b-a173-ce4f5ef1a06a26981969, androidx.camera.core.ImageAnalysis-b1155ff2-4e07-43ec-b090-0a8375d5bec3162043831] now ATTACHED
-D/Camera2CameraControlImp( 6933): setActive: isActive = true
-D/UseCaseAttachState( 6933): All use case: [androidx.camera.core.ImageCapture-84588bd4-fc1a-4e8b-a173-ce4f5ef1a06a26981969, androidx.camera.core.Preview-f129ef02-14c3-4a9a-9679-f556d6f4f6c4118517226, androidx.camera.core.ImageAnalysis-b1155ff2-4e07-43ec-b090-0a8375d5bec3162043831] for camera: 1
-D/UseCaseAttachState( 6933): Active and attached use case: [androidx.camera.core.ImageCapture-84588bd4-fc1a-4e8b-a173-ce4f5ef1a06a26981969, androidx.camera.core.Preview-f129ef02-14c3-4a9a-9679-f556d6f4f6c4118517226] for camera: 1
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Resetting Capture Session
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Skipping Capture Session state check due to current camera state: INITIALIZED and previous session status: false
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Releasing session in state INITIALIZED
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Attempting to force open the camera.
-D/CameraStateRegistry( 6933): tryOpenCamera(Camera@f944152[id=1]) [Available Cameras: 1, Already Open: false (Previous state: CLOSED)] --> SUCCESS
-D/CameraStateRegistry( 6933): Recalculating open cameras:
-D/CameraStateRegistry( 6933): Camera                                       State                 
-D/CameraStateRegistry( 6933): -------------------------------------------------------------------
-D/CameraStateRegistry( 6933): Camera@ef377f[id=10]                         UNKNOWN               
-D/CameraStateRegistry( 6933): Camera@f944152[id=1]                         OPENING               
-D/CameraStateRegistry( 6933): -------------------------------------------------------------------
-D/CameraStateRegistry( 6933): Open count: 1 (Max allowed: 1)
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Opening camera.
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Transitioning camera internal state: INITIALIZED --> OPENING
-D/CameraStateMachine( 6933): New public camera state CameraState{type=OPENING, error=null} from OPENING and null
-D/CameraStateMachine( 6933): Publishing new public camera state CameraState{type=OPENING, error=null}
-D/UseCaseAttachState( 6933): All use case: [androidx.camera.core.ImageCapture-84588bd4-fc1a-4e8b-a173-ce4f5ef1a06a26981969, androidx.camera.core.Preview-f129ef02-14c3-4a9a-9679-f556d6f4f6c4118517226, androidx.camera.core.ImageAnalysis-b1155ff2-4e07-43ec-b090-0a8375d5bec3162043831] for camera: 1
-I/flutter ( 6933): ✅ CameraHelper: 카메라 초기화 완료
-I/flutter ( 6933): ✅ CameraHelper: 카메라 초기화 완료
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Use case androidx.camera.core.Preview-f129ef02-14c3-4a9a-9679-f556d6f4f6c4118517226 ACTIVE
-D/UseCaseAttachState( 6933): Active and attached use case: [androidx.camera.core.ImageCapture-84588bd4-fc1a-4e8b-a173-ce4f5ef1a06a26981969, androidx.camera.core.Preview-f129ef02-14c3-4a9a-9679-f556d6f4f6c4118517226] for camera: 1
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Use case androidx.camera.core.ImageCapture-84588bd4-fc1a-4e8b-a173-ce4f5ef1a06a26981969 ACTIVE
-D/UseCaseAttachState( 6933): Active and attached use case: [androidx.camera.core.ImageCapture-84588bd4-fc1a-4e8b-a173-ce4f5ef1a06a26981969, androidx.camera.core.Preview-f129ef02-14c3-4a9a-9679-f556d6f4f6c4118517226] for camera: 1
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Use case androidx.camera.core.ImageAnalysis-b1155ff2-4e07-43ec-b090-0a8375d5bec3162043831 INACTIVE
-D/UseCaseAttachState( 6933): Active and attached use case: [androidx.camera.core.ImageCapture-84588bd4-fc1a-4e8b-a173-ce4f5ef1a06a26981969, androidx.camera.core.Preview-f129ef02-14c3-4a9a-9679-f556d6f4f6c4118517226] for camera: 1
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} CameraDevice.onOpened()
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Transitioning camera internal state: OPENING --> OPENED
-D/CameraStateRegistry( 6933): Recalculating open cameras:
-D/CameraStateRegistry( 6933): Camera                                       State                 
-D/CameraStateRegistry( 6933): -------------------------------------------------------------------
-D/CameraStateRegistry( 6933): Camera@ef377f[id=10]                         UNKNOWN               
-D/CameraStateRegistry( 6933): Camera@f944152[id=1]                         OPEN                  
-D/CameraStateRegistry( 6933): -------------------------------------------------------------------
-D/CameraStateRegistry( 6933): Open count: 1 (Max allowed: 1)
-D/CameraStateMachine( 6933): New public camera state CameraState{type=OPEN, error=null} from OPEN and null
-D/CameraStateMachine( 6933): Publishing new public camera state CameraState{type=OPEN, error=null}
-D/UseCaseAttachState( 6933): All use case: [androidx.camera.core.ImageCapture-84588bd4-fc1a-4e8b-a173-ce4f5ef1a06a26981969, androidx.camera.core.Preview-f129ef02-14c3-4a9a-9679-f556d6f4f6c4118517226, androidx.camera.core.ImageAnalysis-b1155ff2-4e07-43ec-b090-0a8375d5bec3162043831] for camera: 1
-D/UseCaseAttachState( 6933): Active and attached use case: [androidx.camera.core.ImageCapture-84588bd4-fc1a-4e8b-a173-ce4f5ef1a06a26981969, androidx.camera.core.Preview-f129ef02-14c3-4a9a-9679-f556d6f4f6c4118517226] for camera: 1
-D/SyncCaptureSessionBase( 6933): [androidx.camera.camera2.internal.SynchronizedCaptureSessionImpl@59d8f02] getSurface done with results: [Surface(name=null)/@0xfd8df25, Surface(name=null)/@0xfd3fbe4, Surface(name=null)/@0xa59e84d]
-D/CaptureSession( 6933): Opening capture session.
-D/Camera2CaptureRequestBuilder( 6933): template type = 1
-D/SyncCaptureSessionImpl( 6933): [androidx.camera.camera2.internal.SynchronizedCaptureSessionImpl@59d8f02] start openCaptureSession
-D/DeferrableSurface( 6933): use count+1, useCount=2 androidx.camera.core.SurfaceRequest$2@dd8dca7
-D/DeferrableSurface( 6933): New surface in use[total_surfaces=4, used_surfaces=2](androidx.camera.core.impl.ImmediateSurface@a15294a}
-D/DeferrableSurface( 6933): use count+1, useCount=1 androidx.camera.core.impl.ImmediateSurface@a15294a
-D/DeferrableSurface( 6933): New surface in use[total_surfaces=4, used_surfaces=3](androidx.camera.core.impl.ImmediateSurface@b6eb131}
-D/DeferrableSurface( 6933): use count+1, useCount=1 androidx.camera.core.impl.ImmediateSurface@b6eb131
-D/SyncCaptureSessionImpl( 6933): [androidx.camera.camera2.internal.SynchronizedCaptureSessionImpl@59d8f02] Session onConfigured()
-D/CaptureSession( 6933): Attempting to send capture request onConfigured
-D/CaptureSession( 6933): Issuing request for session.
-D/Camera2CaptureRequestBuilder( 6933): createCaptureRequest
-D/CaptureSession( 6933): CameraCaptureSession.onConfigured() mState=OPENED
-D/CaptureSession( 6933): CameraCaptureSession.onReady() OPENED
-E/libEGL  ( 6933): called unimplemented OpenGL ES API
-D/EGL_emulation( 6933): app_time_stats: avg=30.91ms min=7.12ms max=118.59ms count=33
-I/flutter ( 6933): 📸 촬영 버튼 클릭됨
-I/flutter ( 6933): 📸 CameraHelper: 사진 촬영 시도
-D/ImageCapture( 6933): takePictureInternal
-D/TakePictureManager( 6933): Issue the next TakePictureRequest.
-D/Camera2CapturePipeline( 6933): createPipeline: captureMode = 1, flashMode = 2, flashType = 0, pipeline tasks = [androidx.camera.camera2.internal.Camera2CapturePipeline$AePreCaptureTask@f202614]
-D/Camera2CapturePipeline( 6933): isFlashRequired: flashMode = 2
-D/Camera2CapturePipeline( 6933): isFlashRequired: flashMode = 2
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Issue capture request
-D/CaptureSession( 6933): Issuing capture request.
-D/Camera2CaptureRequestBuilder( 6933): createCaptureRequest
-D/TakePictureManager( 6933): Issue the next TakePictureRequest.
-D/TakePictureManager( 6933): No new request.
-I/flutter ( 6933): ✅ CameraHelper: 사진 촬영 성공 - /data/user/0/com.example.easydev/cache/CAP7521527966978903908.jpg
-I/flutter ( 6933): ✅ CameraHelper: 사진 촬영 성공 - /data/user/0/com.example.easydev/cache/CAP7521527966978903908.jpg
-I/flutter ( 6933): 📸 이미지 1장 실시간 반영됨: /data/user/0/com.example.easydev/cache/CAP7521527966978903908.jpg
-I/flutter ( 6933):  AdjustmentState: 지역 변경 감지됨 (dev) → 데이터 새로 가져옴
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev 1&5_dev, countType: dev 1&5, area: dev, basicStandard: 1, basicAmount: 1000, addStandard: 1, addAmount: 1500)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev 5m&500,1m&100_dev, countType: dev 5m&500,1m&100, area: dev, basicStandard: 5, basicAmount: 500, addStandard: 1, addAmount: 100)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev_1&1_dev, countType: dev_1&1, area: dev, basicStandard: 1, basicAmount: 500, addStandard: 1, addAmount: 100)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev_free_dev, countType: dev_free, area: dev, basicStandard: 1, basicAmount: 0, addStandard: 1, addAmount: 0)
-E/libEGL  ( 6933): called unimplemented OpenGL ES API
-D/EGL_emulation( 6933): app_time_stats: avg=23.29ms min=5.88ms max=58.19ms count=42
-I/flutter ( 6933): 📸 다이얼로그 닫힘 → dispose() 호출 전
-I/flutter ( 6933): 🧹 CameraHelper: dispose() 호출
-I/flutter ( 6933): 🧹 CameraController 초기화됨 → dispose 시작
-D/DeferrableSurface( 6933): surface closed,  useCount=2 closed=true androidx.camera.core.SurfaceRequest$2@dd8dca7
-D/DeferrableSurface( 6933): surface closed,  useCount=0 closed=true androidx.camera.core.processing.SurfaceEdge$SettableSurface@d91ecb
-D/DeferrableSurface( 6933): Surface terminated[total_surfaces=3, used_surfaces=3](androidx.camera.core.processing.SurfaceEdge$SettableSurface@d91ecb}
-D/DeferrableSurface( 6933): use count-1,  useCount=1 closed=true androidx.camera.core.SurfaceRequest$2@dd8dca7
-W/ScreenFlashWrapper( 6933): completePendingScreenFlashClear: none pending!
-D/ImageCapture( 6933): clearPipeline
-D/DeferrableSurface( 6933): surface closed,  useCount=1 closed=true androidx.camera.core.impl.ImmediateSurface@a15294a
-D/DeferrableSurface( 6933): surface closed,  useCount=1 closed=true androidx.camera.core.impl.ImmediateSurface@b6eb131
-W/ScreenFlashWrapper( 6933): completePendingScreenFlashClear: none pending!
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Use cases [androidx.camera.core.Preview-f129ef02-14c3-4a9a-9679-f556d6f4f6c4118517226, androidx.camera.core.ImageCapture-84588bd4-fc1a-4e8b-a173-ce4f5ef1a06a26981969, androidx.camera.core.ImageAnalysis-b1155ff2-4e07-43ec-b090-0a8375d5bec3162043831] now DETACHED for camera
-D/UseCaseAttachState( 6933): All use case: [] for camera: 1
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Resetting Capture Session
-D/SyncCaptureSessionImpl( 6933): [androidx.camera.camera2.internal.SynchronizedCaptureSessionImpl@59d8f02] Session call close()
-I/flutter ( 6933): ✅ CameraController dispose 완료
-I/flutter ( 6933): 📸 dispose 완료 후 200ms 지연
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Releasing session in state OPENED
-D/Camera2CameraControlImp( 6933): setActive: isActive = false
-D/UseCaseAttachState( 6933): Active and attached use case: [] for camera: 1
-D/UseCaseAttachState( 6933): Active and attached use case: [] for camera: 1
-D/VideoUsageControl( 6933): resetDirectly: mVideoUsage reset!
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Closing camera.
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Transitioning camera internal state: OPENED --> CLOSING
-E/BufferQueueProducer( 6933): [ImageReader-720x480f22m5-6933-35](id:1b1500000025,api:4,p:468,c:6933) dequeueBuffer: BufferQueue has been abandoned
-D/CameraStateRegistry( 6933): Recalculating open cameras:
-D/CameraStateRegistry( 6933): Camera                                       State                 
-D/CameraStateRegistry( 6933): -------------------------------------------------------------------
-D/CameraStateRegistry( 6933): Camera@ef377f[id=10]                         UNKNOWN               
-D/CameraStateRegistry( 6933): Camera@f944152[id=1]                         CLOSING               
-D/CameraStateRegistry( 6933): -------------------------------------------------------------------
-D/CameraStateRegistry( 6933): Open count: 1 (Max allowed: 1)
-E/BufferQueueProducer( 6933): [ImageReader-720x480f22m5-6933-35](id:1b1500000025,api:4,p:468,c:6933) queueBuffer: BufferQueue has been abandoned
-D/CameraStateMachine( 6933): New public camera state CameraState{type=CLOSING, error=null} from CLOSING and null
-D/CameraStateMachine( 6933): Publishing new public camera state CameraState{type=CLOSING, error=null}
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Resetting Capture Session
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Skipping Capture Session state check due to current camera state: CLOSING and previous session status: false
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} Releasing session in state CLOSING
-D/SyncCaptureSessionImpl( 6933): [androidx.camera.camera2.internal.SynchronizedCaptureSessionImpl@59d8f02] Session call super.close()
-D/UseCaseAttachState( 6933): Active and attached use case: [] for camera: 1
-D/CaptureSession( 6933): onSessionFinished()
-D/Camera2CameraImpl( 6933): {Camera@f944152[id=1]} closing camera
-E/BufferQueueProducer( 6933): [ImageReader-720x480f22m5-6933-35](id:1b1500000025,api:4,p:468,c:6933) queueBuffer: BufferQueue has been abandoned
-E/BufferQueueProducer( 6933): [ImageReader-720x480f22m5-6933-35](id:1b1500000025,api:4,p:468,c:6933) queueBuffer: BufferQueue has been abandoned
-I/flutter ( 6933): 🧹 CameraHelper: dispose() 호출
-I/flutter ( 6933): 🧹 CameraHelper: dispose() 호출
-I/flutter ( 6933): 🧹 CameraController 초기화됨 → dispose 시작
-I/flutter ( 6933): ✅ CameraController dispose 완료
-I/flutter ( 6933):  AdjustmentState: 지역 변경 감지됨 (dev) → 데이터 새로 가져옴
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev 1&5_dev, countType: dev 1&5, area: dev, basicStandard: 1, basicAmount: 1000, addStandard: 1, addAmount: 1500)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev 5m&500,1m&100_dev, countType: dev 5m&500,1m&100, area: dev, basicStandard: 5, basicAmount: 500, addStandard: 1, addAmount: 100)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev_1&1_dev, countType: dev_1&1, area: dev, basicStandard: 1, basicAmount: 500, addStandard: 1, addAmount: 100)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev_free_dev, countType: dev_free, area: dev, basicStandard: 1, basicAmount: 0, addStandard: 1, addAmount: 0)
-E/BufferQueueProducer( 6933): [ImageReader-720x480f22m5-6933-35](id:1b1500000025,api:4,p:468,c:6933) queueBuffer: BufferQueue has been abandoned
-E/BufferQueueProducer( 6933): [ImageReader-720x480f22m5-6933-35](id:1b1500000025,api:4,p:468,c:6933) cancelBuffer: BufferQueue has been abandoned
-E/BufferQueueProducer( 6933): [ImageReader-720x480f22m5-6933-35](id:1b1500000025,api:4,p:468,c:6933) cancelBuffer: BufferQueue has been abandoned
-E/libEGL  ( 6933): called unimplemented OpenGL ES API
-D/EGL_emulation( 6933): app_time_stats: avg=24.36ms min=5.41ms max=339.65ms count=46
-I/flutter ( 6933):  AdjustmentState: 지역 변경 감지됨 (dev) → 데이터 새로 가져옴
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev 1&5_dev, countType: dev 1&5, area: dev, basicStandard: 1, basicAmount: 1000, addStandard: 1, addAmount: 1500)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev 5m&500,1m&100_dev, countType: dev 5m&500,1m&100, area: dev, basicStandard: 5, basicAmount: 500, addStandard: 1, addAmount: 100)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev_1&1_dev, countType: dev_1&1, area: dev, basicStandard: 1, basicAmount: 500, addStandard: 1, addAmount: 100)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev_free_dev, countType: dev_free, area: dev, basicStandard: 1, basicAmount: 0, addStandard: 1, addAmount: 0)
-E/libEGL  ( 6933): called unimplemented OpenGL ES API
-D/EGL_emulation( 6933): app_time_stats: avg=18.25ms min=3.23ms max=155.76ms count=48
-I/flutter ( 6933):  AdjustmentState: 지역 변경 감지됨 (dev) → 데이터 새로 가져옴
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev 1&5_dev, countType: dev 1&5, area: dev, basicStandard: 1, basicAmount: 1000, addStandard: 1, addAmount: 1500)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev 5m&500,1m&100_dev, countType: dev 5m&500,1m&100, area: dev, basicStandard: 5, basicAmount: 500, addStandard: 1, addAmount: 100)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev_1&1_dev, countType: dev_1&1, area: dev, basicStandard: 1, basicAmount: 500, addStandard: 1, addAmount: 100)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev_free_dev, countType: dev_free, area: dev, basicStandard: 1, basicAmount: 0, addStandard: 1, addAmount: 0)
-E/libEGL  ( 6933): called unimplemented OpenGL ES API
-D/EGL_emulation( 6933): app_time_stats: avg=35.01ms min=3.79ms max=452.54ms count=29
-I/flutter ( 6933):  GCS 업로드 실패: DetailedApiRequestError(status: 403, message: No error details. HTTP status was: 403.)
-I/flutter ( 6933):  Stack Trace: #0      validateResponse (package:_discoveryapis_commons/src/api_requester.dart:310:5)
-I/flutter ( 6933): #1      ApiRequester.request (package:_discoveryapis_commons/src/api_requester.dart:72:22)
-I/flutter ( 6933): <asynchronous suspension>
-I/flutter ( 6933): #2      ObjectsResource.insert (package:googleapis/storage/v1.dart:3734:23)
-I/flutter ( 6933): <asynchronous suspension>
-I/flutter ( 6933): #3      GCSUploader._upload (package:easydev/utils/gcs_uploader.dart:35:22)
-I/flutter ( 6933): <asynchronous suspension>
-I/flutter ( 6933): #4      GCSUploader.uploadImageFromInput (package:easydev/utils/gcs_uploader.dart:13:12)
-I/flutter ( 6933): <asynchronous suspension>
-I/flutter ( 6933): #5      InputPlateService.uploadCapturedImages (package:easydev/services/input_plate_service.dart:29:22)
-I/flutter ( 6933): <asynchronous suspension>
-I/flutter ( 6933): #6      _Input3DigitState._handleAction (package:easydev/screens/input_pages/input_3_digit.dart:241:33)
-I/flutter ( 6933): <asynchronous suspension>
-I/flutter ( 6933): #7      _Input3DigitState.build.<anonymous closure> (package:easydev/screens/input_pages/input_3_digit.dart:445:17)
-I/flutter ( 6933): <asynchronous suspension>
-I/flutter ( 6933): #8      _AnimatedActionButtonState._handleTap (package:easydev/utils/button/ani
-I/flutter ( 6933): 이미지 업로드 실패 (파일 경로: /data/user/0/com.example.easydev/cache/CAP7521527966978903908.jpg)
-I/flutter ( 6933):  AdjustmentState: 지역 변경 감지됨 (dev) → 데이터 새로 가져옴
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev 1&5_dev, countType: dev 1&5, area: dev, basicStandard: 1, basicAmount: 1000, addStandard: 1, addAmount: 1500)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev 5m&500,1m&100_dev, countType: dev 5m&500,1m&100, area: dev, basicStandard: 5, basicAmount: 500, addStandard: 1, addAmount: 100)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev_1&1_dev, countType: dev_1&1, area: dev, basicStandard: 1, basicAmount: 500, addStandard: 1, addAmount: 100)
-I/flutter ( 6933): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev_free_dev, countType: dev_free, area: dev, basicStandard: 1, basicAmount: 0, addStandard: 1, addAmount: 0)
-E/libEGL  ( 6933): called unimplemented OpenGL ES API
-D/EGL_emulation( 6933): app_time_stats: avg=20.76ms min=8.53ms max=58.95ms count=48
+Windows PowerShell
+Copyright (C) Microsoft Corporation. All rights reserved.
+
+새로운 크로스 플랫폼 PowerShell 사용 https://aka.ms/pscore6
+
+PS C:\Users\nrit0\Pictures\easydev> flutter clean
+Deleting build...                                                   4.5s
+Deleting .dart_tool...                                              20ms
+Deleting Generated.xcconfig...                                       0ms
+Deleting flutter_export_environment.sh...                            0ms
+Deleting .flutter-plugins-dependencies...                            0ms
+Deleting .flutter-plugins...                                         0ms
+PS C:\Users\nrit0\Pictures\easydev> flutter pub get
+Resolving dependencies... 
+Downloading packages...
+  _flutterfire_internals 1.3.48 (1.3.54 available)
+  archive 3.6.1 (4.0.5 available)
+  args 2.6.0 (2.7.0 available)
+  async 2.12.0 (2.13.0 available)
+  camera_android_camerax 0.6.13 (0.6.14+1 available)
+  camera_avfoundation 0.9.18+8 (0.9.18+13 available)
+  camera_platform_interface 2.9.0 (2.10.0 available)
+  cloud_firestore 5.6.0 (5.6.6 available)
+  cloud_firestore_platform_interface 6.6.0 (6.6.6 available)
+  cloud_firestore_web 4.4.0 (4.4.6 available)
+  dbus 0.7.10 (0.7.11 available)
+  fake_async 1.3.2 (1.3.3 available)
+  ffi 2.1.3 (2.1.4 available)
+  firebase_auth 5.3.4 (5.5.2 available)
+  firebase_auth_platform_interface 7.4.10 (7.6.2 available)
+  firebase_auth_web 5.13.5 (5.14.2 available)
+  firebase_core 3.9.0 (3.13.0 available)
+  firebase_core_web 2.19.0 (2.22.0 available)
+  flutter_local_notifications 18.0.1 (19.0.0 available)
+  flutter_local_notifications_linux 5.0.0 (6.0.0 available)
+  flutter_local_notifications_platform_interface 8.0.0 (9.0.0 available)
+  flutter_plugin_android_lifecycle 2.0.24 (2.0.27 available)
+  googleapis_auth 1.6.0 (2.0.0 available)
+  leak_tracker 10.0.8 (10.0.9 available)
+  material_color_utilities 0.11.1 (0.12.0 available)
++ path_provider 2.1.5
++ path_provider_android 2.2.16
++ path_provider_foundation 2.4.1
++ permission_handler 11.4.0
++ permission_handler_android 12.1.0 (13.0.1 available)
++ permission_handler_apple 9.4.6
++ permission_handler_html 0.1.3+5
++ permission_handler_platform_interface 4.3.0
++ permission_handler_windows 0.2.1
+  petitparser 6.0.2 (6.1.0 available)
+  provider 6.1.2 (6.1.4 available)
+  shared_preferences 2.3.5 (2.5.3 available)
+  shared_preferences_web 2.4.2 (2.4.3 available)
+  sqflite 2.4.1 (2.4.2 available)
+  sqflite_android 2.4.0 (2.4.1 available)
+  sqflite_common 2.5.4+6 (2.5.5 available)
+  sqflite_darwin 2.4.1+1 (2.4.2 available)
+  synchronized 3.3.0+3 (3.3.1 available)
+  vm_service 14.3.1 (15.0.0 available)
+  web 1.1.0 (1.1.1 available)
+Changed 9 dependencies!
+39 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+PS C:\Users\nrit0\Pictures\easydev> flutter clean
+Deleting build...                                                    3ms
+Deleting .dart_tool...                                               1ms
+Deleting Generated.xcconfig...                                       0ms
+Deleting flutter_export_environment.sh...                            0ms
+Deleting .flutter-plugins-dependencies...                            0ms
+Deleting .flutter-plugins...                                         0ms
+PS C:\Users\nrit0\Pictures\easydev> flutter pub get
+Resolving dependencies... 
+Downloading packages...
+  _flutterfire_internals 1.3.48 (1.3.54 available)
+  archive 3.6.1 (4.0.5 available)
+  args 2.6.0 (2.7.0 available)
+  async 2.12.0 (2.13.0 available)
+  camera_android_camerax 0.6.13 (0.6.14+1 available)
+  camera_avfoundation 0.9.18+8 (0.9.18+13 available)
+  camera_platform_interface 2.9.0 (2.10.0 available)
+  cloud_firestore 5.6.0 (5.6.6 available)
+  cloud_firestore_platform_interface 6.6.0 (6.6.6 available)
+  cloud_firestore_web 4.4.0 (4.4.6 available)
+  dbus 0.7.10 (0.7.11 available)
+  fake_async 1.3.2 (1.3.3 available)
+  ffi 2.1.3 (2.1.4 available)
+  firebase_auth 5.3.4 (5.5.2 available)
+  firebase_auth_platform_interface 7.4.10 (7.6.2 available)
+  firebase_auth_web 5.13.5 (5.14.2 available)
+  firebase_core 3.9.0 (3.13.0 available)
+  firebase_core_web 2.19.0 (2.22.0 available)
+  flutter_local_notifications 18.0.1 (19.0.0 available)
+  flutter_local_notifications_linux 5.0.0 (6.0.0 available)
+  flutter_local_notifications_platform_interface 8.0.0 (9.0.0 available)
+  flutter_plugin_android_lifecycle 2.0.24 (2.0.27 available)
+  googleapis_auth 1.6.0 (2.0.0 available)
+  leak_tracker 10.0.8 (10.0.9 available)
+  material_color_utilities 0.11.1 (0.12.0 available)
+  permission_handler_android 12.1.0 (13.0.1 available)
+  petitparser 6.0.2 (6.1.0 available)
+  provider 6.1.2 (6.1.4 available)
+  shared_preferences 2.3.5 (2.5.3 available)
+  shared_preferences_web 2.4.2 (2.4.3 available)
+  sqflite 2.4.1 (2.4.2 available)
+  sqflite_android 2.4.0 (2.4.1 available)
+  sqflite_common 2.5.4+6 (2.5.5 available)
+  sqflite_darwin 2.4.1+1 (2.4.2 available)
+  synchronized 3.3.0+3 (3.3.1 available)
+  timezone 0.9.4 (0.10.0 available)
+  vm_service 14.3.1 (15.0.0 available)
+  web 1.1.0 (1.1.1 available)
+Got dependencies!
+39 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+PS C:\Users\nrit0\Pictures\easydev> flutter run
+Launching lib\main.dart on sdk gphone64 x86 64 in debug mode...
+Warning: The plugin path_provider_android requires Android SDK version 35 or higher.
+For more information about build configuration, see https://flutter.dev/to/review-gradle-config.
+Your project is configured to compile against Android SDK 34, but the following plugin(s) require to be compiled against a higher Android SDK version:
+- path_provider_android compiles against Android SDK 35
+Fix this issue by compiling against the highest Android SDK version (they are backward compatible).
+Add the following to C:\Users\nrit0\Pictures\easydev\android\app\build.gradle:
+
+    android {
+        compileSdk = 35
+        ...
+    }
+
+Note: C:\Users\nrit0\AppData\Local\Pub\Cache\hosted\pub.dev\cloud_firestore-5.6.0\android\src\main\java\io\flutter\plugins\firebase\firestore\FlutterFirebaseFirestoreMessageCodec.java uses unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+Running Gradle task 'assembleDebug'...                             62.7s
+√ Built build\app\outputs\flutter-apk\app-debug.apk
+Installing build\app\outputs\flutter-apk\app-debug.apk...        2,017ms
+I/flutter ( 7167): [IMPORTANT:flutter/shell/platform/android/android_context_gl_impeller.cc(94)] Using the Impeller rendering backend (OpenGLES).
+W/OpenGLRenderer( 7167): Failed to choose config with EGL_SWAP_BEHAVIOR_PRESERVED, retrying without...
+W/OpenGLRenderer( 7167): Failed to initialize 101010-2 format, error = EGL_SUCCESS
+I/Gralloc4( 7167): mapper 4.x is not supported
+E/OpenGLRenderer( 7167): Unable to match the desired swap behavior.
+E/libEGL  ( 7167): called unimplemented OpenGL ES API
+Syncing files to device sdk gphone64 x86 64...                     377ms
+
+Flutter run key commands.
+r Hot reload.
+R Hot restart.
+h List all available interactive commands.
+d Detach (terminate "flutter run" but leave application running).
+c Clear the screen
+q Quit (terminate the application on the device).
+
+A Dart VM Service on sdk gphone64 x86 64 is available at: http://127.0.0.1:2499/QML3cJZqQSY=/
+D/CompatibilityChangeReporter( 7167): Compat change id reported: 3400644; UID 10195; state: ENABLED
+I/Choreographer( 7167): Skipped 69 frames!  The application may be doing too much work on its main thread.
+The Flutter DevTools debugger and profiler on sdk gphone64 x86 64 is available at: http://127.0.0.1:9101?uri=http://127.0.0.1:2499/QML3cJZqQSY=/
+I/flutter ( 7167): [DEBUG] 자동 로그인 시도
+E/libEGL  ( 7167): called unimplemented OpenGL ES API
+I/Choreographer( 7167): Skipped 73 frames!  The application may be doing too much work on its main thread.
+W/DynamiteModule( 7167): Local module descriptor class for com.google.android.gms.providerinstaller.dynamite not found.
+I/DynamiteModule( 7167): Considering local module com.google.android.gms.providerinstaller.dynamite:0 and remote module com.google.android.gms.providerinstaller.dynamite:0
+W/ProviderInstaller( 7167): Failed to load providerinstaller module: No acceptable module com.google.android.gms.providerinstaller.dynamite found. Local version is 0 and remote version is 0.
+D/nativeloader( 7167): Configuring clns-7 for other apk /system/framework/org.apache.http.legacy.jar. target_sdk_version=34, uses_libraries=ALL, library_path=/data/app
+/~~ka1wgL9NIUZFc9pfNG6iGw==/com.google.android.gms-2IWaU8nrF-MMJJRVTEloSQ==/lib/x86_64:/data/app/~~ka1wgL9NIUZFc9pfNG6iGw==/com.google.android.gms-2IWaU8nrF-MMJJRVTEloSQ==/base.apk!/lib/x86_64, permitted_path=/data:/mnt/expand:/data/user/0/com.google.android.gms
+D/nativeloader( 7167): Configuring clns-8 for other apk /system/framework/com.android.media.remotedisplay.jar. target_sdk_version=34, uses_libraries=ALL, library_path=
+/data/app/~~ka1wgL9NIUZFc9pfNG6iGw==/com.google.android.gms-2IWaU8nrF-MMJJRVTEloSQ==/lib/x86_64:/data/app/~~ka1wgL9NIUZFc9pfNG6iGw==/com.google.android.gms-2IWaU8nrF-MMJJRVTEloSQ==/base.apk!/lib/x86_64, permitted_path=/data:/mnt/expand:/data/user/0/com.google.android.gms
+D/nativeloader( 7167): Configuring clns-9 for other apk /system/framework/com.android.location.provider.jar. target_sdk_version=34, uses_libraries=ALL, library_path=/d
+ata/app/~~ka1wgL9NIUZFc9pfNG6iGw==/com.google.android.gms-2IWaU8nrF-MMJJRVTEloSQ==/lib/x86_64:/data/app/~~ka1wgL9NIUZFc9pfNG6iGw==/com.google.android.gms-2IWaU8nrF-MMJJRVTEloSQ==/base.apk!/lib/x86_64, permitted_path=/data:/mnt/expand:/data/user/0/com.google.android.gms
+D/ApplicationLoaders( 7167): Returning zygote-cached class loader: /system_ext/framework/androidx.window.extensions.jar
+D/ApplicationLoaders( 7167): Returning zygote-cached class loader: /system_ext/framework/androidx.window.sidecar.jar
+D/nativeloader( 7167): Configuring clns-10 for other apk /data/app/~~ka1wgL9NIUZFc9pfNG6iGw==/com.google.android.gms-2IWaU8nrF-MMJJRVTEloSQ==/base.apk. target_sdk_vers
+ion=34, uses_libraries=, library_path=/data/app/~~ka1wgL9NIUZFc9pfNG6iGw==/com.google.android.gms-2IWaU8nrF-MMJJRVTEloSQ==/lib/x86_64:/data/app/~~ka1wgL9NIUZFc9pfNG6iGw==/com.google.android.gms-2IWaU8nrF-MMJJRVTEloSQ==/base.apk!/lib/x86_64, permitted_path=/data:/mnt/expand:/data/user/0/com.google.android.gms
+W/ProviderInstaller( 7167): Failed to report request stats: com.google.android.gms.common.security.ProviderInstallerImpl.reportRequestStats [class android.content.Context, long, long]
+V/NativeCrypto( 7167): Registering com/google/android/gms/org/conscrypt/NativeCrypto's 308 native methods...
+W/example.easydev( 7167): Accessing hidden method Ljava/security/spec/ECParameterSpec;->getCurveName()Ljava/lang/String; (unsupported, reflection, allowed)
+W/example.easydev( 7167): Accessing hidden method Ldalvik/system/VMStack;->getStackClass2()Ljava/lang/Class; (unsupported, reflection, allowed)
+E/GoogleApiManager( 7167): Failed to get service from broker. 
+E/GoogleApiManager( 7167): java.lang.SecurityException: Unknown calling package name 'com.google.android.gms'.
+E/GoogleApiManager( 7167):      at android.os.Parcel.createExceptionOrNull(Parcel.java:3057)
+E/GoogleApiManager( 7167):      at android.os.Parcel.createException(Parcel.java:3041)
+E/GoogleApiManager( 7167):      at android.os.Parcel.readException(Parcel.java:3024)
+E/GoogleApiManager( 7167):      at android.os.Parcel.readException(Parcel.java:2966)
+E/GoogleApiManager( 7167):      at atea.a(:com.google.android.gms@250933032@25.09.33 (190800-736501638):36)
+E/GoogleApiManager( 7167):      at atch.z(:com.google.android.gms@250933032@25.09.33 (190800-736501638):143)
+E/GoogleApiManager( 7167):      at asjt.run(:com.google.android.gms@250933032@25.09.33 (190800-736501638):54)
+E/GoogleApiManager( 7167):      at android.os.Handler.handleCallback(Handler.java:958)
+E/GoogleApiManager( 7167):      at android.os.Handler.dispatchMessage(Handler.java:99)
+E/GoogleApiManager( 7167):      at cacz.mv(:com.google.android.gms@250933032@25.09.33 (190800-736501638):1)
+E/GoogleApiManager( 7167):      at cacz.dispatchMessage(:com.google.android.gms@250933032@25.09.33 (190800-736501638):5)
+E/GoogleApiManager( 7167):      at android.os.Looper.loopOnce(Looper.java:205)
+E/GoogleApiManager( 7167):      at android.os.Looper.loop(Looper.java:294)
+E/GoogleApiManager( 7167):      at android.os.HandlerThread.run(HandlerThread.java:67)
+W/FlagRegistrar( 7167): Failed to register com.google.android.gms.providerinstaller#com.example.easydev
+W/FlagRegistrar( 7167): evez: 17: 17: API: Phenotype.API is not available on this device. Connection failed with: ConnectionResult{statusCode=DEVELOPER_ERROR, resolution=null, message=null}
+W/FlagRegistrar( 7167):         at evfb.a(:com.google.android.gms@250933032@25.09.33 (190800-736501638):13)
+W/FlagRegistrar( 7167):         at fphp.d(:com.google.android.gms@250933032@25.09.33 (190800-736501638):3)
+W/FlagRegistrar( 7167):         at fphr.run(:com.google.android.gms@250933032@25.09.33 (190800-736501638):130)
+W/FlagRegistrar( 7167):         at fpjy.execute(:com.google.android.gms@250933032@25.09.33 (190800-736501638):1)
+W/FlagRegistrar( 7167):         at fphz.f(:com.google.android.gms@250933032@25.09.33 (190800-736501638):1)
+W/FlagRegistrar( 7167):         at fphz.m(:com.google.android.gms@250933032@25.09.33 (190800-736501638):99)
+W/FlagRegistrar( 7167):         at fphz.r(:com.google.android.gms@250933032@25.09.33 (190800-736501638):17)
+W/FlagRegistrar( 7167):         at enuy.hG(:com.google.android.gms@250933032@25.09.33 (190800-736501638):35)
+W/FlagRegistrar( 7167):         at ecdu.run(:com.google.android.gms@250933032@25.09.33 (190800-736501638):14)
+W/FlagRegistrar( 7167):         at fpjy.execute(:com.google.android.gms@250933032@25.09.33 (190800-736501638):1)
+W/FlagRegistrar( 7167):         at ecdv.b(:com.google.android.gms@250933032@25.09.33 (190800-736501638):18)
+W/FlagRegistrar( 7167):         at ecek.b(:com.google.android.gms@250933032@25.09.33 (190800-736501638):36)
+W/FlagRegistrar( 7167):         at ecem.d(:com.google.android.gms@250933032@25.09.33 (190800-736501638):25)
+W/FlagRegistrar( 7167):         at ashb.c(:com.google.android.gms@250933032@25.09.33 (190800-736501638):9)
+W/FlagRegistrar( 7167):         at asjr.q(:com.google.android.gms@250933032@25.09.33 (190800-736501638):48)
+W/FlagRegistrar( 7167):         at asjr.d(:com.google.android.gms@250933032@25.09.33 (190800-736501638):10)
+W/FlagRegistrar( 7167):         at asjr.g(:com.google.android.gms@250933032@25.09.33 (190800-736501638):211)
+W/FlagRegistrar( 7167):         at asjr.onConnectionFailed(:com.google.android.gms@250933032@25.09.33 (190800-736501638):2)
+W/FlagRegistrar( 7167):         at asjt.run(:com.google.android.gms@250933032@25.09.33 (190800-736501638):82)
+W/FlagRegistrar( 7167):         at android.os.Handler.handleCallback(Handler.java:958)
+W/FlagRegistrar( 7167):         at android.os.Handler.dispatchMessage(Handler.java:99)
+W/FlagRegistrar( 7167):         at cacz.mv(:com.google.android.gms@250933032@25.09.33 (190800-736501638):1)
+W/FlagRegistrar( 7167):         at cacz.dispatchMessage(:com.google.android.gms@250933032@25.09.33 (190800-736501638):5)
+W/FlagRegistrar( 7167):         at android.os.Looper.loopOnce(Looper.java:205)
+W/FlagRegistrar( 7167):         at android.os.Looper.loop(Looper.java:294)
+W/FlagRegistrar( 7167):         at android.os.HandlerThread.run(HandlerThread.java:67)
+W/FlagRegistrar( 7167): Caused by: asfq: 17: API: Phenotype.API is not available on this device. Connection failed with: ConnectionResult{statusCode=DEVELOPER_ERROR, resolution=null, message=null}
+W/FlagRegistrar( 7167):         at atbt.a(:com.google.android.gms@250933032@25.09.33 (190800-736501638):15)
+W/FlagRegistrar( 7167):         at ashe.a(:com.google.android.gms@250933032@25.09.33 (190800-736501638):1)
+W/FlagRegistrar( 7167):         at ashb.c(:com.google.android.gms@250933032@25.09.33 (190800-736501638):5)
+W/FlagRegistrar( 7167):         ... 12 more
+I/evem    ( 7167): Unable to retrieve flag snapshot for com.google.android.gms.providerinstaller#com.google.android.gms, using defaults.
+I/ProviderInstaller( 7167): Installed default security provider GmsCore_OpenSSL
+D/TrafficStats( 7167): tagSocket(148) with statsTag=0xffffffff, statsUid=-1
+W/example.easydev( 7167): Accessing hidden field Ljava/net/Socket;->impl:Ljava/net/SocketImpl; (unsupported, reflection, allowed)
+W/example.easydev( 7167): Accessing hidden method Ljava/security/spec/ECParameterSpec;->setCurveName(Ljava/lang/String;)V (unsupported, reflection, allowed)
+D/ProfileInstaller( 7167): Installing profile for com.example.easydev
+E/libEGL  ( 7167): called unimplemented OpenGL ES API
+D/EGL_emulation( 7167): app_time_stats: avg=1026.23ms min=55.78ms max=2894.01ms count=3
+W/WindowOnBackDispatcher( 7167): OnBackInvokedCallback is not enabled for the application.
+W/WindowOnBackDispatcher( 7167): Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+I/flutter ( 7167): 🕐 지역 Plate 상태 수신 대기 중...
+I/flutter ( 7167): 🔄 지역 동기화: dev
+I/flutter ( 7167): 🔄 지역 변경 감지됨: dev
+I/flutter ( 7167): 🕐 지역 Plate 상태 수신 대기 중...
+E/libEGL  ( 7167): call to OpenGL ES API with no current context (logged once per thread)
+I/flutter ( 7167): ✅ 지역 Plate 상태 수신 완료
+I/flutter ( 7167): 📌 Selected Area: dev
+I/flutter ( 7167): 🅿️ Parking Requests: 1
+I/flutter ( 7167): ✅ Parking Completed: 0
+I/flutter ( 7167): 🚗 Departure Requests: 0
+I/flutter ( 7167): 🏁 Departure Completed: 0
+E/GoogleApiManager( 7167): Failed to get service from broker. 
+E/GoogleApiManager( 7167): java.lang.SecurityException: Unknown calling package name 'com.google.android.gms'.
+E/GoogleApiManager( 7167):      at android.os.Parcel.createExceptionOrNull(Parcel.java:3057)
+E/GoogleApiManager( 7167):      at android.os.Parcel.createException(Parcel.java:3041)
+E/GoogleApiManager( 7167):      at android.os.Parcel.readException(Parcel.java:3024)
+E/GoogleApiManager( 7167):      at android.os.Parcel.readException(Parcel.java:2966)
+E/GoogleApiManager( 7167):      at atea.a(:com.google.android.gms@250933032@25.09.33 (190800-736501638):36)
+E/GoogleApiManager( 7167):      at atch.z(:com.google.android.gms@250933032@25.09.33 (190800-736501638):143)
+E/GoogleApiManager( 7167):      at asjt.run(:com.google.android.gms@250933032@25.09.33 (190800-736501638):54)
+E/GoogleApiManager( 7167):      at android.os.Handler.handleCallback(Handler.java:958)
+E/GoogleApiManager( 7167):      at android.os.Handler.dispatchMessage(Handler.java:99)
+E/GoogleApiManager( 7167):      at cacz.mv(:com.google.android.gms@250933032@25.09.33 (190800-736501638):1)
+E/GoogleApiManager( 7167):      at cacz.dispatchMessage(:com.google.android.gms@250933032@25.09.33 (190800-736501638):5)
+E/GoogleApiManager( 7167):      at android.os.Looper.loopOnce(Looper.java:205)
+E/GoogleApiManager( 7167):      at android.os.Looper.loop(Looper.java:294)
+E/GoogleApiManager( 7167):      at android.os.HandlerThread.run(HandlerThread.java:67)
+I/flutter ( 7167): 📸 CameraHelper: initializeCamera() 호출
+E/libEGL  ( 7167): called unimplemented OpenGL ES API
+D/EGL_emulation( 7167): app_time_stats: avg=914.51ms min=4.34ms max=15650.93ms count=18
+I/flutter ( 7167):  AdjustmentState: 지역 변경 감지됨 (dev) → 데이터 새로 가져옴
+D/QuirkSettingsLoader( 7167): QuirkSettings$MetadataHolderService is not found.
+D/CameraX ( 7167): QuirkSettings from app metadata: null
+D/CameraX ( 7167): QuirkSettings by default: QuirkSettings{enabledWhenDeviceHasQuirk=true, forceEnabledQuirks=[], forceDisabledQuirks=[]}
+D/DeviceQuirks( 7167): camera2 DeviceQuirks = 
+I/CameraManagerGlobal( 7167): Connecting to camera service
+D/CompatibilityChangeReporter( 7167): Compat change id reported: 250678880; UID 10195; state: ENABLED
+I/flutter ( 7167):  AdjustmentState: 지역 변경 감지됨 (dev) → 데이터 새로 가져옴
+W/WindowOnBackDispatcher( 7167): OnBackInvokedCallback is not enabled for the application.
+W/WindowOnBackDispatcher( 7167): Set 'android:enableOnBackInvokedCallback="true"' in the application manifest.
+D/CameraRepository( 7167): Added camera: 1
+D/CameraQuirks( 7167): camera2 CameraQuirks = 
+I/flutter ( 7167): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev 1&5_dev, countType: dev 1&5, area: dev, basicStandard: 1, basicAmount: 1000, addStandard: 1, addAmount: 1500)
+I/flutter ( 7167): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev 5m&500,1m&100_dev, countType: dev 5m&500,1m&100, area: dev, basicStandard: 5, basicAmount: 500, addStandard: 1, addAmount: 100)
+I/flutter ( 7167): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev_1&1_dev, countType: dev_1&1, area: dev, basicStandard: 1, basicAmount: 500, addStandard: 1, addAmount: 100)
+I/flutter ( 7167): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev_free_dev, countType: dev_free, area: dev, basicStandard: 1, basicAmount: 0, addStandard: 1, addAmount: 0)
+I/Camera2CameraInfo( 7167): Device Level: INFO_SUPPORTED_HARDWARE_LEVEL_FULL
+I/flutter ( 7167): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev 1&5_dev, countType: dev 1&5, area: dev, basicStandard: 1, basicAmount: 1000, addStandard: 1, addAmount: 1500)
+I/flutter ( 7167): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev 5m&500,1m&100_dev, countType: dev 5m&500,1m&100, area: dev, basicStandard: 5, basicAmount: 500, addStandard: 1, addAmount: 100)
+I/flutter ( 7167): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev_1&1_dev, countType: dev_1&1, area: dev, basicStandard: 1, basicAmount: 500, addStandard: 1, addAmount: 100)
+I/flutter ( 7167): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev_free_dev, countType: dev_free, area: dev, basicStandard: 1, basicAmount: 0, addStandard: 1, addAmount: 0)
+D/CameraRepository( 7167): Added camera: 10
+D/CameraQuirks( 7167): camera2 CameraQuirks =
+I/Camera2CameraInfo( 7167): Device Level: INFO_SUPPORTED_HARDWARE_LEVEL_LIMITED
+D/CameraValidator( 7167): Verifying camera lens facing on emu64xa, lensFacingInteger: null
+I/flutter ( 7167): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev 1&5_dev, countType: dev 1&5, area: dev, basicStandard: 1, basicAmount: 1000, addStandard: 1, addAmount: 1500)
+I/flutter ( 7167): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev 5m&500,1m&100_dev, countType: dev 5m&500,1m&100, area: dev, basicStandard: 5, basicAmount: 500, addStandard: 1, addAmount: 100)
+I/flutter ( 7167): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev_1&1_dev, countType: dev_1&1, area: dev, basicStandard: 1, basicAmount: 500, addStandard: 1, addAmount: 100)
+I/flutter ( 7167): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev_free_dev, countType: dev_free, area: dev, basicStandard: 1, basicAmount: 0, addStandard: 1, addAmount: 0)
+D/DeviceQuirks( 7167): video DeviceQuirks = 
+D/DynamicRangeResolver( 7167): Resolved dynamic range for use case androidx.camera.core.Preview-dcc82886-f00b-47c4-b62d-21b0e8391321 to no compatible HDR dynamic ranges.
+D/DynamicRangeResolver( 7167): DynamicRange@43b643{encoding=UNSPECIFIED, bitDepth=0}
+D/DynamicRangeResolver( 7167): ->
+D/DynamicRangeResolver( 7167): DynamicRange@fe90ff2{encoding=SDR, bitDepth=8}
+D/CameraQuirks( 7167): camera2 CameraQuirks =
+D/CameraQuirks( 7167): camera2 CameraQuirks =
+D/CameraQuirks( 7167): camera2 CameraQuirks =
+D/DeferrableSurface( 7167): Surface created[total_surfaces=1, used_surfaces=0](androidx.camera.core.processing.SurfaceEdge$SettableSurface@1e1739f}
+D/DeferrableSurface( 7167): Surface created[total_surfaces=2, used_surfaces=0](androidx.camera.core.SurfaceRequest$2@673aabb}
+D/DeferrableSurface( 7167): New surface in use[total_surfaces=2, used_surfaces=1](androidx.camera.core.SurfaceRequest$2@673aabb}
+D/DeferrableSurface( 7167): use count+1, useCount=1 androidx.camera.core.SurfaceRequest$2@673aabb
+D/ImageCapture( 7167): createPipeline(cameraId: 1, streamSpec: StreamSpec{resolution=720x480, dynamicRange=DynamicRange@fe90ff2{encoding=SDR, bitDepth=8}, expectedFrameRateRange=[0, 0], implementationOptions=androidx.camera.camera2.impl.Camera2ImplConfig@7d9dd84, zslDisabled=false})
+D/DeviceQuirks( 7167): core DeviceQuirks = SurfaceOrderQuirk
+D/CompatibilityChangeReporter( 7167): Compat change id reported: 236825255; UID 10195; state: ENABLED
+D/DeferrableSurface( 7167): Surface created[total_surfaces=3, used_surfaces=1](androidx.camera.core.impl.ImmediateSurface@10159a2}
+D/Camera2CameraImpl( 7167): {Camera@254cef[id=1]} Use case androidx.camera.core.ImageCapture-5d664635-b166-4dfa-80cf-0bd56cd0d2e050716818 ACTIVE
+D/UseCaseAttachState( 7167): Active and attached use case: [] for camera: 1
+D/DeferrableSurface( 7167): Surface created[total_surfaces=4, used_surfaces=1](androidx.camera.core.impl.ImmediateSurface@ee57f69}
+D/Camera2CameraImpl( 7167): {Camera@254cef[id=1]} Use case androidx.camera.core.Preview-dcc82886-f00b-47c4-b62d-21b0e839132137808327 ACTIVE
+D/ImageCapture( 7167): onCameraControlReady
+D/UseCaseAttachState( 7167): Active and attached use case: [] for camera: 1
+D/Camera2CameraControlImp( 7167): setFlashMode: mFlashMode = 2
+D/Camera2CameraImpl( 7167): {Camera@254cef[id=1]} Use case androidx.camera.core.ImageCapture-5d664635-b166-4dfa-80cf-0bd56cd0d2e050716818 ACTIVE
+D/UseCaseAttachState( 7167): Active and attached use case: [] for camera: 1
+D/Camera2CameraImpl( 7167): {Camera@254cef[id=1]} Use case androidx.camera.core.ImageAnalysis-b48558b0-8509-4de1-b840-9c9a1d0fd79a180422240 INACTIVE
+D/UseCaseAttachState( 7167): Active and attached use case: [] for camera: 1
+D/UseCaseAttachState( 7167): Active and attached use case: [] for camera: 1
+D/Camera2CameraImpl( 7167): {Camera@254cef[id=1]} Use cases [androidx.camera.core.Preview-dcc82886-f00b-47c4-b62d-21b0e839132137808327, androidx.camera.core.ImageCapture-5d664635-b166-4dfa-80cf-0bd56cd0d2e050716818, androidx.camera.core.ImageAnalysis-b48558b0-8509-4de1-b840-9c9a1d0fd79a180422240] now ATTACHED
+D/Camera2CameraControlImp( 7167): setActive: isActive = true
+D/UseCaseAttachState( 7167): All use case: [androidx.camera.core.ImageCapture-5d664635-b166-4dfa-80cf-0bd56cd0d2e050716818, androidx.camera.core.Preview-dcc82886-f00b-47c4-b62d-21b0e839132137808327, androidx.camera.core.ImageAnalysis-b48558b0-8509-4de1-b840-9c9a1d0fd79a180422240] for camera: 1
+D/UseCaseAttachState( 7167): Active and attached use case: [androidx.camera.core.ImageCapture-5d664635-b166-4dfa-80cf-0bd56cd0d2e050716818, androidx.camera.core.Preview-dcc82886-f00b-47c4-b62d-21b0e839132137808327] for camera: 1
+D/Camera2CameraImpl( 7167): {Camera@254cef[id=1]} Resetting Capture Session
+D/Camera2CameraImpl( 7167): {Camera@254cef[id=1]} Skipping Capture Session state check due to current camera state: INITIALIZED and previous session status: false     
+D/Camera2CameraImpl( 7167): {Camera@254cef[id=1]} Releasing session in state INITIALIZED
+D/Camera2CameraImpl( 7167): {Camera@254cef[id=1]} Attempting to force open the camera.
+D/CameraStateRegistry( 7167): tryOpenCamera(Camera@254cef[id=1]) [Available Cameras: 1, Already Open: false (Previous state: null)] --> SUCCESS
+D/CameraStateRegistry( 7167): Recalculating open cameras:
+D/CameraStateRegistry( 7167): Camera                                       State
+D/CameraStateRegistry( 7167): -------------------------------------------------------------------
+D/CameraStateRegistry( 7167): Camera@b8023e8[id=10]                        UNKNOWN
+D/CameraStateRegistry( 7167): Camera@254cef[id=1]                          OPENING
+D/CameraStateRegistry( 7167): -------------------------------------------------------------------
+D/CameraStateRegistry( 7167): Open count: 1 (Max allowed: 1)
+D/Camera2CameraImpl( 7167): {Camera@254cef[id=1]} Opening camera.
+D/Camera2CameraImpl( 7167): {Camera@254cef[id=1]} Transitioning camera internal state: INITIALIZED --> OPENING
+D/CameraStateMachine( 7167): New public camera state CameraState{type=OPENING, error=null} from OPENING and null
+D/CameraStateMachine( 7167): Publishing new public camera state CameraState{type=OPENING, error=null}
+D/UseCaseAttachState( 7167): All use case: [androidx.camera.core.ImageCapture-5d664635-b166-4dfa-80cf-0bd56cd0d2e050716818, androidx.camera.core.Preview-dcc82886-f00b-47c4-b62d-21b0e839132137808327, androidx.camera.core.ImageAnalysis-b48558b0-8509-4de1-b840-9c9a1d0fd79a180422240] for camera: 1
+I/flutter ( 7167): ✅ CameraHelper: 카메라 초기화 완료
+I/flutter ( 7167):  AdjustmentState: 지역 변경 감지됨 (dev) → 데이터 새로 가져옴
+I/flutter ( 7167): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev 1&5_dev, countType: dev 1&5, area: dev, basicStandard: 1, basicAmount: 1000, addStandard: 1, addAmount: 1500)
+I/flutter ( 7167): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev 5m&500,1m&100_dev, countType: dev 5m&500,1m&100, area: dev, basicStandard: 5, basicAmount: 500, addStandard: 1, addAmount: 100)
+I/flutter ( 7167): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev_1&1_dev, countType: dev_1&1, area: dev, basicStandard: 1, basicAmount: 500, addStandard: 1, addAmount: 100)
+I/flutter ( 7167): 📌 Firestore에서 불러온 데이터: AdjustmentModel(id: dev_free_dev, countType: dev_free, area: dev, basicStandard: 1, basicAmount: 0, addStandard: 1, addAmount: 0)
+D/Camera2CameraImpl( 7167): {Camera@254cef[id=1]} Use case androidx.camera.core.Preview-dcc82886-f00b-47c4-b62d-21b0e839132137808327 ACTIVE
+D/UseCaseAttachState( 7167): Active and attached use case: [androidx.camera.core.ImageCapture-5d664635-b166-4dfa-80cf-0bd56cd0d2e050716818, androidx.camera.core.Preview-dcc82886-f00b-47c4-b62d-21b0e839132137808327] for camera: 1
+D/Camera2CameraImpl( 7167): {Camera@254cef[id=1]} Use case androidx.camera.core.ImageCapture-5d664635-b166-4dfa-80cf-0bd56cd0d2e050716818 ACTIVE
+D/UseCaseAttachState( 7167): Active and attached use case: [androidx.camera.core.ImageCapture-5d664635-b166-4dfa-80cf-0bd56cd0d2e050716818, androidx.camera.core.Preview-dcc82886-f00b-47c4-b62d-21b0e839132137808327] for camera: 1
+D/Camera2CameraImpl( 7167): {Camera@254cef[id=1]} Use case androidx.camera.core.ImageAnalysis-b48558b0-8509-4de1-b840-9c9a1d0fd79a180422240 INACTIVE
+D/UseCaseAttachState( 7167): Active and attached use case: [androidx.camera.core.ImageCapture-5d664635-b166-4dfa-80cf-0bd56cd0d2e050716818, androidx.camera.core.Preview-dcc82886-f00b-47c4-b62d-21b0e839132137808327] for camera: 1
+D/Camera2CameraImpl( 7167): {Camera@254cef[id=1]} CameraDevice.onOpened()
+D/Camera2CameraImpl( 7167): {Camera@254cef[id=1]} Transitioning camera internal state: OPENING --> OPENED
+D/CameraStateRegistry( 7167): Recalculating open cameras:
+D/CameraStateRegistry( 7167): Camera                                       State
+D/CameraStateRegistry( 7167): -------------------------------------------------------------------
+D/CameraStateRegistry( 7167): Camera@b8023e8[id=10]                        UNKNOWN
+D/CameraStateRegistry( 7167): Camera@254cef[id=1]                          OPEN
+D/CameraStateRegistry( 7167): -------------------------------------------------------------------
+D/CameraStateRegistry( 7167): Open count: 1 (Max allowed: 1)
+D/CameraStateMachine( 7167): New public camera state CameraState{type=OPEN, error=null} from OPEN and null
+D/CameraStateMachine( 7167): Publishing new public camera state CameraState{type=OPEN, error=null}
+D/UseCaseAttachState( 7167): All use case: [androidx.camera.core.ImageCapture-5d664635-b166-4dfa-80cf-0bd56cd0d2e050716818, androidx.camera.core.Preview-dcc82886-f00b-47c4-b62d-21b0e839132137808327, androidx.camera.core.ImageAnalysis-b48558b0-8509-4de1-b840-9c9a1d0fd79a180422240] for camera: 1
+D/UseCaseAttachState( 7167): Active and attached use case: [androidx.camera.core.ImageCapture-5d664635-b166-4dfa-80cf-0bd56cd0d2e050716818, androidx.camera.core.Preview-dcc82886-f00b-47c4-b62d-21b0e839132137808327] for camera: 1
+D/SyncCaptureSessionBase( 7167): [androidx.camera.camera2.internal.SynchronizedCaptureSessionImpl@79388bd] getSurface done with results: [Surface(name=null)/@0x7034cc6, Surface(name=null)/@0x2928267, Surface(name=null)/@0xec71814]
+D/CaptureSession( 7167): Opening capture session.
+D/Camera2CaptureRequestBuilder( 7167): template type = 1
+D/SyncCaptureSessionImpl( 7167): [androidx.camera.camera2.internal.SynchronizedCaptureSessionImpl@79388bd] start openCaptureSession
+D/DeferrableSurface( 7167): use count+1, useCount=2 androidx.camera.core.SurfaceRequest$2@673aabb
+D/DeferrableSurface( 7167): New surface in use[total_surfaces=4, used_surfaces=2](androidx.camera.core.impl.ImmediateSurface@10159a2}
+D/DeferrableSurface( 7167): use count+1, useCount=1 androidx.camera.core.impl.ImmediateSurface@10159a2
+D/DeferrableSurface( 7167): New surface in use[total_surfaces=4, used_surfaces=3](androidx.camera.core.impl.ImmediateSurface@ee57f69}
+D/DeferrableSurface( 7167): use count+1, useCount=1 androidx.camera.core.impl.ImmediateSurface@ee57f69
+D/SyncCaptureSessionImpl( 7167): [androidx.camera.camera2.internal.SynchronizedCaptureSessionImpl@79388bd] Session onConfigured()
+D/CaptureSession( 7167): Attempting to send capture request onConfigured
+D/CaptureSession( 7167): Issuing request for session.
+D/Camera2CaptureRequestBuilder( 7167): createCaptureRequest
+D/CaptureSession( 7167): CameraCaptureSession.onConfigured() mState=OPENED
+D/CaptureSession( 7167): CameraCaptureSession.onReady() OPENED
+E/libEGL  ( 7167): called unimplemented OpenGL ES API
+D/EGL_emulation( 7167): app_time_stats: avg=39.88ms min=3.64ms max=139.94ms count=26
+E/libEGL  ( 7167): called unimplemented OpenGL ES API
+D/EGL_emulation( 7167): app_time_stats: avg=35.68ms min=15.14ms max=95.23ms count=28
+

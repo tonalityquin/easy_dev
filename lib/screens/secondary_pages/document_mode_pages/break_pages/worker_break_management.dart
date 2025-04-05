@@ -23,6 +23,8 @@ class _WorkerBreakManagementState extends State<WorkerBreakManagement> {
   int? selectedRow;
   int? selectedCol;
 
+  Set<String> selectedCells = {}; // ✅ 추가: 다중 셀 선택
+
   late int selectedYear;
   late int selectedMonth;
 
@@ -49,13 +51,11 @@ class _WorkerBreakManagementState extends State<WorkerBreakManagement> {
   }
 
   String get cellDataKey => 'break_cell_data_${selectedYear}_${selectedMonth}';
+
   String get userCacheKey => 'user_list_$currentArea';
 
   Future<List<UserModel>> getUsersByArea(String area) async {
-    final snapshot = await FirebaseFirestore.instance
-        .collection('user_accounts')
-        .where('area', isEqualTo: area)
-        .get();
+    final snapshot = await FirebaseFirestore.instance.collection('user_accounts').where('area', isEqualTo: area).get();
     return snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
   }
 
@@ -84,10 +84,7 @@ class _WorkerBreakManagementState extends State<WorkerBreakManagement> {
 
   Future<void> _saveUsersToPrefs() async {
     final prefs = await SharedPreferences.getInstance();
-    final userJsonList = users
-        .where((u) => u.id.isNotEmpty)
-        .map((u) => u.toJson())
-        .toList();
+    final userJsonList = users.where((u) => u.id.isNotEmpty).map((u) => u.toJson()).toList();
     await prefs.setString(userCacheKey, jsonEncode(userJsonList));
   }
 
@@ -110,14 +107,13 @@ class _WorkerBreakManagementState extends State<WorkerBreakManagement> {
   }
 
   void _onCellTapped(int rowIndex, int colIndex, String rowKey) {
-    if (colIndex == 0 || colIndex == 32) return;
+    if (colIndex == 0 || colIndex == 33) return;
+    final key = '$rowKey:${colIndex - 1}';
     setState(() {
-      if (selectedRow == rowIndex && selectedCol == colIndex) {
-        selectedRow = null;
-        selectedCol = null;
+      if (selectedCells.contains(key)) {
+        selectedCells.remove(key);
       } else {
-        selectedRow = rowIndex;
-        selectedCol = colIndex;
+        selectedCells.add(key);
       }
     });
   }
@@ -126,29 +122,40 @@ class _WorkerBreakManagementState extends State<WorkerBreakManagement> {
     final value = _controller.text.trim();
     if (value.isEmpty || selectedRow == null || selectedCol == null) return;
 
+    // 👉 홀수 행(종료 행)에는 저장 불가
+    if (selectedRow! % 2 != 0) {
+      showFailedSnackbar(context, '휴게시간 종료는 앱에서 자동으로 처리됩니다');
+      return;
+    }
+
     setState(() {
       cellData[rowKey] ??= {};
-      final existing = cellData[rowKey]![selectedCol!];
-      if (existing != null && existing.split('\n').length < 2) {
-        cellData[rowKey]![selectedCol!] = "$existing\n$value";
-      } else {
-        cellData[rowKey]![selectedCol!] = value;
-      }
+      cellData[rowKey]![selectedCol!] = value;
       _controller.clear();
       _menuOpen = false;
     });
 
     await _saveCellDataToPrefs();
-    showSuccessSnackbar(context, '저장 완료');
+    showSuccessSnackbar(context, '시작 시간 저장 완료');
   }
 
-  Future<void> _clearText(String rowKey) async {
-    if (selectedRow == null || selectedCol == null) return;
 
-    setState(() {
-      cellData[rowKey]?.remove(selectedCol);
-      _menuOpen = false;
-    });
+  Future<void> _clearText(String rowKey, [List<int>? colIndices]) async {
+    if (colIndices != null && colIndices.isNotEmpty) {
+      setState(() {
+        for (final col in colIndices) {
+          cellData[rowKey]?.remove(col);
+        }
+        _menuOpen = false;
+        selectedCells.removeWhere((e) => e.startsWith('$rowKey:'));
+      });
+    } else if (selectedCol != null) {
+      setState(() {
+        cellData[rowKey]?.remove(selectedCol);
+        _menuOpen = false;
+        selectedCells.remove('$rowKey:${selectedCol!}');
+      });
+    }
 
     await _saveCellDataToPrefs();
     showSuccessSnackbar(context, '삭제 완료');
@@ -157,9 +164,9 @@ class _WorkerBreakManagementState extends State<WorkerBreakManagement> {
   Future<void> _saveCellDataToPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     final stringified = cellData.map((rowKey, colMap) => MapEntry(
-      rowKey,
-      colMap.map((colIndex, value) => MapEntry(colIndex.toString(), value)),
-    ));
+          rowKey,
+          colMap.map((colIndex, value) => MapEntry(colIndex.toString(), value)),
+        ));
     final encoded = jsonEncode(stringified);
     await prefs.setString(cellDataKey, encoded);
   }
@@ -172,11 +179,11 @@ class _WorkerBreakManagementState extends State<WorkerBreakManagement> {
       setState(() {
         cellData = Map<String, Map<int, String>>.from(
           decoded.map((rowKey, colMap) => MapEntry(
-            rowKey,
-            Map<int, String>.from(
-              (colMap as Map).map((key, value) => MapEntry(int.parse(key), value)),
-            ),
-          )),
+                rowKey,
+                Map<int, String>.from(
+                  (colMap as Map).map((key, value) => MapEntry(int.parse(key), value)),
+                ),
+              )),
         );
       });
     } else {
@@ -213,6 +220,8 @@ class _WorkerBreakManagementState extends State<WorkerBreakManagement> {
       menuOpen: _menuOpen,
       selectedRow: selectedRow,
       selectedCol: selectedCol,
+      selectedCells: selectedCells,
+      // ✅ 추가
       users: users,
       cellData: cellData,
       selectedYear: selectedYear,
@@ -222,6 +231,7 @@ class _WorkerBreakManagementState extends State<WorkerBreakManagement> {
       onCellTapped: _onCellTapped,
       appendText: _appendText,
       clearText: _clearText,
+      // ✅ 시그니처 대응 완료
       toggleMenu: () => setState(() => _menuOpen = !_menuOpen),
       getUsersByArea: getUsersByArea,
       reloadUsers: _reloadUsers,

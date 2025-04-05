@@ -1,5 +1,3 @@
-// 생략 없이 전체 코드 — 변경된 부분: _handleWorkStatus, _recordLeaveTime 추가 및 적용
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -24,7 +22,7 @@ class DashBoard extends StatelessWidget {
 
       final userState = Provider.of<UserState>(context, listen: false);
       final String userId = userState.user?.id ?? "unknown";
-      final String cellDataKey = 'cell_data_${now.year}_${now.month}';
+      final String cellDataKey = 'attendance_cell_data_${now.year}_${now.month}';
 
       final jsonStr = prefs.getString(cellDataKey);
       Map<String, Map<int, String>> cellData = {};
