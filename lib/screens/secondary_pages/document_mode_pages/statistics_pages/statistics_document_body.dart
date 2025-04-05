@@ -1,25 +1,20 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../../../states/calendar/statistics_calendar_state.dart';
-import '../../../states/calendar/statistics_selected_date_state.dart';
-import '../../../utils/snackbar_helper.dart';
-import '../../../widgets/dialog/calendar/statistics_view_dialog.dart'; // ✅ 다이얼로그 임포트
 
-class StatisticsDocument extends StatefulWidget {
-  const StatisticsDocument({super.key});
+import '../../../../states/calendar/statistics_calendar_state.dart';
+import '../../../../utils/snackbar_helper.dart';
+import '../../../../widgets/dialog/calendar/statistics_view_dialog.dart';
 
-  @override
-  State<StatisticsDocument> createState() => _StatisticsDocumentState();
-}
+class StatisticsDocumentBody extends StatelessWidget {
+  final StatisticsCalendarState calendar;
+  final VoidCallback onDateSelected;
+  final VoidCallback refresh;
 
-class _StatisticsDocumentState extends State<StatisticsDocument> {
-  late StatisticsCalendarState calendar;
-
-  @override
-  void initState() {
-    super.initState();
-    calendar = StatisticsCalendarState();
-  }
+  const StatisticsDocumentBody({
+    super.key,
+    required this.calendar,
+    required this.onDateSelected,
+    required this.refresh,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -28,10 +23,7 @@ class _StatisticsDocumentState extends State<StatisticsDocument> {
         backgroundColor: Colors.white,
         elevation: 0,
         foregroundColor: Colors.black87,
-        title: const Text(
-          '필드 통계 열람 달력',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+        title: const Text('필드 통계 열람 달력', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         automaticallyImplyLeading: false,
       ),
@@ -41,9 +33,9 @@ class _StatisticsDocumentState extends State<StatisticsDocument> {
           children: [
             _buildMonthNavigation(),
             _buildDayHeaders(),
-            _buildDateGrid(),
+            _buildDateGrid(context),
             const SizedBox(height: 16),
-            _buildOpenButton(context), // ✅ 열람 버튼 추가
+            _buildOpenButton(context),
           ],
         ),
       ),
@@ -58,7 +50,10 @@ class _StatisticsDocumentState extends State<StatisticsDocument> {
         children: [
           IconButton(
             icon: const Icon(Icons.arrow_left),
-            onPressed: () => setState(() => calendar.moveToPreviousMonth()),
+            onPressed: () {
+              calendar.moveToPreviousMonth();
+              refresh();
+            },
           ),
           Text(
             calendar.formattedMonth,
@@ -66,7 +61,10 @@ class _StatisticsDocumentState extends State<StatisticsDocument> {
           ),
           IconButton(
             icon: const Icon(Icons.arrow_right),
-            onPressed: () => setState(() => calendar.moveToNextMonth()),
+            onPressed: () {
+              calendar.moveToNextMonth();
+              refresh();
+            },
           ),
         ],
       ),
@@ -78,23 +76,20 @@ class _StatisticsDocumentState extends State<StatisticsDocument> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Row(
-        children: days.map((day) {
-          return Expanded(
-            child: Container(
-              margin: const EdgeInsets.all(4),
-              alignment: Alignment.center,
-              child: Text(
-                day,
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-          );
-        }).toList(),
+        children: days
+            .map((day) => Expanded(
+          child: Container(
+            margin: const EdgeInsets.all(4),
+            alignment: Alignment.center,
+            child: Text(day, style: const TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ))
+            .toList(),
       ),
     );
   }
 
-  Widget _buildDateGrid() {
+  Widget _buildDateGrid(BuildContext context) {
     final firstDay = DateTime(calendar.currentMonth.year, calendar.currentMonth.month, 1);
     final firstWeekday = firstDay.weekday % 7;
     final daysInMonth = DateTime(calendar.currentMonth.year, calendar.currentMonth.month + 1, 0).day;
@@ -114,25 +109,16 @@ class _StatisticsDocumentState extends State<StatisticsDocument> {
 
         return GestureDetector(
           onTap: () {
-            setState(() {
-              if (isSelected) {
-                calendar.selectDate(currentDate); // 내부에서 toggle 되도록 이미 구현됨
-              } else {
-                calendar.selectDate(currentDate);
-              }
+            calendar.selectDate(currentDate);
+            onDateSelected();
 
-              // 선택된 목록 전체를 상태에 반영
-              context.read<StatisticsSelectedDateState>().setSelectedDates(calendar.selectedDates);
+            if (calendar.selectedDates.isEmpty) {
+              showSelectedSnackbar(context, '선택이 해제되었습니다');
+            } else {
+              showSelectedSnackbar(context, '선택된 날짜: ${calendar.formatDate(currentDate)}');
+            }
 
-              if (calendar.selectedDates.isEmpty) {
-                showSelectedSnackbar(context, '선택이 해제되었습니다');
-              } else {
-                showSelectedSnackbar(
-                  context,
-                  '선택된 날짜: ${calendar.formatDate(currentDate)}',
-                );
-              }
-            });
+            refresh();
           },
           child: Container(
             margin: const EdgeInsets.all(4),
@@ -161,7 +147,7 @@ class _StatisticsDocumentState extends State<StatisticsDocument> {
         onPressed: () {
           showDialog(
             context: context,
-            builder: (_) => const StatisticsViewDialog(), // ✅ 팝업 열기
+            builder: (_) => const StatisticsViewDialog(),
           );
         },
         style: ElevatedButton.styleFrom(

@@ -14,9 +14,9 @@ import '../../screens/secondary_pages/office_mode_pages/status_management.dart';
 import '../../screens/secondary_pages/office_mode_pages/user_management.dart';
 
 // Document Mode Pages
-import '../../screens/secondary_pages/document_mode_pages/statistics_document.dart';
-import '../../screens/secondary_pages/document_mode_pages/worker_attendance_document.dart';
-import '../../screens/secondary_pages/document_mode_pages/worker_break_management.dart';
+import '../../screens/secondary_pages/document_mode_pages/statistics_pages/statistics_document.dart';
+import '../../screens/secondary_pages/document_mode_pages/attendance_pages/worker_attendance_document.dart';
+import '../../screens/secondary_pages/document_mode_pages/break_pages/worker_break_management.dart';
 
 class SecondaryInfo {
   final String title;
