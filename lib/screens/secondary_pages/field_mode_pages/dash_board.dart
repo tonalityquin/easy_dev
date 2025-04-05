@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'dart:io';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../utils/excel_helper.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../widgets/navigation/secondary_mini_navigation.dart';
 import '../../../states/user/user_state.dart';
@@ -68,14 +69,48 @@ class DashBoard extends StatelessWidget {
   /// 🔹 출근 / 퇴근 처리 + 퇴근 시간 기록
   Future<void> _handleWorkStatus(UserState userState, BuildContext context) async {
     if (userState.isWorking) {
-      await _recordLeaveTime(context); // ✅ 퇴근 시간 기록 먼저 시도
+      await _recordLeaveTime(context); // ✅ 퇴근 시간 저장
+
+      // ✅ GCS에 엑셀 업로드
+      try {
+        final now = DateTime.now();
+        final prefs = await SharedPreferences.getInstance();
+        final cellDataStr = prefs.getString('attendance_cell_data_${now.year}_${now.month}');
+
+        if (cellDataStr != null) {
+          final uploader = ExcelUploader();
+          final userId = userState.user?.id ?? "unknown";
+          final userName = userState.name;
+          final userArea = userState.area;
+
+          final url = await uploader.uploadAttendanceAndBreakExcel(
+            userIdsInOrder: [userId],
+            userIdToName: {userId: userName},
+            year: now.year,
+            month: now.month,
+            generatedByName: userName,
+            generatedByArea: userArea,
+          );
+
+          if (url != null) {
+            debugPrint('✅ 엑셀 업로드 완료 (비공개 URL): $url');
+          } else {
+            debugPrint('❌ 엑셀 업로드 실패');
+          }
+        }
+      } catch (e) {
+        debugPrint('❌ 엑셀 업로드 중 오류 발생: $e');
+      }
+
+      // ✅ 퇴근 상태 처리 후 앱 종료
       await userState.isHeWorking();
       await Future.delayed(const Duration(seconds: 1));
       exit(0);
     } else {
-      await userState.isHeWorking();
+      await userState.isHeWorking(); // 출근일 경우만 상태 전환
     }
   }
+
 
   /// 🔹 로그아웃 처리
   Future<void> _logout(BuildContext context) async {

@@ -3,7 +3,9 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../../../states/user/user_state.dart';
+import '../../../models/user_model.dart';
 import '../../../utils/snackbar_helper.dart';
+import '../../../utils/excel_helper.dart';
 
 class GoToWork extends StatefulWidget {
   const GoToWork({super.key});
@@ -27,6 +29,11 @@ class _GoToWorkState extends State<GoToWork> {
       }
 
       await userState.isHeWorking(); // 상태 전환 (출근/퇴근 처리)
+
+      // ✅ 퇴근 직후 GCS 엑셀 자동 업로드
+      if (!userState.isWorking) {
+        await _uploadAttendanceSilently(context);
+      }
 
       if (userState.isWorking && mounted) {
         Navigator.pushReplacementNamed(context, '/type_page');
@@ -57,8 +64,7 @@ class _GoToWorkState extends State<GoToWork> {
     final int dayColumn = now.day;
     final userState = Provider.of<UserState>(context, listen: false);
     final String userId = userState.user?.id ?? "unknown";
-    final String time =
-        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    final String time = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
     final String cellDataKey = 'attendance_cell_data_${now.year}_${now.month}';
 
     final jsonStr = prefs.getString(cellDataKey);
@@ -76,7 +82,6 @@ class _GoToWorkState extends State<GoToWork> {
       );
     }
 
-    // ✅ 이미 출근 기록이 존재하면 저장하지 않음
     final existing = cellData[userId]?[dayColumn];
     if (existing != null && existing.trim().isNotEmpty) {
       showFailedSnackbar(context, '이미 출근 기록이 있습니다.');
@@ -95,6 +100,43 @@ class _GoToWorkState extends State<GoToWork> {
     await prefs.setString(cellDataKey, encoded);
 
     showSuccessSnackbar(context, '출근 시간 기록 완료: $time');
+  }
+
+  /// ✅ 퇴근 시 GCS로 자동 업로드 (URL 노출 없음)
+  Future<void> _uploadAttendanceSilently(BuildContext context) async {
+    final userState = Provider.of<UserState>(context, listen: false);
+    final area = userState.area;
+    final name = userState.name;
+
+    if (area.isEmpty || name.isEmpty) return;
+
+    final now = DateTime.now();
+    final selectedYear = now.year;
+    final selectedMonth = now.month;
+
+    final prefs = await SharedPreferences.getInstance();
+    final key = 'user_list_$area';
+    final jsonStr = prefs.getString(key);
+    if (jsonStr == null) return;
+
+    final List<dynamic> jsonList = jsonDecode(jsonStr);
+    final users = jsonList
+        .where((map) => map['id'] != null)
+        .map((map) => UserModel.fromJson(Map<String, dynamic>.from(map)))
+        .toList();
+
+    final userIds = users.map((u) => u.id).toList();
+    final idToName = {for (var u in users) u.id: u.name};
+
+    final uploader = ExcelUploader();
+    await uploader.uploadAttendanceAndBreakExcel(
+      userIdsInOrder: userIds,
+      userIdToName: idToName,
+      year: selectedYear,
+      month: selectedMonth,
+      generatedByName: name,
+      generatedByArea: area,
+    );
   }
 
   Widget _buildWorkButton(UserState userState) {
@@ -128,10 +170,7 @@ class _GoToWorkState extends State<GoToWork> {
         ),
         child: Center(
           child: _isLoading
-              ? const CircularProgressIndicator(
-            color: Colors.white,
-            strokeWidth: 2,
-          )
+              ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
               : Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -221,13 +260,8 @@ class _GoToWorkState extends State<GoToWork> {
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         children: [
-          Text(
-            '$label: ',
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
-          Expanded(
-            child: Text(value, overflow: TextOverflow.ellipsis),
-          ),
+          Text('$label: ', style: const TextStyle(fontWeight: FontWeight.bold)),
+          Expanded(child: Text(value, overflow: TextOverflow.ellipsis)),
         ],
       ),
     );
