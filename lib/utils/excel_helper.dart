@@ -17,8 +17,8 @@ class ExcelUploader {
     required Map<String, String> userIdToName,
     required int year,
     required int month,
-    required String generatedByName,   // ✅ 이름
-    required String generatedByArea,   // ✅ 지역
+    required String generatedByName,
+    required String generatedByArea,
   }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -30,34 +30,46 @@ class ExcelUploader {
       final breakData = _parseCellData(breakRaw);
 
       final excel = Excel.createExcel();
+      excel.rename('Sheet1', '출석기록');
+
       final attendanceSheet = excel['출석기록'];
       final breakSheet = excel['휴게기록'];
 
-      // ✅ 공통 헤더
+      final centerStyle = CellStyle(
+        horizontalAlign: HorizontalAlign.Center,
+        verticalAlign: VerticalAlign.Center, // ✅ 추가
+      );
+
+      // 헤더 생성
       final header = <CellValue>[
         TextCellValue('이름'),
         TextCellValue('출근/퇴근'),
         ...List.generate(31, (i) => TextCellValue('${i + 1}일')),
         TextCellValue('사인란'),
       ];
-      attendanceSheet.appendRow(header);
-
-      // ✅ breakSheet 헤더는 라벨만 변경
       final breakHeader = <CellValue>[
         TextCellValue('이름'),
         TextCellValue('시작/종료'),
         ...List.generate(31, (i) => TextCellValue('${i + 1}일')),
         TextCellValue('사인란'),
       ];
-      breakSheet.appendRow(breakHeader);
+
+      // 헤더 작성
+      for (int col = 0; col < header.length; col++) {
+        final index = CellIndex.indexByColumnRow(columnIndex: col, rowIndex: 0);
+        attendanceSheet.updateCell(index, header[col], cellStyle: centerStyle);
+        breakSheet.updateCell(index, breakHeader[col], cellStyle: centerStyle);
+      }
+
+      int currentRow = 1;
 
       for (final userId in userIdsInOrder) {
         final name = userIdToName[userId] ?? '(이름 없음)';
         final attRowMap = attendanceData[userId] ?? {};
         final breakRowMap = breakData[userId] ?? {};
 
-        // 출석기록 - 출근 / 퇴근
-        final attStartRow = <CellValue>[
+        // 출석기록 - 출근/퇴근
+        final attStartRow = [
           TextCellValue(name),
           TextCellValue('출근'),
           ...List.generate(31, (i) {
@@ -66,7 +78,7 @@ class ExcelUploader {
           }),
           TextCellValue(''),
         ];
-        final attEndRow = <CellValue>[
+        final attEndRow = [
           TextCellValue(''),
           TextCellValue('퇴근'),
           ...List.generate(31, (i) {
@@ -76,8 +88,26 @@ class ExcelUploader {
           TextCellValue(''),
         ];
 
-        // ✅ 휴게기록 - 시작 / 종료
-        final breakStartRow = <CellValue>[
+        for (int col = 0; col < attStartRow.length; col++) {
+          attendanceSheet.updateCell(
+            CellIndex.indexByColumnRow(columnIndex: col, rowIndex: currentRow),
+            attStartRow[col],
+            cellStyle: centerStyle,
+          );
+          attendanceSheet.updateCell(
+            CellIndex.indexByColumnRow(columnIndex: col, rowIndex: currentRow + 1),
+            attEndRow[col],
+            cellStyle: centerStyle,
+          );
+        }
+
+        attendanceSheet.merge(
+          CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: currentRow),
+          CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: currentRow + 1),
+        );
+
+        // 휴게기록 - 시작/종료
+        final breakStartRow = [
           TextCellValue(name),
           TextCellValue('시작'),
           ...List.generate(31, (i) {
@@ -86,7 +116,7 @@ class ExcelUploader {
           }),
           TextCellValue(''),
         ];
-        final breakEndRow = <CellValue>[
+        final breakEndRow = [
           TextCellValue(''),
           TextCellValue('종료'),
           ...List.generate(31, (i) {
@@ -96,13 +126,27 @@ class ExcelUploader {
           TextCellValue(''),
         ];
 
-        attendanceSheet.appendRow(attStartRow);
-        attendanceSheet.appendRow(attEndRow);
-        breakSheet.appendRow(breakStartRow);
-        breakSheet.appendRow(breakEndRow);
+        for (int col = 0; col < breakStartRow.length; col++) {
+          breakSheet.updateCell(
+            CellIndex.indexByColumnRow(columnIndex: col, rowIndex: currentRow),
+            breakStartRow[col],
+            cellStyle: centerStyle,
+          );
+          breakSheet.updateCell(
+            CellIndex.indexByColumnRow(columnIndex: col, rowIndex: currentRow + 1),
+            breakEndRow[col],
+            cellStyle: centerStyle,
+          );
+        }
+
+        breakSheet.merge(
+          CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: currentRow),
+          CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: currentRow + 1),
+        );
+
+        currentRow += 2;
       }
 
-      // ✅ 파일 이름에 생성자 정보 포함
       final dir = await getTemporaryDirectory();
       final safeName = generatedByName.replaceAll(' ', '_');
       final safeArea = generatedByArea.replaceAll(' ', '_');
@@ -118,7 +162,6 @@ class ExcelUploader {
       return null;
     }
   }
-
 
   Map<String, Map<int, String>> _parseCellData(String? jsonStr) {
     if (jsonStr == null) return {};
