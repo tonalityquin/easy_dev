@@ -46,4 +46,4 @@ app.*.map.json
 
 # Google service key (Ignore all JSON keys in this folder)
 assets/keys/*.json
-functions/gcs_to_drive/*.json
+gcs_to_drive/gcs_to_drive/*.json
