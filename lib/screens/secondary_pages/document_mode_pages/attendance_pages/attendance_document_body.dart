@@ -134,7 +134,8 @@ class AttendanceDocumentBody extends StatelessWidget {
               final generatedByName = userState.user?.name ?? 'unknown';
               final generatedByArea = userState.user?.area ?? 'unknown';
 
-              final url = await uploader.uploadAttendanceAndBreakExcel(
+              // ✅ Map 반환됨
+              final urls = await uploader.uploadAttendanceAndBreakExcel(
                 userIdsInOrder: userIds,
                 userIdToName: idToName,
                 year: selectedYear,
@@ -143,8 +144,10 @@ class AttendanceDocumentBody extends StatelessWidget {
                 generatedByArea: generatedByArea,
               );
 
-              if (url != null) {
-                await Clipboard.setData(ClipboardData(text: url));
+              final attUrl = urls['출석기록']; // ✅ 출석기록 파일 URL만 추출
+
+              if (attUrl != null) {
+                await Clipboard.setData(ClipboardData(text: attUrl));
                 showSuccessSnackbar(context, '엑셀 다운로드 링크가 복사되었습니다!');
               } else {
                 showFailedSnackbar(context, '엑셀 생성 또는 업로드에 실패했습니다.');

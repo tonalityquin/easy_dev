@@ -134,7 +134,8 @@ class BreakDocumentBody extends StatelessWidget {
               final generatedByName = userState.user?.name ?? 'unknown';
               final generatedByArea = userState.user?.area ?? 'unknown';
 
-              final url = await uploader.uploadAttendanceAndBreakExcel(
+              // ✅ Map<String, String?> 형태로 반환됨
+              final urls = await uploader.uploadAttendanceAndBreakExcel(
                 userIdsInOrder: userIds,
                 userIdToName: idToName,
                 year: selectedYear,
@@ -143,8 +144,11 @@ class BreakDocumentBody extends StatelessWidget {
                 generatedByArea: generatedByArea,
               );
 
-              if (url != null) {
-                await Clipboard.setData(ClipboardData(text: url));
+              // ✅ 휴게기록 링크만 복사
+              final breakUrl = urls['휴게기록'];
+
+              if (breakUrl != null) {
+                await Clipboard.setData(ClipboardData(text: breakUrl));
                 showSuccessSnackbar(context, '엑셀 다운로드 링크가 복사되었습니다!');
               } else {
                 showFailedSnackbar(context, '엑셀 생성 또는 업로드에 실패했습니다.');

@@ -12,7 +12,7 @@ class ExcelUploader {
   final String projectId = 'easydev-97fb6';
   final String serviceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
 
-  Future<String?> uploadAttendanceAndBreakExcel({
+  Future<Map<String, String?>> uploadAttendanceAndBreakExcel({
     required List<String> userIdsInOrder,
     required Map<String, String> userIdToName,
     required int year,
@@ -22,31 +22,95 @@ class ExcelUploader {
   }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-
       final attendanceRaw = prefs.getString('attendance_cell_data_${year}_${month}');
       final breakRaw = prefs.getString('break_cell_data_${year}_${month}');
-
       final attendanceData = _parseCellData(attendanceRaw);
       final breakData = _parseCellData(breakRaw);
 
-      final excel = Excel.createExcel();
-      excel.rename('Sheet1', '출석기록');
-
-      final attendanceSheet = excel['출석기록'];
-      final breakSheet = excel['휴게기록'];
-
+      final urls = <String, String?>{};
       final centerStyle = CellStyle(
         horizontalAlign: HorizontalAlign.Center,
-        verticalAlign: VerticalAlign.Center, // ✅ 추가
+        verticalAlign: VerticalAlign.Center,
       );
 
-      // 헤더 생성
+      // ✅ 출근부 파일 생성
+      final attendanceExcel = Excel.createExcel();
+      attendanceExcel.rename('Sheet1', '출근부');
+      final attendanceSheet = attendanceExcel['출근부'];
+
       final header = <CellValue>[
         TextCellValue('이름'),
         TextCellValue('출근/퇴근'),
         ...List.generate(31, (i) => TextCellValue('${i + 1}일')),
         TextCellValue('사인란'),
       ];
+
+      for (int col = 0; col < header.length; col++) {
+        final idx = CellIndex.indexByColumnRow(columnIndex: col, rowIndex: 0);
+        attendanceSheet.updateCell(idx, header[col], cellStyle: centerStyle);
+      }
+
+      int row = 1;
+      for (final userId in userIdsInOrder) {
+        final name = userIdToName[userId] ?? '(이름 없음)';
+        final rowMap = attendanceData[userId] ?? {};
+
+        final startRow = [
+          TextCellValue(name),
+          TextCellValue('출근'),
+          ...List.generate(31, (i) {
+            final cell = rowMap[i + 1] ?? '';
+            return TextCellValue(cell.split('\n').firstOrNull ?? '');
+          }),
+          TextCellValue(''),
+        ];
+        final endRow = [
+          TextCellValue(''),
+          TextCellValue('퇴근'),
+          ...List.generate(31, (i) {
+            final cell = rowMap[i + 1] ?? '';
+            return TextCellValue(cell.split('\n').length > 1 ? cell.split('\n')[1] : '');
+          }),
+          TextCellValue(''),
+        ];
+
+        for (int col = 0; col < startRow.length; col++) {
+          attendanceSheet.updateCell(
+            CellIndex.indexByColumnRow(columnIndex: col, rowIndex: row),
+            startRow[col],
+            cellStyle: centerStyle,
+          );
+          attendanceSheet.updateCell(
+            CellIndex.indexByColumnRow(columnIndex: col, rowIndex: row + 1),
+            endRow[col],
+            cellStyle: centerStyle,
+          );
+        }
+
+        attendanceSheet.merge(
+          CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row),
+          CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row + 1),
+        );
+
+        row += 2;
+      }
+
+      final dir = await getTemporaryDirectory();
+      final safeName = generatedByName.replaceAll(' ', '_');
+      final safeArea = generatedByArea.replaceAll(' ', '_');
+
+      final attendanceFileName = '출근부_${safeName}_${safeArea}_${year}년_${month}월.xlsx';
+      final attendancePath = '${dir.path}/$attendanceFileName';
+      final attendanceFile = File(attendancePath)
+        ..createSync(recursive: true)
+        ..writeAsBytesSync(attendanceExcel.encode()!);
+      urls['출근부'] = await _uploadToGCS(attendanceFile, 'exports/$attendanceFileName');
+
+      // ✅ 휴게시간 파일 생성
+      final breakExcel = Excel.createExcel();
+      breakExcel.rename('Sheet1', '휴게시간');
+      final breakSheet = breakExcel['휴게시간'];
+
       final breakHeader = <CellValue>[
         TextCellValue('이름'),
         TextCellValue('시작/종료'),
@@ -54,112 +118,67 @@ class ExcelUploader {
         TextCellValue('사인란'),
       ];
 
-      // 헤더 작성
-      for (int col = 0; col < header.length; col++) {
-        final index = CellIndex.indexByColumnRow(columnIndex: col, rowIndex: 0);
-        attendanceSheet.updateCell(index, header[col], cellStyle: centerStyle);
-        breakSheet.updateCell(index, breakHeader[col], cellStyle: centerStyle);
+      for (int col = 0; col < breakHeader.length; col++) {
+        final idx = CellIndex.indexByColumnRow(columnIndex: col, rowIndex: 0);
+        breakSheet.updateCell(idx, breakHeader[col], cellStyle: centerStyle);
       }
 
-      int currentRow = 1;
-
+      row = 1;
       for (final userId in userIdsInOrder) {
         final name = userIdToName[userId] ?? '(이름 없음)';
-        final attRowMap = attendanceData[userId] ?? {};
-        final breakRowMap = breakData[userId] ?? {};
+        final rowMap = breakData[userId] ?? {};
 
-        // 출석기록 - 출근/퇴근
-        final attStartRow = [
-          TextCellValue(name),
-          TextCellValue('출근'),
-          ...List.generate(31, (i) {
-            final cell = attRowMap[i + 1] ?? '';
-            return TextCellValue(cell.split('\n').firstOrNull ?? '');
-          }),
-          TextCellValue(''),
-        ];
-        final attEndRow = [
-          TextCellValue(''),
-          TextCellValue('퇴근'),
-          ...List.generate(31, (i) {
-            final cell = attRowMap[i + 1] ?? '';
-            return TextCellValue(cell.split('\n').length > 1 ? cell.split('\n')[1] : '');
-          }),
-          TextCellValue(''),
-        ];
-
-        for (int col = 0; col < attStartRow.length; col++) {
-          attendanceSheet.updateCell(
-            CellIndex.indexByColumnRow(columnIndex: col, rowIndex: currentRow),
-            attStartRow[col],
-            cellStyle: centerStyle,
-          );
-          attendanceSheet.updateCell(
-            CellIndex.indexByColumnRow(columnIndex: col, rowIndex: currentRow + 1),
-            attEndRow[col],
-            cellStyle: centerStyle,
-          );
-        }
-
-        attendanceSheet.merge(
-          CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: currentRow),
-          CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: currentRow + 1),
-        );
-
-        // 휴게기록 - 시작/종료
-        final breakStartRow = [
+        final startRow = [
           TextCellValue(name),
           TextCellValue('시작'),
           ...List.generate(31, (i) {
-            final cell = breakRowMap[i + 1] ?? '';
+            final cell = rowMap[i + 1] ?? '';
             return TextCellValue(cell.split('\n').firstOrNull ?? '');
           }),
           TextCellValue(''),
         ];
-        final breakEndRow = [
+        final endRow = [
           TextCellValue(''),
           TextCellValue('종료'),
           ...List.generate(31, (i) {
-            final cell = breakRowMap[i + 1] ?? '';
+            final cell = rowMap[i + 1] ?? '';
             return TextCellValue(cell.split('\n').length > 1 ? cell.split('\n')[1] : '');
           }),
           TextCellValue(''),
         ];
 
-        for (int col = 0; col < breakStartRow.length; col++) {
+        for (int col = 0; col < startRow.length; col++) {
           breakSheet.updateCell(
-            CellIndex.indexByColumnRow(columnIndex: col, rowIndex: currentRow),
-            breakStartRow[col],
+            CellIndex.indexByColumnRow(columnIndex: col, rowIndex: row),
+            startRow[col],
             cellStyle: centerStyle,
           );
           breakSheet.updateCell(
-            CellIndex.indexByColumnRow(columnIndex: col, rowIndex: currentRow + 1),
-            breakEndRow[col],
+            CellIndex.indexByColumnRow(columnIndex: col, rowIndex: row + 1),
+            endRow[col],
             cellStyle: centerStyle,
           );
         }
 
         breakSheet.merge(
-          CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: currentRow),
-          CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: currentRow + 1),
+          CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row),
+          CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row + 1),
         );
 
-        currentRow += 2;
+        row += 2;
       }
 
-      final dir = await getTemporaryDirectory();
-      final safeName = generatedByName.replaceAll(' ', '_');
-      final safeArea = generatedByArea.replaceAll(' ', '_');
-      final fileName = '근태기록_${safeName}_${safeArea}_${year}년_${month}월.xlsx';
-      final filePath = '${dir.path}/$fileName';
-      final file = File(filePath)
+      final breakFileName = '휴게시간_${safeName}_${safeArea}_${year}년_${month}월.xlsx';
+      final breakPath = '${dir.path}/$breakFileName';
+      final breakFile = File(breakPath)
         ..createSync(recursive: true)
-        ..writeAsBytesSync(excel.encode()!);
+        ..writeAsBytesSync(breakExcel.encode()!);
+      urls['휴게시간'] = await _uploadToGCS(breakFile, 'exports/$breakFileName');
 
-      return await _uploadToGCS(file, 'exports/$fileName');
+      return urls;
     } catch (e) {
       print('❌ 엑셀 생성 또는 업로드 실패: $e');
-      return null;
+      return {};
     }
   }
 
