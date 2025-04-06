@@ -9,6 +9,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../models/user_model.dart';
 import '../../../../states/area/area_state.dart';
+import '../../../../states/user/user_state.dart';
+import '../../../../utils/excel_helper.dart';
 import '../../../../utils/snackbar_helper.dart';
 
 class AttendanceDocumentBody extends StatelessWidget {
@@ -147,10 +149,8 @@ class AttendanceDocumentBody extends StatelessWidget {
                   final sheet = workbook['출근부'];
 
                   for (int row = 1; row < sheet.maxRows; row += 2) {
-                    String? userId = sheet
-                        .cell(excel.CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: row))
-                        .value
-                        ?.toString();
+                    String? userId =
+                        sheet.cell(excel.CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: row)).value?.toString();
 
                     if (userId == null || userId.isEmpty || !users.any((u) => u.id == userId)) {
                       final nameFromCell = sheet
@@ -193,9 +193,9 @@ class AttendanceDocumentBody extends StatelessWidget {
                   final decoded = jsonDecode(existingJson);
                   mergedData = Map<String, Map<int, String>>.from(
                     decoded.map((key, val) => MapEntry(
-                      key,
-                      Map<int, String>.from((val as Map).map((k, v) => MapEntry(int.parse(k), v))),
-                    )),
+                          key,
+                          Map<int, String>.from((val as Map).map((k, v) => MapEntry(int.parse(k), v))),
+                        )),
                   );
                 }
 
@@ -211,8 +211,7 @@ class AttendanceDocumentBody extends StatelessWidget {
 
                 // ✅ SharedPreferences 저장
                 final encoded = jsonEncode(
-                  mergedData.map((key, map) =>
-                      MapEntry(key, map.map((day, val) => MapEntry(day.toString(), val)))),
+                  mergedData.map((key, map) => MapEntry(key, map.map((day, val) => MapEntry(day.toString(), val)))),
                 );
                 await prefs.setString('attendance_cell_data_${selectedYear}_${selectedMonth}', encoded);
                 debugPrint('✅ SharedPreferences 병합 저장 완료');
@@ -234,6 +233,49 @@ class AttendanceDocumentBody extends StatelessWidget {
               }
             },
           ),
+          IconButton(
+            icon: const Icon(Icons.download),
+            tooltip: '출근부 내려받기',
+            onPressed: () async {
+              if (selectedArea.isEmpty) {
+                showFailedSnackbar(context, '지역을 먼저 선택하세요');
+                return;
+              }
+
+              showSuccessSnackbar(context, '출근부 생성 중...');
+
+              try {
+                final prefs = await SharedPreferences.getInstance();
+                final raw = prefs.getString('attendance_cell_data_${selectedYear}_${selectedMonth}');
+                if (raw == null) {
+                  showFailedSnackbar(context, '출근부 데이터가 없습니다.');
+                  return;
+                }
+
+                final userIdToName = {for (var u in users) u.id: u.name};
+                final userIdsInOrder = users.map((u) => u.id).toList();
+
+                final uploader = ExcelUploader();
+                final urls = await uploader.uploadAttendanceAndBreakExcel(
+                  userIdsInOrder: userIdsInOrder,
+                  userIdToName: userIdToName,
+                  year: selectedYear,
+                  month: selectedMonth,
+                  generatedByName: context.read<UserState>().name,
+                  generatedByArea: selectedArea,
+                );
+
+                if (urls['출근부'] != null) {
+                  debugPrint('📁 생성 완료: ${urls['출근부']}');
+                  showSuccessSnackbar(context, '출근부 다운로드 링크가 생성되었습니다.');
+                } else {
+                  showFailedSnackbar(context, '출근부 생성 실패');
+                }
+              } catch (e) {
+                showFailedSnackbar(context, '다운로드 중 오류: $e');
+              }
+            },
+          ),
         ],
       ),
       body: Padding(
@@ -241,14 +283,6 @@ class AttendanceDocumentBody extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextField(
-              controller: controller,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: '추가할 문구 입력',
-              ),
-            ),
             const SizedBox(height: 24),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
