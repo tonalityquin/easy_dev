@@ -328,7 +328,8 @@ class BreakDocumentBody extends StatelessWidget {
             isSelected: isSel,
             onTap: offset == 0 // 시작 행만 탭 가능
                 ? () => onCellTapped(rowIndex, colIndex, rowKey)
-                : null,          );
+                : null,
+          );
         }),
       ),
     );

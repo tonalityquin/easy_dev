@@ -18,8 +18,7 @@ class DashBoard extends StatelessWidget {
       final prefs = await SharedPreferences.getInstance();
       final now = DateTime.now();
       final int dayColumn = now.day;
-      final String currentTime =
-          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+      final String currentTime = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
 
       final userState = Provider.of<UserState>(context, listen: false);
       final String userId = userState.user?.id ?? "unknown";
@@ -32,11 +31,11 @@ class DashBoard extends StatelessWidget {
         final decoded = jsonDecode(jsonStr);
         cellData = Map<String, Map<int, String>>.from(
           decoded.map((rowKey, colMap) => MapEntry(
-            rowKey,
-            Map<int, String>.from(
-              (colMap as Map).map((k, v) => MapEntry(int.parse(k), v)),
-            ),
-          )),
+                rowKey,
+                Map<int, String>.from(
+                  (colMap as Map).map((k, v) => MapEntry(int.parse(k), v)),
+                ),
+              )),
         );
       }
 
@@ -54,9 +53,9 @@ class DashBoard extends StatelessWidget {
 
       final encoded = jsonEncode(
         cellData.map((rowKey, colMap) => MapEntry(
-          rowKey,
-          colMap.map((col, v) => MapEntry(col.toString(), v)),
-        )),
+              rowKey,
+              colMap.map((col, v) => MapEntry(col.toString(), v)),
+            )),
       );
       await prefs.setString(cellDataKey, encoded);
 
@@ -118,8 +117,6 @@ class DashBoard extends StatelessWidget {
     }
   }
 
-
-
   /// 🔹 로그아웃 처리
   Future<void> _logout(BuildContext context) async {
     try {
@@ -166,8 +163,7 @@ class DashBoard extends StatelessWidget {
       final prefs = await SharedPreferences.getInstance();
       final now = DateTime.now();
       final dayColumn = now.day;
-      final currentTime =
-          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+      final currentTime = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
 
       final userState = Provider.of<UserState>(context, listen: false);
       final userId = userState.user?.id ?? "unknown";
@@ -181,11 +177,11 @@ class DashBoard extends StatelessWidget {
         final decoded = jsonDecode(jsonStr);
         cellData = Map<String, Map<int, String>>.from(
           decoded.map((rowKey, colMap) => MapEntry(
-            rowKey,
-            Map<int, String>.from(
-              (colMap as Map).map((k, v) => MapEntry(int.parse(k), v)),
-            ),
-          )),
+                rowKey,
+                Map<int, String>.from(
+                  (colMap as Map).map((k, v) => MapEntry(int.parse(k), v)),
+                ),
+              )),
         );
       }
 
@@ -202,9 +198,9 @@ class DashBoard extends StatelessWidget {
 
       final encoded = jsonEncode(
         cellData.map((rowKey, colMap) => MapEntry(
-          rowKey,
-          colMap.map((col, v) => MapEntry(col.toString(), v)),
-        )),
+              rowKey,
+              colMap.map((col, v) => MapEntry(col.toString(), v)),
+            )),
       );
       await prefs.setString(cellDataKey, encoded);
 

@@ -65,35 +65,33 @@ class AttendanceDocumentBody extends StatelessWidget {
           color: isHeader
               ? Colors.grey.shade200
               : isSelected
-              ? Colors.lightBlue.shade100
-              : Colors.white,
+                  ? Colors.lightBlue.shade100
+                  : Colors.white,
         ),
         child: text.contains('\n')
             ? Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: text.split('\n').map((line) {
-            return Text(
-              line,
-              style: TextStyle(
-                fontWeight:
-                isHeader ? FontWeight.bold : FontWeight.normal,
-                fontSize: 13,
-                height: 1.3,
-              ),
-              textAlign: TextAlign.center,
-            );
-          }).toList(),
-        )
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: text.split('\n').map((line) {
+                  return Text(
+                    line,
+                    style: TextStyle(
+                      fontWeight: isHeader ? FontWeight.bold : FontWeight.normal,
+                      fontSize: 13,
+                      height: 1.3,
+                    ),
+                    textAlign: TextAlign.center,
+                  );
+                }).toList(),
+              )
             : Text(
-          text,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontWeight:
-            isHeader ? FontWeight.bold : FontWeight.normal,
-            fontSize: 13,
-            height: 1.3,
-          ),
-        ),
+                text,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontWeight: isHeader ? FontWeight.bold : FontWeight.normal,
+                  fontSize: 13,
+                  height: 1.3,
+                ),
+              ),
       ),
     );
   }
@@ -110,48 +108,22 @@ class AttendanceDocumentBody extends StatelessWidget {
         backgroundColor: Colors.white,
         elevation: 0,
         foregroundColor: Colors.black87,
-        title: const Text('근무자 출퇴근 테이블',
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('근무자 출퇴근 테이블', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         automaticallyImplyLeading: false,
         actions: [
           IconButton(
-            icon: const Icon(Icons.download),
-            tooltip: '엑셀 다운로드',
+            icon: const Icon(Icons.cloud_download),
+            tooltip: '출근부 불러오기',
             onPressed: () async {
               if (selectedArea.isEmpty) {
                 showFailedSnackbar(context, '지역을 먼저 선택하세요');
                 return;
               }
 
-              showSuccessSnackbar(context, '엑셀 파일 생성 중...');
+              showSuccessSnackbar(context, '출근부 불러오는 중...');
 
-              final uploader = ExcelUploader();
-              final userIds = users.map((u) => u.id).toList();
-              final idToName = {for (var u in users) u.id: u.name};
-
-              final userState = context.read<UserState>();
-              final generatedByName = userState.user?.name ?? 'unknown';
-              final generatedByArea = userState.user?.area ?? 'unknown';
-
-              // ✅ Map 반환됨
-              final urls = await uploader.uploadAttendanceAndBreakExcel(
-                userIdsInOrder: userIds,
-                userIdToName: idToName,
-                year: selectedYear,
-                month: selectedMonth,
-                generatedByName: generatedByName,
-                generatedByArea: generatedByArea,
-              );
-
-              final attUrl = urls['출석기록']; // ✅ 출석기록 파일 URL만 추출
-
-              if (attUrl != null) {
-                await Clipboard.setData(ClipboardData(text: attUrl));
-                showSuccessSnackbar(context, '엑셀 다운로드 링크가 복사되었습니다!');
-              } else {
-                showFailedSnackbar(context, '엑셀 생성 또는 업로드에 실패했습니다.');
-              }
+              // ✅ TODO: GCS에서 엑셀 불러오기 및 테이블 갱신 로직 구현 예정
             },
           ),
           IconButton(
@@ -186,17 +158,13 @@ class AttendanceDocumentBody extends StatelessWidget {
               children: [
                 Text(
                   '직원 근무 테이블 (${selectedArea.isNotEmpty ? selectedArea : "지역 미선택"})',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 16),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
                 Row(
                   children: [
                     DropdownButton<int>(
                       value: selectedYear,
-                      items: yearList
-                          .map((y) =>
-                          DropdownMenuItem(value: y, child: Text('$y년')))
-                          .toList(),
+                      items: yearList.map((y) => DropdownMenuItem(value: y, child: Text('$y년'))).toList(),
                       onChanged: (value) {
                         if (value != null) onYearChanged(value);
                       },
@@ -204,10 +172,7 @@ class AttendanceDocumentBody extends StatelessWidget {
                     const SizedBox(width: 12),
                     DropdownButton<int>(
                       value: selectedMonth,
-                      items: monthList
-                          .map((m) =>
-                          DropdownMenuItem(value: m, child: Text('$m월')))
-                          .toList(),
+                      items: monthList.map((m) => DropdownMenuItem(value: m, child: Text('$m월'))).toList(),
                       onChanged: (value) {
                         if (value != null) onMonthChanged(value);
                       },
@@ -226,24 +191,13 @@ class AttendanceDocumentBody extends StatelessWidget {
                       Row(
                         children: List.generate(34, (index) {
                           if (index == 0) {
-                            return _buildCell(
-                                text: '', isHeader: true, isSelected: false);
+                            return _buildCell(text: '', isHeader: true, isSelected: false);
                           } else if (index == 1) {
-                            return _buildCell(
-                                text: '출근/퇴근',
-                                isHeader: true,
-                                isSelected: false);
+                            return _buildCell(text: '출근/퇴근', isHeader: true, isSelected: false);
                           } else if (index == 33) {
-                            return _buildCell(
-                                text: '사인란',
-                                isHeader: true,
-                                isSelected: false,
-                                width: 120);
+                            return _buildCell(text: '사인란', isHeader: true, isSelected: false, width: 120);
                           }
-                          return _buildCell(
-                              text: '${index - 1}',
-                              isHeader: true,
-                              isSelected: false);
+                          return _buildCell(text: '${index - 1}', isHeader: true, isSelected: false);
                         }),
                       ),
                       const SizedBox(height: 8),
@@ -262,37 +216,23 @@ class AttendanceDocumentBody extends StatelessWidget {
                             child: Row(
                               children: List.generate(34, (colIndex) {
                                 if (colIndex == 0) {
-                                  return _buildCell(
-                                      text: user.name,
-                                      isHeader: true,
-                                      isSelected: false);
+                                  return _buildCell(text: user.name, isHeader: true, isSelected: false);
                                 } else if (colIndex == 1) {
-                                  return _buildCell(
-                                      text: label,
-                                      isHeader: false,
-                                      isSelected: false);
+                                  return _buildCell(text: label, isHeader: false, isSelected: false);
                                 } else if (colIndex == 33) {
-                                  return _buildCell(
-                                      text: '',
-                                      isHeader: false,
-                                      isSelected: false,
-                                      width: 120);
+                                  return _buildCell(text: '', isHeader: false, isSelected: false, width: 120);
                                 }
 
                                 final dateCol = colIndex - 1;
-                                final fullKey =
-                                isCheckIn ? rowKey : '${rowKey}_out';
-                                final isSel = selectedRow == logicalRow &&
-                                    selectedCol == colIndex;
-                                final text =
-                                    cellData[fullKey]?[dateCol] ?? '';
+                                final fullKey = isCheckIn ? rowKey : '${rowKey}_out';
+                                final isSel = selectedRow == logicalRow && selectedCol == colIndex;
+                                final text = cellData[fullKey]?[dateCol] ?? '';
 
                                 return _buildCell(
                                   text: text,
                                   isHeader: false,
                                   isSelected: isSel,
-                                  onTap: () =>
-                                      onCellTapped(logicalRow, colIndex, fullKey),
+                                  onTap: () => onCellTapped(logicalRow, colIndex, fullKey),
                                 );
                               }),
                             ),
@@ -317,11 +257,9 @@ class AttendanceDocumentBody extends StatelessWidget {
                   heroTag: 'saveBtn',
                   mini: true,
                   onPressed: () {
-                    if (selectedRow != null &&
-                        (selectedRow! ~/ 2) < users.length) {
+                    if (selectedRow != null && (selectedRow! ~/ 2) < users.length) {
                       final userId = users[selectedRow! ~/ 2].id;
-                      final fullKey =
-                      selectedRow! % 2 == 0 ? userId : '${userId}_out';
+                      final fullKey = selectedRow! % 2 == 0 ? userId : '${userId}_out';
                       appendText(fullKey);
                     }
                   },
@@ -333,11 +271,9 @@ class AttendanceDocumentBody extends StatelessWidget {
                   heroTag: 'clearBtn',
                   mini: true,
                   onPressed: () {
-                    if (selectedRow != null &&
-                        (selectedRow! ~/ 2) < users.length) {
+                    if (selectedRow != null && (selectedRow! ~/ 2) < users.length) {
                       final userId = users[selectedRow! ~/ 2].id;
-                      final fullKey =
-                      selectedRow! % 2 == 0 ? userId : '${userId}_out';
+                      final fullKey = selectedRow! % 2 == 0 ? userId : '${userId}_out';
                       clearText(fullKey);
                     }
                   },

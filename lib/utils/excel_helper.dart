@@ -40,6 +40,7 @@ class ExcelUploader {
 
       final header = <CellValue>[
         TextCellValue('이름'),
+        TextCellValue('ID'), // ✅ ID 열 추가
         TextCellValue('출근/퇴근'),
         ...List.generate(31, (i) => TextCellValue('${i + 1}일')),
         TextCellValue('사인란'),
@@ -57,6 +58,7 @@ class ExcelUploader {
 
         final startRow = [
           TextCellValue(name),
+          TextCellValue(userId),
           TextCellValue('출근'),
           ...List.generate(31, (i) {
             final cell = rowMap[i + 1] ?? '';
@@ -65,6 +67,7 @@ class ExcelUploader {
           TextCellValue(''),
         ];
         final endRow = [
+          TextCellValue(''),
           TextCellValue(''),
           TextCellValue('퇴근'),
           ...List.generate(31, (i) {
@@ -87,6 +90,7 @@ class ExcelUploader {
           );
         }
 
+        // 이름 셀만 병합
         attendanceSheet.merge(
           CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row),
           CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row + 1),
@@ -113,6 +117,7 @@ class ExcelUploader {
 
       final breakHeader = <CellValue>[
         TextCellValue('이름'),
+        TextCellValue('ID'), // ✅ ID 열 추가
         TextCellValue('시작/종료'),
         ...List.generate(31, (i) => TextCellValue('${i + 1}일')),
         TextCellValue('사인란'),
@@ -130,6 +135,7 @@ class ExcelUploader {
 
         final startRow = [
           TextCellValue(name),
+          TextCellValue(userId),
           TextCellValue('시작'),
           ...List.generate(31, (i) {
             final cell = rowMap[i + 1] ?? '';
@@ -138,6 +144,7 @@ class ExcelUploader {
           TextCellValue(''),
         ];
         final endRow = [
+          TextCellValue(''),
           TextCellValue(''),
           TextCellValue('종료'),
           ...List.generate(31, (i) {
@@ -160,6 +167,7 @@ class ExcelUploader {
           );
         }
 
+        // 이름 셀만 병합
         breakSheet.merge(
           CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row),
           CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row + 1),
