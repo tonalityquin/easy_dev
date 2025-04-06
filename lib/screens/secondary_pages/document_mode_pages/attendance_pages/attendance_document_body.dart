@@ -1,5 +1,4 @@
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
@@ -118,6 +117,17 @@ class AttendanceDocumentBody extends StatelessWidget {
         automaticallyImplyLeading: false,
         actions: [
           IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: '사용자 목록 새로고침',
+            onPressed: () async {
+              if (selectedArea.isNotEmpty) {
+                await reloadUsers(selectedArea);
+              } else {
+                showFailedSnackbar(context, '지역을 먼저 선택하세요');
+              }
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.cloud_download),
             tooltip: '출근부 불러오기',
             onPressed: () async {
@@ -219,17 +229,6 @@ class AttendanceDocumentBody extends StatelessWidget {
                 showSuccessSnackbar(context, '출근부 불러오기 완료!');
               } catch (e) {
                 showFailedSnackbar(context, '불러오기 중 오류 발생: $e');
-              }
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: '사용자 목록 새로고침',
-            onPressed: () async {
-              if (selectedArea.isNotEmpty) {
-                await reloadUsers(selectedArea);
-              } else {
-                showFailedSnackbar(context, '지역을 먼저 선택하세요');
               }
             },
           ),

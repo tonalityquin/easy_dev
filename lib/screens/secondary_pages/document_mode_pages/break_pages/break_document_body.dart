@@ -1,6 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'package:excel/excel.dart' as excel;
+import 'package:collection/collection.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../models/user_model.dart';
 import '../../../../states/area/area_state.dart';
@@ -75,17 +79,15 @@ class BreakDocumentBody extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: text
                     .split('\n')
-                    .map(
-                      (line) => Text(
-                        line,
-                        style: TextStyle(
-                          fontWeight: isHeader ? FontWeight.bold : FontWeight.normal,
-                          fontSize: 13,
-                          height: 1.3,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    )
+                    .map((line) => Text(
+                          line,
+                          style: TextStyle(
+                            fontWeight: isHeader ? FontWeight.bold : FontWeight.normal,
+                            fontSize: 13,
+                            height: 1.3,
+                          ),
+                          textAlign: TextAlign.center,
+                        ))
                     .toList(),
               )
             : Text(
@@ -118,44 +120,6 @@ class BreakDocumentBody extends StatelessWidget {
         automaticallyImplyLeading: false,
         actions: [
           IconButton(
-            icon: const Icon(Icons.download),
-            tooltip: '엑셀 다운로드',
-            onPressed: () async {
-              if (selectedArea.isEmpty) {
-                showFailedSnackbar(context, '지역을 먼저 선택하세요');
-                return;
-              }
-
-              showSuccessSnackbar(context, '엑셀 파일 생성 중...');
-              final uploader = ExcelUploader();
-              final userIds = users.map((u) => u.id).toList();
-              final idToName = {for (var u in users) u.id: u.name};
-              final userState = context.read<UserState>();
-              final generatedByName = userState.user?.name ?? 'unknown';
-              final generatedByArea = userState.user?.area ?? 'unknown';
-
-              // ✅ Map<String, String?> 형태로 반환됨
-              final urls = await uploader.uploadAttendanceAndBreakExcel(
-                userIdsInOrder: userIds,
-                userIdToName: idToName,
-                year: selectedYear,
-                month: selectedMonth,
-                generatedByName: generatedByName,
-                generatedByArea: generatedByArea,
-              );
-
-              // ✅ 휴게기록 링크만 복사
-              final breakUrl = urls['휴게기록'];
-
-              if (breakUrl != null) {
-                await Clipboard.setData(ClipboardData(text: breakUrl));
-                showSuccessSnackbar(context, '엑셀 다운로드 링크가 복사되었습니다!');
-              } else {
-                showFailedSnackbar(context, '엑셀 생성 또는 업로드에 실패했습니다.');
-              }
-            },
-          ),
-          IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: '사용자 목록 새로고침',
             onPressed: () async {
@@ -166,20 +130,135 @@ class BreakDocumentBody extends StatelessWidget {
               }
             },
           ),
+          IconButton(
+            icon: const Icon(Icons.cloud_download),
+            tooltip: '휴게시간 불러오기',
+            onPressed: () async {
+              if (selectedArea.isEmpty) {
+                showFailedSnackbar(context, '지역을 먼저 선택하세요');
+                return;
+              }
+
+              showSuccessSnackbar(context, '휴게시간 불러오는 중...');
+              try {
+                final safeArea = selectedArea.replaceAll(' ', '_');
+                final Map<String, Map<int, String>> newData = {};
+
+                for (final user in users) {
+                  final safeName = user.name.replaceAll(' ', '_');
+                  final fileName = '휴게시간_${safeName}_${safeArea}_${selectedYear}년_${selectedMonth}월.xlsx';
+                  final fileUrl = 'https://storage.googleapis.com/easydev-image/exports/$fileName';
+
+                  final response = await http.get(Uri.parse(fileUrl));
+                  if (response.statusCode != 200) continue;
+
+                  final workbook = excel.Excel.decodeBytes(response.bodyBytes);
+                  final sheet = workbook['휴게시간'];
+
+                  for (int row = 1; row < sheet.maxRows; row += 2) {
+                    String? userId =
+                        sheet.cell(excel.CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: row)).value?.toString();
+
+                    if (userId == null || userId.isEmpty || !users.any((u) => u.id == userId)) {
+                      final nameFromCell = sheet
+                          .cell(excel.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row))
+                          .value
+                          ?.toString()
+                          .trim();
+                      final matchedUser = users.firstWhereOrNull((u) => u.name.trim() == nameFromCell);
+                      if (matchedUser == null) continue;
+                      userId = matchedUser.id;
+                    }
+
+                    final startRow = sheet.row(row);
+                    final endRow = sheet.row(row + 1);
+                    final startMap = <int, String>{};
+                    final endMap = <int, String>{};
+
+                    for (int day = 0; day < 31; day++) {
+                      final col = day + 3;
+                      final start = startRow[col]?.value?.toString() ?? '';
+                      final end = endRow[col]?.value?.toString() ?? '';
+                      if (start.isNotEmpty) startMap[day + 1] = start;
+                      if (end.isNotEmpty) endMap[day + 1] = end;
+                    }
+
+                    newData[userId] = startMap;
+                    newData['${userId}_out'] = endMap;
+                  }
+                }
+
+                final prefs = await SharedPreferences.getInstance();
+                final existingJson = prefs.getString('break_cell_data_${selectedYear}_${selectedMonth}');
+                Map<String, Map<int, String>> mergedData = {};
+
+                if (existingJson != null) {
+                  final decoded = jsonDecode(existingJson);
+                  mergedData = Map<String, Map<int, String>>.from(
+                    decoded.map((key, val) => MapEntry(
+                          key,
+                          Map<int, String>.from((val as Map).map((k, v) => MapEntry(int.parse(k), v))),
+                        )),
+                  );
+                }
+
+                for (final entry in newData.entries) {
+                  mergedData[entry.key] ??= {};
+                  mergedData[entry.key]!.addAll(entry.value);
+                }
+
+                cellData.clear();
+                cellData.addAll(mergedData);
+
+                final encoded = jsonEncode(
+                  mergedData.map((key, map) => MapEntry(key, map.map((k, v) => MapEntry(k.toString(), v)))),
+                );
+                await prefs.setString('break_cell_data_${selectedYear}_${selectedMonth}', encoded);
+
+                showSuccessSnackbar(context, '휴게시간 불러오기 완료!');
+              } catch (e) {
+                showFailedSnackbar(context, '불러오기 오류: $e');
+              }
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.download),
+            tooltip: '휴게시간 내려받기',
+            onPressed: () async {
+              if (selectedArea.isEmpty) {
+                showFailedSnackbar(context, '지역을 먼저 선택하세요');
+                return;
+              }
+
+              showSuccessSnackbar(context, '엑셀 파일 생성 중...');
+              final uploader = ExcelUploader();
+              final userIds = users.map((u) => u.id).toList();
+              final idToName = {for (var u in users) u.id: u.name};
+              final userName = context.read<UserState>().name;
+
+              final urls = await uploader.uploadAttendanceAndBreakExcel(
+                userIdsInOrder: userIds,
+                userIdToName: idToName,
+                year: selectedYear,
+                month: selectedMonth,
+                generatedByName: userName,
+                generatedByArea: selectedArea,
+              );
+
+              final breakUrl = urls['휴게시간'];
+              if (breakUrl != null) {
+                showSuccessSnackbar(context, '엑셀 다운로드 링크가 생성되었습니다.');
+              } else {
+                showFailedSnackbar(context, '엑셀 생성 실패');
+              }
+            },
+          ),
         ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            TextField(
-              controller: controller,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: '추가할 문구 입력',
-              ),
-            ),
             const SizedBox(height: 24),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -326,9 +405,7 @@ class BreakDocumentBody extends StatelessWidget {
             text: text,
             isHeader: false,
             isSelected: isSel,
-            onTap: offset == 0 // 시작 행만 탭 가능
-                ? () => onCellTapped(rowIndex, colIndex, rowKey)
-                : null,
+            onTap: offset == 0 ? () => onCellTapped(rowIndex, colIndex, rowKey) : null,
           );
         }),
       ),
