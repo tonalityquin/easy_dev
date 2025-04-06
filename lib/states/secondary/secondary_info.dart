@@ -16,7 +16,7 @@ import '../../screens/secondary_pages/office_mode_pages/user_management.dart';
 // Document Mode Pages
 import '../../screens/secondary_pages/document_mode_pages/statistics_pages/statistics_document.dart';
 import '../../screens/secondary_pages/document_mode_pages/attendance_pages/worker_attendance_document.dart';
-import '../../screens/secondary_pages/document_mode_pages/break_pages/worker_break_management.dart';
+import '../../screens/secondary_pages/document_mode_pages/break_pages/worker_break_document.dart';
 
 class SecondaryInfo {
   final String title;
@@ -46,6 +46,6 @@ final List<SecondaryInfo> officeModePages = [
 /// 🔹 Document Mode Pages
 final List<SecondaryInfo> documentPages = [
   SecondaryInfo('출퇴근 문서', WorkerAttendanceDocument(), Icon(Icons.badge)),
-  SecondaryInfo('휴게시간 문서', WorkerBreakManagement(), Icon(Icons.free_breakfast )),
+  SecondaryInfo('휴게시간 문서', WorkerBreakDocument(), Icon(Icons.free_breakfast )),
   SecondaryInfo('통계 문서', StatisticsDocument(), Icon(Icons.analytics)),
 ];

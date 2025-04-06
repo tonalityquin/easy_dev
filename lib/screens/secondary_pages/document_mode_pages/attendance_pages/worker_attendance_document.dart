@@ -13,10 +13,10 @@ class WorkerAttendanceDocument extends StatefulWidget {
   const WorkerAttendanceDocument({super.key});
 
   @override
-  State<WorkerAttendanceDocument> createState() => _WorkerDocumentState();
+  State<WorkerAttendanceDocument> createState() => _WorkerAttendanceDocumentState();
 }
 
-class _WorkerDocumentState extends State<WorkerAttendanceDocument> {
+class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
   final TextEditingController _controller = TextEditingController();
   bool _menuOpen = false;
 
