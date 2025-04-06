@@ -1,12 +1,15 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'package:excel/excel.dart' as excel;
+import 'package:collection/collection.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../models/user_model.dart';
 import '../../../../states/area/area_state.dart';
-import '../../../../states/user/user_state.dart';
 import '../../../../utils/snackbar_helper.dart';
-import '../../../../utils/excel_helper.dart';
 
 class AttendanceDocumentBody extends StatelessWidget {
   final TextEditingController controller;
@@ -123,7 +126,101 @@ class AttendanceDocumentBody extends StatelessWidget {
 
               showSuccessSnackbar(context, '출근부 불러오는 중...');
 
-              // ✅ TODO: GCS에서 엑셀 불러오기 및 테이블 갱신 로직 구현 예정
+              try {
+                final safeArea = selectedArea.replaceAll(' ', '_');
+                final Map<String, Map<int, String>> newData = {};
+
+                for (final user in users) {
+                  final safeName = user.name.replaceAll(' ', '_');
+                  final fileName = '출근부_${safeName}_${safeArea}_${selectedYear}년_${selectedMonth}월.xlsx';
+                  final fileUrl = 'https://storage.googleapis.com/easydev-image/exports/$fileName';
+
+                  debugPrint('🧾 파일 요청: $fileUrl');
+
+                  final response = await http.get(Uri.parse(fileUrl));
+                  if (response.statusCode != 200) {
+                    debugPrint('❌ 파일 없음: $fileName');
+                    continue;
+                  }
+
+                  final workbook = excel.Excel.decodeBytes(response.bodyBytes);
+                  final sheet = workbook['출근부'];
+
+                  for (int row = 1; row < sheet.maxRows; row += 2) {
+                    String? userId = sheet
+                        .cell(excel.CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: row))
+                        .value
+                        ?.toString();
+
+                    if (userId == null || userId.isEmpty || !users.any((u) => u.id == userId)) {
+                      final nameFromCell = sheet
+                          .cell(excel.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row))
+                          .value
+                          ?.toString()
+                          .trim();
+                      final matchedUser = users.firstWhereOrNull((u) => u.name.trim() == nameFromCell);
+                      if (matchedUser == null) {
+                        debugPrint('⚠️ 이름으로도 매칭 실패: $nameFromCell');
+                        continue;
+                      }
+                      userId = matchedUser.id;
+                    }
+
+                    final startRow = sheet.row(row);
+                    final endRow = sheet.row(row + 1);
+                    final startMap = <int, String>{};
+                    final endMap = <int, String>{};
+
+                    for (int day = 0; day < 31; day++) {
+                      final col = day + 3;
+                      final start = startRow[col]?.value?.toString() ?? '';
+                      final end = endRow[col]?.value?.toString() ?? '';
+                      if (start.isNotEmpty) startMap[day + 1] = start;
+                      if (end.isNotEmpty) endMap[day + 1] = end;
+                    }
+
+                    newData[userId] = startMap;
+                    newData['${userId}_out'] = endMap;
+                  }
+                }
+
+                // ✅ 기존 데이터와 병합
+                final prefs = await SharedPreferences.getInstance();
+                final existingJson = prefs.getString('attendance_cell_data_${selectedYear}_${selectedMonth}');
+                Map<String, Map<int, String>> mergedData = {};
+
+                if (existingJson != null) {
+                  final decoded = jsonDecode(existingJson);
+                  mergedData = Map<String, Map<int, String>>.from(
+                    decoded.map((key, val) => MapEntry(
+                      key,
+                      Map<int, String>.from((val as Map).map((k, v) => MapEntry(int.parse(k), v))),
+                    )),
+                  );
+                }
+
+                // ✅ newData를 기존 데이터에 덮어쓰기 방식으로 병합
+                for (final entry in newData.entries) {
+                  mergedData[entry.key] ??= {};
+                  mergedData[entry.key]!.addAll(entry.value);
+                }
+
+                // ✅ 메모리 반영
+                cellData.clear();
+                cellData.addAll(mergedData);
+
+                // ✅ SharedPreferences 저장
+                final encoded = jsonEncode(
+                  mergedData.map((key, map) =>
+                      MapEntry(key, map.map((day, val) => MapEntry(day.toString(), val)))),
+                );
+                await prefs.setString('attendance_cell_data_${selectedYear}_${selectedMonth}', encoded);
+                debugPrint('✅ SharedPreferences 병합 저장 완료');
+
+                showSuccessSnackbar(context, '출근부 불러오기 완료!');
+              } catch (e) {
+                showFailedSnackbar(context, '불러오기 중 오류 발생: $e');
+              }
             },
           ),
           IconButton(

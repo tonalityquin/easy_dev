@@ -42,6 +42,7 @@ dependencies:
   # Excel&GCS
   path_provider: ^2.1.5
   permission_handler: ^11.4.0
+  collection: ^1.19.1
 
 
 dev_dependencies:
