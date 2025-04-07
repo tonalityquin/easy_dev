@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../../states/calendar/statistics_calendar_state.dart';
 import '../../../../utils/snackbar_helper.dart';
-import '../../../../widgets/dialog/calendar/statistics_view_dialog.dart';
+import '../../../../widgets/dialog/calendar/statistics_sum_dialog.dart';
+import '../../../../widgets/dialog/calendar/statistics_average_dialog.dart';
 
 class StatisticsDocumentBody extends StatelessWidget {
   final StatisticsCalendarState calendar;
@@ -35,7 +36,7 @@ class StatisticsDocumentBody extends StatelessWidget {
             _buildDayHeaders(),
             _buildDateGrid(context),
             const SizedBox(height: 16),
-            _buildOpenButton(context),
+            _buildOpenButtons(context), // ✅ 열람 버튼 2개로 분리
           ],
         ),
       ),
@@ -140,22 +141,47 @@ class StatisticsDocumentBody extends StatelessWidget {
     );
   }
 
-  Widget _buildOpenButton(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: () {
-          showDialog(
-            context: context,
-            builder: (_) => const StatisticsViewDialog(),
-          );
-        },
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.indigo,
-          foregroundColor: Colors.white,
+  Widget _buildOpenButtons(BuildContext context) {
+    final selectedCount = calendar.selectedDates.length;
+
+    return Row(
+      children: [
+        Expanded(
+          child: ElevatedButton(
+            onPressed: selectedCount >= 1
+                ? () {
+              showDialog(
+                context: context,
+                builder: (_) => const StatisticsSumDialog(),
+              );
+            }
+                : null, // ⛔ 0개 선택 시 비활성화
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.indigo,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('합산'),
+          ),
         ),
-        child: const Text('열람'),
-      ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: ElevatedButton(
+            onPressed: selectedCount >= 2
+                ? () {
+              showDialog(
+                context: context,
+                builder: (_) => const StatisticsAverageDialog(),
+              );
+            }
+                : null, // ⛔ 1개 이하 선택 시 비활성화
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.indigo,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('평균'),
+          ),
+        ),
+      ],
     );
   }
 }

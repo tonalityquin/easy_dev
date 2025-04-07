@@ -12,7 +12,7 @@ import '../repositories/log/firestore_plate_log_repository.dart'; // ✅ 로그�
 
 // 📦 States
 import '../states/area/area_state.dart';
-import '../states/calendar/statistics_selected_date_state.dart';
+import '../states/calendar/selected_date_store.dart';
 import '../states/page/page_info.dart';
 import '../states/page/page_state.dart';
 import '../states/plate/modify_plate.dart';
@@ -131,6 +131,6 @@ final List<SingleChildWidget> stateProviders = [
   ),
   // 📊 통계 달력에서 사용하는 선택된 날짜 상태
   ChangeNotifierProvider(
-    create: (_) => StatisticsSelectedDateState(),
+    create: (_) => SelectedDateStore(),
   ),
 ];

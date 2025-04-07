@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-class StatisticsSelectedDateState extends ChangeNotifier {
+class SelectedDateStore extends ChangeNotifier {
   List<DateTime> _selectedDates = [];
 
   List<DateTime> get selectedDates => _selectedDates;

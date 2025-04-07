@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../states/calendar/statistics_calendar_state.dart';
-import '../../../../states/calendar/statistics_selected_date_state.dart';
+import '../../../../states/calendar/selected_date_store.dart';
 import 'statistics_document_body.dart';
 import 'package:provider/provider.dart';
 
@@ -27,7 +27,7 @@ class _StatisticsDocumentState extends State<StatisticsDocument> {
       calendar: calendar,
       onDateSelected: () {
         // 날짜 선택 상태를 글로벌 상태에 반영
-        context.read<StatisticsSelectedDateState>().setSelectedDates(calendar.selectedDates);
+        context.read<SelectedDateStore>().setSelectedDates(calendar.selectedDates);
       },
       refresh: () => setState(() {}),
     );

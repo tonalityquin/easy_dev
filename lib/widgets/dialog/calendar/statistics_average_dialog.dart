@@ -1,14 +1,13 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../states/calendar/statistics_selected_date_state.dart';
+import '../../../states/calendar/selected_date_store.dart';
 
-class StatisticsViewDialog extends StatelessWidget {
-  const StatisticsViewDialog({super.key});
+class StatisticsAverageDialog extends StatelessWidget {
+  const StatisticsAverageDialog({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final selectedDates = context.watch<StatisticsSelectedDateState>().selectedDates;
+    final selectedDates = context.watch<SelectedDateStore>().selectedDates;
 
     String formattedDates = selectedDates.isNotEmpty
         ? selectedDates
@@ -17,18 +16,18 @@ class StatisticsViewDialog extends StatelessWidget {
         : '선택된 날짜 없음';
 
     return CupertinoAlertDialog(
-      title: const Text('열람 정보', style: TextStyle(fontWeight: FontWeight.bold)),
+      title: const Text('평균 정보', style: TextStyle(fontWeight: FontWeight.bold)),
       content: Padding(
         padding: const EdgeInsets.only(top: 12),
         child: Column(
           children: [
             _buildRow('선택 날짜', formattedDates, isDimmed: selectedDates.isEmpty),
             const SizedBox(height: 8),
-            _buildRow('입차 합계', ''),
+            _buildRow('입차 평균', ''),
             const SizedBox(height: 8),
-            _buildRow('출차 합계', ''),
+            _buildRow('출차 평균', ''),
             const SizedBox(height: 8),
-            _buildRow('정산 합계', ''),
+            _buildRow('정산 평균', ''),
           ],
         ),
       ),
@@ -43,13 +42,9 @@ class StatisticsViewDialog extends StatelessWidget {
 
   Widget _buildRow(String label, String value, {bool isDimmed = false}) {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: const TextStyle(fontWeight: FontWeight.w500),
-        ),
+        Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
         Expanded(
           child: Text(
             value,
