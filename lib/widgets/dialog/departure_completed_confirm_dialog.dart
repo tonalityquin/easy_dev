@@ -31,7 +31,9 @@ class DepartureCompletedConfirmDialog extends StatelessWidget {
             FilledButton(
               onPressed: () {
                 Navigator.pop(context);
-                onConfirm();
+                Future.microtask(() {
+                  onConfirm();
+                });
               },
               style: FilledButton.styleFrom(
                 backgroundColor: Colors.redAccent,

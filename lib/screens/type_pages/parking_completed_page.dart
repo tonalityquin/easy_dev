@@ -338,19 +338,15 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                             onRequestEntry: () {
                               handleEntryParkingRequest(context, selectedPlate.plateNumber, selectedPlate.area);
                             },
-                            onCompleteDeparture: () {
-                              handleEntryDepartureCompleted(
-                                  context, selectedPlate.plateNumber, selectedPlate.area, selectedPlate.location);
-                            },
                             onDelete: () {
                               showDialog(
                                 context: context,
                                 builder: (context) => ParkingRequestDeleteDialog(
                                   onConfirm: () {
                                     context.read<DeletePlate>().deletePlateFromParkingCompleted(
-                                          selectedPlate.plateNumber,
-                                          selectedPlate.area,
-                                        );
+                                      selectedPlate.plateNumber,
+                                      selectedPlate.area,
+                                    );
                                     showSuccessSnackbar(context, "삭제 완료: ${selectedPlate.plateNumber}");
                                   },
                                 ),
@@ -362,6 +358,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                         _toggleSortIcon();
                       }
                     }
+
                   });
             },
           ),

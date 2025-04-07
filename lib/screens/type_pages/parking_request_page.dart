@@ -311,20 +311,12 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                                 area: selectedPlate.area,
                                 onCancelEntryRequest: () {
                                   context.read<DeletePlate>().deletePlateFromParkingRequest(
-                                        selectedPlate.plateNumber,
-                                        selectedPlate.area,
-                                      );
-                                  showSuccessSnackbar(context, "입차 요청이 취소되었습니다: ${selectedPlate.plateNumber}");
-                                },
-                                onPrePayment: () {
-                                  handleEntryDepartureCompleted(
-                                    context,
                                     selectedPlate.plateNumber,
                                     selectedPlate.area,
-                                    selectedPlate.location,
                                   );
+                                  showSuccessSnackbar(context, "입차 요청이 취소되었습니다: ${selectedPlate.plateNumber}");
                                 },
-                                onDelete: () {}, // ❗삭제는 현재는 사용되지 않지만 인터페이스 유지
+                                onDelete: () {}, // 삭제는 현재 사용되지 않지만 인터페이스 유지
                               );
                             },
                           );

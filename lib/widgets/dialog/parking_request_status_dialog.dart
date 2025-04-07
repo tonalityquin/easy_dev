@@ -5,11 +5,9 @@ import '../../screens/modify_pages/modify_3_digit.dart'; // ✅ 정보 수정 �
 import '../../screens/logs/plate_log_viewer_page.dart';
 import '../../states/plate/movement_plate.dart';
 import '../../states/plate/plate_state.dart';
-import '../../utils/snackbar_helper.dart';
 
 class ParkingRequestStatusDialog extends StatelessWidget {
   final VoidCallback onCancelEntryRequest;
-  final VoidCallback onPrePayment;
   final VoidCallback onDelete;
   final String plateNumber;
   final String area;
@@ -19,7 +17,6 @@ class ParkingRequestStatusDialog extends StatelessWidget {
     super.key,
     required this.plate,
     required this.onCancelEntryRequest,
-    required this.onPrePayment,
     required this.onDelete,
     required this.plateNumber,
     required this.area,
@@ -79,17 +76,7 @@ class ParkingRequestStatusDialog extends StatelessWidget {
                 label: const Text("입차 요청 취소"),
                 onPressed: () {
                   Navigator.pop(context);
-                  onCancelEntryRequest();
-                },
-                style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
-              ),
-              const SizedBox(height: 8),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.payments),
-                label: const Text("사전 정산"),
-                onPressed: () {
-                  Navigator.pop(context);
-                  onPrePayment();
+                  onCancelEntryRequest(); // 입차 요청 취소
                 },
                 style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
               ),
@@ -145,7 +132,11 @@ class _ScaleTransitionDialogState extends State<ScaleTransitionDialog>
   }
 }
 
-/// 입차 완료 → 입차 요청 (되돌리기)
+/// 입차 완료 → 입차 요청 (되돌리기) - 더 이상 사용하지 않음, 코드 삭제됨
+
+/// 출차 시 정산 여부 확인 다이얼로그 - 더 이상 사용하지 않음, 코드 삭제됨
+
+/// 입차 요청 취소
 void handleEntryParkingRequest(BuildContext context, String plateNumber, String area) {
   final movementPlate = context.read<MovementPlate>();
   final plateState = context.read<PlateState>();
@@ -157,35 +148,5 @@ void handleEntryParkingRequest(BuildContext context, String plateNumber, String 
     plateState: plateState,
     newLocation: "미지정",
   );
-
-  showSuccessSnackbar(context, "입차 요청이 처리되었습니다.");
 }
 
-/// 입차 완료 → 출차 완료 (사전 정산)
-void handleEntryDepartureCompleted(BuildContext context, String plateNumber, String area, String location) {
-  final movementPlate = context.read<MovementPlate>();
-  final plateState = context.read<PlateState>();
-
-  movementPlate.setDepartureCompleted(
-    plateNumber,
-    area,
-    plateState,
-    location,
-  );
-
-  showSuccessSnackbar(context, "출차 완료가 처리되었습니다.");
-}
-
-void handlePrePayment(BuildContext context, String plateNumber, String area, String location) {
-  final movementPlate = context.read<MovementPlate>();
-  final plateState = context.read<PlateState>();
-
-  movementPlate.setDepartureRequested(
-    plateNumber,
-    area,
-    plateState,
-    location,
-  );
-
-  showSuccessSnackbar(context, "사전 정산이 처리되었습니다.");
-}

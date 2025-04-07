@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import '../../models/plate_model.dart';
 import '../../repositories/plate/plate_repository.dart';
 import 'plate_state.dart';
 import '../../models/plate_log_model.dart';
 import 'log_plate.dart';
+
 class MovementPlate {
   final PlateRepository _repository;
   final LogPlateState _logState;
@@ -130,13 +132,51 @@ class MovementPlate {
     if (success) await plateState.fetchPlateData();
   }
 
+  Future<void> setDepartureCompletedWithPlate(
+    PlateModel plate,
+    PlateState plateState,
+  ) async {
+    final documentId = '${plate.plateNumber}_${plate.area}';
+
+    try {
+      await _repository.deleteDocument('departure_requests', documentId);
+
+      await _repository.addOrUpdateDocument('departure_completed', documentId, {
+        ...plate.toMap(),
+        'type': '출차 완료',
+        'location': plate.location,
+        'userName': plate.userName,
+        'isSelected': false,
+        'selectedBy': null,
+        'end_time': DateTime.now(),
+      });
+
+      await _logState.saveLog(
+        PlateLogModel(
+          plateNumber: plate.plateNumber,
+          area: plate.area,
+          from: 'departure_requests',
+          to: 'departure_completed',
+          action: '출차 완료',
+          performedBy: plate.userName,
+          timestamp: DateTime.now(),
+        ),
+      );
+
+      await plateState.fetchPlateData();
+    } catch (e) {
+      debugPrint('🚨 출차 완료 이동 실패: $e');
+      rethrow;
+    }
+  }
+
   Future<void> doubleParkingCompletedToDepartureCompleted(
-      String plateNumber,
-      String area,
-      PlateState plateState,
-      String location, {
-        String performedBy = '시스템',
-      }) async {
+    String plateNumber,
+    String area,
+    PlateState plateState,
+    String location, {
+    String performedBy = '시스템',
+  }) async {
     final success = await _transferData(
       fromCollection: 'parking_completed',
       toCollection: 'departure_completed',
@@ -148,6 +188,44 @@ class MovementPlate {
     );
 
     if (success) await plateState.fetchPlateData();
+  }
+
+  Future<void> doubleParkingCompletedToDepartureCompletedWithPlate(
+    PlateModel plate,
+    PlateState plateState,
+  ) async {
+    final documentId = '${plate.plateNumber}_${plate.area}';
+
+    try {
+      await _repository.deleteDocument('parking_completed', documentId);
+
+      await _repository.addOrUpdateDocument('departure_completed', documentId, {
+        ...plate.toMap(),
+        'type': '출차 완료',
+        'location': plate.location,
+        'userName': plate.userName,
+        'isSelected': false,
+        'selectedBy': null,
+        'end_time': DateTime.now(),
+      });
+
+      await _logState.saveLog(
+        PlateLogModel(
+          plateNumber: plate.plateNumber,
+          area: plate.area,
+          from: 'parking_completed',
+          to: 'departure_completed',
+          action: '출차 완료',
+          performedBy: plate.userName,
+          timestamp: DateTime.now(),
+        ),
+      );
+
+      await plateState.fetchPlateData();
+    } catch (e) {
+      debugPrint('🚨 출차 완료 이동 실패: $e');
+      rethrow;
+    }
   }
 
   Future<void> goBackToParkingRequest({

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../models/plate_model.dart';
 import '../../repositories/plate/plate_repository.dart';
 import '../../states/plate/filter_plate.dart';
 import '../../states/plate/movement_plate.dart';
@@ -11,6 +12,7 @@ import '../../utils/fee_calculator.dart';
 import '../../widgets/container/plate_container.dart'; // 번호판 컨테이너 위젯
 import '../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 import '../../widgets/dialog/departure_completed_confirm_dialog.dart';
+import '../../widgets/dialog/departure_settlement_confirm_dialog.dart';
 import '../../widgets/dialog/parking_location_dialog.dart';
 import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바
 import '../../widgets/dialog/plate_search_dialog.dart'; // ✅ PlateSearchDialog 추가
@@ -96,29 +98,74 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
     });
   }
 
-  void _handleDepartureCompleted(BuildContext context) {
-    final movementPlate = context.read<MovementPlate>(); // ✅ MovementPlate 사용
+  void _handleDepartureCompleted(BuildContext context) async {
+    final movementPlate = context.read<MovementPlate>();
     final plateState = context.read<PlateState>();
     final userName = context.read<UserState>().name;
     final selectedPlate = plateState.getSelectedPlate('departure_requests', userName);
-    if (selectedPlate != null) {
-      try {
-        plateState.toggleIsSelected(
-          collection: 'departure_requests',
-          plateNumber: selectedPlate.plateNumber,
-          userName: userName,
-          onError: (errorMessage) {
-          },
-        );
-        movementPlate.setDepartureCompleted(
-            selectedPlate.plateNumber, selectedPlate.area, plateState, selectedPlate.location);
-        showSuccessSnackbar(context, "출차 완료 처리되었습니다.");
-      } catch (e) {
-        debugPrint("출차 완료 처리 실패: $e");
-        showFailedSnackbar(context, "출차 완료 처리 중 오류 발생: $e");
+
+    if (selectedPlate == null) return;
+
+    PlateModel updatedPlate = selectedPlate;
+
+    // ✅ 정산 안 된 경우에만 다이얼로그
+    if (selectedPlate.isLockedFee != true) {
+      final shouldSettle = await showDialog<bool?>(
+        context: context,
+        builder: (context) => DepartureSettlementConfirmDialog(
+          entryTimeInSeconds: selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000,
+          basicStandard: selectedPlate.basicStandard ?? 0,
+          basicAmount: selectedPlate.basicAmount ?? 0,
+          addStandard: selectedPlate.addStandard ?? 0,
+          addAmount: selectedPlate.addAmount ?? 0,
+        ),
+      );
+
+      // 출차 취소 시 아무 작업도 하지 않고 종료
+      if (shouldSettle == null) {
+        return; // 출차 취소: Plate가 이동하지 않음
       }
+
+      if (shouldSettle == true) {
+        final now = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
+        final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
+
+        final lockedFee = calculateParkingFee(
+          entryTimeInSeconds: entryTime,
+          currentTimeInSeconds: now,
+          basicStandard: selectedPlate.basicStandard ?? 0,
+          basicAmount: selectedPlate.basicAmount ?? 0,
+          addStandard: selectedPlate.addStandard ?? 0,
+          addAmount: selectedPlate.addAmount ?? 0,
+        ).round();
+
+        updatedPlate = selectedPlate.copyWith(
+          isLockedFee: true,
+          lockedAtTimeInSeconds: now,
+          lockedFeeAmount: lockedFee,
+        );
+      }
+      // else: 사용자가 "정산 안함" 선택 → 그대로 출차 완료 진행
+    }
+
+    try {
+      // ✅ 선택 해제
+      plateState.toggleIsSelected(
+        collection: 'departure_requests',
+        plateNumber: updatedPlate.plateNumber,
+        userName: userName,
+        onError: (_) {},
+      );
+
+      // ✅ 출차 완료 처리 (정산 반영된 Plate 포함)
+      await movementPlate.setDepartureCompletedWithPlate(updatedPlate, plateState);
+      // 출차 완료 처리 후 알림을 없애기 위해 showSuccessSnackbar를 삭제함
+    } catch (e) {
+      debugPrint("출차 완료 처리 실패: $e");
+      // showFailedSnackbar(context, "출차 완료 처리 중 오류 발생: $e"); // 알림 삭제
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -255,14 +302,13 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                             isLockedFee: false,
                             lockedAtTimeInSeconds: null,
                             lockedFeeAmount: null,
-
                           );
 
                           await context.read<PlateRepository>().addOrUpdateDocument(
-                            'departure_requests',
-                            selectedPlate.id,
-                            updatedPlate.toMap(),
-                          );
+                                'departure_requests',
+                                selectedPlate.id,
+                                updatedPlate.toMap(),
+                              );
 
                           await context.read<PlateState>().updatePlateLocally('departure_requests', updatedPlate);
 
@@ -284,14 +330,13 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                           isLockedFee: true,
                           lockedAtTimeInSeconds: currentTime,
                           lockedFeeAmount: lockedFee, // ✅ 사전 정산 금액 저장
-
                         );
 
                         await context.read<PlateRepository>().addOrUpdateDocument(
-                          'departure_requests',
-                          selectedPlate.id,
-                          updatedPlate.toMap(),
-                        );
+                              'departure_requests',
+                              selectedPlate.id,
+                              updatedPlate.toMap(),
+                            );
 
                         await context.read<PlateState>().updatePlateLocally('departure_requests', updatedPlate);
 
@@ -299,8 +344,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                       } else {
                         _isSearchMode ? _resetSearch(context) : _showSearchDialog(context);
                       }
-                    }
-                    else if (index == 1) {
+                    } else if (index == 1) {
                       if (isPlateSelected) {
                         showDialog(
                           context: context,
