@@ -65,7 +65,9 @@ class ExcelUploader {
           TextCellValue('출근'),
           ...List.generate(31, (i) {
             final cell = rowMap[i + 1] ?? '';
-            return TextCellValue(cell.split('\n').firstOrNull ?? '');
+            return TextCellValue(cell
+                .split('\n')
+                .firstOrNull ?? '');
           }),
           TextCellValue(''),
         ];
@@ -76,7 +78,9 @@ class ExcelUploader {
           TextCellValue('퇴근'),
           ...List.generate(31, (i) {
             final cell = rowMap[i + 1] ?? '';
-            return TextCellValue(cell.split('\n').length > 1 ? cell.split('\n')[1] : '');
+            return TextCellValue(cell
+                .split('\n')
+                .length > 1 ? cell.split('\n')[1] : '');
           }),
           TextCellValue(''),
         ];
@@ -106,7 +110,7 @@ class ExcelUploader {
       final safeName = generatedByName.replaceAll(' ', '_');
       final safeArea = generatedByArea.replaceAll(' ', '_');
 
-      final attendanceFileName = '출근부_${safeArea}_${year}년_${month}월.xlsx';
+      final attendanceFileName = '출근부_${safeName}_${safeArea}_${year}년_${month}월.xlsx';
       final attendancePath = '${dir.path}/$attendanceFileName';
       final attendanceFile = File(attendancePath)
         ..createSync(recursive: true)
@@ -145,7 +149,9 @@ class ExcelUploader {
           TextCellValue('시작'),
           ...List.generate(31, (i) {
             final cell = rowMap[i + 1] ?? '';
-            return TextCellValue(cell.split('\n').firstOrNull ?? '');
+            return TextCellValue(cell
+                .split('\n')
+                .firstOrNull ?? '');
           }),
           TextCellValue(''),
         ];
@@ -156,7 +162,9 @@ class ExcelUploader {
           TextCellValue('종료'),
           ...List.generate(31, (i) {
             final cell = rowMap[i + 1] ?? '';
-            return TextCellValue(cell.split('\n').length > 1 ? cell.split('\n')[1] : '');
+            return TextCellValue(cell
+                .split('\n')
+                .length > 1 ? cell.split('\n')[1] : '');
           }),
           TextCellValue(''),
         ];
@@ -201,7 +209,8 @@ class ExcelUploader {
     try {
       final decoded = jsonDecode(jsonStr);
       return Map<String, Map<int, String>>.from(
-        decoded.map((userId, colMap) => MapEntry(
+        decoded.map((userId, colMap) =>
+            MapEntry(
               userId,
               Map<int, String>.from(
                 (colMap as Map).map((k, v) => MapEntry(int.parse(k), v)),
