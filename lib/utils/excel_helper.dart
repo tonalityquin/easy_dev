@@ -65,9 +65,7 @@ class ExcelUploader {
           TextCellValue('출근'),
           ...List.generate(31, (i) {
             final cell = rowMap[i + 1] ?? '';
-            return TextCellValue(cell
-                .split('\n')
-                .firstOrNull ?? '');
+            return TextCellValue(cell.split('\n').firstOrNull ?? '');
           }),
           TextCellValue(''),
         ];
@@ -78,9 +76,7 @@ class ExcelUploader {
           TextCellValue('퇴근'),
           ...List.generate(31, (i) {
             final cell = rowMap[i + 1] ?? '';
-            return TextCellValue(cell
-                .split('\n')
-                .length > 1 ? cell.split('\n')[1] : '');
+            return TextCellValue(cell.split('\n').length > 1 ? cell.split('\n')[1] : '');
           }),
           TextCellValue(''),
         ];
@@ -109,8 +105,11 @@ class ExcelUploader {
       final dir = await getTemporaryDirectory();
       final safeName = generatedByName.replaceAll(' ', '_');
       final safeArea = generatedByArea.replaceAll(' ', '_');
+      final isSingleUser = userIdsInOrder.length == 1;
 
-      final attendanceFileName = '출근부_${safeName}_${safeArea}_${year}년_${month}월.xlsx';
+      final attendanceFileName = isSingleUser
+          ? '출근부_${safeName}_${safeArea}_${year}년_${month}월.xlsx'
+          : '출근부_${safeArea}_${year}년_${month}월.xlsx';
       final attendancePath = '${dir.path}/$attendanceFileName';
       final attendanceFile = File(attendancePath)
         ..createSync(recursive: true)
@@ -149,9 +148,7 @@ class ExcelUploader {
           TextCellValue('시작'),
           ...List.generate(31, (i) {
             final cell = rowMap[i + 1] ?? '';
-            return TextCellValue(cell
-                .split('\n')
-                .firstOrNull ?? '');
+            return TextCellValue(cell.split('\n').firstOrNull ?? '');
           }),
           TextCellValue(''),
         ];
@@ -162,9 +159,7 @@ class ExcelUploader {
           TextCellValue('종료'),
           ...List.generate(31, (i) {
             final cell = rowMap[i + 1] ?? '';
-            return TextCellValue(cell
-                .split('\n')
-                .length > 1 ? cell.split('\n')[1] : '');
+            return TextCellValue(cell.split('\n').length > 1 ? cell.split('\n')[1] : '');
           }),
           TextCellValue(''),
         ];
@@ -190,7 +185,9 @@ class ExcelUploader {
         row += 2;
       }
 
-      final breakFileName = '휴게시간_${safeName}_${safeArea}_${year}년_${month}월.xlsx';
+      final breakFileName = isSingleUser
+          ? '휴게시간_${safeName}_${safeArea}_${year}년_${month}월.xlsx'
+          : '휴게시간_${safeArea}_${year}년_${month}월.xlsx';
       final breakPath = '${dir.path}/$breakFileName';
       final breakFile = File(breakPath)
         ..createSync(recursive: true)
