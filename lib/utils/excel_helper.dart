@@ -57,15 +57,16 @@ class ExcelUploader {
       int row = 1;
       for (final userId in userIdsInOrder) {
         final name = userIdToName[userId] ?? '(이름 없음)';
-        final rowMap = attendanceData[userId] ?? {};
+        final rowMapIn = attendanceData[userId] ?? {};
+        final rowMapOut = attendanceData['${userId}_out'] ?? {};
 
         final startRow = [
           TextCellValue(name),
           TextCellValue(userId),
           TextCellValue('출근'),
           ...List.generate(31, (i) {
-            final cell = rowMap[i + 1] ?? '';
-            return TextCellValue(cell.split('\n').firstOrNull ?? '');
+            final value = rowMapIn[i + 1] ?? '';
+            return TextCellValue(value);
           }),
           TextCellValue(''),
         ];
@@ -75,8 +76,8 @@ class ExcelUploader {
           TextCellValue(''),
           TextCellValue('퇴근'),
           ...List.generate(31, (i) {
-            final cell = rowMap[i + 1] ?? '';
-            return TextCellValue(cell.split('\n').length > 1 ? cell.split('\n')[1] : '');
+            final value = rowMapOut[i + 1] ?? '';
+            return TextCellValue(value);
           }),
           TextCellValue(''),
         ];
@@ -140,15 +141,16 @@ class ExcelUploader {
       row = 1;
       for (final userId in userIdsInOrder) {
         final name = userIdToName[userId] ?? '(이름 없음)';
-        final rowMap = breakData[userId] ?? {};
+        final rowMapIn = breakData[userId] ?? {};
+        final rowMapOut = breakData['${userId}_out'] ?? {};
 
         final startRow = [
           TextCellValue(name),
           TextCellValue(userId),
           TextCellValue('시작'),
           ...List.generate(31, (i) {
-            final cell = rowMap[i + 1] ?? '';
-            return TextCellValue(cell.split('\n').firstOrNull ?? '');
+            final value = rowMapIn[i + 1] ?? '';
+            return TextCellValue(value);
           }),
           TextCellValue(''),
         ];
@@ -158,8 +160,8 @@ class ExcelUploader {
           TextCellValue(''),
           TextCellValue('종료'),
           ...List.generate(31, (i) {
-            final cell = rowMap[i + 1] ?? '';
-            return TextCellValue(cell.split('\n').length > 1 ? cell.split('\n')[1] : '');
+            final value = rowMapOut[i + 1] ?? '';
+            return TextCellValue(value);
           }),
           TextCellValue(''),
         ];
@@ -200,6 +202,7 @@ class ExcelUploader {
       return {};
     }
   }
+
 
   Map<String, Map<int, String>> _parseCellData(String? jsonStr) {
     if (jsonStr == null) return {};
