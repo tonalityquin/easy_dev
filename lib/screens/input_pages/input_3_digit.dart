@@ -159,24 +159,27 @@ class _Input3DigitState extends State<Input3Digit> {
 
     await _cameraHelper.initializeCamera(); // 🔸 여기까지 정상 실행됨
 
-    await showDialog(
-      context: context,
-      builder: (context) =>
-          CameraPreviewDialog(
-            onImageCaptured: (image) {
-              setState(() {
-                _capturedImages.add(image);
-                debugPrint('📸 이미지 1장 실시간 반영됨: ${image.path}');
-              });
-            },
-          ),
-    );
+    if (mounted) {
+      await showDialog(
+        context: context,
+        builder: (context) => CameraPreviewDialog(
+          onImageCaptured: (image) {
+            setState(() {
+              _capturedImages.add(image);
+              debugPrint('📸 이미지 1장 실시간 반영됨: ${image.path}');
+            });
+          },
+        ),
+      );
+    }
 
     debugPrint('📸 다이얼로그 닫힘 → dispose() 호출 전');
     await _cameraHelper.dispose();
     debugPrint('📸 dispose 완료 후 200ms 지연');
     await Future.delayed(const Duration(milliseconds: 200));
-    setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   void _setActiveController(TextEditingController controller) {
@@ -261,13 +264,16 @@ class _Input3DigitState extends State<Input3Digit> {
         region: dropdownValue,
       );
 
-      Navigator.of(context).pop(); // 로딩 다이얼로그 닫기
-      showSuccessSnackbar(context, '차량 정보 등록 완료');
-      _resetInputForm();
-
+      if (mounted) {
+        Navigator.of(context).pop(); // 로딩 다이얼로그 닫기
+        showSuccessSnackbar(context, '차량 정보 등록 완료');
+        _resetInputForm();
+      }
     } catch (e) {
-      Navigator.of(context).pop(); // 로딩 다이얼로그 닫기
-      showFailedSnackbar(context, '등록 실패: ${e.toString()}');
+      if (mounted) {
+        Navigator.of(context).pop(); // 로딩 다이얼로그 닫기
+        showFailedSnackbar(context, '등록 실패: ${e.toString()}');
+      }
     } finally {
       if (mounted) {
         setState(() => isLoading = false);
@@ -401,20 +407,20 @@ class _Input3DigitState extends State<Input3Digit> {
         showKeypad: showKeypad,
         keypad: activeController == controller3digit
             ? NumKeypad(
-          controller: controller3digit,
-          maxLength: 3,
-          onComplete: () => _setActiveController(controller1digit),
-        )
+                controller: controller3digit,
+                maxLength: 3,
+                onComplete: () => _setActiveController(controller1digit),
+              )
             : activeController == controller1digit
-            ? KorKeypad(
-          controller: controller1digit,
-          onComplete: () => _setActiveController(controller4digit),
-        )
-            : NumKeypad(
-          controller: controller4digit,
-          maxLength: 4,
-          onComplete: () => setState(() => showKeypad = false),
-        ),
+                ? KorKeypad(
+                    controller: controller1digit,
+                    onComplete: () => _setActiveController(controller4digit),
+                  )
+                : NumKeypad(
+                    controller: controller4digit,
+                    maxLength: 4,
+                    onComplete: () => setState(() => showKeypad = false),
+                  ),
         actionButton: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -430,8 +436,7 @@ class _Input3DigitState extends State<Input3Digit> {
                 Expanded(
                   child: AnimatedParkingButton(
                     isLocationSelected: isLocationSelected,
-                    onPressed:
-                    isLocationSelected ? _clearLocation : _selectParkingLocation,
+                    onPressed: isLocationSelected ? _clearLocation : _selectParkingLocation,
                   ),
                 ),
               ],
@@ -452,6 +457,4 @@ class _Input3DigitState extends State<Input3Digit> {
       ),
     );
   }
-
-
 }

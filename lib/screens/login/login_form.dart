@@ -3,6 +3,7 @@ import 'login_controller.dart';
 
 class LoginForm extends StatefulWidget {
   final LoginController controller;
+
   const LoginForm({super.key, required this.controller});
 
   @override
@@ -83,7 +84,7 @@ class _LoginFormState extends State<LoginForm> {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.15),
+                  color: Colors.black.withValues(alpha: 0.15),
                   blurRadius: 6,
                   offset: const Offset(0, 3),
                 ),
@@ -92,7 +93,9 @@ class _LoginFormState extends State<LoginForm> {
             child: Center(
               child: _controller.isLoading
                   ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
-                  : const Text("로그인", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                  : const Text("로그인",
+                      style: TextStyle(
+                          color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
             ),
           ),
         )

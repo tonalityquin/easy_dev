@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 import '../../models/user_model.dart';
 import 'user_repository.dart';
 
@@ -26,23 +27,23 @@ class FirestoreUserRepository implements UserRepository {
 
   @override
   Future<UserModel?> getUserByPhone(String phone) async {
-    print("[DEBUG] Firestore 사용자 조회 시작 - phone: $phone");
+    debugPrint("[DEBUG] Firestore 사용자 조회 시작 - phone: $phone");
 
     try {
       final querySnapshot = await _getCollectionRef().where('phone', isEqualTo: phone).get();
 
-      print("[DEBUG] Firestore 조회 완료 - 결과 개수: ${querySnapshot.docs.length}");
+      debugPrint("[DEBUG] Firestore 조회 완료 - 결과 개수: ${querySnapshot.docs.length}");
 
       if (querySnapshot.docs.isNotEmpty) {
         final doc = querySnapshot.docs.first;
-        print("[DEBUG] 사용자 찾음 - ID: ${doc.id}, 데이터: ${doc.data()}");
+        debugPrint("[DEBUG] 사용자 찾음 - ID: ${doc.id}, 데이터: ${doc.data()}");
 
         return UserModel.fromMap(doc.id, doc.data());
       } else {
-        print("[DEBUG] Firestore에서 해당 전화번호 사용자를 찾을 수 없음");
+        debugPrint("[DEBUG] Firestore에서 해당 전화번호 사용자를 찾을 수 없음");
       }
     } catch (e) {
-      print("[DEBUG] Firestore 사용자 조회 중 예외 발생: $e");
+      debugPrint("[DEBUG] Firestore 사용자 조회 중 예외 발생: $e");
     }
 
     return null;

@@ -24,6 +24,7 @@ class LoginController {
   LoginController(this.context);
 
   void initState() {
+    // `initState`에서 `BuildContext`를 사용하는 작업은 문제없음
     Provider.of<UserState>(context, listen: false).loadUserToLogIn().then((_) {
       if (Provider.of<UserState>(context, listen: false).isLoggedIn) {
         Navigator.pushReplacementNamed(context, '/home');
@@ -81,15 +82,11 @@ class LoginController {
 
     setState(() => isLoading = true);
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
-    );
-
+    // 비동기 작업 중에도 BuildContext는 await 이후에 사용하지 않도록 처리
     if (!await NetworkService().isConnected()) {
-      Navigator.of(context).pop();
-      showFailedSnackbar(context, '인터넷 연결이 필요합니다.');
+      if (context.mounted) {
+        showFailedSnackbar(context, '인터넷 연결이 필요합니다.');
+      }
       setState(() => isLoading = false);
       return;
     }
@@ -99,12 +96,14 @@ class LoginController {
       final user = await userRepository.getUserByPhone(phone);
 
       // ✅ 디버깅 출력
-      print("[DEBUG] 입력값 → name: $name, phone: $phone, password: $password");
+      if (context.mounted) {
+        debugPrint("[DEBUG] 입력값 → name: $name, phone: $phone, password: $password");
 
-      if (user != null) {
-        print("[DEBUG] DB 유저 → name: ${user.name}, phone: ${user.phone}, password: ${user.password}");
-      } else {
-        print("[DEBUG] Firestore에서 user가 null로 반환됨");
+        if (user != null) {
+          debugPrint("[DEBUG] DB 유저 → name: ${user.name}, phone: ${user.phone}, password: ${user.password}");
+        } else {
+          debugPrint("[DEBUG] Firestore에서 user가 null로 반환됨");
+        }
       }
 
       if (user != null && user.name == name && user.password == password) {
@@ -115,15 +114,21 @@ class LoginController {
         userState.updateUserCard(updatedUser);
         areaState.updateArea(updatedUser.area);
 
-        Navigator.of(context).pop();
-        Navigator.pushReplacementNamed(context, '/home');
+        if (context.mounted) {
+          Navigator.of(context).pop();
+          Navigator.pushReplacementNamed(context, '/home');
+        }
       } else {
-        Navigator.of(context).pop();
-        showFailedSnackbar(context, '이름 또는 비밀번호가 올바르지 않습니다.');
+        if (context.mounted) {
+          Navigator.of(context).pop();
+          showFailedSnackbar(context, '이름 또는 비밀번호가 올바르지 않습니다.');
+        }
       }
     } catch (e) {
-      Navigator.of(context).pop();
-      showFailedSnackbar(context, '로그인 실패: $e');
+      if (context.mounted) {
+        Navigator.of(context).pop();
+        showFailedSnackbar(context, '로그인 실패: $e');
+      }
     }
   }
 }

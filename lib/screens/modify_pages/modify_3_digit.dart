@@ -247,11 +247,6 @@ class _Modify3Digit extends State<Modify3Digit> {
     }
   }
 
-
-
-
-
-
   void _setActiveController(TextEditingController controller) {
     setState(() {
       activeController = controller;
@@ -356,7 +351,9 @@ class _Modify3Digit extends State<Modify3Digit> {
       final plateState = context.read<PlateState>();
       await plateState.updatePlateLocally(widget.collectionKey, updatedPlate);
 
-      Navigator.pop(context);
+      if (mounted) {
+        Navigator.pop(context);
+      }
     }
 
     clearInput();
@@ -520,13 +517,22 @@ class _Modify3Digit extends State<Modify3Digit> {
               isLocationSelected: isLocationSelected,
               buttonLabel: '수정 완료',
               onPressed: () async {
-                setState(() => isLoading = true);
+                setState(() => isLoading = true); // 비동기 작업 전 로딩 상태 설정
+
+                // 비동기 작업을 처리
                 await _handleAction();
+
+                // 비동기 작업 후, mounted 체크 후 UI 업데이트
                 if (!mounted) return;
-                setState(() => isLoading = false);
-                showSuccessSnackbar(context, "수정이 완료되었습니다!");
+
+                setState(() => isLoading = false); // 비동기 작업 후 로딩 상태 해제
+
+                // 비동기 작업 완료 후 스낵바 표시
+                if (mounted) {
+                  showSuccessSnackbar(context, "수정이 완료되었습니다!");
+                }
               },
-            ),
+            )
           ],
         ),
       ),

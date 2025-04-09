@@ -90,7 +90,7 @@ class _PlateLogViewerPageState extends State<PlateLogViewerPage> {
           final log = logs[index];
           return ListTile(
             leading: const Icon(Icons.directions_car),
-            title: Text('${log.action}'),
+            title: Text(log.action),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
