@@ -5,7 +5,7 @@ import '../../../states/status/status_state.dart';
 import '../../../widgets/navigation/secondary_mini_navigation.dart';
 
 class StatusManagement extends StatelessWidget {
-  const StatusManagement({Key? key}) : super(key: key);
+  const StatusManagement({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -64,7 +64,9 @@ class StatusManagement extends StatelessWidget {
                   curve: Curves.easeInOut,
                   margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: statusState.selectedItemId == item.id ? Colors.blue.withOpacity(0.2) : Colors.white,
+                    color: statusState.selectedItemId == item.id
+                        ? Colors.blue.withAlpha((0.2 * 255).toInt())
+                        : Colors.white,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
                       color: statusState.selectedItemId == item.id ? Colors.blue : Colors.grey.shade300,

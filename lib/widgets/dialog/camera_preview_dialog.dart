@@ -3,10 +3,8 @@ import 'package:camera/camera.dart';
 import '../../utils/camera_helper.dart';
 
 class CameraPreviewDialog extends StatefulWidget {
-  /// 촬영 완료 후 전체 이미지 리스트를 콜백으로 전달
   final void Function(List<XFile>)? onCaptureComplete;
 
-  /// 📸 이미지 한 장이 촬영될 때마다 호출되는 콜백 (선택 사항)
   final void Function(XFile)? onImageCaptured;
 
   const CameraPreviewDialog({
@@ -66,7 +64,6 @@ class _CameraPreviewDialogState extends State<CameraPreviewDialog> {
         backgroundColor: Colors.black,
         body: Stack(
           children: [
-            // 📷 카메라 프리뷰
             if (_isCameraReady && _cameraHelper.cameraController != null)
               Positioned.fill(
                 child: RotatedBox(
@@ -76,8 +73,6 @@ class _CameraPreviewDialogState extends State<CameraPreviewDialog> {
               )
             else
               const Center(child: CircularProgressIndicator()),
-
-            // 📸 촬영 버튼
             Positioned(
               bottom: 20,
               left: 0,

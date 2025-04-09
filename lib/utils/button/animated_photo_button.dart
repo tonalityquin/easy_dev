@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-
 class AnimatedPhotoButton extends StatefulWidget {
   final VoidCallback onPressed;
 
@@ -10,8 +9,7 @@ class AnimatedPhotoButton extends StatefulWidget {
   State<AnimatedPhotoButton> createState() => _AnimatedPhotoButtonState();
 }
 
-class _AnimatedPhotoButtonState extends State<AnimatedPhotoButton>
-    with SingleTickerProviderStateMixin {
+class _AnimatedPhotoButtonState extends State<AnimatedPhotoButton> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
 

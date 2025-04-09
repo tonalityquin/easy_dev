@@ -11,7 +11,7 @@ class ParkingRequestStatusDialog extends StatelessWidget {
   final VoidCallback onDelete;
   final String plateNumber;
   final String area;
-  final PlateModel plate; // ✅ plate 전달용
+  final PlateModel plate;
 
   const ParkingRequestStatusDialog({
     super.key,
@@ -88,7 +88,6 @@ class ParkingRequestStatusDialog extends StatelessWidget {
   }
 }
 
-
 class ScaleTransitionDialog extends StatefulWidget {
   final Widget child;
 
@@ -98,8 +97,7 @@ class ScaleTransitionDialog extends StatefulWidget {
   State<ScaleTransitionDialog> createState() => _ScaleTransitionDialogState();
 }
 
-class _ScaleTransitionDialogState extends State<ScaleTransitionDialog>
-    with SingleTickerProviderStateMixin {
+class _ScaleTransitionDialogState extends State<ScaleTransitionDialog> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
 
@@ -132,11 +130,6 @@ class _ScaleTransitionDialogState extends State<ScaleTransitionDialog>
   }
 }
 
-/// 입차 완료 → 입차 요청 (되돌리기) - 더 이상 사용하지 않음, 코드 삭제됨
-
-/// 출차 시 정산 여부 확인 다이얼로그 - 더 이상 사용하지 않음, 코드 삭제됨
-
-/// 입차 요청 취소
 void handleEntryParkingRequest(BuildContext context, String plateNumber, String area) {
   final movementPlate = context.read<MovementPlate>();
   final plateState = context.read<PlateState>();
@@ -149,4 +142,3 @@ void handleEntryParkingRequest(BuildContext context, String plateNumber, String 
     newLocation: "미지정",
   );
 }
-

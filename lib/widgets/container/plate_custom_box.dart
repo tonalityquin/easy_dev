@@ -107,13 +107,13 @@ class PlateCustomBox extends StatelessWidget {
         transformAlignment: Alignment.center,
         transform: isSelected ? (Matrix4.identity()..scale(0.95)) : Matrix4.identity(),
         decoration: BoxDecoration(
-          color: backgroundColor ?? (isSelected ? Colors.blue.withOpacity(0.2) : Colors.white),
+          color: backgroundColor ?? (isSelected ? Colors.blue.withValues(alpha: 0.2) : Colors.white),
           border: Border.all(color: Colors.black, width: 2.0),
           borderRadius: BorderRadius.circular(10),
           boxShadow: [
             if (isSelected)
               BoxShadow(
-                color: Colors.blue.withOpacity(0.3),
+                color: Colors.blue.withValues(alpha: 0.3),
                 blurRadius: 10,
                 spreadRadius: 2,
               ),

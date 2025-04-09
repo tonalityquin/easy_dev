@@ -144,7 +144,7 @@ class AttendanceDocumentBody extends StatelessWidget {
 
                 for (final user in users) {
                   final safeName = user.name.replaceAll(' ', '_');
-                  final fileName = '출근부_${safeName}_${safeArea}_${selectedYear}년_${selectedMonth}월.xlsx';
+                  final fileName = '출근부_${safeName}_${safeArea}_$selectedYear년_$selectedMonth월.xlsx';
                   final fileUrl = 'https://storage.googleapis.com/easydev-image/exports/$fileName';
 
                   debugPrint('🧾 파일 요청: $fileUrl');
@@ -196,7 +196,7 @@ class AttendanceDocumentBody extends StatelessWidget {
 
                 // ✅ 기존 데이터와 병합
                 final prefs = await SharedPreferences.getInstance();
-                final existingJson = prefs.getString('attendance_cell_data_${selectedYear}_${selectedMonth}');
+                final existingJson = prefs.getString('attendance_cell_data_${selectedYear}_$selectedMonth');
                 Map<String, Map<int, String>> mergedData = {};
 
                 if (existingJson != null) {
@@ -221,14 +221,24 @@ class AttendanceDocumentBody extends StatelessWidget {
 
                 // ✅ SharedPreferences 저장
                 final encoded = jsonEncode(
-                  mergedData.map((key, map) => MapEntry(key, map.map((day, val) => MapEntry(day.toString(), val)))),
+                  mergedData.map((key, map) => MapEntry(key, map.map((k, v) => MapEntry(k.toString(), v)))),
                 );
-                await prefs.setString('attendance_cell_data_${selectedYear}_${selectedMonth}', encoded);
+                await prefs.setString('attendance_cell_data_${selectedYear}_$selectedMonth', encoded);
                 debugPrint('✅ SharedPreferences 병합 저장 완료');
 
-                showSuccessSnackbar(context, '출근부 불러오기 완료!');
+                // Ensure snackbar is shown after the frame has been built
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (context.mounted) {
+                    showSuccessSnackbar(context, '출근부 불러오기 완료!');
+                  }
+                });
               } catch (e) {
-                showFailedSnackbar(context, '불러오기 중 오류 발생: $e');
+                // Ensure snackbar is shown after the frame has been built
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (context.mounted) {
+                    showFailedSnackbar(context, '불러오기 중 오류 발생: $e');
+                  }
+                });
               }
             },
           ),
@@ -244,10 +254,17 @@ class AttendanceDocumentBody extends StatelessWidget {
               showSuccessSnackbar(context, '출근부 생성 중...');
 
               try {
+                final userState = context.read<UserState>(); // Get UserState before the async call
                 final prefs = await SharedPreferences.getInstance();
-                final raw = prefs.getString('attendance_cell_data_${selectedYear}_${selectedMonth}');
+                final raw = prefs.getString('attendance_cell_data_${selectedYear}_$selectedMonth');
+
                 if (raw == null) {
-                  showFailedSnackbar(context, '출근부 데이터가 없습니다.');
+                  // Ensure snackbar is shown after the current frame is built
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (context.mounted) {
+                      showFailedSnackbar(context, '출근부 데이터가 없습니다.');
+                    }
+                  });
                   return;
                 }
 
@@ -260,19 +277,30 @@ class AttendanceDocumentBody extends StatelessWidget {
                   userIdToName: userIdToName,
                   year: selectedYear,
                   month: selectedMonth,
-                  generatedByName: context.read<UserState>().name,
+                  generatedByName: userState.name,  // Use the user name from the state
                   generatedByArea: selectedArea,
                 );
 
-                if (urls['출근부'] != null) {
-                  debugPrint('📁 생성 완료: ${urls['출근부']}');
-                  showSuccessSnackbar(context, '출근부 다운로드 링크가 생성되었습니다.');
-                } else {
-                  showFailedSnackbar(context, '출근부 생성 실패');
-                }
+                // Ensure snackbar is shown after the current frame is built
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (context.mounted) {
+                    if (urls['출근부'] != null) {
+                      debugPrint('📁 생성 완료: ${urls['출근부']}');
+                      showSuccessSnackbar(context, '출근부 다운로드 링크가 생성되었습니다.');
+                    } else {
+                      showFailedSnackbar(context, '출근부 생성 실패');
+                    }
+                  }
+                });
               } catch (e) {
-                showFailedSnackbar(context, '다운로드 중 오류: $e');
+                // Ensure snackbar is shown after the current frame is built
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (context.mounted) {
+                    showFailedSnackbar(context, '다운로드 중 오류: $e');
+                  }
+                });
               }
+
             },
           ),
         ],

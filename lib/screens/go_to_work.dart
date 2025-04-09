@@ -28,9 +28,8 @@ class _GoToWorkState extends State<GoToWork> {
         await _recordAttendance(context);
       }
 
-      await userState.isHeWorking(); // 상태 전환 (출근/퇴근 처리)
+      await userState.isHeWorking();
 
-      // ✅ 퇴근 직후 GCS 엑셀 자동 업로드
       if (!userState.isWorking) {
         await _uploadAttendanceSilently(context);
       }
@@ -57,7 +56,6 @@ class _GoToWorkState extends State<GoToWork> {
     }
   }
 
-  /// ✅ 출근 시간 저장 (덮어쓰기 방지)
   Future<void> _recordAttendance(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
     final now = DateTime.now();
@@ -102,7 +100,6 @@ class _GoToWorkState extends State<GoToWork> {
     showSuccessSnackbar(context, '출근 시간 기록 완료: $time');
   }
 
-  /// ✅ 퇴근 시 GCS로 자동 업로드 (URL 노출 없음)
   Future<void> _uploadAttendanceSilently(BuildContext context) async {
     final userState = Provider.of<UserState>(context, listen: false);
     final area = userState.area;

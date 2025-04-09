@@ -4,7 +4,7 @@ import '../../states/user/user_state.dart';
 import '../../states/area/area_state.dart';
 import '../../repositories/user/user_repository.dart';
 import '../../utils/snackbar_helper.dart';
-import '../../utils/network_service.dart';
+import '../../utils/login_network_service.dart';
 import 'login_view_model.dart';
 
 class LoginController {

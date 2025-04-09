@@ -26,7 +26,6 @@ class DepartureRequestConfirmDialog extends StatelessWidget {
             ),
           ),
           actionsAlignment: MainAxisAlignment.center,
-          // ✅ 버튼 중앙 정렬
           actions: [
             FilledButton(
               onPressed: () {
@@ -36,11 +35,8 @@ class DepartureRequestConfirmDialog extends StatelessWidget {
               style: FilledButton.styleFrom(
                 backgroundColor: Colors.blueAccent,
                 padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                // ✅ 버튼 내부 여백
                 minimumSize: const Size(120, 48),
-                // ✅ 최소 크기 보장
                 textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                // ✅ 글씨 크기 키움
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
               child: const Text('확인'),

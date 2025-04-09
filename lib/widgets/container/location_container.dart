@@ -6,11 +6,11 @@ class LocationContainer extends StatelessWidget {
   final VoidCallback onTap;
 
   const LocationContainer({
-    Key? key,
+    super.key,
     required this.location,
     required this.isSelected,
     required this.onTap,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -27,13 +27,13 @@ class LocationContainer extends StatelessWidget {
             ? (Matrix4.identity()..scale(0.95)) // ✅ 선택되면 95% 크기로 축소
             : Matrix4.identity(),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.blue.withOpacity(0.2) : Colors.white, // ✅ 선택 시 배경색 변경
+          color: isSelected ? Colors.blue.withValues(alpha: 0.2) : Colors.white,
           border: Border.all(color: Colors.black, width: 2.0),
           borderRadius: BorderRadius.circular(8),
           boxShadow: [
             if (isSelected)
               BoxShadow(
-                color: Colors.blue.withOpacity(0.3),
+                color: Colors.blue.withValues(alpha: 0.3),
                 blurRadius: 10,
                 spreadRadius: 2,
               ),

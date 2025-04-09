@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../widgets/navigation/secondary_mini_navigation.dart'; // 하단 내비게이션 바
 
 class Wireless extends StatelessWidget {
-  const Wireless({Key? key}) : super(key: key);
+  const Wireless({super.key});
 
   void _handleMenuSelection(BuildContext context, String value) {
     if (value == 'logout') {

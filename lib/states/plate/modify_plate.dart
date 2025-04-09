@@ -47,12 +47,13 @@ class ModifyPlate with ChangeNotifier {
     int addStandard = 0,
     int addAmount = 0,
     required String region,
-    bool isLockedFee = false,               // ✅ 추가
+    bool isLockedFee = false, // ✅ 추가
     int? lockedAtTimeInSeconds,
     int? lockedFeeAmount, // ✅ 추가
 // ✅ 추가
   }) async {
     if (await isPlateNumberDuplicated(plateNumber, areaState.currentArea)) {
+      if (!context.mounted) return;
       showFailedSnackbar(context, '이미 등록된 번호판입니다: $plateNumber');
       return;
     }
@@ -79,7 +80,6 @@ class ModifyPlate with ChangeNotifier {
         isLockedFee: isLockedFee,
         lockedAtTimeInSeconds: lockedAtTimeInSeconds,
         lockedFeeAmount: lockedFeeAmount,
-
       );
 
       await _logState.saveLog(
@@ -94,9 +94,10 @@ class ModifyPlate with ChangeNotifier {
         ),
       );
 
+      if (!context.mounted) return;
       showSuccessSnackbar(context, '$type 완료');
-      notifyListeners();
     } catch (error) {
+      if (!context.mounted) return;
       showFailedSnackbar(context, '오류 발생: $error');
     }
   }
@@ -120,7 +121,6 @@ class ModifyPlate with ChangeNotifier {
     bool? isLockedFee, // ✅ 추가
     int? lockedAtTimeInSeconds, // ✅ 추가
     int? lockedFeeAmount,
-
   }) async {
     try {
       final documentId = '${plate.plateNumber}_${plate.area}';
@@ -146,7 +146,6 @@ class ModifyPlate with ChangeNotifier {
         isLockedFee: isLockedFee ?? plate.isLockedFee,
         lockedAtTimeInSeconds: lockedAtTimeInSeconds ?? plate.lockedAtTimeInSeconds,
         lockedFeeAmount: lockedFeeAmount ?? plate.lockedFeeAmount,
-
       );
 
       await _plateRepository.addOrUpdateDocument(
@@ -175,6 +174,7 @@ class ModifyPlate with ChangeNotifier {
       }
 
       // ✅ PlateState 최신화 → 요금 재계산 반영
+      if (!context.mounted) return false; // 함수 반환값에 맞게 처리
       final plateState = context.read<PlateState>();
       await plateState.fetchPlateData(); // 🔥 강제 fetch
 
@@ -182,6 +182,7 @@ class ModifyPlate with ChangeNotifier {
       return true;
     } catch (e) {
       dev.log('❌ 정보 수정 실패: $e');
+      if (!context.mounted) return false;
       showFailedSnackbar(context, '정보 수정 실패: $e');
       return false;
     }

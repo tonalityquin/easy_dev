@@ -33,16 +33,16 @@ class PlateState extends ChangeNotifier {
 
   bool get isLoading => _isLoading;
 
-  void PlateCounts() {
+  void plateCounts() {
     if (_isLoading) {
-      print('🕐 지역 Plate 상태 수신 대기 중...');
+      debugPrint('🕐 지역 Plate 상태 수신 대기 중...');
     } else {
-      print('✅ 지역 Plate 상태 수신 완료');
-      print('📌 Selected Area: $currentArea');
-      print('🅿️ Parking Requests: ${_data['parking_requests']?.length ?? 0}');
-      print('✅ Parking Completed: ${_data['parking_completed']?.length ?? 0}');
-      print('🚗 Departure Requests: ${_data['departure_requests']?.length ?? 0}');
-      print('🏁 Departure Completed: ${_data['departure_completed']?.length ?? 0}');
+      debugPrint('✅ 지역 Plate 상태 수신 완료');
+      debugPrint('📌 Selected Area: $currentArea');
+      debugPrint('🅿️ Parking Requests: ${_data['parking_requests']?.length ?? 0}');
+      debugPrint('✅ Parking Completed: ${_data['parking_completed']?.length ?? 0}');
+      debugPrint('🚗 Departure Requests: ${_data['departure_requests']?.length ?? 0}');
+      debugPrint('🏁 Departure Completed: ${_data['departure_completed']?.length ?? 0}');
     }
   }
 
@@ -61,7 +61,7 @@ class PlateState extends ChangeNotifier {
     _cancelAllSubscriptions();
 
     _isLoading = true;
-    PlateCounts();
+    plateCounts();
 
     int receivedCount = 0;
     final totalCollections = _data.keys.length;
@@ -88,7 +88,7 @@ class PlateState extends ChangeNotifier {
 
         if (receivedCount == totalCollections) {
           _isLoading = false;
-          PlateCounts();
+          plateCounts();
         }
       });
 
@@ -104,13 +104,13 @@ class PlateState extends ChangeNotifier {
   }
 
   void _onAreaChanged() {
-    print("🔄 지역 변경 감지됨: ${_areaState.currentArea}");
+    debugPrint("🔄 지역 변경 감지됨: ${_areaState.currentArea}");
     _initializeSubscriptions();
   }
 
   void syncWithAreaState() {
-    print("🔄 지역 동기화 수동 호출됨(: $currentArea");
-    PlateCounts();
+    debugPrint("🔄 지역 동기화 수동 호출됨(: $currentArea");
+    plateCounts();
   }
 
   List<PlateModel> getPlatesByCollection(String collection, {DateTime? selectedDate}) {

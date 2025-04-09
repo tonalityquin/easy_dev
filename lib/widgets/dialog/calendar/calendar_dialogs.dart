@@ -86,7 +86,6 @@ void showEditMemoDialog({
   );
 }
 
-/// iOS 스타일의 간단한 스낵바 대체
 void showCupertinoSnackBar(BuildContext context, String message) {
   showCupertinoDialog(
     context: context,
@@ -97,6 +96,8 @@ void showCupertinoSnackBar(BuildContext context, String message) {
   );
 
   Future.delayed(const Duration(seconds: 1), () {
-    Navigator.of(context, rootNavigator: true).pop();
+    if (context.mounted) {
+      Navigator.of(context, rootNavigator: true).pop();
+    }
   });
 }

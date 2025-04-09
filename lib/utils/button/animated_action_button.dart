@@ -11,7 +11,7 @@ class AnimatedActionButton extends StatefulWidget {
     required this.isLoading,
     required this.isLocationSelected,
     required this.onPressed,
-    this.buttonLabel, // optional - if null, fallback label is used
+    this.buttonLabel,
   });
 
   @override
@@ -57,7 +57,6 @@ class _AnimatedActionButtonState extends State<AnimatedActionButton>
     final bool isLoading = widget.isLoading;
     final bool isLocationSelected = widget.isLocationSelected;
 
-    // 라벨 텍스트: 외부에서 주어지면 사용, 아니면 기본값
     final String label = widget.buttonLabel ??
         (isLocationSelected ? '입차 완료' : '입차 요청');
 

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 class CustomAdjustmentDropdown extends StatelessWidget {
   final List<String> items;
   final String? selectedValue;
-  final void Function(String?)? onChanged; // ✅ nullable 처리
+  final void Function(String?)? onChanged;
 
   const CustomAdjustmentDropdown({
     super.key,

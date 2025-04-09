@@ -15,10 +15,10 @@ class MiniNavigation extends StatefulWidget {
   });
 
   @override
-  _MiniNavigationState createState() => _MiniNavigationState();
+  MiniNavigationState createState() => MiniNavigationState();
 }
 
-class _MiniNavigationState extends State<MiniNavigation> {
+class MiniNavigationState extends State<MiniNavigation> {
   bool isAscending = true;
 
   void toggleSortOrder() {

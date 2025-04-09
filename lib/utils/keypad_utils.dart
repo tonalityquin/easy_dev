@@ -30,7 +30,7 @@ class KorKeypadUtils {
           child: InkWell(
             onTap: onTap,
             borderRadius: BorderRadius.circular(8.0),
-            splashColor: Colors.purple.withOpacity(0.2),
+            splashColor: Colors.purple.withValues(alpha: 0.2),
             child: Container(
               padding: const EdgeInsets.all(16.0),
               decoration: BoxDecoration(

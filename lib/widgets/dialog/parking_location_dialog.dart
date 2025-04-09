@@ -8,10 +8,10 @@ class ParkingLocationDialog extends StatelessWidget {
   final Function(String) onLocationSelected;
 
   const ParkingLocationDialog({
-    Key? key,
+    super.key,
     required this.locationController,
     required this.onLocationSelected,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -69,7 +69,6 @@ class ParkingLocationDialog extends StatelessWidget {
         ),
       ),
     );
-
   }
 }
 

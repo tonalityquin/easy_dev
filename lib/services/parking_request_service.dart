@@ -17,11 +17,11 @@ class ParkingRequestService {
   void togglePlateSelection(String plateNumber) {
     final userName = context.read<UserState>().name;
     context.read<PlateState>().toggleIsSelected(
-      collection: 'parking_requests',
-      plateNumber: plateNumber,
-      userName: userName,
-      onError: (msg) => showFailedSnackbar(context, msg),
-    );
+          collection: 'parking_requests',
+          plateNumber: plateNumber,
+          userName: userName,
+          onError: (msg) => showFailedSnackbar(context, msg),
+        );
   }
 
   Future<void> completeParking({
@@ -57,18 +57,20 @@ class ParkingRequestService {
         location,
       );
 
+      if (!context.mounted) return;
       showSuccessSnackbar(context, '입차 완료: ${selectedPlate.plateNumber} ($location)');
     } catch (e) {
       debugPrint('입차 완료 실패: $e');
+      if (!context.mounted) return;
       showFailedSnackbar(context, '입차 완료 중 오류 발생: $e');
     }
   }
 
   void deletePlate(PlateModel plate) {
     context.read<DeletePlate>().deletePlateFromParkingRequest(
-      plate.plateNumber,
-      plate.area,
-    );
+          plate.plateNumber,
+          plate.area,
+        );
     showSuccessSnackbar(context, '삭제 완료: ${plate.plateNumber}');
   }
 }

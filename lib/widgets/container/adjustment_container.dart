@@ -10,7 +10,7 @@ class AdjustmentContainer extends StatelessWidget {
   final VoidCallback onTap;
 
   const AdjustmentContainer({
-    Key? key,
+    super.key,
     required this.countType,
     required this.basicStandard,
     required this.basicAmount,
@@ -18,7 +18,7 @@ class AdjustmentContainer extends StatelessWidget {
     required this.addAmount,
     required this.isSelected,
     required this.onTap,
-  }) : super(key: key);
+  });
 
   Widget _buildTextRow(String label, String value) {
     return Text('$label: $value');

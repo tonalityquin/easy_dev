@@ -37,7 +37,6 @@ class DepartureCompletedStatusDialog extends StatelessWidget {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // ✅ 1. 정보 수정
               ElevatedButton.icon(
                 icon: const Icon(Icons.edit_note_outlined),
                 label: const Text("정보 수정"),
@@ -55,10 +54,7 @@ class DepartureCompletedStatusDialog extends StatelessWidget {
                 },
                 style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
               ),
-
               const SizedBox(height: 8),
-
-              // ✅ 3. 로그 확인
               ElevatedButton.icon(
                 icon: const Icon(Icons.history),
                 label: const Text("로그 확인"),
@@ -123,9 +119,6 @@ class _ScaleTransitionDialogState extends State<ScaleTransitionDialog> with Sing
   }
 }
 
-//
-// ✅ 사전 정산 핸들러 (재사용 가능)
-//
 void handlePrePayment(BuildContext context, String plateNumber, String area, String location) {
   final movementPlate = context.read<MovementPlate>();
   final plateState = context.read<PlateState>();

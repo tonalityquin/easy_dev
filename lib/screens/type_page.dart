@@ -22,16 +22,18 @@ class TypePage extends StatelessWidget {
         builder: (context) {
           final plateState = context.read<PlateState>();
           final pageState = context.read<PageState>();
-          final userName = context
-              .read<UserState>()
-              .name;
+          final userName = context.read<UserState>().name;
 
-          return WillPopScope(
-            onWillPop: () async {
+          return PopScope(
+            canPop: true,
+            // ignore: deprecated_member_use
+            onPopInvoked: (didPop) async {
+              if (!didPop) return;
+
               final currentPage = pageState.pages[pageState.selectedIndex];
               final collection = currentPage.collectionKey;
-
               final selectedPlate = plateState.getSelectedPlate(collection, userName);
+
               if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
                 await plateState.toggleIsSelected(
                   collection: collection,
@@ -39,10 +41,7 @@ class TypePage extends StatelessWidget {
                   userName: userName,
                   onError: (msg) => debugPrint(msg),
                 );
-                return false;
               }
-
-              return false;
             },
             child: Scaffold(
               appBar: AppBar(
@@ -117,7 +116,7 @@ class RefreshableBody extends StatelessWidget {
               ),
               if (state.isLoading)
                 Container(
-                  color: Colors.black.withOpacity(0.2),
+                  color: Colors.black.withAlpha(51),
                   child: const Center(
                     child: CircularProgressIndicator(),
                   ),
@@ -160,12 +159,12 @@ class PageBottomNavigation extends StatelessWidget {
               count = plateState
                   .getPlatesByCollection('departure_completed')
                   .where((p) =>
-              p.type == '출차 완료' &&
-                  p.area == currentArea &&
-                  p.endTime != null &&
-                  p.endTime!.year == selectedDate.year &&
-                  p.endTime!.month == selectedDate.month &&
-                  p.endTime!.day == selectedDate.day)
+                      p.type == '출차 완료' &&
+                      p.area == currentArea &&
+                      p.endTime != null &&
+                      p.endTime!.year == selectedDate.year &&
+                      p.endTime!.month == selectedDate.month &&
+                      p.endTime!.day == selectedDate.day)
                   .length;
             } else {
               count = plateState.getPlatesByCollection(pageInfo.collectionKey).length;
@@ -180,8 +179,7 @@ class PageBottomNavigation extends StatelessWidget {
                   children: [
                     AnimatedSwitcher(
                       duration: const Duration(milliseconds: 300),
-                      transitionBuilder: (child, animation) =>
-                          ScaleTransition(scale: animation, child: child),
+                      transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
                       child: TweenAnimationBuilder<Color?>(
                         key: ValueKey(count),
                         duration: const Duration(milliseconds: 300),

@@ -19,7 +19,10 @@ class _AdjustmentManagementState extends State<AdjustmentManagement> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     Future.delayed(Duration.zero, () {
-      context.read<AdjustmentState>().syncWithAreaState();
+      if (context.mounted) {
+        // ignore: use_build_context_synchronously
+        context.read<AdjustmentState>().syncWithAreaState();
+      }
     });
   }
 
@@ -46,10 +49,14 @@ class _AdjustmentManagementState extends State<AdjustmentManagement> {
                       adjustmentData['addStandard'].toString(),
                       adjustmentData['addAmount'].toString(),
                     );
-                showSuccessSnackbar(context, '✅ 정산 데이터가 성공적으로 추가되었습니다.');
+                if (context.mounted) {
+                  showSuccessSnackbar(context, '✅ 정산 데이터가 성공적으로 추가되었습니다.');
+                }
               } catch (e) {
                 debugPrint("🔥 데이터 추가 중 예외 발생: $e");
-                showFailedSnackbar(context, '🚨 데이터 추가 중 오류가 발생했습니다: $e');
+                if (context.mounted) {
+                  showFailedSnackbar(context, '🚨 데이터 추가 중 오류가 발생했습니다: $e');
+                }
               }
             },
           ),
@@ -61,15 +68,23 @@ class _AdjustmentManagementState extends State<AdjustmentManagement> {
   Future<void> _deleteSelectedAdjustments(BuildContext context) async {
     final adjustmentState = context.read<AdjustmentState>();
     final selectedIds = _getSelectedIds(adjustmentState);
+
     if (selectedIds.isEmpty) {
-      showFailedSnackbar(context, '삭제할 항목을 선택하세요.');
+      if (context.mounted) {
+        showFailedSnackbar(context, '삭제할 항목을 선택하세요.');
+      }
       return;
     }
+
     try {
       await adjustmentState.deleteAdjustments(selectedIds);
-      showSuccessSnackbar(context, '선택된 항목이 삭제되었습니다.');
+      if (context.mounted) {
+        showSuccessSnackbar(context, '선택된 항목이 삭제되었습니다.');
+      }
     } catch (e) {
-      showFailedSnackbar(context, '삭제 중 오류가 발생했습니다.');
+      if (context.mounted) {
+        showFailedSnackbar(context, '삭제 중 오류가 발생했습니다.');
+      }
     }
   }
 

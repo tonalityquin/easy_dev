@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:convert';
 import 'package:excel/excel.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:googleapis/storage/v1.dart';
 import 'package:googleapis_auth/auth_io.dart';
@@ -22,8 +23,8 @@ class ExcelUploader {
   }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final attendanceRaw = prefs.getString('attendance_cell_data_${year}_${month}');
-      final breakRaw = prefs.getString('break_cell_data_${year}_${month}');
+      final attendanceRaw = prefs.getString('attendance_cell_data_${year}_$month');
+      final breakRaw = prefs.getString('break_cell_data_${year}_$month');
       final attendanceData = _parseCellData(attendanceRaw);
       final breakData = _parseCellData(breakRaw);
 
@@ -33,7 +34,6 @@ class ExcelUploader {
         verticalAlign: VerticalAlign.Center,
       );
 
-      // ✅ 출근부 엑셀 생성
       final attendanceExcel = Excel.createExcel();
       attendanceExcel.rename('Sheet1', '출근부');
       final attendanceSheet = attendanceExcel['출근부'];
@@ -109,8 +109,8 @@ class ExcelUploader {
       final isSingleUser = userIdsInOrder.length == 1;
 
       final attendanceFileName = isSingleUser
-          ? '출근부_${safeName}_${safeArea}_${year}년_${month}월.xlsx'
-          : '출근부_${safeArea}_${year}년_${month}월.xlsx';
+          ? '출근부_${safeName}_${safeArea}_$year년_$month월.xlsx'
+          : '출근부_${safeArea}_$year년_$month월.xlsx';
       final attendancePath = '${dir.path}/$attendanceFileName';
       final attendanceFile = File(attendancePath)
         ..createSync(recursive: true)
@@ -188,8 +188,8 @@ class ExcelUploader {
       }
 
       final breakFileName = isSingleUser
-          ? '휴게시간_${safeName}_${safeArea}_${year}년_${month}월.xlsx'
-          : '휴게시간_${safeArea}_${year}년_${month}월.xlsx';
+          ? '휴게시간_${safeName}_${safeArea}_$year년_$month월.xlsx'
+          : '휴게시간_${safeArea}_$year년_$month월.xlsx';
       final breakPath = '${dir.path}/$breakFileName';
       final breakFile = File(breakPath)
         ..createSync(recursive: true)
@@ -198,7 +198,7 @@ class ExcelUploader {
 
       return urls;
     } catch (e) {
-      print('❌ 엑셀 생성 또는 업로드 실패: $e');
+      debugPrint('❌ 엑셀 생성 또는 업로드 실패: $e');
       return {};
     }
   }
@@ -218,7 +218,7 @@ class ExcelUploader {
             )),
       );
     } catch (e) {
-      print('❌ JSON 파싱 오류: $e');
+      debugPrint('❌ JSON 파싱 오류: $e');
       return {};
     }
   }

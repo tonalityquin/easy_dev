@@ -38,14 +38,14 @@ Future<void> showRegionPickerDialog({
                   },
                   children: regions
                       .map((region) => Center(
-                    child: Text(
-                      region,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold, // ✅ 여기 추가
-                      ),
-                    ),
-                  ))
+                            child: Text(
+                              region,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ))
                       .toList(),
                 ),
               ),

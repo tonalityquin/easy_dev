@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 class LocationSetting extends StatefulWidget {
   final Function(String location) onSave;
 
-  const LocationSetting({Key? key, required this.onSave}) : super(key: key);
+  const LocationSetting({super.key, required this.onSave});
 
   @override
   State<LocationSetting> createState() => _LocationSettingState();

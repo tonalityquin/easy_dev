@@ -48,14 +48,12 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
     });
   }
 
-  String get cellDataKey => 'attendance_cell_data_${selectedYear}_${selectedMonth}';
+  String get cellDataKey => 'attendance_cell_data_${selectedYear}_$selectedMonth';
+
   String get userCacheKey => 'user_list_$currentArea';
 
   Future<List<UserModel>> getUsersByArea(String area) async {
-    final snapshot = await FirebaseFirestore.instance
-        .collection('user_accounts')
-        .where('area', isEqualTo: area)
-        .get();
+    final snapshot = await FirebaseFirestore.instance.collection('user_accounts').where('area', isEqualTo: area).get();
     return snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
   }
 
@@ -73,21 +71,34 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
           users = updatedUsers;
         });
         await _saveUsersToPrefs();
-        showSuccessSnackbar(context, '최신 사용자 목록으로 갱신되었습니다');
+
+        // Execute snackbar in the next event loop iteration to avoid async gaps
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (context.mounted) {
+            showSuccessSnackbar(context, '최신 사용자 목록으로 갱신되었습니다');
+          }
+        });
       } else {
-        showSuccessSnackbar(context, '변경 사항 없음');
+        // Execute snackbar in the next event loop iteration to avoid async gaps
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (context.mounted) {
+            showSuccessSnackbar(context, '변경 사항 없음');
+          }
+        });
       }
     } catch (e) {
-      showFailedSnackbar(context, '사용자 목록을 불러오지 못했습니다');
+      // Execute snackbar in the next event loop iteration to avoid async gaps
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) {
+          showFailedSnackbar(context, '사용자 목록을 불러오지 못했습니다');
+        }
+      });
     }
   }
 
   Future<void> _saveUsersToPrefs() async {
     final prefs = await SharedPreferences.getInstance();
-    final userJsonList = users
-        .where((u) => u.id.isNotEmpty)
-        .map((u) => u.toJson())
-        .toList();
+    final userJsonList = users.where((u) => u.id.isNotEmpty).map((u) => u.toJson()).toList();
     await prefs.setString(userCacheKey, jsonEncode(userJsonList));
   }
 
@@ -136,10 +147,14 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
     });
 
     await _saveCellDataToPrefs();
-    showSuccessSnackbar(context, '저장 완료');
+
+    // Ensure Snackbar is shown after the frame has been built (avoiding async gap issues)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (context.mounted) {
+        showSuccessSnackbar(context, '저장 완료');
+      }
+    });
   }
-
-
 
   Future<void> _clearText(String rowKey) async {
     if (selectedRow == null || selectedCol == null) return;
@@ -150,13 +165,20 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
     });
 
     await _saveCellDataToPrefs();
-    showSuccessSnackbar(context, '삭제 완료');
+
+    // Ensure Snackbar is shown after the frame has been built (avoiding async gap issues)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (context.mounted) {
+        showSuccessSnackbar(context, '삭제 완료');
+      }
+    });
   }
+
 
   Future<void> _saveCellDataToPrefs() async {
     final prefs = await SharedPreferences.getInstance();
-    final stringified = cellData.map((rowKey, colMap) =>
-        MapEntry(rowKey, colMap.map((colIndex, value) => MapEntry(colIndex.toString(), value))));
+    final stringified = cellData.map(
+        (rowKey, colMap) => MapEntry(rowKey, colMap.map((colIndex, value) => MapEntry(colIndex.toString(), value))));
     final encoded = jsonEncode(stringified);
     await prefs.setString(cellDataKey, encoded);
   }
@@ -173,7 +195,7 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
         decoded.forEach((rowKey, colMap) {
           final parsedMap = Map<int, String>.from(
             (colMap as Map).map(
-                  (k, v) => MapEntry(int.parse(k.toString()), v.toString()),
+              (k, v) => MapEntry(int.parse(k.toString()), v.toString()),
             ),
           );
 
@@ -209,9 +231,6 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
       });
     }
   }
-
-
-
 
   void _onChangeYear(int year) {
     setState(() {

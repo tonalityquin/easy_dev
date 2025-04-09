@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart'; // 날짜 포맷용
-
-import '../../utils/fee_calculator.dart'; // 요금 계산 유틸을 직접 사용하는 경우
+import 'package:intl/intl.dart';
+import '../../utils/fee_calculator.dart';
 
 class DepartureSettlementConfirmDialog extends StatelessWidget {
   final int entryTimeInSeconds;

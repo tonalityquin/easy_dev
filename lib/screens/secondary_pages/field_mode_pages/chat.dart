@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../widgets/navigation/secondary_mini_navigation.dart'; // 하단 내비게이션 바
 
 class Chat extends StatelessWidget {
-  const Chat({Key? key}) : super(key: key);
+  const Chat({super.key});
 
   void _handleMenuSelection(BuildContext context, String value) {
     if (value == 'logout') {

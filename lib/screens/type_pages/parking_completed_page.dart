@@ -130,11 +130,9 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
 
     movementPlate.goBackToParkingRequest(
       fromCollection: 'parking_completed',
-      // 🔥 fromCollection을 명시적으로 지정
       plateNumber: plateNumber,
       area: area,
       newLocation: "미지정",
-      // ❓ 선택적으로 위치 변경 가능
       plateState: plateState,
     );
 
@@ -146,8 +144,12 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
     final plateState = context.read<PlateState>();
     final userName = context.read<UserState>().name;
 
-    return WillPopScope(
-        onWillPop: () async {
+    return PopScope(
+        canPop: true,
+        // ignore: deprecated_member_use
+        onPopInvoked: (didPop) async {
+          if (!didPop) return;
+
           final selectedPlate = plateState.getSelectedPlate('parking_completed', userName);
           if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
             await plateState.toggleIsSelected(
@@ -156,9 +158,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
               userName: userName,
               onError: (msg) => debugPrint(msg),
             );
-            return false; // 뒤로가기 취소하고 선택만 해제
           }
-          return true;
         },
         child: Scaffold(
           appBar: const TopNavigation(),
@@ -270,13 +270,19 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                               lockedFeeAmount: null,
                             );
 
+                            if (!context.mounted) return;
+
                             await context.read<PlateRepository>().addOrUpdateDocument(
                                   'parking_completed',
                                   selectedPlate.id,
                                   updatedPlate.toMap(),
                                 );
 
+                            if (!context.mounted) return;
+
                             await context.read<PlateState>().updatePlateLocally('parking_completed', updatedPlate);
+
+                            if (!context.mounted) return;
 
                             showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
                           }
@@ -306,7 +312,11 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                               updatedPlate.toMap(),
                             );
 
+                        if (!context.mounted) return;
+
                         await context.read<PlateState>().updatePlateLocally('parking_completed', updatedPlate);
+
+                        if (!context.mounted) return;
 
                         showSuccessSnackbar(context, '사전 정산 완료: ₩$lockedFee');
                       } else {
@@ -344,9 +354,9 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                                 builder: (context) => ParkingRequestDeleteDialog(
                                   onConfirm: () {
                                     context.read<DeletePlate>().deletePlateFromParkingCompleted(
-                                      selectedPlate.plateNumber,
-                                      selectedPlate.area,
-                                    );
+                                          selectedPlate.plateNumber,
+                                          selectedPlate.area,
+                                        );
                                     showSuccessSnackbar(context, "삭제 완료: ${selectedPlate.plateNumber}");
                                   },
                                 ),
@@ -358,7 +368,6 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                         _toggleSortIcon();
                       }
                     }
-
                   });
             },
           ),

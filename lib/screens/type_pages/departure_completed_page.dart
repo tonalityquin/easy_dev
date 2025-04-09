@@ -23,9 +23,10 @@ class DepartureCompletedPage extends StatefulWidget {
 }
 
 class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
+  final bool _isSorted = true;
+  final bool _isLoading = false;
   bool _isSearchMode = false;
-  bool _isSorted = true;
-  bool _isLoading = false;
+
   bool _hasCalendarBeenReset = false;
 
   void _showSearchDialog(BuildContext context) {
@@ -61,8 +62,11 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
     final plateRepository = Provider.of<PlateRepository>(context, listen: false);
     try {
       await plateRepository.deleteAllData();
+
+      if (!context.mounted) return;
       showSuccessSnackbar(context, '모든 문서가 삭제되었습니다. 컬렉션은 유지됩니다.');
     } catch (e) {
+      if (!context.mounted) return;
       showFailedSnackbar(context, '문서 삭제 실패: $e');
     }
   }
@@ -72,8 +76,11 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
     final plateState = context.read<PlateState>();
     final userName = context.read<UserState>().name;
 
-    return WillPopScope(
-      onWillPop: () async {
+    return PopScope(
+      canPop: true,
+      // ignore: deprecated_member_use
+      onPopInvoked: (didPop) async {
+        if (!didPop) return;
         final selectedPlate = plateState.getSelectedPlate('departure_completed', userName);
         if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
           await plateState.toggleIsSelected(
@@ -82,9 +89,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
             userName: userName,
             onError: (msg) => debugPrint(msg),
           );
-          return false;
         }
-        return true;
       },
       child: Scaffold(
         appBar: const TopNavigation(),
@@ -225,8 +230,10 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                           updatedPlate.toMap(),
                         );
 
+                    if (!context.mounted) return;
                     await context.read<PlateState>().updatePlateLocally('departure_completed', updatedPlate);
 
+                    if (!context.mounted) return;
                     showSuccessSnackbar(context, '사전 정산 완료: ₩$lockedFee');
                   } else {
                     _isSearchMode ? _resetSearch(context) : _showSearchDialog(context);
@@ -262,6 +269,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                       },
                     );
                     if (confirm == true) {
+                      if (!context.mounted) return;
                       await _deleteAllData(context);
                     }
                   }

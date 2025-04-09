@@ -23,7 +23,7 @@ class TopNavigation extends StatelessWidget implements PreferredSizeWidget {
 
     final UserRole userRole = UserRole.values.firstWhere(
       (role) => role.name == userState.role,
-      orElse: () => UserRole.Admin,
+      orElse: () => UserRole.admin,
     );
 
     _initializeAreaIfEmpty(areaState, userState);
@@ -33,7 +33,7 @@ class TopNavigation extends StatelessWidget implements PreferredSizeWidget {
       elevation: 0,
       centerTitle: true,
       title: GestureDetector(
-        onTap: (userRole == UserRole.Fielder || userRole == UserRole.FieldLeader)
+        onTap: (userRole == UserRole.fielder || userRole == UserRole.fieldLeader)
             ? null
             : () => showAreaPickerDialog(
                   context: context,
@@ -75,7 +75,7 @@ class TopNavigation extends StatelessWidget implements PreferredSizeWidget {
 }
 
 enum UserRole {
-  Admin,
-  Fielder,
-  FieldLeader,
+  admin,
+  fielder,
+  fieldLeader,
 }

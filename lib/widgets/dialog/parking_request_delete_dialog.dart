@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 class ParkingRequestDeleteDialog extends StatelessWidget {
   final VoidCallback onConfirm;
 
-  const ParkingRequestDeleteDialog({Key? key, required this.onConfirm}) : super(key: key);
+  const ParkingRequestDeleteDialog({super.key, required this.onConfirm});
 
   @override
   Widget build(BuildContext context) {

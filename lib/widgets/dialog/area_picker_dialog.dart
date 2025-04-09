@@ -43,11 +43,11 @@ void showAreaPickerDialog({
                   },
                   children: areas
                       .map((area) => Center(
-                    child: Text(
-                      area,
-                      style: const TextStyle(fontSize: 18),
-                    ),
-                  ))
+                            child: Text(
+                              area,
+                              style: const TextStyle(fontSize: 18),
+                            ),
+                          ))
                       .toList(),
                 ),
               ),

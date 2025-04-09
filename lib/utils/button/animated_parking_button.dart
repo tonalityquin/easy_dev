@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 class AnimatedParkingButton extends StatefulWidget {
   final bool isLocationSelected;
   final VoidCallback onPressed;
-  final String? buttonLabel; // ✅ 외부에서 텍스트 지정 가능하도록 추가
+  final String? buttonLabel;
 
   const AnimatedParkingButton({
     super.key,
@@ -53,7 +53,6 @@ class _AnimatedParkingButtonState extends State<AnimatedParkingButton>
   Widget build(BuildContext context) {
     final isSelected = widget.isLocationSelected;
 
-    // ✅ 텍스트는 외부에서 지정된 경우 우선 사용
     final label = widget.buttonLabel ??
         (isSelected ? '구역 초기화' : '주차 구역 선택');
 

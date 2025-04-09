@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // ✅ asset 로드를 위한 import
 import 'package:googleapis_auth/auth_io.dart';
 import 'package:googleapis/storage/v1.dart';
@@ -49,8 +50,8 @@ class GCSUploader {
       // ✅ 업로드된 파일의 공개 URL 반환
       return 'https://storage.googleapis.com/$bucketName/${object.name}';
     } catch (e, stack) {
-      print('🔥 GCS 업로드 실패: $e');
-      print('🔥 Stack Trace: $stack');
+      debugPrint('🔥 GCS 업로드 실패: $e');
+      debugPrint('🔥 Stack Trace: $stack');
       rethrow; // ⛔ 또는 showFailedSnackbar()로 스낵바 출력도 가능
     }
   }

@@ -146,7 +146,7 @@ class BreakDocumentBody extends StatelessWidget {
 
                 for (final user in users) {
                   final safeName = user.name.replaceAll(' ', '_');
-                  final fileName = '휴게시간_${safeName}_${safeArea}_${selectedYear}년_${selectedMonth}월.xlsx';
+                  final fileName = '휴게시간_${safeName}_${safeArea}_$selectedYear년_$selectedMonth월.xlsx';
                   final fileUrl = 'https://storage.googleapis.com/easydev-image/exports/$fileName';
 
                   final response = await http.get(Uri.parse(fileUrl));
@@ -189,7 +189,7 @@ class BreakDocumentBody extends StatelessWidget {
                 }
 
                 final prefs = await SharedPreferences.getInstance();
-                final existingJson = prefs.getString('break_cell_data_${selectedYear}_${selectedMonth}');
+                final existingJson = prefs.getString('break_cell_data_${selectedYear}_$selectedMonth');
                 Map<String, Map<int, String>> mergedData = {};
 
                 if (existingJson != null) {
@@ -213,10 +213,12 @@ class BreakDocumentBody extends StatelessWidget {
                 final encoded = jsonEncode(
                   mergedData.map((key, map) => MapEntry(key, map.map((k, v) => MapEntry(k.toString(), v)))),
                 );
-                await prefs.setString('break_cell_data_${selectedYear}_${selectedMonth}', encoded);
+                await prefs.setString('break_cell_data_${selectedYear}_$selectedMonth', encoded);
 
+                if (!context.mounted) return;
                 showSuccessSnackbar(context, '휴게시간 불러오기 완료!');
               } catch (e) {
+                if (!context.mounted) return;
                 showFailedSnackbar(context, '불러오기 오류: $e');
               }
             },
@@ -247,9 +249,13 @@ class BreakDocumentBody extends StatelessWidget {
 
               final breakUrl = urls['휴게시간'];
               if (breakUrl != null) {
-                showSuccessSnackbar(context, '엑셀 다운로드 링크가 생성되었습니다.');
+                if (context.mounted) {
+                  showSuccessSnackbar(context, '엑셀 다운로드 링크가 생성되었습니다.');
+                }
               } else {
-                showFailedSnackbar(context, '엑셀 생성 실패');
+                if (context.mounted) {
+                  showFailedSnackbar(context, '엑셀 생성 실패');
+                }
               }
             },
           ),
@@ -297,11 +303,15 @@ class BreakDocumentBody extends StatelessWidget {
                     children: [
                       Row(
                         children: List.generate(34, (index) {
-                          if (index == 0) return _buildCell(text: '', isHeader: true, isSelected: false);
-                          if (index == 1) return _buildCell(text: '출근/퇴근', isHeader: true, isSelected: false);
-                          if (index == 33)
+                          if (index == 0) {
+                            return _buildCell(text: '', isHeader: true, isSelected: false);
+                          } else if (index == 1) {
+                            return _buildCell(text: '출근/퇴근', isHeader: true, isSelected: false);
+                          } else if (index == 33) {
                             return _buildCell(text: '사인란', isHeader: true, isSelected: false, width: 120);
-                          return _buildCell(text: '${index - 1}', isHeader: true, isSelected: false);
+                          } else {
+                            return _buildCell(text: '${index - 1}', isHeader: true, isSelected: false);
+                          }
                         }),
                       ),
                       const SizedBox(height: 8),

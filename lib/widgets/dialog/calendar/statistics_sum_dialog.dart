@@ -11,8 +11,9 @@ class StatisticsSumDialog extends StatelessWidget {
 
     String formattedDates = selectedDates.isNotEmpty
         ? selectedDates
-        .map((date) => '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}')
-        .join(', ')
+            .map((date) =>
+                '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}')
+            .join(', ')
         : '선택된 날짜 없음';
 
     return CupertinoAlertDialog(

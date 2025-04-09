@@ -19,10 +19,10 @@ class SecondaryMiniNavigation extends StatefulWidget {
   });
 
   @override
-  _SecondaryMiniNavigation createState() => _SecondaryMiniNavigation();
+  SecondaryMiniNavigationState createState() => SecondaryMiniNavigationState();
 }
 
-class _SecondaryMiniNavigation extends State<SecondaryMiniNavigation> {
+class SecondaryMiniNavigationState extends State<SecondaryMiniNavigation> {
   bool isAscending = true;
 
   void toggleSortOrder() {

@@ -42,11 +42,11 @@ void secondaryPickerDialog({
                   },
                   children: availableStatus
                       .map((mode) => Center(
-                    child: Text(
-                      mode,
-                      style: const TextStyle(fontSize: 18),
-                    ),
-                  ))
+                            child: Text(
+                              mode,
+                              style: const TextStyle(fontSize: 18),
+                            ),
+                          ))
                       .toList(),
                 ),
               ),
@@ -56,7 +56,6 @@ void secondaryPickerDialog({
                 child: Center(
                   child: GestureDetector(
                     onTap: () {
-                      // ✅ 모드 변경 적용
                       manageState.updateManage(tempSelected);
                       Navigator.of(context).pop();
                     },

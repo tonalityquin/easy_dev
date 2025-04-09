@@ -21,17 +21,16 @@ class _UserManagementState extends State<UserManagement> {
   void initState() {
     super.initState();
 
-    // UserState 초기화 (자동 로그인 및 실시간 유저 수신)
-    Future.microtask(() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       final userState = context.read<UserState>();
       userState.initialize();
     });
   }
 
   void buildAddUserDialog(
-      BuildContext context,
-      void Function(String, String, String, String, String, String, bool, bool) onSave,
-      ) {
+    BuildContext context,
+    void Function(String, String, String, String, String, String, bool, bool) onSave,
+  ) {
     final currentArea = Provider.of<AreaState>(context, listen: false).currentArea;
     showDialog(
       context: context,
@@ -49,9 +48,7 @@ class _UserManagementState extends State<UserManagement> {
   }
 
   void onIconTapped(BuildContext context, int index, UserState userState) {
-    final selectedIds = userState.selectedUsers.keys
-        .where((id) => userState.selectedUsers[id] == true)
-        .toList();
+    final selectedIds = userState.selectedUsers.keys.where((id) => userState.selectedUsers[id] == true).toList();
 
     if (index == 0) {
       buildAddUserDialog(context, (name, phone, email, role, area, password, isWorking, isSaved) {
@@ -89,9 +86,7 @@ class _UserManagementState extends State<UserManagement> {
   Widget build(BuildContext context) {
     final userState = context.watch<UserState>();
     final currentArea = context.watch<AreaState>().currentArea;
-    final filteredUsers = userState.users
-        .where((user) => user.area == currentArea)
-        .toList();
+    final filteredUsers = userState.users.where((user) => user.area == currentArea).toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -108,25 +103,25 @@ class _UserManagementState extends State<UserManagement> {
       body: userState.isLoading
           ? const Center(child: CircularProgressIndicator())
           : filteredUsers.isEmpty
-          ? const Center(child: Text('생성된 계정이 없습니다'))
-          : ListView.builder(
-        itemCount: filteredUsers.length,
-        itemBuilder: (context, index) {
-          final userContainer = filteredUsers[index];
-          final isSelected = userState.selectedUsers[userContainer.id] ?? false;
+              ? const Center(child: Text('생성된 계정이 없습니다'))
+              : ListView.builder(
+                  itemCount: filteredUsers.length,
+                  itemBuilder: (context, index) {
+                    final userContainer = filteredUsers[index];
+                    final isSelected = userState.selectedUsers[userContainer.id] ?? false;
 
-          return UserCustomBox(
-            topLeftText: userContainer.name,
-            topRightText: userContainer.email,
-            midLeftText: userContainer.role,
-            midCenterText: userContainer.phone,
-            midRightText: userContainer.area,
-            onTap: () => userState.toggleUserCard(userContainer.id),
-            isSelected: isSelected,
-            backgroundColor: isSelected ? Colors.green : Colors.white,
-          );
-        },
-      ),
+                    return UserCustomBox(
+                      topLeftText: userContainer.name,
+                      topRightText: userContainer.email,
+                      midLeftText: userContainer.role,
+                      midCenterText: userContainer.phone,
+                      midRightText: userContainer.area,
+                      onTap: () => userState.toggleUserCard(userContainer.id),
+                      isSelected: isSelected,
+                      backgroundColor: isSelected ? Colors.green : Colors.white,
+                    );
+                  },
+                ),
       bottomNavigationBar: SecondaryMiniNavigation(
         icons: getNavigationIcons(userState.selectedUsers.containsValue(true)),
         onIconTapped: (index) => onIconTapped(context, index, userState),

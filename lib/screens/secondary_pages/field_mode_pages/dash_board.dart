@@ -20,6 +20,7 @@ class DashBoard extends StatelessWidget {
       final int dayColumn = now.day;
       final String currentTime = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
 
+      // ignore: use_build_context_synchronously
       final userState = Provider.of<UserState>(context, listen: false);
       final String userId = userState.user?.id ?? "unknown";
       final String cellDataKey = 'attendance_cell_data_${now.year}_${now.month}';
@@ -40,6 +41,9 @@ class DashBoard extends StatelessWidget {
       }
 
       final existing = cellData[userId]?[dayColumn];
+
+      if (!context.mounted) return;
+
       if (existing == null || existing.trim().isEmpty) {
         showFailedSnackbar(context, '출근 기록이 없습니다. 먼저 출근하세요.');
         return;
@@ -59,9 +63,13 @@ class DashBoard extends StatelessWidget {
       );
       await prefs.setString(cellDataKey, encoded);
 
-      showSuccessSnackbar(context, '퇴근 시간 기록 완료: $currentTime');
+      if (context.mounted) {
+        showSuccessSnackbar(context, '퇴근 시간 기록 완료: $currentTime');
+      }
     } catch (e) {
-      showFailedSnackbar(context, '퇴근 시간 저장 실패: $e');
+      if (context.mounted) {
+        showFailedSnackbar(context, '퇴근 시간 저장 실패: $e');
+      }
     }
   }
 
@@ -131,9 +139,13 @@ class DashBoard extends StatelessWidget {
       await prefs.remove('area');
       await prefs.setBool('isLoggedIn', false);
 
+      if (!context.mounted) return;
+
       Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
     } catch (e) {
-      showFailedSnackbar(context, '로그아웃 실패: $e');
+      if (context.mounted) {
+        showFailedSnackbar(context, '로그아웃 실패: $e');
+      }
     }
 
     SystemChannels.platform.invokeMethod('SystemNavigator.pop');
@@ -165,6 +177,7 @@ class DashBoard extends StatelessWidget {
       final dayColumn = now.day;
       final currentTime = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
 
+      if (!context.mounted) return;
       final userState = Provider.of<UserState>(context, listen: false);
       final userId = userState.user?.id ?? "unknown";
 
@@ -185,14 +198,13 @@ class DashBoard extends StatelessWidget {
         );
       }
 
-      // ✅ 이미 값이 존재하는지 확인
       final existing = cellData[userId]?[dayColumn];
       if (existing != null && existing.trim().isNotEmpty) {
+        if (!context.mounted) return;
         showFailedSnackbar(context, '이미 기록된 휴게 시간이 있습니다.');
         return;
       }
 
-      // 시간 기록
       cellData[userId] ??= {};
       cellData[userId]![dayColumn] = currentTime;
 
@@ -204,9 +216,12 @@ class DashBoard extends StatelessWidget {
       );
       await prefs.setString(cellDataKey, encoded);
 
+      if (!context.mounted) return;
       showSuccessSnackbar(context, '휴게 시간 저장 완료: $currentTime');
     } catch (e) {
-      showFailedSnackbar(context, '휴게 시간 저장 실패: $e');
+      if (context.mounted) {
+        showFailedSnackbar(context, '휴게 시간 저장 실패: $e');
+      }
     }
   }
 
@@ -229,10 +244,10 @@ class DashBoard extends StatelessWidget {
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.15),
+              color: Colors.black.withAlpha((0.15 * 255).round()),
               blurRadius: 6,
               offset: Offset(0, 3),
-            ),
+            )
           ],
         ),
         child: const Center(
@@ -279,7 +294,7 @@ class DashBoard extends StatelessWidget {
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.15),
+              color: const Color.fromARGB(38, 0, 0, 0), // 0.15 * 255 ≈ 38
               blurRadius: 6,
               offset: const Offset(0, 3),
             ),

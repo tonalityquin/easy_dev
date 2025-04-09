@@ -86,11 +86,12 @@ class ParkingCompletedStatusDialog extends StatelessWidget {
               ElevatedButton.icon(
                 icon: const Icon(Icons.exit_to_app),
                 label: const Text("출차 완료 처리"),
-                onPressed: () {
+                onPressed: () async {
                   Navigator.pop(context);
-                  Future.microtask(() {
+                  await Future.delayed(Duration.zero);
+                  if (context.mounted) {
                     handleEntryDepartureCompleted(context, plate);
-                  });
+                  }
                 },
                 style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
               ),
@@ -153,7 +154,6 @@ class _ScaleTransitionDialogState extends State<ScaleTransitionDialog> with Sing
   }
 }
 
-/// 🔁 입차 요청으로 되돌리기 (입차 완료 → 입차 요청)
 void handleEntryParkingRequest(BuildContext context, String plateNumber, String area) {
   final movementPlate = context.read<MovementPlate>();
   final plateState = context.read<PlateState>();
@@ -167,7 +167,6 @@ void handleEntryParkingRequest(BuildContext context, String plateNumber, String 
   );
 }
 
-/// ✅ 출차 완료 처리 (입차 완료 → 출차 완료, 정산 여부 반영)
 void handleEntryDepartureCompleted(BuildContext context, PlateModel plate) async {
   final movementPlate = context.read<MovementPlate>();
   final plateState = context.read<PlateState>();
@@ -187,7 +186,7 @@ void handleEntryDepartureCompleted(BuildContext context, PlateModel plate) async
     );
 
     if (shouldSettle == null) {
-      return; // 출차 취소
+      return;
     }
     if (shouldSettle == true) {
       final now = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
@@ -220,7 +219,6 @@ void handleEntryDepartureCompleted(BuildContext context, PlateModel plate) async
   }
 }
 
-/// ✅ 사전 정산 처리 (입차 완료 → 출차 요청)
 void handlePrePayment(BuildContext context, String plateNumber, String area, String location) {
   final movementPlate = context.read<MovementPlate>();
   final plateState = context.read<PlateState>();
@@ -233,7 +231,6 @@ void handlePrePayment(BuildContext context, String plateNumber, String area, Str
   );
 }
 
-/// ✅ 출차 시 정산 여부 확인 다이얼로그
 class _DepartureSettlementConfirmDialog extends StatelessWidget {
   final int entryTimeInSeconds;
   final int basicStandard;
@@ -289,15 +286,15 @@ class _DepartureSettlementConfirmDialog extends StatelessWidget {
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context, null), // ❌ 출차 취소
+          onPressed: () => Navigator.pop(context, null),
           child: const Text('출차 취소'),
         ),
         TextButton(
-          onPressed: () => Navigator.pop(context, false), // 정산 안함
+          onPressed: () => Navigator.pop(context, false),
           child: const Text('아니요'),
         ),
         FilledButton(
-          onPressed: () => Navigator.pop(context, true), // 정산함
+          onPressed: () => Navigator.pop(context, true),
           child: const Text('예'),
         ),
       ],

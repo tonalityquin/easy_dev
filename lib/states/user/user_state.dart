@@ -49,7 +49,7 @@ class UserState extends ChangeNotifier {
   }
 
   Future<void> loadUserToLogIn() async {
-    print("[DEBUG] 자동 로그인 시도");
+    debugPrint("[DEBUG] 자동 로그인 시도");
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -57,7 +57,7 @@ class UserState extends ChangeNotifier {
       final area = prefs.getString('area');
 
       if (phone == null || area == null) {
-        print("[DEBUG] 자동 로그인 실패 - 저장된 전화번호 또는 지역 정보 없음");
+        debugPrint("[DEBUG] 자동 로그인 실패 - 저장된 전화번호 또는 지역 정보 없음");
         return;
       }
 
@@ -65,7 +65,7 @@ class UserState extends ChangeNotifier {
       final userData = await _repository.getUserById(userId);
 
       if (userData == null) {
-        print("[DEBUG] 자동 로그인 실패 - Firestore에서 사용자 정보 없음");
+        debugPrint("[DEBUG] 자동 로그인 실패 - Firestore에서 사용자 정보 없음");
         return;
       }
 
@@ -74,7 +74,7 @@ class UserState extends ChangeNotifier {
       _user = userData.copyWith(isSaved: true);
       notifyListeners();
     } catch (e) {
-      print("[DEBUG] 자동 로그인 중 오류 발생: $e");
+      debugPrint("[DEBUG] 자동 로그인 중 오류 발생: $e");
     }
   }
 

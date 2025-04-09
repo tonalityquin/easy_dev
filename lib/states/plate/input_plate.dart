@@ -52,6 +52,7 @@ class InputPlate with ChangeNotifier {
     int? lockedFeeAmount, // ✅ 추가
   }) async {
     if (await isPlateNumberDuplicated(plateNumber, areaState.currentArea)) {
+      if (!context.mounted) return;
       showFailedSnackbar(context, '이미 등록된 번호판입니다: $plateNumber');
       return;
     }
@@ -97,6 +98,7 @@ class InputPlate with ChangeNotifier {
 
       notifyListeners();
     } catch (error) {
+      if (!context.mounted) return;
       showFailedSnackbar(context, '오류 발생: $error');
     }
   }
@@ -166,11 +168,13 @@ class InputPlate with ChangeNotifier {
         );
       }
 
+      if (!context.mounted) return false;
       showSuccessSnackbar(context, '정보 수정 완료');
       notifyListeners();
 
       return true;
     } catch (e) {
+      if (!context.mounted) return false;
       showFailedSnackbar(context, '정보 수정 실패: $e');
       return false;
     }

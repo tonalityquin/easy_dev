@@ -166,14 +166,16 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     final plateState = context.read<PlateState>();
     final userName = context.read<UserState>().name;
 
-    return WillPopScope(
-        onWillPop: () async {
+    return PopScope(
+        canPop: true,
+        // ignore: deprecated_member_use
+        onPopInvoked: (didPop) async {
+          if (!didPop) return;
           final selectedPlate = plateState.getSelectedPlate('departure_requests', userName);
           if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
             await plateState.toggleIsSelected(
@@ -182,9 +184,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
               userName: userName,
               onError: (msg) => debugPrint(msg),
             );
-            return false;
           }
-          return true;
         },
         child: Scaffold(
           appBar: const TopNavigation(),
@@ -304,13 +304,18 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                             lockedFeeAmount: null,
                           );
 
+                          if (!context.mounted) return;
                           await context.read<PlateRepository>().addOrUpdateDocument(
                                 'departure_requests',
                                 selectedPlate.id,
                                 updatedPlate.toMap(),
                               );
 
+                          if (!context.mounted) return;
+
                           await context.read<PlateState>().updatePlateLocally('departure_requests', updatedPlate);
+
+                          if (!context.mounted) return;
 
                           showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
                           return;
@@ -338,7 +343,11 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                               updatedPlate.toMap(),
                             );
 
+                        if (!context.mounted) return;
+
                         await context.read<PlateState>().updatePlateLocally('departure_requests', updatedPlate);
+
+                        if (!context.mounted) return;
 
                         showSuccessSnackbar(context, '사전 정산 완료: ₩$lockedFee');
                       } else {

@@ -50,7 +50,7 @@ class _WorkerBreakDocumentState extends State<WorkerBreakDocument> {
     });
   }
 
-  String get cellDataKey => 'break_cell_data_${selectedYear}_${selectedMonth}';
+  String get cellDataKey => 'break_cell_data_${selectedYear}_$selectedMonth';
 
   String get userCacheKey => 'user_list_$currentArea';
 
@@ -68,17 +68,19 @@ class _WorkerBreakDocumentState extends State<WorkerBreakDocument> {
 
       final hasChanged = currentIds.length != newIds.length || !currentIds.containsAll(newIds);
 
+      if (!mounted) return; // ⛑️ context 사용 전 안전성 체크
+
       if (hasChanged) {
         setState(() {
           users = updatedUsers;
         });
         await _saveUsersToPrefs();
-        showSuccessSnackbar(context, '최신 사용자 목록으로 갱신되었습니다');
+        if (mounted) showSuccessSnackbar(context, '최신 사용자 목록으로 갱신되었습니다');
       } else {
-        showSuccessSnackbar(context, '변경 사항 없음');
+        if (mounted) showSuccessSnackbar(context, '변경 사항 없음');
       }
     } catch (e) {
-      showFailedSnackbar(context, '사용자 목록을 불러오지 못했습니다');
+      if (mounted) showFailedSnackbar(context, '사용자 목록을 불러오지 못했습니다');
     }
   }
 
@@ -124,6 +126,7 @@ class _WorkerBreakDocumentState extends State<WorkerBreakDocument> {
 
     // 👉 홀수 행(종료 행)에는 저장 불가
     if (selectedRow! % 2 != 0) {
+      if (!mounted) return;
       showFailedSnackbar(context, '휴게시간 종료는 앱에서 자동으로 처리됩니다');
       return;
     }
@@ -136,9 +139,10 @@ class _WorkerBreakDocumentState extends State<WorkerBreakDocument> {
     });
 
     await _saveCellDataToPrefs();
+
+    if (!mounted) return;
     showSuccessSnackbar(context, '시작 시간 저장 완료');
   }
-
 
   Future<void> _clearText(String rowKey, [List<int>? colIndices]) async {
     if (colIndices != null && colIndices.isNotEmpty) {
@@ -158,6 +162,8 @@ class _WorkerBreakDocumentState extends State<WorkerBreakDocument> {
     }
 
     await _saveCellDataToPrefs();
+
+    if (!mounted) return; // ⚠️ context 사용 전 안전성 체크
     showSuccessSnackbar(context, '삭제 완료');
   }
 

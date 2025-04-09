@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../widgets/navigation/secondary_mini_navigation.dart'; // 하단 내비게이션 바
 
 class DocuSign extends StatelessWidget {
-  const DocuSign({Key? key}) : super(key: key);
+  const DocuSign({super.key});
 
   void _handleMenuSelection(BuildContext context, String value) {
     if (value == 'logout') {

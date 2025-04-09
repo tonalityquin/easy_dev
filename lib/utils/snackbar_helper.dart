@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-/// ✅ 성공 Snackbar
 void showSuccessSnackbar(BuildContext context, String message) {
   final overlay = Overlay.of(context, rootOverlay: true);
 
@@ -21,7 +20,6 @@ void showSuccessSnackbar(BuildContext context, String message) {
   Future.delayed(const Duration(seconds: 2), () => overlayEntry.remove());
 }
 
-/// ✅ 실패 Snackbar
 void showFailedSnackbar(BuildContext context, String message) {
   final overlay = Overlay.of(context, rootOverlay: true);
 
@@ -42,7 +40,6 @@ void showFailedSnackbar(BuildContext context, String message) {
   Future.delayed(const Duration(seconds: 2), () => overlayEntry.remove());
 }
 
-/// ✅ 선택 필요 Snackbar (노란색)
 void showSelectedSnackbar(BuildContext context, String message) {
   final overlay = Overlay.of(context, rootOverlay: true);
 
@@ -63,7 +60,6 @@ void showSelectedSnackbar(BuildContext context, String message) {
   Future.delayed(const Duration(seconds: 2), () => overlayEntry.remove());
 }
 
-/// ✅ 공통 Snackbar UI 컨테이너
 class _SnackbarContainer extends StatelessWidget {
   final Color color;
   final IconData icon;

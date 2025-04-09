@@ -206,26 +206,51 @@ class _Modify3Digit extends State<Modify3Digit> {
   Future<void> _showCameraPreviewDialog() async {
     debugPrint('📸 _showCameraPreviewDialog() 호출됨');
 
-    await _cameraHelper.initializeCamera(); // 🔸 여기까지 정상 실행됨
+    // 카메라 초기화
+    await _cameraHelper.initializeCamera();
 
+    // showDialog 호출 전에 mounted 체크
+    if (!context.mounted) return;
+
+    // 다이얼로그 표시
     await showDialog(
       context: context,
-      builder: (context) => CameraPreviewDialog(
-        onImageCaptured: (image) {
-          setState(() {
-            _capturedImages.add(image);
-            debugPrint('📸 이미지 1장이 실시간 반영됨: ${image.path}');
-          });
-        },
-      ),
+      builder: (context) {
+        return CameraPreviewDialog(
+          onImageCaptured: (image) {
+            // 다이얼로그에서 이미지를 캡처한 후 setState 호출 전에 mounted 체크
+            if (context.mounted) {
+              setState(() {
+                _capturedImages.add(image);
+                debugPrint('📸 이미지 1장이 실시간 반영됨: ${image.path}');
+              });
+            }
+          },
+        );
+      },
     );
 
     debugPrint('📸 다이얼로그 닫힘 → dispose() 호출 전');
-    await _cameraHelper.dispose();
+
+    // dispose 호출 전 mounted 체크
+    if (context.mounted) {
+      await _cameraHelper.dispose();
+    }
+
     debugPrint('📸 dispose 완료 후 200ms 지연');
+    // 200ms 지연 후 setState 호출
     await Future.delayed(const Duration(milliseconds: 200));
-    setState(() {});
+
+    // setState 호출 전에 여전히 위젯이 마운트되었는지 확인
+    if (context.mounted) {
+      setState(() {});
+    }
   }
+
+
+
+
+
 
   void _setActiveController(TextEditingController controller) {
     setState(() {
@@ -442,9 +467,7 @@ class _Modify3Digit extends State<Modify3Digit> {
                       setState(() {
                         isSelected[index] = !isSelected[index];
                         final status = statuses[index];
-                        isSelected[index]
-                            ? selectedStatuses.add(status)
-                            : selectedStatuses.remove(status);
+                        isSelected[index] ? selectedStatuses.add(status) : selectedStatuses.remove(status);
                       });
                     },
                   ),
@@ -458,20 +481,20 @@ class _Modify3Digit extends State<Modify3Digit> {
         showKeypad: showKeypad,
         keypad: activeController == controller3digit
             ? NumKeypad(
-          controller: controller3digit,
-          maxLength: 3,
-          onComplete: () => _setActiveController(controller1digit),
-        )
+                controller: controller3digit,
+                maxLength: 3,
+                onComplete: () => _setActiveController(controller1digit),
+              )
             : activeController == controller1digit
-            ? KorKeypad(
-          controller: controller1digit,
-          onComplete: () => _setActiveController(controller4digit),
-        )
-            : NumKeypad(
-          controller: controller4digit,
-          maxLength: 4,
-          onComplete: () => setState(() => showKeypad = false),
-        ),
+                ? KorKeypad(
+                    controller: controller1digit,
+                    onComplete: () => _setActiveController(controller4digit),
+                  )
+                : NumKeypad(
+                    controller: controller4digit,
+                    maxLength: 4,
+                    onComplete: () => setState(() => showKeypad = false),
+                  ),
         actionButton: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -509,5 +532,4 @@ class _Modify3Digit extends State<Modify3Digit> {
       ),
     );
   }
-
 }

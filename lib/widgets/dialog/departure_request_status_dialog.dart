@@ -15,7 +15,6 @@ class DepartureRequestStatusDialog extends StatelessWidget {
   final String area;
   final PlateModel plate;
 
-
   const DepartureRequestStatusDialog({
     super.key,
     required this.onRequestEntry,
@@ -120,8 +119,7 @@ class ScaleTransitionDialog extends StatefulWidget {
   State<ScaleTransitionDialog> createState() => _ScaleTransitionDialogState();
 }
 
-class _ScaleTransitionDialogState extends State<ScaleTransitionDialog>
-    with SingleTickerProviderStateMixin {
+class _ScaleTransitionDialogState extends State<ScaleTransitionDialog> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
 
@@ -154,11 +152,6 @@ class _ScaleTransitionDialogState extends State<ScaleTransitionDialog>
   }
 }
 
-//
-// ✅ 상태 변경 핸들러들
-//
-
-/// 출차 요청 → 입차 요청
 void handleEntryParkingRequest(BuildContext context, String plateNumber, String area) {
   final movementPlate = context.read<MovementPlate>();
   final plateState = context.read<PlateState>();
@@ -174,7 +167,6 @@ void handleEntryParkingRequest(BuildContext context, String plateNumber, String 
   showSuccessSnackbar(context, "입차 요청이 처리되었습니다.");
 }
 
-/// 출차 요청 → 입차 완료
 void handleEntryParkingCompleted(BuildContext context, String plateNumber, String area, String location) {
   final movementPlate = context.read<MovementPlate>();
   final plateState = context.read<PlateState>();
@@ -189,7 +181,6 @@ void handleEntryParkingCompleted(BuildContext context, String plateNumber, Strin
   showSuccessSnackbar(context, "입차 완료가 처리되었습니다.");
 }
 
-/// 출차 요청 → 출차 완료 (사전 정산)
 void handlePrePayment(BuildContext context, String plateNumber, String area, String location) {
   final movementPlate = context.read<MovementPlate>();
   final plateState = context.read<PlateState>();

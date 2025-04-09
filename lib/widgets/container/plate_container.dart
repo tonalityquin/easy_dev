@@ -95,8 +95,8 @@ class PlateContainer extends StatelessWidget {
           children: [
             PlateCustomBox(
               topLeftText: '${item.region ?? '전국'} ${item.plateNumber}',
-              topRightUpText: "${item.adjustmentType ?? '없음'}",
-              topRightDownText: "${currentFee}원",
+              topRightUpText: item.adjustmentType ?? '없음',
+              topRightDownText: "$currentFee원",
               midLeftText: item.location,
               midCenterText: displayUser,
               midRightText: CustomDateUtils.formatTimeForUI(item.requestTime),

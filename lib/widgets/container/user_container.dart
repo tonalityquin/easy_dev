@@ -10,7 +10,7 @@ class UserContainer extends StatelessWidget {
   final VoidCallback onTap;
 
   const UserContainer({
-    Key? key,
+    super.key,
     required this.name,
     required this.phone,
     required this.email,
@@ -18,7 +18,7 @@ class UserContainer extends StatelessWidget {
     required this.access,
     required this.isSelected,
     required this.onTap,
-  }) : super(key: key);
+  });
 
   Widget _buildTextRow(String label, String value) {
     return Text('$label: $value');

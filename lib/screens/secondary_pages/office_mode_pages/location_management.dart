@@ -7,7 +7,7 @@ import '../../../widgets/container/location_container.dart';
 import '../../../states/location/location_state.dart';
 import '../../../states/area/area_state.dart';
 class LocationManagement extends StatelessWidget {
-  const LocationManagement({Key? key}) : super(key: key);
+  const LocationManagement({super.key});
 
   void handleIconTapped(int index, LocationState locationState, BuildContext context) {
     final selectedIds = locationState.selectedLocations.keys.where((id) => locationState.selectedLocations[id] == true).toList();

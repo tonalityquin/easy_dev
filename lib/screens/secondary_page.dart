@@ -55,7 +55,7 @@ class SecondaryPage extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: const [
                 Flexible(
-                  child: SecondaryRoleNavigation(), // 여기를 Flexible로 감쌈
+                  child: SecondaryRoleNavigation(),
                 ),
               ],
             ),

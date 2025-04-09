@@ -68,7 +68,7 @@ class ModifyPlateService {
       final formattedDate = '${now.year.toString().padLeft(4, '0')}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}'
           '_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
 
-      final fileName = '${formattedDate}_${area}_${plateNumber}_${performedBy}.jpg';
+      final fileName = '${formattedDate}_${area}_${plateNumber}_$performedBy.jpg';
       final gcsUrl = await uploader.uploadImageFromModify(file, 'plates/$fileName');
 
       if (gcsUrl != null) {

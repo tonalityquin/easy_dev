@@ -54,7 +54,7 @@ class NumKeypad extends StatelessWidget {
           child: InkWell(
             onTap: () => _handleKeyTap(key),
             borderRadius: BorderRadius.circular(8.0),
-            splashColor: Colors.purple.withOpacity(0.2),
+            splashColor: Colors.purple.withValues(alpha: 0.2),
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 16.0),
               decoration: BoxDecoration(
@@ -84,22 +84,22 @@ class NumKeypad extends StatelessWidget {
   }
 
   void _handleKeyTap(String key) {
-    print('키 입력: $key, 현재 텍스트: ${controller.text}');
+    debugPrint('키 입력: $key, 현재 텍스트: ${controller.text}');
 
     if (key == '지우기') {
       if (controller.text.isNotEmpty) {
         controller.text = controller.text.substring(0, controller.text.length - 1);
-        print('지우기: ${controller.text}');
+        debugPrint('지우기: ${controller.text}');
       }
     } else if (key == 'Reset') {
-      print('Reset 호출');
+      debugPrint('Reset 호출');
       if (onReset != null) onReset!();
     } else if (controller.text.length < maxLength) {
       controller.text += key;
-      print('숫자 추가 후 텍스트: ${controller.text}');
+      debugPrint('숫자 추가 후 텍스트: ${controller.text}');
       if (controller.text.length == maxLength) {
         Future.microtask(() {
-          print('onComplete 호출 - 입력 완료 상태: ${controller.text}');
+          debugPrint('onComplete 호출 - 입력 완료 상태: ${controller.text}');
           if (onComplete != null) {
             onComplete!();
           }

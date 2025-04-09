@@ -5,7 +5,7 @@ import '../../../../states/area/area_state.dart';
 class AdjustmentSetting extends StatefulWidget {
   final Function(Map<String, dynamic> adjustmentData) onSave;
 
-  const AdjustmentSetting({Key? key, required this.onSave}) : super(key: key);
+  const AdjustmentSetting({super.key, required this.onSave});
 
   @override
   State<AdjustmentSetting> createState() => _AdjustmentSettingState();

@@ -84,9 +84,9 @@ class _PlateSearchDialogState extends State<PlateSearchDialog> {
                 return FilledButton(
                   onPressed: isValid
                       ? () {
-                    widget.onSearch(value.text);
-                    Navigator.pop(context);
-                  }
+                          widget.onSearch(value.text);
+                          Navigator.pop(context);
+                        }
                       : null,
                   style: FilledButton.styleFrom(
                     backgroundColor: isValid ? Colors.blueAccent : Colors.grey,
@@ -113,8 +113,7 @@ class ScaleTransitionDialog extends StatefulWidget {
   State<ScaleTransitionDialog> createState() => _ScaleTransitionDialogState();
 }
 
-class _ScaleTransitionDialogState extends State<ScaleTransitionDialog>
-    with SingleTickerProviderStateMixin {
+class _ScaleTransitionDialogState extends State<ScaleTransitionDialog> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
 

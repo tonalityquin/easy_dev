@@ -30,9 +30,9 @@ class SecondaryState with ChangeNotifier {
   }
 
   Future<void> refreshData() async {
-    print('데이터 갱신 중...');
+    debugPrint('데이터 갱신 중...');
     await Future.delayed(const Duration(seconds: 2));
-    print('데이터 갱신 완료!');
+    debugPrint('데이터 갱신 완료!');
     notifyListeners();
   }
 

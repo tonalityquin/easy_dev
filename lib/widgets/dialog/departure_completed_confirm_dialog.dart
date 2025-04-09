@@ -26,7 +26,6 @@ class DepartureCompletedConfirmDialog extends StatelessWidget {
             ),
           ),
           actionsAlignment: MainAxisAlignment.center,
-          // ✅ 버튼 중앙 정렬
           actions: [
             FilledButton(
               onPressed: () {

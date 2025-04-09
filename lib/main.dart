@@ -33,8 +33,10 @@ class MyApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         title: 'easyvalet',
         theme: appTheme,
-        initialRoute: initialRoute, // 초기 라우트 값을 상수로 사용
-        routes: appRoutes, // routes.dart에서 정의된 라우팅 정보
+        initialRoute: initialRoute,
+        // 초기 라우트 값을 상수로 사용
+        routes: appRoutes,
+        // routes.dart에서 정의된 라우팅 정보
         onUnknownRoute: (settings) => MaterialPageRoute(
           builder: (context) => const NotFoundPage(),
         ),

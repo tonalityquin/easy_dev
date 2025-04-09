@@ -4,6 +4,7 @@ import '../../models/location_model.dart';
 
 class LocationState extends ChangeNotifier {
   final LocationRepository _repository;
+  final List<IconData> _navigationIcons = [Icons.add, Icons.delete];
 
   LocationState(this._repository) {
     _initializeLocations();
@@ -12,7 +13,6 @@ class LocationState extends ChangeNotifier {
   List<LocationModel> _locations = [];
   Map<String, bool> _selectedLocations = {};
   bool _isLoading = true;
-  List<IconData> _navigationIcons = [Icons.add, Icons.delete];
 
   List<LocationModel> get locations => _locations;
 
