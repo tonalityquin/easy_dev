@@ -72,11 +72,11 @@ class _GoToWorkState extends State<GoToWork> {
       final decoded = jsonDecode(jsonStr);
       cellData = Map<String, Map<int, String>>.from(
         decoded.map((rowKey, colMap) => MapEntry(
-          rowKey,
-          Map<int, String>.from(
-            (colMap as Map).map((k, v) => MapEntry(int.parse(k), v)),
-          ),
-        )),
+              rowKey,
+              Map<int, String>.from(
+                (colMap as Map).map((k, v) => MapEntry(int.parse(k), v)),
+              ),
+            )),
       );
     }
 
@@ -91,9 +91,9 @@ class _GoToWorkState extends State<GoToWork> {
 
     final encoded = jsonEncode(
       cellData.map((rowKey, colMap) => MapEntry(
-        rowKey,
-        colMap.map((col, v) => MapEntry(col.toString(), v)),
-      )),
+            rowKey,
+            colMap.map((col, v) => MapEntry(col.toString(), v)),
+          )),
     );
     await prefs.setString(cellDataKey, encoded);
 
@@ -140,9 +140,7 @@ class _GoToWorkState extends State<GoToWork> {
     final isWorking = userState.isWorking;
     final label = isWorking ? '퇴근하기' : '출근하기';
     final icon = isWorking ? Icons.logout : Icons.login;
-    final colors = isWorking
-        ? [Colors.redAccent, Colors.deepOrange]
-        : [Colors.green.shade400, Colors.teal];
+    final colors = isWorking ? [Colors.redAccent, Colors.deepOrange] : [Colors.green.shade400, Colors.teal];
 
     return InkWell(
       onTap: _isLoading ? null : () => _handleWorkStatus(context, userState),
@@ -159,7 +157,7 @@ class _GoToWorkState extends State<GoToWork> {
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.15),
+              color: Colors.black.withValues(alpha: 0.15),
               blurRadius: 6,
               offset: const Offset(0, 3),
             ),
@@ -169,21 +167,21 @@ class _GoToWorkState extends State<GoToWork> {
           child: _isLoading
               ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
               : Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: Colors.white),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.1,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, color: Colors.white),
+                    const SizedBox(width: 8),
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
-          ),
         ),
       ),
     );
