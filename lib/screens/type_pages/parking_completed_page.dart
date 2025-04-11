@@ -17,7 +17,7 @@ import '../../widgets/dialog/plate_search_dialog.dart'; // ✅ PlateSearchDialog
 import '../../widgets/dialog/parking_completed_status_dialog.dart';
 import '../../widgets/dialog/parking_request_delete_dialog.dart';
 import '../../utils/snackbar_helper.dart';
-import '../../enums/plate_collection.dart';
+import '../../enums/plate_type.dart';
 
 class ParkingCompletedPage extends StatefulWidget {
   const ParkingCompletedPage({super.key});
@@ -101,7 +101,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
     final movementPlate = context.read<MovementPlate>(); // ✅ MovementPlate 사용
     final userName = context.read<UserState>().name;
     final plateState = context.read<PlateState>();
-    final selectedPlate = plateState.getSelectedPlate(PlateCollection.parkingCompleted, userName);
+    final selectedPlate = plateState.getSelectedPlate(PlateType.parkingCompleted, userName);
 
     if (selectedPlate != null) {
       try {
@@ -151,10 +151,10 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
         onPopInvoked: (didPop) async {
           if (!didPop) return;
 
-          final selectedPlate = plateState.getSelectedPlate(PlateCollection.parkingCompleted, userName);
+          final selectedPlate = plateState.getSelectedPlate(PlateType.parkingCompleted, userName);
           if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
             await plateState.toggleIsSelected(
-              collection: PlateCollection.parkingCompleted,
+              collection: PlateType.parkingCompleted,
               plateNumber: selectedPlate.plateNumber,
               userName: userName,
               onError: (msg) => debugPrint(msg),
@@ -169,7 +169,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
               final filterState = context.read<FilterPlate>();
               var parkingCompleted = _isParkingAreaMode && _selectedParkingArea != null
                   ? filterState.filterByParkingLocation('parking_completed', currentArea, _selectedParkingArea!)
-                  : plateState.getPlatesByCollection(PlateCollection.parkingCompleted);
+                  : plateState.getPlatesByCollection(PlateType.parkingCompleted);
               final userName = context.read<UserState>().name;
               parkingCompleted.sort((a, b) {
                 return _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime);
@@ -179,11 +179,11 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                 children: [
                   PlateContainer(
                     data: parkingCompleted,
-                    collection: PlateCollection.parkingCompleted,
+                    collection: PlateType.parkingCompleted,
                     filterCondition: (request) => request.type == '입차 완료',
                     onPlateTap: (plateNumber, area) {
                       plateState.toggleIsSelected(
-                        collection: PlateCollection.parkingCompleted,
+                        collection: PlateType.parkingCompleted,
                         plateNumber: plateNumber,
                         userName: userName,
                         onError: (errorMessage) {
@@ -199,7 +199,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
           bottomNavigationBar: Consumer<PlateState>(
             builder: (context, plateState, child) {
               final userName = context.read<UserState>().name;
-              final selectedPlate = plateState.getSelectedPlate(PlateCollection.parkingCompleted, userName);
+              final selectedPlate = plateState.getSelectedPlate(PlateType.parkingCompleted, userName);
               final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
               return BottomNavigationBar(
                   items: [
@@ -281,7 +281,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
 
                             if (!context.mounted) return;
 
-                            await context.read<PlateState>().updatePlateLocally(PlateCollection.parkingCompleted, updatedPlate);
+                            await context.read<PlateState>().updatePlateLocally(PlateType.parkingCompleted, updatedPlate);
 
                             if (!context.mounted) return;
 
@@ -315,7 +315,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
 
                         if (!context.mounted) return;
 
-                        await context.read<PlateState>().updatePlateLocally(PlateCollection.parkingCompleted, updatedPlate);
+                        await context.read<PlateState>().updatePlateLocally(PlateType.parkingCompleted, updatedPlate);
 
                         if (!context.mounted) return;
 

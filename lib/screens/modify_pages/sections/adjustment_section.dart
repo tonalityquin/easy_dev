@@ -3,10 +3,10 @@ import 'package:provider/provider.dart';
 import 'package:easydev/states/adjustment/adjustment_state.dart';
 import 'package:easydev/models/adjustment_model.dart';
 import 'package:easydev/utils/button/custom_adjustment_dropdown.dart';
-import 'package:easydev/enums/plate_collection.dart';
+import 'package:easydev/enums/plate_type.dart';
 
 class AdjustmentSection extends StatelessWidget {
-  final PlateCollection collectionKey;
+  final PlateType collectionKey;
   final String? selectedAdjustment;
   final ValueChanged<String?> onChanged;
   final Future<bool> Function() onRefresh;
@@ -68,7 +68,7 @@ class AdjustmentSection extends StatelessWidget {
             return CustomAdjustmentDropdown(
               items: dropdownItems,
               selectedValue: selectedAdjustment,
-              onChanged: collectionKey == PlateCollection.departureCompleted
+              onChanged: collectionKey == PlateType.departureCompleted
                   ? null
                   : (newValue) {
                 final adjustment = adjustmentList.firstWhere(

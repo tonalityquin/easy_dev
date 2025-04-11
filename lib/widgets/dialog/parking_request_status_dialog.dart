@@ -5,7 +5,7 @@ import '../../screens/modify_pages/modify_3_digit.dart'; // ✅ 정보 수정 �
 import '../../screens/logs/plate_log_viewer_page.dart';
 import '../../states/plate/movement_plate.dart';
 import '../../states/plate/plate_state.dart';
-import '../../enums/plate_collection.dart';
+import '../../enums/plate_type.dart';
 
 class ParkingRequestStatusDialog extends StatelessWidget {
   final VoidCallback onCancelEntryRequest;
@@ -64,7 +64,7 @@ class ParkingRequestStatusDialog extends StatelessWidget {
                     MaterialPageRoute(
                       builder: (_) => Modify3Digit(
                         plate: plate,
-                        collectionKey: PlateCollection.parkingRequests,
+                        collectionKey: PlateType.parkingRequests,
                       ),
                     ),
                   );

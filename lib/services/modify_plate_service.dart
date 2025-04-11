@@ -9,13 +9,13 @@ import '../states/plate/modify_plate.dart';
 import '../states/area/area_state.dart';
 import '../states/user/user_state.dart';
 import '../utils/gcs_uploader.dart';
-import '../enums/plate_collection.dart';
+import '../enums/plate_type.dart';
 
 class ModifyPlateService {
   final BuildContext context;
   final List<XFile> capturedImages;
   final List<String> existingImageUrls;
-  final PlateCollection collectionKey;
+  final PlateType collectionKey;
   final dynamic originalPlate;
 
   // form controllers

@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../../repositories/plate/plate_repository.dart';
 import '../../models/plate_model.dart';
 import '../area/area_state.dart';
-import '../../enums/plate_collection.dart';
+import '../../enums/plate_type.dart';
 
 class PlateState extends ChangeNotifier {
   final PlateRepository _repository;
@@ -14,12 +14,12 @@ class PlateState extends ChangeNotifier {
     _areaState.addListener(_onAreaChanged);
   }
 
-  final Map<PlateCollection, List<PlateModel>> _data = {
-    for (var c in PlateCollection.values) c: [],
+  final Map<PlateType, List<PlateModel>> _data = {
+    for (var c in PlateType.values) c: [],
   };
 
-  final Map<PlateCollection, Stream<List<PlateModel>>> _activeStreams = {};
-  final Map<PlateCollection, StreamSubscription<List<PlateModel>>> _subscriptions = {};
+  final Map<PlateType, Stream<List<PlateModel>>> _activeStreams = {};
+  final Map<PlateType, StreamSubscription<List<PlateModel>>> _subscriptions = {};
 
   String? _searchQuery;
 
@@ -37,15 +37,15 @@ class PlateState extends ChangeNotifier {
     } else {
       debugPrint('✅ 지역 Plate 상태 수신 완료');
       debugPrint('📌 Selected Area: $currentArea');
-      debugPrint('🅿️ Parking Requests: ${_data[PlateCollection.parkingRequests]?.length ?? 0}');
-      debugPrint('✅ Parking Completed: ${_data[PlateCollection.parkingCompleted]?.length ?? 0}');
-      debugPrint('🚗 Departure Requests: ${_data[PlateCollection.departureRequests]?.length ?? 0}');
-      debugPrint('🏁 Departure Completed: ${_data[PlateCollection.departureCompleted]?.length ?? 0}');
+      debugPrint('🅿️ Parking Requests: ${_data[PlateType.parkingRequests]?.length ?? 0}');
+      debugPrint('✅ Parking Completed: ${_data[PlateType.parkingCompleted]?.length ?? 0}');
+      debugPrint('🚗 Departure Requests: ${_data[PlateType.departureRequests]?.length ?? 0}');
+      debugPrint('🏁 Departure Completed: ${_data[PlateType.departureCompleted]?.length ?? 0}');
     }
   }
 
   int getDepartureCompletedCountByDate(DateTime selectedDate) {
-    return _data[PlateCollection.departureCompleted]
+    return _data[PlateType.departureCompleted]
         ?.where((p) =>
     p.endTime != null &&
         p.endTime!.year == selectedDate.year &&
@@ -62,9 +62,9 @@ class PlateState extends ChangeNotifier {
     plateCounts();
 
     int receivedCount = 0;
-    final totalCollections = PlateCollection.values.length;
+    final totalCollections = PlateType.values.length;
 
-    for (final collection in PlateCollection.values) {
+    for (final collection in PlateType.values) {
       final stream = _repository
           .getCollectionStream(collection.name)
           .map((list) => list.where((plate) => plate.area == currentArea).toList());
@@ -111,10 +111,10 @@ class PlateState extends ChangeNotifier {
     plateCounts();
   }
 
-  List<PlateModel> getPlatesByCollection(PlateCollection collection, {DateTime? selectedDate}) {
+  List<PlateModel> getPlatesByCollection(PlateType collection, {DateTime? selectedDate}) {
     List<PlateModel> plates = _data[collection] ?? [];
 
-    if (collection == PlateCollection.departureCompleted) {
+    if (collection == PlateType.departureCompleted) {
       plates = plates.where((plate) {
         if (plate.endTime == null) return false;
         if (selectedDate == null) return true;
@@ -138,7 +138,7 @@ class PlateState extends ChangeNotifier {
   }
 
   Future<void> toggleIsSelected({
-    required PlateCollection collection,
+    required PlateType collection,
     required String plateNumber,
     required String userName,
     required void Function(String) onError,
@@ -218,7 +218,7 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  PlateModel? getSelectedPlate(PlateCollection collection, String userName) {
+  PlateModel? getSelectedPlate(PlateType collection, String userName) {
     final plates = _data[collection];
     if (plates == null || plates.isEmpty) return null;
 
@@ -242,7 +242,7 @@ class PlateState extends ChangeNotifier {
     _initializeSubscriptions();
   }
 
-  Future<void> updatePlateLocally(PlateCollection collection, PlateModel updatedPlate) async {
+  Future<void> updatePlateLocally(PlateType collection, PlateModel updatedPlate) async {
     final list = _data[collection];
     if (list == null) return;
 

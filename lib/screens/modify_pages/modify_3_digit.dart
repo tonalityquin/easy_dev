@@ -25,11 +25,11 @@ import 'package:easydev/utils/button/animated_photo_button.dart';
 import 'package:easydev/utils/button/animated_action_button.dart';
 
 import 'package:easydev/states/plate/plate_state.dart';
-import 'package:easydev/enums/plate_collection.dart';
+import 'package:easydev/enums/plate_type.dart';
 
 class Modify3Digit extends StatefulWidget {
   final PlateModel plate; // ✅ plate 파라미터 추가
-  final PlateCollection collectionKey; // ✅ 추가
+  final PlateType collectionKey; // ✅ 추가
 
   const Modify3Digit({
     super.key,

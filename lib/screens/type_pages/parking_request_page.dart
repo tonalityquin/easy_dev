@@ -15,7 +15,7 @@ import '../../utils/snackbar_helper.dart';
 import '../../widgets/dialog/parking_location_dialog.dart';
 import '../../repositories/plate/plate_repository.dart';
 import '../../utils/fee_calculator.dart';
-import '../../enums/plate_collection.dart';
+import '../../enums/plate_type.dart';
 
 class ParkingRequestPage extends StatefulWidget {
   const ParkingRequestPage({super.key});
@@ -66,7 +66,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
   void _handlePlateTap(BuildContext context, String plateNumber, String area) {
     final userName = context.read<UserState>().name;
     context.read<PlateState>().toggleIsSelected(
-          collection: PlateCollection.parkingRequests,
+          collection: PlateType.parkingRequests,
           plateNumber: plateNumber,
           userName: userName,
           onError: (errorMessage) {
@@ -78,7 +78,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
   void _handleParkingCompleted(BuildContext context) {
     final plateState = context.read<PlateState>();
     final userName = context.read<UserState>().name;
-    final selectedPlate = plateState.getSelectedPlate(PlateCollection.parkingRequests, userName);
+    final selectedPlate = plateState.getSelectedPlate(PlateType.parkingRequests, userName);
     if (selectedPlate != null) {
       final TextEditingController locationController = TextEditingController();
       showDialog(
@@ -146,10 +146,10 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
       onPopInvoked: (didPop) async {
         if (!didPop) return;
 
-        final selectedPlate = plateState.getSelectedPlate(PlateCollection.parkingRequests, userName);
+        final selectedPlate = plateState.getSelectedPlate(PlateType.parkingRequests, userName);
         if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
           await plateState.toggleIsSelected(
-            collection: PlateCollection.parkingRequests,
+            collection: PlateType.parkingRequests,
             plateNumber: selectedPlate.plateNumber,
             userName: userName,
             onError: (msg) => debugPrint(msg),
@@ -160,7 +160,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
         appBar: const TopNavigation(),
         body: Consumer2<PlateState, AreaState>(
           builder: (context, plateState, areaState, child) {
-            var parkingRequests = plateState.getPlatesByCollection(PlateCollection.parkingRequests);
+            var parkingRequests = plateState.getPlatesByCollection(PlateType.parkingRequests);
             parkingRequests.sort((a, b) {
               return _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime);
             });
@@ -169,7 +169,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
               children: [
                 PlateContainer(
                   data: parkingRequests,
-                  collection: PlateCollection.parkingRequests,
+                  collection: PlateType.parkingRequests,
                   filterCondition: (request) => request.type == '입차 요청' || request.type == '입차 중',
                   onPlateTap: (plateNumber, area) {
                     _handlePlateTap(context, plateNumber, area);
@@ -182,7 +182,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
         bottomNavigationBar: Consumer<PlateState>(
           builder: (context, plateState, child) {
             final userName = context.read<UserState>().name;
-            final selectedPlate = plateState.getSelectedPlate(PlateCollection.parkingRequests, userName);
+            final selectedPlate = plateState.getSelectedPlate(PlateType.parkingRequests, userName);
             final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
             return BottomNavigationBar(
               items: [
@@ -266,7 +266,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
 
                       if (!context.mounted) return;
 
-                      await context.read<PlateState>().updatePlateLocally(PlateCollection.parkingRequests, updatedPlate);
+                      await context.read<PlateState>().updatePlateLocally(PlateType.parkingRequests, updatedPlate);
 
                       if (!context.mounted) return;
 
@@ -297,7 +297,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
 
                     if (!context.mounted) return;
 
-                    await context.read<PlateState>().updatePlateLocally(PlateCollection.parkingRequests, updatedPlate);
+                    await context.read<PlateState>().updatePlateLocally(PlateType.parkingRequests, updatedPlate);
 
                     if (!context.mounted) return;
 
@@ -309,7 +309,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                   _handleParkingCompleted(context);
                 } else if (index == 2) {
                   if (isPlateSelected) {
-                    final selectedPlate = plateState.getSelectedPlate(PlateCollection.parkingRequests, userName);
+                    final selectedPlate = plateState.getSelectedPlate(PlateType.parkingRequests, userName);
                     if (selectedPlate != null) {
                       showDialog(
                         context: context,
