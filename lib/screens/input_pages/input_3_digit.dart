@@ -281,8 +281,6 @@ class _Input3DigitState extends State<Input3Digit> {
     }
   }
 
-
-
   void _selectParkingLocation() {
     showDialog(
       context: context,

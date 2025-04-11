@@ -160,13 +160,14 @@ void handleEntryParkingRequest(BuildContext context, String plateNumber, String 
   final plateState = context.read<PlateState>();
 
   movementPlate.goBackToParkingRequest(
-    fromCollection: 'parking_completed',
+    fromType: PlateType.parkingCompleted, // 🔄 수정된 부분
     plateNumber: plateNumber,
     area: area,
     plateState: plateState,
     newLocation: "미지정",
   );
 }
+
 
 void handleEntryDepartureCompleted(BuildContext context, PlateModel plate) async {
   final movementPlate = context.read<MovementPlate>();

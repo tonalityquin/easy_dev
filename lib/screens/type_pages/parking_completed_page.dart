@@ -74,7 +74,9 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
           });
           final area = context.read<AreaState>().currentArea;
           setState(() {
-            context.read<FilterPlate>().filterByParkingLocation('parking_completed', area, _selectedParkingArea!);
+            context
+                .read<FilterPlate>()
+                .filterByParkingLocation(PlateType.parkingCompleted, area, _selectedParkingArea!);
           });
         },
       ),
@@ -126,11 +128,12 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
   }
 
   void handleEntryRequest(BuildContext context, String plateNumber, String area) {
-    final movementPlate = context.read<MovementPlate>(); // ✅ MovementPlate 사용
+    final movementPlate = context.read<MovementPlate>();
     final plateState = context.read<PlateState>();
 
     movementPlate.goBackToParkingRequest(
-      fromCollection: 'parking_completed',
+      fromType: PlateType.parkingCompleted,
+      // 🔄 수정: enum으로 전달
       plateNumber: plateNumber,
       area: area,
       newLocation: "미지정",
@@ -168,7 +171,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
               final currentArea = areaState.currentArea;
               final filterState = context.read<FilterPlate>();
               var parkingCompleted = _isParkingAreaMode && _selectedParkingArea != null
-                  ? filterState.filterByParkingLocation('parking_completed', currentArea, _selectedParkingArea!)
+                  ? filterState.filterByParkingLocation(PlateType.parkingCompleted, currentArea, _selectedParkingArea!)
                   : plateState.getPlatesByCollection(PlateType.parkingCompleted);
               final userName = context.read<UserState>().name;
               parkingCompleted.sort((a, b) {
@@ -180,7 +183,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                   PlateContainer(
                     data: parkingCompleted,
                     collection: PlateType.parkingCompleted,
-                    filterCondition: (request) => request.type == '입차 완료',
+                    filterCondition: (request) => request.type == PlateType.parkingCompleted.firestoreValue,
                     onPlateTap: (plateNumber, area) {
                       plateState.toggleIsSelected(
                         collection: PlateType.parkingCompleted,
@@ -273,15 +276,16 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
 
                             if (!context.mounted) return;
 
-                            await context.read<PlateRepository>().addOrUpdateDocument(
-                                  'parking_completed',
+                            await context.read<PlateRepository>().addOrUpdatePlate(
                                   selectedPlate.id,
-                                  updatedPlate.toMap(),
+                                  updatedPlate,
                                 );
 
                             if (!context.mounted) return;
 
-                            await context.read<PlateState>().updatePlateLocally(PlateType.parkingCompleted, updatedPlate);
+                            await context
+                                .read<PlateState>()
+                                .updatePlateLocally(PlateType.parkingCompleted, updatedPlate);
 
                             if (!context.mounted) return;
 
@@ -307,10 +311,9 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                           lockedFeeAmount: lockedFee, // ✅ 사전 정산 금액 저장
                         );
 
-                        await context.read<PlateRepository>().addOrUpdateDocument(
-                              'parking_completed',
+                        await context.read<PlateRepository>().addOrUpdatePlate(
                               selectedPlate.id,
-                              updatedPlate.toMap(),
+                              updatedPlate,
                             );
 
                         if (!context.mounted) return;
@@ -354,7 +357,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                                 context: context,
                                 builder: (context) => ParkingRequestDeleteDialog(
                                   onConfirm: () {
-                                    context.read<DeletePlate>().deletePlateFromParkingCompleted(
+                                    context.read<DeletePlate>().deleteFromParkingCompleted(
                                           selectedPlate.plateNumber,
                                           selectedPlate.area,
                                         );

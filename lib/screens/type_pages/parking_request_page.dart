@@ -112,12 +112,12 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
 
     try {
       plateRepository.addRequestOrCompleted(
-        collection: 'parking_completed',
         plateNumber: plateNumber,
         location: location,
         area: area,
         userName: context.read<UserState>().name,
-        type: '입차 완료',
+        plateType: PlateType.parkingCompleted,
+        // ✅ 수정된 부분
         adjustmentType: null,
         statusList: [],
         basicStandard: 0,
@@ -170,7 +170,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                 PlateContainer(
                   data: parkingRequests,
                   collection: PlateType.parkingRequests,
-                  filterCondition: (request) => request.type == '입차 요청' || request.type == '입차 중',
+                  filterCondition: (request) => request.type == PlateType.parkingRequests.firestoreValue,
                   onPlateTap: (plateNumber, area) {
                     _handlePlateTap(context, plateNumber, area);
                   },
@@ -258,10 +258,9 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                       );
 
                       if (!context.mounted) return;
-                      await context.read<PlateRepository>().addOrUpdateDocument(
-                            'parking_requests',
+                      await context.read<PlateRepository>().addOrUpdatePlate(
                             selectedPlate.id,
-                            updatedPlate.toMap(),
+                            updatedPlate,
                           );
 
                       if (!context.mounted) return;
@@ -289,10 +288,9 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                       lockedFeeAmount: lockedFee,
                     );
 
-                    await context.read<PlateRepository>().addOrUpdateDocument(
-                          'parking_requests',
+                    await context.read<PlateRepository>().addOrUpdatePlate(
                           selectedPlate.id,
-                          updatedPlate.toMap(),
+                          updatedPlate,
                         );
 
                     if (!context.mounted) return;
@@ -319,7 +317,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                             plateNumber: selectedPlate.plateNumber,
                             area: selectedPlate.area,
                             onCancelEntryRequest: () {
-                              context.read<DeletePlate>().deletePlateFromParkingRequest(
+                              context.read<DeletePlate>().deleteFromParkingRequest(
                                     selectedPlate.plateNumber,
                                     selectedPlate.area,
                                   );

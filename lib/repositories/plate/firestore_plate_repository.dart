@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
 import 'plate_repository.dart';
 import 'dart:developer' as dev;
@@ -7,16 +8,20 @@ class FirestorePlateRepository implements PlateRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   @override
-  Stream<List<PlateModel>> getCollectionStream(String collectionName) {
-    return _firestore.collection(collectionName).snapshots().map((snapshot) {
-      return snapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList();
-    });
+  Stream<List<PlateModel>> getPlatesByType(PlateType type) {
+    return _firestore
+        .collection('plates')
+        .where(PlateFields.type, isEqualTo: type.firestoreValue)
+        .orderBy(PlateFields.requestTime, descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList());
   }
 
   @override
-  Future<void> addOrUpdateDocument(String collection, String documentId, Map<String, dynamic> data) async {
-    final docRef = _firestore.collection(collection).doc(documentId);
+  Future<void> addOrUpdatePlate(String documentId, PlateModel plate) async {
+    final docRef = _firestore.collection('plates').doc(documentId);
     final docSnapshot = await docRef.get();
+    final data = plate.toMap();
 
     if (docSnapshot.exists) {
       final existingData = docSnapshot.data();
@@ -25,6 +30,7 @@ class FirestorePlateRepository implements PlateRepository {
         return;
       }
     }
+
     await docRef.set(data, SetOptions(merge: true));
     dev.log("DB 문서 저장 완료: $documentId", name: "Firestore");
   }
@@ -40,19 +46,20 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
-  Future<void> deleteDocument(String collection, String documentId) async {
-    final docRef = _firestore.collection(collection).doc(documentId);
+  Future<void> deletePlate(String documentId) async {
+    final docRef = _firestore.collection('plates').doc(documentId);
     final docSnapshot = await docRef.get();
+
     if (docSnapshot.exists) {
       await docRef.delete();
     } else {
-      dev.log("DB에 존재하지 않는 문서 (deleteDocument): $documentId", name: "Firestore");
+      dev.log("DB에 존재하지 않는 문서 (deletePlate): $documentId", name: "Firestore");
     }
   }
 
   @override
-  Future<PlateModel?> getDocument(String collection, String documentId) async {
-    final doc = await _firestore.collection(collection).doc(documentId).get();
+  Future<PlateModel?> getPlate(String documentId) async {
+    final doc = await _firestore.collection('plates').doc(documentId).get();
     if (!doc.exists) return null;
     return PlateModel.fromDocument(doc);
   }
@@ -60,26 +67,14 @@ class FirestorePlateRepository implements PlateRepository {
   @override
   Future<void> deleteAllData() async {
     try {
-      final collections = [
-        'parking_requests',
-        'parking_completed',
-        'departure_requests',
-        'departure_completed',
-      ];
+      final snapshot = await _firestore.collection('plates').get();
+      final batch = _firestore.batch();
+      for (var doc in snapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
 
-      // 1. 일반 컬렉션 문서 삭제
-      await Future.wait(collections.map((collection) async {
-        final snapshot = await _firestore.collection(collection).get();
-        final batch = _firestore.batch();
-        for (var doc in snapshot.docs) {
-          batch.delete(doc.reference);
-        }
-        await batch.commit();
-      }));
-
-      // 2. 🔥 logs/plate_movements/entries 문서 삭제
       final entriesSnapshot = await _firestore.collection('logs').doc('plate_movements').collection('entries').get();
-
       final entriesBatch = _firestore.batch();
       for (var doc in entriesSnapshot.docs) {
         entriesBatch.delete(doc.reference);
@@ -92,10 +87,13 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
-  Future<List<PlateModel>> getPlatesByArea(String collection, String area) async {
+  Future<List<PlateModel>> getPlatesByArea(PlateType type, String area) async {
     try {
-      QuerySnapshot<Map<String, dynamic>> querySnapshot =
-          await _firestore.collection(collection).where('area', isEqualTo: area).get();
+      final querySnapshot = await _firestore
+          .collection('plates')
+          .where('type', isEqualTo: type.firestoreValue)
+          .where('area', isEqualTo: area)
+          .get();
 
       return querySnapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList();
     } catch (e) {
@@ -106,11 +104,10 @@ class FirestorePlateRepository implements PlateRepository {
 
   @override
   Future<void> addRequestOrCompleted({
-    required String collection,
     required String plateNumber,
     required String location,
     required String area,
-    required String type,
+    required PlateType plateType,
     required String userName,
     String? adjustmentType,
     List<String>? statusList,
@@ -120,15 +117,14 @@ class FirestorePlateRepository implements PlateRepository {
     int? addAmount,
     required String region,
     List<String>? imageUrls,
-    bool isLockedFee = false, // 🔐 추가
-    int? lockedAtTimeInSeconds, // ⏱️ 추가
+    bool isLockedFee = false,
+    int? lockedAtTimeInSeconds,
     int? lockedFeeAmount,
     DateTime? endTime,
   }) async {
     final documentId = '${plateNumber}_$area';
 
-    // Firestore에서 중복 확인
-    final existingPlate = await getDocument(collection, documentId);
+    final existingPlate = await getPlate(documentId);
     if (existingPlate != null) {
       dev.log("🚨 중복된 번호판 등록 시도: $plateNumber");
       throw Exception("이미 등록된 번호판입니다: $plateNumber");
@@ -136,8 +132,7 @@ class FirestorePlateRepository implements PlateRepository {
 
     if (adjustmentType != null) {
       try {
-        final adjustmentRef = _firestore.collection('adjustment');
-        final adjustmentDoc = await adjustmentRef.doc('${adjustmentType}_$area').get();
+        final adjustmentDoc = await _firestore.collection('adjustment').doc('${adjustmentType}_$area').get();
         if (adjustmentDoc.exists) {
           final adjustmentData = adjustmentDoc.data()!;
           dev.log('🔥 Firestore에서 가져온 정산 데이터: $adjustmentData');
@@ -146,7 +141,7 @@ class FirestorePlateRepository implements PlateRepository {
           addStandard = adjustmentData['addStandard'] as int? ?? 0;
           addAmount = adjustmentData['addAmount'] as int? ?? 0;
         } else {
-          throw Exception('🚨 Firestore에서 데이터를 찾을 수 없음');
+          throw Exception('🚨 Firestore에서 정산 데이터를 찾을 수 없음');
         }
       } catch (e) {
         dev.log("🔥 Firestore 에러 (addRequestOrCompleted): $e");
@@ -154,36 +149,38 @@ class FirestorePlateRepository implements PlateRepository {
       }
     }
 
-    final data = {
-      'plate_number': plateNumber,
-      'type': type,
-      'request_time': DateTime.now(),
-      'location': location.isNotEmpty ? location : '미지정',
-      'area': area,
-      'userName': userName,
-      'adjustmentType': adjustmentType,
-      'statusList': statusList ?? [],
-      'isSelected': false,
-      'selectedBy': null,
-      'basicStandard': basicStandard ?? 0,
-      'basicAmount': basicAmount ?? 0,
-      'addStandard': addStandard ?? 0,
-      'addAmount': addAmount ?? 0,
-      'region': region,
-      'imageUrls': imageUrls ?? [],
-      'isLockedFee': isLockedFee,                    // ✅
-      'lockedAtTimeInSeconds': lockedAtTimeInSeconds, // ✅
-      if (lockedFeeAmount != null) 'lockedFeeAmount': lockedFeeAmount,
-      if (endTime != null) 'end_time': endTime,
-    };
+    final plate = PlateModel(
+      id: documentId,
+      plateNumber: plateNumber,
+      type: plateType.firestoreValue, // ✅ 여기 핵심 수정
+      requestTime: DateTime.now(),
+      endTime: endTime,
+      location: location.isNotEmpty ? location : '미지정',
+      area: area,
+      userName: userName,
+      adjustmentType: adjustmentType,
+      statusList: statusList ?? [],
+      basicStandard: basicStandard ?? 0,
+      basicAmount: basicAmount ?? 0,
+      addStandard: addStandard ?? 0,
+      addAmount: addAmount ?? 0,
+      region: region,
+      imageUrls: imageUrls,
+      isSelected: false,
+      selectedBy: null,
+      isLockedFee: isLockedFee,
+      lockedAtTimeInSeconds: lockedAtTimeInSeconds,
+      lockedFeeAmount: lockedFeeAmount,
+    );
 
-    dev.log('🔥 Firestore 저장 데이터: $data');
-    await _firestore.collection(collection).doc(documentId).set(data);
+    dev.log('🔥 저장할 PlateModel: ${plate.toMap()}');
+    await addOrUpdatePlate(documentId, plate);
   }
 
   @override
-  Future<void> updatePlateSelection(String collection, String id, bool isSelected, {String? selectedBy}) async {
-    final docRef = _firestore.collection(collection).doc(id);
+  Future<void> updatePlateSelection(String id, bool isSelected, {String? selectedBy}) async {
+    final docRef = _firestore.collection('plates').doc(id);
+
     try {
       await _firestore.runTransaction((transaction) async {
         final docSnapshot = await transaction.get(docRef);
@@ -191,6 +188,7 @@ class FirestorePlateRepository implements PlateRepository {
           dev.log("번호판을 찾을 수 없음: $id", name: "Firestore");
           return;
         }
+
         transaction.update(docRef, {
           'isSelected': isSelected,
           'selectedBy': isSelected ? selectedBy : null,

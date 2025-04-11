@@ -18,8 +18,8 @@ class ParkingRequestService {
   void togglePlateSelection(String plateNumber) {
     final userName = context.read<UserState>().name;
     context.read<PlateState>().toggleIsSelected(
-      collection: PlateType.parkingRequests,
-      plateNumber: plateNumber,
+          collection: PlateType.parkingRequests,
+          plateNumber: plateNumber,
           userName: userName,
           onError: (msg) => showFailedSnackbar(context, msg),
         );
@@ -36,12 +36,12 @@ class ParkingRequestService {
 
     try {
       await plateRepo.addRequestOrCompleted(
-        collection: 'parking_completed',
         plateNumber: selectedPlate.plateNumber,
         location: location,
         area: selectedPlate.area,
         userName: userState.name,
-        type: '입차 완료',
+        plateType: PlateType.parkingCompleted,
+        // ✅ type으로 구분
         adjustmentType: null,
         statusList: [],
         basicStandard: 0,
@@ -68,7 +68,7 @@ class ParkingRequestService {
   }
 
   void deletePlate(PlateModel plate) {
-    context.read<DeletePlate>().deletePlateFromParkingRequest(
+    context.read<DeletePlate>().deleteFromParkingRequest(
           plate.plateNumber,
           plate.area,
         );

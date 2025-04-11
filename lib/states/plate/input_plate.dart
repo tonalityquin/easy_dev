@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
 import '../../models/plate_log_model.dart';
 import '../../utils/snackbar_helper.dart';
@@ -10,24 +11,25 @@ import 'dart:developer' as dev;
 
 class InputPlate with ChangeNotifier {
   final PlateRepository _plateRepository;
-  final LogPlateState _logState; // ✅ 로그 주입
+  final LogPlateState _logState;
 
   InputPlate(this._plateRepository, this._logState);
 
   Future<bool> isPlateNumberDuplicated(String plateNumber, String area) async {
-    final collectionsToCheck = [
-      'parking_requests',
-      'parking_completed',
-      'departure_requests',
+    final typesToCheck = [
+      PlateType.parkingRequests,
+      PlateType.parkingCompleted,
+      PlateType.departureRequests,
     ];
 
-    for (var collection in collectionsToCheck) {
-      final plates = await _plateRepository.getPlatesByArea(collection, area);
+    for (final type in typesToCheck) {
+      final plates = await _plateRepository.getPlatesByArea(type, area);
       if (plates.any((plate) => plate.plateNumber == plateNumber)) {
-        dev.log("🚨 중복된 번호판 발견: $plateNumber (컬렉션: $collection)");
+        dev.log("🚨 중복된 번호판 발견: $plateNumber (type: ${type.firestoreValue})");
         return true;
       }
     }
+
     return false;
   }
 
@@ -47,9 +49,9 @@ class InputPlate with ChangeNotifier {
     required String region,
     List<String>? imageUrls,
     int? lockedFee,
-    bool isLockedFee = false,               // ✅ 추가
-    int? lockedAtTimeInSeconds,            // ✅ 추가
-    int? lockedFeeAmount, // ✅ 추가
+    bool isLockedFee = false,
+    int? lockedAtTimeInSeconds,
+    int? lockedFeeAmount,
   }) async {
     if (await isPlateNumberDuplicated(plateNumber, areaState.currentArea)) {
       if (!context.mounted) return;
@@ -58,18 +60,15 @@ class InputPlate with ChangeNotifier {
     }
 
     final correctedLocation = location.isEmpty ? '미지정' : location;
-
-    final collection = isLocationSelected ? 'parking_completed' : 'parking_requests';
-    final type = isLocationSelected ? '입차 완료' : '입차 요청';
+    final plateType = isLocationSelected ? PlateType.parkingCompleted : PlateType.parkingRequests;
 
     try {
       await _plateRepository.addRequestOrCompleted(
-        collection: collection,
         plateNumber: plateNumber,
         location: correctedLocation,
         area: areaState.currentArea,
         userName: userState.name,
-        type: type,
+        plateType: plateType,
         adjustmentType: adjustmentType,
         statusList: statusList ?? [],
         basicStandard: basicStandard,
@@ -81,16 +80,15 @@ class InputPlate with ChangeNotifier {
         isLockedFee: isLockedFee,
         lockedAtTimeInSeconds: lockedAtTimeInSeconds,
         lockedFeeAmount: lockedFeeAmount,
-    );
+      );
 
-      // ✅ 로그 저장
       await _logState.saveLog(
         PlateLogModel(
           plateNumber: plateNumber,
           area: areaState.currentArea,
           from: '-',
-          to: collection,
-          action: type,
+          to: plateType.label,
+          action: plateType.label,
           performedBy: userState.name,
           timestamp: DateTime.now(),
         ),
@@ -110,7 +108,6 @@ class InputPlate with ChangeNotifier {
     required String location,
     required AreaState areaState,
     required UserState userState,
-    required String collectionKey,
     String? adjustmentType,
     List<String>? statusList,
     int? basicStandard,
@@ -124,7 +121,8 @@ class InputPlate with ChangeNotifier {
     int? lockedFeeAmount,
   }) async {
     try {
-      final documentId = '${plate.plateNumber}_${plate.area}';
+      final oldDocumentId = '${plate.plateNumber}_${plate.area}';
+      final newDocumentId = '${newPlateNumber}_${plate.area}';
 
       final updatedPlate = plate.copyWith(
         plateNumber: newPlateNumber,
@@ -143,24 +141,23 @@ class InputPlate with ChangeNotifier {
         lockedFeeAmount: lockedFeeAmount ?? plate.lockedFeeAmount,
       );
 
-      await _plateRepository.addOrUpdateDocument(
-        collectionKey,
-        documentId,
-        updatedPlate.toMap(),
-      );
+      if (oldDocumentId != newDocumentId) {
+        await _plateRepository.deletePlate(oldDocumentId);
+      }
 
-      // ✅ 정산 변경 여부 감지 후 로그 저장
-      if ((plate.isLockedFee != updatedPlate.isLockedFee)) {
-        final actionLog = updatedPlate.isLockedFee
-            ? '사전 정산 완료'
-            : '사전 정산 취소';
+      await _plateRepository.addOrUpdatePlate(newDocumentId, updatedPlate);
+
+      // 사전 정산 여부 변경 시 로그
+      if (plate.isLockedFee != updatedPlate.isLockedFee) {
+        final actionLog = updatedPlate.isLockedFee ? '사전 정산 완료' : '사전 정산 취소';
 
         await _logState.saveLog(
           PlateLogModel(
             plateNumber: plate.plateNumber,
             area: plate.area,
-            from: collectionKey,
-            to: collectionKey,
+            from: plate.type,
+            // ✅ 문자열 그대로 사용
+            to: plate.type,
             action: actionLog,
             performedBy: userState.name,
             timestamp: DateTime.now(),

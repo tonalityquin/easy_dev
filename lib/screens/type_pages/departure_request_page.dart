@@ -76,7 +76,9 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
           });
           final area = context.read<AreaState>().currentArea;
           setState(() {
-            context.read<FilterPlate>().filterByParkingLocation('departure_requests', area, _selectedParkingArea!);
+            context
+                .read<FilterPlate>()
+                .filterByParkingLocation(PlateType.departureRequests, area, _selectedParkingArea!);
           });
         },
       ),
@@ -194,7 +196,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
               final currentArea = areaState.currentArea;
               final filterState = context.read<FilterPlate>(); // 🔹 FilterState 가져오기
               var departureRequests = _isParkingAreaMode && _selectedParkingArea != null
-                  ? filterState.filterByParkingLocation('departure_requests', currentArea, _selectedParkingArea!)
+                  ? filterState.filterByParkingLocation(PlateType.departureRequests, currentArea, _selectedParkingArea!)
                   : plateState.getPlatesByCollection(PlateType.departureRequests);
               final userName = context.read<UserState>().name;
               departureRequests.sort((a, b) {
@@ -206,7 +208,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                   PlateContainer(
                     data: departureRequests,
                     collection: PlateType.departureRequests,
-                    filterCondition: (request) => request.type == '출차 요청' || request.type == '출차 중',
+                    filterCondition: (request) => request.type == PlateType.departureRequests.firestoreValue,
                     onPlateTap: (plateNumber, area) {
                       plateState.toggleIsSelected(
                         collection: PlateType.departureRequests,
@@ -306,15 +308,16 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                           );
 
                           if (!context.mounted) return;
-                          await context.read<PlateRepository>().addOrUpdateDocument(
-                                'departure_requests',
+                          await context.read<PlateRepository>().addOrUpdatePlate(
                                 selectedPlate.id,
-                                updatedPlate.toMap(),
+                                updatedPlate,
                               );
 
                           if (!context.mounted) return;
 
-                          await context.read<PlateState>().updatePlateLocally(PlateType.departureRequests, updatedPlate);
+                          await context
+                              .read<PlateState>()
+                              .updatePlateLocally(PlateType.departureRequests, updatedPlate);
 
                           if (!context.mounted) return;
 
@@ -338,10 +341,9 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                           lockedFeeAmount: lockedFee, // ✅ 사전 정산 금액 저장
                         );
 
-                        await context.read<PlateRepository>().addOrUpdateDocument(
-                              'departure_requests',
+                        await context.read<PlateRepository>().addOrUpdatePlate(
                               selectedPlate.id,
-                              updatedPlate.toMap(),
+                              updatedPlate,
                             );
 
                         if (!context.mounted) return;
@@ -397,7 +399,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                                 context: context,
                                 builder: (context) => ParkingRequestDeleteDialog(
                                   onConfirm: () {
-                                    context.read<DeletePlate>().deletePlateFromDepartureRequest(
+                                    context.read<DeletePlate>().deleteFromDepartureRequest(
                                           selectedPlate.plateNumber,
                                           selectedPlate.area,
                                         );

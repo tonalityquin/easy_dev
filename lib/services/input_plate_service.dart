@@ -10,18 +10,19 @@ import 'package:camera/camera.dart';
 class InputPlateService {
   /// 이미지 업로드
   static Future<List<String>> uploadCapturedImages(
-      List<XFile> images,
-      String plateNumber,
-      String area,
-      String userName,
-      ) async {
+    List<XFile> images,
+    String plateNumber,
+    String area,
+    String userName,
+  ) async {
     final uploader = GCSUploader();
     final List<String> uploadedUrls = [];
 
     for (var image in images) {
       final file = File(image.path);
       final now = DateTime.now();
-      final formattedDate = '${now.year.toString().padLeft(4, '0')}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}'
+      final formattedDate =
+          '${now.year.toString().padLeft(4, '0')}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}'
           '_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
 
       final fileName = '${formattedDate}_${area}_${plateNumber}_$userName.jpg';
@@ -33,14 +34,11 @@ class InputPlateService {
         throw Exception('이미지 업로드에 실패했습니다. 다시 시도해주세요.');
       }
 
-
       uploadedUrls.add(gcsUrl);
     }
 
     return uploadedUrls;
   }
-
-
 
   /// plate 저장 처리
   static Future<void> savePlateEntry({

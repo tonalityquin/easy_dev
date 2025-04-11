@@ -2,6 +2,7 @@ import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
 import 'dart:developer' as dev;
 
+import '../enums/plate_type.dart';
 import '../repositories/adjustment/firestore_adjustment_repository.dart';
 import '../repositories/location/firestore_location_repository.dart';
 import '../repositories/plate/firestore_plate_repository.dart';
@@ -22,16 +23,35 @@ import '../models/status_model.dart';
 /// ⚠️ fallback dummy 구현체들 (필수 메서드 구현 포함)
 class DummyPlateRepository implements PlateRepository {
   @override
-  Future<void> addOrUpdateDocument(String collection, String docId, Map<String, dynamic> data) => throw UnimplementedError();
+  Future<void> addOrUpdatePlate(String documentId, PlateModel plate) => throw UnimplementedError();
 
   @override
-  Future<void> addRequestOrCompleted({required String plateNumber, required String area, required String region, required String location, required String type, required String userName, required String collection, int? basicAmount, int? basicStandard, int? addAmount, int? addStandard, String? adjustmentType, int? lockedAtTimeInSeconds, int? lockedFeeAmount, bool isLockedFee = false, DateTime? endTime, List<String>? imageUrls, List<String>? statusList}) => throw UnimplementedError();
+  Future<void> addRequestOrCompleted({
+    required String plateNumber,
+    required String area,
+    required String region,
+    required String location,
+    required PlateType plateType,
+    required String userName,
+    String? adjustmentType,
+    List<String>? statusList,
+    int basicStandard = 0,
+    int basicAmount = 0,
+    int addStandard = 0,
+    int addAmount = 0,
+    List<String>? imageUrls,
+    bool isLockedFee = false,
+    int? lockedAtTimeInSeconds,
+    int? lockedFeeAmount,
+    DateTime? endTime,
+  }) =>
+      throw UnimplementedError();
 
   @override
   Future<void> deleteAllData() => throw UnimplementedError();
 
   @override
-  Future<void> deleteDocument(String collection, String docId) => throw UnimplementedError();
+  Future<void> deletePlate(String documentId) => throw UnimplementedError();
 
   Stream<List<PlateModel>> getPlatesStream() => throw UnimplementedError();
 
@@ -45,16 +65,16 @@ class DummyPlateRepository implements PlateRepository {
   Future<List<String>> getAvailableLocations(String area) => throw UnimplementedError();
 
   @override
-  Stream<List<PlateModel>> getCollectionStream(String collection) => throw UnimplementedError();
+  Stream<List<PlateModel>> getPlatesByType(PlateType type) => throw UnimplementedError();
 
   @override
-  Future<PlateModel?> getDocument(String collection, String docId) => throw UnimplementedError();
+  Future<PlateModel?> getPlate(String documentId) => throw UnimplementedError();
 
   @override
-  Future<List<PlateModel>> getPlatesByArea(String area, String location) => throw UnimplementedError();
+  Future<List<PlateModel>> getPlatesByArea(PlateType type, String area) => throw UnimplementedError();
 
   @override
-  Future<void> updatePlateSelection(String collection, String plateId, bool isSelected, {String? selectedBy}) => throw UnimplementedError();
+  Future<void> updatePlateSelection(String id, bool isSelected, {String? selectedBy}) => throw UnimplementedError();
 }
 
 class DummyLocationRepository implements LocationRepository {
@@ -100,7 +120,8 @@ class DummyUserRepository implements UserRepository {
   Future<void> toggleUserSelection(String userId, bool selected) => throw UnimplementedError();
 
   @override
-  Future<void> updateUserStatus(String userId, String status, {bool? isSaved, bool? isWorking}) => throw UnimplementedError();
+  Future<void> updateUserStatus(String userId, String status, {bool? isSaved, bool? isWorking}) =>
+      throw UnimplementedError();
 }
 
 class DummyAdjustmentRepository implements AdjustmentRepository {

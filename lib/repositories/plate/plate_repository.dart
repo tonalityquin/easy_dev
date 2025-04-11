@@ -1,26 +1,26 @@
+import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
 
 abstract class PlateRepository {
-  Stream<List<PlateModel>> getCollectionStream(String collectionName);
+  Stream<List<PlateModel>> getPlatesByType(PlateType type);
 
-  Future<void> addOrUpdateDocument(String collection, String documentId, Map<String, dynamic> data);
+  Future<void> addOrUpdatePlate(String documentId, PlateModel plate);
 
-  Future<void> deleteDocument(String collection, String documentId);
+  Future<void> deletePlate(String documentId);
 
-  Future<PlateModel?> getDocument(String collection, String documentId);
+  Future<PlateModel?> getPlate(String documentId);
 
-  Future<List<PlateModel>> getPlatesByArea(String collection, String area);
+  Future<List<PlateModel>> getPlatesByArea(PlateType type, String area);
 
   Future<void> deleteAllData();
 
-  Future<void> updatePlateSelection(String collection, String id, bool isSelected, {String? selectedBy});
+  Future<void> updatePlateSelection(String id, bool isSelected, {String? selectedBy});
 
   Future<void> addRequestOrCompleted({
-    required String collection,
     required String plateNumber,
     required String location,
     required String area,
-    required String type,
+    required PlateType plateType,
     required String userName,
     String? adjustmentType,
     List<String>? statusList,
@@ -35,7 +35,6 @@ abstract class PlateRepository {
     int? lockedFeeAmount,
     DateTime? endTime,
   });
-
 
   Future<List<String>> getAvailableLocations(String area);
 }

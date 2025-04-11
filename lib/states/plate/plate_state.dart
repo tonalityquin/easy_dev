@@ -46,12 +46,12 @@ class PlateState extends ChangeNotifier {
 
   int getDepartureCompletedCountByDate(DateTime selectedDate) {
     return _data[PlateType.departureCompleted]
-        ?.where((p) =>
-    p.endTime != null &&
-        p.endTime!.year == selectedDate.year &&
-        p.endTime!.month == selectedDate.month &&
-        p.endTime!.day == selectedDate.day)
-        .length ??
+            ?.where((p) =>
+                p.endTime != null &&
+                p.endTime!.year == selectedDate.year &&
+                p.endTime!.month == selectedDate.month &&
+                p.endTime!.day == selectedDate.day)
+            .length ??
         0;
   }
 
@@ -66,7 +66,7 @@ class PlateState extends ChangeNotifier {
 
     for (final collection in PlateType.values) {
       final stream = _repository
-          .getCollectionStream(collection.name)
+          .getPlatesByType(collection)
           .map((list) => list.where((plate) => plate.area == currentArea).toList());
 
       _activeStreams[collection] = stream;
@@ -159,18 +159,18 @@ class PlateState extends ChangeNotifier {
 
       final alreadySelected = _data.entries.expand((entry) => entry.value).firstWhere(
             (p) => p.isSelected && p.selectedBy == userName && p.id != plateId,
-        orElse: () => PlateModel(
-          id: '',
-          plateNumber: '',
-          type: '',
-          requestTime: DateTime.now(),
-          location: '',
-          area: '',
-          userName: '',
-          isSelected: false,
-          statusList: [],
-        ),
-      );
+            orElse: () => PlateModel(
+              id: '',
+              plateNumber: '',
+              type: '',
+              requestTime: DateTime.now(),
+              location: '',
+              area: '',
+              userName: '',
+              isSelected: false,
+              statusList: [],
+            ),
+          );
 
       if (alreadySelected.id.isNotEmpty && !plate.isSelected) {
         final collectionLabel = _getCollectionLabelForType(alreadySelected.type);
@@ -183,8 +183,8 @@ class PlateState extends ChangeNotifier {
       final newIsSelected = !plate.isSelected;
       final newSelectedBy = newIsSelected ? userName : null;
 
+      // ✅ 변경된 방식으로 호출 (plateId 기준, 단일 컬렉션)
       await _repository.updatePlateSelection(
-        collection.name,
         plateId,
         newIsSelected,
         selectedBy: newSelectedBy,
@@ -223,7 +223,7 @@ class PlateState extends ChangeNotifier {
     if (plates == null || plates.isEmpty) return null;
 
     return plates.firstWhere(
-          (plate) => plate.isSelected && plate.selectedBy == userName,
+      (plate) => plate.isSelected && plate.selectedBy == userName,
       orElse: () => PlateModel(
         id: '',
         plateNumber: '',

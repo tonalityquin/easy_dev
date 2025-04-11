@@ -102,7 +102,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
             // 🔍 날짜 & 지역 기준으로 출차 완료 Plate 필터링
             final departureCompleted = plateState.getPlatesByCollection(PlateType.departureCompleted).where((p) {
               final endTime = p.endTime;
-              return p.type == '출차 완료' &&
+              return p.type == PlateType.departureCompleted.firestoreValue &&
                   endTime != null &&
                   p.area == area &&
                   endTime.year == selectedDate.year &&
@@ -225,10 +225,9 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                       lockedFeeAmount: lockedFee,
                     );
 
-                    await context.read<PlateRepository>().addOrUpdateDocument(
-                          'departure_completed',
+                    await context.read<PlateRepository>().addOrUpdatePlate(
                           selectedPlate.id,
-                          updatedPlate.toMap(),
+                          updatedPlate,
                         );
 
                     if (!context.mounted) return;

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../enums/plate_type.dart';
 import '../../repositories/plate/plate_repository.dart';
 import '../../models/plate_model.dart';
 
@@ -9,11 +10,8 @@ class FilterPlate extends ChangeNotifier {
     _initializeData();
   }
 
-  final Map<String, List<PlateModel>> _data = {
-    'parking_requests': [],
-    'parking_completed': [],
-    'departure_requests': [],
-    'departure_completed': [],
+  final Map<PlateType, List<PlateModel>> _data = {
+    for (var type in PlateType.values) type: [],
   };
 
   String? _searchQuery;
@@ -24,9 +22,9 @@ class FilterPlate extends ChangeNotifier {
   String get locationQuery => _locationQuery ?? "";
 
   void _initializeData() {
-    for (final collection in _data.keys) {
-      _repository.getCollectionStream(collection).listen((data) {
-        _data[collection] = data;
+    for (final plateType in PlateType.values) {
+      _repository.getPlatesByType(plateType).listen((data) {
+        _data[plateType] = data;
         notifyListeners();
       });
     }
@@ -64,16 +62,15 @@ class FilterPlate extends ChangeNotifier {
     return plates;
   }
 
-  List<PlateModel> filterByParkingLocation(String collection, String area, String parkingLocation) {
+  List<PlateModel> filterByParkingLocation(PlateType collection, String area, String parkingLocation) {
     debugPrint("🚀 filterByParkingLocation() 호출됨: 지역 = $area, 주차 구역 = $parkingLocation");
 
     List<PlateModel> plates;
 
-    if (collection == 'departure_completed') {
+    if (collection == PlateType.departureCompleted) {
       // ✅ 출차 완료만: area + end_time 필터
       plates = _data[collection]?.where((plate) => plate.area == area && plate.endTime != null).toList() ?? [];
     } else {
-      // 나머지 컬렉션은 기존대로
       plates = _data[collection]?.where((plate) => plate.area == area).toList() ?? [];
     }
 
@@ -90,7 +87,7 @@ class FilterPlate extends ChangeNotifier {
     required String area,
     required DateTime selectedDate,
   }) {
-    return _data['departure_completed']
+    return _data[PlateType.departureCompleted]
             ?.where((plate) =>
                 plate.area == area &&
                 plate.endTime != null &&

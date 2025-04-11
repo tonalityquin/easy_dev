@@ -158,7 +158,8 @@ void handleEntryParkingRequest(BuildContext context, String plateNumber, String 
   final plateState = context.read<PlateState>();
 
   movementPlate.goBackToParkingRequest(
-    fromCollection: 'departure_requests',
+    fromType: PlateType.departureRequests,
+    // 🔄 수정: 문자열 → PlateType enum
     plateNumber: plateNumber,
     area: area,
     plateState: plateState,

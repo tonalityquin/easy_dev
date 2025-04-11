@@ -136,7 +136,7 @@ void handleEntryParkingRequest(BuildContext context, String plateNumber, String 
   final plateState = context.read<PlateState>();
 
   movementPlate.goBackToParkingRequest(
-    fromCollection: 'parking_completed',
+    fromType: PlateType.parkingCompleted,
     plateNumber: plateNumber,
     area: area,
     plateState: plateState,
