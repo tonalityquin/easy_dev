@@ -14,6 +14,7 @@ import '../../widgets/dialog/plate_search_dialog.dart';
 import '../../widgets/dialog/adjustment_completed_confirm_dialog.dart';
 import '../../utils/snackbar_helper.dart';
 import '../mini_calendars/field_calendar.dart';
+import '../../enums/plate_collection.dart';
 
 class DepartureCompletedPage extends StatefulWidget {
   const DepartureCompletedPage({super.key});
@@ -81,10 +82,10 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
       // ignore: deprecated_member_use
       onPopInvoked: (didPop) async {
         if (!didPop) return;
-        final selectedPlate = plateState.getSelectedPlate('departure_completed', userName);
+        final selectedPlate = plateState.getSelectedPlate(PlateCollection.departureCompleted, userName);
         if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
           await plateState.toggleIsSelected(
-            collection: 'departure_completed',
+            collection: PlateCollection.departureCompleted,
             plateNumber: selectedPlate.plateNumber,
             userName: userName,
             onError: (msg) => debugPrint(msg),
@@ -99,7 +100,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
             final area = areaState.currentArea;
 
             // 🔍 날짜 & 지역 기준으로 출차 완료 Plate 필터링
-            final departureCompleted = plateState.getPlatesByCollection('departure_completed').where((p) {
+            final departureCompleted = plateState.getPlatesByCollection(PlateCollection.departureCompleted).where((p) {
               final endTime = p.endTime;
               return p.type == '출차 완료' &&
                   endTime != null &&
@@ -121,11 +122,11 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                     children: [
                       PlateContainer(
                         data: departureCompleted,
-                        collection: 'departure_completed',
+                        collection: PlateCollection.departureCompleted,
                         filterCondition: (_) => true, // 이미 위에서 필터링 완료됨
                         onPlateTap: (plateNumber, area) {
                           plateState.toggleIsSelected(
-                            collection: 'departure_completed',
+                            collection: PlateCollection.departureCompleted,
                             plateNumber: plateNumber,
                             userName: context.read<UserState>().name,
                             onError: (errorMessage) {
@@ -140,7 +141,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
         ),
         bottomNavigationBar: Consumer<PlateState>(
           builder: (context, plateState, child) {
-            final selectedPlate = plateState.getSelectedPlate('departure_completed', userName);
+            final selectedPlate = plateState.getSelectedPlate(PlateCollection.departureCompleted, userName);
             final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
             final selectedDate = context.watch<FieldSelectedDateState>().selectedDate ?? DateTime.now(); // ← null 대비
             final formattedDate =
@@ -231,7 +232,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                         );
 
                     if (!context.mounted) return;
-                    await context.read<PlateState>().updatePlateLocally('departure_completed', updatedPlate);
+                    await context.read<PlateState>().updatePlateLocally(PlateCollection.departureCompleted, updatedPlate);
 
                     if (!context.mounted) return;
                     showSuccessSnackbar(context, '사전 정산 완료: ₩$lockedFee');

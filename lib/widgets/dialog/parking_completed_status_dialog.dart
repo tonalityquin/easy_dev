@@ -7,6 +7,7 @@ import '../../screens/logs/plate_log_viewer_page.dart';
 import '../../states/plate/movement_plate.dart';
 import '../../states/plate/plate_state.dart';
 import '../../utils/fee_calculator.dart';
+import '../../enums/plate_collection.dart';
 
 class ParkingCompletedStatusDialog extends StatelessWidget {
   final VoidCallback onRequestEntry;
@@ -65,7 +66,7 @@ class ParkingCompletedStatusDialog extends StatelessWidget {
                     MaterialPageRoute(
                       builder: (_) => Modify3Digit(
                         plate: plate,
-                        collectionKey: 'parking_completed',
+                        collectionKey: PlateCollection.parkingCompleted,
                       ),
                     ),
                   );

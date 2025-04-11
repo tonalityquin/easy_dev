@@ -10,6 +10,7 @@ import '../states/page/page_state.dart';
 import '../states/page/page_info.dart';
 import '../screens/input_pages/input_3_digit.dart';
 import 'secondary_page.dart';
+import '../enums/plate_collection.dart';
 
 class TypePage extends StatelessWidget {
   const TypePage({super.key});
@@ -155,9 +156,9 @@ class PageBottomNavigation extends StatelessWidget {
             final bool isSelected = pageState.selectedIndex == index;
 
             int count;
-            if (pageInfo.collectionKey == 'departure_completed') {
+            if (pageInfo.collectionKey == PlateCollection.departureCompleted) {
               count = plateState
-                  .getPlatesByCollection('departure_completed')
+                  .getPlatesByCollection(PlateCollection.departureCompleted)
                   .where((p) =>
                       p.type == '출차 완료' &&
                       p.area == currentArea &&

@@ -6,6 +6,7 @@ import '../../screens/logs/plate_log_viewer_page.dart';
 import '../../states/plate/movement_plate.dart';
 import '../../states/plate/plate_state.dart';
 import '../../utils/snackbar_helper.dart';
+import '../../enums/plate_collection.dart';
 
 class DepartureRequestStatusDialog extends StatelessWidget {
   final VoidCallback onRequestEntry;
@@ -51,7 +52,7 @@ class DepartureRequestStatusDialog extends StatelessWidget {
                     MaterialPageRoute(
                       builder: (_) => Modify3Digit(
                         plate: plate,
-                        collectionKey: 'departure_requests',
+                        collectionKey: PlateCollection.departureRequests,
                       ),
                     ),
                   );

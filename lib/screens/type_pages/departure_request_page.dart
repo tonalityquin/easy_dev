@@ -19,6 +19,7 @@ import '../../widgets/dialog/plate_search_dialog.dart'; // ✅ PlateSearchDialog
 import '../../widgets/dialog/departure_request_status_dialog.dart';
 import '../../widgets/dialog/parking_request_delete_dialog.dart';
 import '../../utils/snackbar_helper.dart';
+import '../../enums/plate_collection.dart';
 
 class DepartureRequestPage extends StatefulWidget {
   const DepartureRequestPage({super.key});
@@ -102,7 +103,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
     final movementPlate = context.read<MovementPlate>();
     final plateState = context.read<PlateState>();
     final userName = context.read<UserState>().name;
-    final selectedPlate = plateState.getSelectedPlate('departure_requests', userName);
+    final selectedPlate = plateState.getSelectedPlate(PlateCollection.departureRequests, userName);
 
     if (selectedPlate == null) return;
 
@@ -151,7 +152,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
     try {
       // ✅ 선택 해제
       plateState.toggleIsSelected(
-        collection: 'departure_requests',
+        collection: PlateCollection.departureRequests,
         plateNumber: updatedPlate.plateNumber,
         userName: userName,
         onError: (_) {},
@@ -176,10 +177,10 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
         // ignore: deprecated_member_use
         onPopInvoked: (didPop) async {
           if (!didPop) return;
-          final selectedPlate = plateState.getSelectedPlate('departure_requests', userName);
+          final selectedPlate = plateState.getSelectedPlate(PlateCollection.departureRequests, userName);
           if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
             await plateState.toggleIsSelected(
-              collection: 'departure_requests',
+              collection: PlateCollection.departureRequests,
               plateNumber: selectedPlate.plateNumber,
               userName: userName,
               onError: (msg) => debugPrint(msg),
@@ -194,7 +195,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
               final filterState = context.read<FilterPlate>(); // 🔹 FilterState 가져오기
               var departureRequests = _isParkingAreaMode && _selectedParkingArea != null
                   ? filterState.filterByParkingLocation('departure_requests', currentArea, _selectedParkingArea!)
-                  : plateState.getPlatesByCollection('departure_requests');
+                  : plateState.getPlatesByCollection(PlateCollection.departureRequests);
               final userName = context.read<UserState>().name;
               departureRequests.sort((a, b) {
                 return _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime);
@@ -204,11 +205,11 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                 children: [
                   PlateContainer(
                     data: departureRequests,
-                    collection: 'departure_requests',
+                    collection: PlateCollection.departureRequests,
                     filterCondition: (request) => request.type == '출차 요청' || request.type == '출차 중',
                     onPlateTap: (plateNumber, area) {
                       plateState.toggleIsSelected(
-                        collection: 'departure_requests',
+                        collection: PlateCollection.departureRequests,
                         plateNumber: plateNumber,
                         userName: userName,
                         onError: (errorMessage) {
@@ -224,7 +225,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
           bottomNavigationBar: Consumer<PlateState>(
             builder: (context, plateState, child) {
               final userName = context.read<UserState>().name;
-              final selectedPlate = plateState.getSelectedPlate('departure_requests', userName);
+              final selectedPlate = plateState.getSelectedPlate(PlateCollection.departureRequests, userName);
               final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
               return BottomNavigationBar(
                   items: [
@@ -313,7 +314,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
 
                           if (!context.mounted) return;
 
-                          await context.read<PlateState>().updatePlateLocally('departure_requests', updatedPlate);
+                          await context.read<PlateState>().updatePlateLocally(PlateCollection.departureRequests, updatedPlate);
 
                           if (!context.mounted) return;
 
@@ -345,7 +346,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
 
                         if (!context.mounted) return;
 
-                        await context.read<PlateState>().updatePlateLocally('departure_requests', updatedPlate);
+                        await context.read<PlateState>().updatePlateLocally(PlateCollection.departureRequests, updatedPlate);
 
                         if (!context.mounted) return;
 

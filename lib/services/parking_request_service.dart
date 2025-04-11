@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../enums/plate_collection.dart';
 import '../states/plate/plate_state.dart';
 import '../states/plate/delete_plate.dart';
 import '../states/plate/movement_plate.dart';
@@ -17,8 +18,8 @@ class ParkingRequestService {
   void togglePlateSelection(String plateNumber) {
     final userName = context.read<UserState>().name;
     context.read<PlateState>().toggleIsSelected(
-          collection: 'parking_requests',
-          plateNumber: plateNumber,
+      collection: PlateCollection.parkingRequests,
+      plateNumber: plateNumber,
           userName: userName,
           onError: (msg) => showFailedSnackbar(context, msg),
         );

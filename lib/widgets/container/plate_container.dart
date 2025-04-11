@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../enums/plate_collection.dart';
 import '../../models/plate_model.dart';
 import '../../states/plate/filter_plate.dart';
 import '../../utils/fee_calculator.dart';
@@ -12,7 +13,7 @@ import 'plate_custom_box.dart';
 class PlateContainer extends StatelessWidget {
   final List<PlateModel> data;
   final bool Function(PlateModel)? filterCondition;
-  final String collection;
+  final PlateCollection collection;
   final void Function(String plateNumber, String area) onPlateTap;
 
   const PlateContainer({

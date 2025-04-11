@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../../repositories/plate/plate_repository.dart';
 import '../../models/plate_model.dart';
 import '../area/area_state.dart';
+import '../../enums/plate_collection.dart';
 
 class PlateState extends ChangeNotifier {
   final PlateRepository _repository;
@@ -13,15 +14,12 @@ class PlateState extends ChangeNotifier {
     _areaState.addListener(_onAreaChanged);
   }
 
-  final Map<String, List<PlateModel>> _data = {
-    'parking_requests': [],
-    'parking_completed': [],
-    'departure_requests': [],
-    'departure_completed': [],
+  final Map<PlateCollection, List<PlateModel>> _data = {
+    for (var c in PlateCollection.values) c: [],
   };
 
-  final Map<String, Stream<List<PlateModel>>> _activeStreams = {};
-  final Map<String, StreamSubscription<List<PlateModel>>> _subscriptions = {};
+  final Map<PlateCollection, Stream<List<PlateModel>>> _activeStreams = {};
+  final Map<PlateCollection, StreamSubscription<List<PlateModel>>> _subscriptions = {};
 
   String? _searchQuery;
 
@@ -39,21 +37,21 @@ class PlateState extends ChangeNotifier {
     } else {
       debugPrint('✅ 지역 Plate 상태 수신 완료');
       debugPrint('📌 Selected Area: $currentArea');
-      debugPrint('🅿️ Parking Requests: ${_data['parking_requests']?.length ?? 0}');
-      debugPrint('✅ Parking Completed: ${_data['parking_completed']?.length ?? 0}');
-      debugPrint('🚗 Departure Requests: ${_data['departure_requests']?.length ?? 0}');
-      debugPrint('🏁 Departure Completed: ${_data['departure_completed']?.length ?? 0}');
+      debugPrint('🅿️ Parking Requests: ${_data[PlateCollection.parkingRequests]?.length ?? 0}');
+      debugPrint('✅ Parking Completed: ${_data[PlateCollection.parkingCompleted]?.length ?? 0}');
+      debugPrint('🚗 Departure Requests: ${_data[PlateCollection.departureRequests]?.length ?? 0}');
+      debugPrint('🏁 Departure Completed: ${_data[PlateCollection.departureCompleted]?.length ?? 0}');
     }
   }
 
   int getDepartureCompletedCountByDate(DateTime selectedDate) {
-    return _data['departure_completed']
-            ?.where((p) =>
-                p.endTime != null &&
-                p.endTime!.year == selectedDate.year &&
-                p.endTime!.month == selectedDate.month &&
-                p.endTime!.day == selectedDate.day)
-            .length ??
+    return _data[PlateCollection.departureCompleted]
+        ?.where((p) =>
+    p.endTime != null &&
+        p.endTime!.year == selectedDate.year &&
+        p.endTime!.month == selectedDate.month &&
+        p.endTime!.day == selectedDate.day)
+        .length ??
         0;
   }
 
@@ -64,20 +62,20 @@ class PlateState extends ChangeNotifier {
     plateCounts();
 
     int receivedCount = 0;
-    final totalCollections = _data.keys.length;
+    final totalCollections = PlateCollection.values.length;
 
-    for (final collectionName in _data.keys) {
+    for (final collection in PlateCollection.values) {
       final stream = _repository
-          .getCollectionStream(collectionName)
+          .getCollectionStream(collection.name)
           .map((list) => list.where((plate) => plate.area == currentArea).toList());
 
-      _activeStreams[collectionName] = stream;
+      _activeStreams[collection] = stream;
 
       bool firstDataReceived = false;
 
       final subscription = stream.listen((filteredData) {
-        if (!listEquals(_data[collectionName], filteredData)) {
-          _data[collectionName] = filteredData;
+        if (!listEquals(_data[collection], filteredData)) {
+          _data[collection] = filteredData;
           notifyListeners();
         }
 
@@ -92,7 +90,7 @@ class PlateState extends ChangeNotifier {
         }
       });
 
-      _subscriptions[collectionName] = subscription;
+      _subscriptions[collection] = subscription;
     }
   }
 
@@ -113,11 +111,10 @@ class PlateState extends ChangeNotifier {
     plateCounts();
   }
 
-  List<PlateModel> getPlatesByCollection(String collection, {DateTime? selectedDate}) {
+  List<PlateModel> getPlatesByCollection(PlateCollection collection, {DateTime? selectedDate}) {
     List<PlateModel> plates = _data[collection] ?? [];
 
-    // ✅ 출차 완료일 경우만 end_time + 날짜 필터 적용
-    if (collection == 'departure_completed') {
+    if (collection == PlateCollection.departureCompleted) {
       plates = plates.where((plate) {
         if (plate.endTime == null) return false;
         if (selectedDate == null) return true;
@@ -128,7 +125,6 @@ class PlateState extends ChangeNotifier {
       }).toList();
     }
 
-    // ✅ 번호판 검색 필터 적용
     if (_searchQuery != null && _searchQuery!.length == 4) {
       plates = plates.where((plate) {
         final last4Digits = plate.plateNumber.length >= 4
@@ -141,9 +137,8 @@ class PlateState extends ChangeNotifier {
     return plates;
   }
 
-
   Future<void> toggleIsSelected({
-    required String collection,
+    required PlateCollection collection,
     required String plateNumber,
     required String userName,
     required void Function(String) onError,
@@ -164,18 +159,18 @@ class PlateState extends ChangeNotifier {
 
       final alreadySelected = _data.entries.expand((entry) => entry.value).firstWhere(
             (p) => p.isSelected && p.selectedBy == userName && p.id != plateId,
-            orElse: () => PlateModel(
-              id: '',
-              plateNumber: '',
-              type: '',
-              requestTime: DateTime.now(),
-              location: '',
-              area: '',
-              userName: '',
-              isSelected: false,
-              statusList: [],
-            ),
-          );
+        orElse: () => PlateModel(
+          id: '',
+          plateNumber: '',
+          type: '',
+          requestTime: DateTime.now(),
+          location: '',
+          area: '',
+          userName: '',
+          isSelected: false,
+          statusList: [],
+        ),
+      );
 
       if (alreadySelected.id.isNotEmpty && !plate.isSelected) {
         final collectionLabel = _getCollectionLabelForType(alreadySelected.type);
@@ -189,7 +184,7 @@ class PlateState extends ChangeNotifier {
       final newSelectedBy = newIsSelected ? userName : null;
 
       await _repository.updatePlateSelection(
-        collection,
+        collection.name,
         plateId,
         newIsSelected,
         selectedBy: newSelectedBy,
@@ -223,12 +218,12 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  PlateModel? getSelectedPlate(String collection, String userName) {
+  PlateModel? getSelectedPlate(PlateCollection collection, String userName) {
     final plates = _data[collection];
     if (plates == null || plates.isEmpty) return null;
 
     return plates.firstWhere(
-      (plate) => plate.isSelected && plate.selectedBy == userName,
+          (plate) => plate.isSelected && plate.selectedBy == userName,
       orElse: () => PlateModel(
         id: '',
         plateNumber: '',
@@ -247,8 +242,7 @@ class PlateState extends ChangeNotifier {
     _initializeSubscriptions();
   }
 
-  /// ✅ 요금 변경, 위치 변경 등 수정을 로컬에 반영 (즉시 UI 업데이트)
-  Future<void> updatePlateLocally(String collection, PlateModel updatedPlate) async {
+  Future<void> updatePlateLocally(PlateCollection collection, PlateModel updatedPlate) async {
     final list = _data[collection];
     if (list == null) return;
 
