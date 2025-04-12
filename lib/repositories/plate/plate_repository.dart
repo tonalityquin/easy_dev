@@ -6,6 +6,8 @@ abstract class PlateRepository {
 
   Future<void> addOrUpdatePlate(String documentId, PlateModel plate);
 
+  Future<void> updatePlate(String documentId, Map<String, dynamic> updatedFields);
+
   Future<void> deletePlate(String documentId);
 
   Future<PlateModel?> getPlate(String documentId);

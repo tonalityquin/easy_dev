@@ -32,24 +32,19 @@ class MovementPlate {
       final plateData = document.toMap();
       final selectedBy = plateData['selectedBy'] ?? '시스템';
 
-      await _repository.deletePlate(documentId);
+      // ✅ 변경된 필드만 업데이트
+      final updateData = {
+        'type': toType.firestoreValue,
+        'location': location,
+        'userName': selectedBy,
+        'isSelected': false,
+        'selectedBy': null,
+        if (toType == PlateType.departureCompleted) 'end_time': DateTime.now(),
+      };
 
-      final updatedPlate = PlateModel.fromMap(
-        {
-          ...plateData,
-          'type': toType.firestoreValue,
-          'location': location,
-          'userName': selectedBy,
-          'isSelected': false,
-          'selectedBy': null,
-          if (toType == PlateType.departureCompleted) 'end_time': DateTime.now(),
-        },
-        documentId,
-      );
+      await _repository.updatePlate(documentId, updateData);
 
-      await _repository.addOrUpdatePlate(documentId, updatedPlate);
-
-      debugPrint("✅ 문서 이동 완료: ${fromType.name} → ${toType.name} ($plateNumber)");
+      debugPrint("✅ 문서 상태 이동 완료: ${fromType.name} → ${toType.name} ($plateNumber)");
 
       await _logState.saveLog(
         PlateLogModel(
@@ -65,18 +60,18 @@ class MovementPlate {
 
       return true;
     } catch (e) {
-      debugPrint('🚨 문서 이동 오류: $e');
+      debugPrint('🚨 문서 상태 이동 오류: $e');
       return false;
     }
   }
 
   Future<void> setParkingCompleted(
-      String plateNumber,
-      String area,
-      PlateState plateState,
-      String location, {
-        String performedBy = '시스템',
-      }) async {
+    String plateNumber,
+    String area,
+    PlateState plateState,
+    String location, {
+    String performedBy = '시스템',
+  }) async {
     final success = await _transferData(
       fromType: PlateType.parkingRequests,
       toType: PlateType.parkingCompleted,
@@ -89,12 +84,12 @@ class MovementPlate {
   }
 
   Future<void> setDepartureRequested(
-      String plateNumber,
-      String area,
-      PlateState plateState,
-      String location, {
-        String performedBy = '시스템',
-      }) async {
+    String plateNumber,
+    String area,
+    PlateState plateState,
+    String location, {
+    String performedBy = '시스템',
+  }) async {
     final success = await _transferData(
       fromType: PlateType.parkingCompleted,
       toType: PlateType.departureRequests,
@@ -107,12 +102,12 @@ class MovementPlate {
   }
 
   Future<void> setDepartureCompleted(
-      String plateNumber,
-      String area,
-      PlateState plateState,
-      String location, {
-        String performedBy = '시스템',
-      }) async {
+    String plateNumber,
+    String area,
+    PlateState plateState,
+    String location, {
+    String performedBy = '시스템',
+  }) async {
     final success = await _transferData(
       fromType: PlateType.departureRequests,
       toType: PlateType.departureCompleted,
@@ -125,9 +120,9 @@ class MovementPlate {
   }
 
   Future<void> setDepartureCompletedWithPlate(
-      PlateModel plate,
-      PlateState plateState,
-      ) async {
+    PlateModel plate,
+    PlateState plateState,
+  ) async {
     final documentId = '${plate.plateNumber}_${plate.area}';
 
     try {
@@ -164,12 +159,12 @@ class MovementPlate {
   }
 
   Future<void> doubleParkingCompletedToDepartureCompleted(
-      String plateNumber,
-      String area,
-      PlateState plateState,
-      String location, {
-        String performedBy = '시스템',
-      }) async {
+    String plateNumber,
+    String area,
+    PlateState plateState,
+    String location, {
+    String performedBy = '시스템',
+  }) async {
     final success = await _transferData(
       fromType: PlateType.parkingCompleted,
       toType: PlateType.departureCompleted,
@@ -182,9 +177,9 @@ class MovementPlate {
   }
 
   Future<void> doubleParkingCompletedToDepartureCompletedWithPlate(
-      PlateModel plate,
-      PlateState plateState,
-      ) async {
+    PlateModel plate,
+    PlateState plateState,
+  ) async {
     final documentId = '${plate.plateNumber}_${plate.area}';
 
     try {
@@ -269,12 +264,12 @@ class MovementPlate {
   }
 
   Future<void> moveDepartureToParkingCompleted(
-      String plateNumber,
-      String area,
-      PlateState plateState,
-      String location, {
-        String performedBy = '시스템',
-      }) async {
+    String plateNumber,
+    String area,
+    PlateState plateState,
+    String location, {
+    String performedBy = '시스템',
+  }) async {
     final success = await _transferData(
       fromType: PlateType.departureRequests,
       toType: PlateType.parkingCompleted,

@@ -46,6 +46,19 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
+  Future<void> updatePlate(String documentId, Map<String, dynamic> updatedFields) async {
+    final docRef = _firestore.collection('plates').doc(documentId);
+
+    try {
+      await docRef.update(updatedFields);
+      dev.log("✅ 문서 업데이트 완료: $documentId", name: "Firestore");
+    } catch (e) {
+      dev.log("🔥 문서 업데이트 실패: $e", name: "Firestore");
+      rethrow;
+    }
+  }
+
+  @override
   Future<void> deletePlate(String documentId) async {
     final docRef = _firestore.collection('plates').doc(documentId);
     final docSnapshot = await docRef.get();
@@ -152,7 +165,8 @@ class FirestorePlateRepository implements PlateRepository {
     final plate = PlateModel(
       id: documentId,
       plateNumber: plateNumber,
-      type: plateType.firestoreValue, // ✅ 여기 핵심 수정
+      type: plateType.firestoreValue,
+      // ✅ 여기 핵심 수정
       requestTime: DateTime.now(),
       endTime: endTime,
       location: location.isNotEmpty ? location : '미지정',

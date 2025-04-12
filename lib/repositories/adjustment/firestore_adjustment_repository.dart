@@ -19,18 +19,24 @@ class FirestoreAdjustmentRepository implements AdjustmentRepository {
     final data = adjustment.toMap();
 
     // Null 값이나 잘못된 데이터 제거
-    data.removeWhere((key, value) => value == null || value.toString().trim().isEmpty);
+    data.removeWhere((key, value) =>
+    value == null || value
+        .toString()
+        .trim()
+        .isEmpty);
 
     debugPrint("📌 Firestore에 저장할 데이터: $data");
 
     try {
-      await docRef.set(data, SetOptions(merge: true));
+      // 병합 없이 새로운 문서로 저장 (기존 문서가 있으면 덮어씀)
+      await docRef.set(data);
       debugPrint("✅ Firestore 데이터 저장 성공: ${adjustment.id}");
     } catch (e) {
       debugPrint("🔥 Firestore 저장 실패: $e");
-      rethrow; // 예외를 다시 throw 하여 상위에서 처리 가능하게 함
+      rethrow;
     }
   }
+
 
   @override
   Future<void> deleteAdjustment(List<String> ids) async {

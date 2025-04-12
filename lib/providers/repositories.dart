@@ -26,6 +26,9 @@ class DummyPlateRepository implements PlateRepository {
   Future<void> addOrUpdatePlate(String documentId, PlateModel plate) => throw UnimplementedError();
 
   @override
+  Future<void> updatePlate(String documentId, Map<String, dynamic> updatedFields) => throw UnimplementedError();
+
+  @override
   Future<void> addRequestOrCompleted({
     required String plateNumber,
     required String area,
