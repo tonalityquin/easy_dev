@@ -1,10 +1,12 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../states/area/area_state.dart';
 import '../../states/plate/plate_state.dart';
 import '../../states/user/user_state.dart';
 import '../dialog/area_picker_dialog.dart';
+import '../../screens/secondary_pages/office_mode_pages/user_management_pages/user_setting.dart'; // ✅ RoleType enum 위치
 
 class TopNavigation extends StatelessWidget implements PreferredSizeWidget {
   final double height;
@@ -21,25 +23,30 @@ class TopNavigation extends StatelessWidget implements PreferredSizeWidget {
     final plateState = context.read<PlateState>();
     final selectedArea = _getSelectedArea(areaState);
 
-    final UserRole userRole = UserRole.values.firstWhere(
-      (role) => role.name == userState.role,
-      orElse: () => UserRole.admin,
-    );
+    // ✅ RoleType 기반 역할 파싱
+    final RoleType userRole = RoleType.fromName(userState.role); // ✅ name 기준으로 매핑
 
     _initializeAreaIfEmpty(areaState, userState);
+
+    // ✅ 지역 선택 가능 여부 확인 (dev, officer, fieldLeader만 허용)
+    final isAreaSelectable = [
+      RoleType.dev,
+      RoleType.officer,
+      RoleType.fieldLeader,
+    ].contains(userRole);
 
     return AppBar(
       backgroundColor: Colors.white,
       elevation: 0,
       centerTitle: true,
       title: GestureDetector(
-        onTap: (userRole == UserRole.fielder || userRole == UserRole.fieldLeader)
-            ? null
-            : () => showAreaPickerDialog(
-                  context: context,
-                  areaState: areaState,
-                  plateState: plateState,
-                ),
+        onTap: isAreaSelectable
+            ? () => showAreaPickerDialog(
+          context: context,
+          areaState: areaState,
+          plateState: plateState,
+        )
+            : null,
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -53,8 +60,10 @@ class TopNavigation extends StatelessWidget implements PreferredSizeWidget {
                 color: Colors.black87,
               ),
             ),
-            const SizedBox(width: 4),
-            const Icon(CupertinoIcons.chevron_down, size: 14, color: Colors.grey),
+            if (isAreaSelectable) ...[
+              const SizedBox(width: 4),
+              const Icon(CupertinoIcons.chevron_down, size: 14, color: Colors.grey),
+            ],
           ],
         ),
       ),
@@ -72,10 +81,4 @@ class TopNavigation extends StatelessWidget implements PreferredSizeWidget {
       areaState.initializeOrSyncArea(userState.area);
     }
   }
-}
-
-enum UserRole {
-  admin,
-  fielder,
-  fieldLeader,
 }

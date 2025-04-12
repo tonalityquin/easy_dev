@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../screens/secondary_pages/office_mode_pages/user_management_pages/user_setting.dart';
 import '../../states/secondary/secondary_mode.dart';
 import '../../states/user/user_state.dart';
 import '../dialog/secondary_picker_dialog.dart';
@@ -17,28 +18,34 @@ class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWi
   Widget build(BuildContext context) {
     final manageState = context.watch<SecondaryMode>();
     final userState = context.watch<UserState>();
-    final userRole = userState.role.toLowerCase();
 
-    // enum을 String으로 변환
-    final selectedModeLabel = userRole == 'fielder'
-        ? 'Field Mode'
-        : manageState.currentStatus.label;
+    // ✅ fromName으로 수정: Firestore에서 불러온 'dev', 'officer' 등 대응
+    final RoleType userRole = RoleType.fromName(userState.role);
+
+    // ✅ 직책에 따라 선택 가능한지 여부 설정
+    final isSelectable = [
+      RoleType.dev,
+      RoleType.officer,
+      RoleType.fieldLeader,
+    ].contains(userRole);
+
+    final selectedModeLabel = userRole == RoleType.fielder ? 'Field Mode' : manageState.currentStatus.label;
 
     return AppBar(
       backgroundColor: Colors.white,
       centerTitle: true,
       title: GestureDetector(
-        onTap: userRole == 'fielder'
-            ? null
-            : () => secondaryPickerDialog(
-          context: context,
-          manageState: manageState,
-          currentStatus: selectedModeLabel,
-          availableStatus: _getFilteredAvailableStatus(
-            userRole,
-            manageState.availableStatus,
-          ),
-        ),
+        onTap: isSelectable
+            ? () => secondaryPickerDialog(
+                  context: context,
+                  manageState: manageState,
+                  currentStatus: selectedModeLabel,
+                  availableStatus: _getFilteredAvailableStatus(
+                    userRole,
+                    manageState.availableStatus,
+                  ),
+                )
+            : null,
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -52,7 +59,7 @@ class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWi
                 color: Colors.black87,
               ),
             ),
-            if (userRole != 'fielder') ...[
+            if (isSelectable) ...[
               const SizedBox(width: 4),
               const Icon(CupertinoIcons.chevron_down, size: 14, color: Colors.grey),
             ],
@@ -62,9 +69,9 @@ class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWi
     );
   }
 
-  List<String> _getFilteredAvailableStatus(String userRole, List<String> availableStatus) {
-    if (userRole == 'fielder') return ['Field Mode'];
-    if (userRole == 'dev') return availableStatus;
+  List<String> _getFilteredAvailableStatus(RoleType userRole, List<String> availableStatus) {
+    if (userRole == RoleType.fielder) return ['Field Mode'];
+    if (userRole == RoleType.dev) return availableStatus;
     return availableStatus.where((mode) => mode != 'Document Mode').toList();
   }
 }

@@ -2,38 +2,64 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+enum RoleType {
+  dev,
+  officer,
+  fieldLeader,
+  fielder;
+
+  /// 한글 표시용 라벨
+  String get label {
+    switch (this) {
+      case RoleType.dev:
+        return '개발자';
+      case RoleType.officer:
+        return '내근직';
+      case RoleType.fieldLeader:
+        return '필드 팀장';
+      case RoleType.fielder:
+        return '외근직';
+    }
+  }
+
+  /// Firebase의 role(String) → enum 매핑: 저장된 값이 'dev', 'officer' 등일 때 사용
+  static RoleType fromName(String name) {
+    return RoleType.values.firstWhere(
+      (e) => e.name == name,
+      orElse: () => RoleType.fielder,
+    );
+  }
+
+  /// 라벨(String) → enum 매핑: UI에서 선택된 label이 들어올 때 사용
+  static RoleType fromLabel(String label) {
+    return RoleType.values.firstWhere(
+      (e) => e.label == label,
+      orElse: () => RoleType.fielder,
+    );
+  }
+}
+
 class UserSetting extends StatefulWidget {
   final Function(
-      String name,
-      String phone,
-      String email,
-      String role,
-      String password,
-      String area,
-      String division,
-      bool isWorking,
-      bool isSaved,
-      ) onSave;
+    String name,
+    String phone,
+    String email,
+    String role,
+    String password,
+    String area,
+    String division,
+    bool isWorking,
+    bool isSaved,
+  ) onSave;
 
   final String areaValue;
   final String division;
-  final List<String> roleOptions;
 
   const UserSetting({
     super.key,
     required this.onSave,
     required this.areaValue,
     required this.division,
-    this.roleOptions = const [
-      'Dev',
-      'Officer',
-      'Field Leader',
-      'Fielder',
-      '대표 이사',
-      '본부장',
-      '팀장',
-      '팀원',
-    ],
   });
 
   @override
@@ -50,7 +76,7 @@ class _UserAccountsState extends State<UserSetting> {
   final _phoneFocus = FocusNode();
   final _emailFocus = FocusNode();
 
-  String _selectedRole = 'Fielder';
+  RoleType _selectedRole = RoleType.fielder;
   String? _errorMessage;
 
   @override
@@ -73,33 +99,26 @@ class _UserAccountsState extends State<UserSetting> {
 
   final Map<String, String Function(String)> _validationRules = {
     '이름': (value) => value.isEmpty ? '이름을 다시 입력하세요' : '',
-    '전화번호': (value) =>
-    RegExp(r'^\d{9,}$').hasMatch(value) ? '' : '전화번호를 다시 입력 하세요',
-    '이메일(구글)': (value) =>
-    value.isEmpty ? '이메일을 다시 입력 하세요' : '',
+    '전화번호': (value) => RegExp(r'^\d{9,}$').hasMatch(value) ? '' : '전화번호를 다시 입력 하세요',
+    '이메일(구글)': (value) => value.isEmpty ? '이메일을 다시 입력 하세요' : '',
   };
 
   bool _validateInputs() {
-    String? errorMessage;
-
     for (var entry in _validationRules.entries) {
       final field = entry.key;
       final validator = entry.value;
-
       String inputValue = switch (field) {
         '이름' => _nameController.text,
         '전화번호' => _phoneController.text,
         '이메일(구글)' => _emailController.text,
         _ => '',
       };
-
-      errorMessage = validator(inputValue);
+      final errorMessage = validator(inputValue);
       if (errorMessage.isNotEmpty) {
         _setErrorMessage(errorMessage);
         return false;
       }
     }
-
     _setErrorMessage(null);
     return true;
   }
@@ -130,8 +149,7 @@ class _UserAccountsState extends State<UserSetting> {
             decoration: InputDecoration(
               labelText: '이름',
               border: const OutlineInputBorder(),
-              errorText:
-              _errorMessage == '이름을 다시 입력하세요' ? _errorMessage : null,
+              errorText: _errorMessage == '이름을 다시 입력하세요' ? _errorMessage : null,
             ),
           ),
           const SizedBox(height: 16),
@@ -145,9 +163,7 @@ class _UserAccountsState extends State<UserSetting> {
             decoration: InputDecoration(
               labelText: '전화번호',
               border: const OutlineInputBorder(),
-              errorText: _errorMessage == '전화번호를 다시 입력 하세요'
-                  ? _errorMessage
-                  : null,
+              errorText: _errorMessage == '전화번호를 다시 입력 하세요' ? _errorMessage : null,
             ),
           ),
           const SizedBox(height: 16),
@@ -162,8 +178,7 @@ class _UserAccountsState extends State<UserSetting> {
                   decoration: InputDecoration(
                     labelText: '이메일(구글)',
                     border: const OutlineInputBorder(),
-                    errorText:
-                    _errorMessage == '이메일(구글)' ? _errorMessage : null,
+                    errorText: _errorMessage == '이메일(구글)' ? _errorMessage : null,
                   ),
                 ),
               ),
@@ -180,22 +195,24 @@ class _UserAccountsState extends State<UserSetting> {
             ],
           ),
           const SizedBox(height: 16),
-          DropdownButtonFormField<String>(
+          DropdownButtonFormField<RoleType>(
             value: _selectedRole,
             decoration: const InputDecoration(
               labelText: '직책',
               border: OutlineInputBorder(),
             ),
-            items: widget.roleOptions
-                .map((role) => DropdownMenuItem(
-              value: role,
-              child: Text(role),
-            ))
+            items: RoleType.values
+                .map((role) => DropdownMenuItem<RoleType>(
+                      value: role,
+                      child: Text(role.label),
+                    ))
                 .toList(),
             onChanged: (value) {
-              setState(() {
-                _selectedRole = value!;
-              });
+              if (value != null) {
+                setState(() {
+                  _selectedRole = value;
+                });
+              }
             },
           ),
           const SizedBox(height: 16),
@@ -226,8 +243,7 @@ class _UserAccountsState extends State<UserSetting> {
             children: [
               ElevatedButton(
                 onPressed: () => Navigator.pop(context),
-                style:
-                ElevatedButton.styleFrom(backgroundColor: Colors.white),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.white),
                 child: const Text('취소'),
               ),
               ElevatedButton(
@@ -238,7 +254,8 @@ class _UserAccountsState extends State<UserSetting> {
                       _nameController.text,
                       _phoneController.text,
                       fullEmail,
-                      _selectedRole,
+                      _selectedRole.name,
+                      // ✅ name 저장
                       _passwordController.text,
                       widget.areaValue,
                       widget.division,
@@ -248,8 +265,7 @@ class _UserAccountsState extends State<UserSetting> {
                     Navigator.pop(context);
                   }
                 },
-                style:
-                ElevatedButton.styleFrom(backgroundColor: Colors.white),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.white),
                 child: const Text('생성'),
               ),
             ],
