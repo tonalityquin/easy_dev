@@ -158,14 +158,13 @@ class PageBottomNavigation extends StatelessWidget {
             int count;
             if (pageInfo.collectionKey == PlateType.departureCompleted) {
               count = plateState
-                  .getPlatesByCollection(PlateType.departureCompleted)
+                  .getPlatesByCollection(
+                    PlateType.departureCompleted,
+                    selectedDate: selectedDate, // ✅ 날짜 필터 전달
+                  )
                   .where((p) =>
-                      p.type == '출차 완료' &&
-                      p.area == currentArea &&
-                      p.endTime != null &&
-                      p.endTime!.year == selectedDate.year &&
-                      p.endTime!.month == selectedDate.month &&
-                      p.endTime!.day == selectedDate.day)
+                      p.type == PlateType.departureCompleted.firestoreValue && // ✅ 고침
+                      p.area == currentArea)
                   .length;
             } else {
               count = plateState.getPlatesByCollection(pageInfo.collectionKey).length;

@@ -114,14 +114,14 @@ class PlateState extends ChangeNotifier {
   List<PlateModel> getPlatesByCollection(PlateType collection, {DateTime? selectedDate}) {
     List<PlateModel> plates = _data[collection] ?? [];
 
-    if (collection == PlateType.departureCompleted) {
+    if (collection == PlateType.departureCompleted && selectedDate != null) {
+      final selectedDateOnly = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
       plates = plates.where((plate) {
-        if (plate.endTime == null) return false;
-        if (selectedDate == null) return true;
+        final end = plate.endTime;
+        if (end == null) return false;
 
-        return plate.endTime!.year == selectedDate.year &&
-            plate.endTime!.month == selectedDate.month &&
-            plate.endTime!.day == selectedDate.day;
+        final endDate = DateTime(end.year, end.month, end.day);
+        return endDate == selectedDateOnly;
       }).toList();
     }
 
@@ -136,6 +136,7 @@ class PlateState extends ChangeNotifier {
 
     return plates;
   }
+
 
   Future<void> toggleIsSelected({
     required PlateType collection,

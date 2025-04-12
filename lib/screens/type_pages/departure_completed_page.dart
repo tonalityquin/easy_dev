@@ -95,49 +95,65 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
       child: Scaffold(
         appBar: const TopNavigation(),
         body: Consumer3<PlateState, AreaState, FieldSelectedDateState>(
-          builder: (context, plateState, areaState, selectedDateState, child) {
-            final selectedDate = selectedDateState.selectedDate ?? DateTime.now();
-            final area = areaState.currentArea;
+            builder: (context, plateState, areaState, selectedDateState, child) {
+              // 선택된 날짜의 시간 정보 제거
+              final selectedDateRaw = selectedDateState.selectedDate ?? DateTime.now();
+              final selectedDate = DateTime(
+                selectedDateRaw.year,
+                selectedDateRaw.month,
+                selectedDateRaw.day,
+              );
 
-            // 🔍 날짜 & 지역 기준으로 출차 완료 Plate 필터링
-            final departureCompleted = plateState.getPlatesByCollection(PlateType.departureCompleted).where((p) {
-              final endTime = p.endTime;
-              return p.type == PlateType.departureCompleted.firestoreValue &&
-                  endTime != null &&
-                  p.area == area &&
-                  endTime.year == selectedDate.year &&
-                  endTime.month == selectedDate.month &&
-                  endTime.day == selectedDate.day;
-            }).toList();
+              final area = areaState.currentArea.trim();
 
-            // ✅ 정렬 처리
-            departureCompleted.sort(
-              (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime),
-            );
+              // 출차 완료 plate 목록 가져오기
+              final departureCompleted = plateState
+                  .getPlatesByCollection(
+                PlateType.departureCompleted,
+                selectedDate: selectedDate,
+              )
+                  .where((p) =>
+              p.type == PlateType.departureCompleted.firestoreValue &&
+                  p.area.trim() == area)
+                  .toList();
 
-            return _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : ListView(
-                    padding: const EdgeInsets.all(8.0),
-                    children: [
-                      PlateContainer(
-                        data: departureCompleted,
+              // ✅ 정렬 처리
+              departureCompleted.sort(
+                    (a, b) => _isSorted
+                    ? b.requestTime.compareTo(a.requestTime)
+                    : a.requestTime.compareTo(b.requestTime),
+              );
+
+              // ✅ 디버그 로그 (원인 확인용)
+              debugPrint('📅 필터링 기준 날짜: $selectedDate');
+              debugPrint('📍 기준 지역: "$area"');
+              for (final p in departureCompleted) {
+                debugPrint('✔️ plate=${p.plateNumber}, type=${p.type}, area=${p.area}, end=${p.endTime}');
+              }
+
+              return _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : ListView(
+                padding: const EdgeInsets.all(8.0),
+                children: [
+                  PlateContainer(
+                    data: departureCompleted,
+                    collection: PlateType.departureCompleted,
+                    filterCondition: (_) => true, // 이미 위에서 필터링 완료됨
+                    onPlateTap: (plateNumber, area) {
+                      plateState.toggleIsSelected(
                         collection: PlateType.departureCompleted,
-                        filterCondition: (_) => true, // 이미 위에서 필터링 완료됨
-                        onPlateTap: (plateNumber, area) {
-                          plateState.toggleIsSelected(
-                            collection: PlateType.departureCompleted,
-                            plateNumber: plateNumber,
-                            userName: context.read<UserState>().name,
-                            onError: (errorMessage) {
-                              showFailedSnackbar(context, errorMessage);
-                            },
-                          );
+                        plateNumber: plateNumber,
+                        userName: context.read<UserState>().name,
+                        onError: (errorMessage) {
+                          showFailedSnackbar(context, errorMessage);
                         },
-                      ),
-                    ],
-                  );
-          },
+                      );
+                    },
+                  ),
+                ],
+              );
+            },
         ),
         bottomNavigationBar: Consumer<PlateState>(
           builder: (context, plateState, child) {
