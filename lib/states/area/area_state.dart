@@ -49,28 +49,31 @@ class AreaState with ChangeNotifier {
   }
 
   Future<void> addArea(String name, String division) async {
-    final trimmed = name.trim();
-    final trimmedDivision = division.trim();
+    final trimmedName = name.trim();
+    final trimmedDivision = division.trim().isEmpty ? 'default' : division.trim();
 
-    if (trimmed.isEmpty || _availableAreas.contains(trimmed)) {
-      debugPrint('⚠️ 이미 존재하거나 빈 값입니다: $trimmed');
+    if (trimmedName.isEmpty || _availableAreas.contains(trimmedName)) {
+      debugPrint('⚠️ 이미 존재하거나 빈 값입니다: $trimmedName');
       return;
     }
 
+    final customId = '${trimmedDivision}_$trimmedName';
+
     try {
-      await _firestore.collection('areas').add({
-        'name': trimmed,
-        'division': trimmedDivision.isEmpty ? 'default' : trimmedDivision,
+      await _firestore.collection('areas').doc(customId).set({
+        'name': trimmedName,
+        'division': trimmedDivision,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      _availableAreas.add(trimmed);
+      _availableAreas.add(trimmedName);
       notifyListeners();
-      debugPrint('🆕 지역 추가됨 (Firestore): $trimmed, division: $trimmedDivision');
+      debugPrint('🆕 지역 추가됨 (Firestore): $trimmedName, division: $trimmedDivision, id: $customId');
     } catch (e) {
       debugPrint('❌ Firestore 지역 추가 실패: $e');
     }
   }
+
 
   Future<void> removeArea(String area) async {
     if (area == AreaType.label) {

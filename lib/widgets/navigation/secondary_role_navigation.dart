@@ -19,17 +19,16 @@ class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWi
     final manageState = context.watch<SecondaryMode>();
     final userState = context.watch<UserState>();
 
-    // ✅ fromName으로 수정: Firestore에서 불러온 'dev', 'officer' 등 대응
     final RoleType userRole = RoleType.fromName(userState.role);
 
-    // ✅ 직책에 따라 선택 가능한지 여부 설정
     final isSelectable = [
       RoleType.dev,
       RoleType.officer,
       RoleType.fieldLeader,
     ].contains(userRole);
 
-    final selectedModeLabel = userRole == RoleType.fielder ? 'Field Mode' : manageState.currentStatus.label;
+    final selectedModeLabel =
+    userRole == RoleType.fielder ? 'Field Mode' : manageState.currentStatus.label;
 
     return AppBar(
       backgroundColor: Colors.white,
@@ -37,14 +36,14 @@ class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWi
       title: GestureDetector(
         onTap: isSelectable
             ? () => secondaryPickerDialog(
-                  context: context,
-                  manageState: manageState,
-                  currentStatus: selectedModeLabel,
-                  availableStatus: _getFilteredAvailableStatus(
-                    userRole,
-                    manageState.availableStatus,
-                  ),
-                )
+          context: context,
+          manageState: manageState,
+          currentStatus: selectedModeLabel,
+          availableStatus: _getFilteredAvailableStatus(
+            userRole,
+            manageState.availableStatus,
+          ),
+        )
             : null,
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -71,7 +70,17 @@ class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWi
 
   List<String> _getFilteredAvailableStatus(RoleType userRole, List<String> availableStatus) {
     if (userRole == RoleType.fielder) return ['Field Mode'];
-    if (userRole == RoleType.dev) return availableStatus;
-    return availableStatus.where((mode) => mode != 'Document Mode').toList();
+
+    if (userRole == RoleType.fieldLeader) {
+      return availableStatus
+          .where((mode) => mode != 'Dev Mode' && mode != 'Statistics Mode')
+          .toList();
+    }
+
+    if (userRole == RoleType.officer) {
+      return availableStatus.where((mode) => mode != 'Dev Mode').toList();
+    }
+
+    return availableStatus; // dev는 전부 허용
   }
 }

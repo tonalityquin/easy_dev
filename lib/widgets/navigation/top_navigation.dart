@@ -28,11 +28,10 @@ class TopNavigation extends StatelessWidget implements PreferredSizeWidget {
 
     _initializeAreaIfEmpty(areaState, userState);
 
-    // ✅ 지역 선택 가능 여부 확인 (dev, officer, fieldLeader만 허용)
+    // ✅ 지역 선택 가능 여부 확인 (dev, officer만 허용)
     final isAreaSelectable = [
       RoleType.dev,
       RoleType.officer,
-      RoleType.fieldLeader,
     ].contains(userRole);
 
     return AppBar(
