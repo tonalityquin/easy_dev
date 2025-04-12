@@ -138,12 +138,13 @@ class _GoToWorkState extends State<GoToWork> {
 
   Widget _buildWorkButton(UserState userState) {
     final isWorking = userState.isWorking;
-    final label = isWorking ? '퇴근하기' : '출근하기';
-    final icon = isWorking ? Icons.logout : Icons.login;
-    final colors = isWorking ? [Colors.redAccent, Colors.deepOrange] : [Colors.green.shade400, Colors.teal];
+
+    final label = isWorking ? '출근 중' : '출근하기';
+    final icon = Icons.login;
+    final colors = isWorking ? [Colors.grey.shade400, Colors.grey.shade600] : [Colors.green.shade400, Colors.teal];
 
     return InkWell(
-      onTap: _isLoading ? null : () => _handleWorkStatus(context, userState),
+      onTap: _isLoading || isWorking ? null : () => _handleWorkStatus(context, userState),
       borderRadius: BorderRadius.circular(16),
       child: Container(
         height: 55,
@@ -157,7 +158,7 @@ class _GoToWorkState extends State<GoToWork> {
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.15),
+              color: Colors.black.withAlpha(30),
               blurRadius: 6,
               offset: const Offset(0, 3),
             ),
