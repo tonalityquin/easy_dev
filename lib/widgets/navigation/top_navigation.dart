@@ -8,7 +8,7 @@ import '../../states/user/user_state.dart';
 import '../dialog/area_picker_dialog.dart';
 import '../../screens/secondary_pages/office_mode_pages/user_management_pages/user_setting.dart'; // ✅ RoleType enum 위치
 
-class TopNavigation extends StatelessWidget implements PreferredSizeWidget {
+class TopNavigation extends StatefulWidget implements PreferredSizeWidget {
   final double height;
 
   const TopNavigation({super.key, this.height = kToolbarHeight});
@@ -17,22 +17,44 @@ class TopNavigation extends StatelessWidget implements PreferredSizeWidget {
   Size get preferredSize => Size.fromHeight(height);
 
   @override
+  State<TopNavigation> createState() => _TopNavigationState();
+}
+
+class _TopNavigationState extends State<TopNavigation> {
+  bool _initialized = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    // 초기화는 한 번만 수행
+    if (!_initialized) {
+      final areaState = context.read<AreaState>();
+      final userState = context.read<UserState>();
+
+      areaState.initialize(userState.area).then((_) {
+        if (mounted) {
+          setState(() {
+            _initialized = true;
+          });
+        }
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final areaState = context.watch<AreaState>();
     final userState = context.watch<UserState>();
     final plateState = context.read<PlateState>();
-    final selectedArea = _getSelectedArea(areaState);
 
-    // ✅ RoleType 기반 역할 파싱
-    final RoleType userRole = RoleType.fromName(userState.role); // ✅ name 기준으로 매핑
-
-    _initializeAreaIfEmpty(areaState, userState);
-
-    // ✅ 지역 선택 가능 여부 확인 (dev, officer만 허용)
+    final RoleType userRole = RoleType.fromName(userState.role);
     final isAreaSelectable = [
       RoleType.dev,
       RoleType.officer,
     ].contains(userRole);
+
+    final selectedArea = areaState.currentArea;
 
     return AppBar(
       backgroundColor: Colors.white,
@@ -67,17 +89,5 @@ class TopNavigation extends StatelessWidget implements PreferredSizeWidget {
         ),
       ),
     );
-  }
-
-  String _getSelectedArea(AreaState areaState) {
-    return areaState.availableAreas.contains(areaState.currentArea)
-        ? areaState.currentArea
-        : areaState.availableAreas.first;
-  }
-
-  void _initializeAreaIfEmpty(AreaState areaState, UserState userState) {
-    if (areaState.currentArea.isEmpty) {
-      areaState.initializeOrSyncArea(userState.area);
-    }
   }
 }

@@ -18,8 +18,13 @@ class AreaState with ChangeNotifier {
   String get currentDivision => _currentDivision;
   List<String> get availableAreas => _availableAreas.toList();
 
-  AreaState() {
-    _loadAreasFromFirestore();
+  // ❌ 초기 로드 제거 — 외부에서 initialize로 호출하도록 변경
+  AreaState();
+
+  /// ✅ 외부에서 Firestore 로드 완료 후 사용자 지역 반영
+  Future<void> initialize(String userArea) async {
+    await _loadAreasFromFirestore();
+    initializeOrSyncArea(userArea);
   }
 
   Future<void> _loadAreasFromFirestore() async {
@@ -35,7 +40,6 @@ class AreaState with ChangeNotifier {
           _availableAreas.add(name.trim());
         }
 
-        // 현재 선택된 지역에 해당하는 division을 가져옴
         if (name == _currentArea) {
           final division = doc['division'] as String?;
           _currentDivision = division?.trim().isNotEmpty == true ? division!.trim() : 'default';
@@ -73,7 +77,6 @@ class AreaState with ChangeNotifier {
       debugPrint('❌ Firestore 지역 추가 실패: $e');
     }
   }
-
 
   Future<void> removeArea(String area) async {
     if (area == AreaType.label) {
@@ -137,7 +140,7 @@ class AreaState with ChangeNotifier {
             : '✅ 지역 변경됨: $_currentArea / division: $_currentDivision',
       );
     } else if (!_availableAreas.contains(newArea)) {
-      debugPrint('⚠️ 잘못된 지역 입력: $newArea');
+      debugPrint('⚠️ 잘못된 지역 입력: $newArea / 가능한 지역: $_availableAreas');
     }
   }
 
