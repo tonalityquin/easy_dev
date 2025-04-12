@@ -21,20 +21,11 @@ class _LoginFormState extends State<LoginForm> {
   }
 
   @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Column(
       children: [
         const SizedBox(height: 96),
-        SizedBox(
-          height: 120,
-          child: Image.asset('assets/images/belivus_logo.PNG'),
-        ),
+        SizedBox(height: 120, child: Image.asset('assets/images/belivus_logo.PNG')),
         const SizedBox(height: 96),
         TextField(
           controller: _controller.nameController,
@@ -58,7 +49,7 @@ class _LoginFormState extends State<LoginForm> {
           focusNode: _controller.passwordFocus,
           obscureText: _controller.obscurePassword,
           textInputAction: TextInputAction.done,
-          onSubmitted: (_) => _controller.login(setState),
+          onSubmitted: (_) => _handleLogin(),
           decoration: _controller.inputDecoration(
             label: "비밀번호(5자리 이상)",
             icon: Icons.lock,
@@ -70,7 +61,7 @@ class _LoginFormState extends State<LoginForm> {
         ),
         const SizedBox(height: 32),
         InkWell(
-          onTap: _controller.isLoading ? null : () => _controller.login(setState),
+          onTap: _controller.isLoading ? null : _handleLogin,
           borderRadius: BorderRadius.circular(24),
           child: Container(
             height: 55,
@@ -84,7 +75,7 @@ class _LoginFormState extends State<LoginForm> {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.15),
+                  color: Colors.black.withAlpha(30),
                   blurRadius: 6,
                   offset: const Offset(0, 3),
                 ),
@@ -93,13 +84,15 @@ class _LoginFormState extends State<LoginForm> {
             child: Center(
               child: _controller.isLoading
                   ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
-                  : const Text("로그인",
-                      style: TextStyle(
-                          color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                  : const Text("로그인", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
             ),
           ),
-        )
+        ),
       ],
     );
+  }
+
+  void _handleLogin() {
+    _controller.login(setState);
   }
 }

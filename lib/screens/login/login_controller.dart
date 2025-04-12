@@ -24,10 +24,11 @@ class LoginController {
   LoginController(this.context);
 
   void initState() {
-    // `initState`에서 `BuildContext`를 사용하는 작업은 문제없음
     Provider.of<UserState>(context, listen: false).loadUserToLogIn().then((_) {
-      if (Provider.of<UserState>(context, listen: false).isLoggedIn) {
-        Navigator.pushReplacementNamed(context, '/home');
+      if (Provider.of<UserState>(context, listen: false).isLoggedIn && context.mounted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          Navigator.pushReplacementNamed(context, '/home');
+        });
       }
     });
   }
@@ -45,7 +46,11 @@ class LoginController {
     obscurePassword = !obscurePassword;
   }
 
-  InputDecoration inputDecoration({required String label, IconData? icon, Widget? suffixIcon}) {
+  InputDecoration inputDecoration({
+    required String label,
+    IconData? icon,
+    Widget? suffixIcon,
+  }) {
     return InputDecoration(
       labelText: label,
       hintText: label,
@@ -55,7 +60,10 @@ class LoginController {
       filled: true,
       fillColor: Colors.grey.shade100,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.indigo, width: 2)),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: Colors.indigo, width: 2),
+      ),
     );
   }
 
@@ -82,7 +90,6 @@ class LoginController {
 
     setState(() => isLoading = true);
 
-    // 비동기 작업 중에도 BuildContext는 await 이후에 사용하지 않도록 처리
     if (!await NetworkService().isConnected()) {
       if (context.mounted) {
         showFailedSnackbar(context, '인터넷 연결이 필요합니다.');
@@ -95,7 +102,6 @@ class LoginController {
       final userRepository = context.read<UserRepository>();
       final user = await userRepository.getUserByPhone(phone);
 
-      // ✅ 디버깅 출력
       if (context.mounted) {
         debugPrint("[DEBUG] 입력값 → name: $name, phone: $phone, password: $password");
 
@@ -115,20 +121,21 @@ class LoginController {
         areaState.updateArea(updatedUser.area);
 
         if (context.mounted) {
-          Navigator.of(context).pop();
-          Navigator.pushReplacementNamed(context, '/home');
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            Navigator.pushReplacementNamed(context, '/home');
+          });
         }
       } else {
         if (context.mounted) {
-          Navigator.of(context).pop();
           showFailedSnackbar(context, '이름 또는 비밀번호가 올바르지 않습니다.');
         }
       }
     } catch (e) {
       if (context.mounted) {
-        Navigator.of(context).pop();
         showFailedSnackbar(context, '로그인 실패: $e');
       }
+    } finally {
+      setState(() => isLoading = false);
     }
   }
 }
