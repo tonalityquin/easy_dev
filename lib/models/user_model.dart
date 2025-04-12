@@ -6,6 +6,7 @@ class UserModel {
   final String role;
   final String password;
   final String area;
+  final String division; // ✅ 추가
   final bool isSelected;
   final bool isWorking;
   final bool isSaved;
@@ -18,6 +19,7 @@ class UserModel {
     required this.role,
     required this.password,
     required this.area,
+    required this.division, // ✅ 추가
     required this.isSelected,
     required this.isWorking,
     required this.isSaved,
@@ -32,6 +34,7 @@ class UserModel {
     String? role,
     String? password,
     String? area,
+    String? division, // ✅ 추가
     bool? isSelected,
     bool? isWorking,
     bool? isSaved,
@@ -44,6 +47,7 @@ class UserModel {
       role: role ?? this.role,
       password: password ?? this.password,
       area: area ?? this.area,
+      division: division ?? this.division, // ✅ 추가
       isSelected: isSelected ?? this.isSelected,
       isWorking: isWorking ?? this.isWorking,
       isSaved: isSaved ?? this.isSaved,
@@ -60,6 +64,7 @@ class UserModel {
       role: data['role'] ?? '',
       password: data['password'] ?? '',
       area: data['area'] ?? '',
+      division: data['division'] ?? '', // ✅ 추가
       isSelected: data['isSelected'] ?? false,
       isWorking: data['isWorking'] ?? false,
       isSaved: data['isSaved'] ?? false,
@@ -75,6 +80,7 @@ class UserModel {
       'role': role,
       'password': password,
       'area': area,
+      'division': division, // ✅ 추가
       'isSelected': isSelected,
       'isWorking': isWorking,
       'isSaved': isSaved,
@@ -84,13 +90,14 @@ class UserModel {
   /// ✅ SharedPreferences에서 복원용 (id 포함)
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
-      id: json['id'] ?? '', // null-safe
+      id: json['id'] ?? '',
       name: json['name'] ?? '',
       phone: json['phone'] ?? '',
       email: json['email'] ?? '',
       role: json['role'] ?? '',
       password: json['password'] ?? '',
       area: json['area'] ?? '',
+      division: json['division'] ?? '', // ✅ 추가
       isSelected: json['isSelected'] ?? false,
       isWorking: json['isWorking'] ?? false,
       isSaved: json['isSaved'] ?? false,
@@ -107,6 +114,7 @@ class UserModel {
       'role': role,
       'password': password,
       'area': area,
+      'division': division, // ✅ 추가
       'isSelected': isSelected,
       'isWorking': isWorking,
       'isSaved': isSaved,

@@ -29,15 +29,29 @@ class _UserManagementState extends State<UserManagement> {
 
   void buildAddUserDialog(
     BuildContext context,
-    void Function(String, String, String, String, String, String, bool, bool) onSave,
+    void Function(
+      String name,
+      String phone,
+      String email,
+      String role,
+      String password,
+      String area,
+      String division,
+      bool isWorking,
+      bool isSaved,
+    ) onSave,
   ) {
-    final currentArea = Provider.of<AreaState>(context, listen: false).currentArea;
+    final areaState = context.read<AreaState>();
+    final currentArea = areaState.currentArea;
+    final currentDivision = areaState.currentDivision;
+
     showDialog(
       context: context,
       builder: (BuildContext dialogContext) {
         return UserSetting(
           onSave: onSave,
           areaValue: currentArea,
+          division: currentDivision,
         );
       },
     );
@@ -51,27 +65,41 @@ class _UserManagementState extends State<UserManagement> {
     final selectedIds = userState.selectedUsers.keys.where((id) => userState.selectedUsers[id] == true).toList();
 
     if (index == 0) {
-      buildAddUserDialog(context, (name, phone, email, role, area, password, isWorking, isSaved) {
-        final newUser = UserModel(
-          id: '$phone-$area',
-          name: name,
-          phone: phone,
-          email: email,
-          role: role,
-          password: password,
-          area: area,
-          isSelected: false,
-          isWorking: isWorking,
-          isSaved: isSaved,
-        );
+      buildAddUserDialog(
+        context,
+        (
+          String name,
+          String phone,
+          String email,
+          String role,
+          String password,
+          String area,
+          String division,
+          bool isWorking,
+          bool isSaved,
+        ) {
+          final newUser = UserModel(
+            id: '$phone-$area',
+            name: name,
+            phone: phone,
+            email: email,
+            role: role,
+            password: password,
+            area: area,
+            division: division,
+            isSelected: false,
+            isWorking: isWorking,
+            isSaved: isSaved,
+          );
 
-        userState.addUserCard(
-          newUser,
-          onError: (errorMessage) {
-            showFailedSnackbar(context, errorMessage);
-          },
-        );
-      });
+          userState.addUserCard(
+            newUser,
+            onError: (errorMessage) {
+              showFailedSnackbar(context, errorMessage);
+            },
+          );
+        },
+      );
     } else if (index == 1 && selectedIds.isNotEmpty) {
       userState.deleteUserCard(
         selectedIds,
@@ -85,8 +113,13 @@ class _UserManagementState extends State<UserManagement> {
   @override
   Widget build(BuildContext context) {
     final userState = context.watch<UserState>();
-    final currentArea = context.watch<AreaState>().currentArea;
-    final filteredUsers = userState.users.where((user) => user.area == currentArea).toList();
+    final areaState = context.watch<AreaState>();
+    final currentArea = areaState.currentArea;
+    final currentDivision = areaState.currentDivision; // ✅ 사용됨
+
+    final filteredUsers = userState.users.where((user) {
+      return user.area == currentArea && user.division == currentDivision;
+    }).toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -107,16 +140,16 @@ class _UserManagementState extends State<UserManagement> {
               : ListView.builder(
                   itemCount: filteredUsers.length,
                   itemBuilder: (context, index) {
-                    final userContainer = filteredUsers[index];
-                    final isSelected = userState.selectedUsers[userContainer.id] ?? false;
+                    final user = filteredUsers[index];
+                    final isSelected = userState.selectedUsers[user.id] ?? false;
 
                     return UserCustomBox(
-                      topLeftText: userContainer.name,
-                      topRightText: userContainer.email,
-                      midLeftText: userContainer.role,
-                      midCenterText: userContainer.phone,
-                      midRightText: userContainer.area,
-                      onTap: () => userState.toggleUserCard(userContainer.id),
+                      topLeftText: user.name,
+                      topRightText: user.email,
+                      midLeftText: user.role,
+                      midCenterText: user.phone,
+                      midRightText: user.area,
+                      onTap: () => userState.toggleUserCard(user.id),
                       isSelected: isSelected,
                       backgroundColor: isSelected ? Colors.green : Colors.white,
                     );

@@ -41,6 +41,8 @@ class UserState extends ChangeNotifier {
 
   String get password => _user?.password ?? '';
 
+  String get division => _user?.division ?? ''; // ✅ division getter 추가
+
   Future<void> saveCardToUserPhone(UserModel user) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('phone', user.phone);
@@ -69,7 +71,6 @@ class UserState extends ChangeNotifier {
         return;
       }
 
-      // ✅ 로그인 시 isSaved를 true로 설정
       await _repository.updateUserStatus(phone, area, isSaved: true);
       _user = userData.copyWith(isSaved: true);
       notifyListeners();
@@ -80,14 +81,14 @@ class UserState extends ChangeNotifier {
 
   void _realtimeUsers() {
     _repository.getUsersStream().listen(
-      (data) {
+          (data) {
         _users = data;
         _selectedUsers = {for (var user in data) user.id: user.isSelected};
         _isLoading = false;
         notifyListeners();
       },
       onError: (error) {
-        debugPrint('Error syncing users: \$error');
+        debugPrint('Error syncing users: $error');
       },
     );
   }
@@ -95,15 +96,15 @@ class UserState extends ChangeNotifier {
   Future<void> isHeWorking() async {
     if (_user == null) return;
 
-    final newStatus = !_user!.isWorking; // ✅ isWorking만 토글
+    final newStatus = !_user!.isWorking;
 
     await _repository.updateUserStatus(
       _user!.phone,
       _user!.area,
-      isWorking: newStatus, // ✅ isWorking만 업데이트
+      isWorking: newStatus,
     );
 
-    _user = _user!.copyWith(isWorking: newStatus); // ✅ isSaved는 변경 없음
+    _user = _user!.copyWith(isWorking: newStatus);
     notifyListeners();
   }
 
@@ -113,8 +114,8 @@ class UserState extends ChangeNotifier {
     await _repository.updateUserStatus(
       _user!.phone,
       _user!.area,
-      isWorking: false, // ✅ 로그아웃 시 isWorking false
-      isSaved: false, // ✅ 로그아웃 시 isSaved false
+      isWorking: false,
+      isSaved: false,
     );
 
     final prefs = await SharedPreferences.getInstance();
@@ -127,7 +128,7 @@ class UserState extends ChangeNotifier {
     _user = updatedUser;
     notifyListeners();
     await _repository.addUser(updatedUser);
-    await saveCardToUserPhone(updatedUser); // ✅ 로그인 성공 후 SharedPreferences 저장
+    await saveCardToUserPhone(updatedUser);
   }
 
   Future<void> addUserCard(UserModel user, {void Function(String)? onError}) async {
@@ -140,13 +141,14 @@ class UserState extends ChangeNotifier {
         role: user.role,
         password: user.password,
         area: user.area,
+        division: user.division, // ✅ division 반영
         isSelected: user.isSelected,
         isWorking: user.isWorking,
         isSaved: user.isSaved,
       );
       await _repository.addUser(correctedUser);
     } catch (e) {
-      onError?.call('사용자 추가 실패: \$e');
+      onError?.call('사용자 추가 실패: $e');
     }
   }
 
@@ -154,7 +156,7 @@ class UserState extends ChangeNotifier {
     try {
       await _repository.deleteUsers(ids);
     } catch (e) {
-      onError?.call('사용자 삭제 실패: \$e');
+      onError?.call('사용자 삭제 실패: $e');
     }
   }
 
@@ -166,7 +168,7 @@ class UserState extends ChangeNotifier {
       _selectedUsers[id] = newSelectionState;
       notifyListeners();
     } catch (e) {
-      debugPrint('사용자 선택 오류: \$e');
+      debugPrint('사용자 선택 오류: $e');
     }
   }
 }

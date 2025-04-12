@@ -14,14 +14,14 @@ class SecondaryPage extends StatelessWidget {
       return fieldModePages;
     } else {
       switch (roleState.currentStatus) {
-        case 'Field Mode':
+        case ModeStatus.field:
           return fieldModePages;
-        case 'Office Mode':
+        case ModeStatus.office:
           return officeModePages;
-        case 'Document Mode':
-        return documentPages;
-        default:
-          return fieldModePages;
+        case ModeStatus.document:
+          return documentPages;
+        case ModeStatus.dev:
+          return devPages;
       }
     }
   }
@@ -30,6 +30,7 @@ class SecondaryPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final userState = context.watch<UserState>();
     final userRole = userState.role;
+
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => SecondaryMode()),

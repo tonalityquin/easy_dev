@@ -70,23 +70,25 @@ class FirestoreUserRepository implements UserRepository {
     await _getCollectionRef().doc(id).update({'isSelected': isSelected});
   }
 
-  // ✅ 추가된 메서드 (JSON 없이 데이터 직접 매핑)
   @override
   Future<UserModel?> getUserById(String userId) async {
     final doc = await _getCollectionRef().doc(userId).get();
     if (!doc.exists) return null;
 
+    final data = doc.data()!;
+
     return UserModel(
       id: doc.id,
-      name: doc['name'] ?? '',
-      phone: doc['phone'] ?? '',
-      email: doc['email'] ?? '',
-      role: doc['role'] ?? '',
-      password: doc['password'] ?? '',
-      area: doc['area'] ?? '',
-      isSelected: doc['isSelected'] ?? false,
-      isWorking: doc['isWorking'] ?? false,
-      isSaved: doc['isSaved'] ?? false,
+      name: data['name'] ?? '',
+      phone: data['phone'] ?? '',
+      email: data['email'] ?? '',
+      role: data['role'] ?? '',
+      password: data['password'] ?? '',
+      area: data['area'] ?? '',
+      division: data['division'] ?? '', // ✅ 추가됨
+      isSelected: data['isSelected'] ?? false,
+      isWorking: data['isWorking'] ?? false,
+      isSaved: data['isSaved'] ?? false,
     );
   }
 

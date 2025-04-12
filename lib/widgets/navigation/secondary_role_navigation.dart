@@ -18,7 +18,11 @@ class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWi
     final manageState = context.watch<SecondaryMode>();
     final userState = context.watch<UserState>();
     final userRole = userState.role.toLowerCase();
-    final selectedMode = userRole == 'fielder' ? 'Field Mode' : manageState.currentStatus;
+
+    // enum을 String으로 변환
+    final selectedModeLabel = userRole == 'fielder'
+        ? 'Field Mode'
+        : manageState.currentStatus.label;
 
     return AppBar(
       backgroundColor: Colors.white,
@@ -27,18 +31,21 @@ class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWi
         onTap: userRole == 'fielder'
             ? null
             : () => secondaryPickerDialog(
-                  context: context,
-                  manageState: manageState,
-                  currentStatus: selectedMode,
-                  availableStatus: _getFilteredAvailableStatus(userRole, manageState.availableStatus),
-                ),
+          context: context,
+          manageState: manageState,
+          currentStatus: selectedModeLabel,
+          availableStatus: _getFilteredAvailableStatus(
+            userRole,
+            manageState.availableStatus,
+          ),
+        ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             const Icon(CupertinoIcons.settings_solid, size: 18, color: Colors.green),
             const SizedBox(width: 6),
             Text(
-              selectedMode,
+              selectedModeLabel,
               style: const TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w600,
