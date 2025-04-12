@@ -125,7 +125,13 @@ class DummyUserRepository implements UserRepository {
   @override
   Future<void> updateUserStatus(String userId, String status, {bool? isSaved, bool? isWorking}) =>
       throw UnimplementedError();
+
+  /// ✅ 추가된 추상 메서드 구현 (비워만 놓기)
+  @override
+  Future<void> updateCurrentArea(String phone, String area, String currentArea) =>
+      throw UnimplementedError();
 }
+
 
 class DummyAdjustmentRepository implements AdjustmentRepository {
   @override

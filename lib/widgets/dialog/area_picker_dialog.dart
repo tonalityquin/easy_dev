@@ -1,7 +1,10 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart'; // ✅ 추가
+
 import '../../states/area/area_state.dart';
 import '../../states/plate/plate_state.dart';
+import '../../states/user/user_state.dart'; // ✅ 추가
 
 void showAreaPickerDialog({
   required BuildContext context,
@@ -43,11 +46,11 @@ void showAreaPickerDialog({
                   },
                   children: areas
                       .map((area) => Center(
-                            child: Text(
-                              area,
-                              style: const TextStyle(fontSize: 18),
-                            ),
-                          ))
+                    child: Text(
+                      area,
+                      style: const TextStyle(fontSize: 18),
+                    ),
+                  ))
                       .toList(),
                 ),
               ),
@@ -58,8 +61,13 @@ void showAreaPickerDialog({
                   child: GestureDetector(
                     onTap: () {
                       Navigator.of(context).pop();
+
                       areaState.updateArea(tempSelected);
                       plateState.syncWithAreaState();
+
+                      // ✅ 사용자 상태에도 currentArea 반영 (Firestore 포함)
+                      final userState = context.read<UserState>();
+                      userState.updateCurrentArea(tempSelected);
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 16),

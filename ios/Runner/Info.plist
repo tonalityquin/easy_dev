@@ -45,5 +45,9 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+
+	<!-- 📌 [추가] TTS 사용을 위한 권한 설명 -->
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>음성 안내 기능을 위해 음성 합성을 사용합니다.</string>
 </dict>
 </plist>

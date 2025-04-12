@@ -149,11 +149,8 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
     final userName = context.read<UserState>().name;
 
     return PopScope(
-        canPop: true,
-        // ignore: deprecated_member_use
+        canPop: false,
         onPopInvoked: (didPop) async {
-          if (!didPop) return;
-
           final selectedPlate = plateState.getSelectedPlate(PlateType.parkingCompleted, userName);
           if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
             await plateState.toggleIsSelected(

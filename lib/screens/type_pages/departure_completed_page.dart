@@ -78,10 +78,9 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
     final userName = context.read<UserState>().name;
 
     return PopScope(
-      canPop: true,
-      // ignore: deprecated_member_use
+      canPop: false, // ✅ 뒤로 가기 차단
       onPopInvoked: (didPop) async {
-        if (!didPop) return;
+        // ✅ 선택된 번호판 해제만 수행
         final selectedPlate = plateState.getSelectedPlate(PlateType.departureCompleted, userName);
         if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
           await plateState.toggleIsSelected(

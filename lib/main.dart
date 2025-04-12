@@ -1,17 +1,33 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart'; // Firebase 초기화를 위한 패키지
-import 'package:provider/provider.dart'; // 상태 관리를 위한 Provider 패키지
-import 'routes.dart'; // 앱 라우팅 정보를 관리하는 파일
-import 'providers/providers.dart'; // 상태 관리 객체를 정의한 파일
-import 'theme.dart'; // 테마 설정을 분리한 파일
+import 'package:firebase_core/firebase_core.dart';
+import 'package:provider/provider.dart';
+import 'package:flutter_tts/flutter_tts.dart';
+
+import 'routes.dart';
+import 'providers/providers.dart';
+import 'theme.dart';
+import 'states/user/user_state.dart';
+import 'services/plate_tts_listener_service.dart'; // ✅ 새로 만든 서비스 임포트
 import 'dart:developer' as dev;
 
-// 초기 라우트 상수 정의
 const String initialRoute = AppRoutes.login;
+
+// ✅ TTS 헬퍼
+class TtsHelper {
+  static final FlutterTts _flutterTts = FlutterTts();
+
+  static Future<void> speak(String text) async {
+    await _flutterTts.setLanguage("ko-KR");
+    await _flutterTts.setSpeechRate(0.5);
+    await _flutterTts.setVolume(1.0);
+    await _flutterTts.setPitch(1.0);
+    await _flutterTts.stop();
+    await _flutterTts.speak(text);
+  }
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   try {
     await Firebase.initializeApp();
     runApp(const MyApp());
@@ -21,31 +37,42 @@ void main() async {
   }
 }
 
-// MyApp 클래스: 앱의 전체 구조 정의
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
-      providers: appProviders, // providers.dart에서 정의된 상태 관리 객체 목록
-      child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        title: 'easyvalet',
-        theme: appTheme,
-        initialRoute: initialRoute,
-        // 초기 라우트 값을 상수로 사용
-        routes: appRoutes,
-        // routes.dart에서 정의된 라우팅 정보
-        onUnknownRoute: (settings) => MaterialPageRoute(
-          builder: (context) => const NotFoundPage(),
-        ),
+      providers: appProviders,
+      child: Builder(
+        builder: (context) {
+          return Consumer<UserState>(
+            builder: (context, userState, child) {
+              if (userState.isLoggedIn && userState.currentArea.isNotEmpty) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  PlateTtsListenerService.start(userState.currentArea); // ✅ 최초 감지 시작
+                  dev.log("[TTS] 감지 시작됨: ${userState.currentArea}");
+                });
+              }
+
+              return MaterialApp(
+                debugShowCheckedModeBanner: false,
+                title: 'easyvalet',
+                theme: appTheme,
+                initialRoute: initialRoute,
+                routes: appRoutes,
+                onUnknownRoute: (settings) => MaterialPageRoute(
+                  builder: (context) => const NotFoundPage(),
+                ),
+              );
+            },
+          );
+        },
       ),
     );
   }
 }
 
-// Firebase 초기화 실패 시 표시할 에러 화면
 class ErrorApp extends StatelessWidget {
   final String message;
 
@@ -69,7 +96,6 @@ class ErrorApp extends StatelessWidget {
   }
 }
 
-// 정의되지 않은 경로 접근 시 보여줄 페이지
 class NotFoundPage extends StatelessWidget {
   const NotFoundPage({super.key});
 

@@ -141,11 +141,9 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
     final userName = context.read<UserState>().name;
 
     return PopScope(
-      canPop: true,
-      // ignore: deprecated_member_use
+      canPop: false, // ✅ 뒤로가기 완전 차단
       onPopInvoked: (didPop) async {
-        if (!didPop) return;
-
+        // ✅ 화면은 닫히지 않지만, 선택된 번호판이 있으면 선택 해제
         final selectedPlate = plateState.getSelectedPlate(PlateType.parkingRequests, userName);
         if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
           await plateState.toggleIsSelected(
@@ -155,6 +153,8 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
             onError: (msg) => debugPrint(msg),
           );
         }
+
+        // ❌ didPop 여부와 관계없이 화면은 절대 pop되지 않음
       },
       child: Scaffold(
         appBar: const TopNavigation(),

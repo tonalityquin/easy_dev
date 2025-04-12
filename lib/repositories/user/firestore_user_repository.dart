@@ -85,7 +85,8 @@ class FirestoreUserRepository implements UserRepository {
       role: data['role'] ?? '',
       password: data['password'] ?? '',
       area: data['area'] ?? '',
-      division: data['division'] ?? '', // ✅ 추가됨
+      division: data['division'] ?? '',
+      currentArea: data['currentArea'], // ✅ currentArea 반영
       isSelected: data['isSelected'] ?? false,
       isWorking: data['isWorking'] ?? false,
       isSaved: data['isSaved'] ?? false,
@@ -97,5 +98,14 @@ class FirestoreUserRepository implements UserRepository {
     for (String id in ids) {
       await _getCollectionRef().doc(id).delete();
     }
+  }
+
+  /// ✅ currentArea 필드 업데이트 메서드
+  @override
+  Future<void> updateCurrentArea(String phone, String area, String currentArea) async {
+    final userId = '$phone-$area';
+    await _getCollectionRef().doc(userId).update({
+      'currentArea': currentArea,
+    });
   }
 }

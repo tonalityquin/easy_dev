@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../repositories/user/user_repository.dart';
 import '../../models/user_model.dart';
+import 'package:easydev/services/plate_tts_listener_service.dart';
+
 
 class UserState extends ChangeNotifier {
   final UserRepository _repository;
@@ -41,7 +43,10 @@ class UserState extends ChangeNotifier {
 
   String get password => _user?.password ?? '';
 
-  String get division => _user?.division ?? ''; // ✅ division getter 추가
+  String get division => _user?.division ?? '';
+
+  /// ✅ 현재 근무 중인 지역 (없으면 area 사용)
+  String get currentArea => _user?.currentArea ?? area;
 
   Future<void> saveCardToUserPhone(UserModel user) async {
     final prefs = await SharedPreferences.getInstance();
@@ -74,10 +79,17 @@ class UserState extends ChangeNotifier {
       await _repository.updateUserStatus(phone, area, isSaved: true);
       _user = userData.copyWith(isSaved: true);
       notifyListeners();
+
+      // ✅ 자동 로그인 완료 후 TTS 감지 시작
+      PlateTtsListenerService.start(currentArea);
+      debugPrint("[TTS] 자동 로그인 후 감지 시작: $currentArea");
+
     } catch (e) {
       debugPrint("[DEBUG] 자동 로그인 중 오류 발생: $e");
     }
   }
+
+
 
   void _realtimeUsers() {
     _repository.getUsersStream().listen(
@@ -141,7 +153,9 @@ class UserState extends ChangeNotifier {
         role: user.role,
         password: user.password,
         area: user.area,
-        division: user.division, // ✅ division 반영
+        division: user.division,
+        currentArea: user.currentArea,
+        // ✅ 추가됨
         isSelected: user.isSelected,
         isWorking: user.isWorking,
         isSaved: user.isSaved,
@@ -170,5 +184,18 @@ class UserState extends ChangeNotifier {
     } catch (e) {
       debugPrint('사용자 선택 오류: $e');
     }
+  }
+
+  Future<void> updateCurrentArea(String newArea) async {
+    if (_user == null) return;
+
+    final updatedUser = _user!.copyWith(currentArea: newArea);
+    _user = updatedUser;
+    notifyListeners();
+
+    await _repository.updateCurrentArea(_user!.phone, _user!.area, newArea);
+
+    // ✅ 지역 변경 시 TTS 다시 시작
+    PlateTtsListenerService.start(newArea);
   }
 }

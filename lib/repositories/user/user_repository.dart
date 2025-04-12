@@ -10,4 +10,5 @@ abstract class UserRepository {
   Future<void> deleteUsers(List<String> ids);
   Future<UserModel?> getUserById(String userId);
 
+  Future<void> updateCurrentArea(String phone, String area, String currentArea);
 }
