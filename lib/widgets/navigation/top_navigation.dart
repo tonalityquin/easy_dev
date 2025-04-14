@@ -6,7 +6,6 @@ import '../../states/area/area_state.dart';
 import '../../states/plate/plate_state.dart';
 import '../../states/user/user_state.dart';
 import '../dialog/area_picker_dialog.dart';
-import '../../screens/secondary_pages/office_mode_pages/user_management_pages/user_setting.dart'; // ✅ RoleType enum 위치
 
 class TopNavigation extends StatefulWidget implements PreferredSizeWidget {
   final double height;
@@ -27,7 +26,6 @@ class _TopNavigationState extends State<TopNavigation> {
   void didChangeDependencies() {
     super.didChangeDependencies();
 
-    // 초기화는 한 번만 수행
     if (!_initialized) {
       final areaState = context.read<AreaState>();
       final userState = context.read<UserState>();
@@ -48,13 +46,11 @@ class _TopNavigationState extends State<TopNavigation> {
     final userState = context.watch<UserState>();
     final plateState = context.read<PlateState>();
 
-    final RoleType userRole = RoleType.fromName(userState.role);
-    final isAreaSelectable = [
-      RoleType.dev,
-      RoleType.officer,
-    ].contains(userRole);
-
     final selectedArea = areaState.currentArea;
+    final userDivision = userState.division;
+
+    // dev는 모든 지역 선택 가능, 그 외는 동일 division만
+    final isAreaSelectable = userDivision == 'dev';
 
     return AppBar(
       backgroundColor: Colors.white,

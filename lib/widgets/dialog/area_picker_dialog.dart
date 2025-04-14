@@ -1,17 +1,27 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart'; // ✅ 추가
+import 'package:provider/provider.dart';
 
 import '../../states/area/area_state.dart';
 import '../../states/plate/plate_state.dart';
-import '../../states/user/user_state.dart'; // ✅ 추가
+import '../../states/user/user_state.dart';
 
 void showAreaPickerDialog({
   required BuildContext context,
   required AreaState areaState,
   required PlateState plateState,
 }) {
-  final areas = areaState.availableAreas;
+  final userState = context.read<UserState>();
+  final userDivision = userState.division;
+
+  // ✅ dev는 모든 지역 선택 가능, 그 외는 division 일치하는 지역만 선택 가능
+  final allAreas = areaState.availableAreas;
+  final filteredAreas = userDivision == 'dev'
+      ? allAreas
+      : allAreas.where((area) {
+    return areaState.currentDivision == userDivision;
+  }).toList();
+
   String tempSelected = areaState.currentArea;
 
   showGeneralDialog(
@@ -38,13 +48,15 @@ void showAreaPickerDialog({
               Expanded(
                 child: CupertinoPicker(
                   scrollController: FixedExtentScrollController(
-                    initialItem: areas.indexOf(areaState.currentArea),
+                    initialItem: filteredAreas.contains(tempSelected)
+                        ? filteredAreas.indexOf(tempSelected)
+                        : 0,
                   ),
                   itemExtent: 50,
                   onSelectedItemChanged: (index) {
-                    tempSelected = areas[index];
+                    tempSelected = filteredAreas[index];
                   },
-                  children: areas
+                  children: filteredAreas
                       .map((area) => Center(
                     child: Text(
                       area,
@@ -64,9 +76,6 @@ void showAreaPickerDialog({
 
                       areaState.updateArea(tempSelected);
                       plateState.syncWithAreaState();
-
-                      // ✅ 사용자 상태에도 currentArea 반영 (Firestore 포함)
-                      final userState = context.read<UserState>();
                       userState.updateCurrentArea(tempSelected);
                     },
                     child: Container(
