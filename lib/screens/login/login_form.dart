@@ -63,28 +63,48 @@ class _LoginFormState extends State<LoginForm> {
         InkWell(
           onTap: _controller.isLoading ? null : _handleLogin,
           borderRadius: BorderRadius.circular(24),
-          child: Container(
-            height: 55,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(24),
-              gradient: const LinearGradient(
-                colors: [Color(0xFF4F93E6), Color(0xFF1976D2)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withAlpha(30),
-                  blurRadius: 6,
-                  offset: const Offset(0, 3),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+            child: Container(
+              key: ValueKey<bool>(_controller.isLoading),
+              height: 55,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(24),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF4F93E6), Color(0xFF1976D2)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-              ],
-            ),
-            child: Center(
-              child: _controller.isLoading
-                  ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
-                  : const Text("로그인", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withAlpha(30),
+                    blurRadius: 6,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Center(
+                child: _controller.isLoading
+                    ? const SizedBox(
+                  height: 24,
+                  width: 24,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                )
+                    : const Text(
+                  "로그인",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
             ),
           ),
         ),

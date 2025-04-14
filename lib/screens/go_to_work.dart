@@ -6,6 +6,8 @@ import '../../../states/user/user_state.dart';
 import '../../../models/user_model.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../utils/excel_helper.dart';
+import '../../../states/plate/plate_state.dart';
+import '../../../enums/plate_type.dart';
 
 class GoToWork extends StatefulWidget {
   const GoToWork({super.key});
@@ -23,7 +25,6 @@ class _GoToWorkState extends State<GoToWork> {
     });
 
     try {
-      // ✅ 출근 시 출석 시간 기록
       if (!userState.isWorking) {
         await _recordAttendance(context);
       }
@@ -188,11 +189,45 @@ class _GoToWorkState extends State<GoToWork> {
     );
   }
 
+  Widget _buildPlateCounts(PlateState plateState) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    final Map<PlateType, int> counts = {
+      for (var type in PlateType.values)
+        type: type == PlateType.departureCompleted
+            ? plateState.getPlatesByCollection(type, selectedDate: today).length
+            : plateState.getPlatesByCollection(type).length,
+    };
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: PlateType.values.map((type) {
+              return Column(
+                children: [
+                  Text(type.label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  const SizedBox(height: 6),
+                  Text('${counts[type]}건', style: const TextStyle(fontSize: 16, color: Colors.blueAccent)),
+                ],
+              );
+            }).toList(),
+          ),
+          const Divider(height: 32, thickness: 1),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Consumer<UserState>(
-        builder: (context, userState, _) {
+      body: Consumer2<UserState, PlateState>(
+        builder: (context, userState, plateState, _) {
           if (userState.isWorking) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               Navigator.pushReplacementNamed(context, '/type_page');
@@ -237,6 +272,7 @@ class _GoToWorkState extends State<GoToWork> {
                           ),
                         ),
                       ),
+                      _buildPlateCounts(plateState), // ✅ 여기 추가됨
                       const SizedBox(height: 32),
                       _buildWorkButton(userState),
                       const SizedBox(height: 32),
