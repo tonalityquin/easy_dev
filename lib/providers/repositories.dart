@@ -78,6 +78,11 @@ class DummyPlateRepository implements PlateRepository {
 
   @override
   Future<void> updatePlateSelection(String id, bool isSelected, {String? selectedBy}) => throw UnimplementedError();
+
+  @override
+  Future<int> getPlateCountByType(PlateType type, {DateTime? selectedDate}) {
+    throw UnimplementedError();
+  }
 }
 
 class DummyLocationRepository implements LocationRepository {

@@ -39,4 +39,5 @@ abstract class PlateRepository {
   });
 
   Future<List<String>> getAvailableLocations(String area);
+  Future<int> getPlateCountByType(PlateType type, {DateTime? selectedDate});
 }

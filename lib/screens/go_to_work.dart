@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+
 import '../../../states/user/user_state.dart';
 import '../../../models/user_model.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../utils/excel_helper.dart';
-import '../../../states/plate/plate_state.dart';
 import '../../../enums/plate_type.dart';
+import '../../../repositories/plate/plate_repository.dart';
 
 class GoToWork extends StatefulWidget {
   const GoToWork({super.key});
@@ -20,9 +21,7 @@ class _GoToWorkState extends State<GoToWork> {
   bool _isLoading = false;
 
   void _handleWorkStatus(BuildContext context, UserState userState) async {
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
       if (!userState.isWorking) {
@@ -50,9 +49,7 @@ class _GoToWorkState extends State<GoToWork> {
       }
     } finally {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() => _isLoading = false);
       }
     }
   }
@@ -73,11 +70,9 @@ class _GoToWorkState extends State<GoToWork> {
       final decoded = jsonDecode(jsonStr);
       cellData = Map<String, Map<int, String>>.from(
         decoded.map((rowKey, colMap) => MapEntry(
-              rowKey,
-              Map<int, String>.from(
-                (colMap as Map).map((k, v) => MapEntry(int.parse(k), v)),
-              ),
-            )),
+          rowKey,
+          Map<int, String>.from((colMap as Map).map((k, v) => MapEntry(int.parse(k), v))),
+        )),
       );
     }
 
@@ -92,9 +87,9 @@ class _GoToWorkState extends State<GoToWork> {
 
     final encoded = jsonEncode(
       cellData.map((rowKey, colMap) => MapEntry(
-            rowKey,
-            colMap.map((col, v) => MapEntry(col.toString(), v)),
-          )),
+        rowKey,
+        colMap.map((col, v) => MapEntry(col.toString(), v)),
+      )),
     );
     await prefs.setString(cellDataKey, encoded);
 
@@ -137,97 +132,65 @@ class _GoToWorkState extends State<GoToWork> {
     );
   }
 
-  Widget _buildWorkButton(UserState userState) {
-    final isWorking = userState.isWorking;
-
-    final label = isWorking ? '출근 중' : '출근하기';
-    final icon = Icons.login;
-    final colors = isWorking ? [Colors.grey.shade400, Colors.grey.shade600] : [Colors.green.shade400, Colors.teal];
-
-    return InkWell(
-      onTap: _isLoading || isWorking ? null : () => _handleWorkStatus(context, userState),
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        height: 55,
-        width: double.infinity,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          gradient: LinearGradient(
-            colors: colors,
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(30),
-              blurRadius: 6,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Center(
-          child: _isLoading
-              ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
-              : Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(icon, color: Colors.white),
-                    const SizedBox(width: 8),
-                    Text(
-                      label,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.1,
-                      ),
-                    ),
-                  ],
-                ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPlateCounts(PlateState plateState) {
+  Future<Map<PlateType, int>> _fetchCounts(BuildContext context) async {
+    final repo = context.read<PlateRepository>();
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
-    final Map<PlateType, int> counts = {
-      for (var type in PlateType.values)
-        type: type == PlateType.departureCompleted
-            ? plateState.getPlatesByCollection(type, selectedDate: today).length
-            : plateState.getPlatesByCollection(type).length,
-    };
+    final Map<PlateType, int> result = {};
+    for (var type in PlateType.values) {
+      final count = await repo.getPlateCountByType(
+        type,
+        selectedDate: type == PlateType.departureCompleted ? today : null,
+      );
+      result[type] = count;
+    }
+    return result;
+  }
 
-    return Padding(
-      padding: const EdgeInsets.only(top: 24.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: PlateType.values.map((type) {
-              return Column(
-                children: [
-                  Text(type.label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                  const SizedBox(height: 6),
-                  Text('${counts[type]}건', style: const TextStyle(fontSize: 16, color: Colors.blueAccent)),
-                ],
-              );
-            }).toList(),
+  Widget _buildPlateCountsAsync(BuildContext context) {
+    return FutureBuilder<Map<PlateType, int>>(
+      future: _fetchCounts(context),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        final counts = snapshot.data!;
+        return Padding(
+          padding: const EdgeInsets.only(top: 24.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: PlateType.values.map((type) {
+                  return Column(
+                    children: [
+                      Text(type.label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      const SizedBox(height: 6),
+                      Text('${counts[type] ?? 0}건',
+                          style: const TextStyle(fontSize: 16, color: Colors.blueAccent)),
+                    ],
+                  );
+                }).toList(),
+              ),
+              const Divider(height: 32, thickness: 1),
+            ],
           ),
-          const Divider(height: 32, thickness: 1),
-        ],
-      ),
+        );
+      },
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Consumer2<UserState, PlateState>(
-        builder: (context, userState, plateState, _) {
+      body: Consumer<UserState>(
+        builder: (context, userState, _) {
           if (userState.isWorking) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               Navigator.pushReplacementNamed(context, '/type_page');
@@ -255,9 +218,7 @@ class _GoToWorkState extends State<GoToWork> {
                       const SizedBox(height: 16),
                       Card(
                         elevation: 4,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         margin: const EdgeInsets.symmetric(vertical: 8),
                         child: Padding(
                           padding: const EdgeInsets.all(20),
@@ -272,7 +233,7 @@ class _GoToWorkState extends State<GoToWork> {
                           ),
                         ),
                       ),
-                      _buildPlateCounts(plateState), // ✅ 여기 추가됨
+                      _buildPlateCountsAsync(context),
                       const SizedBox(height: 32),
                       _buildWorkButton(userState),
                       const SizedBox(height: 32),
@@ -283,6 +244,54 @@ class _GoToWorkState extends State<GoToWork> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildWorkButton(UserState userState) {
+    final isWorking = userState.isWorking;
+
+    final label = isWorking ? '출근 중' : '출근하기';
+    final icon = Icons.login;
+    final colors = isWorking ? [Colors.grey.shade400, Colors.grey.shade600] : [Colors.green.shade400, Colors.teal];
+
+    return InkWell(
+      onTap: _isLoading || isWorking ? null : () => _handleWorkStatus(context, userState),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        height: 55,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: LinearGradient(colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(30),
+              blurRadius: 6,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Center(
+          child: _isLoading
+              ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+              : Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: Colors.white),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.1,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

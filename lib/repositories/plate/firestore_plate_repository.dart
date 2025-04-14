@@ -224,4 +224,23 @@ class FirestorePlateRepository implements PlateRepository {
       throw Exception('Firestore에서 사용 가능한 위치 목록을 가져오지 못했습니다: $e');
     }
   }
+
+  @override
+  Future<int> getPlateCountByType(PlateType type, {DateTime? selectedDate}) async {
+    try {
+      Query<Map<String, dynamic>> query = _firestore.collection('plates').where('type', isEqualTo: type.firestoreValue);
+
+      if (selectedDate != null && type == PlateType.departureCompleted) {
+        final start = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+        final end = start.add(const Duration(days: 1));
+        query = query.where('requestTime', isGreaterThanOrEqualTo: start).where('requestTime', isLessThan: end);
+      }
+
+      final result = await query.count().get();
+      return result.count ?? 0; // ✅ null 방어 처리
+    } catch (e) {
+      dev.log("🔥 문서 count 실패: $e", name: "Firestore");
+      return 0;
+    }
+  }
 }
