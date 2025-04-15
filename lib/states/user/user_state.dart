@@ -4,7 +4,6 @@ import '../../repositories/user/user_repository.dart';
 import '../../models/user_model.dart';
 import 'package:easydev/services/plate_tts_listener_service.dart';
 
-
 class UserState extends ChangeNotifier {
   final UserRepository _repository;
   UserModel? _user;
@@ -60,8 +59,8 @@ class UserState extends ChangeNotifier {
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      final phone = prefs.getString('phone');
-      final area = prefs.getString('area');
+      final phone = prefs.getString('phone')?.trim();
+      final area = prefs.getString('area')?.trim();
 
       if (phone == null || area == null) {
         debugPrint("[DEBUG] 자동 로그인 실패 - 저장된 전화번호 또는 지역 정보 없음");
@@ -69,11 +68,21 @@ class UserState extends ChangeNotifier {
       }
 
       final userId = "$phone-$area";
-      final userData = await _repository.getUserById(userId);
+      var userData = await _repository.getUserById(userId);
 
       if (userData == null) {
         debugPrint("[DEBUG] 자동 로그인 실패 - Firestore에서 사용자 정보 없음");
         return;
+      }
+
+      // ✅ currentArea 동기화 로직
+      if (userData.currentArea == null || userData.currentArea != userData.area) {
+        final trimmedPhone = userData.phone.trim();
+        final trimmedArea = userData.area.trim();
+        debugPrint("[DEBUG] updateCurrentArea 요청: userId=${trimmedPhone}-${trimmedArea} → currentArea=$trimmedArea");
+        await _repository.updateCurrentArea(trimmedPhone, trimmedArea, trimmedArea);
+        userData = userData.copyWith(currentArea: trimmedArea);
+        debugPrint("🛠 currentArea 자동 동기화: $trimmedArea");
       }
 
       await _repository.updateUserStatus(phone, area, isSaved: true);
@@ -83,17 +92,14 @@ class UserState extends ChangeNotifier {
       // ✅ 자동 로그인 완료 후 TTS 감지 시작
       PlateTtsListenerService.start(currentArea);
       debugPrint("[TTS] 자동 로그인 후 감지 시작: $currentArea");
-
     } catch (e) {
       debugPrint("[DEBUG] 자동 로그인 중 오류 발생: $e");
     }
   }
 
-
-
   void _realtimeUsers() {
     _repository.getUsersStream().listen(
-          (data) {
+      (data) {
         _users = data;
         _selectedUsers = {for (var user in data) user.id: user.isSelected};
         _isLoading = false;
@@ -155,7 +161,6 @@ class UserState extends ChangeNotifier {
         area: user.area,
         division: user.division,
         currentArea: user.currentArea,
-        // ✅ 추가됨
         isSelected: user.isSelected,
         isWorking: user.isWorking,
         isSaved: user.isSaved,
@@ -193,7 +198,16 @@ class UserState extends ChangeNotifier {
     _user = updatedUser;
     notifyListeners();
 
-    await _repository.updateCurrentArea(_user!.phone, _user!.area, newArea);
+    try {
+      await _repository.updateCurrentArea(
+        _user!.phone.trim(),
+        _user!.area.trim(),
+        newArea.trim(),
+      );
+      debugPrint("✅ Firestore currentArea 업데이트 완료 → ${_user!.phone.trim()}-${_user!.area.trim()} → $newArea");
+    } catch (e) {
+      debugPrint("❌ Firestore currentArea 업데이트 실패: $e / userId: ${_user!.phone.trim()}-${_user!.area.trim()}");
+    }
 
     // ✅ 지역 변경 시 TTS 다시 시작
     PlateTtsListenerService.start(newArea);

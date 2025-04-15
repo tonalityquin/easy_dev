@@ -8,12 +8,12 @@ import 'providers/providers.dart';
 import 'theme.dart';
 import 'states/user/user_state.dart';
 import 'services/plate_tts_listener_service.dart';
+import 'states/area/area_state.dart';
+import 'screens/secondary_pages/dev_mode_pages/area_management.dart';
 import 'dart:developer' as dev;
-import 'screens/secondary_pages/dev_mode_pages/area_management.dart'; // 🔽 dev 리소스 등록 함수 불러오기
 
 const String initialRoute = AppRoutes.login;
 
-// ✅ TTS 헬퍼
 class TtsHelper {
   static final FlutterTts _flutterTts = FlutterTts();
 
@@ -32,7 +32,7 @@ void main() async {
   try {
     await Firebase.initializeApp();
 
-    await registerDevResources(); // ✅ dev 관련 리소스 자동 등록
+    await registerDevResources(); // ✅ dev division/area/user_accounts 자동 생성
 
     runApp(const MyApp());
   } catch (e) {
@@ -54,8 +54,14 @@ class MyApp extends StatelessWidget {
             builder: (context, userState, child) {
               if (userState.isLoggedIn && userState.currentArea.isNotEmpty) {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
+                  final areaState = context.read<AreaState>();
+
+                  // ✅ 현재 Firestore의 currentArea 값을 강제로 설정
+                  areaState.updateArea(userState.currentArea);
+
+                  // ✅ TTS 감지 시작
                   PlateTtsListenerService.start(userState.currentArea);
-                  dev.log("[TTS] 감지 시작됨: ${userState.currentArea}");
+                  dev.log("[TTS] 감지 시작됨 (강제 초기화): ${userState.currentArea}");
                 });
               }
 
