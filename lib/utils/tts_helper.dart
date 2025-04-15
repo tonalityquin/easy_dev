@@ -14,7 +14,7 @@ class TtsHelper {
       }
 
       await _flutterTts.setLanguage("ko-KR");
-      await _flutterTts.setSpeechRate(0.1); // 더 느리게
+      await _flutterTts.setSpeechRate(0.5); // 더 느리게
       await _flutterTts.setVolume(1.0);
       await _flutterTts.setPitch(1.0);
 

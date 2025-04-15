@@ -16,11 +16,8 @@ void showAreaPickerDialog({
 
   // ✅ dev는 모든 지역 선택 가능, 그 외는 division 일치하는 지역만 선택 가능
   final allAreas = areaState.availableAreas;
-  final filteredAreas = userDivision == 'dev'
-      ? allAreas
-      : allAreas.where((area) {
-    return areaState.currentDivision == userDivision;
-  }).toList();
+  final filteredAreas = allAreas;
+
 
   String tempSelected = areaState.currentArea;
 

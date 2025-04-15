@@ -50,7 +50,7 @@ class _TopNavigationState extends State<TopNavigation> {
     final userDivision = userState.division;
 
     // dev는 모든 지역 선택 가능, 그 외는 동일 division만
-    final isAreaSelectable = userDivision == 'dev';
+    final isAreaSelectable = true;
 
     return AppBar(
       backgroundColor: Colors.white,
