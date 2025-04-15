@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'add_area_tab.dart';
-import 'division_management_tab.dart';
-import 'user_account_tab.dart';
+import 'area_managements/add_area_tab.dart';
+import 'area_managements/division_management_tab.dart';
+import 'area_managements/user_account_tab.dart';
 import '../../../widgets/navigation/secondary_mini_navigation.dart';
 
 /// ✅ 앱 어디서든 호출 가능하게끔 전역 함수로 정의

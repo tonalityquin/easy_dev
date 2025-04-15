@@ -17,7 +17,6 @@ void showAreaPickerDialog({
   final allAreas = areaState.availableAreas;
   final filteredAreas = allAreas;
 
-
   String tempSelected = areaState.currentArea;
 
   showGeneralDialog(
@@ -44,9 +43,7 @@ void showAreaPickerDialog({
               Expanded(
                 child: CupertinoPicker(
                   scrollController: FixedExtentScrollController(
-                    initialItem: filteredAreas.contains(tempSelected)
-                        ? filteredAreas.indexOf(tempSelected)
-                        : 0,
+                    initialItem: filteredAreas.contains(tempSelected) ? filteredAreas.indexOf(tempSelected) : 0,
                   ),
                   itemExtent: 50,
                   onSelectedItemChanged: (index) {
@@ -54,11 +51,11 @@ void showAreaPickerDialog({
                   },
                   children: filteredAreas
                       .map((area) => Center(
-                    child: Text(
-                      area,
-                      style: const TextStyle(fontSize: 18),
-                    ),
-                  ))
+                            child: Text(
+                              area,
+                              style: const TextStyle(fontSize: 18),
+                            ),
+                          ))
                       .toList(),
                 ),
               ),
