@@ -5,6 +5,52 @@ import 'division_management_tab.dart';
 import 'user_account_tab.dart';
 import '../../../widgets/navigation/secondary_mini_navigation.dart';
 
+/// ✅ 앱 어디서든 호출 가능하게끔 전역 함수로 정의
+Future<void> registerDevResources() async {
+  final firestore = FirebaseFirestore.instance;
+
+  // 1. dev division 등록
+  final divisionDoc = firestore.collection('divisions').doc('dev');
+  if (!(await divisionDoc.get()).exists) {
+    await divisionDoc.set({
+      'name': 'dev',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  // 2. dev 기본 지역 등록
+  final areaQuery = await firestore.collection('areas').where('division', isEqualTo: 'dev').get();
+  if (areaQuery.docs.isEmpty) {
+    await firestore.collection('areas').doc('dev-default').set({
+      'name': 'default',
+      'division': 'dev',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  // 3. dev 고정 계정 등록
+  const devPhone = '00000000000';
+  const devArea = 'default';
+  const devAccountId = '$devPhone-$devArea';
+
+  final userDoc = firestore.collection('user_accounts').doc(devAccountId);
+  if (!(await userDoc.get()).exists) {
+    await userDoc.set({
+      'name': 'developer',
+      'phone': devPhone,
+      'email': 'dev@gmail.com',
+      'password': '00000',
+      'division': 'dev',
+      'area': devArea,
+      'role': 'dev',
+      'isWorking': false,
+      'isSaved': false,
+      'isSelected': false,
+      'currentArea': null,
+    });
+  }
+}
+
 class AreaManagement extends StatefulWidget {
   const AreaManagement({super.key});
 
@@ -30,8 +76,10 @@ class _AreaManagementState extends State<AreaManagement> with SingleTickerProvid
 
   void _loadDivisions() async {
     final snapshot = await FirebaseFirestore.instance.collection('divisions').get();
+    final divisions = snapshot.docs.map((e) => e['name'] as String).toList();
+
     setState(() {
-      _divisionList = snapshot.docs.map((e) => e['name'] as String).toList();
+      _divisionList = divisions;
       if (_divisionList.isNotEmpty && _selectedDivision == null) {
         _selectedDivision = _divisionList.first;
       }
@@ -59,10 +107,8 @@ class _AreaManagementState extends State<AreaManagement> with SingleTickerProvid
   Future<void> _deleteDivision(String name) async {
     try {
       await FirebaseFirestore.instance.collection('divisions').doc(name).delete();
-      final areaSnapshot = await FirebaseFirestore.instance
-          .collection('areas')
-          .where('division', isEqualTo: name)
-          .get();
+      final areaSnapshot =
+          await FirebaseFirestore.instance.collection('areas').where('division', isEqualTo: name).get();
       for (var doc in areaSnapshot.docs) {
         await doc.reference.delete();
       }

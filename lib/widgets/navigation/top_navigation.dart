@@ -43,12 +43,9 @@ class _TopNavigationState extends State<TopNavigation> {
   @override
   Widget build(BuildContext context) {
     final areaState = context.watch<AreaState>();
-    final userState = context.watch<UserState>();
     final plateState = context.read<PlateState>();
 
     final selectedArea = areaState.currentArea;
-    final userDivision = userState.division;
-
     // dev는 모든 지역 선택 가능, 그 외는 동일 division만
     final isAreaSelectable = true;
 
@@ -57,13 +54,11 @@ class _TopNavigationState extends State<TopNavigation> {
       elevation: 0,
       centerTitle: true,
       title: GestureDetector(
-        onTap: isAreaSelectable
-            ? () => showAreaPickerDialog(
+        onTap: () => showAreaPickerDialog(
           context: context,
           areaState: areaState,
           plateState: plateState,
-        )
-            : null,
+        ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [

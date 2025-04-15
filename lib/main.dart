@@ -7,8 +7,9 @@ import 'routes.dart';
 import 'providers/providers.dart';
 import 'theme.dart';
 import 'states/user/user_state.dart';
-import 'services/plate_tts_listener_service.dart'; // ✅ 새로 만든 서비스 임포트
+import 'services/plate_tts_listener_service.dart';
 import 'dart:developer' as dev;
+import 'screens/secondary_pages/dev_mode_pages/area_management.dart'; // 🔽 dev 리소스 등록 함수 불러오기
 
 const String initialRoute = AppRoutes.login;
 
@@ -30,6 +31,9 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
     await Firebase.initializeApp();
+
+    await registerDevResources(); // ✅ dev 관련 리소스 자동 등록
+
     runApp(const MyApp());
   } catch (e) {
     dev.log("DB 초기화 실패: $e");
@@ -50,7 +54,7 @@ class MyApp extends StatelessWidget {
             builder: (context, userState, child) {
               if (userState.isLoggedIn && userState.currentArea.isNotEmpty) {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
-                  PlateTtsListenerService.start(userState.currentArea); // ✅ 최초 감지 시작
+                  PlateTtsListenerService.start(userState.currentArea);
                   dev.log("[TTS] 감지 시작됨: ${userState.currentArea}");
                 });
               }

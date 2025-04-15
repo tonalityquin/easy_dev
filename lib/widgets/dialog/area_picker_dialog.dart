@@ -12,7 +12,6 @@ void showAreaPickerDialog({
   required PlateState plateState,
 }) {
   final userState = context.read<UserState>();
-  final userDivision = userState.division;
 
   // ✅ dev는 모든 지역 선택 가능, 그 외는 division 일치하는 지역만 선택 가능
   final allAreas = areaState.availableAreas;
