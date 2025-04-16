@@ -269,11 +269,15 @@ class BreakDocumentBody extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  '직원 휴게 테이블 (${selectedArea.isNotEmpty ? selectedArea : "지역 미선택"})',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                Flexible(
+                  child: Text(
+                    '직원 휴게 테이블 (${selectedArea.isNotEmpty ? selectedArea : "지역 미선택"})',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
                 Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     DropdownButton<int>(
                       value: selectedYear,

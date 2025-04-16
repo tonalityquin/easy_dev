@@ -277,7 +277,8 @@ class AttendanceDocumentBody extends StatelessWidget {
                   userIdToName: userIdToName,
                   year: selectedYear,
                   month: selectedMonth,
-                  generatedByName: userState.name,  // Use the user name from the state
+                  generatedByName: userState.name,
+                  // Use the user name from the state
                   generatedByArea: selectedArea,
                 );
 
@@ -300,7 +301,6 @@ class AttendanceDocumentBody extends StatelessWidget {
                   }
                 });
               }
-
             },
           ),
         ],
@@ -314,11 +314,15 @@ class AttendanceDocumentBody extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  '직원 근무 테이블 (${selectedArea.isNotEmpty ? selectedArea : "지역 미선택"})',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                Flexible(
+                  child: Text(
+                    '직원 근무 테이블 (${selectedArea.isNotEmpty ? selectedArea : "지역 미선택"})',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    overflow: TextOverflow.ellipsis, // 혹시 너무 길면 "..."으로 처리
+                  ),
                 ),
                 Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     DropdownButton<int>(
                       value: selectedYear,
