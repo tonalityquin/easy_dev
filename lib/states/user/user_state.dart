@@ -18,6 +18,18 @@ class UserState extends ChangeNotifier {
     _realtimeUsers();
   }
 
+  /// ✅ 사용자 목록만 불러오는 로직 (Office Mode 용)
+  Future<void> loadUsersOnly() async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      _realtimeUsers(); // 실시간 유저 구독만 수행
+    } catch (e) {
+      debugPrint("📛 사용자 목록 로딩 실패: $e");
+    }
+  }
+
   UserModel? get user => _user;
 
   List<UserModel> get users => _users;
@@ -75,8 +87,8 @@ class UserState extends ChangeNotifier {
         return;
       }
 
-      // ✅ currentArea 동기화 로직
-      if (userData.currentArea == null || userData.currentArea != userData.area) {
+      // ✅ currentArea 동기화 로직 (userData 기준, 비어 있을 때만)
+      if (userData.currentArea == null || userData.currentArea!.trim().isEmpty) {
         final trimmedPhone = userData.phone.trim();
         final trimmedArea = userData.area.trim();
         debugPrint("[DEBUG] updateCurrentArea 요청: userId=${trimmedPhone}-${trimmedArea} → currentArea=$trimmedArea");

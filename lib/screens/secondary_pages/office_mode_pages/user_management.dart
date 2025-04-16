@@ -17,13 +17,12 @@ class UserManagement extends StatefulWidget {
 }
 
 class _UserManagementState extends State<UserManagement> {
+  // ✅ initialize() 호출 제거 – Document Mode와 동일하게 처리
   @override
   void initState() {
     super.initState();
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final userState = context.read<UserState>();
-      userState.initialize();
+      context.read<UserState>().loadUsersOnly();
     });
   }
 
@@ -115,7 +114,7 @@ class _UserManagementState extends State<UserManagement> {
     final userState = context.watch<UserState>();
     final areaState = context.watch<AreaState>();
     final currentArea = areaState.currentArea;
-    final currentDivision = areaState.currentDivision; // ✅ 사용됨
+    final currentDivision = areaState.currentDivision;
 
     final filteredUsers = userState.users.where((user) {
       return user.area == currentArea && user.division == currentDivision;
