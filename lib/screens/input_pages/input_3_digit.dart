@@ -87,8 +87,12 @@ class _Input3DigitState extends State<Input3Digit> {
 
     Future.delayed(const Duration(milliseconds: 100), () async {
       try {
+        // ✅ 정산 유형 상태 수동 초기화 호출
+        final adjustmentState = context.read<AdjustmentState>();
+        adjustmentState.syncWithAreaState();
+
         await Future.wait([
-          _initializeStatuses().timeout(Duration(seconds: 3)),
+          _initializeStatuses().timeout(const Duration(seconds: 3)),
         ]);
       } catch (e) {
         debugPrint("초기화 오류 발생: $e");
@@ -101,6 +105,7 @@ class _Input3DigitState extends State<Input3Digit> {
       }
     });
   }
+
 
   Future<void> _initializeStatuses() async {
     final statusState = context.read<StatusState>();
