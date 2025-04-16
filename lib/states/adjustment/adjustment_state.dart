@@ -15,6 +15,8 @@ class AdjustmentState extends ChangeNotifier {
   Map<String, bool> _selectedAdjustments = {};
   bool _isLoading = true;
 
+  String _previousArea = ''; // ✅ 이전 지역 캐시 변수 추가
+
   List<AdjustmentModel> get adjustments => _adjustments;
 
   Map<String, bool> get selectedAdjustments => _selectedAdjustments;
@@ -22,13 +24,13 @@ class AdjustmentState extends ChangeNotifier {
   bool get isLoading => _isLoading;
 
   Future<void> addAdjustments(
-    String countType,
-    String area,
-    String basicStandard,
-    String basicAmount,
-    String addStandard,
-    String addAmount,
-  ) async {
+      String countType,
+      String area,
+      String basicStandard,
+      String basicAmount,
+      String addStandard,
+      String addAmount,
+      ) async {
     try {
       final adjustment = AdjustmentModel(
         id: '${countType}_$area',
@@ -59,7 +61,15 @@ class AdjustmentState extends ChangeNotifier {
   void syncWithAreaState() {
     try {
       final currentArea = _areaState.currentArea.trim();
-      debugPrint('🔥 AdjustmentState: 지역 변경 감지됨 ($currentArea) → 데이터 새로 가져옴');
+
+      // ✅ 이전 지역과 비교하여 동일하면 재조회 생략
+      if (_previousArea == currentArea) {
+        debugPrint('✅ 동일 지역 감지됨 ($currentArea) → 재조회 생략');
+        return;
+      }
+
+      debugPrint('🔥 지역 변경 감지됨 ($_previousArea → $currentArea) → 데이터 새로 가져옴');
+      _previousArea = currentArea;
       _initializeAdjustments();
     } catch (e) {
       debugPrint("🔥 Error syncing area state: $e");
@@ -71,7 +81,7 @@ class AdjustmentState extends ChangeNotifier {
 
     // 기존 스트림을 제거하고 새로운 스트림을 추가
     _repository.getAdjustmentStream(currentArea).listen(
-      (data) {
+          (data) {
         _adjustments.clear(); // 기존 데이터 초기화
 
         for (var adj in data) {

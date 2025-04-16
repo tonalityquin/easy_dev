@@ -298,15 +298,6 @@ class _Input3DigitState extends State<Input3Digit> {
     );
   }
 
-  Future<bool> _refreshAdjustments() async {
-    final adjustmentState = context.read<AdjustmentState>();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      adjustmentState.syncWithAreaState();
-    });
-    await Future.delayed(const Duration(milliseconds: 500));
-    return adjustmentState.adjustments.isNotEmpty;
-  }
-
   @override
   void dispose() {
     _removeInputListeners();
@@ -377,7 +368,6 @@ class _Input3DigitState extends State<Input3Digit> {
                   AdjustmentSection(
                     selectedAdjustment: selectedAdjustment,
                     onChanged: (value) => setState(() => selectedAdjustment = value),
-                    onRefresh: _refreshAdjustments,
                   ),
                   const SizedBox(height: 32.0),
                   StatusChipSection(
