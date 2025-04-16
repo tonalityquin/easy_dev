@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
 import '../../models/plate_model.dart';
 import '../../repositories/plate/plate_repository.dart';
-import 'plate_state.dart';
-import '../../models/plate_log_model.dart';
-import '../../enums/plate_type.dart';
 import 'log_plate.dart';
+import 'plate_state.dart';
+import '../../enums/plate_type.dart';
+import '../../models/plate_log_model.dart';
+import '../../utils/gcs_uploader.dart';
 
 class MovementPlate {
   final PlateRepository _repository;
+
+  // ignore: unused_field
   final LogPlateState _logState;
 
-  MovementPlate(this._repository, this._logState);
-
+  MovementPlate(this._repository, this._logState); // 로그 저장 목적
+  final _uploader = GCSUploader(); // ✅ GCS 업로더 인스턴스
   Future<bool> _transferData({
     required PlateType fromType,
     required PlateType toType,
@@ -30,9 +33,8 @@ class MovementPlate {
       }
 
       final plateData = document.toMap();
-      final selectedBy = plateData['selectedBy'] ?? '시스템';
+      final selectedBy = plateData['selectedBy'] ?? performedBy;
 
-      // ✅ 변경된 필드만 업데이트
       final updateData = {
         'type': toType.firestoreValue,
         'location': location,
@@ -43,20 +45,18 @@ class MovementPlate {
       };
 
       await _repository.updatePlate(documentId, updateData);
-
       debugPrint("✅ 문서 상태 이동 완료: ${fromType.name} → ${toType.name} ($plateNumber)");
 
-      await _logState.saveLog(
-        PlateLogModel(
-          plateNumber: plateNumber,
-          area: area,
-          from: fromType.name,
-          to: toType.name,
-          action: toType.firestoreValue,
-          performedBy: selectedBy,
-          timestamp: DateTime.now(),
-        ),
+      final log = PlateLogModel(
+        plateNumber: plateNumber,
+        area: area,
+        from: fromType.name,
+        to: toType.name,
+        action: '${fromType.label} → ${toType.label}',
+        performedBy: selectedBy,
+        timestamp: DateTime.now(),
       );
+      await _uploader.uploadLogJson(log.toMap(), plateNumber);
 
       return true;
     } catch (e) {
@@ -119,45 +119,6 @@ class MovementPlate {
     if (success) await plateState.fetchPlateData();
   }
 
-  Future<void> setDepartureCompletedWithPlate(
-    PlateModel plate,
-    PlateState plateState,
-  ) async {
-    final documentId = '${plate.plateNumber}_${plate.area}';
-
-    try {
-      await _repository.deletePlate(documentId);
-
-      final updatedPlate = plate.copyWith(
-        type: PlateType.departureCompleted.firestoreValue,
-        location: plate.location,
-        userName: plate.userName,
-        isSelected: false,
-        selectedBy: null,
-        endTime: DateTime.now(),
-      );
-
-      await _repository.addOrUpdatePlate(documentId, updatedPlate);
-
-      await _logState.saveLog(
-        PlateLogModel(
-          plateNumber: plate.plateNumber,
-          area: plate.area,
-          from: PlateType.departureRequests.name,
-          to: PlateType.departureCompleted.name,
-          action: PlateType.departureCompleted.firestoreValue,
-          performedBy: plate.userName,
-          timestamp: DateTime.now(),
-        ),
-      );
-
-      await plateState.fetchPlateData();
-    } catch (e) {
-      debugPrint('🚨 출차 완료 이동 실패: $e');
-      rethrow;
-    }
-  }
-
   Future<void> doubleParkingCompletedToDepartureCompleted(
     String plateNumber,
     String area,
@@ -174,45 +135,6 @@ class MovementPlate {
       performedBy: performedBy,
     );
     if (success) await plateState.fetchPlateData();
-  }
-
-  Future<void> doubleParkingCompletedToDepartureCompletedWithPlate(
-    PlateModel plate,
-    PlateState plateState,
-  ) async {
-    final documentId = '${plate.plateNumber}_${plate.area}';
-
-    try {
-      await _repository.deletePlate(documentId);
-
-      final updatedPlate = plate.copyWith(
-        type: PlateType.departureCompleted.firestoreValue,
-        location: plate.location,
-        userName: plate.userName,
-        isSelected: false,
-        selectedBy: null,
-        endTime: DateTime.now(),
-      );
-
-      await _repository.addOrUpdatePlate(documentId, updatedPlate);
-
-      await _logState.saveLog(
-        PlateLogModel(
-          plateNumber: plate.plateNumber,
-          area: plate.area,
-          from: PlateType.parkingCompleted.name,
-          to: PlateType.departureCompleted.name,
-          action: PlateType.departureCompleted.firestoreValue,
-          performedBy: plate.userName,
-          timestamp: DateTime.now(),
-        ),
-      );
-
-      await plateState.fetchPlateData();
-    } catch (e) {
-      debugPrint('🚨 출차 완료 이동 실패: $e');
-      rethrow;
-    }
   }
 
   Future<void> goBackToParkingRequest({
@@ -242,22 +164,18 @@ class MovementPlate {
       );
 
       await _repository.addOrUpdatePlate(documentId, updatedPlate);
-
-      debugPrint("🔄 복원 완료 → ${PlateType.parkingRequests.name}: $plateNumber");
-
-      await _logState.saveLog(
-        PlateLogModel(
-          plateNumber: plateNumber,
-          area: area,
-          from: fromType.name,
-          to: PlateType.parkingRequests.name,
-          action: '입차 요청 복원',
-          performedBy: performedBy,
-          timestamp: DateTime.now(),
-        ),
-      );
-
       await plateState.fetchPlateData();
+
+      final log = PlateLogModel(
+        plateNumber: plateNumber,
+        area: area,
+        from: fromType.name,
+        to: PlateType.parkingRequests.name,
+        action: '${fromType.label} → ${PlateType.parkingRequests.label}',
+        performedBy: performedBy,
+        timestamp: DateTime.now(),
+      );
+      await _uploader.uploadLogJson(log.toMap(), plateNumber);
     } catch (e) {
       debugPrint("🚨 복원 오류: $e");
     }
@@ -278,11 +196,87 @@ class MovementPlate {
       location: location,
       performedBy: performedBy,
     );
-
-    if (!success) {
+    if (success) {
+      await plateState.fetchPlateData();
+    } else {
       debugPrint("🚫 출차 요청 → 입차 완료 이동 실패");
     }
   }
+
+  Future<void> setDepartureCompletedWithPlate(
+      PlateModel plate,
+      PlateState plateState,
+      ) async {
+    final documentId = '${plate.plateNumber}_${plate.area}';
+
+    try {
+      await _repository.deletePlate(documentId);
+
+      final updatedPlate = plate.copyWith(
+        type: PlateType.departureCompleted.firestoreValue,
+        location: plate.location,
+        userName: plate.userName,
+        isSelected: false,
+        selectedBy: null,
+        endTime: DateTime.now(),
+      );
+
+      await _repository.addOrUpdatePlate(documentId, updatedPlate);
+      await plateState.fetchPlateData();
+
+      final log = PlateLogModel(
+        plateNumber: plate.plateNumber,
+        area: plate.area,
+        from: PlateType.departureRequests.name,
+        to: PlateType.departureCompleted.name,
+        action: '출차 요청 → 출차 완료',
+        performedBy: plate.userName,
+        timestamp: DateTime.now(),
+      );
+      await _uploader.uploadLogJson(log.toMap(), plate.plateNumber);
+    } catch (e) {
+      debugPrint('🚨 출차 완료 이동 실패: \$e');
+      rethrow;
+    }
+  }
+
+  Future<void> doubleParkingCompletedToDepartureCompletedWithPlate(
+      PlateModel plate,
+      PlateState plateState,
+      ) async {
+    final documentId = '${plate.plateNumber}_${plate.area}';
+
+    try {
+      await _repository.deletePlate(documentId);
+
+      final updatedPlate = plate.copyWith(
+        type: PlateType.departureCompleted.firestoreValue,
+        location: plate.location,
+        userName: plate.userName,
+        isSelected: false,
+        selectedBy: null,
+        endTime: DateTime.now(),
+      );
+
+      await _repository.addOrUpdatePlate(documentId, updatedPlate);
+      await plateState.fetchPlateData();
+
+      final log = PlateLogModel(
+        plateNumber: plate.plateNumber,
+        area: plate.area,
+        from: PlateType.parkingCompleted.name,
+        to: PlateType.departureCompleted.name,
+        action: '입차 완료 → 출차 완료',
+        performedBy: plate.userName,
+        timestamp: DateTime.now(),
+      );
+      await _uploader.uploadLogJson(log.toMap(), plate.plateNumber);
+    } catch (e) {
+      debugPrint('🚨 출차 완료 이동 실패: \$e');
+      rethrow;
+    }
+  }
+
 
   Future<void> updatePlateStatus({
     required PlateType fromType,
@@ -301,7 +295,6 @@ class MovementPlate {
       location: location,
       performedBy: performedBy,
     );
-
     if (success) await plateState.fetchPlateData();
   }
 }

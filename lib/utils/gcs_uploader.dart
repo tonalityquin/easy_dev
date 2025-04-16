@@ -1,13 +1,14 @@
 import 'dart:io';
+import 'dart:convert'; // ✅ jsonEncode 사용
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // ✅ asset 로드를 위한 import
+import 'package:flutter/services.dart';
 import 'package:googleapis_auth/auth_io.dart';
 import 'package:googleapis/storage/v1.dart';
 
 class GCSUploader {
-  final String bucketName = 'easydev-image'; // GCS 버킷 이름
-  final String projectId = 'easydev-97fb6';  // GCP 프로젝트 ID
-  final String serviceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json'; // assets 내 JSON 키 경로
+  final String bucketName = 'easydev-image';
+  final String projectId = 'easydev-97fb6';
+  final String serviceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
 
   /// ✅ input_3_digit.dart 전용 업로드
   Future<String?> uploadImageFromInput(File imageFile, String destinationPath) async {
@@ -20,18 +21,15 @@ class GCSUploader {
   }
 
   /// 🔁 내부 공통 업로드 처리 로직
-  Future<String?> _upload(File imageFile, String destinationPath) async {
+  Future<String?> _upload(File file, String destinationPath) async {
     try {
-      // ✅ Flutter asset에서 JSON 키 파일 로드
       final credentialsJson = await rootBundle.loadString(serviceAccountPath);
-
       final accountCredentials = ServiceAccountCredentials.fromJson(credentialsJson);
       final scopes = [StorageApi.devstorageFullControlScope];
-
       final client = await clientViaServiceAccount(accountCredentials, scopes);
       final storage = StorageApi(client);
 
-      final media = Media(imageFile.openRead(), imageFile.lengthSync());
+      final media = Media(file.openRead(), file.lengthSync());
 
       final object = await storage.objects.insert(
         Object()
@@ -39,20 +37,66 @@ class GCSUploader {
           ..acl = [
             ObjectAccessControl()
               ..entity = 'allUsers'
-              ..role = 'READER' // ✅ 공개 권한 부여
+              ..role = 'READER'
           ],
         bucketName,
         uploadMedia: media,
       );
 
       client.close();
-
-      // ✅ 업로드된 파일의 공개 URL 반환
       return 'https://storage.googleapis.com/$bucketName/${object.name}';
     } catch (e, stack) {
       debugPrint('🔥 GCS 업로드 실패: $e');
       debugPrint('🔥 Stack Trace: $stack');
-      rethrow; // ⛔ 또는 showFailedSnackbar()로 스낵바 출력도 가능
+      rethrow;
     }
   }
+
+  /// ✅ 일반 JSON 데이터 업로드 (사용자 지정 경로)
+  Future<String?> uploadJsonData(Map<String, dynamic> jsonData, String destinationPath) async {
+    try {
+      final credentialsJson = await rootBundle.loadString(serviceAccountPath);
+      final accountCredentials = ServiceAccountCredentials.fromJson(credentialsJson);
+      final scopes = [StorageApi.devstorageFullControlScope];
+      final client = await clientViaServiceAccount(accountCredentials, scopes);
+      final storage = StorageApi(client);
+
+      final jsonString = jsonEncode(jsonData); // ⬅️ 중요: JSON 문자열로 저장
+      final tempFile = File('${Directory.systemTemp.path}/temp_upload.json');
+      await tempFile.writeAsString(jsonString);
+
+      final media = Media(tempFile.openRead(), tempFile.lengthSync());
+
+      final object = await storage.objects.insert(
+        Object()
+          ..name = destinationPath
+          ..acl = [
+            ObjectAccessControl()
+              ..entity = 'allUsers'
+              ..role = 'READER'
+          ],
+        bucketName,
+        uploadMedia: media,
+      );
+
+      client.close();
+      return 'https://storage.googleapis.com/$bucketName/${object.name}';
+    } catch (e, stack) {
+      debugPrint('🔥 JSON 업로드 실패: $e');
+      debugPrint('🔥 Stack Trace: $stack');
+      rethrow;
+    }
+  }
+
+  /// ✅ 로그 저장 전용 업로드 (plateNumber 기준으로 자동 파일명 생성)
+  Future<String?> uploadLogJson(Map<String, dynamic> logData, String plateNumber) async {
+    final now = DateTime.now();
+    final timestamp = '${now.year}${_two(now.month)}${_two(now.day)}_${_two(now.hour)}${_two(now.minute)}${_two(now.second)}';
+    final safePlate = plateNumber.replaceAll(RegExp(r'\s'), '');
+    final fileName = 'logs/${timestamp}_${safePlate}.json';
+
+    return await uploadJsonData(logData, fileName);
+  }
+
+  String _two(int value) => value.toString().padLeft(2, '0');
 }

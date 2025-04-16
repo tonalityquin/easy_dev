@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:camera/camera.dart';
 
-import '../models/plate_log_model.dart';
-import '../states/plate/log_plate.dart';
 import '../states/plate/modify_plate.dart';
 import '../states/area/area_state.dart';
 import '../states/user/user_state.dart';
@@ -83,7 +81,6 @@ class ModifyPlateService {
     return [...existingImageUrls, ...uploadedImageUrls];
   }
 
-
   Future<bool> updatePlateInfo({
     required String plateNumber,
     required List<String> imageUrls,
@@ -112,33 +109,4 @@ class ModifyPlateService {
       imageUrls: imageUrls,
     );
   }
-
-  Future<void> logPlateChange({
-    required String plateNumber,
-    required String from,
-    required String to,
-    required String action,
-  }) async {
-    final area = context.read<AreaState>().currentArea;
-    final user = context.read<UserState>().user;
-    final logState = context.read<LogPlateState>();
-
-    if (user == null) {
-      debugPrint("❗️logPlateChange 호출 시 유저 정보가 없음 → 로그 저장 생략");
-      return;
-    }
-
-    final log = PlateLogModel(
-      plateNumber: plateNumber,
-      area: area,
-      from: from,
-      to: to,
-      action: action,
-      performedBy: user.name, // ✅ 명확한 사용자 이름
-      timestamp: DateTime.now(),
-    );
-
-    await logState.saveLog(log);
-  }
-
 }

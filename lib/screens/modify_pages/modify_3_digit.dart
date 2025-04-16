@@ -305,14 +305,9 @@ class _Modify3Digit extends State<Modify3Digit> {
     );
 
     final plateNumber = service.composePlateNumber();
-    final oldLocation = widget.plate.location;
-    final oldAdjustmentType = widget.plate.adjustmentType;
 
     final newLocation = locationController.text;
     final newAdjustmentType = selectedAdjustment;
-
-    final locationChanged = oldLocation != newLocation;
-    final adjustmentChanged = oldAdjustmentType != newAdjustmentType;
 
     final mergedImageUrls = await service.uploadAndMergeImages(plateNumber);
 
@@ -323,18 +318,7 @@ class _Modify3Digit extends State<Modify3Digit> {
       newAdjustmentType: newAdjustmentType,
     );
 
-    if (success && (locationChanged || adjustmentChanged)) {
-      await service.logPlateChange(
-        plateNumber: plateNumber,
-        from: locationChanged ? oldLocation : (adjustmentChanged ? oldAdjustmentType ?? '-' : '-'),
-        to: locationChanged ? newLocation : (adjustmentChanged ? newAdjustmentType ?? '-' : '-'),
-        action: locationChanged && adjustmentChanged
-            ? '위치/할인 수정'
-            : locationChanged
-                ? '위치 수정'
-                : '할인 수정',
-      );
-    }
+    // ✅ 로그 저장은 정책상 제거 → logPlateChange 제거
 
     if (success) {
       final updatedPlate = widget.plate.copyWith(
@@ -360,6 +344,7 @@ class _Modify3Digit extends State<Modify3Digit> {
     clearInput();
     _clearLocation();
   }
+
 
   void _selectParkingLocation() {
     showDialog(

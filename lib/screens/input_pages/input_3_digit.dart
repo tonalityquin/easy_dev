@@ -167,14 +167,15 @@ class _Input3DigitState extends State<Input3Digit> {
     if (mounted) {
       await showDialog(
         context: context,
-        builder: (context) => CameraPreviewDialog(
-          onImageCaptured: (image) {
-            setState(() {
-              _capturedImages.add(image);
-              debugPrint('📸 이미지 1장 실시간 반영됨: ${image.path}');
-            });
-          },
-        ),
+        builder: (context) =>
+            CameraPreviewDialog(
+              onImageCaptured: (image) {
+                setState(() {
+                  _capturedImages.add(image);
+                  debugPrint('📸 이미지 1장 실시간 반영됨: ${image.path}');
+                });
+              },
+            ),
       );
     }
 
@@ -228,9 +229,15 @@ class _Input3DigitState extends State<Input3Digit> {
 
   Future<void> _handleAction() async {
     final plateNumber = _buildPlateNumber();
-    final area = context.read<AreaState>().currentArea;
-    final userName = context.read<UserState>().name;
-    final adjustmentList = context.read<AdjustmentState>().adjustments;
+    final area = context
+        .read<AreaState>()
+        .currentArea;
+    final userName = context
+        .read<UserState>()
+        .name;
+    final adjustmentList = context
+        .read<AdjustmentState>()
+        .adjustments;
 
     if (adjustmentList.isNotEmpty && selectedAdjustment == null) {
       showFailedSnackbar(context, '정산 유형을 선택해주세요');
@@ -400,20 +407,20 @@ class _Input3DigitState extends State<Input3Digit> {
         showKeypad: showKeypad,
         keypad: activeController == controller3digit
             ? NumKeypad(
-                controller: controller3digit,
-                maxLength: 3,
-                onComplete: () => _setActiveController(controller1digit),
-              )
+          controller: controller3digit,
+          maxLength: 3,
+          onComplete: () => _setActiveController(controller1digit),
+        )
             : activeController == controller1digit
-                ? KorKeypad(
-                    controller: controller1digit,
-                    onComplete: () => _setActiveController(controller4digit),
-                  )
-                : NumKeypad(
-                    controller: controller4digit,
-                    maxLength: 4,
-                    onComplete: () => setState(() => showKeypad = false),
-                  ),
+            ? KorKeypad(
+          controller: controller1digit,
+          onComplete: () => _setActiveController(controller4digit),
+        )
+            : NumKeypad(
+          controller: controller4digit,
+          maxLength: 4,
+          onComplete: () => setState(() => showKeypad = false),
+        ),
         actionButton: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

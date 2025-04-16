@@ -71,9 +71,10 @@ class MyApp extends StatelessWidget {
                 theme: appTheme,
                 initialRoute: initialRoute,
                 routes: appRoutes,
-                onUnknownRoute: (settings) => MaterialPageRoute(
-                  builder: (context) => const NotFoundPage(),
-                ),
+                onUnknownRoute: (settings) =>
+                    MaterialPageRoute(
+                      builder: (context) => const NotFoundPage(),
+                    ),
               );
             },
           );

@@ -8,13 +8,13 @@ import '../repositories/plate/plate_repository.dart';
 import '../repositories/status/firestore_status_repository.dart';
 import '../repositories/status/status_repository.dart';
 import '../repositories/user/user_repository.dart';
-import '../repositories/log/firestore_plate_log_repository.dart'; // ✅ 로그용 Repository
 
 // 📦 States
 import '../states/area/area_state.dart';
 import '../states/calendar/selected_date_store.dart';
 import '../states/page/page_info.dart';
 import '../states/page/page_state.dart';
+import '../states/plate/log_plate.dart';
 import '../states/plate/modify_plate.dart';
 import '../states/user/user_state.dart';
 import '../states/location/location_state.dart';
@@ -25,7 +25,6 @@ import '../states/plate/plate_state.dart';
 import '../states/plate/filter_plate.dart';
 import '../states/plate/delete_plate.dart';
 import '../states/plate/movement_plate.dart';
-import '../states/plate/log_plate.dart'; // ✅ 로그 상태 추가
 import '../states/secondary/secondary_mode.dart';
 import '../states/calendar/field_selected_date_state.dart';
 
@@ -45,25 +44,23 @@ final List<SingleChildWidget> stateProviders = [
     create: (_) => SecondaryMode(),
   ),
 
-  // 🧾 로그 기록 상태 (모든 plate 관련 작업에서 사용됨)
+  // ✅ 로그 기록 상태 (GCS 업로드용 내부 구현 사용)
   ChangeNotifierProvider(
-    create: (context) => LogPlateState(
-      FirestorePlateLogRepository(),
-      context.read<AreaState>(), // ✅ 현재 지역 상태 주입
-    ),
+    create: (_) => LogPlateState(),
   ),
+
   // 🔧 차량 정보 수정 상태
   ChangeNotifierProvider(
     create: (context) => ModifyPlate(
       context.read<PlateRepository>(),
-      context.read<LogPlateState>(), // 로그 주입
     ),
   ),
+
   // 🚘 차량 입차 처리 상태
   ChangeNotifierProvider(
     create: (context) => InputPlate(
       context.read<PlateRepository>(),
-      context.read<LogPlateState>(), // ✅ 로그 상태 주입
+      context.read<LogPlateState>(),
     ),
   ),
 
@@ -72,7 +69,7 @@ final List<SingleChildWidget> stateProviders = [
     create: (context) {
       final repo = context.read<PlateRepository>();
       final area = context.read<AreaState>();
-      return PlateState(repo, area); // ✅ 올바르게 3개 전달
+      return PlateState(repo, area);
     },
   ),
 
@@ -85,12 +82,11 @@ final List<SingleChildWidget> stateProviders = [
   Provider(
     create: (context) => DeletePlate(
       context.read<PlateRepository>(),
-      {}, // ⛔ 필요 시 PlateState 데이터 맵 주입
-      context.read<LogPlateState>(), // ✅ 로그 상태 주입
+      {},
     ),
   ),
 
-  // 🔄 상태 간 Plate 이동 처리
+  // 🔄 상태 간 Plate 이동 처리 (✅ 로그 기록 포함)
   Provider(
     create: (context) => MovementPlate(
       context.read<PlateRepository>(),
@@ -125,10 +121,12 @@ final List<SingleChildWidget> stateProviders = [
       return StatusState(repo, area);
     },
   ),
+
   // 📅 선택된 날짜 상태
   ChangeNotifierProvider(
     create: (_) => FieldSelectedDateState(),
   ),
+
   // 📊 통계 달력에서 사용하는 선택된 날짜 상태
   ChangeNotifierProvider(
     create: (_) => SelectedDateStore(),

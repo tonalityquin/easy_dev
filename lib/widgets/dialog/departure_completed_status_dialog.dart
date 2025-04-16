@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/plate_model.dart';
 import '../../screens/modify_pages/modify_3_digit.dart';
-import '../../screens/logs/plate_log_viewer_page.dart';
 import '../../states/plate/movement_plate.dart';
 import '../../states/plate/plate_state.dart';
 import '../../utils/snackbar_helper.dart';
@@ -57,16 +56,11 @@ class DepartureCompletedStatusDialog extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               ElevatedButton.icon(
-                icon: const Icon(Icons.history),
+                icon: const Icon(Icons.history), // 아이콘 유지
                 label: const Text("로그 확인"),
                 onPressed: () {
+                  // 로그 기능 제거됨
                   Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => PlateLogViewerPage(initialPlateNumber: plateNumber),
-                    ),
-                  );
                 },
                 style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
               ),

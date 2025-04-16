@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class PlateLogModel {
   final String plateNumber;
   final String area;
@@ -26,10 +24,20 @@ class PlateLogModel {
     'to': to,
     'action': action,
     'performedBy': performedBy,
-    'timestamp': timestamp,
+    'timestamp': timestamp.toIso8601String(), // ✅ GCS 저장용: ISO 문자열
   };
 
   factory PlateLogModel.fromMap(Map<String, dynamic> map) {
+    DateTime parsedTime;
+
+    if (map['timestamp'] is String) {
+      parsedTime = DateTime.tryParse(map['timestamp']) ?? DateTime.now();
+    } else if (map['timestamp'] is int) {
+      parsedTime = DateTime.fromMillisecondsSinceEpoch(map['timestamp']);
+    } else {
+      parsedTime = DateTime.now();
+    }
+
     return PlateLogModel(
       plateNumber: map['plateNumber'] ?? '',
       area: map['area'] ?? '',
@@ -37,7 +45,7 @@ class PlateLogModel {
       to: map['to'] ?? '',
       action: map['action'] ?? '',
       performedBy: map['performedBy'] ?? '',
-      timestamp: (map['timestamp'] as Timestamp).toDate(),
+      timestamp: parsedTime,
     );
   }
 }

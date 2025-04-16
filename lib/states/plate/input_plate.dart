@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
-import '../../models/plate_log_model.dart';
 import '../../utils/snackbar_helper.dart';
 import '../area/area_state.dart';
 import '../user/user_state.dart';
-import 'log_plate.dart';
 import '../../repositories/plate/plate_repository.dart';
+import 'log_plate.dart'; // ✅ 여전히 필요: 입력 로그 허용
+import '../../models/plate_log_model.dart';
 import 'dart:developer' as dev;
 
 class InputPlate with ChangeNotifier {
@@ -146,24 +146,6 @@ class InputPlate with ChangeNotifier {
       }
 
       await _plateRepository.addOrUpdatePlate(newDocumentId, updatedPlate);
-
-      // 사전 정산 여부 변경 시 로그
-      if (plate.isLockedFee != updatedPlate.isLockedFee) {
-        final actionLog = updatedPlate.isLockedFee ? '사전 정산 완료' : '사전 정산 취소';
-
-        await _logState.saveLog(
-          PlateLogModel(
-            plateNumber: plate.plateNumber,
-            area: plate.area,
-            from: plate.type,
-            // ✅ 문자열 그대로 사용
-            to: plate.type,
-            action: actionLog,
-            performedBy: userState.name,
-            timestamp: DateTime.now(),
-          ),
-        );
-      }
 
       if (!context.mounted) return false;
       showSuccessSnackbar(context, '정보 수정 완료');

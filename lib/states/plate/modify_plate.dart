@@ -2,20 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
-import '../../models/plate_log_model.dart';
 import '../../utils/snackbar_helper.dart';
 import '../area/area_state.dart';
 import '../user/user_state.dart';
 import '../plate/plate_state.dart'; // ✅ PlateState import
-import 'log_plate.dart';
 import '../../repositories/plate/plate_repository.dart';
 import 'dart:developer' as dev;
 
 class ModifyPlate with ChangeNotifier {
   final PlateRepository _plateRepository;
-  final LogPlateState _logState;
 
-  ModifyPlate(this._plateRepository, this._logState);
+  ModifyPlate(this._plateRepository);
 
   Future<bool> isPlateNumberDuplicated(String plateNumber, String area) async {
     final typesToCheck = [
@@ -81,18 +78,6 @@ class ModifyPlate with ChangeNotifier {
         lockedFeeAmount: lockedFeeAmount,
       );
 
-      await _logState.saveLog(
-        PlateLogModel(
-          plateNumber: plateNumber,
-          area: areaState.currentArea,
-          from: '-',
-          to: plateType.label,
-          action: plateType.label,
-          performedBy: userState.name,
-          timestamp: DateTime.now(),
-        ),
-      );
-
       if (!context.mounted) return;
       showSuccessSnackbar(context, '${plateType.label} 완료');
     } catch (error) {
@@ -125,7 +110,6 @@ class ModifyPlate with ChangeNotifier {
       final oldDocumentId = '${plate.plateNumber}_${plate.area}';
       final newDocumentId = '${newPlateNumber}_${plate.area}';
 
-      // 🔍 디버깅 로그
       dev.log("📝 updatePlateInfo() 호출됨");
       dev.log("📌 documentId: $oldDocumentId → $newDocumentId");
       dev.log("📌 newPlateNumber: $newPlateNumber");
@@ -148,7 +132,6 @@ class ModifyPlate with ChangeNotifier {
         lockedFeeAmount: lockedFeeAmount ?? plate.lockedFeeAmount,
       );
 
-      // ✅ 기존 문서와 ID가 달라졌다면 삭제 후 새로 저장
       if (oldDocumentId != newDocumentId) {
         await _plateRepository.deletePlate(oldDocumentId);
       }
@@ -174,7 +157,6 @@ class ModifyPlate with ChangeNotifier {
         dev.log('🗂 변경 내역: ${changes.join(', ')}');
       }
 
-      // ✅ PlateState 최신화 → 요금 재계산 반영
       if (!context.mounted) return false;
       final plateState = context.read<PlateState>();
       await plateState.fetchPlateData();
