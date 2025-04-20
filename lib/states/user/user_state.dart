@@ -87,17 +87,19 @@ class UserState extends ChangeNotifier {
         return;
       }
 
-      // ✅ currentArea 동기화 로직 (userData 기준, 비어 있을 때만)
-      if (userData.currentArea == null || userData.currentArea!.trim().isEmpty) {
-        final trimmedPhone = userData.phone.trim();
-        final trimmedArea = userData.area.trim();
-        debugPrint("[DEBUG] updateCurrentArea 요청: userId=${trimmedPhone}-${trimmedArea} → currentArea=$trimmedArea");
-        await _repository.updateCurrentArea(trimmedPhone, trimmedArea, trimmedArea);
-        userData = userData.copyWith(currentArea: trimmedArea);
-        debugPrint("🛠 currentArea 자동 동기화: $trimmedArea");
-      }
+      // ✅ currentArea를 무조건 SharedPreferences의 area로 강제 동기화
+      final trimmedPhone = userData.phone.trim();
+      final trimmedArea = userData.area.trim();
+      debugPrint("[DEBUG] updateCurrentArea 요청: userId=${trimmedPhone}-${trimmedArea} → currentArea=$trimmedArea");
 
+      await _repository.updateCurrentArea(trimmedPhone, trimmedArea, trimmedArea);
+      userData = userData.copyWith(currentArea: trimmedArea);
+      debugPrint("🛠 currentArea 동기화 완료: $trimmedArea");
+
+      // ✅ 저장 상태 갱신
       await _repository.updateUserStatus(phone, area, isSaved: true);
+
+      // ✅ user 객체 갱신
       _user = userData.copyWith(isSaved: true);
       notifyListeners();
 
@@ -108,6 +110,7 @@ class UserState extends ChangeNotifier {
       debugPrint("[DEBUG] 자동 로그인 중 오류 발생: $e");
     }
   }
+
 
   void _realtimeUsers() {
     _repository.getUsersStream().listen(

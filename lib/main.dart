@@ -29,9 +29,9 @@ class TtsHelper {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   try {
     await Firebase.initializeApp();
-
     await registerDevResources(); // ✅ dev division/area/user_accounts 자동 생성
 
     runApp(const MyApp());
@@ -50,18 +50,17 @@ class MyApp extends StatelessWidget {
       providers: appProviders,
       child: Builder(
         builder: (context) {
-          return Consumer<UserState>(
-            builder: (context, userState, child) {
-              if (userState.isLoggedIn && userState.currentArea.isNotEmpty) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  final areaState = context.read<AreaState>();
+          return Consumer2<UserState, AreaState>(
+            builder: (context, userState, areaState, child) {
+              if (userState.isLoggedIn && !areaState.isLocked) {
+                WidgetsBinding.instance.addPostFrameCallback((_) async {
+                  // ✅ 1. userState.area를 기준으로 초기화
+                  await areaState.initialize(userState.area);
+                  areaState.lockArea();
 
-                  // ✅ 현재 Firestore의 currentArea 값을 강제로 설정
-                  areaState.updateArea(userState.currentArea);
-
-                  // ✅ TTS 감지 시작
-                  PlateTtsListenerService.start(userState.currentArea);
-                  dev.log("[TTS] 감지 시작됨 (강제 초기화): ${userState.currentArea}");
+                  // ✅ 2. TTS 시작은 currentArea가 동기화된 후 실행
+                  PlateTtsListenerService.start(areaState.currentArea);
+                  dev.log("[TTS] 감지 시작됨 (초기화 완료 후): ${areaState.currentArea}");
                 });
               }
 
@@ -71,10 +70,9 @@ class MyApp extends StatelessWidget {
                 theme: appTheme,
                 initialRoute: initialRoute,
                 routes: appRoutes,
-                onUnknownRoute: (settings) =>
-                    MaterialPageRoute(
-                      builder: (context) => const NotFoundPage(),
-                    ),
+                onUnknownRoute: (settings) => MaterialPageRoute(
+                  builder: (context) => const NotFoundPage(),
+                ),
               );
             },
           );

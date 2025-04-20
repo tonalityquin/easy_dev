@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // ✅ 추가
 
 enum AreaType {
   dev;
@@ -14,17 +15,42 @@ class AreaState with ChangeNotifier {
   String _currentArea = AreaType.label;
   String _currentDivision = 'dev'; // dev 지역의 division도 명시적으로 지정
 
+  bool _isLocked = false; // ✅ 외부 감지 방지 플래그 추가
+
   String get currentArea => _currentArea;
   String get currentDivision => _currentDivision;
   List<String> get availableAreas => _availableAreas.toList();
+  bool get isLocked => _isLocked; // ✅ 외부에서 상태 확인용
 
-  // ❌ 초기 로드 제거 — 외부에서 initialize로 호출하도록 변경
   AreaState();
 
-  /// ✅ 외부에서 Firestore 로드 완료 후 사용자 지역 반영
+  /// ✅ 외부에서 수동 설정 시 보호 활성화
+  void lockArea() {
+    _isLocked = true;
+    debugPrint('🔒 지역 보호 활성화됨 → 현재 지역: $_currentArea');
+  }
+
+  void unlockArea() {
+    _isLocked = false;
+    debugPrint('🔓 지역 보호 해제됨');
+  }
+
+  Future<void> initializeFromStorageIfAvailable() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedArea = prefs.getString('area');
+
+    if (savedArea != null && savedArea.trim().isNotEmpty) {
+      debugPrint('📦 저장된 user.area 감지됨 → $savedArea');
+      await initialize(savedArea);
+    } else {
+      debugPrint('📦 SharedPreferences에 저장된 지역 정보 없음');
+    }
+  }
+
   Future<void> initialize(String userArea) async {
     await _loadAreasFromFirestore();
     initializeOrSyncArea(userArea);
+    lockArea(); // ✅ 초기화 후 보호 활성화
   }
 
   Future<void> _loadAreasFromFirestore() async {
@@ -85,10 +111,7 @@ class AreaState with ChangeNotifier {
     }
 
     try {
-      final snapshot = await _firestore
-          .collection('areas')
-          .where('name', isEqualTo: area)
-          .get();
+      final snapshot = await _firestore.collection('areas').where('name', isEqualTo: area).get();
 
       for (var doc in snapshot.docs) {
         await doc.reference.delete();
@@ -108,40 +131,49 @@ class AreaState with ChangeNotifier {
   }
 
   Future<void> updateArea(String newArea, {bool isSyncing = false}) async {
-    if (_availableAreas.contains(newArea) && _currentArea != newArea) {
-      _currentArea = newArea;
+    // ✅ 보호된 상태에서는 감지된 지역 반영 금지
+    if (_isLocked && !isSyncing) {
+      debugPrint('⛔ currentArea는 보호 중 → 변경 무시됨 (입력: $newArea)');
+      return;
+    }
 
-      if (newArea == AreaType.label) {
-        _currentDivision = 'dev';
-      } else {
-        try {
-          final snapshot = await _firestore
-              .collection('areas')
-              .where('name', isEqualTo: newArea)
-              .limit(1)
-              .get();
+    if (!_availableAreas.contains(newArea)) {
+      debugPrint('⚠️ 잘못된 지역 입력: $newArea / 가능한 지역: $_availableAreas');
+      return;
+    }
 
-          if (snapshot.docs.isNotEmpty) {
-            final division = snapshot.docs.first['division'] as String?;
-            _currentDivision = division?.trim().isNotEmpty == true ? division!.trim() : 'default';
-          } else {
-            _currentDivision = 'default';
-          }
-        } catch (e) {
-          debugPrint('❌ 지역 division 불러오기 실패: $e');
+    if (_currentArea == newArea) {
+      debugPrint('ℹ️ currentArea 변경 없음: $_currentArea 그대로 유지됨');
+      return;
+    }
+
+    _currentArea = newArea;
+
+    if (newArea == AreaType.label) {
+      _currentDivision = 'dev';
+    } else {
+      try {
+        final snapshot = await _firestore.collection('areas').where('name', isEqualTo: newArea).limit(1).get();
+
+        if (snapshot.docs.isNotEmpty) {
+          final division = snapshot.docs.first['division'] as String?;
+          _currentDivision = division?.trim().isNotEmpty == true ? division!.trim() : 'default';
+        } else {
           _currentDivision = 'default';
         }
+      } catch (e) {
+        debugPrint('❌ 지역 division 불러오기 실패: $e');
+        _currentDivision = 'default';
       }
-
-      notifyListeners();
-      debugPrint(
-        isSyncing
-            ? '🔄 지역 동기화: $_currentArea / division: $_currentDivision'
-            : '✅ 지역 변경됨: $_currentArea / division: $_currentDivision',
-      );
-    } else if (!_availableAreas.contains(newArea)) {
-      debugPrint('⚠️ 잘못된 지역 입력: $newArea / 가능한 지역: $_availableAreas');
     }
+
+    notifyListeners();
+
+    debugPrint(
+      isSyncing
+          ? '🔄 지역 동기화: $_currentArea / division: $_currentDivision'
+          : '✅ 지역 변경됨: $_currentArea / division: $_currentDivision',
+    );
   }
 
   void initializeOrSyncArea(String area) {
@@ -150,3 +182,4 @@ class AreaState with ChangeNotifier {
     }
   }
 }
+

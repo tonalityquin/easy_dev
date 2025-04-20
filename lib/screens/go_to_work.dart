@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
 import '../../../states/user/user_state.dart';
+import '../../../states/area/area_state.dart';
 import '../../../models/user_model.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../utils/excel_helper.dart';
@@ -19,6 +20,28 @@ class GoToWork extends StatefulWidget {
 
 class _GoToWorkState extends State<GoToWork> {
   bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final userState = context.read<UserState>();
+      final areaState = context.read<AreaState>();
+      final prefs = await SharedPreferences.getInstance();
+      final storedArea = prefs.getString('area');
+
+      final areaToInit = (storedArea != null && storedArea.isNotEmpty)
+          ? storedArea
+          : userState.area;
+
+      await areaState.initialize(userState.area);
+
+      debugPrint('[GoToWork] SharedPreferences에서 불러온 area: $storedArea');
+      debugPrint('[GoToWork] 최종 초기화 area: $areaToInit');
+      debugPrint('[GoToWork] 초기화 후 currentArea: ${areaState.currentArea}');
+    });
+  }
 
   void _handleWorkStatus(BuildContext context, UserState userState) async {
     setState(() => _isLoading = true);
@@ -70,9 +93,9 @@ class _GoToWorkState extends State<GoToWork> {
       final decoded = jsonDecode(jsonStr);
       cellData = Map<String, Map<int, String>>.from(
         decoded.map((rowKey, colMap) => MapEntry(
-              rowKey,
-              Map<int, String>.from((colMap as Map).map((k, v) => MapEntry(int.parse(k), v))),
-            )),
+          rowKey,
+          Map<int, String>.from((colMap as Map).map((k, v) => MapEntry(int.parse(k), v))),
+        )),
       );
     }
 
@@ -87,9 +110,9 @@ class _GoToWorkState extends State<GoToWork> {
 
     final encoded = jsonEncode(
       cellData.map((rowKey, colMap) => MapEntry(
-            rowKey,
-            colMap.map((col, v) => MapEntry(col.toString(), v)),
-          )),
+        rowKey,
+        colMap.map((col, v) => MapEntry(col.toString(), v)),
+      )),
     );
     await prefs.setString(cellDataKey, encoded);
 
@@ -275,21 +298,21 @@ class _GoToWorkState extends State<GoToWork> {
           child: _isLoading
               ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
               : Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(icon, color: Colors.white),
-                    const SizedBox(width: 8),
-                    Text(
-                      label,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.1,
-                      ),
-                    ),
-                  ],
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: Colors.white),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.1,
                 ),
+              ),
+            ],
+          ),
         ),
       ),
     );
