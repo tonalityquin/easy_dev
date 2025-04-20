@@ -41,7 +41,7 @@ class InputPlateService {
   }
 
   /// plate 저장 처리
-  static Future<void> savePlateEntry({
+  static Future<bool> savePlateEntry({
     required BuildContext context,
     required String plateNumber,
     required String location,
@@ -59,7 +59,7 @@ class InputPlateService {
     final areaState = context.read<AreaState>();
     final userState = context.read<UserState>();
 
-    await inputState.handlePlateEntry(
+    return await inputState.handlePlateEntry(
       context: context,
       plateNumber: plateNumber,
       location: location,

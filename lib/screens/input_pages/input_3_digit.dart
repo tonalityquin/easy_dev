@@ -229,15 +229,9 @@ class _Input3DigitState extends State<Input3Digit> {
 
   Future<void> _handleAction() async {
     final plateNumber = _buildPlateNumber();
-    final area = context
-        .read<AreaState>()
-        .currentArea;
-    final userName = context
-        .read<UserState>()
-        .name;
-    final adjustmentList = context
-        .read<AdjustmentState>()
-        .adjustments;
+    final area = context.read<AreaState>().currentArea;
+    final userName = context.read<UserState>().name;
+    final adjustmentList = context.read<AdjustmentState>().adjustments;
 
     if (adjustmentList.isNotEmpty && selectedAdjustment == null) {
       showFailedSnackbar(context, '정산 유형을 선택해주세요');
@@ -245,6 +239,7 @@ class _Input3DigitState extends State<Input3Digit> {
     }
 
     setState(() => isLoading = true);
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -252,7 +247,7 @@ class _Input3DigitState extends State<Input3Digit> {
     );
 
     try {
-      // 📸 Step 1. 이미지 업로드 (전체 실패 처리)
+      // 📸 Step 1. 이미지 업로드
       final uploadedImageUrls = await InputPlateService.uploadCapturedImages(
         _capturedImages,
         plateNumber,
@@ -260,8 +255,8 @@ class _Input3DigitState extends State<Input3Digit> {
         userName,
       );
 
-      // 📝 Step 2. plate 데이터 등록
-      await InputPlateService.savePlateEntry(
+      // 📝 Step 2. plate 데이터 등록 → 성공 여부 반환
+      final wasSuccessful = await InputPlateService.savePlateEntry(
         context: context,
         plateNumber: plateNumber,
         location: locationController.text,
@@ -278,8 +273,13 @@ class _Input3DigitState extends State<Input3Digit> {
 
       if (mounted) {
         Navigator.of(context).pop(); // 로딩 다이얼로그 닫기
-        showSuccessSnackbar(context, '차량 정보 등록 완료');
-        _resetInputForm();
+
+        if (wasSuccessful) {
+          showSuccessSnackbar(context, '차량 정보 등록 완료');
+          _resetInputForm();
+        } else {
+          // 실패 메시지는 내부에서 출력됨, 필요 시 추가 처리 가능
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -292,6 +292,7 @@ class _Input3DigitState extends State<Input3Digit> {
       }
     }
   }
+
 
   void _selectParkingLocation() {
     showDialog(

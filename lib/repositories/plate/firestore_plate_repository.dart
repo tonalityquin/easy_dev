@@ -139,8 +139,12 @@ class FirestorePlateRepository implements PlateRepository {
 
     final existingPlate = await getPlate(documentId);
     if (existingPlate != null) {
-      dev.log("🚨 중복된 번호판 등록 시도: $plateNumber");
-      throw Exception("이미 등록된 번호판입니다: $plateNumber");
+      if (existingPlate.type == PlateType.departureCompleted.firestoreValue) {
+        dev.log("⚠️ departure_completed 중복 등록 허용: $plateNumber");
+      } else {
+        dev.log("🚨 중복된 번호판 등록 시도: $plateNumber");
+        throw Exception("이미 등록된 번호판입니다: $plateNumber");
+      }
     }
 
     if (adjustmentType != null) {
@@ -166,7 +170,6 @@ class FirestorePlateRepository implements PlateRepository {
       id: documentId,
       plateNumber: plateNumber,
       type: plateType.firestoreValue,
-      // ✅ 여기 핵심 수정
       requestTime: DateTime.now(),
       endTime: endTime,
       location: location.isNotEmpty ? location : '미지정',
@@ -237,10 +240,29 @@ class FirestorePlateRepository implements PlateRepository {
       }
 
       final result = await query.count().get();
-      return result.count ?? 0; // ✅ null 방어 처리
+      return result.count ?? 0;
     } catch (e) {
       dev.log("🔥 문서 count 실패: $e", name: "Firestore");
       return 0;
     }
+  }
+
+  Future<bool> checkDuplicatePlate({
+    required String plateNumber,
+    required String area,
+  }) async {
+    final querySnapshot = await _firestore
+        .collection('plates')
+        .where('plate_number', isEqualTo: plateNumber)
+        .where('area', isEqualTo: area)
+        .where('type', whereIn: [
+      PlateType.parkingRequests.firestoreValue,
+      PlateType.parkingCompleted.firestoreValue,
+      PlateType.departureRequests.firestoreValue,
+    ])
+        .limit(1)
+        .get();
+
+    return querySnapshot.docs.isNotEmpty;
   }
 }

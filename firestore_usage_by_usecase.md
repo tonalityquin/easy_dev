@@ -1,0 +1,210 @@
+# 📊 Firestore 사용 코드 정리 (유스케이스 기준 분류)
+
+## 📥 단건 조회
+- **repositories/plate/firestore_plate_repository.dart**: `.get();`
+- **repositories/plate/firestore_plate_repository.dart**: `final adjustmentDoc = await _firestore.collection('adjustment').doc('${adjustmentType}_$area').get();`
+- **repositories/plate/firestore_plate_repository.dart**: `final doc = await _firestore.collection('plates').doc(documentId).get();`
+- **repositories/plate/firestore_plate_repository.dart**: `final docSnapshot = await docRef.get();`
+- **repositories/plate/firestore_plate_repository.dart**: `final docSnapshot = await docRef.get();`
+- **repositories/plate/firestore_plate_repository.dart**: `final docSnapshot = await transaction.get(docRef);`
+- **repositories/plate/firestore_plate_repository.dart**: `final entriesSnapshot = await _firestore.collection('logs').doc('plate_movements').collection('entries').get();`
+- **repositories/plate/firestore_plate_repository.dart**: `final querySnapshot = await _firestore.collection('locations').where('area', isEqualTo: area).get();`
+- **repositories/plate/firestore_plate_repository.dart**: `final result = await query.count().get();`
+- **repositories/plate/firestore_plate_repository.dart**: `final snapshot = await _firestore.collection('plates').get();`
+- **repositories/user/firestore_user_repository.dart**: `final doc = await _getCollectionRef().doc(userId).get();`
+- **repositories/user/firestore_user_repository.dart**: `final querySnapshot = await _getCollectionRef().where('phone', isEqualTo: phone).get();`
+- **screens/secondary_pages/dev_mode_pages/area_management.dart**: `await FirebaseFirestore.instance.collection('areas').where('division', isEqualTo: name).get();`
+- **screens/secondary_pages/dev_mode_pages/area_management.dart**: `final areaQuery = await firestore.collection('areas').where('division', isEqualTo: 'dev').get();`
+- **screens/secondary_pages/dev_mode_pages/area_management.dart**: `final snapshot = await FirebaseFirestore.instance.collection('divisions').get();`
+- **screens/secondary_pages/dev_mode_pages/area_management.dart**: `if (!(await divisionDoc.get()).exists) {`
+- **screens/secondary_pages/dev_mode_pages/area_management.dart**: `if (!(await userDoc.get()).exists) {`
+- **screens/secondary_pages/dev_mode_pages/area_managements/add_area_tab.dart**: `.get(),`
+- **screens/secondary_pages/dev_mode_pages/area_managements/user_account_tab.dart**: `.get(),`
+- **screens/secondary_pages/dev_mode_pages/area_managements/user_account_tab.dart**: `.get(),`
+- **screens/secondary_pages/dev_mode_pages/area_managements/user_account_tab.dart**: `.get();`
+- **screens/secondary_pages/document_mode_pages/attendance_pages/attendance_document_body.dart**: `final response = await http.get(Uri.parse(fileUrl));`
+- **screens/secondary_pages/document_mode_pages/attendance_pages/worker_attendance_document.dart**: `final snapshot = await FirebaseFirestore.instance.collection('user_accounts').where('area', isEqualTo: area).get();`
+- **screens/secondary_pages/document_mode_pages/break_pages/break_document_body.dart**: `final response = await http.get(Uri.parse(fileUrl));`
+- **screens/secondary_pages/document_mode_pages/break_pages/worker_break_document.dart**: `final snapshot = await FirebaseFirestore.instance.collection('user_accounts').where('area', isEqualTo: area).get();`
+- **states/area/area_state.dart**: `.get();`
+- **states/area/area_state.dart**: `.get();`
+- **states/area/area_state.dart**: `final snapshot = await _firestore.collection('areas').get();`
+
+## 📌 조건부 쿼리
+- **repositories/plate/firestore_plate_repository.dart**: `Query<Map<String, dynamic>> query = _firestore.collection('plates').where('type', isEqualTo: type.firestoreValue);`
+- **repositories/status/firestore_status_repository.dart**: `return _getCollectionRef().where('area', isEqualTo: area).snapshots().map((snapshot) {`
+- **screens/secondary_pages/document_mode_pages/attendance_pages/worker_attendance_document.dart**: `final userJsonList = users.where((u) => u.id.isNotEmpty).map((u) => u.toJson()).toList();`
+- **screens/secondary_pages/document_mode_pages/break_pages/worker_break_document.dart**: `final userJsonList = users.where((u) => u.id.isNotEmpty).map((u) => u.toJson()).toList();`
+- **screens/secondary_pages/office_mode_pages/adjustment_management.dart**: `return state.selectedAdjustments.entries.where((entry) => entry.value).map((entry) => entry.key).toList();`
+- **states/plate/plate_state.dart**: `.map((list) => list.where((plate) => plate.area == currentArea).toList());`
+
+## 📤 쓰기 연산
+- **repositories/adjustment/firestore_adjustment_repository.dart**: `await docRef.set(data);`
+- **repositories/location/firestore_location_repository.dart**: `await _firestore.collection('locations').doc(id).update({'isSelected': isSelected});`
+- **repositories/location/firestore_location_repository.dart**: `await docRef.set(location.toMap());`
+- **repositories/plate/firestore_plate_repository.dart**: `await docRef.set(data, SetOptions(merge: true));`
+- **repositories/plate/firestore_plate_repository.dart**: `await docRef.update(updatedFields);`
+- **repositories/plate/firestore_plate_repository.dart**: `transaction.update(docRef, {`
+- **repositories/status/firestore_status_repository.dart**: `await _getCollectionRef().doc(id).update({'isActive': isActive});`
+- **repositories/status/firestore_status_repository.dart**: `await docRef.set(status.toMap());`
+- **repositories/user/firestore_user_repository.dart**: `await _getCollectionRef().doc(id).update({'isSelected': isSelected});`
+- **repositories/user/firestore_user_repository.dart**: `await _getCollectionRef().doc(user.id).set(user.toMap());`
+- **repositories/user/firestore_user_repository.dart**: `await _getCollectionRef().doc(userId).update(updates);`
+- **repositories/user/firestore_user_repository.dart**: `await _getCollectionRef().doc(userId).update({`
+- **screens/secondary_pages/dev_mode_pages/area_management.dart**: `await FirebaseFirestore.instance.collection('divisions').doc(trimmed).set({`
+- **screens/secondary_pages/dev_mode_pages/area_management.dart**: `await divisionDoc.set({`
+- **screens/secondary_pages/dev_mode_pages/area_management.dart**: `await firestore.collection('areas').doc('dev-default').set({`
+- **screens/secondary_pages/dev_mode_pages/area_management.dart**: `await userDoc.set({`
+- **screens/secondary_pages/dev_mode_pages/area_managements/user_account_tab.dart**: `await firestore.collection('user_accounts').doc(newId).set(newData);`
+- **states/area/area_state.dart**: `await _firestore.collection('areas').doc(customId).set({`
+
+## 🔁 실시간 스트리밍 – 컬렉션 전체
+- **repositories/adjustment/firestore_adjustment_repository.dart**: `return _firestore.collection('adjustment').where('area', isEqualTo: currentArea).snapshots().map((snapshot) {`
+- **repositories/location/firestore_location_repository.dart**: `return _firestore.collection('locations').snapshots().map((snapshot) {`
+- **repositories/plate/firestore_plate_repository.dart**: `.snapshots()`
+- **repositories/user/firestore_user_repository.dart**: `.snapshots()`
+- **repositories/user/firestore_user_repository.dart**: `return _getCollectionRef().snapshots().map((snapshot) {`
+- **services/plate_tts_listener_service.dart**: `_subscription = FirebaseFirestore.instance.collection('plates').snapshots().listen((snapshot) {`
+
+## 🔍 기타
+- **repositories/adjustment/firestore_adjustment_repository.dart**: `await _firestore.collection('adjustment').doc(id).delete();`
+- **repositories/adjustment/firestore_adjustment_repository.dart**: `final FirebaseFirestore _firestore = FirebaseFirestore.instance;`
+- **repositories/adjustment/firestore_adjustment_repository.dart**: `final docRef = _firestore.collection('adjustment').doc(adjustment.id);`
+- **repositories/adjustment/firestore_adjustment_repository.dart**: `return snapshot.docs.map((doc) => AdjustmentModel.fromMap(doc.id, doc.data())).toList();`
+- **repositories/location/firestore_location_repository.dart**: `await _firestore.collection('locations').doc(id).delete();`
+- **repositories/location/firestore_location_repository.dart**: `final FirebaseFirestore _firestore = FirebaseFirestore.instance;`
+- **repositories/location/firestore_location_repository.dart**: `final docRef = _firestore.collection('locations').doc(location.id);`
+- **repositories/location/firestore_location_repository.dart**: `return snapshot.docs.map((doc) => LocationModel.fromMap(doc.id, doc.data())).toList();`
+- **repositories/plate/firestore_plate_repository.dart**: `.collection('plates')`
+- **repositories/plate/firestore_plate_repository.dart**: `.collection('plates')`
+- **repositories/plate/firestore_plate_repository.dart**: `.map((snapshot) => snapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList());`
+- **repositories/plate/firestore_plate_repository.dart**: `await docRef.delete();`
+- **repositories/plate/firestore_plate_repository.dart**: `batch.delete(doc.reference);`
+- **repositories/plate/firestore_plate_repository.dart**: `entriesBatch.delete(doc.reference);`
+- **repositories/plate/firestore_plate_repository.dart**: `final FirebaseFirestore _firestore = FirebaseFirestore.instance;`
+- **repositories/plate/firestore_plate_repository.dart**: `final docRef = _firestore.collection('plates').doc(documentId);`
+- **repositories/plate/firestore_plate_repository.dart**: `final docRef = _firestore.collection('plates').doc(documentId);`
+- **repositories/plate/firestore_plate_repository.dart**: `final docRef = _firestore.collection('plates').doc(documentId);`
+- **repositories/plate/firestore_plate_repository.dart**: `final docRef = _firestore.collection('plates').doc(id);`
+- **repositories/plate/firestore_plate_repository.dart**: `return querySnapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList();`
+- **repositories/plate/firestore_plate_repository.dart**: `return querySnapshot.docs.map((doc) => doc['locationName'] as String).toList();`
+- **repositories/status/firestore_status_repository.dart**: `await _getCollectionRef().doc(id).delete();`
+- **repositories/status/firestore_status_repository.dart**: `final FirebaseFirestore _firestore = FirebaseFirestore.instance;`
+- **repositories/status/firestore_status_repository.dart**: `final docRef = _getCollectionRef().doc();`
+- **repositories/status/firestore_status_repository.dart**: `return _firestore.collection(collectionName);`
+- **repositories/status/firestore_status_repository.dart**: `return snapshot.docs.map((doc) => StatusModel.fromMap(doc.id, doc.data())).toList();`
+- **repositories/user/firestore_user_repository.dart**: `.doc(phone)`
+- **repositories/user/firestore_user_repository.dart**: `.map((doc) => doc.exists ? UserModel.fromMap(doc.id, doc.data()!) : null);`
+- **repositories/user/firestore_user_repository.dart**: `await _getCollectionRef().doc(id).delete();`
+- **repositories/user/firestore_user_repository.dart**: `final FirebaseFirestore _firestore = FirebaseFirestore.instance;`
+- **repositories/user/firestore_user_repository.dart**: `return _firestore.collection('user_accounts');`
+- **repositories/user/firestore_user_repository.dart**: `return snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();`
+- **screens/go_to_work.dart**: `.map((map) => UserModel.fromJson(Map<String, dynamic>.from(map)))`
+- **screens/go_to_work.dart**: `Map<int, String>.from((colMap as Map).map((k, v) => MapEntry(int.parse(k), v))),`
+- **screens/go_to_work.dart**: `cellData.map((rowKey, colMap) => MapEntry(`
+- **screens/go_to_work.dart**: `children: PlateType.values.map((type) {`
+- **screens/go_to_work.dart**: `colMap.map((col, v) => MapEntry(col.toString(), v)),`
+- **screens/go_to_work.dart**: `decoded.map((rowKey, colMap) => MapEntry(`
+- **screens/go_to_work.dart**: `final userIds = users.map((u) => u.id).toList();`
+- **screens/input_pages/input_3_digit.dart**: `.map((status) => status.name) // ✅ 수정됨`
+- **screens/input_pages/sections/adjustment_section.dart**: `items: adjustmentList.map((adj) => adj.countType).toList(),`
+- **screens/mini_calendars/field_calendar.dart**: `_memoMap = decoded.map((key, value) => MapEntry(key, value.toString()));`
+- **screens/mini_calendars/field_calendar.dart**: `children: days.map((day) {`
+- **screens/modify_pages/modify_3_digit.dart**: `.map((status) => status.name) // ✅ 수정됨`
+- **screens/modify_pages/modify_3_digit.dart**: `isSelected = statuses.map((s) => selectedStatuses.contains(s)).toList();`
+- **screens/modify_pages/sections/adjustment_section.dart**: `final dropdownItems = adjustmentList.map((adj) => adj.countType).toList();`
+- **screens/modify_pages/sections/photo_section.dart**: `...capturedImages.asMap().entries.map((entry) {`
+- **screens/modify_pages/sections/photo_section.dart**: `...existingImageUrls.asMap().entries.map((entry) {`
+- **screens/secondary_page.dart**: `children: state.pages.map((pageInfo) => pageInfo.page).toList(),`
+- **screens/secondary_page.dart**: `items: state.pages.map((pageInfo) {`
+- **screens/secondary_pages/dev_mode_pages/area_management.dart**: `await FirebaseFirestore.instance.collection('divisions').doc(name).delete();`
+- **screens/secondary_pages/dev_mode_pages/area_management.dart**: `await doc.reference.delete();`
+- **screens/secondary_pages/dev_mode_pages/area_management.dart**: `final divisionDoc = firestore.collection('divisions').doc('dev');`
+- **screens/secondary_pages/dev_mode_pages/area_management.dart**: `final divisions = snapshot.docs.map((e) => e['name'] as String).toList();`
+- **screens/secondary_pages/dev_mode_pages/area_management.dart**: `final firestore = FirebaseFirestore.instance;`
+- **screens/secondary_pages/dev_mode_pages/area_management.dart**: `final userDoc = firestore.collection('user_accounts').doc(devAccountId);`
+- **screens/secondary_pages/dev_mode_pages/area_managements/add_area_tab.dart**: `.collection('areas')`
+- **screens/secondary_pages/dev_mode_pages/area_managements/add_area_tab.dart**: `.map((div) => DropdownMenuItem(value: div, child: Text(div)))`
+- **screens/secondary_pages/dev_mode_pages/area_managements/add_area_tab.dart**: `children: docs.map((doc) {`
+- **screens/secondary_pages/dev_mode_pages/area_managements/add_area_tab.dart**: `future: FirebaseFirestore.instance`
+- **screens/secondary_pages/dev_mode_pages/area_managements/user_account_tab.dart**: `.collection('areas')`
+- **screens/secondary_pages/dev_mode_pages/area_managements/user_account_tab.dart**: `.collection('areas')`
+- **screens/secondary_pages/dev_mode_pages/area_managements/user_account_tab.dart**: `.collection('user_accounts')`
+- **screens/secondary_pages/dev_mode_pages/area_managements/user_account_tab.dart**: `.map((area) =>`
+- **screens/secondary_pages/dev_mode_pages/area_managements/user_account_tab.dart**: `.map((area) => DropdownMenuItem(`
+- **screens/secondary_pages/dev_mode_pages/area_managements/user_account_tab.dart**: `.map((div) => DropdownMenuItem(`
+- **screens/secondary_pages/dev_mode_pages/area_managements/user_account_tab.dart**: `.map((div) => DropdownMenuItem(value: div, child: Text(div)))`
+- **screens/secondary_pages/dev_mode_pages/area_managements/user_account_tab.dart**: `.map((e) => e['name'] as String)`
+- **screens/secondary_pages/dev_mode_pages/area_managements/user_account_tab.dart**: `.map((role) => DropdownMenuItem(`
+- **screens/secondary_pages/dev_mode_pages/area_managements/user_account_tab.dart**: `await firestore.collection('user_accounts').doc(oldId).delete();`
+- **screens/secondary_pages/dev_mode_pages/area_managements/user_account_tab.dart**: `children: docs.map((doc) {`
+- **screens/secondary_pages/dev_mode_pages/area_managements/user_account_tab.dart**: `final firestore = FirebaseFirestore.instance;`
+- **screens/secondary_pages/dev_mode_pages/area_managements/user_account_tab.dart**: `final snapshot = await FirebaseFirestore.instance`
+- **screens/secondary_pages/dev_mode_pages/area_managements/user_account_tab.dart**: `future: FirebaseFirestore.instance`
+- **screens/secondary_pages/dev_mode_pages/area_managements/user_account_tab.dart**: `future: FirebaseFirestore.instance`
+- **screens/secondary_pages/dev_mode_pages/area_managements/user_account_tab.dart**: `return snapshot.docs.map((doc) => doc['name'] as String).toSet().toList();`
+- **screens/secondary_pages/document_mode_pages/attendance_pages/attendance_document_body.dart**: `Map<int, String>.from((val as Map).map((k, v) => MapEntry(int.parse(k), v))),`
+- **screens/secondary_pages/document_mode_pages/attendance_pages/attendance_document_body.dart**: `children: text.split('\n').map((line) {`
+- **screens/secondary_pages/document_mode_pages/attendance_pages/attendance_document_body.dart**: `decoded.map((key, val) => MapEntry(`
+- **screens/secondary_pages/document_mode_pages/attendance_pages/attendance_document_body.dart**: `final userIdsInOrder = users.map((u) => u.id).toList();`
+- **screens/secondary_pages/document_mode_pages/attendance_pages/attendance_document_body.dart**: `items: monthList.map((m) => DropdownMenuItem(value: m, child: Text('$m월'))).toList(),`
+- **screens/secondary_pages/document_mode_pages/attendance_pages/attendance_document_body.dart**: `items: yearList.map((y) => DropdownMenuItem(value: y, child: Text('$y년'))).toList(),`
+- **screens/secondary_pages/document_mode_pages/attendance_pages/attendance_document_body.dart**: `mergedData.map((key, map) => MapEntry(key, map.map((k, v) => MapEntry(k.toString(), v)))),`
+- **screens/secondary_pages/document_mode_pages/attendance_pages/worker_attendance_document.dart**: `(colMap as Map).map(`
+- **screens/secondary_pages/document_mode_pages/attendance_pages/worker_attendance_document.dart**: `(rowKey, colMap) => MapEntry(rowKey, colMap.map((colIndex, value) => MapEntry(colIndex.toString(), value))));`
+- **screens/secondary_pages/document_mode_pages/attendance_pages/worker_attendance_document.dart**: `.map((map) => UserModel.fromJson(Map<String, dynamic>.from(map)))`
+- **screens/secondary_pages/document_mode_pages/attendance_pages/worker_attendance_document.dart**: `final currentIds = users.map((u) => u.id).toSet();`
+- **screens/secondary_pages/document_mode_pages/attendance_pages/worker_attendance_document.dart**: `final newIds = updatedUsers.map((u) => u.id).toSet();`
+- **screens/secondary_pages/document_mode_pages/attendance_pages/worker_attendance_document.dart**: `final stringified = cellData.map(`
+- **screens/secondary_pages/document_mode_pages/attendance_pages/worker_attendance_document.dart**: `return snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();`
+- **screens/secondary_pages/document_mode_pages/break_pages/break_document_body.dart**: `.map((line) => Text(`
+- **screens/secondary_pages/document_mode_pages/break_pages/break_document_body.dart**: `Map<int, String>.from((val as Map).map((k, v) => MapEntry(int.parse(k), v))),`
+- **screens/secondary_pages/document_mode_pages/break_pages/break_document_body.dart**: `decoded.map((key, val) => MapEntry(`
+- **screens/secondary_pages/document_mode_pages/break_pages/break_document_body.dart**: `final userIds = users.map((u) => u.id).toList();`
+- **screens/secondary_pages/document_mode_pages/break_pages/break_document_body.dart**: `items: monthList.map((m) => DropdownMenuItem(value: m, child: Text('$m월'))).toList(),`
+- **screens/secondary_pages/document_mode_pages/break_pages/break_document_body.dart**: `items: yearList.map((y) => DropdownMenuItem(value: y, child: Text('$y년'))).toList(),`
+- **screens/secondary_pages/document_mode_pages/break_pages/break_document_body.dart**: `mergedData.map((key, map) => MapEntry(key, map.map((k, v) => MapEntry(k.toString(), v)))),`
+- **screens/secondary_pages/document_mode_pages/break_pages/worker_break_document.dart**: `(colMap as Map).map((key, value) => MapEntry(int.parse(key), value)),`
+- **screens/secondary_pages/document_mode_pages/break_pages/worker_break_document.dart**: `.map((map) => UserModel.fromJson(Map<String, dynamic>.from(map)))`
+- **screens/secondary_pages/document_mode_pages/break_pages/worker_break_document.dart**: `colMap.map((colIndex, value) => MapEntry(colIndex.toString(), value)),`
+- **screens/secondary_pages/document_mode_pages/break_pages/worker_break_document.dart**: `decoded.map((rowKey, colMap) => MapEntry(`
+- **screens/secondary_pages/document_mode_pages/break_pages/worker_break_document.dart**: `final currentIds = users.map((u) => u.id).toSet();`
+- **screens/secondary_pages/document_mode_pages/break_pages/worker_break_document.dart**: `final newIds = updatedUsers.map((u) => u.id).toSet();`
+- **screens/secondary_pages/document_mode_pages/break_pages/worker_break_document.dart**: `final stringified = cellData.map((rowKey, colMap) => MapEntry(`
+- **screens/secondary_pages/document_mode_pages/break_pages/worker_break_document.dart**: `return snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();`
+- **screens/secondary_pages/document_mode_pages/statistics_pages/statistics_document_body.dart**: `.map((day) => Expanded(`
+- **screens/secondary_pages/field_mode_pages/dash_board.dart**: `(colMap as Map).map((k, v) => MapEntry(int.parse(k), v)),`
+- **screens/secondary_pages/field_mode_pages/dash_board.dart**: `(colMap as Map).map((k, v) => MapEntry(int.parse(k), v)),`
+- **screens/secondary_pages/field_mode_pages/dash_board.dart**: `cellData.map((rowKey, colMap) => MapEntry(`
+- **screens/secondary_pages/field_mode_pages/dash_board.dart**: `cellData.map((rowKey, colMap) => MapEntry(`
+- **screens/secondary_pages/field_mode_pages/dash_board.dart**: `colMap.map((col, v) => MapEntry(col.toString(), v)),`
+- **screens/secondary_pages/field_mode_pages/dash_board.dart**: `colMap.map((col, v) => MapEntry(col.toString(), v)),`
+- **screens/secondary_pages/field_mode_pages/dash_board.dart**: `decoded.map((rowKey, colMap) => MapEntry(`
+- **screens/secondary_pages/field_mode_pages/dash_board.dart**: `decoded.map((rowKey, colMap) => MapEntry(`
+- **screens/secondary_pages/office_mode_pages/office_calender.dart**: `_memoMap = decoded.map((key, value) => MapEntry(key, value.toString()));`
+- **screens/secondary_pages/office_mode_pages/office_calender.dart**: `children: days.map((day) {`
+- **screens/secondary_pages/office_mode_pages/user_management_pages/user_setting.dart**: `.map((role) => DropdownMenuItem<RoleType>(`
+- **screens/type_page.dart**: `children: state.pages.map((pageInfo) => pageInfo.page).toList(),`
+- **services/plate_tts_listener_service.dart**: `.map((d) => koreanDigits[d] ?? d)`
+- **states/area/area_state.dart**: `.collection('areas')`
+- **states/area/area_state.dart**: `.collection('areas')`
+- **states/area/area_state.dart**: `await doc.reference.delete();`
+- **states/area/area_state.dart**: `final FirebaseFirestore _firestore = FirebaseFirestore.instance;`
+- **states/secondary/secondary_mode.dart**: `List<String> get availableStatus => ModeStatus.values.map((e) => e.label).toList();`
+- **utils/button/custom_adjustment_dropdown.dart**: `items: items.map((item) {`
+- **utils/excel_helper.dart**: `(colMap as Map).map((k, v) => MapEntry(int.parse(k), v)),`
+- **utils/excel_helper.dart**: `decoded.map((userId, colMap) =>`
+- **utils/keypad_utils.dart**: `children: keyRows.map((row) {`
+- **utils/keypad_utils.dart**: `children: row.map((key) {`
+- **utils/tts_helper.dart**: `.map((d) => koreanDigits[d] ?? d)`
+- **widgets/container/plate_container.dart**: `children: filteredData.map((item) {`
+- **widgets/dialog/area_picker_dialog.dart**: `.map((area) => Center(`
+- **widgets/dialog/calendar/statistics_average_dialog.dart**: `.map((date) => '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}')`
+- **widgets/dialog/calendar/statistics_sum_dialog.dart**: `.map((date) =>`
+- **widgets/dialog/region_picker_dialog.dart**: `.map((region) => Center(`
+- **widgets/dialog/secondary_picker_dialog.dart**: `.map((mode) => Center(`
+- **widgets/keypad/kor_keypad.dart**: `children: keyRows.map((row) {`
+- **widgets/keypad/kor_keypad.dart**: `children: row.map((key) {`
+- **widgets/keypad/num_keypad.dart**: `children: keys.map((key) => _buildKeyButton(key)).toList(),`
+- **widgets/navigation/mini_navigation.dart**: `children: widget.icons.asMap().entries.map((entry) {`
+- **widgets/navigation/secondary_mini_navigation.dart**: `children: widget.icons.asMap().entries.map((entry) {`

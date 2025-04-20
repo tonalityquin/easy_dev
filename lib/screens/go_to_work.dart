@@ -70,9 +70,9 @@ class _GoToWorkState extends State<GoToWork> {
       final decoded = jsonDecode(jsonStr);
       cellData = Map<String, Map<int, String>>.from(
         decoded.map((rowKey, colMap) => MapEntry(
-          rowKey,
-          Map<int, String>.from((colMap as Map).map((k, v) => MapEntry(int.parse(k), v))),
-        )),
+              rowKey,
+              Map<int, String>.from((colMap as Map).map((k, v) => MapEntry(int.parse(k), v))),
+            )),
       );
     }
 
@@ -87,9 +87,9 @@ class _GoToWorkState extends State<GoToWork> {
 
     final encoded = jsonEncode(
       cellData.map((rowKey, colMap) => MapEntry(
-        rowKey,
-        colMap.map((col, v) => MapEntry(col.toString(), v)),
-      )),
+            rowKey,
+            colMap.map((col, v) => MapEntry(col.toString(), v)),
+          )),
     );
     await prefs.setString(cellDataKey, encoded);
 
@@ -172,8 +172,7 @@ class _GoToWorkState extends State<GoToWork> {
                     children: [
                       Text(type.label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                       const SizedBox(height: 6),
-                      Text('${counts[type] ?? 0}건',
-                          style: const TextStyle(fontSize: 16, color: Colors.blueAccent)),
+                      Text('${counts[type] ?? 0}건', style: const TextStyle(fontSize: 16, color: Colors.blueAccent)),
                     ],
                   );
                 }).toList(),
@@ -276,21 +275,21 @@ class _GoToWorkState extends State<GoToWork> {
           child: _isLoading
               ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
               : Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: Colors.white),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.1,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, color: Colors.white),
+                    const SizedBox(width: 8),
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
-          ),
         ),
       ),
     );

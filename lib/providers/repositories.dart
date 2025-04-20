@@ -83,6 +83,13 @@ class DummyPlateRepository implements PlateRepository {
   Future<int> getPlateCountByType(PlateType type, {DateTime? selectedDate}) {
     throw UnimplementedError();
   }
+
+  @override
+  Future<bool> checkDuplicatePlate({
+    required String plateNumber,
+    required String area,
+  }) =>
+      throw UnimplementedError();
 }
 
 class DummyLocationRepository implements LocationRepository {
@@ -133,10 +140,8 @@ class DummyUserRepository implements UserRepository {
 
   /// ✅ 추가된 추상 메서드 구현 (비워만 놓기)
   @override
-  Future<void> updateCurrentArea(String phone, String area, String currentArea) =>
-      throw UnimplementedError();
+  Future<void> updateCurrentArea(String phone, String area, String currentArea) => throw UnimplementedError();
 }
-
 
 class DummyAdjustmentRepository implements AdjustmentRepository {
   @override

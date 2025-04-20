@@ -5,9 +5,8 @@ import '../../utils/snackbar_helper.dart';
 import '../area/area_state.dart';
 import '../user/user_state.dart';
 import '../../repositories/plate/plate_repository.dart';
-import 'log_plate.dart'; // ✅ 여전히 필요: 입력 로그 허용
+import 'log_plate.dart';
 import '../../models/plate_log_model.dart';
-import 'dart:developer' as dev;
 
 class InputPlate with ChangeNotifier {
   final PlateRepository _plateRepository;
@@ -16,24 +15,13 @@ class InputPlate with ChangeNotifier {
   InputPlate(this._plateRepository, this._logState);
 
   Future<bool> isPlateNumberDuplicated(String plateNumber, String area) async {
-    final typesToCheck = [
-      PlateType.parkingRequests,
-      PlateType.parkingCompleted,
-      PlateType.departureRequests,
-    ];
-
-    for (final type in typesToCheck) {
-      final plates = await _plateRepository.getPlatesByArea(type, area);
-      if (plates.any((plate) => plate.plateNumber == plateNumber)) {
-        dev.log("🚨 중복된 번호판 발견: $plateNumber (type: ${type.firestoreValue})");
-        return true;
-      }
-    }
-
-    return false;
+    return await _plateRepository.checkDuplicatePlate(
+      plateNumber: plateNumber,
+      area: area,
+    );
   }
 
-  Future<void> handlePlateEntry({
+  Future<bool> handlePlateEntry({
     required BuildContext context,
     required String plateNumber,
     required String location,
@@ -53,14 +41,16 @@ class InputPlate with ChangeNotifier {
     int? lockedAtTimeInSeconds,
     int? lockedFeeAmount,
   }) async {
-    if (await isPlateNumberDuplicated(plateNumber, areaState.currentArea)) {
-      if (!context.mounted) return;
-      showFailedSnackbar(context, '이미 등록된 번호판입니다: $plateNumber');
-      return;
-    }
-
     final correctedLocation = location.isEmpty ? '미지정' : location;
     final plateType = isLocationSelected ? PlateType.parkingCompleted : PlateType.parkingRequests;
+
+    // departure_completed 외에는 중복 검사 수행
+    if (plateType != PlateType.departureCompleted &&
+        await isPlateNumberDuplicated(plateNumber, areaState.currentArea)) {
+      if (!context.mounted) return false;
+      showFailedSnackbar(context, '이미 등록된 번호판입니다: $plateNumber');
+      return false;
+    }
 
     try {
       await _plateRepository.addRequestOrCompleted(
@@ -95,9 +85,14 @@ class InputPlate with ChangeNotifier {
       );
 
       notifyListeners();
+      return true;
     } catch (error) {
-      if (!context.mounted) return;
-      showFailedSnackbar(context, '오류 발생: $error');
+      if (!context.mounted) return false;
+
+      final errorMessage = error.toString().contains('이미 등록된 번호판') ? '이미 등록된 번호판입니다: $plateNumber' : '오류 발생: $error';
+
+      showFailedSnackbar(context, errorMessage);
+      return false;
     }
   }
 

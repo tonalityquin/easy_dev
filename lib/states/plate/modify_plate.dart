@@ -13,25 +13,6 @@ class ModifyPlate with ChangeNotifier {
   final PlateRepository _plateRepository;
 
   ModifyPlate(this._plateRepository);
-
-  Future<bool> isPlateNumberDuplicated(String plateNumber, String area) async {
-    final typesToCheck = [
-      PlateType.parkingRequests,
-      PlateType.parkingCompleted,
-      PlateType.departureRequests,
-    ];
-
-    for (final type in typesToCheck) {
-      final plates = await _plateRepository.getPlatesByArea(type, area);
-      if (plates.any((plate) => plate.plateNumber == plateNumber)) {
-        dev.log("🚨 중복된 번호판 발견: $plateNumber (type: ${type.firestoreValue})");
-        return true;
-      }
-    }
-
-    return false;
-  }
-
   Future<void> handlePlateEntry({
     required BuildContext context,
     required String plateNumber,
@@ -50,11 +31,8 @@ class ModifyPlate with ChangeNotifier {
     int? lockedAtTimeInSeconds,
     int? lockedFeeAmount,
   }) async {
-    if (await isPlateNumberDuplicated(plateNumber, areaState.currentArea)) {
-      if (!context.mounted) return;
-      showFailedSnackbar(context, '이미 등록된 번호판입니다: $plateNumber');
-      return;
-    }
+
+
 
     final correctedLocation = location.isEmpty ? '미지정' : location;
     final plateType = isLocationSelected ? PlateType.parkingCompleted : PlateType.parkingRequests;
