@@ -13,18 +13,12 @@ class UserState extends ChangeNotifier {
 
   UserState(this._repository);
 
-  Future<void> initialize() async {
-    await loadUserToLogIn();
-    _realtimeUsers();
-  }
-
-  /// ✅ 사용자 목록만 불러오는 로직 (Office Mode 용)
   Future<void> loadUsersOnly() async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      _realtimeUsers(); // 실시간 유저 구독만 수행
+      _realtimeUsers();
     } catch (e) {
       debugPrint("📛 사용자 목록 로딩 실패: $e");
     }
@@ -56,7 +50,6 @@ class UserState extends ChangeNotifier {
 
   String get division => _user?.division ?? '';
 
-  /// ✅ 현재 근무 중인 지역 (없으면 area 사용)
   String get currentArea => _user?.currentArea ?? area;
 
   Future<void> saveCardToUserPhone(UserModel user) async {
@@ -87,7 +80,7 @@ class UserState extends ChangeNotifier {
         return;
       }
 
-      // ✅ currentArea를 무조건 SharedPreferences의 area로 강제 동기화
+      // ✅ currentArea를 SharedPreferences의 area로 강제 동기화
       final trimmedPhone = userData.phone.trim();
       final trimmedArea = userData.area.trim();
       debugPrint("[DEBUG] updateCurrentArea 요청: userId=${trimmedPhone}-${trimmedArea} → currentArea=$trimmedArea");
@@ -96,21 +89,16 @@ class UserState extends ChangeNotifier {
       userData = userData.copyWith(currentArea: trimmedArea);
       debugPrint("🛠 currentArea 동기화 완료: $trimmedArea");
 
-      // ✅ 저장 상태 갱신
       await _repository.updateUserStatus(phone, area, isSaved: true);
-
-      // ✅ user 객체 갱신
       _user = userData.copyWith(isSaved: true);
       notifyListeners();
 
-      // ✅ 자동 로그인 완료 후 TTS 감지 시작
       PlateTtsListenerService.start(currentArea);
       debugPrint("[TTS] 자동 로그인 후 감지 시작: $currentArea");
     } catch (e) {
       debugPrint("[DEBUG] 자동 로그인 중 오류 발생: $e");
     }
   }
-
 
   void _realtimeUsers() {
     _repository.getUsersStream().listen(
@@ -224,7 +212,6 @@ class UserState extends ChangeNotifier {
       debugPrint("❌ Firestore currentArea 업데이트 실패: $e / userId: ${_user!.phone.trim()}-${_user!.area.trim()}");
     }
 
-    // ✅ 지역 변경 시 TTS 다시 시작
     PlateTtsListenerService.start(newArea);
   }
 }

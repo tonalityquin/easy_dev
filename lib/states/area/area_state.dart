@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // ✅ 추가
+import 'package:shared_preferences/shared_preferences.dart';
 
 enum AreaType {
   dev;
@@ -11,20 +11,22 @@ enum AreaType {
 class AreaState with ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  final Set<String> _availableAreas = {AreaType.label}; // 항상 dev 포함
+  final Set<String> _availableAreas = {AreaType.label};
   String _currentArea = AreaType.label;
-  String _currentDivision = 'dev'; // dev 지역의 division도 명시적으로 지정
+  String _currentDivision = 'dev';
 
-  bool _isLocked = false; // ✅ 외부 감지 방지 플래그 추가
+  bool _isLocked = false;
 
   String get currentArea => _currentArea;
+
   String get currentDivision => _currentDivision;
+
   List<String> get availableAreas => _availableAreas.toList();
-  bool get isLocked => _isLocked; // ✅ 외부에서 상태 확인용
+
+  bool get isLocked => _isLocked;
 
   AreaState();
 
-  /// ✅ 외부에서 수동 설정 시 보호 활성화
   void lockArea() {
     _isLocked = true;
     debugPrint('🔒 지역 보호 활성화됨 → 현재 지역: $_currentArea');
@@ -35,47 +37,36 @@ class AreaState with ChangeNotifier {
     debugPrint('🔓 지역 보호 해제됨');
   }
 
-  Future<void> initializeFromStorageIfAvailable() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedArea = prefs.getString('area');
-
-    if (savedArea != null && savedArea.trim().isNotEmpty) {
-      debugPrint('📦 저장된 user.area 감지됨 → $savedArea');
-      await initialize(savedArea);
-    } else {
-      debugPrint('📦 SharedPreferences에 저장된 지역 정보 없음');
-    }
-  }
-
+  /// ✅ 특정 유저의 지역만 Firestore에서 가져와 초기화
   Future<void> initialize(String userArea) async {
-    await _loadAreasFromFirestore();
-    initializeOrSyncArea(userArea);
-    lockArea(); // ✅ 초기화 후 보호 활성화
-  }
-
-  Future<void> _loadAreasFromFirestore() async {
     try {
-      final snapshot = await _firestore.collection('areas').get();
+      final snapshot = await _firestore.collection('areas').where('name', isEqualTo: userArea).limit(1).get();
 
-      _availableAreas.clear();
-      _availableAreas.add(AreaType.label); // dev는 기본 포함
+      if (snapshot.docs.isNotEmpty) {
+        final doc = snapshot.docs.first;
+        final division = doc['division'] as String?;
 
-      for (var doc in snapshot.docs) {
-        final name = doc['name'] as String?;
-        if (name != null && name.trim().isNotEmpty && name != AreaType.label) {
-          _availableAreas.add(name.trim());
-        }
+        _currentArea = userArea;
+        _currentDivision = (division != null && division.trim().isNotEmpty) ? division.trim() : 'default';
 
-        if (name == _currentArea) {
-          final division = doc['division'] as String?;
-          _currentDivision = division?.trim().isNotEmpty == true ? division!.trim() : 'default';
-        }
+        _availableAreas.clear();
+        _availableAreas.add(userArea);
+        _availableAreas.add(AreaType.label); // dev 항상 포함
+
+        notifyListeners();
+        debugPrint('✅ 사용자 지역 초기화 완료 → $_currentArea / $_currentDivision');
+      } else {
+        debugPrint('⚠️ Firestore에 해당 지역이 존재하지 않음: $userArea');
+        _currentArea = AreaType.label;
+        _currentDivision = 'dev';
       }
-
-      notifyListeners();
     } catch (e) {
-      debugPrint('❌ Firestore 지역 불러오기 실패: $e');
+      debugPrint('❌ Firestore 사용자 지역 초기화 실패: $e');
+      _currentArea = AreaType.label;
+      _currentDivision = 'dev';
     }
+
+    lockArea(); // 초기화 완료 후 보호
   }
 
   Future<void> addArea(String name, String division) async {
@@ -131,14 +122,8 @@ class AreaState with ChangeNotifier {
   }
 
   Future<void> updateArea(String newArea, {bool isSyncing = false}) async {
-    // ✅ 보호된 상태에서는 감지된 지역 반영 금지
     if (_isLocked && !isSyncing) {
       debugPrint('⛔ currentArea는 보호 중 → 변경 무시됨 (입력: $newArea)');
-      return;
-    }
-
-    if (!_availableAreas.contains(newArea)) {
-      debugPrint('⚠️ 잘못된 지역 입력: $newArea / 가능한 지역: $_availableAreas');
       return;
     }
 
@@ -147,33 +132,26 @@ class AreaState with ChangeNotifier {
       return;
     }
 
-    _currentArea = newArea;
+    try {
+      final snapshot = await _firestore.collection('areas').where('name', isEqualTo: newArea).limit(1).get();
 
-    if (newArea == AreaType.label) {
-      _currentDivision = 'dev';
-    } else {
-      try {
-        final snapshot = await _firestore.collection('areas').where('name', isEqualTo: newArea).limit(1).get();
+      if (snapshot.docs.isNotEmpty) {
+        final doc = snapshot.docs.first;
+        final division = doc['division'] as String?;
 
-        if (snapshot.docs.isNotEmpty) {
-          final division = snapshot.docs.first['division'] as String?;
-          _currentDivision = division?.trim().isNotEmpty == true ? division!.trim() : 'default';
-        } else {
-          _currentDivision = 'default';
-        }
-      } catch (e) {
-        debugPrint('❌ 지역 division 불러오기 실패: $e');
-        _currentDivision = 'default';
+        _currentArea = newArea;
+        _currentDivision = (division != null && division.trim().isNotEmpty) ? division.trim() : 'default';
+
+        notifyListeners();
+        debugPrint(isSyncing
+            ? '🔄 지역 동기화: $_currentArea / division: $_currentDivision'
+            : '✅ 지역 변경됨: $_currentArea / division: $_currentDivision');
+      } else {
+        debugPrint('⚠️ 지역 정보 없음 - 변경 무시됨: $newArea');
       }
+    } catch (e) {
+      debugPrint('❌ 지역 변경 실패: $e');
     }
-
-    notifyListeners();
-
-    debugPrint(
-      isSyncing
-          ? '🔄 지역 동기화: $_currentArea / division: $_currentDivision'
-          : '✅ 지역 변경됨: $_currentArea / division: $_currentDivision',
-    );
   }
 
   void initializeOrSyncArea(String area) {
@@ -182,4 +160,3 @@ class AreaState with ChangeNotifier {
     }
   }
 }
-
