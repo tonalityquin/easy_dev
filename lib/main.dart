@@ -52,13 +52,10 @@ class MyApp extends StatelessWidget {
         builder: (context) {
           return Consumer2<UserState, AreaState>(
             builder: (context, userState, areaState, child) {
-              if (userState.isLoggedIn && !areaState.isLocked) {
+              if (userState.isLoggedIn) {
                 WidgetsBinding.instance.addPostFrameCallback((_) async {
-                  // ✅ 1. userState.area를 기준으로 초기화
                   await areaState.initialize(userState.area);
-                  areaState.lockArea();
 
-                  // ✅ 2. TTS 시작은 currentArea가 동기화된 후 실행
                   PlateTtsListenerService.start(areaState.currentArea);
                   dev.log("[TTS] 감지 시작됨 (초기화 완료 후): ${areaState.currentArea}");
                 });

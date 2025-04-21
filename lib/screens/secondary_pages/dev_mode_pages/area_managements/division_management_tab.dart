@@ -1,18 +1,43 @@
 import 'package:flutter/material.dart';
 
-class DivisionManagementTab extends StatelessWidget {
+class DivisionManagementTab extends StatefulWidget {
   final List<String> divisionList;
   final Future<void> Function(String) onDivisionAdded;
   final Future<void> Function(String) onDivisionDeleted;
 
-  DivisionManagementTab({
+  const DivisionManagementTab({
     super.key,
     required this.divisionList,
     required this.onDivisionAdded,
     required this.onDivisionDeleted,
   });
 
+  @override
+  State<DivisionManagementTab> createState() => _DivisionManagementTabState();
+}
+
+class _DivisionManagementTabState extends State<DivisionManagementTab> {
   final TextEditingController _controller = TextEditingController();
+
+  Future<void> _handleAddDivision() async {
+    final input = _controller.text.trim();
+
+    if (input.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('회사 이름을 입력해주세요.')),
+      );
+      return;
+    }
+
+    await widget.onDivisionAdded(input);
+
+    setState(() {
+      _controller.clear();
+    });
+
+    FocusScope.of(context).unfocus();
+    debugPrint("✅ Division 추가 후 UI 갱신됨: $input");
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,27 +48,27 @@ class DivisionManagementTab extends StatelessWidget {
           TextField(
             controller: _controller,
             decoration: const InputDecoration(labelText: '새 회사 이름 (division)'),
-            onSubmitted: onDivisionAdded,
+            onSubmitted: (_) => _handleAddDivision(),
           ),
           const SizedBox(height: 12),
           ElevatedButton.icon(
             icon: const Icon(Icons.add_business),
             label: const Text('회사 추가'),
-            onPressed: () => onDivisionAdded(_controller.text),
+            onPressed: _handleAddDivision,
           ),
           const SizedBox(height: 20),
           const Text('등록된 회사 목록', style: TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 10),
           Expanded(
             child: ListView.builder(
-              itemCount: divisionList.length,
+              itemCount: widget.divisionList.length,
               itemBuilder: (context, index) {
-                final division = divisionList[index];
+                final division = widget.divisionList[index];
                 return ListTile(
                   title: Text(division),
                   trailing: IconButton(
                     icon: const Icon(Icons.delete, color: Colors.redAccent),
-                    onPressed: () => onDivisionDeleted(division),
+                    onPressed: () => widget.onDivisionDeleted(division),
                   ),
                 );
               },
@@ -54,3 +79,4 @@ class DivisionManagementTab extends StatelessWidget {
     );
   }
 }
+

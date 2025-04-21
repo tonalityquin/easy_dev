@@ -13,9 +13,11 @@ void showAreaPickerDialog({
 }) {
   final userState = context.read<UserState>();
 
-  // ✅ dev는 모든 지역 선택 가능, 그 외는 division 일치하는 지역만 선택 가능
+  // ✅ 모든 유저는 자신의 division과 일치하는 지역만 선택 가능
   final allAreas = areaState.availableAreas;
-  final filteredAreas = allAreas;
+  final filteredAreas = allAreas.where((area) {
+    return areaState.currentDivision == userState.division;
+  }).toList();
 
   String tempSelected = areaState.currentArea;
 
@@ -43,7 +45,9 @@ void showAreaPickerDialog({
               Expanded(
                 child: CupertinoPicker(
                   scrollController: FixedExtentScrollController(
-                    initialItem: filteredAreas.contains(tempSelected) ? filteredAreas.indexOf(tempSelected) : 0,
+                    initialItem: filteredAreas.contains(tempSelected)
+                        ? filteredAreas.indexOf(tempSelected)
+                        : 0,
                   ),
                   itemExtent: 50,
                   onSelectedItemChanged: (index) {
@@ -51,11 +55,11 @@ void showAreaPickerDialog({
                   },
                   children: filteredAreas
                       .map((area) => Center(
-                            child: Text(
-                              area,
-                              style: const TextStyle(fontSize: 18),
-                            ),
-                          ))
+                    child: Text(
+                      area,
+                      style: const TextStyle(fontSize: 18),
+                    ),
+                  ))
                       .toList(),
                 ),
               ),

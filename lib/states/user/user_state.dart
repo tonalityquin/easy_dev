@@ -40,23 +40,29 @@ class UserState extends ChangeNotifier {
 
   String get role => _user?.role ?? '';
 
-  String get area => _user?.area ?? '';
-
   String get name => _user?.name ?? '';
 
   String get phone => _user?.phone ?? '';
 
   String get password => _user?.password ?? '';
 
-  String get division => _user?.division ?? '';
+  String get area => _user?.areas.firstOrNull ?? '';
+
+  String get division => _user?.divisions.firstOrNull ?? '';
 
   String get currentArea => _user?.currentArea ?? area;
 
   Future<void> saveCardToUserPhone(UserModel user) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('phone', user.phone);
-    await prefs.setString('area', user.area);
-    debugPrint("📌 SharedPreferences 저장 완료: phone=${user.phone}, area=${user.area}");
+
+    final areaToSave = user.currentArea ?? user.areas.firstOrNull ?? '';
+    await prefs.setString('area', areaToSave);
+
+    final divisionToSave = user.divisions.firstOrNull ?? '';
+    await prefs.setString('division', divisionToSave);
+
+    debugPrint("📌 SharedPreferences 저장 완료: phone=${user.phone}, area=$areaToSave, division=$divisionToSave");
   }
 
   Future<void> loadUserToLogIn() async {
@@ -66,6 +72,7 @@ class UserState extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       final phone = prefs.getString('phone')?.trim();
       final area = prefs.getString('area')?.trim();
+      final division = prefs.getString('division')?.trim(); // ✅ division도 불러옴
 
       if (phone == null || area == null) {
         debugPrint("[DEBUG] 자동 로그인 실패 - 저장된 전화번호 또는 지역 정보 없음");
@@ -80,9 +87,8 @@ class UserState extends ChangeNotifier {
         return;
       }
 
-      // ✅ currentArea를 SharedPreferences의 area로 강제 동기화
       final trimmedPhone = userData.phone.trim();
-      final trimmedArea = userData.area.trim();
+      final trimmedArea = area.trim();
       debugPrint("[DEBUG] updateCurrentArea 요청: userId=${trimmedPhone}-${trimmedArea} → currentArea=$trimmedArea");
 
       await _repository.updateCurrentArea(trimmedPhone, trimmedArea, trimmedArea);
@@ -95,6 +101,7 @@ class UserState extends ChangeNotifier {
 
       PlateTtsListenerService.start(currentArea);
       debugPrint("[TTS] 자동 로그인 후 감지 시작: $currentArea");
+      debugPrint("[INFO] 자동   로그인 완료 - phone: $phone, area: $area, division: $division");
     } catch (e) {
       debugPrint("[DEBUG] 자동 로그인 중 오류 발생: $e");
     }
@@ -121,7 +128,7 @@ class UserState extends ChangeNotifier {
 
     await _repository.updateUserStatus(
       _user!.phone,
-      _user!.area,
+      _user!.areas.firstOrNull ?? '',
       isWorking: newStatus,
     );
 
@@ -134,7 +141,7 @@ class UserState extends ChangeNotifier {
 
     await _repository.updateUserStatus(
       _user!.phone,
-      _user!.area,
+      _user!.areas.firstOrNull ?? '',
       isWorking: false,
       isSaved: false,
     );
@@ -161,8 +168,8 @@ class UserState extends ChangeNotifier {
         email: user.email,
         role: user.role,
         password: user.password,
-        area: user.area,
-        division: user.division,
+        areas: user.areas,
+        divisions: user.divisions,
         currentArea: user.currentArea,
         isSelected: user.isSelected,
         isWorking: user.isWorking,
@@ -204,12 +211,12 @@ class UserState extends ChangeNotifier {
     try {
       await _repository.updateCurrentArea(
         _user!.phone.trim(),
-        _user!.area.trim(),
+        _user!.areas.firstOrNull ?? '',
         newArea.trim(),
       );
-      debugPrint("✅ Firestore currentArea 업데이트 완료 → ${_user!.phone.trim()}-${_user!.area.trim()} → $newArea");
+      debugPrint("✅ Firestore currentArea 업데이트 완료 → ${_user!.phone.trim()}-${_user!.areas.firstOrNull} → $newArea");
     } catch (e) {
-      debugPrint("❌ Firestore currentArea 업데이트 실패: $e / userId: ${_user!.phone.trim()}-${_user!.area.trim()}");
+      debugPrint("❌ Firestore currentArea 업데이트 실패: $e / userId: ${_user!.phone.trim()}-${_user!.areas.firstOrNull}");
     }
 
     PlateTtsListenerService.start(newArea);

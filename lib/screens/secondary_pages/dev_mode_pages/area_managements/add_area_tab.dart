@@ -1,29 +1,55 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:provider/provider.dart';
-import '../../../../states/area/area_state.dart';
 
-class AddAreaTab extends StatelessWidget {
+class AddAreaTab extends StatefulWidget {
   final String? selectedDivision;
   final List<String> divisionList;
   final ValueChanged<String?> onDivisionChanged;
 
-  AddAreaTab({
+  const AddAreaTab({
     super.key,
     required this.selectedDivision,
     required this.divisionList,
     required this.onDivisionChanged,
   });
 
+  @override
+  State<AddAreaTab> createState() => _AddAreaTabState();
+}
+
+class _AddAreaTabState extends State<AddAreaTab> {
   final TextEditingController _areaController = TextEditingController();
 
-  void _addArea(BuildContext context) {
-    final area = _areaController.text.trim();
-    final division = selectedDivision ?? '';
-    if (area.isEmpty || division.isEmpty) return;
+  Future<void> _addArea() async {
+    final areaName = _areaController.text.trim();
+    final division = widget.selectedDivision;
+    if (areaName.isEmpty || division == null || division.isEmpty) return;
 
-    context.read<AreaState>().addArea(area, division);
+    final areaId = '$division-$areaName';
+    final areaDoc = FirebaseFirestore.instance.collection('areas').doc(areaId);
+
+    await areaDoc.set({
+      'name': areaName,
+      'division': division,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
     _areaController.clear();
+    FocusScope.of(context).unfocus();
+    setState(() {}); // 🔄 FutureBuilder 리빌드
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('✅ "$areaName" 지역이 추가되었습니다')),
+    );
+  }
+
+  Future<List<String>> _loadAreas() async {
+    if (widget.selectedDivision == null) return [];
+    final snapshot = await FirebaseFirestore.instance
+        .collection('areas')
+        .where('division', isEqualTo: widget.selectedDivision)
+        .get();
+    return snapshot.docs.map((e) => e['name'] as String).toList();
   }
 
   @override
@@ -33,54 +59,51 @@ class AddAreaTab extends StatelessWidget {
       child: Column(
         children: [
           DropdownButtonFormField<String>(
-            value: selectedDivision,
-            items: divisionList
+            value: widget.selectedDivision,
+            items: widget.divisionList
                 .map((div) => DropdownMenuItem(value: div, child: Text(div)))
                 .toList(),
-            onChanged: onDivisionChanged,
+            onChanged: widget.onDivisionChanged,
             decoration: const InputDecoration(labelText: '회사 선택'),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _areaController,
             decoration: const InputDecoration(labelText: '새 지역 이름'),
-            onSubmitted: (_) => _addArea(context),
+            onSubmitted: (_) => _addArea(),
           ),
           const SizedBox(height: 12),
           ElevatedButton.icon(
             icon: const Icon(Icons.add),
             label: const Text('지역 추가'),
-            onPressed: () => _addArea(context),
+            onPressed: _addArea,
           ),
           const SizedBox(height: 20),
           const Text('해당 회사의 지역 목록', style: TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           Expanded(
-            child: selectedDivision == null
+            child: widget.selectedDivision == null
                 ? const Center(child: Text('📌 회사를 먼저 선택하세요.'))
-                : FutureBuilder<QuerySnapshot>(
-              future: FirebaseFirestore.instance
-                  .collection('areas')
-                  .where('division', isEqualTo: selectedDivision)
-                  .get(),
+                : FutureBuilder<List<String>>(
+              future: _loadAreas(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return const Center(child: Text('등록된 지역이 없습니다.'));
-                }
 
-                final docs = snapshot.data!.docs;
+                final areas = snapshot.data ?? [];
+                if (areas.isEmpty) return const Center(child: Text('등록된 지역이 없습니다.'));
+
                 return ListView(
-                  children: docs.map((doc) {
-                    final areaName = doc['name'];
+                  children: areas.map((areaName) {
                     return ListTile(
                       title: Text(areaName),
                       trailing: IconButton(
                         icon: const Icon(Icons.delete_outline),
-                        onPressed: () {
-                          context.read<AreaState>().removeArea(areaName);
+                        onPressed: () async {
+                          final areaId = '${widget.selectedDivision}-$areaName';
+                          await FirebaseFirestore.instance.collection('areas').doc(areaId).delete();
+                          setState(() {});
                         },
                       ),
                     );

@@ -118,7 +118,7 @@ class LoginController {
 
         final updatedUser = user.copyWith(isSaved: true);
         userState.updateUserCard(updatedUser);
-        areaState.updateArea(updatedUser.area);
+        areaState.updateArea(updatedUser.areas.firstOrNull ?? '');
 
         if (context.mounted) {
           WidgetsBinding.instance.addPostFrameCallback((_) {

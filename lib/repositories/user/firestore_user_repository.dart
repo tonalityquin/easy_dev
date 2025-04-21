@@ -84,9 +84,11 @@ class FirestoreUserRepository implements UserRepository {
       email: data['email'] ?? '',
       role: data['role'] ?? '',
       password: data['password'] ?? '',
-      area: data['area'] ?? '',
-      division: data['division'] ?? '',
-      currentArea: data['currentArea'], // ✅ currentArea 반영
+      areas: List<String>.from(data['areas'] ?? []),
+      // ✅ 수정
+      divisions: List<String>.from(data['divisions'] ?? []),
+      // ✅ 수정
+      currentArea: data['currentArea'],
       isSelected: data['isSelected'] ?? false,
       isWorking: data['isWorking'] ?? false,
       isSaved: data['isSaved'] ?? false,

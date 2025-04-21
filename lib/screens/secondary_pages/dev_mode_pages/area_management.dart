@@ -9,7 +9,6 @@ import '../../../widgets/navigation/secondary_mini_navigation.dart';
 Future<void> registerDevResources() async {
   final firestore = FirebaseFirestore.instance;
 
-  // 1. dev division 등록
   final divisionDoc = firestore.collection('divisions').doc('dev');
   if (!(await divisionDoc.get()).exists) {
     await divisionDoc.set({
@@ -18,7 +17,6 @@ Future<void> registerDevResources() async {
     });
   }
 
-  // 2. dev 기본 지역 등록
   final areaQuery = await firestore.collection('areas').where('division', isEqualTo: 'dev').get();
   if (areaQuery.docs.isEmpty) {
     await firestore.collection('areas').doc('dev-default').set({
@@ -28,7 +26,6 @@ Future<void> registerDevResources() async {
     });
   }
 
-  // 3. dev 고정 계정 등록
   const devPhone = '00000000000';
   const devArea = 'default';
   const devAccountId = '$devPhone-$devArea';
@@ -40,8 +37,8 @@ Future<void> registerDevResources() async {
       'phone': devPhone,
       'email': 'dev@gmail.com',
       'password': '00000',
-      'division': 'dev',
-      'area': devArea,
+      'divisions': ['dev'],
+      'areas': ['default'],
       'role': 'dev',
       'isWorking': false,
       'isSaved': false,
@@ -75,8 +72,15 @@ class _AreaManagementState extends State<AreaManagement> with SingleTickerProvid
   }
 
   void _loadDivisions() async {
-    final snapshot = await FirebaseFirestore.instance.collection('divisions').get();
-    final divisions = snapshot.docs.map((e) => e['name'] as String).toList();
+    final firestore = FirebaseFirestore.instance;
+
+    final divisionSnapshot = await firestore.collection('divisions').get();
+    final divisions = divisionSnapshot.docs.map((e) => e['name'] as String).toList();
+
+    final areaSnapshot = await firestore.collection('areas').get();
+    final areas = areaSnapshot.docs
+        .map((doc) => '${doc['division']}-${doc['name']}')
+        .toList();
 
     setState(() {
       _divisionList = divisions;
@@ -87,7 +91,11 @@ class _AreaManagementState extends State<AreaManagement> with SingleTickerProvid
         _accountSelectedDivision = _divisionList.first;
       }
     });
+
+    debugPrint("📥 Division 목록 로드됨: $divisions");
+    debugPrint("📍 Area 목록 로드됨: $areas");
   }
+
 
   Future<void> _addDivision(String name) async {
     final trimmed = name.trim();
@@ -98,7 +106,9 @@ class _AreaManagementState extends State<AreaManagement> with SingleTickerProvid
       'createdAt': FieldValue.serverTimestamp(),
     });
 
+    // ✅ 추가 후 갱신
     _loadDivisions();
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('✅ 회사 "$trimmed" 추가됨')),
     );
@@ -107,8 +117,11 @@ class _AreaManagementState extends State<AreaManagement> with SingleTickerProvid
   Future<void> _deleteDivision(String name) async {
     try {
       await FirebaseFirestore.instance.collection('divisions').doc(name).delete();
-      final areaSnapshot =
-          await FirebaseFirestore.instance.collection('areas').where('division', isEqualTo: name).get();
+
+      final areaSnapshot = await FirebaseFirestore.instance
+          .collection('areas')
+          .where('division', isEqualTo: name)
+          .get();
       for (var doc in areaSnapshot.docs) {
         await doc.reference.delete();
       }
@@ -172,7 +185,6 @@ class _AreaManagementState extends State<AreaManagement> with SingleTickerProvid
               onDivisionDeleted: _deleteDivision,
             ),
             UserAccountsTab(
-              divisionList: _divisionList,
               selectedDivision: _accountSelectedDivision,
               selectedArea: _accountSelectedArea,
               onDivisionChanged: (val) {

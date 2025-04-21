@@ -9,6 +9,10 @@ import '../../../widgets/container/user_custom_box.dart';
 import '../../../states/user/user_state.dart';
 import '../../../states/area/area_state.dart';
 
+extension SafeFirst<T> on List<T> {
+  T? get firstOrNull => isNotEmpty ? first : null;
+}
+
 class UserManagement extends StatefulWidget {
   const UserManagement({super.key});
 
@@ -17,7 +21,6 @@ class UserManagement extends StatefulWidget {
 }
 
 class _UserManagementState extends State<UserManagement> {
-  // ✅ initialize() 호출 제거 – Document Mode와 동일하게 처리
   @override
   void initState() {
     super.initState();
@@ -27,19 +30,19 @@ class _UserManagementState extends State<UserManagement> {
   }
 
   void buildAddUserDialog(
-    BuildContext context,
-    void Function(
-      String name,
-      String phone,
-      String email,
-      String role,
-      String password,
-      String area,
-      String division,
-      bool isWorking,
-      bool isSaved,
-    ) onSave,
-  ) {
+      BuildContext context,
+      void Function(
+          String name,
+          String phone,
+          String email,
+          String role,
+          String password,
+          String area,
+          String division,
+          bool isWorking,
+          bool isSaved,
+          ) onSave,
+      ) {
     final areaState = context.read<AreaState>();
     final currentArea = areaState.currentArea;
     final currentDivision = areaState.currentDivision;
@@ -66,17 +69,17 @@ class _UserManagementState extends State<UserManagement> {
     if (index == 0) {
       buildAddUserDialog(
         context,
-        (
-          String name,
-          String phone,
-          String email,
-          String role,
-          String password,
-          String area,
-          String division,
-          bool isWorking,
-          bool isSaved,
-        ) {
+            (
+            String name,
+            String phone,
+            String email,
+            String role,
+            String password,
+            String area,
+            String division,
+            bool isWorking,
+            bool isSaved,
+            ) {
           final newUser = UserModel(
             id: '$phone-$area',
             name: name,
@@ -84,8 +87,9 @@ class _UserManagementState extends State<UserManagement> {
             email: email,
             role: role,
             password: password,
-            area: area,
-            division: division,
+            areas: [area], // ✅ 복수 구조 대응
+            divisions: [division], // ✅ 복수 구조 대응
+            currentArea: area,
             isSelected: false,
             isWorking: isWorking,
             isSaved: isSaved,
@@ -117,7 +121,7 @@ class _UserManagementState extends State<UserManagement> {
     final currentDivision = areaState.currentDivision;
 
     final filteredUsers = userState.users.where((user) {
-      return user.area == currentArea && user.division == currentDivision;
+      return user.areas.contains(currentArea) && user.divisions.contains(currentDivision);
     }).toList();
 
     return Scaffold(
@@ -135,25 +139,25 @@ class _UserManagementState extends State<UserManagement> {
       body: userState.isLoading
           ? const Center(child: CircularProgressIndicator())
           : filteredUsers.isEmpty
-              ? const Center(child: Text('생성된 계정이 없습니다'))
-              : ListView.builder(
-                  itemCount: filteredUsers.length,
-                  itemBuilder: (context, index) {
-                    final user = filteredUsers[index];
-                    final isSelected = userState.selectedUsers[user.id] ?? false;
+          ? const Center(child: Text('생성된 계정이 없습니다'))
+          : ListView.builder(
+        itemCount: filteredUsers.length,
+        itemBuilder: (context, index) {
+          final user = filteredUsers[index];
+          final isSelected = userState.selectedUsers[user.id] ?? false;
 
-                    return UserCustomBox(
-                      topLeftText: user.name,
-                      topRightText: user.email,
-                      midLeftText: user.role,
-                      midCenterText: user.phone,
-                      midRightText: user.area,
-                      onTap: () => userState.toggleUserCard(user.id),
-                      isSelected: isSelected,
-                      backgroundColor: isSelected ? Colors.green : Colors.white,
-                    );
-                  },
-                ),
+          return UserCustomBox(
+            topLeftText: user.name,
+            topRightText: user.email,
+            midLeftText: user.role,
+            midCenterText: user.phone,
+            midRightText: user.areas.firstOrNull ?? '-', // ✅ 수정
+            onTap: () => userState.toggleUserCard(user.id),
+            isSelected: isSelected,
+            backgroundColor: isSelected ? Colors.green : Colors.white,
+          );
+        },
+      ),
       bottomNavigationBar: SecondaryMiniNavigation(
         icons: getNavigationIcons(userState.selectedUsers.containsValue(true)),
         onIconTapped: (index) => onIconTapped(context, index, userState),
