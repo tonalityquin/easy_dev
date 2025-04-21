@@ -13,13 +13,16 @@ void showAreaPickerDialog({
 }) {
   final userState = context.read<UserState>();
 
-  // ✅ 모든 유저는 자신의 division과 일치하는 지역만 선택 가능
-  final allAreas = areaState.availableAreas;
-  final filteredAreas = allAreas.where((area) {
-    return areaState.currentDivision == userState.division;
-  }).toList();
+  // ✅ 구조 변경 없이 userState 기반으로만 지역 필터링
+  final userAreas = userState.user?.areas ?? [];
 
-  String tempSelected = areaState.currentArea;
+  if (userAreas.isEmpty) {
+    debugPrint('⚠️ 사용자 소속 지역 없음 (userAreas)');
+  }
+
+  String tempSelected = areaState.currentArea.isNotEmpty
+      ? areaState.currentArea
+      : (userAreas.isNotEmpty ? userAreas.first : '');
 
   showGeneralDialog(
     context: context,
@@ -43,17 +46,19 @@ void showAreaPickerDialog({
               ),
               const SizedBox(height: 16),
               Expanded(
-                child: CupertinoPicker(
+                child: userAreas.isEmpty
+                    ? const Center(child: Text("표시할 지역이 없습니다"))
+                    : CupertinoPicker(
                   scrollController: FixedExtentScrollController(
-                    initialItem: filteredAreas.contains(tempSelected)
-                        ? filteredAreas.indexOf(tempSelected)
+                    initialItem: userAreas.contains(tempSelected)
+                        ? userAreas.indexOf(tempSelected)
                         : 0,
                   ),
                   itemExtent: 50,
                   onSelectedItemChanged: (index) {
-                    tempSelected = filteredAreas[index];
+                    tempSelected = userAreas[index];
                   },
-                  children: filteredAreas
+                  children: userAreas
                       .map((area) => Center(
                     child: Text(
                       area,
@@ -76,7 +81,8 @@ void showAreaPickerDialog({
                       userState.updateCurrentArea(tempSelected);
                     },
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 16),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 50, vertical: 16),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(30),

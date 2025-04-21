@@ -44,6 +44,26 @@ void main() async {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
+  Future<void> _initializeAreaIfNeeded(BuildContext context) async {
+    final userState = context.read<UserState>();
+    final areaState = context.read<AreaState>();
+
+    if (!userState.isLoggedIn) return;
+
+    // ✅ 유저의 currentArea 또는 첫 지역, fallback은 'default'
+    final selectedArea = userState.user?.currentArea?.trim().isNotEmpty == true
+        ? userState.user!.currentArea!
+        : (userState.user?.areas.isNotEmpty == true
+        ? userState.user!.areas.first
+        : 'default');
+
+    await areaState.initialize(selectedArea);
+
+    // ✅ TTS도 선택된 지역 기준으로 시작
+    PlateTtsListenerService.start(areaState.currentArea);
+    dev.log("[TTS] 감지 시작됨 (초기화 완료 후): ${areaState.currentArea}");
+  }
+
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
@@ -52,14 +72,9 @@ class MyApp extends StatelessWidget {
         builder: (context) {
           return Consumer2<UserState, AreaState>(
             builder: (context, userState, areaState, child) {
-              if (userState.isLoggedIn) {
-                WidgetsBinding.instance.addPostFrameCallback((_) async {
-                  await areaState.initialize(userState.area);
-
-                  PlateTtsListenerService.start(areaState.currentArea);
-                  dev.log("[TTS] 감지 시작됨 (초기화 완료 후): ${areaState.currentArea}");
-                });
-              }
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _initializeAreaIfNeeded(context);
+              });
 
               return MaterialApp(
                 debugShowCheckedModeBanner: false,
