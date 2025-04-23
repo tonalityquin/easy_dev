@@ -221,18 +221,19 @@ class MovementPlate {
     final documentId = '${plate.plateNumber}_${plate.area}';
 
     try {
-      await _repository.deletePlate(documentId);
+      final updateData = {
+        'type': PlateType.departureCompleted.firestoreValue,
+        'location': plate.location,
+        'userName': plate.userName,
+        'isSelected': false,
+        'selectedBy': null,
+        'end_time': DateTime.now(), // ✅ 출차 완료 시각
+        if (plate.isLockedFee == true) 'isLockedFee': true,
+        if (plate.lockedAtTimeInSeconds != null) 'lockedAtTimeInSeconds': plate.lockedAtTimeInSeconds,
+        if (plate.lockedFeeAmount != null) 'lockedFeeAmount': plate.lockedFeeAmount,
+      };
 
-      final updatedPlate = plate.copyWith(
-        type: PlateType.departureCompleted.firestoreValue,
-        location: plate.location,
-        userName: plate.userName,
-        isSelected: false,
-        selectedBy: null,
-        endTime: DateTime.now(),
-      );
-
-      await _repository.addOrUpdatePlate(documentId, updatedPlate);
+      await _repository.updatePlate(documentId, updateData); // ✅ 삭제 없이 update만
       await plateState.fetchPlateData();
 
       final log = PlateLogModel(
@@ -244,6 +245,7 @@ class MovementPlate {
         performedBy: plate.userName,
         timestamp: DateTime.now(),
       );
+
       await _uploader.uploadLogJson(log.toMap(), plate.plateNumber, division, plate.area);
     } catch (e) {
       debugPrint('🚨 출차 완료 이동 실패: $e');

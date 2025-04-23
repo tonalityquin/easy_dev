@@ -104,14 +104,15 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
   void _handleDepartureCompleted(BuildContext context) async {
     final movementPlate = context.read<MovementPlate>();
     final plateState = context.read<PlateState>();
-    final userName = context.read<UserState>().name;
+    final userState = context.read<UserState>();
+    final division = context.read<AreaState>().currentDivision;
+    final userName = userState.name;
     final selectedPlate = plateState.getSelectedPlate(PlateType.departureRequests, userName);
 
     if (selectedPlate == null) return;
 
     PlateModel updatedPlate = selectedPlate;
 
-    // ✅ 정산 안 된 경우에만 다이얼로그
     if (selectedPlate.isLockedFee != true) {
       final shouldSettle = await showDialog<bool?>(
         context: context,
@@ -124,10 +125,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
         ),
       );
 
-      // 출차 취소 시 아무 작업도 하지 않고 종료
-      if (shouldSettle == null) {
-        return; // 출차 취소: Plate가 이동하지 않음
-      }
+      if (shouldSettle == null) return;
 
       if (shouldSettle == true) {
         final now = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
@@ -148,13 +146,9 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
           lockedFeeAmount: lockedFee,
         );
       }
-      // else: 사용자가 "정산 안함" 선택 → 그대로 출차 완료 진행
     }
 
     try {
-      final userState = context.read<UserState>();
-
-      // ✅ 선택 해제
       plateState.toggleIsSelected(
         collection: PlateType.departureRequests,
         plateNumber: updatedPlate.plateNumber,
@@ -162,15 +156,19 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
         onError: (_) {},
       );
 
-      // ✅ 출차 완료 처리 (정산 반영된 Plate 포함)
       await movementPlate.setDepartureCompletedWithPlate(
         updatedPlate,
         plateState,
-        userState.division, // ✅ division 인자 추가
-      ); // 출차 완료 처리 후 알림을 없애기 위해 showSuccessSnackbar를 삭제함
+        division,
+      );
+
+      if (!context.mounted) return;
+      showSuccessSnackbar(context, '출차 완료 처리되었습니다.');
     } catch (e) {
       debugPrint("출차 완료 처리 실패: $e");
-      // showFailedSnackbar(context, "출차 완료 처리 중 오류 발생: $e"); // 알림 삭제
+      if (context.mounted) {
+        showFailedSnackbar(context, "출차 완료 중 오류 발생: $e");
+      }
     }
   }
 
