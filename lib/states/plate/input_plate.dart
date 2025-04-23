@@ -82,7 +82,7 @@ class InputPlate with ChangeNotifier {
           performedBy: userState.name,
           timestamp: DateTime.now(),
         ),
-        division: userState.division, // ✅ division 전달
+        division: areaState.currentDivision,
         area: areaState.currentArea, // ✅ area 전달
       );
 
