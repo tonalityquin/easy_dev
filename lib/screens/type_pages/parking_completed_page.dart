@@ -100,18 +100,24 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
   }
 
   void _handleDepartureRequested(BuildContext context) {
-    final movementPlate = context.read<MovementPlate>(); // ✅ MovementPlate 사용
-    final userName = context.read<UserState>().name;
+    final movementPlate = context.read<MovementPlate>();
+    final userState = context.read<UserState>(); // ✅ division 가져오기 위해 추가
+    final userName = userState.name;
     final plateState = context.read<PlateState>();
     final selectedPlate = plateState.getSelectedPlate(PlateType.parkingCompleted, userName);
 
     if (selectedPlate != null) {
       try {
         movementPlate
-            .setDepartureRequested(selectedPlate.plateNumber, selectedPlate.area, plateState, selectedPlate.location)
+            .setDepartureRequested(
+          selectedPlate.plateNumber,
+          selectedPlate.area,
+          plateState,
+          selectedPlate.location,
+          userState.division, // ✅ division 전달
+        )
             .then((_) {
-          // ✅ MovementPlate에서 호출
-          Future.delayed(Duration(milliseconds: 300), () {
+          Future.delayed(const Duration(milliseconds: 300), () {
             if (context.mounted) {
               Navigator.pop(context);
               showSuccessSnackbar(context, "출차 요청이 완료되었습니다.");
@@ -130,14 +136,15 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
   void handleEntryRequest(BuildContext context, String plateNumber, String area) {
     final movementPlate = context.read<MovementPlate>();
     final plateState = context.read<PlateState>();
+    final userState = context.read<UserState>();
 
     movementPlate.goBackToParkingRequest(
       fromType: PlateType.parkingCompleted,
-      // 🔄 수정: enum으로 전달
       plateNumber: plateNumber,
       area: area,
       newLocation: "미지정",
       plateState: plateState,
+      division: userState.division, // ✅ division 추가
     );
 
     showSuccessSnackbar(context, "입차 요청이 완료되었습니다.");

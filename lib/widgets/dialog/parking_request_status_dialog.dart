@@ -3,9 +3,11 @@ import 'package:provider/provider.dart';
 import '../../models/plate_model.dart'; // ✅ PlateModel import
 import '../../screens/modify_pages/modify_3_digit.dart'; // ✅ 정보 수정 화면 import
 import '../../screens/logs/plate_log_viewer_page.dart';
+import '../../states/area/area_state.dart';
 import '../../states/plate/movement_plate.dart';
 import '../../states/plate/plate_state.dart';
 import '../../enums/plate_type.dart';
+import '../../states/user/user_state.dart';
 
 class ParkingRequestStatusDialog extends StatelessWidget {
   final VoidCallback onCancelEntryRequest;
@@ -43,11 +45,18 @@ class ParkingRequestStatusDialog extends StatelessWidget {
                 icon: const Icon(Icons.history),
                 label: const Text("로그 확인"),
                 onPressed: () {
+                  final division = context.read<UserState>().division;
+                  final currentArea = context.read<AreaState>().currentArea;
+
                   Navigator.pop(context);
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => PlateLogViewerPage(initialPlateNumber: plateNumber),
+                      builder: (_) => PlateLogViewerPage(
+                        initialPlateNumber: plateNumber,
+                        division: division, // ✅ 추가
+                        area: currentArea, // ✅ 추가
+                      ),
                     ),
                   );
                 },
@@ -134,6 +143,7 @@ class _ScaleTransitionDialogState extends State<ScaleTransitionDialog> with Sing
 void handleEntryParkingRequest(BuildContext context, String plateNumber, String area) {
   final movementPlate = context.read<MovementPlate>();
   final plateState = context.read<PlateState>();
+  final userState = context.read<UserState>();
 
   movementPlate.goBackToParkingRequest(
     fromType: PlateType.parkingCompleted,
@@ -141,5 +151,6 @@ void handleEntryParkingRequest(BuildContext context, String plateNumber, String 
     area: area,
     plateState: plateState,
     newLocation: "미지정",
+    division: userState.division, // ✅ division 인자 추가
   );
 }

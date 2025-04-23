@@ -90,7 +90,6 @@ final List<SingleChildWidget> stateProviders = [
   Provider(
     create: (context) => MovementPlate(
       context.read<PlateRepository>(),
-      context.read<LogPlateState>(), // ✅ 로그 상태 주입
     ),
   ),
 

@@ -61,7 +61,7 @@ class GCSUploader {
       final client = await clientViaServiceAccount(accountCredentials, scopes);
       final storage = StorageApi(client);
 
-      final jsonString = jsonEncode(jsonData); // ⬅️ 중요: JSON 문자열로 저장
+      final jsonString = jsonEncode(jsonData);
       final tempFile = File('${Directory.systemTemp.path}/temp_upload.json');
       await tempFile.writeAsString(jsonString);
 
@@ -88,12 +88,19 @@ class GCSUploader {
     }
   }
 
-  /// ✅ 로그 저장 전용 업로드 (plateNumber 기준으로 자동 파일명 생성)
-  Future<String?> uploadLogJson(Map<String, dynamic> logData, String plateNumber) async {
+  /// ✅ 로그 저장 전용 업로드 (plateNumber 기준 + 지역 기반 폴더 구조)
+  Future<String?> uploadLogJson(
+      Map<String, dynamic> logData,
+      String plateNumber,
+      String division,
+      String area,
+      ) async {
     final now = DateTime.now();
     final timestamp = '${now.year}${_two(now.month)}${_two(now.day)}_${_two(now.hour)}${_two(now.minute)}${_two(now.second)}';
     final safePlate = plateNumber.replaceAll(RegExp(r'\s'), '');
-    final fileName = 'logs/${timestamp}_${safePlate}.json';
+
+    // ✅ division/area/logs/ 하위 경로로 로그 저장
+    final fileName = '$division/$area/logs/${timestamp}_$safePlate.json';
 
     return await uploadJsonData(logData, fileName);
   }

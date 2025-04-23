@@ -109,6 +109,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
     final movementPlate = context.read<MovementPlate>();
     final plateState = context.read<PlateState>();
     final plateRepository = context.read<PlateRepository>();
+    final userState = context.read<UserState>();
 
     try {
       plateRepository.addRequestOrCompleted(
@@ -127,7 +128,13 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
         region: region,
       );
 
-      movementPlate.setParkingCompleted(plateNumber, area, plateState, location);
+      movementPlate.setParkingCompleted(
+        plateNumber,
+        area,
+        plateState,
+        location,
+        userState.division, // ✅ division 인자 추가
+      );
       showSuccessSnackbar(context, "입차 완료: $plateNumber ($location)");
     } catch (e) {
       debugPrint("입차 완료 처리 실패: $e");

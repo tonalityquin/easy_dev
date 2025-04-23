@@ -152,6 +152,8 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
     }
 
     try {
+      final userState = context.read<UserState>();
+
       // ✅ 선택 해제
       plateState.toggleIsSelected(
         collection: PlateType.departureRequests,
@@ -161,8 +163,11 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
       );
 
       // ✅ 출차 완료 처리 (정산 반영된 Plate 포함)
-      await movementPlate.setDepartureCompletedWithPlate(updatedPlate, plateState);
-      // 출차 완료 처리 후 알림을 없애기 위해 showSuccessSnackbar를 삭제함
+      await movementPlate.setDepartureCompletedWithPlate(
+        updatedPlate,
+        plateState,
+        userState.division, // ✅ division 인자 추가
+      ); // 출차 완료 처리 후 알림을 없애기 위해 showSuccessSnackbar를 삭제함
     } catch (e) {
       debugPrint("출차 완료 처리 실패: $e");
       // showFailedSnackbar(context, "출차 완료 처리 중 오류 발생: $e"); // 알림 삭제

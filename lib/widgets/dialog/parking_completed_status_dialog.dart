@@ -4,8 +4,10 @@ import 'package:intl/intl.dart';
 import '../../models/plate_model.dart';
 import '../../screens/modify_pages/modify_3_digit.dart';
 import '../../screens/logs/plate_log_viewer_page.dart';
+import '../../states/area/area_state.dart';
 import '../../states/plate/movement_plate.dart';
 import '../../states/plate/plate_state.dart';
+import '../../states/user/user_state.dart';
 import '../../utils/fee_calculator.dart';
 import '../../enums/plate_type.dart';
 
@@ -45,11 +47,18 @@ class ParkingCompletedStatusDialog extends StatelessWidget {
                 icon: const Icon(Icons.history),
                 label: const Text("로그 확인"),
                 onPressed: () {
+                  final division = context.read<UserState>().division;
+                  final currentArea = context.read<AreaState>().currentArea;
+
                   Navigator.pop(context);
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => PlateLogViewerPage(initialPlateNumber: plateNumber),
+                      builder: (_) => PlateLogViewerPage(
+                        initialPlateNumber: plateNumber,
+                        division: division,
+                        area: currentArea,
+                      ),
                     ),
                   );
                 },
@@ -158,16 +167,18 @@ class _ScaleTransitionDialogState extends State<ScaleTransitionDialog> with Sing
 void handleEntryParkingRequest(BuildContext context, String plateNumber, String area) {
   final movementPlate = context.read<MovementPlate>();
   final plateState = context.read<PlateState>();
+  final userState = context.read<UserState>();
 
   movementPlate.goBackToParkingRequest(
-    fromType: PlateType.parkingCompleted, // 🔄 수정된 부분
+    fromType: PlateType.parkingCompleted,
+    // 🔄 수정된 부분
     plateNumber: plateNumber,
     area: area,
     plateState: plateState,
     newLocation: "미지정",
+    division: userState.division,
   );
 }
-
 
 void handleEntryDepartureCompleted(BuildContext context, PlateModel plate) async {
   final movementPlate = context.read<MovementPlate>();
@@ -212,9 +223,12 @@ void handleEntryDepartureCompleted(BuildContext context, PlateModel plate) async
   }
 
   try {
+    final userState = context.read<UserState>();
+
     await movementPlate.doubleParkingCompletedToDepartureCompletedWithPlate(
       updatedPlate,
       plateState,
+      userState.division, // ✅ division 전달
     );
   } catch (e) {
     debugPrint("출차 완료 실패: $e");
@@ -224,12 +238,14 @@ void handleEntryDepartureCompleted(BuildContext context, PlateModel plate) async
 void handlePrePayment(BuildContext context, String plateNumber, String area, String location) {
   final movementPlate = context.read<MovementPlate>();
   final plateState = context.read<PlateState>();
+  final userState = context.read<UserState>();
 
   movementPlate.setDepartureRequested(
     plateNumber,
     area,
     plateState,
     location,
+    userState.division, // ✅ division 전달
   );
 }
 

@@ -8,8 +8,15 @@ import '../../models/plate_log_model.dart';
 
 class PlateLogViewerPage extends StatefulWidget {
   final String? initialPlateNumber;
+  final String division;
+  final String area;
 
-  const PlateLogViewerPage({super.key, this.initialPlateNumber});
+  const PlateLogViewerPage({
+    super.key,
+    this.initialPlateNumber,
+    required this.division,
+    required this.area,
+  });
 
   @override
   State<PlateLogViewerPage> createState() => _PlateLogViewerPageState();
@@ -37,7 +44,8 @@ class _PlateLogViewerPageState extends State<PlateLogViewerPage> {
       final client = await clientViaServiceAccount(accountCredentials, scopes);
       final storage = StorageApi(client);
 
-      final objects = await storage.objects.list(bucketName, prefix: 'logs/');
+      final prefix = '${widget.division}/${widget.area}/logs/';
+      final objects = await storage.objects.list(bucketName, prefix: prefix);
       final logFiles = objects.items?.where((o) => o.name?.endsWith('.json') ?? false).toList() ?? [];
 
       final logs = <PlateLogModel>[];

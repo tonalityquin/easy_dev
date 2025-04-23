@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/plate_model.dart';
 import '../../repositories/plate/plate_repository.dart';
-import 'log_plate.dart';
 import 'plate_state.dart';
 import '../../enums/plate_type.dart';
 import '../../models/plate_log_model.dart';
@@ -10,17 +9,17 @@ import '../../utils/gcs_uploader.dart';
 class MovementPlate {
   final PlateRepository _repository;
 
-  // ignore: unused_field
-  final LogPlateState _logState;
+  MovementPlate(this._repository);
 
-  MovementPlate(this._repository, this._logState); // 로그 저장 목적
-  final _uploader = GCSUploader(); // ✅ GCS 업로더 인스턴스
+  final _uploader = GCSUploader();
+
   Future<bool> _transferData({
     required PlateType fromType,
     required PlateType toType,
     required String plateNumber,
     required String area,
     required String location,
+    required String division,
     String performedBy = '시스템',
   }) async {
     final documentId = '${plateNumber}_$area';
@@ -56,7 +55,7 @@ class MovementPlate {
         performedBy: selectedBy,
         timestamp: DateTime.now(),
       );
-      await _uploader.uploadLogJson(log.toMap(), plateNumber);
+      await _uploader.uploadLogJson(log.toMap(), plateNumber, division, area);
 
       return true;
     } catch (e) {
@@ -69,7 +68,8 @@ class MovementPlate {
     String plateNumber,
     String area,
     PlateState plateState,
-    String location, {
+    String location,
+    String division, {
     String performedBy = '시스템',
   }) async {
     final success = await _transferData(
@@ -78,6 +78,7 @@ class MovementPlate {
       plateNumber: plateNumber,
       area: area,
       location: location,
+      division: division,
       performedBy: performedBy,
     );
     if (success) await plateState.fetchPlateData();
@@ -87,7 +88,8 @@ class MovementPlate {
     String plateNumber,
     String area,
     PlateState plateState,
-    String location, {
+    String location,
+    String division, {
     String performedBy = '시스템',
   }) async {
     final success = await _transferData(
@@ -96,6 +98,7 @@ class MovementPlate {
       plateNumber: plateNumber,
       area: area,
       location: location,
+      division: division,
       performedBy: performedBy,
     );
     if (success) await plateState.fetchPlateData();
@@ -105,7 +108,8 @@ class MovementPlate {
     String plateNumber,
     String area,
     PlateState plateState,
-    String location, {
+    String location,
+    String division, {
     String performedBy = '시스템',
   }) async {
     final success = await _transferData(
@@ -114,6 +118,7 @@ class MovementPlate {
       plateNumber: plateNumber,
       area: area,
       location: location,
+      division: division,
       performedBy: performedBy,
     );
     if (success) await plateState.fetchPlateData();
@@ -123,7 +128,8 @@ class MovementPlate {
     String plateNumber,
     String area,
     PlateState plateState,
-    String location, {
+    String location,
+    String division, {
     String performedBy = '시스템',
   }) async {
     final success = await _transferData(
@@ -132,6 +138,7 @@ class MovementPlate {
       plateNumber: plateNumber,
       area: area,
       location: location,
+      division: division,
       performedBy: performedBy,
     );
     if (success) await plateState.fetchPlateData();
@@ -142,6 +149,7 @@ class MovementPlate {
     required String plateNumber,
     required String area,
     required PlateState plateState,
+    required String division,
     String newLocation = "미지정",
     String performedBy = '시스템',
   }) async {
@@ -175,7 +183,7 @@ class MovementPlate {
         performedBy: performedBy,
         timestamp: DateTime.now(),
       );
-      await _uploader.uploadLogJson(log.toMap(), plateNumber);
+      await _uploader.uploadLogJson(log.toMap(), plateNumber, division, area);
     } catch (e) {
       debugPrint("🚨 복원 오류: $e");
     }
@@ -185,7 +193,8 @@ class MovementPlate {
     String plateNumber,
     String area,
     PlateState plateState,
-    String location, {
+    String location,
+    String division, {
     String performedBy = '시스템',
   }) async {
     final success = await _transferData(
@@ -194,6 +203,7 @@ class MovementPlate {
       plateNumber: plateNumber,
       area: area,
       location: location,
+      division: division,
       performedBy: performedBy,
     );
     if (success) {
@@ -204,9 +214,10 @@ class MovementPlate {
   }
 
   Future<void> setDepartureCompletedWithPlate(
-      PlateModel plate,
-      PlateState plateState,
-      ) async {
+    PlateModel plate,
+    PlateState plateState,
+    String division,
+  ) async {
     final documentId = '${plate.plateNumber}_${plate.area}';
 
     try {
@@ -233,17 +244,18 @@ class MovementPlate {
         performedBy: plate.userName,
         timestamp: DateTime.now(),
       );
-      await _uploader.uploadLogJson(log.toMap(), plate.plateNumber);
+      await _uploader.uploadLogJson(log.toMap(), plate.plateNumber, division, plate.area);
     } catch (e) {
-      debugPrint('🚨 출차 완료 이동 실패: \$e');
+      debugPrint('🚨 출차 완료 이동 실패: $e');
       rethrow;
     }
   }
 
   Future<void> doubleParkingCompletedToDepartureCompletedWithPlate(
-      PlateModel plate,
-      PlateState plateState,
-      ) async {
+    PlateModel plate,
+    PlateState plateState,
+    String division,
+  ) async {
     final documentId = '${plate.plateNumber}_${plate.area}';
 
     try {
@@ -270,13 +282,12 @@ class MovementPlate {
         performedBy: plate.userName,
         timestamp: DateTime.now(),
       );
-      await _uploader.uploadLogJson(log.toMap(), plate.plateNumber);
+      await _uploader.uploadLogJson(log.toMap(), plate.plateNumber, division, plate.area);
     } catch (e) {
-      debugPrint('🚨 출차 완료 이동 실패: \$e');
+      debugPrint('🚨 출차 완료 이동 실패: $e');
       rethrow;
     }
   }
-
 
   Future<void> updatePlateStatus({
     required PlateType fromType,
@@ -285,6 +296,7 @@ class MovementPlate {
     required String area,
     required PlateState plateState,
     required String location,
+    required String division,
     String performedBy = '시스템',
   }) async {
     final success = await _transferData(
@@ -293,6 +305,7 @@ class MovementPlate {
       plateNumber: plateNumber,
       area: area,
       location: location,
+      division: division,
       performedBy: performedBy,
     );
     if (success) await plateState.fetchPlateData();
