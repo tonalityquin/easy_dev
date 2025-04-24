@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../repositories/plate/plate_repository.dart';
@@ -12,11 +11,11 @@ import '../../utils/gcs_uploader.dart';
 import '../../widgets/container/plate_container.dart';
 import '../../widgets/dialog/departure_completed_status_dialog.dart';
 import '../../widgets/dialog/plate_search_dialog.dart';
-import '../../widgets/dialog/adjustment_completed_confirm_dialog.dart';
 import '../../widgets/navigation/top_navigation.dart';
 import '../../utils/snackbar_helper.dart';
 import '../mini_calendars/field_calendar.dart';
 import '../../enums/plate_type.dart';
+import 'departure_completed_pages/departure_completed_page_merge_log.dart';
 
 class DepartureCompletedPage extends StatefulWidget {
   const DepartureCompletedPage({super.key});
@@ -27,20 +26,16 @@ class DepartureCompletedPage extends StatefulWidget {
 
 class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
   final bool _isSorted = true;
-  final bool _isLoading = false;
   bool _isSearchMode = false;
   bool _hasCalendarBeenReset = false;
+  bool _showMergedLog = false;
 
   void _showSearchDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) {
-        return PlateSearchDialog(
-          onSearch: (query) {
-            _filterPlatesByNumber(context, query);
-          },
-        );
-      },
+      builder: (context) => PlateSearchDialog(
+        onSearch: (query) => _filterPlatesByNumber(context, query),
+      ),
     );
   }
 
@@ -60,18 +55,6 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
     });
   }
 
-  Future<void> _deleteAllData(BuildContext context) async {
-    final plateRepository = Provider.of<PlateRepository>(context, listen: false);
-    try {
-      await plateRepository.deleteAllData();
-      if (!context.mounted) return;
-      showSuccessSnackbar(context, '모든 문서가 삭제되었습니다. 컬렉션은 유지됩니다.');
-    } catch (e) {
-      if (!context.mounted) return;
-      showFailedSnackbar(context, '문서 삭제 실패: $e');
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final plateState = context.read<PlateState>();
@@ -80,301 +63,208 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
 
     final division = areaState.currentDivision;
     final area = areaState.currentArea.trim();
+    final selectedDateRaw = context.watch<FieldSelectedDateState>().selectedDate ?? DateTime.now();
+    final selectedDate = DateTime(selectedDateRaw.year, selectedDateRaw.month, selectedDateRaw.day);
 
-    return PopScope(
-      canPop: false,
-      onPopInvoked: (didPop) async {
-        final selectedPlate = plateState.getSelectedPlate(PlateType.departureCompleted, userName);
-        if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
-          await plateState.toggleIsSelected(
-            collection: PlateType.departureCompleted,
-            plateNumber: selectedPlate.plateNumber,
-            userName: userName,
-            onError: (msg) => debugPrint(msg),
-          );
-        }
-      },
-      child: Scaffold(
-        appBar: const TopNavigation(),
-        body: Consumer3<PlateState, AreaState, FieldSelectedDateState>(
-          builder: (context, plateState, areaState, selectedDateState, child) {
-            final selectedDateRaw = selectedDateState.selectedDate ?? DateTime.now();
-            final selectedDate = DateTime(
-              selectedDateRaw.year,
-              selectedDateRaw.month,
-              selectedDateRaw.day,
-            );
+    final firestorePlates = context
+        .watch<PlateState>()
+        .getPlatesByCollection(PlateType.departureCompleted, selectedDate: selectedDate)
+        .where((p) => !p.isLockedFee && p.area.trim() == area)
+        .toList();
 
-            final firestorePlates = plateState
-                .getPlatesByCollection(PlateType.departureCompleted, selectedDate: selectedDate)
-                .where((p) => !p.isLockedFee && p.area.trim() == area)
-                .toList();
+    firestorePlates
+        .sort((a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime));
 
-            firestorePlates.sort(
-                (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime));
-
-            return FutureBuilder<List<Map<String, dynamic>>>(
-              future: GCSUploader().fetchMergedLogsForArea(
-                division,
-                area,
-                filterDate: selectedDate, // ✅ selectedDate를 여기서 안전하게 사용
+    return Scaffold(
+      appBar: const TopNavigation(),
+      body: Stack(
+        children: [
+          ListView(
+            padding: const EdgeInsets.all(8.0),
+            children: [
+              PlateContainer(
+                data: firestorePlates,
+                collection: PlateType.departureCompleted,
+                filterCondition: (_) => true,
+                onPlateTap: (plateNumber, area) {
+                  plateState.toggleIsSelected(
+                    collection: PlateType.departureCompleted,
+                    plateNumber: plateNumber,
+                    userName: userName,
+                    onError: (msg) => showFailedSnackbar(context, msg),
+                  );
+                },
               ),
+            ],
+          ),
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 300),
+            bottom: _showMergedLog ? 0 : -600,
+            left: 0,
+            right: 0,
+            height: 400,
+            child: Container(
+              color: Colors.white,
+              child: FutureBuilder<List<Map<String, dynamic>>>(
+                future: GCSUploader().fetchMergedLogsForArea(division, area, filterDate: selectedDate),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (snapshot.hasError) {
+                    return const Center(child: Text("병합 로그 로딩 실패"));
+                  }
 
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+                  final mergedLogs = snapshot.data ?? [];
 
-                if (snapshot.hasError) {
-                  debugPrint('🚨 병합 로그 로딩 오류: ${snapshot.error}');
-                  return const Center(child: Text('병합 로그를 불러오는 중 오류가 발생했습니다.'));
-                }
-
-                final mergedLogs = snapshot.data ?? [];
-                debugPrint('📦 병합 로그 개수: ${mergedLogs.length}');
-
-                return _isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : ListView(
+                  return Column(
+                    children: [
+                      Padding(
                         padding: const EdgeInsets.all(8.0),
-                        children: [
-                          PlateContainer(
-                            data: firestorePlates,
-                            collection: PlateType.departureCompleted,
-                            filterCondition: (_) => true,
-                            onPlateTap: (plateNumber, area) {
-                              plateState.toggleIsSelected(
-                                collection: PlateType.departureCompleted,
-                                plateNumber: plateNumber,
-                                userName: userName,
-                                onError: (errorMessage) {
-                                  showFailedSnackbar(context, errorMessage);
-                                },
-                              );
-                            },
-                          ),
-                          const SizedBox(height: 16),
-                          const Divider(),
-                          const Text(
-                            '🔒 병합 로그 항목',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                          ),
-                          if (mergedLogs.isEmpty)
-                            const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 16),
-                              child: Center(child: Text('병합 로그가 없습니다.')),
-                            ),
-                          ...mergedLogs.map((log) {
-                            final plate = log['plateNumber'] ?? 'Unknown';
-                            final logs = log['logs'] ?? [];
-
-                            return ListTile(
-                              title: Text(plate),
-                              subtitle: Text('로그 ${logs.length}개'),
-                              trailing: ElevatedButton(
-                                onPressed: () {
-                                  showDialog(
-                                    context: context,
-                                    builder: (_) {
-                                      return AlertDialog(
-                                        title: Text('$plate 로그'),
-                                        content: SizedBox(
-                                          width: double.maxFinite,
-                                          child: SingleChildScrollView(
-                                            child: Text(
-                                              const JsonEncoder.withIndent('  ').convert(logs),
-                                              style: const TextStyle(fontSize: 12),
-                                            ),
-                                          ),
-                                        ),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () => Navigator.pop(context),
-                                            child: const Text('닫기'),
-                                          ),
-                                        ],
-                                      );
-                                    },
-                                  );
-                                },
-                                child: const Text('전체 로그 보기'),
-                              ),
-                            );
-                          }),
-                        ],
-                      );
-              },
-            );
-          },
-        ),
-        bottomNavigationBar: Consumer<PlateState>(
-          builder: (context, plateState, child) {
-            final selectedPlate = plateState.getSelectedPlate(PlateType.departureCompleted, userName);
-            final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
-            final selectedDate = context.watch<FieldSelectedDateState>().selectedDate ?? DateTime.now(); // ← null 대비
-            final formattedDate =
-                '${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}';
-
-            return BottomNavigationBar(
-              items: [
-                BottomNavigationBarItem(
-                  icon: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 300),
-                    transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
-                    child: isPlateSelected
-                        ? (selectedPlate.isLockedFee
-                            ? const Icon(Icons.lock_open, key: ValueKey('unlock'), color: Colors.grey)
-                            : const Icon(Icons.lock, key: ValueKey('lock'), color: Colors.grey))
-                        : Icon(
-                            _isSearchMode ? Icons.cancel : Icons.search,
-                            key: ValueKey(_isSearchMode),
-                            color: _isSearchMode ? Colors.orange : Colors.grey,
-                          ),
-                  ),
-                  label: isPlateSelected
-                      ? (selectedPlate.isLockedFee ? '정산 취소' : '사전 정산')
-                      : (_isSearchMode ? '검색 초기화' : '번호판 검색'),
-                ),
-                BottomNavigationBarItem(
-                  icon: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 300),
-                    transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
-                    child: isPlateSelected
-                        ? const Icon(
-                            Icons.check_circle,
-                            key: ValueKey('selected'),
-                            color: Colors.green,
-                          )
-                        : const Icon(
-                            Icons.delete_forever,
-                            key: ValueKey('delete'),
-                            color: Colors.redAccent,
-                          ),
-                  ),
-                  label: isPlateSelected ? '요금 정산' : '전체 삭제',
-                ),
-                BottomNavigationBarItem(
-                  icon: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 300),
-                    transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
-                    child: isPlateSelected
-                        ? const Icon(Icons.settings, key: ValueKey('setting'))
-                        : const Icon(Icons.calendar_today, key: ValueKey('calendar'), color: Colors.grey),
-                  ),
-                  label: isPlateSelected ? '상태 수정' : formattedDate,
-                ),
-              ],
-              onTap: (index) async {
-                if (index == 0) {
-                  if (isPlateSelected) {
-                    final now = DateTime.now();
-                    final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
-                    final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
-
-                    if (selectedPlate.isLockedFee) {
-                      // ❌ 정산 취소 불가능 (departure_completed는 정산 완료 상태로 간주)
-                      showFailedSnackbar(context, '정산 완료된 항목은 취소할 수 없습니다.');
-                      return;
-                    }
-
-                    // ✅ 사전 정산 수행
-                    final lockedFee = calculateParkingFee(
-                      entryTimeInSeconds: entryTime,
-                      currentTimeInSeconds: currentTime,
-                      basicStandard: selectedPlate.basicStandard ?? 0,
-                      basicAmount: selectedPlate.basicAmount ?? 0,
-                      addStandard: selectedPlate.addStandard ?? 0,
-                      addAmount: selectedPlate.addAmount ?? 0,
-                    ).round();
-
-                    final updatedPlate = selectedPlate.copyWith(
-                      isLockedFee: true,
-                      lockedAtTimeInSeconds: currentTime,
-                      lockedFeeAmount: lockedFee,
-                    );
-
-                    await context.read<PlateRepository>().addOrUpdatePlate(
-                          selectedPlate.id,
-                          updatedPlate,
-                        );
-
-                    if (!context.mounted) return;
-                    await context.read<PlateState>().updatePlateLocally(PlateType.departureCompleted, updatedPlate);
-
-                    if (!context.mounted) return;
-                    showSuccessSnackbar(context, '사전 정산 완료: ₩$lockedFee');
-                  } else {
-                    _isSearchMode ? _resetSearch(context) : _showSearchDialog(context);
-                  }
-                } else if (index == 1) {
-                  if (isPlateSelected) {
-                    showDialog(
-                      context: context,
-                      builder: (context) => AdjustmentCompletedConfirmDialog(
-                        onConfirm: () {
-                          showSuccessSnackbar(context, "정산 완료 처리가 실행되었습니다."); // 이후 실제 처리 로직 연결
-                        },
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                        ),
                       ),
-                    );
-                  } else {
-                    final confirm = await showDialog<bool>(
-                      context: context,
-                      builder: (BuildContext context) {
-                        return AlertDialog(
-                          title: const Text('모든 데이터 삭제'),
-                          content: const Text('정말로 모든 데이터를 삭제하시겠습니까?'),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(false),
-                              child: const Text('취소'),
-                            ),
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(true),
-                              child: const Text('확인'),
-                            ),
-                          ],
-                        );
-                      },
-                    );
-                    if (confirm == true) {
-                      if (!context.mounted) return;
-                      await _deleteAllData(context);
-                    }
-                  }
-                } else if (index == 2) {
-                  if (isPlateSelected) {
-                    showDialog(
-                      context: context,
-                      builder: (context) => DepartureCompletedStatusDialog(
-                        plate: selectedPlate,
-                        plateNumber: selectedPlate.plateNumber,
-                        area: selectedPlate.area,
-                        onDelete: () {},
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: MergedLogSection(mergedLogs: mergedLogs),
+                        ),
                       ),
-                    );
-                  } else {
-                    if (!_hasCalendarBeenReset) {
-                      // ✅ 첫 클릭: 오늘 날짜로 리셋만 함
-                      context.read<FieldSelectedDateState>().setSelectedDate(DateTime.now());
-                      setState(() {
-                        _hasCalendarBeenReset = true;
-                      });
-                    } else {
-                      // ✅ 두 번째 클릭: 달력 페이지 이동
-                      setState(() {
-                        _hasCalendarBeenReset = false; // 초기화
-                      });
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const FieldCalendarPage()),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: Consumer<PlateState>(
+        builder: (context, plateState, child) {
+          final selectedPlate = plateState.getSelectedPlate(PlateType.departureCompleted, userName);
+          final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
+          final selectedDate = context.watch<FieldSelectedDateState>().selectedDate ?? DateTime.now();
+          final formattedDate =
+              '${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}';
+
+          return BottomNavigationBar(
+            items: [
+              BottomNavigationBarItem(
+                icon: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+                  child: isPlateSelected
+                      ? (selectedPlate.isLockedFee
+                          ? const Icon(Icons.lock_open, key: ValueKey('unlock'), color: Colors.grey)
+                          : const Icon(Icons.lock, key: ValueKey('lock'), color: Colors.grey))
+                      : Icon(
+                          _isSearchMode ? Icons.cancel : Icons.search,
+                          key: ValueKey(_isSearchMode),
+                          color: _isSearchMode ? Colors.orange : Colors.grey,
+                        ),
+                ),
+                label: isPlateSelected
+                    ? (selectedPlate.isLockedFee ? '정산 취소' : '사전 정산')
+                    : (_isSearchMode ? '검색 초기화' : '번호판 검색'),
+              ),
+              BottomNavigationBarItem(
+                icon: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+                  child: Icon(
+                    _showMergedLog ? Icons.expand_more : Icons.list_alt,
+                    key: ValueKey(_showMergedLog),
+                    color: Colors.grey,
+                  ),
+                ),
+                label: _showMergedLog ? '감추기' : '병합 로그',
+              ),
+              BottomNavigationBarItem(
+                icon: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+                  child: isPlateSelected
+                      ? const Icon(Icons.settings, key: ValueKey('setting'))
+                      : const Icon(Icons.calendar_today, key: ValueKey('calendar'), color: Colors.grey),
+                ),
+                label: isPlateSelected ? '상태 수정' : formattedDate,
+              ),
+            ],
+            onTap: (index) async {
+              if (index == 0) {
+                if (isPlateSelected) {
+                  final now = DateTime.now();
+                  final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
+                  final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
+
+                  if (selectedPlate.isLockedFee) {
+                    showFailedSnackbar(context, '정산 완료된 항목은 취소할 수 없습니다.');
+                    return;
+                  }
+
+                  final lockedFee = calculateParkingFee(
+                    entryTimeInSeconds: entryTime,
+                    currentTimeInSeconds: currentTime,
+                    basicStandard: selectedPlate.basicStandard ?? 0,
+                    basicAmount: selectedPlate.basicAmount ?? 0,
+                    addStandard: selectedPlate.addStandard ?? 0,
+                    addAmount: selectedPlate.addAmount ?? 0,
+                  ).round();
+
+                  final updatedPlate = selectedPlate.copyWith(
+                    isLockedFee: true,
+                    lockedAtTimeInSeconds: currentTime,
+                    lockedFeeAmount: lockedFee,
+                  );
+
+                  await context.read<PlateRepository>().addOrUpdatePlate(
+                        selectedPlate.id,
+                        updatedPlate,
                       );
-                    }
+
+                  if (!context.mounted) return;
+                  await context.read<PlateState>().updatePlateLocally(PlateType.departureCompleted, updatedPlate);
+
+                  if (!context.mounted) return;
+                  showSuccessSnackbar(context, '사전 정산 완료: ₩$lockedFee');
+                } else {
+                  _isSearchMode ? _resetSearch(context) : _showSearchDialog(context);
+                }
+              } else if (index == 1) {
+                // 🔁 병합 로그 toggle
+                setState(() {
+                  _showMergedLog = !_showMergedLog;
+                });
+              } else if (index == 2) {
+                if (isPlateSelected) {
+                  showDialog(
+                    context: context,
+                    builder: (context) => DepartureCompletedStatusDialog(
+                      plate: selectedPlate,
+                      plateNumber: selectedPlate.plateNumber,
+                      area: selectedPlate.area,
+                      onDelete: () {},
+                    ),
+                  );
+                } else {
+                  if (!_hasCalendarBeenReset) {
+                    context.read<FieldSelectedDateState>().setSelectedDate(DateTime.now());
+                    setState(() {
+                      _hasCalendarBeenReset = true;
+                    });
+                  } else {
+                    setState(() {
+                      _hasCalendarBeenReset = false;
+                    });
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const FieldCalendarPage()),
+                    );
                   }
                 }
-              },
-            );
-          },
-        ),
+              }
+            },
+          );
+        },
       ),
     );
   }
