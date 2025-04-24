@@ -226,7 +226,11 @@ class GCSUploader {
     }
   }
 
-  Future<List<Map<String, dynamic>>> fetchMergedLogsForArea(String division, String area) async {
+  Future<List<Map<String, dynamic>>> fetchMergedLogsForArea(
+    String division,
+    String area, {
+    DateTime? filterDate, // 🔍 선택적 인자 추가
+  }) async {
     final prefix = '$division/$area/logs/merged_';
     final credentialsJson = await rootBundle.loadString(serviceAccountPath);
     final accountCredentials = ServiceAccountCredentials.fromJson(credentialsJson);
@@ -238,11 +242,26 @@ class GCSUploader {
 
     for (final obj in result.items ?? []) {
       if (obj.name != null && obj.name!.endsWith('.json')) {
-        final media =
-            await storage.objects.get(bucketName, obj.name!, downloadOptions: DownloadOptions.fullMedia) as Media;
+        final media = await storage.objects.get(
+          bucketName,
+          obj.name!,
+          downloadOptions: DownloadOptions.fullMedia,
+        ) as Media;
+
         final bytes = await media.stream.expand((e) => e).toList();
         final content = utf8.decode(bytes);
         final decoded = jsonDecode(content);
+
+        // 🔽 날짜 필터가 있을 경우 적용
+        if (filterDate != null && decoded['mergedAt'] != null && DateTime.tryParse(decoded['mergedAt']) != null) {
+          final mergedAt = DateTime.parse(decoded['mergedAt']);
+          if (!(mergedAt.year == filterDate.year &&
+              mergedAt.month == filterDate.month &&
+              mergedAt.day == filterDate.day)) {
+            continue; // 날짜가 일치하지 않으면 스킵
+          }
+        }
+
         logs.add(decoded);
       }
     }

@@ -81,9 +81,6 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
     final division = areaState.currentDivision;
     final area = areaState.currentArea.trim();
 
-    final logsFuture = GCSUploader().fetchMergedLogsForArea(division, area);
-    debugPrint("📦 병합 로그 호출: $division/$area");
-
     return PopScope(
       canPop: false,
       onPopInvoked: (didPop) async {
@@ -113,12 +110,16 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                 .where((p) => !p.isLockedFee && p.area.trim() == area)
                 .toList();
 
-            firestorePlates.sort((a, b) => _isSorted
-                ? b.requestTime.compareTo(a.requestTime)
-                : a.requestTime.compareTo(b.requestTime));
+            firestorePlates.sort(
+                (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime));
 
             return FutureBuilder<List<Map<String, dynamic>>>(
-              future: logsFuture,
+              future: GCSUploader().fetchMergedLogsForArea(
+                division,
+                area,
+                filterDate: selectedDate, // ✅ selectedDate를 여기서 안전하게 사용
+              ),
+
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -135,73 +136,73 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                 return _isLoading
                     ? const Center(child: CircularProgressIndicator())
                     : ListView(
-                  padding: const EdgeInsets.all(8.0),
-                  children: [
-                    PlateContainer(
-                      data: firestorePlates,
-                      collection: PlateType.departureCompleted,
-                      filterCondition: (_) => true,
-                      onPlateTap: (plateNumber, area) {
-                        plateState.toggleIsSelected(
-                          collection: PlateType.departureCompleted,
-                          plateNumber: plateNumber,
-                          userName: userName,
-                          onError: (errorMessage) {
-                            showFailedSnackbar(context, errorMessage);
-                          },
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    const Divider(),
-                    const Text(
-                      '🔒 병합 로그 항목',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                    if (mergedLogs.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                        child: Center(child: Text('병합 로그가 없습니다.')),
-                      ),
-                    ...mergedLogs.map((log) {
-                      final plate = log['plateNumber'] ?? 'Unknown';
-                      final logs = log['logs'] ?? [];
+                        padding: const EdgeInsets.all(8.0),
+                        children: [
+                          PlateContainer(
+                            data: firestorePlates,
+                            collection: PlateType.departureCompleted,
+                            filterCondition: (_) => true,
+                            onPlateTap: (plateNumber, area) {
+                              plateState.toggleIsSelected(
+                                collection: PlateType.departureCompleted,
+                                plateNumber: plateNumber,
+                                userName: userName,
+                                onError: (errorMessage) {
+                                  showFailedSnackbar(context, errorMessage);
+                                },
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          const Divider(),
+                          const Text(
+                            '🔒 병합 로그 항목',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          ),
+                          if (mergedLogs.isEmpty)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 16),
+                              child: Center(child: Text('병합 로그가 없습니다.')),
+                            ),
+                          ...mergedLogs.map((log) {
+                            final plate = log['plateNumber'] ?? 'Unknown';
+                            final logs = log['logs'] ?? [];
 
-                      return ListTile(
-                        title: Text(plate),
-                        subtitle: Text('로그 ${logs.length}개'),
-                        trailing: ElevatedButton(
-                          onPressed: () {
-                            showDialog(
-                              context: context,
-                              builder: (_) {
-                                return AlertDialog(
-                                  title: Text('$plate 로그'),
-                                  content: SizedBox(
-                                    width: double.maxFinite,
-                                    child: SingleChildScrollView(
-                                      child: Text(
-                                        const JsonEncoder.withIndent('  ').convert(logs),
-                                        style: const TextStyle(fontSize: 12),
-                                      ),
-                                    ),
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(context),
-                                      child: const Text('닫기'),
-                                    ),
-                                  ],
-                                );
-                              },
+                            return ListTile(
+                              title: Text(plate),
+                              subtitle: Text('로그 ${logs.length}개'),
+                              trailing: ElevatedButton(
+                                onPressed: () {
+                                  showDialog(
+                                    context: context,
+                                    builder: (_) {
+                                      return AlertDialog(
+                                        title: Text('$plate 로그'),
+                                        content: SizedBox(
+                                          width: double.maxFinite,
+                                          child: SingleChildScrollView(
+                                            child: Text(
+                                              const JsonEncoder.withIndent('  ').convert(logs),
+                                              style: const TextStyle(fontSize: 12),
+                                            ),
+                                          ),
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(context),
+                                            child: const Text('닫기'),
+                                          ),
+                                        ],
+                                      );
+                                    },
+                                  );
+                                },
+                                child: const Text('전체 로그 보기'),
+                              ),
                             );
-                          },
-                          child: const Text('전체 로그 보기'),
-                        ),
+                          }),
+                        ],
                       );
-                    }),
-                  ],
-                );
               },
             );
           },
