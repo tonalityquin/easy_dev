@@ -143,7 +143,6 @@ class _ScaleTransitionDialogState extends State<ScaleTransitionDialog> with Sing
 void handleEntryParkingRequest(BuildContext context, String plateNumber, String area) {
   final movementPlate = context.read<MovementPlate>();
   final plateState = context.read<PlateState>();
-  final userState = context.read<UserState>();
 
   movementPlate.goBackToParkingRequest(
     fromType: PlateType.parkingCompleted,
@@ -151,6 +150,5 @@ void handleEntryParkingRequest(BuildContext context, String plateNumber, String 
     area: area,
     plateState: plateState,
     newLocation: "미지정",
-    division: userState.division, // ✅ division 인자 추가
   );
 }

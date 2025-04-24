@@ -76,6 +76,7 @@ class InputPlate with ChangeNotifier {
         PlateLogModel(
           plateNumber: plateNumber,
           area: areaState.currentArea,
+          division: areaState.currentDivision, // ✅ 추가된 필수 인자
           from: '-',
           to: plateType.label,
           action: plateType.label,

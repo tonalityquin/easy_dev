@@ -4,7 +4,6 @@ import '../../models/plate_model.dart';
 import '../../screens/modify_pages/modify_3_digit.dart';
 import '../../states/plate/movement_plate.dart';
 import '../../states/plate/plate_state.dart';
-import '../../states/user/user_state.dart';
 import '../../utils/snackbar_helper.dart';
 import '../../enums/plate_type.dart';
 
@@ -118,14 +117,12 @@ class _ScaleTransitionDialogState extends State<ScaleTransitionDialog> with Sing
 void handlePrePayment(BuildContext context, String plateNumber, String area, String location) {
   final movementPlate = context.read<MovementPlate>();
   final plateState = context.read<PlateState>();
-  final userState = context.read<UserState>();
 
   movementPlate.setDepartureRequested(
     plateNumber,
     area,
     plateState,
     location,
-    userState.division, // ✅ division 전달
   );
 
 

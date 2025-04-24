@@ -90,6 +90,7 @@ final List<SingleChildWidget> stateProviders = [
   Provider(
     create: (context) => MovementPlate(
       context.read<PlateRepository>(),
+      context.read<AreaState>(), // ✅ areaState 추가
     ),
   ),
 

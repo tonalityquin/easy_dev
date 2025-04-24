@@ -167,7 +167,6 @@ class _ScaleTransitionDialogState extends State<ScaleTransitionDialog> with Sing
 void handleEntryParkingRequest(BuildContext context, String plateNumber, String area) {
   final movementPlate = context.read<MovementPlate>();
   final plateState = context.read<PlateState>();
-  final userState = context.read<UserState>();
 
   movementPlate.goBackToParkingRequest(
     fromType: PlateType.parkingCompleted,
@@ -176,7 +175,6 @@ void handleEntryParkingRequest(BuildContext context, String plateNumber, String 
     area: area,
     plateState: plateState,
     newLocation: "미지정",
-    division: userState.division,
   );
 }
 
@@ -223,12 +221,9 @@ void handleEntryDepartureCompleted(BuildContext context, PlateModel plate) async
   }
 
   try {
-    final userState = context.read<UserState>();
-
     await movementPlate.doubleParkingCompletedToDepartureCompletedWithPlate(
       updatedPlate,
       plateState,
-      userState.division, // ✅ division 전달
     );
   } catch (e) {
     debugPrint("출차 완료 실패: $e");
@@ -238,14 +233,12 @@ void handleEntryDepartureCompleted(BuildContext context, PlateModel plate) async
 void handlePrePayment(BuildContext context, String plateNumber, String area, String location) {
   final movementPlate = context.read<MovementPlate>();
   final plateState = context.read<PlateState>();
-  final userState = context.read<UserState>();
 
   movementPlate.setDepartureRequested(
     plateNumber,
     area,
     plateState,
     location,
-    userState.division, // ✅ division 전달
   );
 }
 

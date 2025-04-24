@@ -10,7 +10,7 @@ class LogPlateState with ChangeNotifier {
       final logMap = log.toMap();
       final plateNumber = log.plateNumber;
 
-      // ✅ division, area 함께 전달
+      // ✅ 명확하게 매개변수 값 사용
       await _uploader.uploadLogJson(logMap, plateNumber, division, area);
       debugPrint("✅ 로그가 GCS에 저장되었습니다.");
     } catch (e) {

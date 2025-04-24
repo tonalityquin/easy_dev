@@ -56,7 +56,6 @@ class ParkingRequestService {
         selectedPlate.area,
         plateState,
         location,
-        userState.division, // ✅ division 인자 추가
       );
 
       if (!context.mounted) return;

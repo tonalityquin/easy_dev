@@ -114,7 +114,6 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
           selectedPlate.area,
           plateState,
           selectedPlate.location,
-          userState.division, // ✅ division 전달
         )
             .then((_) {
           Future.delayed(const Duration(milliseconds: 300), () {
@@ -136,7 +135,6 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
   void handleEntryRequest(BuildContext context, String plateNumber, String area) {
     final movementPlate = context.read<MovementPlate>();
     final plateState = context.read<PlateState>();
-    final userState = context.read<UserState>();
 
     movementPlate.goBackToParkingRequest(
       fromType: PlateType.parkingCompleted,
@@ -144,7 +142,6 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
       area: area,
       newLocation: "미지정",
       plateState: plateState,
-      division: userState.division, // ✅ division 추가
     );
 
     showSuccessSnackbar(context, "입차 요청이 완료되었습니다.");

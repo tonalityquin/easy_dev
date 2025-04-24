@@ -105,7 +105,6 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
     final movementPlate = context.read<MovementPlate>();
     final plateState = context.read<PlateState>();
     final userState = context.read<UserState>();
-    final division = context.read<AreaState>().currentDivision;
     final userName = userState.name;
     final selectedPlate = plateState.getSelectedPlate(PlateType.departureRequests, userName);
 
@@ -159,7 +158,6 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
       await movementPlate.setDepartureCompletedWithPlate(
         updatedPlate,
         plateState,
-        division,
       );
 
       if (!context.mounted) return;

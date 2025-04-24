@@ -163,7 +163,6 @@ class _ScaleTransitionDialogState extends State<ScaleTransitionDialog> with Sing
 void handleEntryParkingRequest(BuildContext context, String plateNumber, String area) {
   final movementPlate = context.read<MovementPlate>();
   final plateState = context.read<PlateState>();
-  final userState = context.read<UserState>();
 
   movementPlate.goBackToParkingRequest(
     fromType: PlateType.departureRequests,
@@ -171,7 +170,6 @@ void handleEntryParkingRequest(BuildContext context, String plateNumber, String 
     area: area,
     plateState: plateState,
     newLocation: "미지정",
-    division: userState.division, // ✅ division 추가
   );
 
   showSuccessSnackbar(context, "입차 요청이 처리되었습니다.");
@@ -180,14 +178,12 @@ void handleEntryParkingRequest(BuildContext context, String plateNumber, String 
 void handleEntryParkingCompleted(BuildContext context, String plateNumber, String area, String location) {
   final movementPlate = context.read<MovementPlate>();
   final plateState = context.read<PlateState>();
-  final userState = context.read<UserState>();
 
   movementPlate.moveDepartureToParkingCompleted(
     plateNumber,
     area,
     plateState,
     location,
-    userState.division, // ✅ division 추가
   );
 
   showSuccessSnackbar(context, "입차 완료가 처리되었습니다.");
@@ -196,14 +192,12 @@ void handleEntryParkingCompleted(BuildContext context, String plateNumber, Strin
 void handlePrePayment(BuildContext context, String plateNumber, String area, String location) {
   final movementPlate = context.read<MovementPlate>();
   final plateState = context.read<PlateState>();
-  final userState = context.read<UserState>();
 
   movementPlate.setDepartureRequested(
     plateNumber,
     area,
     plateState,
     location,
-    userState.division, // ✅ division 추가
   );
 
   showSuccessSnackbar(context, "사전 정산이 처리되었습니다.");
