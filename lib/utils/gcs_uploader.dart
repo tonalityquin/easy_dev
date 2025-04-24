@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'dart:convert'; // ✅ jsonEncode 사용
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:googleapis_auth/auth_io.dart';
@@ -10,17 +10,14 @@ class GCSUploader {
   final String projectId = 'easydev-97fb6';
   final String serviceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
 
-  /// ✅ input_3_digit.dart 전용 업로드
   Future<String?> uploadImageFromInput(File imageFile, String destinationPath) async {
     return await _upload(imageFile, destinationPath);
   }
 
-  /// ✅ modify_plate_info.dart 전용 업로드
   Future<String?> uploadImageFromModify(File imageFile, String destinationPath) async {
     return await _upload(imageFile, destinationPath);
   }
 
-  /// 🔁 내부 공통 업로드 처리 로직
   Future<String?> _upload(File file, String destinationPath) async {
     try {
       final credentialsJson = await rootBundle.loadString(serviceAccountPath);
@@ -52,7 +49,6 @@ class GCSUploader {
     }
   }
 
-  /// ✅ 일반 JSON 데이터 업로드 (사용자 지정 경로)
   Future<String?> uploadJsonData(Map<String, dynamic> jsonData, String destinationPath) async {
     try {
       final credentialsJson = await rootBundle.loadString(serviceAccountPath);
@@ -88,21 +84,79 @@ class GCSUploader {
     }
   }
 
-  /// ✅ 로그 저장 전용 업로드 (plateNumber 기준 + 지역 기반 폴더 구조)
   Future<String?> uploadLogJson(
-      Map<String, dynamic> logData,
-      String plateNumber,
-      String division,
-      String area,
-      ) async {
+    Map<String, dynamic> logData,
+    String plateNumber,
+    String division,
+    String area,
+  ) async {
     final now = DateTime.now();
-    final timestamp = '${now.year}${_two(now.month)}${_two(now.day)}_${_two(now.hour)}${_two(now.minute)}${_two(now.second)}';
+    final timestamp =
+        '${now.year}${_two(now.month)}${_two(now.day)}_${_two(now.hour)}${_two(now.minute)}${_two(now.second)}';
     final safePlate = plateNumber.replaceAll(RegExp(r'\s'), '');
 
-    // ✅ division/area/logs/ 하위 경로로 로그 저장
     final fileName = '$division/$area/logs/${timestamp}_$safePlate.json';
 
     return await uploadJsonData(logData, fileName);
+  }
+
+  Future<void> mergeAndReplaceLogs(String plateNumber, String division, String area) async {
+    final prefix = '$division/$area/logs/';
+    final credentialsJson = await rootBundle.loadString(serviceAccountPath);
+    final accountCredentials = ServiceAccountCredentials.fromJson(credentialsJson);
+    final scopes = [StorageApi.devstorageFullControlScope];
+    final client = await clientViaServiceAccount(accountCredentials, scopes);
+    final storage = StorageApi(client);
+
+    final allObjects = await storage.objects.list(bucketName, prefix: prefix);
+    final matchingObjects = allObjects.items
+            ?.where((o) => o.name != null && o.name!.contains(plateNumber) && o.name!.endsWith('.json'))
+            .toList() ??
+        [];
+
+    List<Map<String, dynamic>> mergedLogs = [];
+
+    for (final obj in matchingObjects) {
+      try {
+        if (obj.name != null) {
+          final media = await storage.objects.get(
+            bucketName,
+            obj.name!,
+            downloadOptions: DownloadOptions.fullMedia,
+          ) as Media;
+
+          final bytes = await media.stream.expand((e) => e).toList();
+          final content = utf8.decode(bytes);
+          final parsed = jsonDecode(content);
+          mergedLogs.add(parsed);
+        }
+      } catch (e) {
+        debugPrint('⚠️ 로그 파일 파싱 실패: ${obj.name}, $e');
+      }
+    }
+
+    final mergedJson = {
+      'plateNumber': plateNumber,
+      'mergedAt': DateTime.now().toIso8601String(),
+      'logs': mergedLogs,
+    };
+
+    final mergedFileName = '$division/$area/logs/merged_$plateNumber.json';
+    await uploadJsonData(mergedJson, mergedFileName);
+
+    // 기존 로그 파일 삭제
+    for (final obj in matchingObjects) {
+      try {
+        if (obj.name != null) {
+          await storage.objects.delete(bucketName, obj.name!);
+        }
+        debugPrint("🗑️ 삭제 완료: ${obj.name}");
+      } catch (e) {
+        debugPrint("❌ 삭제 실패: ${obj.name}, $e");
+      }
+    }
+
+    client.close();
   }
 
   String _two(int value) => value.toString().padLeft(2, '0');

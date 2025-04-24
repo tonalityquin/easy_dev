@@ -49,7 +49,8 @@ class MovementPlate {
 
       final log = PlateLogModel(
         plateNumber: plateNumber,
-        division: _areaState.currentDivision, // ✅ 수정
+        division: _areaState.currentDivision,
+        // ✅ 수정
         area: area,
         from: fromType.name,
         to: toType.name,
@@ -67,12 +68,12 @@ class MovementPlate {
   }
 
   Future<void> setParkingCompleted(
-      String plateNumber,
-      String area,
-      PlateState plateState,
-      String location, {
-        String performedBy = '시스템',
-      }) async {
+    String plateNumber,
+    String area,
+    PlateState plateState,
+    String location, {
+    String performedBy = '시스템',
+  }) async {
     final success = await _transferData(
       fromType: PlateType.parkingRequests,
       toType: PlateType.parkingCompleted,
@@ -85,12 +86,12 @@ class MovementPlate {
   }
 
   Future<void> setDepartureRequested(
-      String plateNumber,
-      String area,
-      PlateState plateState,
-      String location, {
-        String performedBy = '시스템',
-      }) async {
+    String plateNumber,
+    String area,
+    PlateState plateState,
+    String location, {
+    String performedBy = '시스템',
+  }) async {
     final success = await _transferData(
       fromType: PlateType.parkingCompleted,
       toType: PlateType.departureRequests,
@@ -103,12 +104,12 @@ class MovementPlate {
   }
 
   Future<void> setDepartureCompleted(
-      String plateNumber,
-      String area,
-      PlateState plateState,
-      String location, {
-        String performedBy = '시스템',
-      }) async {
+    String plateNumber,
+    String area,
+    PlateState plateState,
+    String location, {
+    String performedBy = '시스템',
+  }) async {
     final success = await _transferData(
       fromType: PlateType.departureRequests,
       toType: PlateType.departureCompleted,
@@ -121,12 +122,12 @@ class MovementPlate {
   }
 
   Future<void> doubleParkingCompletedToDepartureCompleted(
-      String plateNumber,
-      String area,
-      PlateState plateState,
-      String location, {
-        String performedBy = '시스템',
-      }) async {
+    String plateNumber,
+    String area,
+    PlateState plateState,
+    String location, {
+    String performedBy = '시스템',
+  }) async {
     final success = await _transferData(
       fromType: PlateType.parkingCompleted,
       toType: PlateType.departureCompleted,
@@ -169,7 +170,8 @@ class MovementPlate {
 
       final log = PlateLogModel(
         plateNumber: plateNumber,
-        division: _areaState.currentDivision, // ✅ 수정
+        division: _areaState.currentDivision,
+        // ✅ 수정
         area: area,
         from: fromType.name,
         to: PlateType.parkingRequests.name,
@@ -185,12 +187,12 @@ class MovementPlate {
   }
 
   Future<void> moveDepartureToParkingCompleted(
-      String plateNumber,
-      String area,
-      PlateState plateState,
-      String location, {
-        String performedBy = '시스템',
-      }) async {
+    String plateNumber,
+    String area,
+    PlateState plateState,
+    String location, {
+    String performedBy = '시스템',
+  }) async {
     final success = await _transferData(
       fromType: PlateType.departureRequests,
       toType: PlateType.parkingCompleted,
@@ -207,9 +209,9 @@ class MovementPlate {
   }
 
   Future<void> setDepartureCompletedWithPlate(
-      PlateModel plate,
-      PlateState plateState,
-      ) async {
+    PlateModel plate,
+    PlateState plateState,
+  ) async {
     final documentId = '${plate.plateNumber}_${plate.area}';
 
     try {
@@ -240,6 +242,11 @@ class MovementPlate {
       );
 
       await _uploader.uploadLogJson(log.toMap(), plate.plateNumber, _areaState.currentDivision, plate.area);
+
+      // ✅ 병합 조건: 출차 완료 + 요금 고정됨
+      if (plate.isLockedFee == true) {
+        await _uploader.mergeAndReplaceLogs(plate.plateNumber, _areaState.currentDivision, plate.area);
+      }
     } catch (e) {
       debugPrint('🚨 출차 완료 이동 실패: $e');
       rethrow;
@@ -247,9 +254,9 @@ class MovementPlate {
   }
 
   Future<void> doubleParkingCompletedToDepartureCompletedWithPlate(
-      PlateModel plate,
-      PlateState plateState,
-      ) async {
+    PlateModel plate,
+    PlateState plateState,
+  ) async {
     final documentId = '${plate.plateNumber}_${plate.area}';
 
     try {
@@ -279,6 +286,11 @@ class MovementPlate {
       );
 
       await _uploader.uploadLogJson(log.toMap(), plate.plateNumber, _areaState.currentDivision, plate.area);
+
+      // ✅ 병합 조건: 출차 완료 + 요금 고정됨
+      if (plate.isLockedFee == true) {
+        await _uploader.mergeAndReplaceLogs(plate.plateNumber, _areaState.currentDivision, plate.area);
+      }
     } catch (e) {
       debugPrint('🚨 출차 완료 이동 실패: $e');
       rethrow;

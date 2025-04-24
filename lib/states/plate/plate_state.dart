@@ -4,6 +4,7 @@ import '../../repositories/plate/plate_repository.dart';
 import '../../models/plate_model.dart';
 import '../area/area_state.dart';
 import '../../enums/plate_type.dart';
+import '../../utils/gcs_uploader.dart';
 
 class PlateState extends ChangeNotifier {
   final PlateRepository _repository;
@@ -30,6 +31,8 @@ class PlateState extends ChangeNotifier {
   bool _isLoading = true;
 
   bool get isLoading => _isLoading;
+
+  final Map<String, bool> previousIsLockedFee = {}; // ✅ 추가
 
   void plateCounts() {
     if (_isLoading) {
@@ -73,7 +76,24 @@ class PlateState extends ChangeNotifier {
 
       bool firstDataReceived = false;
 
-      final subscription = stream.listen((filteredData) {
+      final subscription = stream.listen((filteredData) async {
+        if (collection == PlateType.departureCompleted) {
+          for (final plate in filteredData) {
+            final previous = previousIsLockedFee[plate.id];
+
+            if (previous == false && plate.isLockedFee == true) {
+              final uploader = GCSUploader();
+              await uploader.mergeAndReplaceLogs(
+                plate.plateNumber,
+                _areaState.currentDivision,
+                plate.area,
+              );
+            }
+
+            previousIsLockedFee[plate.id] = plate.isLockedFee;
+          }
+        }
+
         if (!listEquals(_data[collection], filteredData)) {
           _data[collection] = filteredData;
           notifyListeners();
@@ -102,12 +122,12 @@ class PlateState extends ChangeNotifier {
   }
 
   void _onAreaChanged() {
-    debugPrint("🔄 지역 변경 감지됨: ${_areaState.currentArea}");
+    debugPrint("🔄 지역 변경 감지됨: \${_areaState.currentArea}");
     _initializeSubscriptions();
   }
 
   void syncWithAreaState() {
-    debugPrint("🔄 지역 동기화 수동 호출됨(: $currentArea");
+    debugPrint("🔄 지역 동기화 수동 호출됨(: \$currentArea");
     plateCounts();
   }
 
@@ -137,7 +157,6 @@ class PlateState extends ChangeNotifier {
     return plates;
   }
 
-
   Future<void> toggleIsSelected({
     required PlateType collection,
     required String plateNumber,
@@ -148,9 +167,18 @@ class PlateState extends ChangeNotifier {
 
     try {
       final plateList = _data[collection];
-      if (plateList == null) throw Exception('🚨 Collection not found');
+
+      if (plateList == null) {
+        throw Exception('🚨 Collection not found: $collection');
+      }
+
+      debugPrint('🔎 Trying to select plateId: $plateId');
+      debugPrint('📋 Plates in collection $collection: ${plateList.map((p) => p.id).toList()}');
+
       final index = plateList.indexWhere((p) => p.id == plateId);
-      if (index == -1) throw Exception('🚨 Plate not found');
+      if (index == -1) {
+        throw Exception('🚨 Plate not found in collection $collection: $plateId');
+      }
 
       final plate = plateList[index];
 
@@ -184,7 +212,6 @@ class PlateState extends ChangeNotifier {
       final newIsSelected = !plate.isSelected;
       final newSelectedBy = newIsSelected ? userName : null;
 
-      // ✅ 변경된 방식으로 호출 (plateId 기준, 단일 컬렉션)
       await _repository.updatePlateSelection(
         plateId,
         newIsSelected,
