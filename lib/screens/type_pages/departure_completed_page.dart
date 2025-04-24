@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../repositories/plate/plate_repository.dart';
@@ -7,11 +8,12 @@ import '../../states/plate/plate_state.dart';
 import '../../states/area/area_state.dart';
 import '../../states/user/user_state.dart';
 import '../../utils/fee_calculator.dart';
+import '../../utils/gcs_uploader.dart';
 import '../../widgets/container/plate_container.dart';
 import '../../widgets/dialog/departure_completed_status_dialog.dart';
-import '../../widgets/navigation/top_navigation.dart';
 import '../../widgets/dialog/plate_search_dialog.dart';
 import '../../widgets/dialog/adjustment_completed_confirm_dialog.dart';
+import '../../widgets/navigation/top_navigation.dart';
 import '../../utils/snackbar_helper.dart';
 import '../mini_calendars/field_calendar.dart';
 import '../../enums/plate_type.dart';
@@ -27,7 +29,6 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
   final bool _isSorted = true;
   final bool _isLoading = false;
   bool _isSearchMode = false;
-
   bool _hasCalendarBeenReset = false;
 
   void _showSearchDialog(BuildContext context) {
@@ -63,7 +64,6 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
     final plateRepository = Provider.of<PlateRepository>(context, listen: false);
     try {
       await plateRepository.deleteAllData();
-
       if (!context.mounted) return;
       showSuccessSnackbar(context, '모든 문서가 삭제되었습니다. 컬렉션은 유지됩니다.');
     } catch (e) {
@@ -76,11 +76,17 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
   Widget build(BuildContext context) {
     final plateState = context.read<PlateState>();
     final userName = context.read<UserState>().name;
+    final areaState = context.watch<AreaState>();
+
+    final division = areaState.currentDivision;
+    final area = areaState.currentArea.trim();
+
+    final logsFuture = GCSUploader().fetchMergedLogsForArea(division, area);
+    debugPrint("📦 병합 로그 호출: $division/$area");
 
     return PopScope(
-      canPop: false, // ✅ 뒤로 가기 차단
+      canPop: false,
       onPopInvoked: (didPop) async {
-        // ✅ 선택된 번호판 해제만 수행
         final selectedPlate = plateState.getSelectedPlate(PlateType.departureCompleted, userName);
         if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
           await plateState.toggleIsSelected(
@@ -94,65 +100,111 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
       child: Scaffold(
         appBar: const TopNavigation(),
         body: Consumer3<PlateState, AreaState, FieldSelectedDateState>(
-            builder: (context, plateState, areaState, selectedDateState, child) {
-              // 선택된 날짜의 시간 정보 제거
-              final selectedDateRaw = selectedDateState.selectedDate ?? DateTime.now();
-              final selectedDate = DateTime(
-                selectedDateRaw.year,
-                selectedDateRaw.month,
-                selectedDateRaw.day,
-              );
+          builder: (context, plateState, areaState, selectedDateState, child) {
+            final selectedDateRaw = selectedDateState.selectedDate ?? DateTime.now();
+            final selectedDate = DateTime(
+              selectedDateRaw.year,
+              selectedDateRaw.month,
+              selectedDateRaw.day,
+            );
 
-              final area = areaState.currentArea.trim();
+            final firestorePlates = plateState
+                .getPlatesByCollection(PlateType.departureCompleted, selectedDate: selectedDate)
+                .where((p) => !p.isLockedFee && p.area.trim() == area)
+                .toList();
 
-              // 출차 완료 plate 목록 가져오기
-              final departureCompleted = plateState
-                  .getPlatesByCollection(
-                PlateType.departureCompleted,
-                selectedDate: selectedDate,
-              )
-                  .where((p) =>
-              p.type == PlateType.departureCompleted.firestoreValue &&
-                  p.area.trim() == area)
-                  .toList();
+            firestorePlates.sort((a, b) => _isSorted
+                ? b.requestTime.compareTo(a.requestTime)
+                : a.requestTime.compareTo(b.requestTime));
 
-              // ✅ 정렬 처리
-              departureCompleted.sort(
-                    (a, b) => _isSorted
-                    ? b.requestTime.compareTo(a.requestTime)
-                    : a.requestTime.compareTo(b.requestTime),
-              );
+            return FutureBuilder<List<Map<String, dynamic>>>(
+              future: logsFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-              // ✅ 디버그 로그 (원인 확인용)
-              debugPrint('📅 필터링 기준 날짜: $selectedDate');
-              debugPrint('📍 기준 지역: "$area"');
-              for (final p in departureCompleted) {
-                debugPrint('✔️ plate=${p.plateNumber}, type=${p.type}, area=${p.area}, end=${p.endTime}');
-              }
+                if (snapshot.hasError) {
+                  debugPrint('🚨 병합 로그 로딩 오류: ${snapshot.error}');
+                  return const Center(child: Text('병합 로그를 불러오는 중 오류가 발생했습니다.'));
+                }
 
-              return _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : ListView(
-                padding: const EdgeInsets.all(8.0),
-                children: [
-                  PlateContainer(
-                    data: departureCompleted,
-                    collection: PlateType.departureCompleted,
-                    filterCondition: (_) => true, // 이미 위에서 필터링 완료됨
-                    onPlateTap: (plateNumber, area) {
-                      plateState.toggleIsSelected(
-                        collection: PlateType.departureCompleted,
-                        plateNumber: plateNumber,
-                        userName: context.read<UserState>().name,
-                        onError: (errorMessage) {
-                          showFailedSnackbar(context, errorMessage);
-                        },
+                final mergedLogs = snapshot.data ?? [];
+                debugPrint('📦 병합 로그 개수: ${mergedLogs.length}');
+
+                return _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : ListView(
+                  padding: const EdgeInsets.all(8.0),
+                  children: [
+                    PlateContainer(
+                      data: firestorePlates,
+                      collection: PlateType.departureCompleted,
+                      filterCondition: (_) => true,
+                      onPlateTap: (plateNumber, area) {
+                        plateState.toggleIsSelected(
+                          collection: PlateType.departureCompleted,
+                          plateNumber: plateNumber,
+                          userName: userName,
+                          onError: (errorMessage) {
+                            showFailedSnackbar(context, errorMessage);
+                          },
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    const Divider(),
+                    const Text(
+                      '🔒 병합 로그 항목',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    if (mergedLogs.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        child: Center(child: Text('병합 로그가 없습니다.')),
+                      ),
+                    ...mergedLogs.map((log) {
+                      final plate = log['plateNumber'] ?? 'Unknown';
+                      final logs = log['logs'] ?? [];
+
+                      return ListTile(
+                        title: Text(plate),
+                        subtitle: Text('로그 ${logs.length}개'),
+                        trailing: ElevatedButton(
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (_) {
+                                return AlertDialog(
+                                  title: Text('$plate 로그'),
+                                  content: SizedBox(
+                                    width: double.maxFinite,
+                                    child: SingleChildScrollView(
+                                      child: Text(
+                                        const JsonEncoder.withIndent('  ').convert(logs),
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                    ),
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context),
+                                      child: const Text('닫기'),
+                                    ),
+                                  ],
+                                );
+                              },
+                            );
+                          },
+                          child: const Text('전체 로그 보기'),
+                        ),
                       );
-                    },
-                  ),
-                ],
-              );
-            },
+                    }),
+                  ],
+                );
+              },
+            );
+          },
         ),
         bottomNavigationBar: Consumer<PlateState>(
           builder: (context, plateState, child) {

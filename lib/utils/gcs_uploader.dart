@@ -85,15 +85,15 @@ class GCSUploader {
   }
 
   Future<String?> uploadLogJson(
-    Map<String, dynamic> logData,
-    String plateNumber,
-    String division,
-    String area,
-  ) async {
+      Map<String, dynamic> logData,
+      String plateNumber,
+      String division,
+      String area,
+      ) async {
     final now = DateTime.now();
     final timestamp =
         '${now.year}${_two(now.month)}${_two(now.day)}_${_two(now.hour)}${_two(now.minute)}${_two(now.second)}';
-    final safePlate = plateNumber.replaceAll(RegExp(r'\s'), '');
+    final safePlate = plateNumber.replaceAll(RegExp(r'\\s'), '');
 
     final fileName = '$division/$area/logs/${timestamp}_$safePlate.json';
 
@@ -110,9 +110,8 @@ class GCSUploader {
 
     final allObjects = await storage.objects.list(bucketName, prefix: prefix);
     final matchingObjects = allObjects.items
-            ?.where((o) => o.name != null && o.name!.contains(plateNumber) && o.name!.endsWith('.json'))
-            .toList() ??
-        [];
+        ?.where((o) => o.name != null && o.name!.contains(plateNumber) && o.name!.endsWith('.json'))
+        .toList() ?? [];
 
     List<Map<String, dynamic>> mergedLogs = [];
 
@@ -144,7 +143,6 @@ class GCSUploader {
     final mergedFileName = '$division/$area/logs/merged_$plateNumber.json';
     await uploadJsonData(mergedJson, mergedFileName);
 
-    // 기존 로그 파일 삭제
     for (final obj in matchingObjects) {
       try {
         if (obj.name != null) {
@@ -159,5 +157,75 @@ class GCSUploader {
     client.close();
   }
 
+  Future<List<String>> listMergedPlateLogs(String division, String area) async {
+    final prefix = '$division/$area/logs/';
+    final credentialsJson = await rootBundle.loadString(serviceAccountPath);
+    final accountCredentials = ServiceAccountCredentials.fromJson(credentialsJson);
+    final scopes = [StorageApi.devstorageFullControlScope];
+    final client = await clientViaServiceAccount(accountCredentials, scopes);
+    final storage = StorageApi(client);
+
+    final allObjects = await storage.objects.list(bucketName, prefix: prefix);
+    final mergedFiles = allObjects.items
+        ?.where((o) => o.name != null && o.name!.contains('merged_') && o.name!.endsWith('.json'))
+        .map((o) => o.name!)
+        .toList() ?? [];
+
+    client.close();
+    return mergedFiles;
+  }
+
+  Future<Map<String, dynamic>> downloadMergedLog(String plateNumber, String division, String area) async {
+    final fileName = '$division/$area/logs/merged_$plateNumber.json';
+
+    final credentialsJson = await rootBundle.loadString(serviceAccountPath);
+    final accountCredentials = ServiceAccountCredentials.fromJson(credentialsJson);
+    final scopes = [StorageApi.devstorageFullControlScope];
+    final client = await clientViaServiceAccount(accountCredentials, scopes);
+    final storage = StorageApi(client);
+
+    try {
+      final media = await storage.objects.get(
+        bucketName,
+        fileName,
+        downloadOptions: DownloadOptions.fullMedia,
+      ) as Media;
+
+      final bytes = await media.stream.expand((e) => e).toList();
+      final content = utf8.decode(bytes);
+      final parsed = jsonDecode(content);
+
+      return parsed;
+    } catch (e) {
+      debugPrint('❌ 병합 로그 다운로드 실패: $e');
+      rethrow;
+    } finally {
+      client.close();
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> fetchMergedLogsForArea(String division, String area) async {
+    final prefix = '$division/$area/logs/merged_';
+    final credentialsJson = await rootBundle.loadString(serviceAccountPath);
+    final accountCredentials = ServiceAccountCredentials.fromJson(credentialsJson);
+    final client = await clientViaServiceAccount(accountCredentials, [StorageApi.devstorageFullControlScope]);
+    final storage = StorageApi(client);
+
+    final result = await storage.objects.list(bucketName, prefix: prefix);
+    final logs = <Map<String, dynamic>>[];
+
+    for (final obj in result.items ?? []) {
+      if (obj.name != null && obj.name!.endsWith('.json')) {
+        final media = await storage.objects.get(bucketName, obj.name!, downloadOptions: DownloadOptions.fullMedia) as Media;
+        final bytes = await media.stream.expand((e) => e).toList();
+        final content = utf8.decode(bytes);
+        final decoded = jsonDecode(content);
+        logs.add(decoded);
+      }
+    }
+
+    client.close();
+    return logs;
+  }
   String _two(int value) => value.toString().padLeft(2, '0');
 }
