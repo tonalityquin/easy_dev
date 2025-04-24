@@ -37,7 +37,6 @@ class _MergedLogSectionState extends State<MergedLogSection> {
             padding: EdgeInsets.symmetric(vertical: 16),
             child: Center(child: Text('병합 로그가 없습니다.')),
           ),
-        // 헤더
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           color: Colors.grey.shade200,
@@ -71,6 +70,15 @@ class _MergedLogSectionState extends State<MergedLogSection> {
 
           final isExpanded = _expandedPlates.contains(plate);
 
+          // 🔢 정산 총액 계산
+          final totalFee = log['totalFee'] ??
+              (logs is List
+                  ? logs
+                  .map((e) => e['fee'] ?? e['lockedFeeAmount'])
+                  .whereType<num>()
+                  .fold(0.0, (sum, fee) => sum + fee)
+                  : 0.0);
+
           return Column(
             children: [
               InkWell(
@@ -101,40 +109,49 @@ class _MergedLogSectionState extends State<MergedLogSection> {
                 Container(
                   color: Colors.grey.shade100,
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  child: Column(
                     children: [
-                      ElevatedButton(
-                        onPressed: () {
-                          showDialog(
-                            context: context,
-                            builder: (_) => AlertDialog(
-                              title: Text('$plate 로그'),
-                              content: SizedBox(
-                                width: double.maxFinite,
-                                child: SingleChildScrollView(
-                                  child: Text(
-                                    const JsonEncoder.withIndent('  ').convert(logs),
-                                    style: const TextStyle(fontSize: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          ElevatedButton(
+                            onPressed: () {
+                              showDialog(
+                                context: context,
+                                builder: (_) => AlertDialog(
+                                  title: Text('$plate 로그'),
+                                  content: SizedBox(
+                                    width: double.maxFinite,
+                                    child: SingleChildScrollView(
+                                      child: Text(
+                                        const JsonEncoder.withIndent('  ').convert(logs),
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                    ),
                                   ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context),
+                                      child: const Text('닫기'),
+                                    ),
+                                  ],
                                 ),
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context),
-                                  child: const Text('닫기'),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                        child: const Text('로그'),
+                              );
+                            },
+                            child: const Text('로그'),
+                          ),
+                          const SizedBox(width: 12),
+                          ElevatedButton(
+                            onPressed: () {},
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.grey.shade400),
+                            child: const Text('사진'),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 12),
-                      ElevatedButton(
-                        onPressed: () {}, // 기능 없음
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.grey.shade400),
-                        child: const Text('사진'),
+                      const SizedBox(height: 8),
+                      Text(
+                        '총 정산 금액: ₩${totalFee.toStringAsFixed(0)}',
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),

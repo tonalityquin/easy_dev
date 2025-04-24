@@ -47,10 +47,7 @@ class AdjustmentState extends ChangeNotifier {
       await _repository.addAdjustment(adjustment);
       debugPrint("✅ 데이터 저장 성공");
 
-      // 🔥 Firestore에서 데이터를 다시 불러오기 전에, UI에 즉시 반영
-      _adjustments.add(adjustment);
-      notifyListeners();
-
+      // ✅ Firestore 스트림을 통해 자동으로 반영되도록 유도
       syncWithAreaState();
     } catch (e) {
       debugPrint('🔥 데이터 추가 중 오류 발생: $e');
