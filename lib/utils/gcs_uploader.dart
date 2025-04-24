@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:googleapis_auth/auth_io.dart';
@@ -85,11 +86,11 @@ class GCSUploader {
   }
 
   Future<String?> uploadLogJson(
-      Map<String, dynamic> logData,
-      String plateNumber,
-      String division,
-      String area,
-      ) async {
+    Map<String, dynamic> logData,
+    String plateNumber,
+    String division,
+    String area,
+  ) async {
     final now = DateTime.now();
     final timestamp =
         '${now.year}${_two(now.month)}${_two(now.day)}_${_two(now.hour)}${_two(now.minute)}${_two(now.second)}';
@@ -110,8 +111,9 @@ class GCSUploader {
 
     final allObjects = await storage.objects.list(bucketName, prefix: prefix);
     final matchingObjects = allObjects.items
-        ?.where((o) => o.name != null && o.name!.contains(plateNumber) && o.name!.endsWith('.json'))
-        .toList() ?? [];
+            ?.where((o) => o.name != null && o.name!.contains(plateNumber) && o.name!.endsWith('.json'))
+            .toList() ??
+        [];
 
     List<Map<String, dynamic>> mergedLogs = [];
 
@@ -154,6 +156,25 @@ class GCSUploader {
       }
     }
 
+    // ✅ Firestore 문서 삭제 추가
+    try {
+      final firestore = FirebaseFirestore.instance;
+      final snapshot = await firestore
+          .collection('plates')
+          .where('plate_number', isEqualTo: plateNumber) // 수정됨
+          .where('type', isEqualTo: 'departure_completed')
+          .where('area', isEqualTo: area)
+          .where('isLockedFee', isEqualTo: true)
+          .get();
+
+      for (final doc in snapshot.docs) {
+        await doc.reference.delete();
+        debugPrint("🔥 Firestore 삭제 완료: ${doc.id}");
+      }
+    } catch (e) {
+      debugPrint("❌ Firestore 삭제 실패: $e");
+    }
+
     client.close();
   }
 
@@ -167,9 +188,10 @@ class GCSUploader {
 
     final allObjects = await storage.objects.list(bucketName, prefix: prefix);
     final mergedFiles = allObjects.items
-        ?.where((o) => o.name != null && o.name!.contains('merged_') && o.name!.endsWith('.json'))
-        .map((o) => o.name!)
-        .toList() ?? [];
+            ?.where((o) => o.name != null && o.name!.contains('merged_') && o.name!.endsWith('.json'))
+            .map((o) => o.name!)
+            .toList() ??
+        [];
 
     client.close();
     return mergedFiles;
@@ -216,7 +238,8 @@ class GCSUploader {
 
     for (final obj in result.items ?? []) {
       if (obj.name != null && obj.name!.endsWith('.json')) {
-        final media = await storage.objects.get(bucketName, obj.name!, downloadOptions: DownloadOptions.fullMedia) as Media;
+        final media =
+            await storage.objects.get(bucketName, obj.name!, downloadOptions: DownloadOptions.fullMedia) as Media;
         final bytes = await media.stream.expand((e) => e).toList();
         final content = utf8.decode(bytes);
         final decoded = jsonDecode(content);
@@ -227,5 +250,6 @@ class GCSUploader {
     client.close();
     return logs;
   }
+
   String _two(int value) => value.toString().padLeft(2, '0');
 }
