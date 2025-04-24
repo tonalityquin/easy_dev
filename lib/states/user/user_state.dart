@@ -89,7 +89,7 @@ class UserState extends ChangeNotifier {
 
       final trimmedPhone = userData.phone.trim();
       final trimmedArea = area.trim();
-      debugPrint("[DEBUG] updateCurrentArea 요청: userId=${trimmedPhone}-${trimmedArea} → currentArea=$trimmedArea");
+      debugPrint("[DEBUG] updateCurrentArea 요청: userId=$trimmedPhone-$trimmedArea → currentArea=$trimmedArea");
 
       await _repository.updateCurrentArea(trimmedPhone, trimmedArea, trimmedArea);
       userData = userData.copyWith(currentArea: trimmedArea);

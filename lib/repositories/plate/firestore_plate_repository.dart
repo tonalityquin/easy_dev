@@ -247,6 +247,7 @@ class FirestorePlateRepository implements PlateRepository {
     }
   }
 
+  @override
   Future<bool> checkDuplicatePlate({
     required String plateNumber,
     required String area,

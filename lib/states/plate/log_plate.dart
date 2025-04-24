@@ -18,8 +18,4 @@ class LogPlateState with ChangeNotifier {
     }
   }
 
-  @override
-  void dispose() {
-    super.dispose();
-  }
 }

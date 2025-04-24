@@ -189,7 +189,7 @@ class PageBottomNavigation extends StatelessWidget {
                         ),
                         builder: (context, color, child) {
                           return Text(
-                            '$count',
+                            '$count',  // count에 병합된 로그까지 포함된 숫자 표시
                             style: TextStyle(
                               fontSize: isSelected ? 26 : 20,
                               fontWeight: FontWeight.bold,
