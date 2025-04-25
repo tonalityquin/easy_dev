@@ -101,7 +101,10 @@ final List<SingleChildWidget> stateProviders = [
 
   // 📍 위치 관리 상태
   ChangeNotifierProvider(
-    create: (context) => LocationState(FirestoreLocationRepository()),
+    create: (context) => LocationState(
+      FirestoreLocationRepository(),
+      context.read<AreaState>(),
+    ),
   ),
 
   // 💸 정산 기준 상태

@@ -100,7 +100,7 @@ class DummyLocationRepository implements LocationRepository {
   Future<void> deleteLocations(List<String> ids) => throw UnimplementedError();
 
   @override
-  Stream<List<LocationModel>> getLocationsStream() => throw UnimplementedError();
+  Stream<List<LocationModel>> getLocationsStream(String area) => throw UnimplementedError();
 
   @override
   Future<void> toggleLocationSelection(String id, bool selected) => throw UnimplementedError();
