@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'dart:async'; // ✅ 추가
 import 'package:provider/provider.dart';
 
 import '../../../../models/user_model.dart';
@@ -23,7 +24,7 @@ class _WorkerBreakDocumentState extends State<WorkerBreakDocument> {
   int? selectedRow;
   int? selectedCol;
 
-  Set<String> selectedCells = {}; // ✅ 추가: 다중 셀 선택
+  Set<String> selectedCells = {};
 
   late int selectedYear;
   late int selectedMonth;
@@ -32,6 +33,7 @@ class _WorkerBreakDocumentState extends State<WorkerBreakDocument> {
   List<UserModel> users = [];
 
   String currentArea = '';
+  late StreamSubscription _userStreamSub; // ✅ 실시간 사용자 구독
 
   @override
   void initState() {
@@ -45,17 +47,41 @@ class _WorkerBreakDocumentState extends State<WorkerBreakDocument> {
       final area = context.read<AreaState>().currentArea;
       if (area.isNotEmpty) {
         currentArea = area;
-        _loadUsersFromPrefs();
+        _subscribeToUsers(currentArea); // ✅ 실시간 스트림 시작
       }
     });
   }
 
-  String get cellDataKey => 'break_cell_data_${selectedYear}_$selectedMonth';
+  void _subscribeToUsers(String area) {
+    _userStreamSub = FirebaseFirestore.instance
+        .collection('user_accounts')
+        .where('currentArea', isEqualTo: area)
+        .snapshots()
+        .listen((snapshot) {
+      final updatedUsers = snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
+      setState(() {
+        users = updatedUsers;
+      });
+      _saveUsersToPrefs(); // 캐시에 저장
+    });
+  }
 
+  @override
+  void dispose() {
+    _userStreamSub.cancel(); // ✅ 구독 해제
+    _controller.dispose();
+    super.dispose();
+  }
+
+  String get cellDataKey => 'break_cell_data_${selectedYear}_$selectedMonth';
   String get userCacheKey => 'user_list_$currentArea';
 
   Future<List<UserModel>> getUsersByArea(String area) async {
-    final snapshot = await FirebaseFirestore.instance.collection('user_accounts').where('area', isEqualTo: area).get();
+    final snapshot = await FirebaseFirestore.instance
+        .collection('user_accounts')
+        .where('currentArea', isEqualTo: area)
+        .get();
+
     return snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
   }
 
@@ -65,10 +91,9 @@ class _WorkerBreakDocumentState extends State<WorkerBreakDocument> {
 
       final currentIds = users.map((u) => u.id).toSet();
       final newIds = updatedUsers.map((u) => u.id).toSet();
-
       final hasChanged = currentIds.length != newIds.length || !currentIds.containsAll(newIds);
 
-      if (!mounted) return; // ⛑️ context 사용 전 안전성 체크
+      if (!mounted) return;
 
       if (hasChanged) {
         setState(() {
@@ -90,41 +115,10 @@ class _WorkerBreakDocumentState extends State<WorkerBreakDocument> {
     await prefs.setString(userCacheKey, jsonEncode(userJsonList));
   }
 
-  Future<void> _loadUsersFromPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    final jsonStr = prefs.getString(userCacheKey);
-    if (jsonStr != null) {
-      final List<dynamic> jsonList = jsonDecode(jsonStr);
-      setState(() {
-        users = jsonList
-            .where((map) => map['id'] != null && map['id'] is String)
-            .map((map) => UserModel.fromJson(Map<String, dynamic>.from(map)))
-            .toList();
-      });
-    } else {
-      setState(() {
-        users = [];
-      });
-    }
-  }
-
-  void _onCellTapped(int rowIndex, int colIndex, String rowKey) {
-    if (colIndex == 0 || colIndex == 33) return;
-    final key = '$rowKey:${colIndex - 1}';
-    setState(() {
-      if (selectedCells.contains(key)) {
-        selectedCells.remove(key);
-      } else {
-        selectedCells.add(key);
-      }
-    });
-  }
-
   Future<void> _appendText(String rowKey) async {
     final value = _controller.text.trim();
     if (value.isEmpty || selectedRow == null || selectedCol == null) return;
 
-    // 👉 홀수 행(종료 행)에는 저장 불가
     if (selectedRow! % 2 != 0) {
       if (!mounted) return;
       showFailedSnackbar(context, '휴게시간 종료는 앱에서 자동으로 처리됩니다');
@@ -139,7 +133,6 @@ class _WorkerBreakDocumentState extends State<WorkerBreakDocument> {
     });
 
     await _saveCellDataToPrefs();
-
     if (!mounted) return;
     showSuccessSnackbar(context, '시작 시간 저장 완료');
   }
@@ -162,17 +155,14 @@ class _WorkerBreakDocumentState extends State<WorkerBreakDocument> {
     }
 
     await _saveCellDataToPrefs();
-
-    if (!mounted) return; // ⚠️ context 사용 전 안전성 체크
+    if (!mounted) return;
     showSuccessSnackbar(context, '삭제 완료');
   }
 
   Future<void> _saveCellDataToPrefs() async {
     final prefs = await SharedPreferences.getInstance();
-    final stringified = cellData.map((rowKey, colMap) => MapEntry(
-          rowKey,
-          colMap.map((colIndex, value) => MapEntry(colIndex.toString(), value)),
-        ));
+    final stringified = cellData.map((rowKey, colMap) =>
+        MapEntry(rowKey, colMap.map((colIndex, value) => MapEntry(colIndex.toString(), value))));
     final encoded = jsonEncode(stringified);
     await prefs.setString(cellDataKey, encoded);
   }
@@ -185,11 +175,9 @@ class _WorkerBreakDocumentState extends State<WorkerBreakDocument> {
       setState(() {
         cellData = Map<String, Map<int, String>>.from(
           decoded.map((rowKey, colMap) => MapEntry(
-                rowKey,
-                Map<int, String>.from(
-                  (colMap as Map).map((key, value) => MapEntry(int.parse(key), value)),
-                ),
-              )),
+            rowKey,
+            Map<int, String>.from((colMap as Map).map((k, v) => MapEntry(int.parse(k), v))),
+          )),
         );
       });
     } else {
@@ -213,21 +201,28 @@ class _WorkerBreakDocumentState extends State<WorkerBreakDocument> {
     _loadCellDataFromPrefs();
   }
 
+  void _onCellTapped(int rowIndex, int colIndex, String rowKey) {
+    if (colIndex == 0 || colIndex == 33) return;
+    final key = '$rowKey:${colIndex - 1}';
+    setState(() {
+      if (selectedCells.contains(key)) {
+        selectedCells.remove(key);
+      } else {
+        selectedCells.add(key);
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     currentArea = context.watch<AreaState>().currentArea;
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadUsersFromPrefs();
-      _loadCellDataFromPrefs(); // ✅ 휴게시간 데이터 새로 로드
-    });
     return BreakDocumentBody(
       controller: _controller,
       menuOpen: _menuOpen,
       selectedRow: selectedRow,
       selectedCol: selectedCol,
       selectedCells: selectedCells,
-      // ✅ 추가
       users: users,
       cellData: cellData,
       selectedYear: selectedYear,
@@ -237,7 +232,6 @@ class _WorkerBreakDocumentState extends State<WorkerBreakDocument> {
       onCellTapped: _onCellTapped,
       appendText: _appendText,
       clearText: _clearText,
-      // ✅ 시그니처 대응 완료
       toggleMenu: () => setState(() => _menuOpen = !_menuOpen),
       getUsersByArea: getUsersByArea,
       reloadUsers: _reloadUsers,
