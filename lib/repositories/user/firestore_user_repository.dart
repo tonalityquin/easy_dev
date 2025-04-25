@@ -11,10 +11,11 @@ class FirestoreUserRepository implements UserRepository {
   }
 
   @override
-  Stream<List<UserModel>> getUsersStream() {
-    return _getCollectionRef().snapshots().map((snapshot) {
-      return snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
-    });
+  Stream<List<UserModel>> getUsersStream(String area) {
+    return _getCollectionRef()
+        .where('currentArea', isEqualTo: area)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList());
   }
 
   @override

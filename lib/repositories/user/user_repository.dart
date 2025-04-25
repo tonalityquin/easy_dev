@@ -1,7 +1,7 @@
 import '../../models/user_model.dart';
 
 abstract class UserRepository {
-  Stream<List<UserModel>> getUsersStream();
+  Stream<List<UserModel>> getUsersStream(String area);
   Stream<UserModel?> listenToUserStatus(String phone);
   Future<UserModel?> getUserByPhone(String phone);
   Future<void> addUser(UserModel user);

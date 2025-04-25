@@ -96,7 +96,10 @@ final List<SingleChildWidget> stateProviders = [
 
   // 👤 사용자 정보 관리 상태
   ChangeNotifierProvider(
-    create: (context) => UserState(context.read<UserRepository>()),
+    create: (context) => UserState(
+      context.read<UserRepository>(),
+      context.read<AreaState>(), // ✅ 추가
+    ),
   ),
 
   // 📍 위치 관리 상태

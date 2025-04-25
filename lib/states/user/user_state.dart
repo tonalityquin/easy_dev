@@ -4,6 +4,8 @@ import '../../repositories/user/user_repository.dart';
 import '../../models/user_model.dart';
 import 'package:easydev/services/plate_tts_listener_service.dart';
 
+import '../area/area_state.dart';
+
 class UserState extends ChangeNotifier {
   final UserRepository _repository;
   UserModel? _user;
@@ -11,7 +13,9 @@ class UserState extends ChangeNotifier {
   Map<String, bool> _selectedUsers = {};
   bool _isLoading = true;
 
-  UserState(this._repository);
+  final AreaState _areaState;
+
+  UserState(this._repository, this._areaState);
 
   Future<void> loadUsersOnly() async {
     _isLoading = true;
@@ -108,7 +112,8 @@ class UserState extends ChangeNotifier {
   }
 
   void _realtimeUsers() {
-    _repository.getUsersStream().listen(
+    final area = _areaState.currentArea;
+    _repository.getUsersStream(area).listen(
       (data) {
         _users = data;
         _selectedUsers = {for (var user in data) user.id: user.isSelected};

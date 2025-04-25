@@ -120,7 +120,7 @@ class DummyUserRepository implements UserRepository {
   Future<UserModel?> getUserByPhone(String phone) => throw UnimplementedError();
 
   @override
-  Stream<List<UserModel>> getUsersStream() => throw UnimplementedError();
+  Stream<List<UserModel>> getUsersStream(String area) => throw UnimplementedError();
 
   Future<void> updateUser(UserModel user) => throw UnimplementedError();
 
