@@ -8,14 +8,16 @@ class FirestorePlateRepository implements PlateRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   @override
-  Stream<List<PlateModel>> getPlatesByType(PlateType type) {
+  Stream<List<PlateModel>> getPlatesByTypeAndArea(PlateType type, String area) {
     return _firestore
         .collection('plates')
-        .where(PlateFields.type, isEqualTo: type.firestoreValue)
-        .orderBy(PlateFields.requestTime, descending: true)
+        .where('type', isEqualTo: type.firestoreValue)
+        .where('area', isEqualTo: area)
+        .orderBy('requestTime', descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList());
   }
+
 
   @override
   Future<void> addOrUpdatePlate(String documentId, PlateModel plate) async {

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../repositories/status/status_repository.dart';
 import '../../models/status_model.dart';
@@ -10,11 +11,13 @@ class StatusState extends ChangeNotifier {
 
   StatusState(this._repository, this._areaState) {
     _fetchStatusToggles();
-    _areaState.addListener(_fetchStatusToggles);
+    _areaState.addListener(_fetchStatusToggles); // 지역 변경 감지
   }
 
   List<StatusModel> _toggleItems = [];
   String? _selectedItemId;
+  String _previousArea = '';
+  StreamSubscription<List<StatusModel>>? _subscription;
 
   List<StatusModel> get toggleItems => _toggleItems;
 
@@ -26,13 +29,22 @@ class StatusState extends ChangeNotifier {
 
   void _fetchStatusToggles() {
     final String currentArea = _areaState.currentArea;
-    if (currentArea.isEmpty) {
-      return;
-    }
-    _repository.getStatusStream(currentArea).listen((statusList) {
-      _toggleItems = statusList;
-      notifyListeners();
-    });
+
+    if (currentArea.isEmpty || _previousArea == currentArea) return;
+
+    _previousArea = currentArea;
+
+    _subscription?.cancel(); // ✅ 기존 스트림 해제
+
+    _subscription = _repository.getStatusStream(currentArea).listen(
+      (statusList) {
+        _toggleItems = statusList;
+        notifyListeners();
+      },
+      onError: (error) {
+        debugPrint('🔥 Status stream error: $error');
+      },
+    );
   }
 
   Future<void> addToggleItem(String name) async {
@@ -73,5 +85,13 @@ class StatusState extends ChangeNotifier {
   void selectItem(String? id) {
     _selectedItemId = (_selectedItemId == id) ? null : id;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel(); // ✅ 상태 해제 시 스트림도 해제
+    _areaState.removeListener(_fetchStatusToggles); // 리스너 해제
+    textController.dispose();
+    super.dispose();
   }
 }

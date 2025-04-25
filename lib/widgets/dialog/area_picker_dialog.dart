@@ -77,12 +77,17 @@ void showAreaPickerDialog({
                       Navigator.of(context).pop();
 
                       areaState.updateArea(tempSelected);
-                      plateState.syncWithAreaState();
-                      userState.updateCurrentArea(tempSelected);
+
+                      // ✅ 순서 수정: userState 업데이트 완료 후 plateState 동기화
+                      userState.updateCurrentArea(tempSelected).then((_) {
+                        plateState.syncWithAreaState();
+                      });
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 50, vertical: 16),
+                        horizontal: 50,
+                        vertical: 16,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(30),

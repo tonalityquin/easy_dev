@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../repositories/location/location_repository.dart';
 import '../../models/location_model.dart';
@@ -10,11 +11,15 @@ class LocationState extends ChangeNotifier {
 
   LocationState(this._repository, this._areaState) {
     _initializeLocations();
+    _areaState.addListener(_initializeLocations); // 지역 변경 감지
   }
 
   List<LocationModel> _locations = [];
   Map<String, bool> _selectedLocations = {};
   bool _isLoading = true;
+
+  String _previousArea = '';
+  StreamSubscription<List<LocationModel>>? _subscription;
 
   List<LocationModel> get locations => _locations;
 
@@ -27,9 +32,14 @@ class LocationState extends ChangeNotifier {
   // 🔄 지역 기반 Location 스트림 초기화
   void _initializeLocations() {
     final currentArea = _areaState.currentArea.trim();
+    if (currentArea.isEmpty || _previousArea == currentArea) return;
 
-    _repository.getLocationsStream(currentArea).listen(
-          (data) {
+    _previousArea = currentArea;
+
+    _subscription?.cancel(); // ✅ 기존 스트림 해제
+
+    _subscription = _repository.getLocationsStream(currentArea).listen(
+      (data) {
         _locations = data;
         _selectedLocations = {
           for (var loc in data) loc.id: loc.isSelected,
@@ -78,5 +88,12 @@ class LocationState extends ChangeNotifier {
       _selectedLocations[id] = previousState; // 롤백
       notifyListeners();
     }
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel(); // ✅ 스트림 해제
+    _areaState.removeListener(_initializeLocations); // ✅ 리스너 해제
+    super.dispose();
   }
 }

@@ -64,7 +64,9 @@ class _UserManagementState extends State<UserManagement> {
   }
 
   void onIconTapped(BuildContext context, int index, UserState userState) {
-    final selectedIds = userState.selectedUsers.keys.where((id) => userState.selectedUsers[id] == true).toList();
+    final selectedIds = userState.selectedUsers.keys
+        .where((id) => userState.selectedUsers[id] == true)
+        .toList();
 
     if (index == 0) {
       buildAddUserDialog(
@@ -87,8 +89,8 @@ class _UserManagementState extends State<UserManagement> {
             email: email,
             role: role,
             password: password,
-            areas: [area], // ✅ 복수 구조 대응
-            divisions: [division], // ✅ 복수 구조 대응
+            areas: [area],
+            divisions: [division],
             currentArea: area,
             isSelected: false,
             isWorking: isWorking,
@@ -121,7 +123,8 @@ class _UserManagementState extends State<UserManagement> {
     final currentDivision = areaState.currentDivision;
 
     final filteredUsers = userState.users.where((user) {
-      return user.areas.contains(currentArea) && user.divisions.contains(currentDivision);
+      return user.areas.contains(currentArea) &&
+          user.divisions.contains(currentDivision);
     }).toList();
 
     return Scaffold(
@@ -139,27 +142,34 @@ class _UserManagementState extends State<UserManagement> {
       body: userState.isLoading
           ? const Center(child: CircularProgressIndicator())
           : filteredUsers.isEmpty
-          ? const Center(child: Text('생성된 계정이 없습니다'))
+          ? Center(
+        child: userState.users.isEmpty
+            ? const Text('전체 계정 데이터가 없습니다')
+            : const Text('현재 지역/사업소에 해당하는 계정이 없습니다'),
+      )
           : ListView.builder(
         itemCount: filteredUsers.length,
         itemBuilder: (context, index) {
           final user = filteredUsers[index];
-          final isSelected = userState.selectedUsers[user.id] ?? false;
+          final isSelected =
+              userState.selectedUsers[user.id] ?? false;
 
           return UserCustomBox(
             topLeftText: user.name,
             topRightText: user.email,
             midLeftText: user.role,
             midCenterText: user.phone,
-            midRightText: user.areas.firstOrNull ?? '-', // ✅ 수정
+            midRightText: user.areas.firstOrNull ?? '-',
             onTap: () => userState.toggleUserCard(user.id),
             isSelected: isSelected,
-            backgroundColor: isSelected ? Colors.green : Colors.white,
+            backgroundColor:
+            isSelected ? Colors.green : Colors.white,
           );
         },
       ),
       bottomNavigationBar: SecondaryMiniNavigation(
-        icons: getNavigationIcons(userState.selectedUsers.containsValue(true)),
+        icons:
+        getNavigationIcons(userState.selectedUsers.containsValue(true)),
         onIconTapped: (index) => onIconTapped(context, index, userState),
       ),
     );

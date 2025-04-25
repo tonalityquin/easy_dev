@@ -75,8 +75,12 @@ final List<SingleChildWidget> stateProviders = [
 
   // 🔍 차량 검색 필터 상태
   ChangeNotifierProvider(
-    create: (context) => FilterPlate(context.read<PlateRepository>()),
+    create: (context) => FilterPlate(
+      context.read<PlateRepository>(),
+      context.read<AreaState>().currentArea,
+    ),
   ),
+
 
   // ❌ 삭제 로직 담당
   Provider(

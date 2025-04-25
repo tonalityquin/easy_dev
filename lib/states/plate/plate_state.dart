@@ -19,46 +19,26 @@ class PlateState extends ChangeNotifier {
     for (var c in PlateType.values) c: [],
   };
 
-  final Map<PlateType, Stream<List<PlateModel>>> _activeStreams = {};
   final Map<PlateType, StreamSubscription<List<PlateModel>>> _subscriptions = {};
 
   String? _searchQuery;
-
-  String get searchQuery => _searchQuery ?? "";
-
-  String get currentArea => _areaState.currentArea;
+  String _previousArea = '';
 
   bool _isLoading = true;
 
   bool get isLoading => _isLoading;
 
-  final Map<String, bool> previousIsLockedFee = {}; // ✅ 추가
+  String get searchQuery => _searchQuery ?? "";
 
-  void plateCounts() {
-    if (_isLoading) {
-      debugPrint('🕐 지역 Plate 상태 수신 대기 중...');
-    } else {
-      debugPrint('✅ 지역 Plate 상태 수신 완료');
-      debugPrint('📌 Selected Area: $currentArea');
-      debugPrint('🅿️ Parking Requests: ${_data[PlateType.parkingRequests]?.length ?? 0}');
-      debugPrint('✅ Parking Completed: ${_data[PlateType.parkingCompleted]?.length ?? 0}');
-      debugPrint('🚗 Departure Requests: ${_data[PlateType.departureRequests]?.length ?? 0}');
-      debugPrint('🏁 Departure Completed: ${_data[PlateType.departureCompleted]?.length ?? 0}');
-    }
-  }
+  String get currentArea => _areaState.currentArea;
 
-  int getDepartureCompletedCountByDate(DateTime selectedDate) {
-    return _data[PlateType.departureCompleted]
-            ?.where((p) =>
-                p.endTime != null &&
-                p.endTime!.year == selectedDate.year &&
-                p.endTime!.month == selectedDate.month &&
-                p.endTime!.day == selectedDate.day)
-            .length ??
-        0;
-  }
+  final Map<String, bool> previousIsLockedFee = {}; // ✅ 고정 요금 이전 상태 기억
 
   void _initializeSubscriptions() {
+    final area = _areaState.currentArea;
+    if (area.isEmpty || _previousArea == area) return;
+
+    _previousArea = area;
     _cancelAllSubscriptions();
 
     _isLoading = true;
@@ -68,11 +48,7 @@ class PlateState extends ChangeNotifier {
     final totalCollections = PlateType.values.length;
 
     for (final collection in PlateType.values) {
-      final stream = _repository
-          .getPlatesByType(collection)
-          .map((list) => list.where((plate) => plate.area == currentArea).toList());
-
-      _activeStreams[collection] = stream;
+      final stream = _repository.getPlatesByTypeAndArea(collection, currentArea);
 
       bool firstDataReceived = false;
 
@@ -108,6 +84,8 @@ class PlateState extends ChangeNotifier {
           _isLoading = false;
           plateCounts();
         }
+      }, onError: (error) {
+        debugPrint('🔥 Plate stream error: $error');
       });
 
       _subscriptions[collection] = subscription;
@@ -122,13 +100,21 @@ class PlateState extends ChangeNotifier {
   }
 
   void _onAreaChanged() {
-    debugPrint("🔄 지역 변경 감지됨: \${_areaState.currentArea}");
+    debugPrint("🔄 지역 변경 감지됨: ${_areaState.currentArea}");
     _initializeSubscriptions();
   }
 
-  void syncWithAreaState() {
-    debugPrint("🔄 지역 동기화 수동 호출됨(: \$currentArea");
-    plateCounts();
+  void plateCounts() {
+    if (_isLoading) {
+      debugPrint('🕐 지역 Plate 상태 수신 대기 중...');
+    } else {
+      debugPrint('✅ 지역 Plate 상태 수신 완료');
+      debugPrint('📌 Selected Area: $currentArea');
+      debugPrint('🅿️ Parking Requests: ${_data[PlateType.parkingRequests]?.length ?? 0}');
+      debugPrint('✅ Parking Completed: ${_data[PlateType.parkingCompleted]?.length ?? 0}');
+      debugPrint('🚗 Departure Requests: ${_data[PlateType.departureRequests]?.length ?? 0}');
+      debugPrint('🏁 Departure Completed: ${_data[PlateType.departureCompleted]?.length ?? 0}');
+    }
   }
 
   List<PlateModel> getPlatesByCollection(PlateType collection, {DateTime? selectedDate}) {
@@ -167,7 +153,6 @@ class PlateState extends ChangeNotifier {
 
     try {
       final plateList = _data[collection];
-
       if (plateList == null) {
         throw Exception('🚨 Collection not found: $collection');
       }
@@ -279,6 +264,11 @@ class PlateState extends ChangeNotifier {
       _data[collection]![index] = updatedPlate;
       notifyListeners();
     }
+  }
+
+  void syncWithAreaState() {
+    debugPrint("🔄 PlateState: 지역 변경 감지 및 상태 갱신 호출됨");
+    _initializeSubscriptions();
   }
 
   @override

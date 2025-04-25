@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../enums/plate_type.dart';
 import '../../repositories/plate/plate_repository.dart';
@@ -5,8 +6,9 @@ import '../../models/plate_model.dart';
 
 class FilterPlate extends ChangeNotifier {
   final PlateRepository _repository;
+  final String currentArea;
 
-  FilterPlate(this._repository) {
+  FilterPlate(this._repository, this.currentArea) {
     _initializeData();
   }
 
@@ -14,18 +16,27 @@ class FilterPlate extends ChangeNotifier {
     for (var type in PlateType.values) type: [],
   };
 
+  final Map<PlateType, StreamSubscription<List<PlateModel>>> _subscriptions = {};
+
   String? _searchQuery;
   String? _locationQuery;
 
   String get searchQuery => _searchQuery ?? "";
-
   String get locationQuery => _locationQuery ?? "";
 
+  /// 🔁 지역 기반으로 PlateType별 스트림 구독
   void _initializeData() {
     for (final plateType in PlateType.values) {
-      _repository.getPlatesByType(plateType).listen((data) {
+      // 기존 구독이 있으면 먼저 해제
+      _subscriptions[plateType]?.cancel();
+
+      final stream = _repository.getPlatesByTypeAndArea(plateType, currentArea);
+
+      _subscriptions[plateType] = stream.listen((data) {
         _data[plateType] = data;
         notifyListeners();
+      }, onError: (error) {
+        debugPrint("🔥 plate stream error: $error");
       });
     }
   }
@@ -50,6 +61,7 @@ class FilterPlate extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 🔍 차량번호 4자리 기준 필터
   List<PlateModel> filterPlatesByQuery(List<PlateModel> plates) {
     if (_searchQuery != null && _searchQuery!.length == 4) {
       return plates.where((plate) {
@@ -62,13 +74,13 @@ class FilterPlate extends ChangeNotifier {
     return plates;
   }
 
+  /// 🅿️ 지역 + 주차구역 기준 필터
   List<PlateModel> filterByParkingLocation(PlateType collection, String area, String parkingLocation) {
     debugPrint("🚀 filterByParkingLocation() 호출됨: 지역 = $area, 주차 구역 = $parkingLocation");
 
     List<PlateModel> plates;
 
     if (collection == PlateType.departureCompleted) {
-      // ✅ 출차 완료만: area + end_time 필터
       plates = _data[collection]?.where((plate) => plate.area == area && plate.endTime != null).toList() ?? [];
     } else {
       plates = _data[collection]?.where((plate) => plate.area == area).toList() ?? [];
@@ -83,26 +95,38 @@ class FilterPlate extends ChangeNotifier {
     return plates;
   }
 
+  /// 📆 특정 날짜 출차 완료 필터
   List<PlateModel> filterDepartureCompletedByDate({
     required String area,
     required DateTime selectedDate,
   }) {
     return _data[PlateType.departureCompleted]
-            ?.where((plate) =>
-                plate.area == area &&
-                plate.endTime != null &&
-                plate.endTime!.year == selectedDate.year &&
-                plate.endTime!.month == selectedDate.month &&
-                plate.endTime!.day == selectedDate.day)
-            .toList() ??
+        ?.where((plate) =>
+    plate.area == area &&
+        plate.endTime != null &&
+        plate.endTime!.year == selectedDate.year &&
+        plate.endTime!.month == selectedDate.month &&
+        plate.endTime!.day == selectedDate.day)
+        .toList() ??
         [];
   }
 
+  /// 🗺️ 선택 가능한 주차 구역
   Future<List<String>> getAvailableLocations(String area) async {
     return await _repository.getAvailableLocations(area);
   }
 
+  /// 🔄 외부 상태 동기화용 호출
   void syncWithAreaState() {
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    for (final subscription in _subscriptions.values) {
+      subscription.cancel();
+    }
+    _subscriptions.clear();
+    super.dispose();
   }
 }
