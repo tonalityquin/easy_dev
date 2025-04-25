@@ -37,7 +37,6 @@ class UserState extends ChangeNotifier {
     }
   }
 
-
   UserModel? get user => _user;
 
   List<UserModel> get users => _users;
@@ -120,7 +119,7 @@ class UserState extends ChangeNotifier {
     notifyListeners();
 
     _subscription = _repository.getUsersStream(area).listen(
-          (data) {
+      (data) {
         _users = data;
         _selectedUsers = {for (var user in data) user.id: user.isSelected};
         _isLoading = false;
