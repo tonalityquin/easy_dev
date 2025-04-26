@@ -19,14 +19,6 @@ class FirestoreUserRepository implements UserRepository {
   }
 
   @override
-  Stream<UserModel?> listenToUserStatus(String phone) {
-    return _getCollectionRef()
-        .doc(phone)
-        .snapshots()
-        .map((doc) => doc.exists ? UserModel.fromMap(doc.id, doc.data()!) : null);
-  }
-
-  @override
   Future<UserModel?> getUserByPhone(String phone) async {
     debugPrint("[DEBUG] Firestore 사용자 조회 시작 - phone: $phone");
 

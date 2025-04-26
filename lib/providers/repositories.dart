@@ -129,9 +129,6 @@ class DummyUserRepository implements UserRepository {
   Future<void> changeUserRole(String userId, String role) => throw UnimplementedError();
 
   @override
-  Stream<UserModel?> listenToUserStatus(String userId) => throw UnimplementedError();
-
-  @override
   Future<void> toggleUserSelection(String userId, bool selected) => throw UnimplementedError();
 
   @override
