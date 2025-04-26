@@ -11,14 +11,6 @@ class FirestoreUserRepository implements UserRepository {
   }
 
   @override
-  Stream<List<UserModel>> getUsersStream(String area) {
-    return _getCollectionRef()
-        .where('currentArea', isEqualTo: area)
-        .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList());
-  }
-
-  @override
   Future<UserModel?> getUserByPhone(String phone) async {
     debugPrint("[DEBUG] Firestore 사용자 조회 시작 - phone: $phone");
 
@@ -40,27 +32,6 @@ class FirestoreUserRepository implements UserRepository {
     }
 
     return null;
-  }
-
-  @override
-  Future<void> addUser(UserModel user) async {
-    await _getCollectionRef().doc(user.id).set(user.toMap());
-  }
-
-  @override
-  Future<void> updateUserStatus(String phone, String area, {bool? isWorking, bool? isSaved}) async {
-    final userId = '$phone-$area';
-
-    Map<String, dynamic> updates = {};
-    if (isWorking != null) updates['isWorking'] = isWorking;
-    if (isSaved != null) updates['isSaved'] = isSaved;
-
-    await _getCollectionRef().doc(userId).update(updates);
-  }
-
-  @override
-  Future<void> toggleUserSelection(String id, bool isSelected) async {
-    await _getCollectionRef().doc(id).update({'isSelected': isSelected});
   }
 
   @override
@@ -89,18 +60,46 @@ class FirestoreUserRepository implements UserRepository {
   }
 
   @override
+  Future<void> updateCurrentArea(String phone, String area, String currentArea) async {
+    final userId = '$phone-$area';
+    await _getCollectionRef().doc(userId).update({
+      'currentArea': currentArea,
+    });
+  }
+
+  @override
+  Future<void> updateUserStatus(String phone, String area, {bool? isWorking, bool? isSaved}) async {
+    final userId = '$phone-$area';
+
+    Map<String, dynamic> updates = {};
+    if (isWorking != null) updates['isWorking'] = isWorking;
+    if (isSaved != null) updates['isSaved'] = isSaved;
+
+    await _getCollectionRef().doc(userId).update(updates);
+  }
+
+  @override
+  Stream<List<UserModel>> getUsersStream(String area) {
+    return _getCollectionRef()
+        .where('currentArea', isEqualTo: area)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList());
+  }
+
+  @override
+  Future<void> addUser(UserModel user) async {
+    await _getCollectionRef().doc(user.id).set(user.toMap());
+  }
+
+  @override
   Future<void> deleteUsers(List<String> ids) async {
     for (String id in ids) {
       await _getCollectionRef().doc(id).delete();
     }
   }
 
-  /// ✅ currentArea 필드 업데이트 메서드
   @override
-  Future<void> updateCurrentArea(String phone, String area, String currentArea) async {
-    final userId = '$phone-$area';
-    await _getCollectionRef().doc(userId).update({
-      'currentArea': currentArea,
-    });
+  Future<void> toggleUserSelection(String id, bool isSelected) async {
+    await _getCollectionRef().doc(id).update({'isSelected': isSelected});
   }
 }

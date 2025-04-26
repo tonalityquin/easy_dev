@@ -2,11 +2,11 @@ import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
 
 abstract class PlateRepository {
-  Stream<List<PlateModel>> getPlatesByTypeAndArea(PlateType type, String area);
+  Stream<List<PlateModel>> getPlatesByTypeAndArea(PlateType type, String area); // v
 
-  Future<void> addOrUpdatePlate(String documentId, PlateModel plate);
+  Future<void> addOrUpdatePlate(String documentId, PlateModel plate); // v
 
-  Future<void> updatePlate(String documentId, Map<String, dynamic> updatedFields);
+  Future<void> updatePlate(String documentId, Map<String, dynamic> updatedFields); // v
 
   Future<void> deletePlate(String documentId);
 
@@ -18,7 +18,7 @@ abstract class PlateRepository {
 
   Future<void> updatePlateSelection(String id, bool isSelected, {String? selectedBy});
 
-  Future<void> addRequestOrCompleted({
+  Future<void> addRequestOrCompleted({ // v
     required String plateNumber,
     required String location,
     required String area,
