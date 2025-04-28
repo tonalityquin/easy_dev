@@ -13,7 +13,7 @@ class FirestorePlateRepository implements PlateRepository {
         .collection('plates')
         .where('type', isEqualTo: type.firestoreValue)
         .where('area', isEqualTo: area)
-        .orderBy('requestTime', descending: true)
+        .orderBy('request_time', descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList());
   }
