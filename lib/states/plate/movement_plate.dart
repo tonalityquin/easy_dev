@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../models/plate_model.dart';
 import '../../repositories/plate/plate_repository.dart';
@@ -41,6 +42,7 @@ class MovementPlate {
         'userName': selectedBy,
         'isSelected': false,
         'selectedBy': null,
+        'updatedAt': Timestamp.now(),
         if (toType == PlateType.departureCompleted) 'end_time': DateTime.now(),
       };
 
@@ -221,6 +223,7 @@ class MovementPlate {
         'userName': plate.userName,
         'isSelected': false,
         'selectedBy': null,
+        'updatedAt': Timestamp.now(),
         'end_time': DateTime.now(),
         if (plate.isLockedFee == true) 'isLockedFee': true,
         if (plate.lockedAtTimeInSeconds != null) 'lockedAtTimeInSeconds': plate.lockedAtTimeInSeconds,

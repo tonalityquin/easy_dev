@@ -44,7 +44,6 @@ class InputPlate with ChangeNotifier {
     final correctedLocation = location.isEmpty ? '미지정' : location;
     final plateType = isLocationSelected ? PlateType.parkingCompleted : PlateType.parkingRequests;
 
-    // departure_completed 외에는 중복 검사 수행
     if (plateType != PlateType.departureCompleted &&
         await isPlateNumberDuplicated(plateNumber, areaState.currentArea)) {
       if (!context.mounted) return false;
@@ -76,7 +75,7 @@ class InputPlate with ChangeNotifier {
         PlateLogModel(
           plateNumber: plateNumber,
           area: areaState.currentArea,
-          division: areaState.currentDivision, // ✅ 추가된 필수 인자
+          division: areaState.currentDivision,
           from: '-',
           to: plateType.label,
           action: plateType.label,
@@ -84,7 +83,7 @@ class InputPlate with ChangeNotifier {
           timestamp: DateTime.now(),
         ),
         division: areaState.currentDivision,
-        area: areaState.currentArea, // ✅ area 전달
+        area: areaState.currentArea,
       );
 
       notifyListeners();
@@ -137,6 +136,7 @@ class InputPlate with ChangeNotifier {
         isLockedFee: isLockedFee ?? plate.isLockedFee,
         lockedAtTimeInSeconds: lockedAtTimeInSeconds ?? plate.lockedAtTimeInSeconds,
         lockedFeeAmount: lockedFeeAmount ?? plate.lockedFeeAmount,
+        updatedAt: DateTime.now(), // ✅ 수정시 updatedAt 갱신
       );
 
       if (oldDocumentId != newDocumentId) {

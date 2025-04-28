@@ -27,19 +27,25 @@ class FilterPlate extends ChangeNotifier {
   /// 🔁 지역 기반으로 PlateType별 스트림 구독
   void _initializeData() {
     for (final plateType in PlateType.values) {
-      // 기존 구독이 있으면 먼저 해제
       _subscriptions[plateType]?.cancel();
 
-      final stream = _repository.getPlatesByTypeAndArea(plateType, currentArea);
-
-      _subscriptions[plateType] = stream.listen((data) {
-        _data[plateType] = data;
-        notifyListeners();
-      }, onError: (error) {
-        debugPrint("🔥 plate stream error: $error");
-      });
+      if (plateType == PlateType.parkingCompleted) {
+        _repository.fetchPlatesByTypeAndArea(plateType, currentArea).then((data) {
+          _data[plateType] = data;
+          notifyListeners();
+        });
+      } else {
+        final stream = _repository.getPlatesByTypeAndArea(plateType, currentArea);
+        _subscriptions[plateType] = stream.listen((data) {
+          _data[plateType] = data;
+          notifyListeners();
+        }, onError: (error) {
+          debugPrint("🔥 plate stream error: $error");
+        });
+      }
     }
   }
+
 
   void setPlateSearchQuery(String query) {
     _searchQuery = query;

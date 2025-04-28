@@ -28,6 +28,7 @@ class PlateFields {
   static const String isLockedFee = 'isLockedFee';
   static const String lockedAtTimeInSeconds = 'lockedAtTimeInSeconds';
   static const String lockedFeeAmount = 'lockedFeeAmount';
+  static const String updatedAt = 'updatedAt'; // ✅ 추가
 }
 
 class PlateModel {
@@ -53,6 +54,7 @@ class PlateModel {
   final bool isLockedFee;
   final int? lockedAtTimeInSeconds;
   final int? lockedFeeAmount;
+  final DateTime? updatedAt; // ✅ 추가
 
   PlateModel({
     required this.id,
@@ -76,12 +78,14 @@ class PlateModel {
     this.isLockedFee = false,
     this.lockedAtTimeInSeconds,
     this.lockedFeeAmount,
+    this.updatedAt, // ✅ 추가
   });
 
   factory PlateModel.fromDocument(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data() ?? {};
     final timestamp = data[PlateFields.requestTime];
     final endTimestamp = data[PlateFields.endTime];
+    final updatedTimestamp = data[PlateFields.updatedAt];
 
     return PlateModel(
       id: doc.id,
@@ -105,6 +109,7 @@ class PlateModel {
       isLockedFee: data[PlateFields.isLockedFee] ?? false,
       lockedAtTimeInSeconds: parseInt(data[PlateFields.lockedAtTimeInSeconds]),
       lockedFeeAmount: parseInt(data[PlateFields.lockedFeeAmount]),
+      updatedAt: (updatedTimestamp is Timestamp) ? updatedTimestamp.toDate() : null, // ✅ 추가
     );
   }
 
@@ -135,6 +140,9 @@ class PlateModel {
       isLockedFee: map[PlateFields.isLockedFee] ?? false,
       lockedAtTimeInSeconds: parseInt(map[PlateFields.lockedAtTimeInSeconds]),
       lockedFeeAmount: parseInt(map[PlateFields.lockedFeeAmount]),
+      updatedAt: (map[PlateFields.updatedAt] is Timestamp)
+          ? (map[PlateFields.updatedAt] as Timestamp).toDate()
+          : null, // ✅ 추가
     );
   }
 
@@ -161,6 +169,8 @@ class PlateModel {
         PlateFields.lockedAtTimeInSeconds: lockedAtTimeInSeconds,
       if (lockedFeeAmount != null)
         PlateFields.lockedFeeAmount: lockedFeeAmount,
+      if (updatedAt != null)
+        PlateFields.updatedAt: Timestamp.fromDate(updatedAt!), // ✅ 추가
     };
   }
 
@@ -186,6 +196,7 @@ class PlateModel {
     bool? isLockedFee,
     int? lockedAtTimeInSeconds,
     int? lockedFeeAmount,
+    DateTime? updatedAt, // ✅ 추가
   }) {
     return PlateModel(
       id: id ?? this.id,
@@ -207,9 +218,9 @@ class PlateModel {
       region: region ?? this.region,
       imageUrls: imageUrls ?? this.imageUrls,
       isLockedFee: isLockedFee ?? this.isLockedFee,
-      lockedAtTimeInSeconds:
-      lockedAtTimeInSeconds ?? this.lockedAtTimeInSeconds,
+      lockedAtTimeInSeconds: lockedAtTimeInSeconds ?? this.lockedAtTimeInSeconds,
       lockedFeeAmount: lockedFeeAmount ?? this.lockedFeeAmount,
+      updatedAt: updatedAt ?? this.updatedAt, // ✅ 추가
     );
   }
 
