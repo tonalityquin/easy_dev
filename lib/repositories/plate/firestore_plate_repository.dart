@@ -94,44 +94,6 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
-  Future<void> deleteAllData() async {
-    try {
-      final snapshot = await _firestore.collection('plates').get();
-      final batch = _firestore.batch();
-      for (var doc in snapshot.docs) {
-        batch.delete(doc.reference);
-      }
-      await batch.commit();
-
-      final entriesSnapshot = await _firestore.collection('logs').doc('plate_movements').collection('entries').get();
-      final entriesBatch = _firestore.batch();
-      for (var doc in entriesSnapshot.docs) {
-        entriesBatch.delete(doc.reference);
-      }
-      await entriesBatch.commit();
-    } catch (e) {
-      dev.log('❌ Firestore 전체 데이터 삭제 실패: $e');
-      throw Exception("전체 데이터 삭제 실패: $e");
-    }
-  }
-
-  @override
-  Future<List<PlateModel>> getPlatesByArea(PlateType type, String area) async {
-    try {
-      final querySnapshot = await _firestore
-          .collection('plates')
-          .where('type', isEqualTo: type.firestoreValue)
-          .where('area', isEqualTo: area)
-          .get();
-
-      return querySnapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList();
-    } catch (e) {
-      dev.log("🔥 Firestore 데이터 가져오기 오류 (getPlatesByArea): $e", name: "Firestore");
-      return [];
-    }
-  }
-
-  @override
   Future<void> addRequestOrCompleted({
     required String plateNumber,
     required String location,

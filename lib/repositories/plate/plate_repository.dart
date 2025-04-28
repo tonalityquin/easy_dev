@@ -5,7 +5,6 @@ abstract class PlateRepository {
   Stream<List<PlateModel>> getPlatesByTypeAndArea(PlateType type, String area); // v
   Future<List<PlateModel>> fetchPlatesByTypeAndArea(PlateType type, String area);
 
-
   Future<void> addOrUpdatePlate(String documentId, PlateModel plate); // v
 
   Future<void> updatePlate(String documentId, Map<String, dynamic> updatedFields); // v
@@ -14,13 +13,10 @@ abstract class PlateRepository {
 
   Future<PlateModel?> getPlate(String documentId);
 
-  Future<List<PlateModel>> getPlatesByArea(PlateType type, String area);
-
-  Future<void> deleteAllData();
-
   Future<void> updatePlateSelection(String id, bool isSelected, {String? selectedBy});
 
-  Future<void> addRequestOrCompleted({ // v
+  Future<void> addRequestOrCompleted({
+    // v
     required String plateNumber,
     required String location,
     required String area,

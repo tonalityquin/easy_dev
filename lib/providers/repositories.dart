@@ -56,9 +56,6 @@ class DummyPlateRepository implements PlateRepository {
       throw UnimplementedError();
 
   @override
-  Future<void> deleteAllData() => throw UnimplementedError();
-
-  @override
   Future<void> deletePlate(String documentId) => throw UnimplementedError();
 
   Stream<List<PlateModel>> getPlatesStream() => throw UnimplementedError();
@@ -77,9 +74,6 @@ class DummyPlateRepository implements PlateRepository {
 
   @override
   Future<PlateModel?> getPlate(String documentId) => throw UnimplementedError();
-
-  @override
-  Future<List<PlateModel>> getPlatesByArea(PlateType type, String area) => throw UnimplementedError();
 
   @override
   Future<void> updatePlateSelection(String id, bool isSelected, {String? selectedBy}) => throw UnimplementedError();
