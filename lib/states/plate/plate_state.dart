@@ -21,10 +21,6 @@ class PlateState extends ChangeNotifier {
 
   final Map<PlateType, StreamSubscription<List<PlateModel>>> _subscriptions = {};
 
-  final Map<PlateType, DateTime?> _lastFetchedAt = {
-    for (var c in PlateType.values) c: null,
-  };
-
   String? _searchQuery;
   String _previousArea = '';
 
@@ -52,59 +48,46 @@ class PlateState extends ChangeNotifier {
     final totalCollections = PlateType.values.length;
 
     for (final collection in PlateType.values) {
-      if (collection == PlateType.parkingCompleted) {
-        fetchPlatesByTypeAndArea(collection).then((_) {
-          receivedCount++;
-          if (receivedCount == totalCollections) {
-            _isLoading = false;
-            plateCounts();
-          }
-        }).catchError((error) {
-          debugPrint('🔥 Plate fetch error (parkingCompleted): $error');
-        });
-      } else {
-        final stream = _repository.getPlatesByTypeAndArea(collection, area);
+      final stream = _repository.getPlatesByTypeAndArea(collection, currentArea);
 
-        bool firstDataReceived = false;
+      bool firstDataReceived = false;
 
-        final subscription = stream.listen((filteredData) async {
-          if (collection == PlateType.departureCompleted) {
-            for (final plate in filteredData) {
-              final previous = previousIsLockedFee[plate.id];
+      final subscription = stream.listen((filteredData) async {
+        if (collection == PlateType.departureCompleted) {
+          for (final plate in filteredData) {
+            final previous = previousIsLockedFee[plate.id];
 
-              if (previous == false && plate.isLockedFee == true) {
-                final uploader = GCSUploader();
-                await uploader.mergeAndReplaceLogs(
-                  plate.plateNumber,
-                  _areaState.currentDivision,
-                  plate.area,
-                );
-              }
-
-              previousIsLockedFee[plate.id] = plate.isLockedFee;
+            if (previous == false && plate.isLockedFee == true) {
+              final uploader = GCSUploader();
+              await uploader.mergeAndReplaceLogs(
+                plate.plateNumber,
+                _areaState.currentDivision,
+                plate.area,
+              );
             }
+            previousIsLockedFee[plate.id] = plate.isLockedFee;
           }
+        }
 
-          if (!listEquals(_data[collection], filteredData)) {
-            _data[collection] = filteredData;
-            notifyListeners();
-          }
+        if (!listEquals(_data[collection], filteredData)) {
+          _data[collection] = filteredData;
+          notifyListeners();
+        }
 
-          if (!firstDataReceived) {
-            firstDataReceived = true;
-            receivedCount++;
-          }
+        if (!firstDataReceived) {
+          firstDataReceived = true;
+          receivedCount++;
+        }
 
-          if (receivedCount == totalCollections) {
-            _isLoading = false;
-            plateCounts();
-          }
-        }, onError: (error) {
-          debugPrint('🔥 Plate stream error: $error');
-        });
+        if (receivedCount == totalCollections) {
+          _isLoading = false;
+          plateCounts();
+        }
+      }, onError: (error) {
+        debugPrint('🔥 Plate stream error: $error');
+      });
 
-        _subscriptions[collection] = subscription;
-      }
+      _subscriptions[collection] = subscription;
     }
   }
 
@@ -159,100 +142,14 @@ class PlateState extends ChangeNotifier {
     return plates;
   }
 
-  Future<int> countParkingCompletedPlates() async {
-    try {
-      final area = _areaState.currentArea;
-      if (area.isEmpty) {
-        debugPrint('🚨 지역 정보 없음');
-        return 0;
-      }
+  Future<void> updatePlateLocally(PlateType collection, PlateModel updatedPlate) async {
+    final list = _data[collection];
+    if (list == null) return;
 
-      final count = await _repository.getPlateCountByType(
-        PlateType.parkingCompleted,
-        selectedDate: null, // 날짜 필터 없음
-      );
-
-      debugPrint('✅ 현재 입차 완료 plates 수: $count');
-      return count;
-    } catch (e, s) {
-      debugPrint('🔥 입차 완료 plates count 실패: $e');
-      debugPrintStack(stackTrace: s);
-      return 0;
-    }
-  }
-
-  Future<void> fetchPlatesByTypeAndArea(PlateType type) async {
-    try {
-      final area = _areaState.currentArea;
-      if (area.isEmpty) return;
-
-      final fetchedData = await _repository.fetchPlatesByTypeAndArea(type, area);
-
-      // ✅ 새로 받아온 plates의 id Set
-      final fetchedIds = fetchedData.map((p) => p.id).toSet();
-
-      // ✅ 기존 local plates
-      final existingPlates = _data[type] ?? [];
-
-      // ✅ 삭제 감지: 기존 plates 중 서버에 없는 plates 제거
-      final mergedPlates = existingPlates
-          .where((plate) => fetchedIds.contains(plate.id)) // 살아남은 plates
-          .toList();
-
-      // ✅ 새 plates를 id 기준으로 덮어쓰기 (merge)
-      final plateMap = {for (var plate in mergedPlates) plate.id: plate};
-      for (final newPlate in fetchedData) {
-        plateMap[newPlate.id] = newPlate; // 🔥 새로운 plates 추가/갱신
-      }
-
-      // ✅ 정렬: request_time 기준 최신순
-      final updatedPlates = plateMap.values.toList()..sort((a, b) => b.requestTime.compareTo(a.requestTime));
-
-      // ✅ 가장 최신 updatedAt 계산
-      final latestUpdatedAt = updatedPlates.isNotEmpty
-          ? updatedPlates.map((p) => p.updatedAt ?? DateTime(2000)).reduce((a, b) => a.isAfter(b) ? a : b)
-          : DateTime(2000);
-
-      _data[type] = updatedPlates;
-      _lastFetchedAt[type] = latestUpdatedAt;
+    final index = list.indexWhere((p) => p.id == updatedPlate.id);
+    if (index != -1) {
+      _data[collection]![index] = updatedPlate;
       notifyListeners();
-
-      debugPrint('🔄 $type: plates ${fetchedData.length}개 증분 merge + 삭제 감지 완료');
-    } catch (e, s) {
-      debugPrint('🔥 Error during incremental fetch with delete detection: $e');
-      debugPrintStack(stackTrace: s);
-    }
-  }
-
-  /// ✅ 입차 완료 plates 수를 비교 후 필요 시 fetch하는 메서드
-  Future<void> fetchParkingCompletedIfChanged() async {
-    try {
-      final area = _areaState.currentArea;
-      if (area.isEmpty) {
-        debugPrint('🚨 지역 정보 없음');
-        return;
-      }
-
-      final localPlates = _data[PlateType.parkingCompleted] ?? [];
-      final localCount = localPlates.length;
-
-      final serverCount = await countParkingCompletedPlates(); // 서버 count 조회
-
-      if (serverCount != localCount) {
-        debugPrint('🔄 변화 감지: local($localCount) vs server($serverCount), fetch 실행');
-        await fetchPlatesByTypeAndArea(PlateType.parkingCompleted);
-      } else {
-        debugPrint('✅ 변화 없음: fetch 생략');
-      }
-    } catch (e, s) {
-      debugPrint('🔥 fetchParkingCompletedIfChanged 실패: $e');
-      debugPrintStack(stackTrace: s);
-    }
-  }
-  Future<void> fetchPlateData() async {
-    debugPrint('🔄 새로고침 요청: plates 최신 상태 확인 중');
-    for (final type in PlateType.values) {
-      await fetchPlatesByTypeAndArea(type);
     }
   }
 
@@ -328,15 +225,8 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  Future<void> updatePlateLocally(PlateType collection, PlateModel updatedPlate) async {
-    final list = _data[collection];
-    if (list == null) return;
-
-    final index = list.indexWhere((p) => p.id == updatedPlate.id);
-    if (index != -1) {
-      _data[collection]![index] = updatedPlate;
-      notifyListeners();
-    }
+  Future<void> fetchPlateData() async {
+    _initializeSubscriptions();
   }
 
   String _getCollectionLabelForType(String type) {

@@ -22,6 +22,7 @@ class FilterPlate extends ChangeNotifier {
   String? _locationQuery;
 
   String get searchQuery => _searchQuery ?? "";
+
   String get locationQuery => _locationQuery ?? "";
 
   /// 🔁 지역 기반으로 PlateType별 스트림 구독
@@ -29,23 +30,16 @@ class FilterPlate extends ChangeNotifier {
     for (final plateType in PlateType.values) {
       _subscriptions[plateType]?.cancel();
 
-      if (plateType == PlateType.parkingCompleted) {
-        _repository.fetchPlatesByTypeAndArea(plateType, currentArea).then((data) {
-          _data[plateType] = data;
-          notifyListeners();
-        });
-      } else {
-        final stream = _repository.getPlatesByTypeAndArea(plateType, currentArea);
-        _subscriptions[plateType] = stream.listen((data) {
-          _data[plateType] = data;
-          notifyListeners();
-        }, onError: (error) {
-          debugPrint("🔥 plate stream error: $error");
-        });
-      }
+      final stream = _repository.getPlatesByTypeAndArea(plateType, currentArea);
+
+      _subscriptions[plateType] = stream.listen((data) {
+        _data[plateType] = data;
+        notifyListeners();
+      }, onError: (error) {
+        debugPrint("🔥 plate stream error: $error");
+      });
     }
   }
-
 
   void setPlateSearchQuery(String query) {
     _searchQuery = query;
@@ -107,13 +101,13 @@ class FilterPlate extends ChangeNotifier {
     required DateTime selectedDate,
   }) {
     return _data[PlateType.departureCompleted]
-        ?.where((plate) =>
-    plate.area == area &&
-        plate.endTime != null &&
-        plate.endTime!.year == selectedDate.year &&
-        plate.endTime!.month == selectedDate.month &&
-        plate.endTime!.day == selectedDate.day)
-        .toList() ??
+            ?.where((plate) =>
+                plate.area == area &&
+                plate.endTime != null &&
+                plate.endTime!.year == selectedDate.year &&
+                plate.endTime!.month == selectedDate.month &&
+                plate.endTime!.day == selectedDate.day)
+            .toList() ??
         [];
   }
 

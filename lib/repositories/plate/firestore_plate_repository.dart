@@ -19,23 +19,10 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
-  Future<List<PlateModel>> fetchPlatesByTypeAndArea(PlateType type, String area) async {
-    final snapshot = await _firestore
-        .collection('plates')
-        .where('type', isEqualTo: type.firestoreValue)
-        .where('area', isEqualTo: area)
-        .orderBy('request_time', descending: true)
-        .limit(7) // 페이징 size
-        .get();
-    return snapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList();
-  }
-
-  @override
   Future<void> addOrUpdatePlate(String documentId, PlateModel plate) async {
     final docRef = _firestore.collection('plates').doc(documentId);
     final docSnapshot = await docRef.get();
-    final data = plate.toMap()..[PlateFields.updatedAt] = Timestamp.now(); // ✅ updatedAt 추가
-
+    final data = plate.toMap();
     if (docSnapshot.exists) {
       final existingData = docSnapshot.data();
       if (existingData != null && _isSameData(existingData, data)) {
@@ -63,10 +50,7 @@ class FirestorePlateRepository implements PlateRepository {
     final docRef = _firestore.collection('plates').doc(documentId);
 
     try {
-      await docRef.update({
-        ...updatedFields,
-        PlateFields.updatedAt: Timestamp.now(), // ✅ updatedAt 추가
-      });
+      await docRef.update(updatedFields);
       dev.log("✅ 문서 업데이트 완료: $documentId", name: "Firestore");
     } catch (e) {
       dev.log("🔥 문서 업데이트 실패: $e", name: "Firestore");

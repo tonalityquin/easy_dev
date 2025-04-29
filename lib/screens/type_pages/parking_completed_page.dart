@@ -178,30 +178,25 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
               parkingCompleted.sort((a, b) {
                 return _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime);
               });
-              return RefreshIndicator(
-                onRefresh: () async {
-                  await plateState.fetchParkingCompletedIfChanged();
-                },
-                child: ListView(
-                  padding: const EdgeInsets.all(8.0),
-                  children: [
-                    PlateContainer(
-                      data: parkingCompleted,
-                      collection: PlateType.parkingCompleted,
-                      filterCondition: (request) => request.type == PlateType.parkingCompleted.firestoreValue,
-                      onPlateTap: (plateNumber, area) {
-                        plateState.toggleIsSelected(
-                          collection: PlateType.parkingCompleted,
-                          plateNumber: plateNumber,
-                          userName: userName,
-                          onError: (errorMessage) {
-                            showFailedSnackbar(context, errorMessage);
-                          },
-                        );
-                      },
-                    ),
-                  ],
-                ),
+              return ListView(
+                padding: const EdgeInsets.all(8.0),
+                children: [
+                  PlateContainer(
+                    data: parkingCompleted,
+                    collection: PlateType.parkingCompleted,
+                    filterCondition: (request) => request.type == PlateType.parkingCompleted.firestoreValue,
+                    onPlateTap: (plateNumber, area) {
+                      plateState.toggleIsSelected(
+                        collection: PlateType.parkingCompleted,
+                        plateNumber: plateNumber,
+                        userName: userName,
+                        onError: (errorMessage) {
+                          showFailedSnackbar(context, errorMessage);
+                        },
+                      );
+                    },
+                  ),
+                ],
               );
             },
           ),
