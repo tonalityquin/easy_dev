@@ -8,14 +8,21 @@ class FirestorePlateRepository implements PlateRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   @override
-  Stream<List<PlateModel>> getPlatesByTypeAndArea(PlateType type, String area) {
-    return _firestore
+  Stream<List<PlateModel>> getPlatesByTypeAndArea(PlateType type, String area, {int? limit}) {
+    Query<Map<String, dynamic>> query = _firestore
         .collection('plates')
         .where('type', isEqualTo: type.firestoreValue)
         .where('area', isEqualTo: area)
-        .orderBy('request_time', descending: true)
-        .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList());
+        .orderBy('request_time', descending: true);
+
+    // ✅ limit 인자 사용 (직접 지정 가능)
+    if (limit != null) {
+      query = query.limit(limit);
+    }
+
+    return query.snapshots().map(
+          (snapshot) => snapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList(),
+        );
   }
 
   @override

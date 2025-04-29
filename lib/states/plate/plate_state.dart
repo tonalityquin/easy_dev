@@ -119,6 +119,7 @@ class PlateState extends ChangeNotifier {
   List<PlateModel> getPlatesByCollection(PlateType collection, {DateTime? selectedDate}) {
     List<PlateModel> plates = _data[collection] ?? [];
 
+    // ✅ 출차 완료는 날짜 필터 적용
     if (collection == PlateType.departureCompleted && selectedDate != null) {
       final selectedDateOnly = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
       plates = plates.where((plate) {
@@ -130,6 +131,7 @@ class PlateState extends ChangeNotifier {
       }).toList();
     }
 
+    // ✅ 검색어가 있다면 번호 필터링
     if (_searchQuery != null && _searchQuery!.length == 4) {
       plates = plates.where((plate) {
         final last4Digits = plate.plateNumber.length >= 4
@@ -137,6 +139,11 @@ class PlateState extends ChangeNotifier {
             : plate.plateNumber;
         return last4Digits == _searchQuery;
       }).toList();
+    }
+
+    // ✅ 입차 완료는 최대 6개만 보여줌
+    if (collection == PlateType.parkingCompleted) {
+      plates = plates.take(6).toList();
     }
 
     return plates;

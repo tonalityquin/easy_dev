@@ -2,7 +2,11 @@ import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
 
 abstract class PlateRepository {
-  Stream<List<PlateModel>> getPlatesByTypeAndArea(PlateType type, String area); // v
+  Stream<List<PlateModel>> getPlatesByTypeAndArea(
+      PlateType type,
+      String area, {
+        int? limit,
+      });
   Future<int> getPlateCountByTypeAndArea(
     PlateType type,
     String area,
