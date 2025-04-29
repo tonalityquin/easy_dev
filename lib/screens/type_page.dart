@@ -10,6 +10,7 @@ import '../states/page/page_state.dart';
 import '../states/page/page_info.dart';
 import '../screens/input_pages/input_3_digit.dart';
 import 'secondary_page.dart';
+import '../repositories/plate/plate_repository.dart';
 import '../enums/plate_type.dart';
 
 class TypePage extends StatelessWidget {
@@ -27,7 +28,6 @@ class TypePage extends StatelessWidget {
 
           return PopScope(
             canPop: true,
-            // ignore: deprecated_member_use
             onPopInvoked: (didPop) async {
               if (!didPop) return;
 
@@ -142,6 +142,7 @@ class PageBottomNavigation extends StatelessWidget {
 
         final selectedDate = selectedDateState.selectedDate ?? DateTime.now();
         final currentArea = context.read<AreaState>().currentArea;
+        final plateRepository = context.read<PlateRepository>();
 
         return BottomNavigationBar(
           currentIndex: pageState.selectedIndex,
@@ -155,68 +156,116 @@ class PageBottomNavigation extends StatelessWidget {
             final pageInfo = pageState.pages[index];
             final bool isSelected = pageState.selectedIndex == index;
 
-            int count;
+            // 출차 완료만 selectedDate 반영
             if (pageInfo.collectionKey == PlateType.departureCompleted) {
-              count = plateState
+              final int count = plateState
                   .getPlatesByCollection(
                     PlateType.departureCompleted,
-                    selectedDate: selectedDate, // ✅ 날짜 필터 전달
+                    selectedDate: selectedDate,
                   )
-                  .where((p) =>
-                      p.type == PlateType.departureCompleted.firestoreValue && // ✅ 고침
-                      p.area == currentArea)
+                  .where((p) => p.type == PlateType.departureCompleted.firestoreValue && p.area == currentArea)
                   .length;
-            } else {
-              count = plateState.getPlatesByCollection(pageInfo.collectionKey).length;
+
+              return _buildNavItem(
+                count,
+                pageInfo.title,
+                isSelected,
+                selectedColor,
+                unselectedColor,
+              );
             }
 
             return BottomNavigationBarItem(
-              icon: AnimatedContainer(
-                duration: const Duration(milliseconds: 250),
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 300),
-                      transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
-                      child: TweenAnimationBuilder<Color?>(
-                        key: ValueKey(count),
-                        duration: const Duration(milliseconds: 300),
-                        tween: ColorTween(
-                          begin: Colors.redAccent,
-                          end: isSelected ? selectedColor : unselectedColor,
-                        ),
-                        builder: (context, color, child) {
-                          return Text(
-                            '$count',  // count에 병합된 로그까지 포함된 숫자 표시
-                            style: TextStyle(
-                              fontSize: isSelected ? 26 : 20,
-                              fontWeight: FontWeight.bold,
-                              color: color,
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    AnimatedDefaultTextStyle(
-                      duration: const Duration(milliseconds: 250),
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: isSelected ? selectedColor : unselectedColor,
-                      ),
-                      child: Text(pageInfo.title),
-                    ),
-                  ],
+              icon: FutureBuilder<int>(
+                future: plateRepository.getPlateCountByTypeAndArea(
+                  pageInfo.collectionKey,
+                  currentArea,
                 ),
+                builder: (context, snapshot) {
+                  final count = snapshot.data ?? 0;
+                  return _buildCountIcon(
+                    count,
+                    isSelected,
+                    selectedColor,
+                    unselectedColor,
+                    pageInfo.title,
+                  );
+                },
               ),
               label: '',
             );
           }),
         );
       },
+    );
+  }
+
+  BottomNavigationBarItem _buildNavItem(
+    int count,
+    String pageTitle,
+    bool isSelected,
+    Color selectedColor,
+    Color unselectedColor,
+  ) {
+    return BottomNavigationBarItem(
+      icon: _buildCountIcon(
+        count,
+        isSelected,
+        selectedColor,
+        unselectedColor,
+        pageTitle,
+      ),
+      label: '',
+    );
+  }
+
+  Widget _buildCountIcon(
+    int count,
+    bool isSelected,
+    Color selectedColor,
+    Color unselectedColor,
+    String label,
+  ) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+            child: TweenAnimationBuilder<Color?>(
+              key: ValueKey(count),
+              duration: const Duration(milliseconds: 300),
+              tween: ColorTween(
+                begin: Colors.redAccent,
+                end: isSelected ? selectedColor : unselectedColor,
+              ),
+              builder: (context, color, child) {
+                return Text(
+                  '$count',
+                  style: TextStyle(
+                    fontSize: isSelected ? 26 : 20,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 4),
+          AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 250),
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: isSelected ? selectedColor : unselectedColor,
+            ),
+            child: Text(label),
+          ),
+        ],
+      ),
     );
   }
 }

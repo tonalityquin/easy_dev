@@ -68,6 +68,11 @@ class DummyPlateRepository implements PlateRepository {
   Stream<List<PlateModel>> getPlatesByTypeAndArea(PlateType type, String area) => throw UnimplementedError();
 
   @override
+  Future<int> getPlateCountByTypeAndArea(PlateType type, String area) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<PlateModel?> getPlate(String documentId) => throw UnimplementedError();
 
   @override

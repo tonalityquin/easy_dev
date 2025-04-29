@@ -345,7 +345,6 @@ class _Modify3Digit extends State<Modify3Digit> {
     _clearLocation();
   }
 
-
   void _selectParkingLocation() {
     showDialog(
       context: context,

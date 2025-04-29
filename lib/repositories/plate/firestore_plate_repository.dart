@@ -19,6 +19,21 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
+  Future<int> getPlateCountByTypeAndArea(
+    PlateType type,
+    String area,
+  ) async {
+    final aggregateQuerySnapshot = await _firestore
+        .collection('plates')
+        .where('type', isEqualTo: type.firestoreValue)
+        .where('area', isEqualTo: area)
+        .count()
+        .get();
+
+    return aggregateQuerySnapshot.count ?? 0;
+  }
+
+  @override
   Future<void> addOrUpdatePlate(String documentId, PlateModel plate) async {
     final docRef = _firestore.collection('plates').doc(documentId);
     final docSnapshot = await docRef.get();
