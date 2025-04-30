@@ -55,6 +55,14 @@ class DummyPlateRepository implements PlateRepository {
 
   Stream<List<PlateModel>> getPlatesStream() => throw UnimplementedError();
 
+  @override
+  Future<List<PlateModel>> getPlatesByLocation({
+    required PlateType type,
+    required String area,
+    required String location,
+  }) =>
+      throw UnimplementedError();
+
   Future<PlateModel?> getPlateById(String docId) => throw UnimplementedError();
 
   Future<void> logPlateAction(PlateModel plate, String action) => throw UnimplementedError();

@@ -71,6 +71,17 @@ class FilterPlate extends ChangeNotifier {
     }
   }
 
+  Future<List<PlateModel>> fetchPlatesByParkingLocation({
+    required PlateType type,
+    required String location,
+  }) async {
+    return await _repository.getPlatesByLocation(
+      type: type,
+      area: currentArea,
+      location: location,
+    );
+  }
+
   void setLocationSearchQuery(String query) {
     _locationQuery = query;
     notifyListeners();
@@ -100,16 +111,6 @@ class FilterPlate extends ChangeNotifier {
     debugPrint("📌 주차 구역 필터링 후 plate 개수: ${plates.length}");
 
     return plates;
-  }
-
-  /// 🗺️ 선택 가능한 주차 구역
-  Future<List<String>> getAvailableLocations(String area) async {
-    return await _repository.getAvailableLocations(area);
-  }
-
-  /// 🔄 외부 상태 동기화용 호출
-  void syncWithAreaState() {
-    notifyListeners();
   }
 
   @override

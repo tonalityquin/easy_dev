@@ -193,21 +193,19 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
           appBar: const TopNavigation(),
           body: Consumer2<PlateState, AreaState>(
             builder: (context, plateState, areaState, child) {
-              final currentArea = areaState.currentArea;
               final filterState = context.read<FilterPlate>();
               final userName = context.read<UserState>().name;
 
               final Future<List<PlateModel>> futurePlates = _isSearchMode
                   ? filterState.fetchPlatesBySearchQuery()
-                  : Future.value(
-                _isParkingAreaMode && _selectedParkingArea != null
-                    ? filterState.filterByParkingLocation(
-                  PlateType.departureRequests,
-                  currentArea,
-                  _selectedParkingArea!,
-                )
-                    : plateState.getPlatesByCollection(PlateType.departureRequests),
-              );
+                  : (_isParkingAreaMode && _selectedParkingArea != null)
+                      ? filterState.fetchPlatesByParkingLocation(
+                          type: PlateType.departureRequests,
+                          location: _selectedParkingArea!,
+                        )
+                      : Future.value(
+                          plateState.getPlatesByCollection(PlateType.departureRequests),
+                        );
 
               return FutureBuilder<List<PlateModel>>(
                 future: futurePlates,
@@ -215,9 +213,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                   final departureRequests = snapshot.data ?? [];
 
                   departureRequests.sort((a, b) {
-                    return _isSorted
-                        ? b.requestTime.compareTo(a.requestTime)
-                        : a.requestTime.compareTo(b.requestTime);
+                    return _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime);
                   });
 
                   return ListView(
@@ -226,8 +222,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                       PlateContainer(
                         data: departureRequests,
                         collection: PlateType.departureRequests,
-                        filterCondition: (request) =>
-                        request.type == PlateType.departureRequests.firestoreValue,
+                        filterCondition: (request) => request.type == PlateType.departureRequests.firestoreValue,
                         onPlateTap: (plateNumber, area) {
                           plateState.toggleIsSelected(
                             collection: PlateType.departureRequests,

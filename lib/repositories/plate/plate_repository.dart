@@ -3,19 +3,26 @@ import '../../models/plate_model.dart';
 
 abstract class PlateRepository {
   Stream<List<PlateModel>> getPlatesByTypeAndArea(
-      PlateType type,
-      String area, {
-        int? limit,
-      });
+    PlateType type,
+    String area, {
+    int? limit,
+  });
+
   Future<int> getPlateCountByTypeAndArea(
     PlateType type,
     String area,
   );
+
   Future<List<PlateModel>> getPlatesByFourDigit({
     required String plateFourDigit,
     required String area,
   });
 
+  Future<List<PlateModel>> getPlatesByLocation({
+    required PlateType type,
+    required String area,
+    required String location,
+  });
 
   Future<void> addOrUpdatePlate(String documentId, PlateModel plate); // v
 

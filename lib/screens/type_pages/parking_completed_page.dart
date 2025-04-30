@@ -168,61 +168,59 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
         },
         child: Scaffold(
           appBar: const TopNavigation(),
-          body: Consumer2<PlateState, AreaState>(
-            builder: (context, plateState, areaState, child) {
-              final currentArea = areaState.currentArea;
-              final filterState = context.read<FilterPlate>();
-              final userName = context.read<UserState>().name;
+            body: Consumer2<PlateState, AreaState>(
+              builder: (context, plateState, areaState, child) {
+                final filterState = context.read<FilterPlate>();
+                final userName = context.read<UserState>().name;
 
-              final Future<List<PlateModel>> futurePlates = _isSearchMode
-                  ? filterState.fetchPlatesBySearchQuery()
-                  : Future.value(
-                _isParkingAreaMode && _selectedParkingArea != null
-                    ? filterState.filterByParkingLocation(
-                  PlateType.parkingCompleted,
-                  currentArea,
-                  _selectedParkingArea!,
+                final Future<List<PlateModel>> futurePlates = _isSearchMode
+                    ? filterState.fetchPlatesBySearchQuery()
+                    : (_isParkingAreaMode && _selectedParkingArea != null)
+                    ? filterState.fetchPlatesByParkingLocation(
+                  type: PlateType.parkingCompleted,
+                  location: _selectedParkingArea!,
                 )
-                    : plateState.getPlatesByCollection(PlateType.parkingCompleted),
-              );
+                    : Future.value(
+                  plateState.getPlatesByCollection(PlateType.parkingCompleted),
+                );
 
-              return FutureBuilder<List<PlateModel>>(
-                future: futurePlates,
-                builder: (context, snapshot) {
-                  final parkingCompleted = snapshot.data ?? [];
+                return FutureBuilder<List<PlateModel>>(
+                  future: futurePlates,
+                  builder: (context, snapshot) {
+                    final parkingCompleted = snapshot.data ?? [];
 
-                  parkingCompleted.sort((a, b) {
-                    return _isSorted
-                        ? b.requestTime.compareTo(a.requestTime)
-                        : a.requestTime.compareTo(b.requestTime);
-                  });
+                    parkingCompleted.sort((a, b) {
+                      return _isSorted
+                          ? b.requestTime.compareTo(a.requestTime)
+                          : a.requestTime.compareTo(b.requestTime);
+                    });
 
-                  return ListView(
-                    padding: const EdgeInsets.all(8.0),
-                    children: [
-                      PlateContainer(
-                        data: parkingCompleted,
-                        collection: PlateType.parkingCompleted,
-                        filterCondition: (request) =>
-                        request.type == PlateType.parkingCompleted.firestoreValue,
-                        onPlateTap: (plateNumber, area) {
-                          plateState.toggleIsSelected(
-                            collection: PlateType.parkingCompleted,
-                            plateNumber: plateNumber,
-                            userName: userName,
-                            onError: (errorMessage) {
-                              showFailedSnackbar(context, errorMessage);
-                            },
-                          );
-                        },
-                      ),
-                    ],
-                  );
-                },
-              );
-            },
-          ),
-          bottomNavigationBar: Consumer<PlateState>(
+                    return ListView(
+                      padding: const EdgeInsets.all(8.0),
+                      children: [
+                        PlateContainer(
+                          data: parkingCompleted,
+                          collection: PlateType.parkingCompleted,
+                          filterCondition: (request) =>
+                          request.type == PlateType.parkingCompleted.firestoreValue,
+                          onPlateTap: (plateNumber, area) {
+                            plateState.toggleIsSelected(
+                              collection: PlateType.parkingCompleted,
+                              plateNumber: plateNumber,
+                              userName: userName,
+                              onError: (errorMessage) {
+                                showFailedSnackbar(context, errorMessage);
+                              },
+                            );
+                          },
+                        ),
+                      ],
+                    );
+                  },
+                );
+              },
+            ),
+            bottomNavigationBar: Consumer<PlateState>(
             builder: (context, plateState, child) {
               final userName = context.read<UserState>().name;
               final selectedPlate = plateState.getSelectedPlate(PlateType.parkingCompleted, userName);

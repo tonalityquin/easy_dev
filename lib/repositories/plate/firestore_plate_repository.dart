@@ -52,6 +52,22 @@ class FirestorePlateRepository implements PlateRepository {
 
     return querySnapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList();
   }
+  @override
+  Future<List<PlateModel>> getPlatesByLocation({
+    required PlateType type,
+    required String area,
+    required String location,
+  }) async {
+    final querySnapshot = await _firestore
+        .collection('plates')
+        .where('type', isEqualTo: type.firestoreValue)
+        .where('area', isEqualTo: area)
+        .where('location', isEqualTo: location)
+        .get();
+
+    return querySnapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList();
+  }
+
 
   @override
   Future<void> addOrUpdatePlate(String documentId, PlateModel plate) async {
