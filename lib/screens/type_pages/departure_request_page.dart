@@ -197,7 +197,9 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
               final filterState = context.read<FilterPlate>(); // 🔹 FilterState 가져오기
               var departureRequests = _isParkingAreaMode && _selectedParkingArea != null
                   ? filterState.filterByParkingLocation(PlateType.departureRequests, currentArea, _selectedParkingArea!)
-                  : plateState.getPlatesByCollection(PlateType.departureRequests);
+                  : filterState.filterPlatesByQuery(
+                      plateState.getPlatesByCollection(PlateType.departureRequests),
+                    );
               final userName = context.read<UserState>().name;
               departureRequests.sort((a, b) {
                 return _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime);

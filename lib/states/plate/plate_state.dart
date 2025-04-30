@@ -6,6 +6,7 @@ import '../area/area_state.dart';
 import '../../enums/plate_type.dart';
 import '../../utils/gcs_uploader.dart';
 
+
 class PlateState extends ChangeNotifier {
   final PlateRepository _repository;
   final AreaState _areaState;
@@ -23,13 +24,10 @@ class PlateState extends ChangeNotifier {
 
   String? _searchQuery;
   String _previousArea = '';
-
   bool _isLoading = true;
 
   bool get isLoading => _isLoading;
-
   String get searchQuery => _searchQuery ?? "";
-
   String get currentArea => _areaState.currentArea;
 
   final Map<String, bool> previousIsLockedFee = {};
@@ -125,20 +123,14 @@ class PlateState extends ChangeNotifier {
       plates = plates.where((plate) {
         final end = plate.endTime;
         if (end == null) return false;
-
         final endDate = DateTime(end.year, end.month, end.day);
         return endDate == selectedDateOnly;
       }).toList();
     }
 
-    // ✅ 검색어가 있다면 번호 필터링
+    // ✅ 번호판 4자리 검색 (plateFourDigit 기준으로 정확히 일치)
     if (_searchQuery != null && _searchQuery!.length == 4) {
-      plates = plates.where((plate) {
-        final last4Digits = plate.plateNumber.length >= 4
-            ? plate.plateNumber.substring(plate.plateNumber.length - 4)
-            : plate.plateNumber;
-        return last4Digits == _searchQuery;
-      }).toList();
+      plates = plates.where((plate) => plate.plateFourDigit == _searchQuery).toList();
     }
 
     // ✅ 입차 완료는 최대 6개만 보여줌
@@ -174,9 +166,6 @@ class PlateState extends ChangeNotifier {
         throw Exception('🚨 Collection not found: $collection');
       }
 
-      debugPrint('🔎 Trying to select plateId: $plateId');
-      debugPrint('📋 Plates in collection $collection: ${plateList.map((p) => p.id).toList()}');
-
       final index = plateList.indexWhere((p) => p.id == plateId);
       if (index == -1) {
         throw Exception('🚨 Plate not found in collection $collection: $plateId');
@@ -190,18 +179,19 @@ class PlateState extends ChangeNotifier {
 
       final alreadySelected = _data.entries.expand((entry) => entry.value).firstWhere(
             (p) => p.isSelected && p.selectedBy == userName && p.id != plateId,
-            orElse: () => PlateModel(
-              id: '',
-              plateNumber: '',
-              type: '',
-              requestTime: DateTime.now(),
-              location: '',
-              area: '',
-              userName: '',
-              isSelected: false,
-              statusList: [],
-            ),
-          );
+        orElse: () => PlateModel(
+          id: '',
+          plateNumber: '',
+          plateFourDigit: '',
+          type: '',
+          requestTime: DateTime.now(),
+          location: '',
+          area: '',
+          userName: '',
+          isSelected: false,
+          statusList: [],
+        ),
+      );
 
       if (alreadySelected.id.isNotEmpty && !plate.isSelected) {
         final collectionLabel = _getCollectionLabelForType(alreadySelected.type);
@@ -257,10 +247,11 @@ class PlateState extends ChangeNotifier {
     if (plates == null || plates.isEmpty) return null;
 
     return plates.firstWhere(
-      (plate) => plate.isSelected && plate.selectedBy == userName,
+          (plate) => plate.isSelected && plate.selectedBy == userName,
       orElse: () => PlateModel(
         id: '',
         plateNumber: '',
+        plateFourDigit: '',
         type: '',
         requestTime: DateTime.now(),
         location: '',

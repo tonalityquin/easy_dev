@@ -173,7 +173,9 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
               final filterState = context.read<FilterPlate>();
               var parkingCompleted = _isParkingAreaMode && _selectedParkingArea != null
                   ? filterState.filterByParkingLocation(PlateType.parkingCompleted, currentArea, _selectedParkingArea!)
-                  : plateState.getPlatesByCollection(PlateType.parkingCompleted);
+                  : filterState.filterPlatesByQuery(
+                      plateState.getPlatesByCollection(PlateType.parkingCompleted),
+                    );
               final userName = context.read<UserState>().name;
               parkingCompleted.sort((a, b) {
                 return _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime);

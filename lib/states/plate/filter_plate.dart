@@ -22,7 +22,6 @@ class FilterPlate extends ChangeNotifier {
   String? _locationQuery;
 
   String get searchQuery => _searchQuery ?? "";
-
   String get locationQuery => _locationQuery ?? "";
 
   /// 🔁 지역 기반으로 PlateType별 스트림 구독
@@ -61,15 +60,10 @@ class FilterPlate extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 🔍 차량번호 4자리 기준 필터
+  /// 🔍 번호판 4자리 기준 필터 (plateFourDigit 필드 활용)
   List<PlateModel> filterPlatesByQuery(List<PlateModel> plates) {
     if (_searchQuery != null && _searchQuery!.length == 4) {
-      return plates.where((plate) {
-        final last4Digits = plate.plateNumber.length >= 4
-            ? plate.plateNumber.substring(plate.plateNumber.length - 4)
-            : plate.plateNumber;
-        return last4Digits == _searchQuery;
-      }).toList();
+      return plates.where((plate) => plate.plateFourDigit == _searchQuery).toList();
     }
     return plates;
   }
@@ -93,22 +87,6 @@ class FilterPlate extends ChangeNotifier {
     debugPrint("📌 주차 구역 필터링 후 plate 개수: ${plates.length}");
 
     return plates;
-  }
-
-  /// 📆 특정 날짜 출차 완료 필터
-  List<PlateModel> filterDepartureCompletedByDate({
-    required String area,
-    required DateTime selectedDate,
-  }) {
-    return _data[PlateType.departureCompleted]
-            ?.where((plate) =>
-                plate.area == area &&
-                plate.endTime != null &&
-                plate.endTime!.year == selectedDate.year &&
-                plate.endTime!.month == selectedDate.month &&
-                plate.endTime!.day == selectedDate.day)
-            .toList() ??
-        [];
   }
 
   /// 🗺️ 선택 가능한 주차 구역

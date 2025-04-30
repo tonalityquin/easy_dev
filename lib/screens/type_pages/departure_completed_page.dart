@@ -66,11 +66,13 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
     final selectedDateRaw = context.watch<FieldSelectedDateState>().selectedDate ?? DateTime.now();
     final selectedDate = DateTime(selectedDateRaw.year, selectedDateRaw.month, selectedDateRaw.day);
 
-    final firestorePlates = context
+    final rawPlates = context
         .watch<PlateState>()
         .getPlatesByCollection(PlateType.departureCompleted, selectedDate: selectedDate)
         .where((p) => !p.isLockedFee && p.area.trim() == area)
         .toList();
+
+    final firestorePlates = context.watch<FilterPlate>().filterPlatesByQuery(rawPlates);
 
     firestorePlates
         .sort((a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime));

@@ -9,6 +9,7 @@ int parseInt(dynamic value) {
 
 class PlateFields {
   static const String plateNumber = 'plate_number';
+  static const String plateFourDigit = 'plate_four_digit'; // ✅ 추가
   static const String type = 'type';
   static const String requestTime = 'request_time';
   static const String endTime = 'end_time';
@@ -28,16 +29,16 @@ class PlateFields {
   static const String isLockedFee = 'isLockedFee';
   static const String lockedAtTimeInSeconds = 'lockedAtTimeInSeconds';
   static const String lockedFeeAmount = 'lockedFeeAmount';
-  static const String updatedAt = 'updatedAt'; // ✅ 추가
+  static const String updatedAt = 'updatedAt';
 }
 
 class PlateModel {
   final String id;
   final String plateNumber;
+  final String plateFourDigit; // ✅ 추가
   final String type;
   final DateTime requestTime;
   final DateTime? endTime;
-
   final String location;
   final String area;
   final String userName;
@@ -54,11 +55,12 @@ class PlateModel {
   final bool isLockedFee;
   final int? lockedAtTimeInSeconds;
   final int? lockedFeeAmount;
-  final DateTime? updatedAt; // ✅ 추가
+  final DateTime? updatedAt;
 
   PlateModel({
     required this.id,
     required this.plateNumber,
+    required this.plateFourDigit, // ✅ 추가
     required this.type,
     required this.requestTime,
     this.endTime,
@@ -78,7 +80,7 @@ class PlateModel {
     this.isLockedFee = false,
     this.lockedAtTimeInSeconds,
     this.lockedFeeAmount,
-    this.updatedAt, // ✅ 추가
+    this.updatedAt,
   });
 
   factory PlateModel.fromDocument(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -90,6 +92,7 @@ class PlateModel {
     return PlateModel(
       id: doc.id,
       plateNumber: data[PlateFields.plateNumber] ?? '',
+      plateFourDigit: data[PlateFields.plateFourDigit] ?? '', // ✅ 추가
       type: data[PlateFields.type] ?? '',
       requestTime: (timestamp is Timestamp) ? timestamp.toDate() : DateTime.now(),
       endTime: (endTimestamp is Timestamp) ? endTimestamp.toDate() : null,
@@ -109,7 +112,7 @@ class PlateModel {
       isLockedFee: data[PlateFields.isLockedFee] ?? false,
       lockedAtTimeInSeconds: parseInt(data[PlateFields.lockedAtTimeInSeconds]),
       lockedFeeAmount: parseInt(data[PlateFields.lockedFeeAmount]),
-      updatedAt: (updatedTimestamp is Timestamp) ? updatedTimestamp.toDate() : null, // ✅ 추가
+      updatedAt: (updatedTimestamp is Timestamp) ? updatedTimestamp.toDate() : null,
     );
   }
 
@@ -117,6 +120,7 @@ class PlateModel {
     return PlateModel(
       id: id,
       plateNumber: map[PlateFields.plateNumber] ?? '',
+      plateFourDigit: map[PlateFields.plateFourDigit] ?? '', // ✅ 추가
       type: map[PlateFields.type] ?? '',
       requestTime: (map[PlateFields.requestTime] is Timestamp)
           ? (map[PlateFields.requestTime] as Timestamp).toDate()
@@ -142,13 +146,14 @@ class PlateModel {
       lockedFeeAmount: parseInt(map[PlateFields.lockedFeeAmount]),
       updatedAt: (map[PlateFields.updatedAt] is Timestamp)
           ? (map[PlateFields.updatedAt] as Timestamp).toDate()
-          : null, // ✅ 추가
+          : null,
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
       PlateFields.plateNumber: plateNumber,
+      PlateFields.plateFourDigit: plateFourDigit, // ✅ 추가
       PlateFields.type: type,
       PlateFields.requestTime: requestTime,
       if (endTime != null) PlateFields.endTime: endTime,
@@ -170,13 +175,14 @@ class PlateModel {
       if (lockedFeeAmount != null)
         PlateFields.lockedFeeAmount: lockedFeeAmount,
       if (updatedAt != null)
-        PlateFields.updatedAt: Timestamp.fromDate(updatedAt!), // ✅ 추가
+        PlateFields.updatedAt: Timestamp.fromDate(updatedAt!),
     };
   }
 
   PlateModel copyWith({
     String? id,
     String? plateNumber,
+    String? plateFourDigit, // ✅ 추가
     String? type,
     DateTime? requestTime,
     DateTime? endTime,
@@ -196,11 +202,12 @@ class PlateModel {
     bool? isLockedFee,
     int? lockedAtTimeInSeconds,
     int? lockedFeeAmount,
-    DateTime? updatedAt, // ✅ 추가
+    DateTime? updatedAt,
   }) {
     return PlateModel(
       id: id ?? this.id,
       plateNumber: plateNumber ?? this.plateNumber,
+      plateFourDigit: plateFourDigit ?? this.plateFourDigit, // ✅ 추가
       type: type ?? this.type,
       requestTime: requestTime ?? this.requestTime,
       endTime: endTime ?? this.endTime,
@@ -220,7 +227,7 @@ class PlateModel {
       isLockedFee: isLockedFee ?? this.isLockedFee,
       lockedAtTimeInSeconds: lockedAtTimeInSeconds ?? this.lockedAtTimeInSeconds,
       lockedFeeAmount: lockedFeeAmount ?? this.lockedFeeAmount,
-      updatedAt: updatedAt ?? this.updatedAt, // ✅ 추가
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
@@ -229,7 +236,6 @@ class PlateModel {
       'PlateModel(id: $id, plateNumber: $plateNumber, user: $userName, area: $area)';
 }
 
-/// ✅ PlateType enum 변환 확장
 extension PlateModelTypeExtension on PlateModel {
   PlateType? get typeEnum {
     switch (type) {

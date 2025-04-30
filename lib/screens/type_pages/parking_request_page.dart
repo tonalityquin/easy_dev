@@ -165,7 +165,9 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
         appBar: const TopNavigation(),
         body: Consumer2<PlateState, AreaState>(
           builder: (context, plateState, areaState, child) {
-            var parkingRequests = plateState.getPlatesByCollection(PlateType.parkingRequests);
+            var parkingRequests = context.watch<FilterPlate>().filterPlatesByQuery(
+                  plateState.getPlatesByCollection(PlateType.parkingRequests),
+                );
             parkingRequests.sort((a, b) {
               return _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime);
             });

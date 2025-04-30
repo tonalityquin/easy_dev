@@ -53,9 +53,7 @@ class MyApp extends StatelessWidget {
     // ✅ 유저의 currentArea 또는 첫 지역, fallback은 'default'
     final selectedArea = userState.user?.currentArea?.trim().isNotEmpty == true
         ? userState.user!.currentArea!
-        : (userState.user?.areas.isNotEmpty == true
-        ? userState.user!.areas.first
-        : 'default');
+        : (userState.user?.areas.isNotEmpty == true ? userState.user!.areas.first : 'default');
 
     await areaState.initialize(selectedArea);
 
