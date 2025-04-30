@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../models/plate_model.dart';
 import '../../repositories/plate/plate_repository.dart';
 import '../../utils/fee_calculator.dart';
 import '../../states/plate/plate_state.dart'; // PlateState 상태 관리
@@ -171,34 +172,53 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
             builder: (context, plateState, areaState, child) {
               final currentArea = areaState.currentArea;
               final filterState = context.read<FilterPlate>();
-              var parkingCompleted = _isParkingAreaMode && _selectedParkingArea != null
-                  ? filterState.filterByParkingLocation(PlateType.parkingCompleted, currentArea, _selectedParkingArea!)
-                  : filterState.filterPlatesByQuery(
-                      plateState.getPlatesByCollection(PlateType.parkingCompleted),
-                    );
               final userName = context.read<UserState>().name;
-              parkingCompleted.sort((a, b) {
-                return _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime);
-              });
-              return ListView(
-                padding: const EdgeInsets.all(8.0),
-                children: [
-                  PlateContainer(
-                    data: parkingCompleted,
-                    collection: PlateType.parkingCompleted,
-                    filterCondition: (request) => request.type == PlateType.parkingCompleted.firestoreValue,
-                    onPlateTap: (plateNumber, area) {
-                      plateState.toggleIsSelected(
+
+              final Future<List<PlateModel>> futurePlates = _isSearchMode
+                  ? filterState.fetchPlatesBySearchQuery()
+                  : Future.value(
+                _isParkingAreaMode && _selectedParkingArea != null
+                    ? filterState.filterByParkingLocation(
+                  PlateType.parkingCompleted,
+                  currentArea,
+                  _selectedParkingArea!,
+                )
+                    : plateState.getPlatesByCollection(PlateType.parkingCompleted),
+              );
+
+              return FutureBuilder<List<PlateModel>>(
+                future: futurePlates,
+                builder: (context, snapshot) {
+                  final parkingCompleted = snapshot.data ?? [];
+
+                  parkingCompleted.sort((a, b) {
+                    return _isSorted
+                        ? b.requestTime.compareTo(a.requestTime)
+                        : a.requestTime.compareTo(b.requestTime);
+                  });
+
+                  return ListView(
+                    padding: const EdgeInsets.all(8.0),
+                    children: [
+                      PlateContainer(
+                        data: parkingCompleted,
                         collection: PlateType.parkingCompleted,
-                        plateNumber: plateNumber,
-                        userName: userName,
-                        onError: (errorMessage) {
-                          showFailedSnackbar(context, errorMessage);
+                        filterCondition: (request) =>
+                        request.type == PlateType.parkingCompleted.firestoreValue,
+                        onPlateTap: (plateNumber, area) {
+                          plateState.toggleIsSelected(
+                            collection: PlateType.parkingCompleted,
+                            plateNumber: plateNumber,
+                            userName: userName,
+                            onError: (errorMessage) {
+                              showFailedSnackbar(context, errorMessage);
+                            },
+                          );
                         },
-                      );
-                    },
-                  ),
-                ],
+                      ),
+                    ],
+                  );
+                },
               );
             },
           ),

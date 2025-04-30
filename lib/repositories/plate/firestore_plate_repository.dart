@@ -21,14 +21,14 @@ class FirestorePlateRepository implements PlateRepository {
 
     return query.snapshots().map(
           (snapshot) => snapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList(),
-    );
+        );
   }
 
   @override
   Future<int> getPlateCountByTypeAndArea(
-      PlateType type,
-      String area,
-      ) async {
+    PlateType type,
+    String area,
+  ) async {
     final aggregateQuerySnapshot = await _firestore
         .collection('plates')
         .where('type', isEqualTo: type.firestoreValue)
@@ -37,6 +37,20 @@ class FirestorePlateRepository implements PlateRepository {
         .get();
 
     return aggregateQuerySnapshot.count ?? 0;
+  }
+
+  @override
+  Future<List<PlateModel>> getPlatesByFourDigit({
+    required String plateFourDigit,
+    required String area,
+  }) async {
+    final querySnapshot = await _firestore
+        .collection('plates')
+        .where('plate_four_digit', isEqualTo: plateFourDigit)
+        .where('area', isEqualTo: area)
+        .get();
+
+    return querySnapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList();
   }
 
   @override
@@ -150,14 +164,14 @@ class FirestorePlateRepository implements PlateRepository {
       }
     }
 
-    final plateFourDigit = plateNumber.length >= 4
-        ? plateNumber.substring(plateNumber.length - 4)
-        : plateNumber; // ✅ 뒷 4자리 추출
+    final plateFourDigit =
+        plateNumber.length >= 4 ? plateNumber.substring(plateNumber.length - 4) : plateNumber; // ✅ 뒷 4자리 추출
 
     final plate = PlateModel(
       id: documentId,
       plateNumber: plateNumber,
-      plateFourDigit: plateFourDigit, // ✅ 필드 추가
+      plateFourDigit: plateFourDigit,
+      // ✅ 필드 추가
       type: plateType.firestoreValue,
       requestTime: DateTime.now(),
       endTime: endTime,
@@ -246,10 +260,10 @@ class FirestorePlateRepository implements PlateRepository {
         .where('plate_number', isEqualTo: plateNumber)
         .where('area', isEqualTo: area)
         .where('type', whereIn: [
-      PlateType.parkingRequests.firestoreValue,
-      PlateType.parkingCompleted.firestoreValue,
-      PlateType.departureRequests.firestoreValue,
-    ])
+          PlateType.parkingRequests.firestoreValue,
+          PlateType.parkingCompleted.firestoreValue,
+          PlateType.departureRequests.firestoreValue,
+        ])
         .limit(1)
         .get();
 

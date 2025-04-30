@@ -9,6 +9,7 @@ class FilterPlate extends ChangeNotifier {
   final String currentArea;
 
   FilterPlate(this._repository, this.currentArea) {
+    debugPrint("✅ FilterPlate created with area: $currentArea");
     _initializeData();
   }
 
@@ -22,6 +23,7 @@ class FilterPlate extends ChangeNotifier {
   String? _locationQuery;
 
   String get searchQuery => _searchQuery ?? "";
+
   String get locationQuery => _locationQuery ?? "";
 
   /// 🔁 지역 기반으로 PlateType별 스트림 구독
@@ -50,6 +52,25 @@ class FilterPlate extends ChangeNotifier {
     notifyListeners();
   }
 
+  List<PlateModel> filterPlatesByQuery(List<PlateModel> plates) {
+    if (_searchQuery != null && _searchQuery!.length == 4) {
+      return plates.where((plate) => plate.plateFourDigit == _searchQuery).toList();
+    }
+    return plates;
+  }
+
+  Future<List<PlateModel>> fetchPlatesBySearchQuery() async {
+    if (_searchQuery != null && _searchQuery!.length == 4) {
+      return await _repository.getPlatesByFourDigit(
+        plateFourDigit: _searchQuery!,
+        area: currentArea,
+      );
+    } else {
+      // 기본값으로 전체 plates 반환 (필요에 따라 타입 추가 가능)
+      return [];
+    }
+  }
+
   void setLocationSearchQuery(String query) {
     _locationQuery = query;
     notifyListeners();
@@ -58,14 +79,6 @@ class FilterPlate extends ChangeNotifier {
   void clearLocationSearchQuery() {
     _locationQuery = null;
     notifyListeners();
-  }
-
-  /// 🔍 번호판 4자리 기준 필터 (plateFourDigit 필드 활용)
-  List<PlateModel> filterPlatesByQuery(List<PlateModel> plates) {
-    if (_searchQuery != null && _searchQuery!.length == 4) {
-      return plates.where((plate) => plate.plateFourDigit == _searchQuery).toList();
-    }
-    return plates;
   }
 
   /// 🅿️ 지역 + 주차구역 기준 필터

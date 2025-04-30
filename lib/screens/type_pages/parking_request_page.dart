@@ -1,6 +1,7 @@
 import 'package:easydev/states/plate/filter_plate.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../models/plate_model.dart';
 import '../../states/plate/plate_state.dart';
 import '../../states/plate/delete_plate.dart';
 import '../../states/plate/movement_plate.dart';
@@ -165,24 +166,33 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
         appBar: const TopNavigation(),
         body: Consumer2<PlateState, AreaState>(
           builder: (context, plateState, areaState, child) {
-            var parkingRequests = context.watch<FilterPlate>().filterPlatesByQuery(
-                  plateState.getPlatesByCollection(PlateType.parkingRequests),
+            return FutureBuilder<List<PlateModel>>(
+              future: _isSearchMode
+                  ? context.read<FilterPlate>().fetchPlatesBySearchQuery()
+                  : Future.value(
+                      plateState.getPlatesByCollection(PlateType.parkingRequests),
+                    ),
+              builder: (context, snapshot) {
+                var parkingRequests = snapshot.data ?? [];
+
+                parkingRequests.sort((a, b) {
+                  return _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime);
+                });
+
+                return ListView(
+                  padding: const EdgeInsets.all(8.0),
+                  children: [
+                    PlateContainer(
+                      data: parkingRequests,
+                      collection: PlateType.parkingRequests,
+                      filterCondition: (request) => request.type == PlateType.parkingRequests.firestoreValue,
+                      onPlateTap: (plateNumber, area) {
+                        _handlePlateTap(context, plateNumber, area);
+                      },
+                    ),
+                  ],
                 );
-            parkingRequests.sort((a, b) {
-              return _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime);
-            });
-            return ListView(
-              padding: const EdgeInsets.all(8.0),
-              children: [
-                PlateContainer(
-                  data: parkingRequests,
-                  collection: PlateType.parkingRequests,
-                  filterCondition: (request) => request.type == PlateType.parkingRequests.firestoreValue,
-                  onPlateTap: (plateNumber, area) {
-                    _handlePlateTap(context, plateNumber, area);
-                  },
-                ),
-              ],
+              },
             );
           },
         ),

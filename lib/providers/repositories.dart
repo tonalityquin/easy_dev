@@ -74,6 +74,13 @@ class DummyPlateRepository implements PlateRepository {
   }
 
   @override
+  Future<List<PlateModel>> getPlatesByFourDigit({
+    required String plateFourDigit,
+    required String area,
+  }) =>
+      throw UnimplementedError();
+
+  @override
   Future<PlateModel?> getPlate(String documentId) => throw UnimplementedError();
 
   @override

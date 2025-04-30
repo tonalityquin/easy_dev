@@ -11,6 +11,11 @@ abstract class PlateRepository {
     PlateType type,
     String area,
   );
+  Future<List<PlateModel>> getPlatesByFourDigit({
+    required String plateFourDigit,
+    required String area,
+  });
+
 
   Future<void> addOrUpdatePlate(String documentId, PlateModel plate); // v
 

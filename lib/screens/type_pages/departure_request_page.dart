@@ -194,35 +194,54 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
           body: Consumer2<PlateState, AreaState>(
             builder: (context, plateState, areaState, child) {
               final currentArea = areaState.currentArea;
-              final filterState = context.read<FilterPlate>(); // 🔹 FilterState 가져오기
-              var departureRequests = _isParkingAreaMode && _selectedParkingArea != null
-                  ? filterState.filterByParkingLocation(PlateType.departureRequests, currentArea, _selectedParkingArea!)
-                  : filterState.filterPlatesByQuery(
-                      plateState.getPlatesByCollection(PlateType.departureRequests),
-                    );
+              final filterState = context.read<FilterPlate>();
               final userName = context.read<UserState>().name;
-              departureRequests.sort((a, b) {
-                return _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime);
-              });
-              return ListView(
-                padding: const EdgeInsets.all(8.0),
-                children: [
-                  PlateContainer(
-                    data: departureRequests,
-                    collection: PlateType.departureRequests,
-                    filterCondition: (request) => request.type == PlateType.departureRequests.firestoreValue,
-                    onPlateTap: (plateNumber, area) {
-                      plateState.toggleIsSelected(
+
+              final Future<List<PlateModel>> futurePlates = _isSearchMode
+                  ? filterState.fetchPlatesBySearchQuery()
+                  : Future.value(
+                _isParkingAreaMode && _selectedParkingArea != null
+                    ? filterState.filterByParkingLocation(
+                  PlateType.departureRequests,
+                  currentArea,
+                  _selectedParkingArea!,
+                )
+                    : plateState.getPlatesByCollection(PlateType.departureRequests),
+              );
+
+              return FutureBuilder<List<PlateModel>>(
+                future: futurePlates,
+                builder: (context, snapshot) {
+                  final departureRequests = snapshot.data ?? [];
+
+                  departureRequests.sort((a, b) {
+                    return _isSorted
+                        ? b.requestTime.compareTo(a.requestTime)
+                        : a.requestTime.compareTo(b.requestTime);
+                  });
+
+                  return ListView(
+                    padding: const EdgeInsets.all(8.0),
+                    children: [
+                      PlateContainer(
+                        data: departureRequests,
                         collection: PlateType.departureRequests,
-                        plateNumber: plateNumber,
-                        userName: userName,
-                        onError: (errorMessage) {
-                          showFailedSnackbar(context, errorMessage);
+                        filterCondition: (request) =>
+                        request.type == PlateType.departureRequests.firestoreValue,
+                        onPlateTap: (plateNumber, area) {
+                          plateState.toggleIsSelected(
+                            collection: PlateType.departureRequests,
+                            plateNumber: plateNumber,
+                            userName: userName,
+                            onError: (errorMessage) {
+                              showFailedSnackbar(context, errorMessage);
+                            },
+                          );
                         },
-                      );
-                    },
-                  ),
-                ],
+                      ),
+                    ],
+                  );
+                },
               );
             },
           ),
