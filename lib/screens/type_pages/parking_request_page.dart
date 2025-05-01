@@ -33,6 +33,11 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
     setState(() {
       _isSorted = !_isSorted;
     });
+
+    context.read<PlateState>().updateSortOrder(
+          PlateType.parkingRequests,
+          _isSorted, // true: 최신순, false: 오래된순
+        );
   }
 
   void _showSearchDialog(BuildContext context) {
@@ -166,34 +171,45 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
         appBar: const TopNavigation(),
         body: Consumer2<PlateState, AreaState>(
           builder: (context, plateState, areaState, child) {
-            return FutureBuilder<List<PlateModel>>(
-              future: _isSearchMode
-                  ? context.read<FilterPlate>().fetchPlatesBySearchQuery()
-                  : Future.value(
-                      plateState.getPlatesByCollection(PlateType.parkingRequests),
-                    ),
-              builder: (context, snapshot) {
-                var parkingRequests = snapshot.data ?? [];
+            if (_isSearchMode) {
+              // 🔍 검색 모드일 때만 FutureBuilder 사용
+              return FutureBuilder<List<PlateModel>>(
+                future: context.read<FilterPlate>().fetchPlatesBySearchQuery(),
+                builder: (context, snapshot) {
+                  final searchResults = snapshot.data ?? [];
+                  return ListView(
+                    padding: const EdgeInsets.all(8.0),
+                    children: [
+                      PlateContainer(
+                        data: searchResults,
+                        collection: PlateType.parkingRequests,
+                        filterCondition: (request) => request.type == PlateType.parkingRequests.firestoreValue,
+                        onPlateTap: (plateNumber, area) {
+                          _handlePlateTap(context, plateNumber, area);
+                        },
+                      ),
+                    ],
+                  );
+                },
+              );
+            } else {
+              // ✅ 실시간 PlateState 데이터 감지 (정렬 포함)
+              final plates = plateState.getPlatesByCollection(PlateType.parkingRequests);
 
-                parkingRequests.sort((a, b) {
-                  return _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime);
-                });
-
-                return ListView(
-                  padding: const EdgeInsets.all(8.0),
-                  children: [
-                    PlateContainer(
-                      data: parkingRequests,
-                      collection: PlateType.parkingRequests,
-                      filterCondition: (request) => request.type == PlateType.parkingRequests.firestoreValue,
-                      onPlateTap: (plateNumber, area) {
-                        _handlePlateTap(context, plateNumber, area);
-                      },
-                    ),
-                  ],
-                );
-              },
-            );
+              return ListView(
+                padding: const EdgeInsets.all(8.0),
+                children: [
+                  PlateContainer(
+                    data: plates,
+                    collection: PlateType.parkingRequests,
+                    filterCondition: (request) => request.type == PlateType.parkingRequests.firestoreValue,
+                    onPlateTap: (plateNumber, area) {
+                      _handlePlateTap(context, plateNumber, area);
+                    },
+                  ),
+                ],
+              );
+            }
           },
         ),
         bottomNavigationBar: Consumer<PlateState>(

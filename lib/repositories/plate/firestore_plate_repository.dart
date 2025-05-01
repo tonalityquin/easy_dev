@@ -8,12 +8,17 @@ class FirestorePlateRepository implements PlateRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   @override
-  Stream<List<PlateModel>> getPlatesByTypeAndArea(PlateType type, String area, {int? limit}) {
+  Stream<List<PlateModel>> getPlatesByTypeAndArea(
+    PlateType type,
+    String area, {
+    int? limit,
+    bool descending = true, // 🔥 정렬 방향 매개변수 추가
+  }) {
     Query<Map<String, dynamic>> query = _firestore
         .collection('plates')
         .where('type', isEqualTo: type.firestoreValue)
         .where('area', isEqualTo: area)
-        .orderBy('request_time', descending: true);
+        .orderBy('request_time', descending: descending); // 🔁 여기에 반영
 
     if (limit != null) {
       query = query.limit(limit);
@@ -52,6 +57,7 @@ class FirestorePlateRepository implements PlateRepository {
 
     return querySnapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList();
   }
+
   @override
   Future<List<PlateModel>> getPlatesByLocation({
     required PlateType type,
@@ -67,7 +73,6 @@ class FirestorePlateRepository implements PlateRepository {
 
     return querySnapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList();
   }
-
 
   @override
   Future<void> addOrUpdatePlate(String documentId, PlateModel plate) async {

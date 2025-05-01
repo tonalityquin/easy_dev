@@ -82,16 +82,6 @@ class FilterPlate extends ChangeNotifier {
     );
   }
 
-  void setLocationSearchQuery(String query) {
-    _locationQuery = query;
-    notifyListeners();
-  }
-
-  void clearLocationSearchQuery() {
-    _locationQuery = null;
-    notifyListeners();
-  }
-
   /// 🅿️ 지역 + 주차구역 기준 필터
   List<PlateModel> filterByParkingLocation(PlateType collection, String area, String parkingLocation) {
     debugPrint("🚀 filterByParkingLocation() 호출됨: 지역 = $area, 주차 구역 = $parkingLocation");
@@ -111,6 +101,11 @@ class FilterPlate extends ChangeNotifier {
     debugPrint("📌 주차 구역 필터링 후 plate 개수: ${plates.length}");
 
     return plates;
+  }
+
+  void clearLocationSearchQuery() {
+    _locationQuery = null;
+    notifyListeners();
   }
 
   @override

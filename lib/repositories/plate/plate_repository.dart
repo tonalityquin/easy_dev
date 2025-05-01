@@ -6,6 +6,7 @@ abstract class PlateRepository {
     PlateType type,
     String area, {
     int? limit,
+    bool descending = true,
   });
 
   Future<int> getPlateCountByTypeAndArea(

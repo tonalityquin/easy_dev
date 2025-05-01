@@ -6,7 +6,6 @@ import '../area/area_state.dart';
 import '../../enums/plate_type.dart';
 import '../../utils/gcs_uploader.dart';
 
-
 class PlateState extends ChangeNotifier {
   final PlateRepository _repository;
   final AreaState _areaState;
@@ -21,16 +20,29 @@ class PlateState extends ChangeNotifier {
   };
 
   final Map<PlateType, StreamSubscription<List<PlateModel>>> _subscriptions = {};
+  final Map<PlateType, bool> _isSortedMap = {
+    for (var c in PlateType.values) c: true, // 기본: 최신순 (descending = true)
+  };
 
   String? _searchQuery;
   String _previousArea = '';
   bool _isLoading = true;
 
   bool get isLoading => _isLoading;
+
   String get searchQuery => _searchQuery ?? "";
+
   String get currentArea => _areaState.currentArea;
 
   final Map<String, bool> previousIsLockedFee = {};
+
+  // 🔧 각 PlateType별 limit 설정
+  final Map<PlateType, int> _limitMap = {
+    PlateType.parkingRequests: 6,
+    PlateType.parkingCompleted: 6,
+    PlateType.departureRequests: 3,
+    PlateType.departureCompleted: 10,
+  };
 
   void _initializeSubscriptions() {
     final area = _areaState.currentArea;
@@ -46,7 +58,14 @@ class PlateState extends ChangeNotifier {
     final totalCollections = PlateType.values.length;
 
     for (final collection in PlateType.values) {
-      final stream = _repository.getPlatesByTypeAndArea(collection, currentArea);
+      final descending = _isSortedMap[collection] ?? true;
+      final limit = _limitMap[collection];
+      final stream = _repository.getPlatesByTypeAndArea(
+        collection,
+        currentArea,
+        descending: descending,
+        limit: limit, // ✅ 서버로 limit 전달
+      );
 
       bool firstDataReceived = false;
 
@@ -67,10 +86,8 @@ class PlateState extends ChangeNotifier {
           }
         }
 
-        if (!listEquals(_data[collection], filteredData)) {
-          _data[collection] = filteredData;
-          notifyListeners();
-        }
+        _data[collection] = filteredData;
+        notifyListeners();
 
         if (!firstDataReceived) {
           firstDataReceived = true;
@@ -117,7 +134,6 @@ class PlateState extends ChangeNotifier {
   List<PlateModel> getPlatesByCollection(PlateType collection, {DateTime? selectedDate}) {
     List<PlateModel> plates = _data[collection] ?? [];
 
-    // ✅ 출차 완료는 날짜 필터 적용
     if (collection == PlateType.departureCompleted && selectedDate != null) {
       final selectedDateOnly = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
       plates = plates.where((plate) {
@@ -128,17 +144,42 @@ class PlateState extends ChangeNotifier {
       }).toList();
     }
 
-    // ✅ 번호판 4자리 검색 (plateFourDigit 기준으로 정확히 일치)
     if (_searchQuery != null && _searchQuery!.length == 4) {
       plates = plates.where((plate) => plate.plateFourDigit == _searchQuery).toList();
     }
 
-    // ✅ 입차 완료는 최대 6개만 보여줌
     if (collection == PlateType.parkingCompleted) {
       plates = plates.take(6).toList();
     }
 
     return plates;
+  }
+
+  void updateSortOrder(PlateType type, bool descending) {
+    _isSortedMap[type] = descending;
+    _resubscribeForType(type); // 🔁 해당 타입만 재구독
+  }
+
+  void _resubscribeForType(PlateType type) {
+    final area = _areaState.currentArea;
+    final descending = _isSortedMap[type] ?? true;
+    final limit = _limitMap[type]; // ✅ 추가
+
+    _subscriptions[type]?.cancel();
+
+    final stream = _repository.getPlatesByTypeAndArea(
+      type,
+      area,
+      descending: descending,
+      limit: limit, // ✅ 반드시 전달
+    );
+
+    final subscription = stream.listen((filteredData) {
+      _data[type] = filteredData;
+      notifyListeners();
+    });
+
+    _subscriptions[type] = subscription;
   }
 
   Future<void> updatePlateLocally(PlateType collection, PlateModel updatedPlate) async {
@@ -179,19 +220,19 @@ class PlateState extends ChangeNotifier {
 
       final alreadySelected = _data.entries.expand((entry) => entry.value).firstWhere(
             (p) => p.isSelected && p.selectedBy == userName && p.id != plateId,
-        orElse: () => PlateModel(
-          id: '',
-          plateNumber: '',
-          plateFourDigit: '',
-          type: '',
-          requestTime: DateTime.now(),
-          location: '',
-          area: '',
-          userName: '',
-          isSelected: false,
-          statusList: [],
-        ),
-      );
+            orElse: () => PlateModel(
+              id: '',
+              plateNumber: '',
+              plateFourDigit: '',
+              type: '',
+              requestTime: DateTime.now(),
+              location: '',
+              area: '',
+              userName: '',
+              isSelected: false,
+              statusList: [],
+            ),
+          );
 
       if (alreadySelected.id.isNotEmpty && !plate.isSelected) {
         final collectionLabel = _getCollectionLabelForType(alreadySelected.type);
@@ -247,7 +288,7 @@ class PlateState extends ChangeNotifier {
     if (plates == null || plates.isEmpty) return null;
 
     return plates.firstWhere(
-          (plate) => plate.isSelected && plate.selectedBy == userName,
+      (plate) => plate.isSelected && plate.selectedBy == userName,
       orElse: () => PlateModel(
         id: '',
         plateNumber: '',

@@ -39,6 +39,11 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
     setState(() {
       _isSorted = !_isSorted;
     });
+
+    context.read<PlateState>().updateSortOrder(
+          PlateType.departureRequests,
+          _isSorted,
+        );
   }
 
   void _showSearchDialog(BuildContext context) {
@@ -196,47 +201,89 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
               final filterState = context.read<FilterPlate>();
               final userName = context.read<UserState>().name;
 
-              final Future<List<PlateModel>> futurePlates = _isSearchMode
-                  ? filterState.fetchPlatesBySearchQuery()
-                  : (_isParkingAreaMode && _selectedParkingArea != null)
-                      ? filterState.fetchPlatesByParkingLocation(
-                          type: PlateType.departureRequests,
-                          location: _selectedParkingArea!,
-                        )
-                      : Future.value(
-                          plateState.getPlatesByCollection(PlateType.departureRequests),
-                        );
+              if (_isSearchMode) {
+                return FutureBuilder<List<PlateModel>>(
+                  future: filterState.fetchPlatesBySearchQuery(),
+                  builder: (context, snapshot) {
+                    final departureRequests = snapshot.data ?? [];
+                    return ListView(
+                      padding: const EdgeInsets.all(8.0),
+                      children: [
+                        PlateContainer(
+                          data: departureRequests,
+                          collection: PlateType.departureRequests,
+                          filterCondition: (request) => request.type == PlateType.departureRequests.firestoreValue,
+                          onPlateTap: (plateNumber, area) {
+                            plateState.toggleIsSelected(
+                              collection: PlateType.departureRequests,
+                              plateNumber: plateNumber,
+                              userName: userName,
+                              onError: (errorMessage) {
+                                showFailedSnackbar(context, errorMessage);
+                              },
+                            );
+                          },
+                        ),
+                      ],
+                    );
+                  },
+                );
+              }
 
-              return FutureBuilder<List<PlateModel>>(
-                future: futurePlates,
-                builder: (context, snapshot) {
-                  final departureRequests = snapshot.data ?? [];
+              if (_isParkingAreaMode && _selectedParkingArea != null) {
+                return FutureBuilder<List<PlateModel>>(
+                  future: filterState.fetchPlatesByParkingLocation(
+                    type: PlateType.departureRequests,
+                    location: _selectedParkingArea!,
+                  ),
+                  builder: (context, snapshot) {
+                    final departureRequests = snapshot.data ?? [];
+                    return ListView(
+                      padding: const EdgeInsets.all(8.0),
+                      children: [
+                        PlateContainer(
+                          data: departureRequests,
+                          collection: PlateType.departureRequests,
+                          filterCondition: (request) => request.type == PlateType.departureRequests.firestoreValue,
+                          onPlateTap: (plateNumber, area) {
+                            plateState.toggleIsSelected(
+                              collection: PlateType.departureRequests,
+                              plateNumber: plateNumber,
+                              userName: userName,
+                              onError: (errorMessage) {
+                                showFailedSnackbar(context, errorMessage);
+                              },
+                            );
+                          },
+                        ),
+                      ],
+                    );
+                  },
+                );
+              }
 
-                  departureRequests.sort((a, b) {
-                    return _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime);
-                  });
+              // ✅ 정렬 반영된 PlateState 데이터 활용
+              final plates = plateState.getPlatesByCollection(PlateType.departureRequests);
 
-                  return ListView(
-                    padding: const EdgeInsets.all(8.0),
-                    children: [
-                      PlateContainer(
-                        data: departureRequests,
+              return ListView(
+                padding: const EdgeInsets.all(8.0),
+                children: [
+                  PlateContainer(
+                    data: plates,
+                    collection: PlateType.departureRequests,
+                    filterCondition: (request) => request.type == PlateType.departureRequests.firestoreValue,
+                    onPlateTap: (plateNumber, area) {
+                      plateState.toggleIsSelected(
                         collection: PlateType.departureRequests,
-                        filterCondition: (request) => request.type == PlateType.departureRequests.firestoreValue,
-                        onPlateTap: (plateNumber, area) {
-                          plateState.toggleIsSelected(
-                            collection: PlateType.departureRequests,
-                            plateNumber: plateNumber,
-                            userName: userName,
-                            onError: (errorMessage) {
-                              showFailedSnackbar(context, errorMessage);
-                            },
-                          );
+                        plateNumber: plateNumber,
+                        userName: userName,
+                        onError: (errorMessage) {
+                          showFailedSnackbar(context, errorMessage);
                         },
-                      ),
-                    ],
-                  );
-                },
+                      );
+                    },
+                  ),
+                ],
               );
             },
           ),

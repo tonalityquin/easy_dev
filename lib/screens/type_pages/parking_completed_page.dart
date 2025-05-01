@@ -38,6 +38,11 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
     setState(() {
       _isSorted = !_isSorted;
     });
+
+    context.read<PlateState>().updateSortOrder(
+          PlateType.parkingCompleted,
+          _isSorted, // true: 최신순, false: 오래된순
+        );
   }
 
   void _showSearchDialog(BuildContext context) {
@@ -168,41 +173,24 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
         },
         child: Scaffold(
           appBar: const TopNavigation(),
-            body: Consumer2<PlateState, AreaState>(
-              builder: (context, plateState, areaState, child) {
-                final filterState = context.read<FilterPlate>();
-                final userName = context.read<UserState>().name;
+          body: Consumer2<PlateState, AreaState>(
+            builder: (context, plateState, areaState, child) {
+              final filterState = context.read<FilterPlate>();
+              final userName = context.read<UserState>().name;
 
-                final Future<List<PlateModel>> futurePlates = _isSearchMode
-                    ? filterState.fetchPlatesBySearchQuery()
-                    : (_isParkingAreaMode && _selectedParkingArea != null)
-                    ? filterState.fetchPlatesByParkingLocation(
-                  type: PlateType.parkingCompleted,
-                  location: _selectedParkingArea!,
-                )
-                    : Future.value(
-                  plateState.getPlatesByCollection(PlateType.parkingCompleted),
-                );
-
+              if (_isSearchMode) {
+                // 🔍 검색 모드일 경우는 FutureBuilder 유지
                 return FutureBuilder<List<PlateModel>>(
-                  future: futurePlates,
+                  future: filterState.fetchPlatesBySearchQuery(),
                   builder: (context, snapshot) {
                     final parkingCompleted = snapshot.data ?? [];
-
-                    parkingCompleted.sort((a, b) {
-                      return _isSorted
-                          ? b.requestTime.compareTo(a.requestTime)
-                          : a.requestTime.compareTo(b.requestTime);
-                    });
-
                     return ListView(
                       padding: const EdgeInsets.all(8.0),
                       children: [
                         PlateContainer(
                           data: parkingCompleted,
                           collection: PlateType.parkingCompleted,
-                          filterCondition: (request) =>
-                          request.type == PlateType.parkingCompleted.firestoreValue,
+                          filterCondition: (request) => request.type == PlateType.parkingCompleted.firestoreValue,
                           onPlateTap: (plateNumber, area) {
                             plateState.toggleIsSelected(
                               collection: PlateType.parkingCompleted,
@@ -218,9 +206,67 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                     );
                   },
                 );
-              },
-            ),
-            bottomNavigationBar: Consumer<PlateState>(
+              }
+
+              if (_isParkingAreaMode && _selectedParkingArea != null) {
+                // 🅿️ 주차 위치 필터 모드일 경우도 FutureBuilder 유지
+                return FutureBuilder<List<PlateModel>>(
+                  future: filterState.fetchPlatesByParkingLocation(
+                    type: PlateType.parkingCompleted,
+                    location: _selectedParkingArea!,
+                  ),
+                  builder: (context, snapshot) {
+                    final parkingCompleted = snapshot.data ?? [];
+                    return ListView(
+                      padding: const EdgeInsets.all(8.0),
+                      children: [
+                        PlateContainer(
+                          data: parkingCompleted,
+                          collection: PlateType.parkingCompleted,
+                          filterCondition: (request) => request.type == PlateType.parkingCompleted.firestoreValue,
+                          onPlateTap: (plateNumber, area) {
+                            plateState.toggleIsSelected(
+                              collection: PlateType.parkingCompleted,
+                              plateNumber: plateNumber,
+                              userName: userName,
+                              onError: (errorMessage) {
+                                showFailedSnackbar(context, errorMessage);
+                              },
+                            );
+                          },
+                        ),
+                      ],
+                    );
+                  },
+                );
+              }
+
+              // ✅ 기본 모드일 때: 서버 정렬 반영되는 PlateState 상태 구독
+              final plates = plateState.getPlatesByCollection(PlateType.parkingCompleted);
+
+              return ListView(
+                padding: const EdgeInsets.all(8.0),
+                children: [
+                  PlateContainer(
+                    data: plates,
+                    collection: PlateType.parkingCompleted,
+                    filterCondition: (request) => request.type == PlateType.parkingCompleted.firestoreValue,
+                    onPlateTap: (plateNumber, area) {
+                      plateState.toggleIsSelected(
+                        collection: PlateType.parkingCompleted,
+                        plateNumber: plateNumber,
+                        userName: userName,
+                        onError: (errorMessage) {
+                          showFailedSnackbar(context, errorMessage);
+                        },
+                      );
+                    },
+                  ),
+                ],
+              );
+            },
+          ),
+          bottomNavigationBar: Consumer<PlateState>(
             builder: (context, plateState, child) {
               final userName = context.read<UserState>().name;
               final selectedPlate = plateState.getSelectedPlate(PlateType.parkingCompleted, userName);
