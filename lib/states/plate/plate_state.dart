@@ -40,7 +40,7 @@ class PlateState extends ChangeNotifier {
   final Map<PlateType, int> _limitMap = {
     PlateType.parkingRequests: 6,
     PlateType.parkingCompleted: 6,
-    PlateType.departureRequests: 3,
+    PlateType.departureRequests: 6,
     PlateType.departureCompleted: 10,
   };
 
