@@ -5,6 +5,7 @@ import '../../screens/type_pages/departure_request_page.dart';
 import '../../screens/type_pages/departure_completed_page.dart';
 import '../../screens/hq_pages/field_office.dart';
 import '../../screens/hq_pages/office_field.dart';
+import '../../screens/hq_pages/headquarter.dart';
 import '../../enums/plate_type.dart';
 
 class PageInfo {
@@ -50,8 +51,9 @@ class HqPageInfo {
   const HqPageInfo(this.title, this.page, this.icon);
 }
 
-/// 🔹 Field Mode Pages
+/// 🔹 hq Pages
 final List<HqPageInfo> hqPage = [
   HqPageInfo('오피스 필드', OfficeField(), Icon(Icons.dashboard)),
+  HqPageInfo('헤드 쿼터', Headquarter(), Icon(Icons.wifi)),
   HqPageInfo('필드 오피스', FieldOffice(), Icon(Icons.wifi)),
 ];
