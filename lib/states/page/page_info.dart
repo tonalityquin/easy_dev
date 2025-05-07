@@ -3,6 +3,8 @@ import '../../screens/type_pages/parking_request_page.dart';
 import '../../screens/type_pages/parking_completed_page.dart';
 import '../../screens/type_pages/departure_request_page.dart';
 import '../../screens/type_pages/departure_completed_page.dart';
+import '../../screens/hq_pages/field_office.dart';
+import '../../screens/hq_pages/office_field.dart';
 import '../../enums/plate_type.dart';
 
 class PageInfo {
@@ -38,4 +40,18 @@ const List<PageInfo> defaultPages = [
     page: DepartureCompletedPage(),
     collectionKey: PlateType.departureCompleted,
   ),
+];
+
+class HqPageInfo {
+  final String title;
+  final Widget page;
+  final Icon icon;
+
+  const HqPageInfo(this.title, this.page, this.icon);
+}
+
+/// 🔹 Field Mode Pages
+final List<HqPageInfo> hqPage = [
+  HqPageInfo('오피스 필드', OfficeField(), Icon(Icons.dashboard)),
+  HqPageInfo('필드 오피스', FieldOffice(), Icon(Icons.wifi)),
 ];
