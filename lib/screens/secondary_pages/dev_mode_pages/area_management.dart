@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'area_managements/add_area_tab.dart';
 import 'area_managements/division_management_tab.dart';
 import 'area_managements/user_account_tab.dart';
-import '../../../widgets/navigation/secondary_mini_navigation.dart';
+import 'area_managements/plate_limit_management_tab.dart'; // ✅ 추가
 
 /// ✅ 앱 어디서든 호출 가능하게끔 전역 함수로 정의
 Future<void> registerDevResources() async {
@@ -19,8 +19,8 @@ Future<void> registerDevResources() async {
 
   final areaQuery = await firestore.collection('areas').where('division', isEqualTo: 'dev').get();
   if (areaQuery.docs.isEmpty) {
-    await firestore.collection('areas').doc('dev-default').set({
-      'name': 'default',
+    await firestore.collection('areas').doc('dev-dev').set({
+      'name': 'dev',
       'division': 'dev',
       'createdAt': FieldValue.serverTimestamp(),
     });
@@ -67,7 +67,7 @@ class _AreaManagementState extends State<AreaManagement> with SingleTickerProvid
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this); // ✅ 탭 수 4개로 수정
     _loadDivisions();
   }
 
@@ -95,7 +95,6 @@ class _AreaManagementState extends State<AreaManagement> with SingleTickerProvid
     debugPrint("📥 Division 목록 로드됨: $divisions");
     debugPrint("📍 Area 목록 로드됨: $areas");
   }
-
 
   Future<void> _addDivision(String name) async {
     final trimmed = name.trim();
@@ -153,7 +152,7 @@ class _AreaManagementState extends State<AreaManagement> with SingleTickerProvid
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         appBar: AppBar(
           automaticallyImplyLeading: false,
@@ -168,6 +167,7 @@ class _AreaManagementState extends State<AreaManagement> with SingleTickerProvid
               Tab(icon: Icon(Icons.location_city), text: '지역 추가'),
               Tab(icon: Icon(Icons.business), text: '회사 관리'),
               Tab(icon: Icon(Icons.manage_accounts), text: '계정 조회/관리'),
+              Tab(icon: Icon(Icons.settings), text: '리밋 설정'), // ✅ 새 탭 추가
             ],
           ),
         ),
@@ -195,10 +195,8 @@ class _AreaManagementState extends State<AreaManagement> with SingleTickerProvid
               },
               onAreaChanged: (val) => setState(() => _accountSelectedArea = val),
             ),
+            const PlateLimitManagementTab(), // ✅ 탭 뷰에 새 위젯 추가
           ],
-        ),
-        bottomNavigationBar: const SecondaryMiniNavigation(
-          icons: [Icons.search, Icons.person, Icons.sort],
         ),
       ),
     );

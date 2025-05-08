@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../repositories/plate/plate_repository.dart';
 import '../../models/plate_model.dart';
 import '../area/area_state.dart';
@@ -21,7 +22,7 @@ class PlateState extends ChangeNotifier {
 
   final Map<PlateType, StreamSubscription<List<PlateModel>>> _subscriptions = {};
   final Map<PlateType, bool> _isSortedMap = {
-    for (var c in PlateType.values) c: true, // 기본: 최신순 (descending = true)
+    for (var c in PlateType.values) c: true,
   };
 
   String? _searchQuery;
@@ -36,15 +37,35 @@ class PlateState extends ChangeNotifier {
 
   final Map<String, bool> previousIsLockedFee = {};
 
-  // 🔧 각 PlateType별 limit 설정
-  final Map<PlateType, int> _limitMap = {
-    PlateType.parkingRequests: 6,
-    PlateType.parkingCompleted: 6,
-    PlateType.departureRequests: 6,
-    PlateType.departureCompleted: 10,
-  };
+  Future<Map<PlateType, int>> _fetchLimitMapFromFirestore(String area) async {
+    // ✅ 하이픈이 있을 경우 뒤쪽만 추출 (e.g., "dev-default" → "default")
+    final areaKey = area.contains('-') ? area.split('-').last : area;
 
-  void _initializeSubscriptions() {
+    try {
+      final doc = await FirebaseFirestore.instance.collection('area_limits').doc(areaKey).get();
+
+      final data = doc.data() ?? {};
+
+      debugPrint("📥 limit fetch → areaKey: $areaKey, data: $data");
+
+      return {
+        PlateType.parkingRequests: data['parkingRequests'] ?? 6,
+        PlateType.parkingCompleted: data['parkingCompleted'] ?? 6,
+        PlateType.departureRequests: data['departureRequests'] ?? 6,
+        PlateType.departureCompleted: data['departureCompleted'] ?? 10,
+      };
+    } catch (e) {
+      debugPrint("❌ limit 불러오기 실패: $e");
+      return {
+        PlateType.parkingRequests: 6,
+        PlateType.parkingCompleted: 6,
+        PlateType.departureRequests: 6,
+        PlateType.departureCompleted: 10,
+      };
+    }
+  }
+
+  void _initializeSubscriptions() async {
     final area = _areaState.currentArea;
     if (area.isEmpty || _previousArea == area) return;
 
@@ -54,17 +75,22 @@ class PlateState extends ChangeNotifier {
     _isLoading = true;
     plateCounts();
 
+    final limitMap = await _fetchLimitMapFromFirestore(area);
+
     int receivedCount = 0;
     final totalCollections = PlateType.values.length;
 
     for (final collection in PlateType.values) {
       final descending = _isSortedMap[collection] ?? true;
-      final limit = _limitMap[collection];
+      final limit = limitMap[collection] ?? 6; // ✅ fallback 안전값 추가
+
+      debugPrint("📦 [LIMIT] $collection → $limit"); // ✅ 로그 출력
+
       final stream = _repository.getPlatesByTypeAndArea(
         collection,
         currentArea,
         descending: descending,
-        limit: limit, // ✅ 서버로 limit 전달
+        limit: limit,
       );
 
       bool firstDataReceived = false;
@@ -73,7 +99,6 @@ class PlateState extends ChangeNotifier {
         if (collection == PlateType.departureCompleted) {
           for (final plate in filteredData) {
             final previous = previousIsLockedFee[plate.id];
-
             if (previous == false && plate.isLockedFee == true) {
               final uploader = GCSUploader();
               await uploader.mergeAndReplaceLogs(
@@ -148,22 +173,20 @@ class PlateState extends ChangeNotifier {
       plates = plates.where((plate) => plate.plateFourDigit == _searchQuery).toList();
     }
 
-    if (collection == PlateType.parkingCompleted) {
-      plates = plates.take(6).toList();
-    }
-
     return plates;
   }
 
   void updateSortOrder(PlateType type, bool descending) {
     _isSortedMap[type] = descending;
-    _resubscribeForType(type); // 🔁 해당 타입만 재구독
+    _resubscribeForType(type);
   }
 
-  void _resubscribeForType(PlateType type) {
+  void _resubscribeForType(PlateType type) async {
     final area = _areaState.currentArea;
     final descending = _isSortedMap[type] ?? true;
-    final limit = _limitMap[type]; // ✅ 추가
+
+    final limitMap = await _fetchLimitMapFromFirestore(area);
+    final limit = limitMap[type];
 
     _subscriptions[type]?.cancel();
 
@@ -171,7 +194,7 @@ class PlateState extends ChangeNotifier {
       type,
       area,
       descending: descending,
-      limit: limit, // ✅ 반드시 전달
+      limit: limit,
     );
 
     final subscription = stream.listen((filteredData) {
@@ -306,6 +329,7 @@ class PlateState extends ChangeNotifier {
 
   void syncWithAreaState() {
     debugPrint("🔄 PlateState: 지역 변경 감지 및 상태 갱신 호출됨");
+    _previousArea = '';
     _initializeSubscriptions();
   }
 

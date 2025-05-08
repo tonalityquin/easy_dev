@@ -26,12 +26,22 @@ class _AddAreaTabState extends State<AddAreaTab> {
     if (areaName.isEmpty || division == null || division.isEmpty) return;
 
     final areaId = '$division-$areaName';
-    final areaDoc = FirebaseFirestore.instance.collection('areas').doc(areaId);
 
+    // Firestore: areas 문서 생성
+    final areaDoc = FirebaseFirestore.instance.collection('areas').doc(areaId);
     await areaDoc.set({
       'name': areaName,
       'division': division,
       'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    // Firestore: area_limits 문서도 같이 초기화
+    final limitDoc = FirebaseFirestore.instance.collection('area_limits').doc(areaId);
+    await limitDoc.set({
+      'parkingRequests': 6,
+      'parkingCompleted': 6,
+      'departureRequests': 6,
+      'departureCompleted': 10,
     });
 
     _areaController.clear();
@@ -50,6 +60,35 @@ class _AddAreaTabState extends State<AddAreaTab> {
         .where('division', isEqualTo: widget.selectedDivision)
         .get();
     return snapshot.docs.map((e) => e['name'] as String).toList();
+  }
+
+  Future<void> _deleteArea(String areaName) async {
+    final division = widget.selectedDivision;
+    if (division == null) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('지역 삭제'),
+        content: Text('"$areaName" 지역을 삭제하시겠습니까?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('취소')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('삭제')),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    final areaId = '$division-$areaName';
+    await FirebaseFirestore.instance.collection('areas').doc(areaId).delete();
+    await FirebaseFirestore.instance.collection('area_limits').doc(areaId).delete();
+
+    setState(() {});
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('🗑️ "$areaName" 지역이 삭제되었습니다')),
+    );
   }
 
   @override
@@ -92,21 +131,17 @@ class _AddAreaTabState extends State<AddAreaTab> {
                 }
 
                 final areas = snapshot.data ?? [];
-                if (areas.isEmpty) return const Center(child: Text('등록된 지역이 없습니다.'));
+                if (areas.isEmpty) {
+                  return const Center(child: Text('등록된 지역이 없습니다.'));
+                }
 
                 return ListView(
                   children: areas.map((areaName) {
                     return ListTile(
                       title: Text(areaName),
-                      trailing: areaName == widget.selectedDivision
-                          ? null // 본사 지역은 삭제 버튼 비활성화
-                          : IconButton(
+                      trailing: IconButton(
                         icon: const Icon(Icons.delete_outline),
-                        onPressed: () async {
-                          final areaId = '${widget.selectedDivision}-$areaName';
-                          await FirebaseFirestore.instance.collection('areas').doc(areaId).delete();
-                          setState(() {});
-                        },
+                        onPressed: () => _deleteArea(areaName),
                       ),
                     );
                   }).toList(),
