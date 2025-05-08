@@ -78,7 +78,13 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
         .sort((a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime));
 
     return Scaffold(
-      appBar: const TopNavigation(),
+      appBar: AppBar(
+        title: const TopNavigation(), // ✅ title로만 사용
+        centerTitle: true,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 0,
+      ),
       body: Stack(
         children: [
           ListView(

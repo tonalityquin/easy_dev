@@ -27,7 +27,7 @@ Future<void> registerDevResources() async {
   }
 
   const devPhone = '00000000000';
-  const devArea = 'default';
+  const devArea = 'dev';
   const devAccountId = '$devPhone-$devArea';
 
   final userDoc = firestore.collection('user_accounts').doc(devAccountId);
@@ -38,7 +38,7 @@ Future<void> registerDevResources() async {
       'email': 'dev@gmail.com',
       'password': '00000',
       'divisions': ['dev'],
-      'areas': ['default'],
+      'areas': ['dev'],
       'role': 'dev',
       'isWorking': false,
       'isSaved': false,

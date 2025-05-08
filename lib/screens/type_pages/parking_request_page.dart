@@ -168,7 +168,13 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
         // ❌ didPop 여부와 관계없이 화면은 절대 pop되지 않음
       },
       child: Scaffold(
-        appBar: const TopNavigation(),
+        appBar: AppBar(
+          title: const TopNavigation(), // ✅ title로만 사용
+          centerTitle: true,
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
+          elevation: 0,
+        ),
         body: Consumer2<PlateState, AreaState>(
           builder: (context, plateState, areaState, child) {
             if (_isSearchMode) {

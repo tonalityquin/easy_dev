@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -31,9 +32,7 @@ class _GoToWorkState extends State<GoToWork> {
       final prefs = await SharedPreferences.getInstance();
       final storedArea = prefs.getString('area');
 
-      final areaToInit = (storedArea != null && storedArea.isNotEmpty)
-          ? storedArea
-          : userState.area;
+      final areaToInit = (storedArea != null && storedArea.isNotEmpty) ? storedArea : userState.area;
 
       await areaState.initialize(userState.area);
 
@@ -58,7 +57,16 @@ class _GoToWorkState extends State<GoToWork> {
       }
 
       if (userState.isWorking && mounted) {
-        Navigator.pushReplacementNamed(context, '/type_page');
+        final division = userState.user?.divisions.first ?? '';
+        final area = userState.area;
+
+        final doc = await FirebaseFirestore.instance.collection('areas').doc('$division-$area').get();
+
+        if (doc.exists && doc['isHeadquarter'] == true) {
+          Navigator.pushReplacementNamed(context, '/headquarter_page');
+        } else {
+          Navigator.pushReplacementNamed(context, '/type_page');
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -93,9 +101,9 @@ class _GoToWorkState extends State<GoToWork> {
       final decoded = jsonDecode(jsonStr);
       cellData = Map<String, Map<int, String>>.from(
         decoded.map((rowKey, colMap) => MapEntry(
-          rowKey,
-          Map<int, String>.from((colMap as Map).map((k, v) => MapEntry(int.parse(k), v))),
-        )),
+              rowKey,
+              Map<int, String>.from((colMap as Map).map((k, v) => MapEntry(int.parse(k), v))),
+            )),
       );
     }
 
@@ -110,9 +118,9 @@ class _GoToWorkState extends State<GoToWork> {
 
     final encoded = jsonEncode(
       cellData.map((rowKey, colMap) => MapEntry(
-        rowKey,
-        colMap.map((col, v) => MapEntry(col.toString(), v)),
-      )),
+            rowKey,
+            colMap.map((col, v) => MapEntry(col.toString(), v)),
+          )),
     );
     await prefs.setString(cellDataKey, encoded);
 
@@ -214,10 +222,25 @@ class _GoToWorkState extends State<GoToWork> {
       body: Consumer<UserState>(
         builder: (context, userState, _) {
           if (userState.isWorking) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              Navigator.pushReplacementNamed(context, '/type_page');
+            WidgetsBinding.instance.addPostFrameCallback((_) async {
+              final division = userState.user?.divisions.first ?? '';
+              final area = userState.area;
+
+              final doc = await FirebaseFirestore.instance
+                  .collection('areas')
+                  .doc('$division-$area')
+                  .get();
+
+              if (!mounted) return;
+
+              if (doc.exists && doc['isHeadquarter'] == true) {
+                Navigator.pushReplacementNamed(context, '/headquarter_page');
+              } else {
+                Navigator.pushReplacementNamed(context, '/type_page');
+              }
             });
           }
+
 
           return SafeArea(
             child: SingleChildScrollView(
@@ -298,21 +321,21 @@ class _GoToWorkState extends State<GoToWork> {
           child: _isLoading
               ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
               : Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: Colors.white),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.1,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, color: Colors.white),
+                    const SizedBox(width: 8),
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
-          ),
         ),
       ),
     );

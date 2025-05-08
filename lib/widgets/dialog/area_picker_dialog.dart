@@ -1,7 +1,9 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../routes.dart';
 import '../../states/area/area_state.dart';
 import '../../states/plate/plate_state.dart';
 import '../../states/user/user_state.dart';
@@ -13,16 +15,14 @@ void showAreaPickerDialog({
 }) {
   final userState = context.read<UserState>();
 
-  // ✅ 구조 변경 없이 userState 기반으로만 지역 필터링
   final userAreas = userState.user?.areas ?? [];
 
   if (userAreas.isEmpty) {
     debugPrint('⚠️ 사용자 소속 지역 없음 (userAreas)');
   }
 
-  String tempSelected = areaState.currentArea.isNotEmpty
-      ? areaState.currentArea
-      : (userAreas.isNotEmpty ? userAreas.first : '');
+  String tempSelected =
+  areaState.currentArea.isNotEmpty ? areaState.currentArea : (userAreas.isNotEmpty ? userAreas.first : '');
 
   showGeneralDialog(
     context: context,
@@ -50,9 +50,7 @@ void showAreaPickerDialog({
                     ? const Center(child: Text("표시할 지역이 없습니다"))
                     : CupertinoPicker(
                   scrollController: FixedExtentScrollController(
-                    initialItem: userAreas.contains(tempSelected)
-                        ? userAreas.indexOf(tempSelected)
-                        : 0,
+                    initialItem: userAreas.contains(tempSelected) ? userAreas.indexOf(tempSelected) : 0,
                   ),
                   itemExtent: 50,
                   onSelectedItemChanged: (index) {
@@ -73,15 +71,32 @@ void showAreaPickerDialog({
                 padding: const EdgeInsets.only(bottom: 40, top: 20),
                 child: Center(
                   child: GestureDetector(
-                    onTap: () {
+                    onTap: () async {
                       Navigator.of(context).pop();
-
                       areaState.updateArea(tempSelected);
 
-                      // ✅ 순서 수정: userState 업데이트 완료 후 plateState 동기화
-                      userState.updateCurrentArea(tempSelected).then((_) {
-                        plateState.syncWithAreaState();
-                      });
+                      await userState.updateCurrentArea(tempSelected);
+                      plateState.syncWithAreaState();
+
+                      final userDivision = userState.user?.divisions.first ?? '';
+                      final areaDoc = await FirebaseFirestore.instance
+                          .collection('areas')
+                          .doc('$userDivision-$tempSelected')
+                          .get();
+
+                      final data = areaDoc.data();
+                      final isHeadquarter = data != null && data['isHeadquarter'] == true;
+
+                      // 디버깅 출력
+                      debugPrint('📌 선택된 지역: $tempSelected');
+                      debugPrint('📌 조회된 문서 ID: ${areaDoc.id}');
+                      debugPrint('📌 isHeadquarter 필드: ${data?['isHeadquarter']}');
+
+                      if (isHeadquarter) {
+                        Navigator.pushReplacementNamed(context, AppRoutes.headquarterPage);
+                      } else {
+                        Navigator.pushReplacementNamed(context, AppRoutes.typePage);
+                      }
                     },
                     child: Container(
                       padding: const EdgeInsets.symmetric(

@@ -53,7 +53,7 @@ class HqPageInfo {
 
 /// 🔹 hq Pages
 final List<HqPageInfo> hqPage = [
-  HqPageInfo('오피스 필드', OfficeField(), Icon(Icons.dashboard)),
-  HqPageInfo('헤드 쿼터', Headquarter(), Icon(Icons.wifi)),
-  HqPageInfo('필드 오피스', FieldOffice(), Icon(Icons.wifi)),
+  HqPageInfo('오피스 필드', OfficeField(), Icon(Icons.local_post_office)),
+  HqPageInfo('헤드 쿼터', Headquarter(), Icon(Icons.view_headline)),
+  HqPageInfo('필드 오피스', FieldOffice(), Icon(Icons.work)),
 ];

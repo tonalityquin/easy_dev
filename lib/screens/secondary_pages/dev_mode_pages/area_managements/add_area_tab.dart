@@ -98,7 +98,9 @@ class _AddAreaTabState extends State<AddAreaTab> {
                   children: areas.map((areaName) {
                     return ListTile(
                       title: Text(areaName),
-                      trailing: IconButton(
+                      trailing: areaName == widget.selectedDivision
+                          ? null // 본사 지역은 삭제 버튼 비활성화
+                          : IconButton(
                         icon: const Icon(Icons.delete_outline),
                         onPressed: () async {
                           final areaId = '${widget.selectedDivision}-$areaName';

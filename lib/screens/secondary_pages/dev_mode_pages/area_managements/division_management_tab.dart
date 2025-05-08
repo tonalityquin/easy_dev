@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 class DivisionManagementTab extends StatefulWidget {
@@ -30,6 +31,15 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
     }
 
     await widget.onDivisionAdded(input);
+
+// 🔽 본사 지역 자동 생성
+    final areaId = '$input-$input';
+    await FirebaseFirestore.instance.collection('areas').doc(areaId).set({
+      'name': input,
+      'division': input,
+      'isHeadquarter': true,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
 
     setState(() {
       _controller.clear();
@@ -68,7 +78,11 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
                   title: Text(division),
                   trailing: IconButton(
                     icon: const Icon(Icons.delete, color: Colors.redAccent),
-                    onPressed: () => widget.onDivisionDeleted(division),
+                    onPressed: () async {
+                      await widget.onDivisionDeleted(division);
+                      final areaId = '$division-$division';
+                      await FirebaseFirestore.instance.collection('areas').doc(areaId).delete();
+                    },
                   ),
                 );
               },

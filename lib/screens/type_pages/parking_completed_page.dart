@@ -172,7 +172,13 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
           }
         },
         child: Scaffold(
-          appBar: const TopNavigation(),
+          appBar: AppBar(
+            title: const TopNavigation(), // ✅ title로만 사용
+            centerTitle: true,
+            backgroundColor: Colors.white,
+            foregroundColor: Colors.black,
+            elevation: 0,
+          ),
           body: Consumer2<PlateState, AreaState>(
             builder: (context, plateState, areaState, child) {
               final filterState = context.read<FilterPlate>();
