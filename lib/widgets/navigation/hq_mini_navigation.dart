@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 class HqMiniNavigation extends StatefulWidget {
   final double height;
   final List<IconData> icons;
+  final List<String>? labels;
   final Function(bool isAscending)? onSortToggle;
   final void Function(int index)? onIconTapped;
   final Color? backgroundColor;
@@ -12,6 +13,7 @@ class HqMiniNavigation extends StatefulWidget {
     super.key,
     this.height = 40.0,
     required this.icons,
+    this.labels,
     this.onSortToggle,
     this.onIconTapped,
     this.backgroundColor = Colors.white,
@@ -24,6 +26,7 @@ class HqMiniNavigation extends StatefulWidget {
 
 class HqMiniNavigationState extends State<HqMiniNavigation> {
   bool isAscending = true;
+  int _currentIndex = 0;
 
   void toggleSortOrder() {
     setState(() {
@@ -34,18 +37,26 @@ class HqMiniNavigationState extends State<HqMiniNavigation> {
 
   Widget _buildIcon(IconData iconData, int index) {
     final isSortIcon = iconData == Icons.sort;
-    return IconButton(
+    final isSelected = _currentIndex == index;
+
+    final iconColor = isSelected ? Colors.green : Colors.grey;
+    final labelColor = isSelected ? Colors.green : Colors.grey;
+
+    final iconWidget = IconButton(
       icon: isSortIcon
           ? Transform(
-              alignment: Alignment.center,
-              transform: Matrix4.rotationX(isAscending ? 0 : 3.14159),
-              child: Icon(Icons.sort),
-            )
-          : Icon(iconData),
+        alignment: Alignment.center,
+        transform: Matrix4.rotationX(isAscending ? 0 : 3.14159),
+        child: Icon(Icons.sort, color: iconColor),
+      )
+          : Icon(iconData, color: iconColor),
       onPressed: () {
         if (isSortIcon) {
           toggleSortOrder();
         } else {
+          setState(() {
+            _currentIndex = index;
+          });
           widget.onIconTapped?.call(index);
         }
       },
@@ -53,24 +64,48 @@ class HqMiniNavigationState extends State<HqMiniNavigation> {
       constraints: const BoxConstraints(),
       iconSize: widget.iconSize,
     );
+
+    if (widget.labels != null && widget.labels!.length > index) {
+      return SizedBox(
+        width: 60,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            AnimatedScale(
+              scale: isSelected ? 1.2 : 1.0,
+              duration: const Duration(milliseconds: 200),
+              child: iconWidget,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              widget.labels![index],
+              style: TextStyle(fontSize: 10, color: labelColor),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      );
+    } else {
+      return iconWidget;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          color: widget.backgroundColor,
-          height: widget.height,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: widget.icons.asMap().entries.map((entry) {
-              return _buildIcon(entry.value, entry.key);
-            }).toList(),
-          ),
-        ),
-      ],
+    final double totalHeight = widget.labels != null ? widget.height + 24 : widget.height;
+
+    return Container(
+      color: widget.backgroundColor,
+      height: totalHeight,
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: widget.icons.asMap().entries.map((entry) {
+          return _buildIcon(entry.value, entry.key);
+        }).toList(),
+      ),
     );
   }
 }

@@ -9,19 +9,27 @@ class FieldOffice extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const TopNavigation(), // ✅ title로만 사용
+        title: const TopNavigation(),
         centerTitle: true,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
       ),
       bottomNavigationBar: const HqMiniNavigation(
+        height: 56,
+        iconSize: 22,
         icons: [
-          Icons.search,
-          Icons.person,
-          Icons.sort,
+          Icons.today,       // 📅 Today Field
+          Icons.input,       // 🔁 In&Out Doc.
+          Icons.account_box, // 🧾 Account Doc.
+        ],
+        labels: [
+          'Today Field',
+          'In&Out Doc.',
+          'Account Doc.',
         ],
       ),
     );
   }
 }
+

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../widgets/navigation/hq_mini_navigation.dart';
-import '../../widgets/navigation/top_navigation.dart'; // 하단 내비게이션 바
+import '../../widgets/navigation/top_navigation.dart';
 
 class OfficeField extends StatelessWidget {
   const OfficeField({super.key});
@@ -9,7 +9,7 @@ class OfficeField extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const TopNavigation(), // ✅ title로만 사용
+        title: const TopNavigation(),
         centerTitle: true,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
@@ -19,10 +19,17 @@ class OfficeField extends StatelessWidget {
         child: Text('오피스 -> 필드'),
       ),
       bottomNavigationBar: const HqMiniNavigation(
+        height: 56,
+        iconSize: 22,
         icons: [
-          Icons.search,
-          Icons.person,
-          Icons.sort,
+          Icons.folder_open, // Open
+          Icons.comment, // Comment
+          Icons.close, // Close
+        ],
+        labels: [
+          'Open',
+          'Comment',
+          'Close',
         ],
       ),
     );

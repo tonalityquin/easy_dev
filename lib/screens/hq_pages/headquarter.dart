@@ -18,11 +18,19 @@ class Headquarter extends StatelessWidget {
         child: Text('Headquarter'),
       ),
       bottomNavigationBar: const HqMiniNavigation(
+        height: 56,
+        iconSize: 22,
         icons: [
-          Icons.search,
-          Icons.person,
-          Icons.sort,
+          Icons.dashboard,     // 대시보드
+          Icons.analytics,     // 분석
+          Icons.settings,      // 설정
         ],
+        labels: [
+          'Dashboard',
+          'Analytics',
+          'Settings',
+        ],
+
       ),
     );
   }

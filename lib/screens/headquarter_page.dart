@@ -2,10 +2,7 @@ import 'package:easydev/screens/secondary_page.dart';
 import 'package:easydev/states/page/hq_state.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../states/plate/plate_state.dart';
-import '../states/user/user_state.dart';
 import '../utils/snackbar_helper.dart';
-import '../states/page/page_state.dart';
 import '../states/page/page_info.dart'; // hqPage, HqPageInfo 등 포함
 
 class HeadquarterPage extends StatelessWidget {
@@ -15,33 +12,12 @@ class HeadquarterPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => PageState(pages: defaultPages)),
         ChangeNotifierProvider(create: (_) => HqState(pages: hqPage)),
       ],
       child: Builder(
         builder: (context) {
-          final plateState = context.read<PlateState>();
-          final pageState = context.read<PageState>();
-          final userName = context.read<UserState>().name;
-
           return PopScope(
             canPop: true,
-            onPopInvoked: (didPop) async {
-              if (!didPop) return;
-
-              final currentPage = pageState.pages[pageState.selectedIndex];
-              final collection = currentPage.collectionKey;
-              final selectedPlate = plateState.getSelectedPlate(collection, userName);
-
-              if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
-                await plateState.toggleIsSelected(
-                  collection: collection,
-                  plateNumber: selectedPlate.plateNumber,
-                  userName: userName,
-                  onError: (msg) => debugPrint(msg),
-                );
-              }
-            },
             child: Scaffold(
               appBar: AppBar(
                 backgroundColor: Colors.white,
@@ -103,7 +79,7 @@ class RefreshableBody extends StatelessWidget {
       onHorizontalDragEnd: (details) {
         _handleDrag(context, details.primaryVelocity ?? 0);
       },
-      child: Consumer<PageState>(
+      child: Consumer<HqState>(
         builder: (context, state, child) {
           return Stack(
             children: [
