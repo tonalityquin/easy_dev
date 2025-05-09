@@ -8,11 +8,10 @@ import '../../states/plate/plate_state.dart'; // 번호판 상태 관리
 import '../../states/plate/delete_plate.dart';
 import '../../states/area/area_state.dart'; // 지역 상태 관리
 import '../../states/user/user_state.dart';
-import '../../utils/fee_calculator.dart';
 import '../../widgets/container/plate_container.dart'; // 번호판 컨테이너 위젯
+import '../../widgets/dialog/adjustment_type_confirm_dialog.dart';
 import '../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 import '../../widgets/dialog/departure_completed_confirm_dialog.dart';
-import '../../widgets/dialog/departure_settlement_confirm_dialog.dart';
 import '../../widgets/dialog/parking_location_dialog.dart';
 import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바
 import '../../widgets/dialog/plate_search_dialog.dart'; // ✅ PlateSearchDialog 추가
@@ -115,53 +114,17 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
 
     if (selectedPlate == null) return;
 
-    PlateModel updatedPlate = selectedPlate;
-
-    if (selectedPlate.isLockedFee != true) {
-      final shouldSettle = await showDialog<bool?>(
-        context: context,
-        builder: (context) => DepartureSettlementConfirmDialog(
-          entryTimeInSeconds: selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000,
-          basicStandard: selectedPlate.basicStandard ?? 0,
-          basicAmount: selectedPlate.basicAmount ?? 0,
-          addStandard: selectedPlate.addStandard ?? 0,
-          addAmount: selectedPlate.addAmount ?? 0,
-        ),
-      );
-
-      if (shouldSettle == null) return;
-
-      if (shouldSettle == true) {
-        final now = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
-        final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
-
-        final lockedFee = calculateParkingFee(
-          entryTimeInSeconds: entryTime,
-          currentTimeInSeconds: now,
-          basicStandard: selectedPlate.basicStandard ?? 0,
-          basicAmount: selectedPlate.basicAmount ?? 0,
-          addStandard: selectedPlate.addStandard ?? 0,
-          addAmount: selectedPlate.addAmount ?? 0,
-        ).round();
-
-        updatedPlate = selectedPlate.copyWith(
-          isLockedFee: true,
-          lockedAtTimeInSeconds: now,
-          lockedFeeAmount: lockedFee,
-        );
-      }
-    }
-
+    // ✅ 정산 상태와 관계없이 그대로 출차 완료
     try {
       plateState.toggleIsSelected(
         collection: PlateType.departureRequests,
-        plateNumber: updatedPlate.plateNumber,
+        plateNumber: selectedPlate.plateNumber,
         userName: userName,
         onError: (_) {},
       );
 
       await movementPlate.setDepartureCompletedWithPlate(
-        updatedPlate,
+        selectedPlate,
         plateState,
       );
 
@@ -196,7 +159,8 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
         },
         child: Scaffold(
           appBar: AppBar(
-            title: const TopNavigation(), // ✅ title로만 사용
+            title: const TopNavigation(),
+            // ✅ title로만 사용
             centerTitle: true,
             backgroundColor: Colors.white,
             foregroundColor: Colors.black,
@@ -351,7 +315,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                       if (isPlateSelected) {
                         final adjustmentType = selectedPlate.adjustmentType;
 
-                        // ✅ 정산 타입이 없는 경우 → 사전 정산 불가
+                        // ✅ 정산 타입 확인
                         if (adjustmentType == null || adjustmentType.trim().isEmpty) {
                           showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
                           return;
@@ -361,53 +325,61 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                         final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
                         final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
 
+                        // ✅ 정산이 이미 된 경우 → 취소 다이얼로그 호출
                         if (selectedPlate.isLockedFee) {
-                          // ✅ 정산 취소 전 확인 다이얼로그
                           final confirm = await showDialog<bool>(
                             context: context,
-                            builder: (context) => const ConfirmCancelFeeDialog(), // ✅ 별도 다이얼로그로 분리 필요
+                            builder: (context) => const ConfirmCancelFeeDialog(),
                           );
 
-                          if (confirm != true) return;
+                          if (confirm == true) {
+                            final updatedPlate = selectedPlate.copyWith(
+                              isLockedFee: false,
+                              lockedAtTimeInSeconds: null,
+                              lockedFeeAmount: null,
+                              paymentMethod: null,
+                            );
 
-                          final updatedPlate = selectedPlate.copyWith(
-                            isLockedFee: false,
-                            lockedAtTimeInSeconds: null,
-                            lockedFeeAmount: null,
-                          );
+                            if (!context.mounted) return;
 
-                          if (!context.mounted) return;
-                          await context.read<PlateRepository>().addOrUpdatePlate(
-                                selectedPlate.id,
-                                updatedPlate,
-                              );
+                            await context.read<PlateRepository>().addOrUpdatePlate(
+                                  selectedPlate.id,
+                                  updatedPlate,
+                                );
 
-                          if (!context.mounted) return;
+                            if (!context.mounted) return;
 
-                          await context
-                              .read<PlateState>()
-                              .updatePlateLocally(PlateType.departureRequests, updatedPlate);
+                            await context.read<PlateState>().updatePlateLocally(
+                                  PlateType.departureRequests,
+                                  updatedPlate,
+                                );
 
-                          if (!context.mounted) return;
+                            if (!context.mounted) return;
 
-                          showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
-                          return;
+                            showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
+                          }
+
+                          return; // 취소 후에는 정산 재진입 방지
                         }
 
-                        // ✅ 사전 정산 수행
-                        final lockedFee = calculateParkingFee(
+                        // ✅ 정산 안 된 경우 → 통합 정산 다이얼로그 호출
+                        final result = await showAdjustmentTypeConfirmDialog(
+                          context: context,
                           entryTimeInSeconds: entryTime,
                           currentTimeInSeconds: currentTime,
                           basicStandard: selectedPlate.basicStandard ?? 0,
                           basicAmount: selectedPlate.basicAmount ?? 0,
                           addStandard: selectedPlate.addStandard ?? 0,
                           addAmount: selectedPlate.addAmount ?? 0,
-                        ).round();
+                        );
+
+                        if (result == null) return;
 
                         final updatedPlate = selectedPlate.copyWith(
                           isLockedFee: true,
                           lockedAtTimeInSeconds: currentTime,
-                          lockedFeeAmount: lockedFee, // ✅ 사전 정산 금액 저장
+                          lockedFeeAmount: result.lockedFee,
+                          paymentMethod: result.paymentMethod,
                         );
 
                         await context.read<PlateRepository>().addOrUpdatePlate(
@@ -417,11 +389,14 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
 
                         if (!context.mounted) return;
 
-                        await context.read<PlateState>().updatePlateLocally(PlateType.departureRequests, updatedPlate);
+                        await context.read<PlateState>().updatePlateLocally(
+                              PlateType.departureRequests,
+                              updatedPlate,
+                            );
 
                         if (!context.mounted) return;
 
-                        showSuccessSnackbar(context, '사전 정산 완료: ₩$lockedFee');
+                        showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
                       } else {
                         _isSearchMode ? _resetSearch(context) : _showSearchDialog(context);
                       }

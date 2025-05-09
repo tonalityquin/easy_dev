@@ -9,16 +9,16 @@ class FirestorePlateRepository implements PlateRepository {
 
   @override
   Stream<List<PlateModel>> getPlatesByTypeAndArea(
-    PlateType type,
-    String area, {
-    int? limit,
-    bool descending = true, // 🔥 정렬 방향 매개변수 추가
-  }) {
+      PlateType type,
+      String area, {
+        int? limit,
+        bool descending = true,
+      }) {
     Query<Map<String, dynamic>> query = _firestore
         .collection('plates')
         .where('type', isEqualTo: type.firestoreValue)
         .where('area', isEqualTo: area)
-        .orderBy('request_time', descending: descending); // 🔁 여기에 반영
+        .orderBy('request_time', descending: descending);
 
     if (limit != null) {
       query = query.limit(limit);
@@ -26,14 +26,14 @@ class FirestorePlateRepository implements PlateRepository {
 
     return query.snapshots().map(
           (snapshot) => snapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList(),
-        );
+    );
   }
 
   @override
   Future<int> getPlateCountByTypeAndArea(
-    PlateType type,
-    String area,
-  ) async {
+      PlateType type,
+      String area,
+      ) async {
     final aggregateQuerySnapshot = await _firestore
         .collection('plates')
         .where('type', isEqualTo: type.firestoreValue)
@@ -153,6 +153,7 @@ class FirestorePlateRepository implements PlateRepository {
     int? lockedAtTimeInSeconds,
     int? lockedFeeAmount,
     DateTime? endTime,
+    String? paymentMethod, // ✅ 추가됨
   }) async {
     final documentId = '${plateNumber}_$area';
 
@@ -186,13 +187,12 @@ class FirestorePlateRepository implements PlateRepository {
     }
 
     final plateFourDigit =
-        plateNumber.length >= 4 ? plateNumber.substring(plateNumber.length - 4) : plateNumber; // ✅ 뒷 4자리 추출
+    plateNumber.length >= 4 ? plateNumber.substring(plateNumber.length - 4) : plateNumber;
 
     final plate = PlateModel(
       id: documentId,
       plateNumber: plateNumber,
       plateFourDigit: plateFourDigit,
-      // ✅ 필드 추가
       type: plateType.firestoreValue,
       requestTime: DateTime.now(),
       endTime: endTime,
@@ -212,6 +212,7 @@ class FirestorePlateRepository implements PlateRepository {
       isLockedFee: isLockedFee,
       lockedAtTimeInSeconds: lockedAtTimeInSeconds,
       lockedFeeAmount: lockedFeeAmount,
+      paymentMethod: paymentMethod, // ✅ 반영
     );
 
     dev.log('🔥 저장할 PlateModel: ${plate.toMap()}');
@@ -281,10 +282,10 @@ class FirestorePlateRepository implements PlateRepository {
         .where('plate_number', isEqualTo: plateNumber)
         .where('area', isEqualTo: area)
         .where('type', whereIn: [
-          PlateType.parkingRequests.firestoreValue,
-          PlateType.parkingCompleted.firestoreValue,
-          PlateType.departureRequests.firestoreValue,
-        ])
+      PlateType.parkingRequests.firestoreValue,
+      PlateType.parkingCompleted.firestoreValue,
+      PlateType.departureRequests.firestoreValue,
+    ])
         .limit(1)
         .get();
 

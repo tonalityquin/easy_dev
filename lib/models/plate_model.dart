@@ -9,7 +9,7 @@ int parseInt(dynamic value) {
 
 class PlateFields {
   static const String plateNumber = 'plate_number';
-  static const String plateFourDigit = 'plate_four_digit'; // ✅ 추가
+  static const String plateFourDigit = 'plate_four_digit';
   static const String type = 'type';
   static const String requestTime = 'request_time';
   static const String endTime = 'end_time';
@@ -30,12 +30,13 @@ class PlateFields {
   static const String lockedAtTimeInSeconds = 'lockedAtTimeInSeconds';
   static const String lockedFeeAmount = 'lockedFeeAmount';
   static const String updatedAt = 'updatedAt';
+  static const String paymentMethod = 'paymentMethod'; // ✅ 추가됨
 }
 
 class PlateModel {
   final String id;
   final String plateNumber;
-  final String plateFourDigit; // ✅ 추가
+  final String plateFourDigit;
   final String type;
   final DateTime requestTime;
   final DateTime? endTime;
@@ -56,11 +57,12 @@ class PlateModel {
   final int? lockedAtTimeInSeconds;
   final int? lockedFeeAmount;
   final DateTime? updatedAt;
+  final String? paymentMethod; // ✅ 추가됨
 
   PlateModel({
     required this.id,
     required this.plateNumber,
-    required this.plateFourDigit, // ✅ 추가
+    required this.plateFourDigit,
     required this.type,
     required this.requestTime,
     this.endTime,
@@ -81,6 +83,7 @@ class PlateModel {
     this.lockedAtTimeInSeconds,
     this.lockedFeeAmount,
     this.updatedAt,
+    this.paymentMethod, // ✅ 추가됨
   });
 
   factory PlateModel.fromDocument(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -92,7 +95,7 @@ class PlateModel {
     return PlateModel(
       id: doc.id,
       plateNumber: data[PlateFields.plateNumber] ?? '',
-      plateFourDigit: data[PlateFields.plateFourDigit] ?? '', // ✅ 추가
+      plateFourDigit: data[PlateFields.plateFourDigit] ?? '',
       type: data[PlateFields.type] ?? '',
       requestTime: (timestamp is Timestamp) ? timestamp.toDate() : DateTime.now(),
       endTime: (endTimestamp is Timestamp) ? endTimestamp.toDate() : null,
@@ -113,47 +116,14 @@ class PlateModel {
       lockedAtTimeInSeconds: parseInt(data[PlateFields.lockedAtTimeInSeconds]),
       lockedFeeAmount: parseInt(data[PlateFields.lockedFeeAmount]),
       updatedAt: (updatedTimestamp is Timestamp) ? updatedTimestamp.toDate() : null,
-    );
-  }
-
-  factory PlateModel.fromMap(Map<String, dynamic> map, String id) {
-    return PlateModel(
-      id: id,
-      plateNumber: map[PlateFields.plateNumber] ?? '',
-      plateFourDigit: map[PlateFields.plateFourDigit] ?? '', // ✅ 추가
-      type: map[PlateFields.type] ?? '',
-      requestTime: (map[PlateFields.requestTime] is Timestamp)
-          ? (map[PlateFields.requestTime] as Timestamp).toDate()
-          : DateTime.now(),
-      endTime: (map[PlateFields.endTime] is Timestamp)
-          ? (map[PlateFields.endTime] as Timestamp).toDate()
-          : null,
-      location: map[PlateFields.location] ?? '미지정',
-      area: map[PlateFields.area] ?? '미지정',
-      userName: map[PlateFields.userName] ?? 'Unknown',
-      isSelected: map[PlateFields.isSelected] ?? false,
-      selectedBy: map[PlateFields.selectedBy],
-      adjustmentType: map[PlateFields.adjustmentType],
-      statusList: List<String>.from(map[PlateFields.statusList] ?? []),
-      basicStandard: parseInt(map[PlateFields.basicStandard]),
-      basicAmount: parseInt(map[PlateFields.basicAmount]),
-      addStandard: parseInt(map[PlateFields.addStandard]),
-      addAmount: parseInt(map[PlateFields.addAmount]),
-      region: map[PlateFields.region],
-      imageUrls: List<String>.from(map[PlateFields.imageUrls] ?? []),
-      isLockedFee: map[PlateFields.isLockedFee] ?? false,
-      lockedAtTimeInSeconds: parseInt(map[PlateFields.lockedAtTimeInSeconds]),
-      lockedFeeAmount: parseInt(map[PlateFields.lockedFeeAmount]),
-      updatedAt: (map[PlateFields.updatedAt] is Timestamp)
-          ? (map[PlateFields.updatedAt] as Timestamp).toDate()
-          : null,
+      paymentMethod: data[PlateFields.paymentMethod], // ✅ 추가됨
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
       PlateFields.plateNumber: plateNumber,
-      PlateFields.plateFourDigit: plateFourDigit, // ✅ 추가
+      PlateFields.plateFourDigit: plateFourDigit,
       PlateFields.type: type,
       PlateFields.requestTime: requestTime,
       if (endTime != null) PlateFields.endTime: endTime,
@@ -176,13 +146,15 @@ class PlateModel {
         PlateFields.lockedFeeAmount: lockedFeeAmount,
       if (updatedAt != null)
         PlateFields.updatedAt: Timestamp.fromDate(updatedAt!),
+      if (paymentMethod != null)
+        PlateFields.paymentMethod: paymentMethod, // ✅ 추가됨
     };
   }
 
   PlateModel copyWith({
     String? id,
     String? plateNumber,
-    String? plateFourDigit, // ✅ 추가
+    String? plateFourDigit,
     String? type,
     DateTime? requestTime,
     DateTime? endTime,
@@ -203,11 +175,12 @@ class PlateModel {
     int? lockedAtTimeInSeconds,
     int? lockedFeeAmount,
     DateTime? updatedAt,
+    String? paymentMethod, // ✅ 추가됨
   }) {
     return PlateModel(
       id: id ?? this.id,
       plateNumber: plateNumber ?? this.plateNumber,
-      plateFourDigit: plateFourDigit ?? this.plateFourDigit, // ✅ 추가
+      plateFourDigit: plateFourDigit ?? this.plateFourDigit,
       type: type ?? this.type,
       requestTime: requestTime ?? this.requestTime,
       endTime: endTime ?? this.endTime,
@@ -228,6 +201,7 @@ class PlateModel {
       lockedAtTimeInSeconds: lockedAtTimeInSeconds ?? this.lockedAtTimeInSeconds,
       lockedFeeAmount: lockedFeeAmount ?? this.lockedFeeAmount,
       updatedAt: updatedAt ?? this.updatedAt,
+      paymentMethod: paymentMethod ?? this.paymentMethod, // ✅ 추가됨
     );
   }
 

@@ -36,7 +36,6 @@ abstract class PlateRepository {
   Future<void> updatePlateSelection(String id, bool isSelected, {String? selectedBy});
 
   Future<void> addRequestOrCompleted({
-    // v
     required String plateNumber,
     required String location,
     required String area,
@@ -54,7 +53,9 @@ abstract class PlateRepository {
     int? lockedAtTimeInSeconds,
     int? lockedFeeAmount,
     DateTime? endTime,
+    String? paymentMethod, // ✅ 추가
   });
+
 
   Future<List<String>> getAvailableLocations(String area);
 

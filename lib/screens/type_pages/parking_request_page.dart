@@ -8,6 +8,7 @@ import '../../states/plate/movement_plate.dart';
 import '../../states/area/area_state.dart';
 import '../../states/user/user_state.dart';
 import '../../widgets/container/plate_container.dart';
+import '../../widgets/dialog/adjustment_type_confirm_dialog.dart';
 import '../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 import '../../widgets/dialog/parking_request_status_dialog.dart';
 import '../../widgets/navigation/top_navigation.dart';
@@ -15,7 +16,6 @@ import '../../widgets/dialog/plate_search_dialog.dart';
 import '../../utils/snackbar_helper.dart';
 import '../../widgets/dialog/parking_location_dialog.dart';
 import '../../repositories/plate/plate_repository.dart';
-import '../../utils/fee_calculator.dart';
 import '../../enums/plate_type.dart';
 
 class ParkingRequestPage extends StatefulWidget {
@@ -282,6 +282,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                     final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
                     final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
 
+                    // ✅ 사전 정산이 이미 된 경우 → 취소 다이얼로그 표시
                     if (selectedPlate.isLockedFee) {
                       final confirm = await showDialog<bool>(
                         context: context,
@@ -294,51 +295,59 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                         isLockedFee: false,
                         lockedAtTimeInSeconds: null,
                         lockedFeeAmount: null,
+                        paymentMethod: null,
                       );
 
                       if (!context.mounted) return;
                       await context.read<PlateRepository>().addOrUpdatePlate(
-                            selectedPlate.id,
-                            updatedPlate,
-                          );
+                        selectedPlate.id,
+                        updatedPlate,
+                      );
 
                       if (!context.mounted) return;
-
-                      await context.read<PlateState>().updatePlateLocally(PlateType.parkingRequests, updatedPlate);
+                      await context.read<PlateState>().updatePlateLocally(
+                        PlateType.parkingRequests,
+                        updatedPlate,
+                      );
 
                       if (!context.mounted) return;
-
                       showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
                       return;
                     }
 
-                    final lockedFee = calculateParkingFee(
+                    // ✅ 정산이 아직 안 된 경우 → 결제 방식 + 요금 선택 다이얼로그
+                    final result = await showAdjustmentTypeConfirmDialog(
+                      context: context,
                       entryTimeInSeconds: entryTime,
                       currentTimeInSeconds: currentTime,
                       basicStandard: selectedPlate.basicStandard ?? 0,
                       basicAmount: selectedPlate.basicAmount ?? 0,
                       addStandard: selectedPlate.addStandard ?? 0,
                       addAmount: selectedPlate.addAmount ?? 0,
-                    ).round();
+                    );
+
+                    if (result == null) return;
 
                     final updatedPlate = selectedPlate.copyWith(
                       isLockedFee: true,
                       lockedAtTimeInSeconds: currentTime,
-                      lockedFeeAmount: lockedFee,
+                      lockedFeeAmount: result.lockedFee,
+                      paymentMethod: result.paymentMethod,
                     );
 
                     await context.read<PlateRepository>().addOrUpdatePlate(
-                          selectedPlate.id,
-                          updatedPlate,
-                        );
+                      selectedPlate.id,
+                      updatedPlate,
+                    );
 
                     if (!context.mounted) return;
-
-                    await context.read<PlateState>().updatePlateLocally(PlateType.parkingRequests, updatedPlate);
+                    await context.read<PlateState>().updatePlateLocally(
+                      PlateType.parkingRequests,
+                      updatedPlate,
+                    );
 
                     if (!context.mounted) return;
-
-                    showSuccessSnackbar(context, '사전 정산 완료: ₩$lockedFee');
+                    showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
                   } else {
                     _isSearchMode ? _resetSearch(context) : _showSearchDialog(context);
                   }
@@ -357,9 +366,9 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                             area: selectedPlate.area,
                             onCancelEntryRequest: () {
                               context.read<DeletePlate>().deleteFromParkingRequest(
-                                    selectedPlate.plateNumber,
-                                    selectedPlate.area,
-                                  );
+                                selectedPlate.plateNumber,
+                                selectedPlate.area,
+                              );
                               showSuccessSnackbar(context, "입차 요청이 취소되었습니다: ${selectedPlate.plateNumber}");
                             },
                             onDelete: () {},

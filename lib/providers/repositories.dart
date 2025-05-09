@@ -47,6 +47,7 @@ class DummyPlateRepository implements PlateRepository {
     int? lockedAtTimeInSeconds,
     int? lockedFeeAmount,
     DateTime? endTime,
+    String? paymentMethod,
   }) =>
       throw UnimplementedError();
 

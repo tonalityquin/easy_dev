@@ -6,9 +6,9 @@ import '../../states/plate/filter_plate.dart';
 import '../../states/plate/plate_state.dart';
 import '../../states/area/area_state.dart';
 import '../../states/user/user_state.dart';
-import '../../utils/fee_calculator.dart';
 import '../../utils/gcs_uploader.dart';
 import '../../widgets/container/plate_container.dart';
+import '../../widgets/dialog/adjustment_type_confirm_dialog.dart';
 import '../../widgets/dialog/departure_completed_status_dialog.dart';
 import '../../widgets/dialog/plate_search_dialog.dart';
 import '../../widgets/navigation/top_navigation.dart';
@@ -200,6 +200,14 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
             onTap: (index) async {
               if (index == 0) {
                 if (isPlateSelected) {
+                  final adjustmentType = selectedPlate.adjustmentType;
+
+                  // ✅ 정산 타입 필수 확인
+                  if (adjustmentType == null || adjustmentType.trim().isEmpty) {
+                    showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
+                    return;
+                  }
+
                   final now = DateTime.now();
                   final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
                   final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
@@ -209,31 +217,36 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                     return;
                   }
 
-                  final lockedFee = calculateParkingFee(
+                  // ✅ 정산 다이얼로그 호출
+                  final result = await showAdjustmentTypeConfirmDialog(
+                    context: context,
                     entryTimeInSeconds: entryTime,
                     currentTimeInSeconds: currentTime,
                     basicStandard: selectedPlate.basicStandard ?? 0,
                     basicAmount: selectedPlate.basicAmount ?? 0,
                     addStandard: selectedPlate.addStandard ?? 0,
                     addAmount: selectedPlate.addAmount ?? 0,
-                  ).round();
+                  );
+
+                  if (result == null) return;
 
                   final updatedPlate = selectedPlate.copyWith(
                     isLockedFee: true,
                     lockedAtTimeInSeconds: currentTime,
-                    lockedFeeAmount: lockedFee,
+                    lockedFeeAmount: result.lockedFee,
+                    paymentMethod: result.paymentMethod,
                   );
 
                   await context.read<PlateRepository>().addOrUpdatePlate(
-                        selectedPlate.id,
-                        updatedPlate,
-                      );
+                    selectedPlate.id,
+                    updatedPlate,
+                  );
 
                   if (!context.mounted) return;
                   await context.read<PlateState>().updatePlateLocally(PlateType.departureCompleted, updatedPlate);
 
                   if (!context.mounted) return;
-                  showSuccessSnackbar(context, '사전 정산 완료: ₩$lockedFee');
+                  showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
                 } else {
                   _isSearchMode ? _resetSearch(context) : _showSearchDialog(context);
                 }
