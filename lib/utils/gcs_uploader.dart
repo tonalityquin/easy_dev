@@ -86,16 +86,16 @@ class GCSUploader {
   }
 
   Future<String?> uploadLogJson(
-      Map<String, dynamic> logData,
-      String plateNumber,
-      String division,
-      String area, {
-        int? basicStandard,
-        int? basicAmount,
-        int? addStandard,
-        int? addAmount,
-        String? adjustmentType,
-      }) async {
+    Map<String, dynamic> logData,
+    String plateNumber,
+    String division,
+    String area, {
+    int? basicStandard,
+    int? basicAmount,
+    int? addStandard,
+    int? addAmount,
+    String? adjustmentType,
+  }) async {
     final now = DateTime.now();
     final timestamp =
         '${now.year}${_two(now.month)}${_two(now.day)}_${_two(now.hour)}${_two(now.minute)}${_two(now.second)}';
@@ -112,7 +112,6 @@ class GCSUploader {
     return await uploadJsonData(logData, fileName);
   }
 
-
   Future<void> mergeAndReplaceLogs(String plateNumber, String division, String area) async {
     final prefix = '$division/$area/logs/';
     final credentialsJson = await rootBundle.loadString(serviceAccountPath);
@@ -123,7 +122,11 @@ class GCSUploader {
 
     final allObjects = await storage.objects.list(bucketName, prefix: prefix);
     final matchingObjects = allObjects.items
-            ?.where((o) => o.name != null && o.name!.contains(plateNumber) && o.name!.endsWith('.json'))
+            ?.where((o) =>
+                o.name != null &&
+                o.name!.contains(plateNumber) &&
+                o.name!.endsWith('.json') &&
+                !o.name!.contains('merged_')) // 병합 로그는 삭제하지 않음
             .toList() ??
         [];
 
@@ -154,7 +157,10 @@ class GCSUploader {
       'logs': mergedLogs,
     };
 
-    final mergedFileName = '$division/$area/logs/merged_$plateNumber.json';
+    final now = DateTime.now();
+    final timestamp =
+        '${now.year}${_two(now.month)}${_two(now.day)}_${_two(now.hour)}${_two(now.minute)}${_two(now.second)}';
+    final mergedFileName = '$division/$area/logs/merged_${timestamp}_$plateNumber.json';
     await uploadJsonData(mergedJson, mergedFileName);
 
     for (final obj in matchingObjects) {
@@ -222,6 +228,33 @@ class GCSUploader {
       final media = await storage.objects.get(
         bucketName,
         fileName,
+        downloadOptions: DownloadOptions.fullMedia,
+      ) as Media;
+
+      final bytes = await media.stream.expand((e) => e).toList();
+      final content = utf8.decode(bytes);
+      final parsed = jsonDecode(content);
+
+      return parsed;
+    } catch (e) {
+      debugPrint('❌ 병합 로그 다운로드 실패: $e');
+      rethrow;
+    } finally {
+      client.close();
+    }
+  }
+
+  Future<Map<String, dynamic>> downloadMergedLogByPath(String fullFilePath) async {
+    final credentialsJson = await rootBundle.loadString(serviceAccountPath);
+    final accountCredentials = ServiceAccountCredentials.fromJson(credentialsJson);
+    final scopes = [StorageApi.devstorageFullControlScope];
+    final client = await clientViaServiceAccount(accountCredentials, scopes);
+    final storage = StorageApi(client);
+
+    try {
+      final media = await storage.objects.get(
+        bucketName,
+        fullFilePath,
         downloadOptions: DownloadOptions.fullMedia,
       ) as Media;
 
