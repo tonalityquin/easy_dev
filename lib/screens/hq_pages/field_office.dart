@@ -19,17 +19,16 @@ class FieldOffice extends StatelessWidget {
         height: 56,
         iconSize: 22,
         icons: [
-          Icons.today,       // 📅 Today Field
-          Icons.input,       // 🔁 In&Out Doc.
-          Icons.account_box, // 🧾 Account Doc.
+          Icons.folder_open,
+          Icons.comment,
+          Icons.close,
         ],
         labels: [
-          'Today Field',
-          'In&Out Doc.',
-          'Account Doc.',
+          'Open',
+          'Comment',
+          'Close',
         ],
       ),
     );
   }
 }
-
