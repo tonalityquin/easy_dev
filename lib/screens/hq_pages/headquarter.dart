@@ -1,36 +1,57 @@
 import 'package:flutter/material.dart';
 import '../../../widgets/navigation/hq_mini_navigation.dart';
-import '../../widgets/navigation/top_navigation.dart'; // 하단 내비게이션 바
+import '../../widgets/navigation/top_navigation.dart';
 
-class Headquarter extends StatelessWidget {
+class Headquarter extends StatefulWidget {
   const Headquarter({super.key});
+
+  @override
+  State<Headquarter> createState() => _HeadquarterState();
+}
+
+class _HeadquarterState extends State<Headquarter> {
+  int _selectedIndex = 0;
+
+  final List<String> _tabContents = [
+    '📊 Dashboard 콘텐츠 준비 중',
+    '📈 Analytics 콘텐츠 준비 중',
+    '⚙️ Settings 콘텐츠 준비 중',
+  ];
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const TopNavigation(), // ✅ title로만 사용
+        title: const TopNavigation(),
         centerTitle: true,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
       ),
-      body: const Center(
-        child: Text('Headquarter'),
+      body: Center(
+        child: Text(
+          _tabContents[_selectedIndex],
+          style: const TextStyle(fontSize: 16),
+        ),
       ),
-      bottomNavigationBar: const HqMiniNavigation(
+      bottomNavigationBar: HqMiniNavigation(
         height: 56,
         iconSize: 22,
-        icons: [
-          Icons.dashboard,     // 대시보드
-          Icons.analytics,     // 분석
-          Icons.settings,      // 설정
+        icons: const [
+          Icons.dashboard,
+          Icons.analytics,
+          Icons.settings,
         ],
-        labels: [
+        labels: const [
           'Dashboard',
           'Analytics',
           'Settings',
         ],
-
+        onIconTapped: (index) {
+          setState(() {
+            _selectedIndex = index;
+          });
+        },
       ),
     );
   }
