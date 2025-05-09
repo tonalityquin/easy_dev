@@ -9,11 +9,11 @@ class FirestorePlateRepository implements PlateRepository {
 
   @override
   Stream<List<PlateModel>> getPlatesByTypeAndArea(
-      PlateType type,
-      String area, {
-        int? limit,
-        bool descending = true,
-      }) {
+    PlateType type,
+    String area, {
+    int? limit,
+    bool descending = true,
+  }) {
     Query<Map<String, dynamic>> query = _firestore
         .collection('plates')
         .where('type', isEqualTo: type.firestoreValue)
@@ -26,14 +26,14 @@ class FirestorePlateRepository implements PlateRepository {
 
     return query.snapshots().map(
           (snapshot) => snapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList(),
-    );
+        );
   }
 
   @override
   Future<int> getPlateCountByTypeAndArea(
-      PlateType type,
-      String area,
-      ) async {
+    PlateType type,
+    String area,
+  ) async {
     final aggregateQuerySnapshot = await _firestore
         .collection('plates')
         .where('type', isEqualTo: type.firestoreValue)
@@ -186,8 +186,7 @@ class FirestorePlateRepository implements PlateRepository {
       }
     }
 
-    final plateFourDigit =
-    plateNumber.length >= 4 ? plateNumber.substring(plateNumber.length - 4) : plateNumber;
+    final plateFourDigit = plateNumber.length >= 4 ? plateNumber.substring(plateNumber.length - 4) : plateNumber;
 
     final plate = PlateModel(
       id: documentId,
@@ -254,14 +253,21 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
-  Future<int> getPlateCountByType(PlateType type, {DateTime? selectedDate}) async {
+  Future<int> getPlateCountByType(
+    PlateType type, {
+    DateTime? selectedDate,
+    required String area,
+  }) async {
     try {
-      Query<Map<String, dynamic>> query = _firestore.collection('plates').where('type', isEqualTo: type.firestoreValue);
+      Query<Map<String, dynamic>> query = _firestore
+          .collection('plates')
+          .where('type', isEqualTo: type.firestoreValue)
+          .where('area', isEqualTo: area); // ✅ 필터링 추가
 
       if (selectedDate != null && type == PlateType.departureCompleted) {
         final start = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
         final end = start.add(const Duration(days: 1));
-        query = query.where('requestTime', isGreaterThanOrEqualTo: start).where('requestTime', isLessThan: end);
+        query = query.where('request_time', isGreaterThanOrEqualTo: start).where('request_time', isLessThan: end);
       }
 
       final result = await query.count().get();
@@ -282,10 +288,10 @@ class FirestorePlateRepository implements PlateRepository {
         .where('plate_number', isEqualTo: plateNumber)
         .where('area', isEqualTo: area)
         .where('type', whereIn: [
-      PlateType.parkingRequests.firestoreValue,
-      PlateType.parkingCompleted.firestoreValue,
-      PlateType.departureRequests.firestoreValue,
-    ])
+          PlateType.parkingRequests.firestoreValue,
+          PlateType.parkingCompleted.firestoreValue,
+          PlateType.departureRequests.firestoreValue,
+        ])
         .limit(1)
         .get();
 

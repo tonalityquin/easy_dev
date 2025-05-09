@@ -2,17 +2,14 @@ import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
 
 abstract class PlateRepository {
-  Stream<List<PlateModel>> getPlatesByTypeAndArea(
-    PlateType type,
-    String area, {
-    int? limit,
-    bool descending = true,
-  });
+  Stream<List<PlateModel>> getPlatesByTypeAndArea(PlateType type,
+      String area, {
+        int? limit,
+        bool descending = true,
+      });
 
-  Future<int> getPlateCountByTypeAndArea(
-    PlateType type,
-    String area,
-  );
+  Future<int> getPlateCountByTypeAndArea(PlateType type,
+      String area,);
 
   Future<List<PlateModel>> getPlatesByFourDigit({
     required String plateFourDigit,
@@ -56,10 +53,12 @@ abstract class PlateRepository {
     String? paymentMethod, // ✅ 추가
   });
 
-
   Future<List<String>> getAvailableLocations(String area);
 
-  Future<int> getPlateCountByType(PlateType type, {DateTime? selectedDate});
+  Future<int> getPlateCountByType(PlateType type, {
+    DateTime? selectedDate,
+    required String area, // ✅ 추가
+  });
 
   Future<bool> checkDuplicatePlate({
     required String plateNumber,

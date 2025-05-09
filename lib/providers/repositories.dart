@@ -101,7 +101,11 @@ class DummyPlateRepository implements PlateRepository {
   Future<void> updatePlateSelection(String id, bool isSelected, {String? selectedBy}) => throw UnimplementedError();
 
   @override
-  Future<int> getPlateCountByType(PlateType type, {DateTime? selectedDate}) {
+  Future<int> getPlateCountByType(
+    PlateType type, {
+    DateTime? selectedDate,
+    required String area,
+  }) {
     throw UnimplementedError();
   }
 

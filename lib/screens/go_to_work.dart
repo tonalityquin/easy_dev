@@ -100,7 +100,8 @@ class _GoToWorkState extends State<GoToWork> {
     if (jsonStr != null) {
       final decoded = jsonDecode(jsonStr);
       cellData = Map<String, Map<int, String>>.from(
-        decoded.map((rowKey, colMap) => MapEntry(
+        decoded.map((rowKey, colMap) =>
+            MapEntry(
               rowKey,
               Map<int, String>.from((colMap as Map).map((k, v) => MapEntry(int.parse(k), v))),
             )),
@@ -108,7 +109,9 @@ class _GoToWorkState extends State<GoToWork> {
     }
 
     final existing = cellData[userId]?[dayColumn];
-    if (existing != null && existing.trim().isNotEmpty) {
+    if (existing != null && existing
+        .trim()
+        .isNotEmpty) {
       showFailedSnackbar(context, '이미 출근 기록이 있습니다.');
       return;
     }
@@ -117,7 +120,8 @@ class _GoToWorkState extends State<GoToWork> {
     cellData[userId]![dayColumn] = time;
 
     final encoded = jsonEncode(
-      cellData.map((rowKey, colMap) => MapEntry(
+      cellData.map((rowKey, colMap) =>
+          MapEntry(
             rowKey,
             colMap.map((col, v) => MapEntry(col.toString(), v)),
           )),
@@ -165,6 +169,9 @@ class _GoToWorkState extends State<GoToWork> {
 
   Future<Map<PlateType, int>> _fetchCounts(BuildContext context) async {
     final repo = context.read<PlateRepository>();
+    final userState = context.read<UserState>();
+    final area = userState.area; // ✅ 사용자 지역 추출
+
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
@@ -173,6 +180,7 @@ class _GoToWorkState extends State<GoToWork> {
       final count = await repo.getPlateCountByType(
         type,
         selectedDate: type == PlateType.departureCompleted ? today : null,
+        area: area, // ✅ 전달
       );
       result[type] = count;
     }
@@ -226,10 +234,7 @@ class _GoToWorkState extends State<GoToWork> {
               final division = userState.user?.divisions.first ?? '';
               final area = userState.area;
 
-              final doc = await FirebaseFirestore.instance
-                  .collection('areas')
-                  .doc('$division-$area')
-                  .get();
+              final doc = await FirebaseFirestore.instance.collection('areas').doc('$division-$area').get();
 
               if (!mounted) return;
 
@@ -240,7 +245,6 @@ class _GoToWorkState extends State<GoToWork> {
               }
             });
           }
-
 
           return SafeArea(
             child: SingleChildScrollView(
@@ -258,7 +262,10 @@ class _GoToWorkState extends State<GoToWork> {
                       const SizedBox(height: 96),
                       Text(
                         '출근 전 사용자 정보 확인',
-                        style: Theme.of(context).textTheme.titleLarge,
+                        style: Theme
+                            .of(context)
+                            .textTheme
+                            .titleLarge,
                       ),
                       const SizedBox(height: 16),
                       Card(
@@ -321,21 +328,21 @@ class _GoToWorkState extends State<GoToWork> {
           child: _isLoading
               ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
               : Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(icon, color: Colors.white),
-                    const SizedBox(width: 8),
-                    Text(
-                      label,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.1,
-                      ),
-                    ),
-                  ],
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: Colors.white),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.1,
                 ),
+              ),
+            ],
+          ),
         ),
       ),
     );
