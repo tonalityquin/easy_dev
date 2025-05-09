@@ -79,7 +79,8 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const TopNavigation(), // ✅ title로만 사용
+        title: const TopNavigation(),
+        // ✅ title로만 사용
         centerTitle: true,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
@@ -238,9 +239,9 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                   );
 
                   await context.read<PlateRepository>().addOrUpdatePlate(
-                    selectedPlate.id,
-                    updatedPlate,
-                  );
+                        selectedPlate.id,
+                        updatedPlate,
+                      );
 
                   if (!context.mounted) return;
                   await context.read<PlateState>().updatePlateLocally(PlateType.departureCompleted, updatedPlate);

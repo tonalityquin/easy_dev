@@ -169,7 +169,8 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const TopNavigation(), // ✅ title로만 사용
+          title: const TopNavigation(),
+          // ✅ title로만 사용
           centerTitle: true,
           backgroundColor: Colors.white,
           foregroundColor: Colors.black,
@@ -300,15 +301,15 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
 
                       if (!context.mounted) return;
                       await context.read<PlateRepository>().addOrUpdatePlate(
-                        selectedPlate.id,
-                        updatedPlate,
-                      );
+                            selectedPlate.id,
+                            updatedPlate,
+                          );
 
                       if (!context.mounted) return;
                       await context.read<PlateState>().updatePlateLocally(
-                        PlateType.parkingRequests,
-                        updatedPlate,
-                      );
+                            PlateType.parkingRequests,
+                            updatedPlate,
+                          );
 
                       if (!context.mounted) return;
                       showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
@@ -336,15 +337,15 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                     );
 
                     await context.read<PlateRepository>().addOrUpdatePlate(
-                      selectedPlate.id,
-                      updatedPlate,
-                    );
+                          selectedPlate.id,
+                          updatedPlate,
+                        );
 
                     if (!context.mounted) return;
                     await context.read<PlateState>().updatePlateLocally(
-                      PlateType.parkingRequests,
-                      updatedPlate,
-                    );
+                          PlateType.parkingRequests,
+                          updatedPlate,
+                        );
 
                     if (!context.mounted) return;
                     showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
@@ -366,9 +367,9 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                             area: selectedPlate.area,
                             onCancelEntryRequest: () {
                               context.read<DeletePlate>().deleteFromParkingRequest(
-                                selectedPlate.plateNumber,
-                                selectedPlate.area,
-                              );
+                                    selectedPlate.plateNumber,
+                                    selectedPlate.area,
+                                  );
                               showSuccessSnackbar(context, "입차 요청이 취소되었습니다: ${selectedPlate.plateNumber}");
                             },
                             onDelete: () {},

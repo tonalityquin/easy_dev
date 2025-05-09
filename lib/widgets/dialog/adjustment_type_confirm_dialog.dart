@@ -54,8 +54,7 @@ class AdjustmentTypeConfirmDialog extends StatefulWidget {
   State<AdjustmentTypeConfirmDialog> createState() => _AdjustmentTypeConfirmDialogState();
 }
 
-class _AdjustmentTypeConfirmDialogState extends State<AdjustmentTypeConfirmDialog>
-    with SingleTickerProviderStateMixin {
+class _AdjustmentTypeConfirmDialogState extends State<AdjustmentTypeConfirmDialog> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
 
@@ -127,9 +126,7 @@ class _AdjustmentTypeConfirmDialogState extends State<AdjustmentTypeConfirmDialo
                     });
                   }
                 },
-                items: ['계좌', '카드', '현금']
-                    .map((type) => DropdownMenuItem(value: type, child: Text(type)))
-                    .toList(),
+                items: ['계좌', '카드', '현금'].map((type) => DropdownMenuItem(value: type, child: Text(type))).toList(),
               ),
               const SizedBox(height: 16),
               Text(

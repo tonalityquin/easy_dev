@@ -352,16 +352,16 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                             if (!context.mounted) return;
 
                             await context.read<PlateRepository>().addOrUpdatePlate(
-                              selectedPlate.id,
-                              updatedPlate,
-                            );
+                                  selectedPlate.id,
+                                  updatedPlate,
+                                );
 
                             if (!context.mounted) return;
 
                             await context.read<PlateState>().updatePlateLocally(
-                              PlateType.parkingCompleted,
-                              updatedPlate,
-                            );
+                                  PlateType.parkingCompleted,
+                                  updatedPlate,
+                                );
 
                             if (!context.mounted) return;
 
@@ -392,16 +392,16 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                         );
 
                         await context.read<PlateRepository>().addOrUpdatePlate(
-                          selectedPlate.id,
-                          updatedPlate,
-                        );
+                              selectedPlate.id,
+                              updatedPlate,
+                            );
 
                         if (!context.mounted) return;
 
                         await context.read<PlateState>().updatePlateLocally(
-                          PlateType.parkingCompleted,
-                          updatedPlate,
-                        );
+                              PlateType.parkingCompleted,
+                              updatedPlate,
+                            );
 
                         if (!context.mounted) return;
 
