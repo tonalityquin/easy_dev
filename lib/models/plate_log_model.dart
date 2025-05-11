@@ -1,6 +1,6 @@
 class PlateLogModel {
   final String plateNumber;
-  final String division; // ✅ 추가
+  final String division;
   final String area;
   final String from;
   final String to;
@@ -10,7 +10,7 @@ class PlateLogModel {
 
   PlateLogModel({
     required this.plateNumber,
-    required this.division, // ✅ 추가
+    required this.division,
     required this.area,
     required this.from,
     required this.to,
@@ -20,15 +20,15 @@ class PlateLogModel {
   });
 
   Map<String, dynamic> toMap() => {
-    'plateNumber': plateNumber,
-    'division': division, // ✅ 추가
-    'area': area,
-    'from': from,
-    'to': to,
-    'action': action,
-    'performedBy': performedBy,
-    'timestamp': timestamp.toIso8601String(),
-  };
+        'plateNumber': plateNumber,
+        'division': division,
+        'area': area,
+        'from': from,
+        'to': to,
+        'action': action,
+        'performedBy': performedBy,
+        'timestamp': timestamp.toIso8601String(),
+      };
 
   factory PlateLogModel.fromMap(Map<String, dynamic> map) {
     DateTime parsedTime;
@@ -43,7 +43,7 @@ class PlateLogModel {
 
     return PlateLogModel(
       plateNumber: map['plateNumber'] ?? '',
-      division: map['division'] ?? '', // ✅ 추가
+      division: map['division'] ?? '',
       area: map['area'] ?? '',
       from: map['from'] ?? '',
       to: map['to'] ?? '',

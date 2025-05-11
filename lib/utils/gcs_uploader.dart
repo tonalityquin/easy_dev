@@ -106,13 +106,6 @@ class GCSUploader {
     final safePlate = plateNumber.replaceAll(RegExp(r'\\s'), '');
     final fileName = '$division/$area/$year/$month/$day/logs/${safePlate}_$time.json';
 
-    // ✅ 정산 관련 필드 포함
-    logData['basicStandard'] = basicStandard;
-    logData['basicAmount'] = basicAmount;
-    logData['addStandard'] = addStandard;
-    logData['addAmount'] = addAmount;
-    logData['adjustmentType'] = adjustmentType;
-
     return await uploadJsonData(logData, fileName);
   }
 
