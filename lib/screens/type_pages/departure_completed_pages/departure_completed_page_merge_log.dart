@@ -32,8 +32,8 @@ class _MergedLogSectionState extends State<MergedLogSection> {
         title: const Text('병합 로그 새로고침'),
         content: const Text(
           '이 작업은 GCS에서 병합 로그를 새로 불러오며,\n'
-              '약간의 데이터 사용량이 발생할 수 있습니다.\n\n'
-              '계속하시겠습니까?',
+          '약간의 데이터 사용량이 발생할 수 있습니다.\n\n'
+          '계속하시겠습니까?',
         ),
         actions: [
           TextButton(
@@ -53,14 +53,13 @@ class _MergedLogSectionState extends State<MergedLogSection> {
     final prefs = await SharedPreferences.getInstance();
     final d = widget.selectedDate;
     final cacheKey = 'mergedLogCache-${widget.division}-${widget.area}-${d.year}-${d.month}-${d.day}';
-
     await prefs.remove(cacheKey);
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('병합 로그가 새로고침되었습니다.')),
       );
-      setState(() {}); // UI 재로드 트리거
+      setState(() {});
     }
   }
 
@@ -73,6 +72,20 @@ class _MergedLogSectionState extends State<MergedLogSection> {
       return searchQuery.isEmpty || plate.endsWith(searchQuery);
     }).toList();
 
+    final totalLockedFee = filteredLogs.map((log) {
+      final logs = (log['logs'] as List?) ?? [];
+      final latestAdjustment = logs
+          .whereType<Map<String, dynamic>>()
+          .where((l) => l['action'] == '사전 정산')
+          .fold<Map<String, dynamic>?>(null, (prev, curr) {
+        final currTime = DateTime.tryParse(curr['timestamp'] ?? '');
+        final prevTime = prev != null ? DateTime.tryParse(prev['timestamp'] ?? '') : null;
+        if (prevTime == null || (currTime != null && currTime.isAfter(prevTime))) return curr;
+        return prev;
+      });
+      return latestAdjustment?['lockedFee'] as num? ?? 0;
+    }).fold<num>(0, (sum, fee) => sum + fee);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -80,9 +93,12 @@ class _MergedLogSectionState extends State<MergedLogSection> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              '🔒 병합 로그 항목 (총 ${filteredLogs.length}개)',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            Expanded(
+              child: Text(
+                '🔒 병합 로그 항목 (총 ${filteredLogs.length}개, ₩${totalLockedFee.toStringAsFixed(0)})',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
             TextButton.icon(
               onPressed: _refreshMergedLogs,
@@ -126,12 +142,6 @@ class _MergedLogSectionState extends State<MergedLogSection> {
 
           final isExpanded = _expandedPlates.contains(plate);
 
-          final totalFee = log['totalFee'] ?? (logs is List
-              ? logs.map((e) => e['fee'] ?? e['lockedFeeAmount'])
-              .whereType<num>()
-              .fold(0.0, (sum, fee) => sum + fee)
-              : 0.0);
-
           final latestAdjustmentLog = (logs as List)
               .whereType<Map<String, dynamic>>()
               .where((l) => l['action'] == '사전 정산')
@@ -146,6 +156,7 @@ class _MergedLogSectionState extends State<MergedLogSection> {
 
           final adjustmentTypeText = latestAdjustmentLog?['adjustmentType']?.toString() ?? '-';
           final paymentMethod = latestAdjustmentLog?['paymentMethod']?.toString() ?? '-';
+          final lockedFee = latestAdjustmentLog?['lockedFee'] ?? '-';
 
           return Column(
             children: [
@@ -166,9 +177,12 @@ class _MergedLogSectionState extends State<MergedLogSection> {
                   ),
                   child: Row(
                     children: [
-                      Expanded(flex: 2, child: Center(child: Text(formattedTime, style: const TextStyle(fontSize: 18)))),
+                      Expanded(
+                          flex: 2, child: Center(child: Text(formattedTime, style: const TextStyle(fontSize: 18)))),
                       Expanded(flex: 5, child: Center(child: Text(plate, style: const TextStyle(fontSize: 18)))),
-                      Expanded(flex: 3, child: Center(child: Text(adjustmentTypeText, style: const TextStyle(fontSize: 16)))),
+                      Expanded(
+                          flex: 3,
+                          child: Center(child: Text(adjustmentTypeText, style: const TextStyle(fontSize: 16)))),
                     ],
                   ),
                 ),
@@ -219,10 +233,9 @@ class _MergedLogSectionState extends State<MergedLogSection> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        '결제 금액: ₩${latestAdjustmentLog?['lockedFee'] ?? '-'} (${latestAdjustmentLog?['paymentMethod'] ?? '-'})',
+                        '결제 금액: ₩$lockedFee ($paymentMethod)',
                         style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                       ),
-
                     ],
                   ),
                 ),
