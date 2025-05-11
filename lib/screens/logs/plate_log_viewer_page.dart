@@ -35,6 +35,8 @@ class _PlateLogViewerPageState extends State<PlateLogViewerPage> {
     _loadLogs();
   }
 
+  String _normalize(String? input) => (input ?? '').replaceAll(RegExp(r'[\s\-]'), '').trim();
+
   Future<void> _loadLogs() async {
     setState(() => _isLoading = true);
     try {
@@ -44,7 +46,12 @@ class _PlateLogViewerPageState extends State<PlateLogViewerPage> {
       final client = await clientViaServiceAccount(accountCredentials, scopes);
       final storage = StorageApi(client);
 
-      final prefix = '${widget.division}/${widget.area}/logs/';
+      // ✅ 날짜 경로 포함: 2025/05/11
+      final year = '2025';
+      final month = '05';
+      final day = '11';
+      final prefix = '${widget.division}/${widget.area}/$year/$month/$day/logs/';
+
       final objects = await storage.objects.list(bucketName, prefix: prefix);
       final logFiles = objects.items?.where((o) => o.name?.endsWith('.json') ?? false).toList() ?? [];
 
@@ -61,10 +68,9 @@ class _PlateLogViewerPageState extends State<PlateLogViewerPage> {
 
       logs.sort((a, b) => b.timestamp.compareTo(a.timestamp)); // 최신순
 
-      // ✅ initialPlateNumber가 있는 경우, 해당 번호판 로그만 필터
-      final normalizedFilter = widget.initialPlateNumber?.replaceAll(RegExp(r'[\s\-]'), '');
-      final filtered = normalizedFilter != null
-          ? logs.where((log) => log.plateNumber.replaceAll(RegExp(r'[\s\-]'), '') == normalizedFilter).toList()
+      // ✅ 정규화된 비교 적용
+      final filtered = widget.initialPlateNumber != null
+          ? logs.where((log) => _normalize(log.plateNumber) == _normalize(widget.initialPlateNumber)).toList()
           : logs;
 
       setState(() {
@@ -81,9 +87,7 @@ class _PlateLogViewerPageState extends State<PlateLogViewerPage> {
 
   @override
   Widget build(BuildContext context) {
-    final plateTitle = widget.initialPlateNumber != null
-        ? '${widget.initialPlateNumber} 로그'
-        : '번호판 로그';
+    final plateTitle = widget.initialPlateNumber != null ? '${widget.initialPlateNumber} 로그' : '번호판 로그';
 
     return Scaffold(
       appBar: AppBar(
@@ -100,30 +104,30 @@ class _PlateLogViewerPageState extends State<PlateLogViewerPage> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _logs.isEmpty
-          ? const Center(child: Text("📭 로그가 없습니다."))
-          : ListView.separated(
-        itemCount: _logs.length,
-        separatorBuilder: (_, __) => const Divider(height: 1),
-        itemBuilder: (_, index) {
-          final log = _logs[index];
-          return ListTile(
-            leading: const Icon(Icons.directions_car),
-            title: Text(log.action),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('${log.from} → ${log.to}'),
-                Text('담당자: ${log.performedBy}', style: const TextStyle(fontSize: 12)),
-              ],
-            ),
-            trailing: Text(
-              log.timestamp.toString().substring(0, 19),
-              style: const TextStyle(fontSize: 12),
-            ),
-            isThreeLine: true,
-          );
-        },
-      ),
+              ? const Center(child: Text("📭 로그가 없습니다."))
+              : ListView.separated(
+                  itemCount: _logs.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (_, index) {
+                    final log = _logs[index];
+                    return ListTile(
+                      leading: const Icon(Icons.directions_car),
+                      title: Text(log.action),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('${log.from} → ${log.to}'),
+                          Text('담당자: ${log.performedBy}', style: const TextStyle(fontSize: 12)),
+                        ],
+                      ),
+                      trailing: Text(
+                        log.timestamp.toString().substring(0, 19),
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      isThreeLine: true,
+                    );
+                  },
+                ),
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.all(12),
         child: ElevatedButton.icon(
