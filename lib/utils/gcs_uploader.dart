@@ -87,12 +87,12 @@ class GCSUploader {
   }
 
   Future<String?> uploadLogJson(
-      Map<String, dynamic> logData,
-      String plateNumber,
-      String division,
-      String area, {
-        String? adjustmentType,
-      }) async {
+    Map<String, dynamic> logData,
+    String plateNumber,
+    String division,
+    String area, {
+    String? adjustmentType,
+  }) async {
     final now = DateTime.now();
     final year = now.year;
     final month = _two(now.month);
@@ -102,8 +102,11 @@ class GCSUploader {
     final safePlate = plateNumber.replaceAll(RegExp(r'\\s'), '');
     final fileName = '$division/$area/$year/$month/$day/logs/${safePlate}_$time.json';
 
-    // ✅ 꼭 필요한 필드만 포함
-    logData['adjustmentType'] = adjustmentType;
+    // ✅ adjustmentType이 null이거나 공백일 경우 추가하지 않음
+    final cleanAdjustmentType = adjustmentType?.trim();
+    if (cleanAdjustmentType != null && cleanAdjustmentType.isNotEmpty) {
+      logData['adjustmentType'] = cleanAdjustmentType;
+    }
 
     if (logData['action'] == '사전 정산') {
       logData.putIfAbsent('from', () => '정산 시작');
@@ -117,7 +120,6 @@ class GCSUploader {
 
     return await uploadJsonData(logData, fileName);
   }
-
 
   Future<void> mergeAndReplaceLogs(String plateNumber, String division, String area) async {
     final now = DateTime.now();

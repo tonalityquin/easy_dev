@@ -357,28 +357,37 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                             if (!context.mounted) return;
 
                             await context.read<PlateRepository>().addOrUpdatePlate(
-                                  selectedPlate.id,
-                                  updatedPlate,
-                                );
+                              selectedPlate.id,
+                              updatedPlate,
+                            );
 
                             if (!context.mounted) return;
 
                             await context.read<PlateState>().updatePlateLocally(
-                                  PlateType.parkingCompleted,
-                                  updatedPlate,
-                                );
+                              PlateType.parkingCompleted,
+                              updatedPlate,
+                            );
 
                             if (!context.mounted) return;
 
-// GCS 로그 저장
-                            await uploader.uploadLogJson({
+                            // ✅ 로그 데이터 구성
+                            final cancelLog = {
                               'plateNumber': selectedPlate.plateNumber,
                               'action': '사전 정산 취소',
                               'performedBy': userName,
                               'timestamp': DateTime.now().toIso8601String(),
-                              'adjustmentType': adjustmentType,
-                            }, selectedPlate.plateNumber, division, area,
-                                adjustmentType: selectedPlate.adjustmentType);
+                            };
+                            if (adjustmentType.trim().isNotEmpty) {
+                              cancelLog['adjustmentType'] = adjustmentType;
+                            }
+
+                            await uploader.uploadLogJson(
+                              cancelLog,
+                              selectedPlate.plateNumber,
+                              division,
+                              area,
+                              adjustmentType: adjustmentType,
+                            );
 
                             showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
                           }
@@ -407,30 +416,39 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                         );
 
                         await context.read<PlateRepository>().addOrUpdatePlate(
-                              selectedPlate.id,
-                              updatedPlate,
-                            );
+                          selectedPlate.id,
+                          updatedPlate,
+                        );
 
                         if (!context.mounted) return;
 
                         await context.read<PlateState>().updatePlateLocally(
-                              PlateType.parkingCompleted,
-                              updatedPlate,
-                            );
+                          PlateType.parkingCompleted,
+                          updatedPlate,
+                        );
 
                         if (!context.mounted) return;
 
-// GCS 로그 저장
-                        await uploader.uploadLogJson({
+                        // ✅ 사전 정산 완료 로그
+                        final log = {
                           'plateNumber': selectedPlate.plateNumber,
                           'action': '사전 정산',
                           'performedBy': userName,
                           'timestamp': DateTime.now().toIso8601String(),
-                          'adjustmentType': adjustmentType,
                           'lockedFee': result.lockedFee,
                           'paymentMethod': result.paymentMethod,
-                        }, selectedPlate.plateNumber, division, area,
-                            adjustmentType: selectedPlate.adjustmentType);
+                        };
+                        if (adjustmentType.trim().isNotEmpty) {
+                          log['adjustmentType'] = adjustmentType;
+                        }
+
+                        await uploader.uploadLogJson(
+                          log,
+                          selectedPlate.plateNumber,
+                          division,
+                          area,
+                          adjustmentType: adjustmentType,
+                        );
 
                         showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
                       } else {

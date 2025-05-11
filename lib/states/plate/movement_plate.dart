@@ -52,7 +52,6 @@ class MovementPlate {
       final log = PlateLogModel(
         plateNumber: plateNumber,
         division: _areaState.currentDivision,
-        // ✅ 수정
         area: area,
         from: fromType.name,
         to: toType.name,
@@ -60,7 +59,10 @@ class MovementPlate {
         performedBy: selectedBy,
         timestamp: DateTime.now(),
       );
-      await _uploader.uploadLogJson(log.toMap(), plateNumber, _areaState.currentDivision, area);
+
+      final logMap = log.toMap()..removeWhere((k, v) => v == null);
+
+      await _uploader.uploadLogJson(logMap, plateNumber, _areaState.currentDivision, area);
 
       return true;
     } catch (e) {
@@ -173,7 +175,6 @@ class MovementPlate {
       final log = PlateLogModel(
         plateNumber: plateNumber,
         division: _areaState.currentDivision,
-        // ✅ 수정
         area: area,
         from: fromType.name,
         to: PlateType.parkingRequests.name,
@@ -182,7 +183,9 @@ class MovementPlate {
         timestamp: DateTime.now(),
       );
 
-      await _uploader.uploadLogJson(log.toMap(), plateNumber, _areaState.currentDivision, area);
+      final logMap = log.toMap()..removeWhere((k, v) => v == null);
+
+      await _uploader.uploadLogJson(logMap, plateNumber, _areaState.currentDivision, area);
     } catch (e) {
       debugPrint("🚨 복원 오류: $e");
     }
@@ -211,9 +214,9 @@ class MovementPlate {
   }
 
   Future<void> setDepartureCompletedWithPlate(
-    PlateModel plate,
-    PlateState plateState,
-  ) async {
+      PlateModel plate,
+      PlateState plateState,
+      ) async {
     final documentId = '${plate.plateNumber}_${plate.area}';
 
     try {
@@ -244,9 +247,10 @@ class MovementPlate {
         timestamp: DateTime.now(),
       );
 
-      await _uploader.uploadLogJson(log.toMap(), plate.plateNumber, _areaState.currentDivision, plate.area);
+      final logMap = log.toMap()..removeWhere((k, v) => v == null);
 
-      // ✅ 병합 조건: 출차 완료 + 요금 고정됨
+      await _uploader.uploadLogJson(logMap, plate.plateNumber, _areaState.currentDivision, plate.area);
+
       if (plate.isLockedFee == true) {
         await _uploader.mergeAndReplaceLogs(plate.plateNumber, _areaState.currentDivision, plate.area);
       }
@@ -257,9 +261,9 @@ class MovementPlate {
   }
 
   Future<void> doubleParkingCompletedToDepartureCompletedWithPlate(
-    PlateModel plate,
-    PlateState plateState,
-  ) async {
+      PlateModel plate,
+      PlateState plateState,
+      ) async {
     final documentId = '${plate.plateNumber}_${plate.area}';
 
     try {
@@ -288,9 +292,10 @@ class MovementPlate {
         timestamp: DateTime.now(),
       );
 
-      await _uploader.uploadLogJson(log.toMap(), plate.plateNumber, _areaState.currentDivision, plate.area);
+      final logMap = log.toMap()..removeWhere((k, v) => v == null);
 
-      // ✅ 병합 조건: 출차 완료 + 요금 고정됨
+      await _uploader.uploadLogJson(logMap, plate.plateNumber, _areaState.currentDivision, plate.area);
+
       if (plate.isLockedFee == true) {
         await _uploader.mergeAndReplaceLogs(plate.plateNumber, _areaState.currentDivision, plate.area);
       }

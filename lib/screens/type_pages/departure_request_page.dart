@@ -364,14 +364,23 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                             if (!context.mounted) return;
 
                             // ✅ 로그 저장: 사전 정산 취소
-                            await uploader.uploadLogJson({
+                            final cancelLog = {
                               'plateNumber': selectedPlate.plateNumber,
                               'action': '사전 정산 취소',
                               'performedBy': userName,
                               'timestamp': DateTime.now().toIso8601String(),
-                              'adjustmentType': adjustmentType,
-                            }, selectedPlate.plateNumber, division, area,
-                                adjustmentType: selectedPlate.adjustmentType);
+                            };
+                            if (adjustmentType.trim().isNotEmpty) {
+                              cancelLog['adjustmentType'] = adjustmentType;
+                            }
+
+                            await uploader.uploadLogJson(
+                              cancelLog,
+                              selectedPlate.plateNumber,
+                              division,
+                              area,
+                              adjustmentType: adjustmentType,
+                            );
 
                             showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
                           }
@@ -414,16 +423,25 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                         if (!context.mounted) return;
 
                         // ✅ 로그 저장: 사전 정산 완료
-                        await uploader.uploadLogJson({
+                        final log = {
                           'plateNumber': selectedPlate.plateNumber,
                           'action': '사전 정산',
                           'performedBy': userName,
                           'timestamp': DateTime.now().toIso8601String(),
-                          'adjustmentType': adjustmentType,
                           'lockedFee': result.lockedFee,
                           'paymentMethod': result.paymentMethod,
-                        }, selectedPlate.plateNumber, division, area,
-                            adjustmentType: selectedPlate.adjustmentType);
+                        };
+                        if (adjustmentType.trim().isNotEmpty) {
+                          log['adjustmentType'] = adjustmentType;
+                        }
+
+                        await uploader.uploadLogJson(
+                          log,
+                          selectedPlate.plateNumber,
+                          division,
+                          area,
+                          adjustmentType: adjustmentType,
+                        );
 
                         showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
                       } else {

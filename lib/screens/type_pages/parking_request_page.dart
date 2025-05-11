@@ -284,13 +284,13 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                     final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
                     final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
 
-                    // ✅ 로그 저장을 위한 공통 선언
+                    // ✅ 로그 저장용
                     final uploader = GCSUploader();
                     final division = context.read<AreaState>().currentDivision;
                     final area = context.read<AreaState>().currentArea.trim();
                     final userName = context.read<UserState>().name;
 
-                    // ✅ 사전 정산이 이미 된 경우 → 취소
+                    // ✅ 사전 정산 이미 된 경우 → 취소 처리
                     if (selectedPlate.isLockedFee) {
                       final confirm = await showDialog<bool>(
                         context: context,
@@ -308,33 +308,42 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
 
                       if (!context.mounted) return;
                       await context.read<PlateRepository>().addOrUpdatePlate(
-                            selectedPlate.id,
-                            updatedPlate,
-                          );
+                        selectedPlate.id,
+                        updatedPlate,
+                      );
 
                       if (!context.mounted) return;
                       await context.read<PlateState>().updatePlateLocally(
-                            PlateType.parkingRequests,
-                            updatedPlate,
-                          );
+                        PlateType.parkingRequests,
+                        updatedPlate,
+                      );
 
                       if (!context.mounted) return;
 
                       // ✅ 사전 정산 취소 로그
-                      await uploader.uploadLogJson({
+                      final cancelLog = {
                         'plateNumber': selectedPlate.plateNumber,
                         'action': '사전 정산 취소',
                         'performedBy': userName,
                         'timestamp': DateTime.now().toIso8601String(),
-                        'adjustmentType': adjustmentType,
-                      }, selectedPlate.plateNumber, division, area,
-                          adjustmentType: selectedPlate.adjustmentType);
+                      };
+                      if (adjustmentType.trim().isNotEmpty) {
+                        cancelLog['adjustmentType'] = adjustmentType;
+                      }
+
+                      await uploader.uploadLogJson(
+                        cancelLog,
+                        selectedPlate.plateNumber,
+                        division,
+                        area,
+                        adjustmentType: adjustmentType,
+                      );
 
                       showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
                       return;
                     }
 
-                    // ✅ 사전 정산 수행
+                    // ✅ 사전 정산 처리
                     final result = await showAdjustmentTypeConfirmDialog(
                       context: context,
                       entryTimeInSeconds: entryTime,
@@ -355,29 +364,38 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                     );
 
                     await context.read<PlateRepository>().addOrUpdatePlate(
-                          selectedPlate.id,
-                          updatedPlate,
-                        );
+                      selectedPlate.id,
+                      updatedPlate,
+                    );
 
                     if (!context.mounted) return;
                     await context.read<PlateState>().updatePlateLocally(
-                          PlateType.parkingRequests,
-                          updatedPlate,
-                        );
+                      PlateType.parkingRequests,
+                      updatedPlate,
+                    );
 
                     if (!context.mounted) return;
 
                     // ✅ 사전 정산 완료 로그
-                    await uploader.uploadLogJson({
+                    final log = {
                       'plateNumber': selectedPlate.plateNumber,
                       'action': '사전 정산',
                       'performedBy': userName,
                       'timestamp': DateTime.now().toIso8601String(),
-                      'adjustmentType': adjustmentType,
                       'lockedFee': result.lockedFee,
                       'paymentMethod': result.paymentMethod,
-                    }, selectedPlate.plateNumber, division, area,
-                        adjustmentType: selectedPlate.adjustmentType);
+                    };
+                    if (adjustmentType.trim().isNotEmpty) {
+                      log['adjustmentType'] = adjustmentType;
+                    }
+
+                    await uploader.uploadLogJson(
+                      log,
+                      selectedPlate.plateNumber,
+                      division,
+                      area,
+                      adjustmentType: adjustmentType,
+                    );
 
                     showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
                   } else {

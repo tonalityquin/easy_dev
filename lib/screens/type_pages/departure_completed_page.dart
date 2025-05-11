@@ -262,16 +262,25 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                   final area = context.read<AreaState>().currentArea.trim();
                   final userName = context.read<UserState>().name;
 
-                  await uploader.uploadLogJson({
+                  final log = {
                     'plateNumber': selectedPlate.plateNumber,
                     'action': '사전 정산',
                     'performedBy': userName,
                     'timestamp': DateTime.now().toIso8601String(),
-                    'adjustmentType': adjustmentType,
                     'lockedFee': result.lockedFee,
                     'paymentMethod': result.paymentMethod,
-                  }, selectedPlate.plateNumber, division, area,
-                      adjustmentType: selectedPlate.adjustmentType);
+                  };
+                  if (adjustmentType.trim().isNotEmpty) {
+                    log['adjustmentType'] = adjustmentType;
+                  }
+
+                  await uploader.uploadLogJson(
+                    log,
+                    selectedPlate.plateNumber,
+                    division,
+                    area,
+                    adjustmentType: adjustmentType,
+                  );
 
                   showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
                 } else {
