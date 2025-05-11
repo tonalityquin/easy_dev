@@ -244,14 +244,35 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                   );
 
                   await context.read<PlateRepository>().addOrUpdatePlate(
-                        selectedPlate.id,
-                        updatedPlate,
-                      );
+                    selectedPlate.id,
+                    updatedPlate,
+                  );
 
                   if (!context.mounted) return;
-                  await context.read<PlateState>().updatePlateLocally(PlateType.departureCompleted, updatedPlate);
+                  await context.read<PlateState>().updatePlateLocally(
+                    PlateType.departureCompleted,
+                    updatedPlate,
+                  );
 
                   if (!context.mounted) return;
+
+                  // ✅ GCS 로그 저장
+                  final uploader = GCSUploader();
+                  final division = context.read<AreaState>().currentDivision;
+                  final area = context.read<AreaState>().currentArea.trim();
+                  final userName = context.read<UserState>().name;
+
+                  await uploader.uploadLogJson({
+                    'plateNumber': selectedPlate.plateNumber,
+                    'action': '사전 정산',
+                    'performedBy': userName,
+                    'timestamp': DateTime.now().toIso8601String(),
+                    'adjustmentType': adjustmentType,
+                    'lockedFee': result.lockedFee,
+                    'paymentMethod': result.paymentMethod,
+                  }, selectedPlate.plateNumber, division, area,
+                      adjustmentType: selectedPlate.adjustmentType);
+
                   showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
                 } else {
                   _isSearchMode ? _resetSearch(context) : _showSearchDialog(context);

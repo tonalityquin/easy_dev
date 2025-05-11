@@ -8,6 +8,7 @@ import '../../states/plate/plate_state.dart'; // 번호판 상태 관리
 import '../../states/plate/delete_plate.dart';
 import '../../states/area/area_state.dart'; // 지역 상태 관리
 import '../../states/user/user_state.dart';
+import '../../utils/gcs_uploader.dart';
 import '../../widgets/container/plate_container.dart'; // 번호판 컨테이너 위젯
 import '../../widgets/dialog/adjustment_type_confirm_dialog.dart';
 import '../../widgets/dialog/confirm_cancel_fee_dialog.dart';
@@ -325,7 +326,13 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                         final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
                         final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
 
-                        // ✅ 정산이 이미 된 경우 → 취소 다이얼로그 호출
+                        // ✅ 공통 선언 (로그 저장용)
+                        final uploader = GCSUploader();
+                        final division = context.read<AreaState>().currentDivision;
+                        final area = context.read<AreaState>().currentArea.trim();
+                        final userName = context.read<UserState>().name;
+
+                        // ✅ 정산이 이미 된 경우 → 정산 취소 다이얼로그
                         if (selectedPlate.isLockedFee) {
                           final confirm = await showDialog<bool>(
                             context: context,
@@ -343,18 +350,28 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                             if (!context.mounted) return;
 
                             await context.read<PlateRepository>().addOrUpdatePlate(
-                                  selectedPlate.id,
-                                  updatedPlate,
-                                );
+                              selectedPlate.id,
+                              updatedPlate,
+                            );
 
                             if (!context.mounted) return;
 
                             await context.read<PlateState>().updatePlateLocally(
-                                  PlateType.departureRequests,
-                                  updatedPlate,
-                                );
+                              PlateType.departureRequests,
+                              updatedPlate,
+                            );
 
                             if (!context.mounted) return;
+
+                            // ✅ 로그 저장: 사전 정산 취소
+                            await uploader.uploadLogJson({
+                              'plateNumber': selectedPlate.plateNumber,
+                              'action': '사전 정산 취소',
+                              'performedBy': userName,
+                              'timestamp': DateTime.now().toIso8601String(),
+                              'adjustmentType': adjustmentType,
+                            }, selectedPlate.plateNumber, division, area,
+                                adjustmentType: selectedPlate.adjustmentType);
 
                             showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
                           }
@@ -362,7 +379,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                           return; // 취소 후에는 정산 재진입 방지
                         }
 
-                        // ✅ 정산 안 된 경우 → 통합 정산 다이얼로그 호출
+                        // ✅ 정산 안 된 경우 → 다이얼로그 호출
                         final result = await showAdjustmentTypeConfirmDialog(
                           context: context,
                           entryTimeInSeconds: entryTime,
@@ -383,18 +400,30 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                         );
 
                         await context.read<PlateRepository>().addOrUpdatePlate(
-                              selectedPlate.id,
-                              updatedPlate,
-                            );
+                          selectedPlate.id,
+                          updatedPlate,
+                        );
 
                         if (!context.mounted) return;
 
                         await context.read<PlateState>().updatePlateLocally(
-                              PlateType.departureRequests,
-                              updatedPlate,
-                            );
+                          PlateType.departureRequests,
+                          updatedPlate,
+                        );
 
                         if (!context.mounted) return;
+
+                        // ✅ 로그 저장: 사전 정산 완료
+                        await uploader.uploadLogJson({
+                          'plateNumber': selectedPlate.plateNumber,
+                          'action': '사전 정산',
+                          'performedBy': userName,
+                          'timestamp': DateTime.now().toIso8601String(),
+                          'adjustmentType': adjustmentType,
+                          'lockedFee': result.lockedFee,
+                          'paymentMethod': result.paymentMethod,
+                        }, selectedPlate.plateNumber, division, area,
+                            adjustmentType: selectedPlate.adjustmentType);
 
                         showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
                       } else {

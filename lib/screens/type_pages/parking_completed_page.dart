@@ -8,6 +8,7 @@ import '../../states/plate/movement_plate.dart';
 import '../../states/area/area_state.dart'; // AreaState 상태 관리
 import '../../states/user/user_state.dart';
 import '../../states/plate/filter_plate.dart';
+import '../../utils/gcs_uploader.dart';
 import '../../widgets/container/plate_container.dart'; // 번호판 컨테이너 위젯
 import '../../widgets/dialog/adjustment_type_confirm_dialog.dart';
 import '../../widgets/dialog/confirm_cancel_fee_dialog.dart';
@@ -333,6 +334,10 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                         final now = DateTime.now();
                         final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
                         final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
+                        final uploader = GCSUploader();
+                        final division = context.read<AreaState>().currentDivision;
+                        final area = context.read<AreaState>().currentArea.trim();
+                        final userName = context.read<UserState>().name;
 
                         // ✅ 정산 취소 가능 (확인 다이얼로그 표시)
                         if (selectedPlate.isLockedFee) {
@@ -364,6 +369,16 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                                 );
 
                             if (!context.mounted) return;
+
+// GCS 로그 저장
+                            await uploader.uploadLogJson({
+                              'plateNumber': selectedPlate.plateNumber,
+                              'action': '사전 정산 취소',
+                              'performedBy': userName,
+                              'timestamp': DateTime.now().toIso8601String(),
+                              'adjustmentType': adjustmentType,
+                            }, selectedPlate.plateNumber, division, area,
+                                adjustmentType: selectedPlate.adjustmentType);
 
                             showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
                           }
@@ -404,6 +419,18 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                             );
 
                         if (!context.mounted) return;
+
+// GCS 로그 저장
+                        await uploader.uploadLogJson({
+                          'plateNumber': selectedPlate.plateNumber,
+                          'action': '사전 정산',
+                          'performedBy': userName,
+                          'timestamp': DateTime.now().toIso8601String(),
+                          'adjustmentType': adjustmentType,
+                          'lockedFee': result.lockedFee,
+                          'paymentMethod': result.paymentMethod,
+                        }, selectedPlate.plateNumber, division, area,
+                            adjustmentType: selectedPlate.adjustmentType);
 
                         showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
                       } else {

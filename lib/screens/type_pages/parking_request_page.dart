@@ -7,6 +7,7 @@ import '../../states/plate/delete_plate.dart';
 import '../../states/plate/movement_plate.dart';
 import '../../states/area/area_state.dart';
 import '../../states/user/user_state.dart';
+import '../../utils/gcs_uploader.dart';
 import '../../widgets/container/plate_container.dart';
 import '../../widgets/dialog/adjustment_type_confirm_dialog.dart';
 import '../../widgets/dialog/confirm_cancel_fee_dialog.dart';
@@ -283,7 +284,13 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                     final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
                     final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
 
-                    // ✅ 사전 정산이 이미 된 경우 → 취소 다이얼로그 표시
+                    // ✅ 로그 저장을 위한 공통 선언
+                    final uploader = GCSUploader();
+                    final division = context.read<AreaState>().currentDivision;
+                    final area = context.read<AreaState>().currentArea.trim();
+                    final userName = context.read<UserState>().name;
+
+                    // ✅ 사전 정산이 이미 된 경우 → 취소
                     if (selectedPlate.isLockedFee) {
                       final confirm = await showDialog<bool>(
                         context: context,
@@ -312,11 +319,22 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                           );
 
                       if (!context.mounted) return;
+
+                      // ✅ 사전 정산 취소 로그
+                      await uploader.uploadLogJson({
+                        'plateNumber': selectedPlate.plateNumber,
+                        'action': '사전 정산 취소',
+                        'performedBy': userName,
+                        'timestamp': DateTime.now().toIso8601String(),
+                        'adjustmentType': adjustmentType,
+                      }, selectedPlate.plateNumber, division, area,
+                          adjustmentType: selectedPlate.adjustmentType);
+
                       showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
                       return;
                     }
 
-                    // ✅ 정산이 아직 안 된 경우 → 결제 방식 + 요금 선택 다이얼로그
+                    // ✅ 사전 정산 수행
                     final result = await showAdjustmentTypeConfirmDialog(
                       context: context,
                       entryTimeInSeconds: entryTime,
@@ -348,6 +366,19 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                         );
 
                     if (!context.mounted) return;
+
+                    // ✅ 사전 정산 완료 로그
+                    await uploader.uploadLogJson({
+                      'plateNumber': selectedPlate.plateNumber,
+                      'action': '사전 정산',
+                      'performedBy': userName,
+                      'timestamp': DateTime.now().toIso8601String(),
+                      'adjustmentType': adjustmentType,
+                      'lockedFee': result.lockedFee,
+                      'paymentMethod': result.paymentMethod,
+                    }, selectedPlate.plateNumber, division, area,
+                        adjustmentType: selectedPlate.adjustmentType);
+
                     showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
                   } else {
                     _isSearchMode ? _resetSearch(context) : _showSearchDialog(context);
