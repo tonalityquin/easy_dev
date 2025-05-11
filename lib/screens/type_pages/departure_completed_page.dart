@@ -136,7 +136,12 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                       ),
                       Expanded(
                         child: SingleChildScrollView(
-                          child: MergedLogSection(mergedLogs: mergedLogs),
+                          child: MergedLogSection(
+                            mergedLogs: mergedLogs,
+                            division: division,
+                            area: area,
+                            selectedDate: selectedDate,
+                          ),
                         ),
                       ),
                     ],

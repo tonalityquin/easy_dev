@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:googleapis_auth/auth_io.dart';
 import 'package:googleapis/storage/v1.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class GCSUploader {
   final String bucketName = 'easydev-image';
@@ -288,12 +289,39 @@ class GCSUploader {
     String area, {
     DateTime? filterDate,
   }) async {
+    final prefs = await SharedPreferences.getInstance();
     final now = filterDate ?? DateTime.now();
-    final year = now.year;
-    final month = _two(now.month);
-    final day = _two(now.day);
-    final prefix = '$division/$area/$year/$month/$day/logs/merged_';
 
+    final year = now.year;
+    final month = now.month;
+    final day = now.day;
+    final monthStr = month.toString().padLeft(2, '0');
+    final dayStr = day.toString().padLeft(2, '0');
+    final prefix = '$division/$area/$year/$monthStr/$dayStr/logs/merged_';
+
+    final cacheKey = 'mergedLogCache-$division-$area-$year-$month-$day';
+    final raw = prefs.getString(cacheKey);
+
+    // ✅ 캐시가 존재하고 15일 이내면 반환
+    if (raw != null) {
+      try {
+        final decoded = jsonDecode(raw);
+        final createdAt = DateTime.tryParse(decoded['createdAt'] ?? '');
+
+        if (createdAt != null && DateTime.now().difference(createdAt).inDays <= 15 && decoded['logs'] is List) {
+          final cachedLogs = List<Map<String, dynamic>>.from(decoded['logs']);
+          debugPrint('✅ 캐시된 병합 로그 사용됨: $cacheKey');
+          return cachedLogs;
+        } else {
+          await prefs.remove(cacheKey);
+          debugPrint('🗑️ 만료된 병합 로그 캐시 제거됨: $cacheKey');
+        }
+      } catch (e) {
+        debugPrint('⚠️ 병합 로그 캐시 파싱 실패: $e');
+      }
+    }
+
+    // 🔄 캐시가 없거나 만료되었으면 GCS에서 가져옴
     final credentialsJson = await rootBundle.loadString(serviceAccountPath);
     final accountCredentials = ServiceAccountCredentials.fromJson(credentialsJson);
     final client = await clientViaServiceAccount(accountCredentials, [StorageApi.devstorageFullControlScope]);
@@ -304,30 +332,45 @@ class GCSUploader {
 
     for (final obj in result.items ?? []) {
       if (obj.name != null && obj.name!.endsWith('.json')) {
-        final media = await storage.objects.get(
-          bucketName,
-          obj.name!,
-          downloadOptions: DownloadOptions.fullMedia,
-        ) as Media;
+        try {
+          final media = await storage.objects.get(
+            bucketName,
+            obj.name!,
+            downloadOptions: DownloadOptions.fullMedia,
+          ) as Media;
 
-        final bytes = await media.stream.expand((e) => e).toList();
-        final content = utf8.decode(bytes);
-        final decoded = jsonDecode(content);
+          final bytes = await media.stream.expand((e) => e).toList();
+          final content = utf8.decode(bytes);
+          final decoded = jsonDecode(content);
 
-        if (filterDate != null && decoded['mergedAt'] != null && DateTime.tryParse(decoded['mergedAt']) != null) {
-          final mergedAt = DateTime.parse(decoded['mergedAt']);
-          if (!(mergedAt.year == filterDate.year &&
-              mergedAt.month == filterDate.month &&
-              mergedAt.day == filterDate.day)) {
-            continue;
+          if (filterDate != null && decoded['mergedAt'] != null && DateTime.tryParse(decoded['mergedAt']) != null) {
+            final mergedAt = DateTime.parse(decoded['mergedAt']);
+            if (!(mergedAt.year == filterDate.year &&
+                mergedAt.month == filterDate.month &&
+                mergedAt.day == filterDate.day)) {
+              continue;
+            }
           }
-        }
 
-        logs.add(decoded);
+          logs.add(decoded);
+        } catch (e) {
+          debugPrint('⚠️ 병합 로그 파일 처리 실패 (${obj.name}): $e');
+        }
       }
     }
 
     client.close();
+
+    // ✅ 캐시 저장
+    await prefs.setString(
+      cacheKey,
+      jsonEncode({
+        'logs': logs,
+        'createdAt': DateTime.now().toIso8601String(),
+      }),
+    );
+
+    debugPrint('📥 병합 로그 GCS에서 로드됨 + 캐시 저장됨: $cacheKey');
     return logs;
   }
 
