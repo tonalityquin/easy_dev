@@ -80,9 +80,9 @@ class _MergedLogSectionState extends State<MergedLogSection> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              '🔒 병합 로그 항목',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            Text(
+              '🔒 병합 로그 항목 (총 ${filteredLogs.length}개)',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             TextButton.icon(
               onPressed: _refreshMergedLogs,
