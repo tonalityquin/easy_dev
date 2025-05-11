@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../states/user/user_state.dart';
 import '../../states/area/area_state.dart';
 import '../../repositories/user/user_repository.dart';
@@ -118,6 +119,8 @@ class LoginController {
 
         final updatedUser = user.copyWith(isSaved: true);
         userState.updateUserCard(updatedUser);
+        final prefs = await SharedPreferences.getInstance();
+        debugPrint("📌 로그인 직후 저장된 phone=${prefs.getString('phone')} / area=${prefs.getString('area')}");
         areaState.updateArea(updatedUser.areas.firstOrNull ?? '');
 
         if (context.mounted) {

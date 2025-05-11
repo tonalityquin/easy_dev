@@ -36,10 +36,16 @@ class FirestoreUserRepository implements UserRepository {
 
   @override
   Future<UserModel?> getUserById(String userId) async {
+    debugPrint("📥 getUserById() 호출됨 → 요청 ID: $userId");
+
     final doc = await _getCollectionRef().doc(userId).get();
-    if (!doc.exists) return null;
+    if (!doc.exists) {
+      debugPrint("❌ Firestore 문서 없음 → userId=$userId");
+      return null;
+    }
 
     final data = doc.data()!;
+    debugPrint("✅ Firestore 문서 조회 성공 → userId=$userId / 데이터: $data");
 
     return UserModel(
       id: doc.id,
@@ -49,9 +55,7 @@ class FirestoreUserRepository implements UserRepository {
       role: data['role'] ?? '',
       password: data['password'] ?? '',
       areas: List<String>.from(data['areas'] ?? []),
-      // ✅ 수정
       divisions: List<String>.from(data['divisions'] ?? []),
-      // ✅ 수정
       currentArea: data['currentArea'],
       isSelected: data['isSelected'] ?? false,
       isWorking: data['isWorking'] ?? false,

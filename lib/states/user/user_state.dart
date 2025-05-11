@@ -70,7 +70,15 @@ class UserState extends ChangeNotifier {
     await prefs.setString('phone', user.phone);
     await prefs.setString('area', user.currentArea ?? user.areas.firstOrNull ?? '');
     await prefs.setString('division', user.divisions.firstOrNull ?? '');
-    debugPrint("📌 SharedPreferences 저장 완료: phone=${user.phone}");
+
+    debugPrint("📌 SharedPreferences 저장 완료: phone=${user.phone}, area=${user.currentArea}");
+
+    // 저장된 값 검증용 로그
+    final savedPhone = prefs.getString('phone');
+    final savedArea = prefs.getString('area');
+    final savedDivision = prefs.getString('division');
+
+    debugPrint("📦 저장 상태 확인 → phone=$savedPhone / area=$savedArea / division=$savedDivision");
   }
 
   Future<void> loadUserToLogIn() async {
@@ -80,6 +88,8 @@ class UserState extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       final phone = prefs.getString('phone')?.trim();
       final area = prefs.getString('area')?.trim();
+
+      debugPrint("📥 자동 로그인 정보 → phone=$phone / area=$area");
 
       if (phone == null || area == null) {
         debugPrint("[DEBUG] 자동 로그인 실패 - 저장된 전화번호 또는 지역 없음");

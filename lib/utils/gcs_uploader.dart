@@ -97,10 +97,13 @@ class GCSUploader {
     String? adjustmentType,
   }) async {
     final now = DateTime.now();
-    final timestamp =
-        '${now.year}${_two(now.month)}${_two(now.day)}_${_two(now.hour)}${_two(now.minute)}${_two(now.second)}';
+    final year = now.year;
+    final month = _two(now.month);
+    final day = _two(now.day);
+    final time = '${_two(now.hour)}${_two(now.minute)}${_two(now.second)}';
+
     final safePlate = plateNumber.replaceAll(RegExp(r'\\s'), '');
-    final fileName = '$division/$area/logs/${timestamp}_$safePlate.json';
+    final fileName = '$division/$area/$year/$month/$day/logs/${safePlate}_$time.json';
 
     // ✅ 정산 관련 필드 포함
     logData['basicStandard'] = basicStandard;
@@ -113,7 +116,15 @@ class GCSUploader {
   }
 
   Future<void> mergeAndReplaceLogs(String plateNumber, String division, String area) async {
-    final prefix = '$division/$area/logs/';
+    final now = DateTime.now();
+    final year = now.year;
+    final month = _two(now.month);
+    final day = _two(now.day);
+    final time = '${_two(now.hour)}${_two(now.minute)}${_two(now.second)}';
+
+    final safePlate = plateNumber.replaceAll(RegExp(r'\\s'), ''); // ✅ 추가된 부분
+    final prefix = '$division/$area/$year/$month/$day/logs/';
+
     final credentialsJson = await rootBundle.loadString(serviceAccountPath);
     final accountCredentials = ServiceAccountCredentials.fromJson(credentialsJson);
     final scopes = [StorageApi.devstorageFullControlScope];
@@ -126,7 +137,7 @@ class GCSUploader {
                 o.name != null &&
                 o.name!.contains(plateNumber) &&
                 o.name!.endsWith('.json') &&
-                !o.name!.contains('merged_')) // 병합 로그는 삭제하지 않음
+                !o.name!.contains('merged_'))
             .toList() ??
         [];
 
@@ -153,14 +164,11 @@ class GCSUploader {
 
     final mergedJson = {
       'plateNumber': plateNumber,
-      'mergedAt': DateTime.now().toIso8601String(),
+      'mergedAt': now.toIso8601String(),
       'logs': mergedLogs,
     };
 
-    final now = DateTime.now();
-    final timestamp =
-        '${now.year}${_two(now.month)}${_two(now.day)}_${_two(now.hour)}${_two(now.minute)}${_two(now.second)}';
-    final mergedFileName = '$division/$area/logs/merged_${timestamp}_$plateNumber.json';
+    final mergedFileName = '$division/$area/$year/$month/$day/logs/merged_${safePlate}_$time.json';
     await uploadJsonData(mergedJson, mergedFileName);
 
     for (final obj in matchingObjects) {
@@ -174,12 +182,11 @@ class GCSUploader {
       }
     }
 
-    // ✅ Firestore 문서 삭제 추가
     try {
       final firestore = FirebaseFirestore.instance;
       final snapshot = await firestore
           .collection('plates')
-          .where('plate_number', isEqualTo: plateNumber) // 수정됨
+          .where('plate_number', isEqualTo: plateNumber)
           .where('type', isEqualTo: 'departure_completed')
           .where('area', isEqualTo: area)
           .where('isLockedFee', isEqualTo: true)
@@ -197,7 +204,12 @@ class GCSUploader {
   }
 
   Future<List<String>> listMergedPlateLogs(String division, String area) async {
-    final prefix = '$division/$area/logs/';
+    final now = DateTime.now();
+    final year = now.year;
+    final month = _two(now.month);
+    final day = _two(now.day);
+    final prefix = '$division/$area/$year/$month/$day/logs/';
+
     final credentialsJson = await rootBundle.loadString(serviceAccountPath);
     final accountCredentials = ServiceAccountCredentials.fromJson(credentialsJson);
     final scopes = [StorageApi.devstorageFullControlScope];
@@ -274,9 +286,14 @@ class GCSUploader {
   Future<List<Map<String, dynamic>>> fetchMergedLogsForArea(
     String division,
     String area, {
-    DateTime? filterDate, // 🔍 선택적 인자 추가
+    DateTime? filterDate,
   }) async {
-    final prefix = '$division/$area/logs/merged_';
+    final now = filterDate ?? DateTime.now();
+    final year = now.year;
+    final month = _two(now.month);
+    final day = _two(now.day);
+    final prefix = '$division/$area/$year/$month/$day/logs/merged_';
+
     final credentialsJson = await rootBundle.loadString(serviceAccountPath);
     final accountCredentials = ServiceAccountCredentials.fromJson(credentialsJson);
     final client = await clientViaServiceAccount(accountCredentials, [StorageApi.devstorageFullControlScope]);
@@ -297,13 +314,12 @@ class GCSUploader {
         final content = utf8.decode(bytes);
         final decoded = jsonDecode(content);
 
-        // 🔽 날짜 필터가 있을 경우 적용
         if (filterDate != null && decoded['mergedAt'] != null && DateTime.tryParse(decoded['mergedAt']) != null) {
           final mergedAt = DateTime.parse(decoded['mergedAt']);
           if (!(mergedAt.year == filterDate.year &&
               mergedAt.month == filterDate.month &&
               mergedAt.day == filterDate.day)) {
-            continue; // 날짜가 일치하지 않으면 스킵
+            continue;
           }
         }
 
