@@ -100,8 +100,7 @@ class _GoToWorkState extends State<GoToWork> {
     if (jsonStr != null) {
       final decoded = jsonDecode(jsonStr);
       cellData = Map<String, Map<int, String>>.from(
-        decoded.map((rowKey, colMap) =>
-            MapEntry(
+        decoded.map((rowKey, colMap) => MapEntry(
               rowKey,
               Map<int, String>.from((colMap as Map).map((k, v) => MapEntry(int.parse(k), v))),
             )),
@@ -109,9 +108,17 @@ class _GoToWorkState extends State<GoToWork> {
     }
 
     final existing = cellData[userId]?[dayColumn];
-    if (existing != null && existing
-        .trim()
-        .isNotEmpty) {
+
+// 🔹 전날 퇴근 누락 확인
+    final yesterday = now.subtract(const Duration(days: 1));
+    final int yCol = yesterday.day;
+    final existingYesterday = cellData[userId]?[yCol];
+    if (existingYesterday != null && existingYesterday.split('\n').length == 1) {
+      // 퇴근 기록 누락 → 자동 03:00 기록 추가
+      cellData[userId]![yCol] = '$existingYesterday\n03:00';
+    }
+
+    if (existing != null && existing.trim().isNotEmpty) {
       showFailedSnackbar(context, '이미 출근 기록이 있습니다.');
       return;
     }
@@ -120,8 +127,7 @@ class _GoToWorkState extends State<GoToWork> {
     cellData[userId]![dayColumn] = time;
 
     final encoded = jsonEncode(
-      cellData.map((rowKey, colMap) =>
-          MapEntry(
+      cellData.map((rowKey, colMap) => MapEntry(
             rowKey,
             colMap.map((col, v) => MapEntry(col.toString(), v)),
           )),
@@ -262,10 +268,7 @@ class _GoToWorkState extends State<GoToWork> {
                       const SizedBox(height: 96),
                       Text(
                         '출근 전 사용자 정보 확인',
-                        style: Theme
-                            .of(context)
-                            .textTheme
-                            .titleLarge,
+                        style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const SizedBox(height: 16),
                       Card(
@@ -328,21 +331,21 @@ class _GoToWorkState extends State<GoToWork> {
           child: _isLoading
               ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
               : Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: Colors.white),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.1,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, color: Colors.white),
+                    const SizedBox(width: 8),
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
-          ),
         ),
       ),
     );

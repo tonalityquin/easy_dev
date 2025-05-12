@@ -77,7 +77,8 @@ class ExcelUploader {
           TextCellValue('퇴근'),
           ...List.generate(31, (i) {
             final value = rowMapOut[i + 1] ?? '';
-            return TextCellValue(value);
+            final displayValue = value == '03:00' ? '03:00*' : value;
+            return TextCellValue(displayValue);
           }),
           TextCellValue(''),
         ];
@@ -202,7 +203,6 @@ class ExcelUploader {
       return {};
     }
   }
-
 
   Map<String, Map<int, String>> _parseCellData(String? jsonStr) {
     if (jsonStr == null) return {};

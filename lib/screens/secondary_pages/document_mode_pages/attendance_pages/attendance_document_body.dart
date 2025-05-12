@@ -68,9 +68,12 @@ class AttendanceDocumentBody extends StatelessWidget {
           border: Border.all(color: Colors.grey.shade300),
           color: isHeader
               ? Colors.grey.shade200
+              : text.contains('03:00')
+              ? Colors.yellow.shade100
               : isSelected
-                  ? Colors.lightBlue.shade100
-                  : Colors.white,
+              ? Colors.lightBlue.shade100
+              : Colors.white,
+
         ),
         child: text.contains('\n')
             ? Column(
