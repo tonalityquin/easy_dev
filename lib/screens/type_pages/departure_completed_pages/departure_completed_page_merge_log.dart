@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../states/plate/filter_plate.dart';
+import '../../../utils/snackbar_helper.dart';
 
 class MergedLogSection extends StatefulWidget {
   final List<Map<String, dynamic>> mergedLogs;
@@ -56,9 +57,7 @@ class _MergedLogSectionState extends State<MergedLogSection> {
     await prefs.remove(cacheKey);
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('병합 로그가 새로고침되었습니다.')),
-      );
+      showSuccessSnackbar(context, '병합 로그가 새로고침되었습니다.');
       setState(() {});
     }
   }
