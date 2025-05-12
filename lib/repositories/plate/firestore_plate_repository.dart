@@ -187,6 +187,8 @@ class FirestorePlateRepository implements PlateRepository {
     }
 
     final plateFourDigit = plateNumber.length >= 4 ? plateNumber.substring(plateNumber.length - 4) : plateNumber;
+    final bool effectiveIsLockedFee = isLockedFee || (adjustmentType == null || adjustmentType.trim().isEmpty);
+
 
     final plate = PlateModel(
       id: documentId,
@@ -208,7 +210,7 @@ class FirestorePlateRepository implements PlateRepository {
       imageUrls: imageUrls,
       isSelected: false,
       selectedBy: null,
-      isLockedFee: isLockedFee,
+      isLockedFee: effectiveIsLockedFee, // ✅ 수정된 부분
       lockedAtTimeInSeconds: lockedAtTimeInSeconds,
       lockedFeeAmount: lockedFeeAmount,
       paymentMethod: paymentMethod, // ✅ 반영
