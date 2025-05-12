@@ -168,6 +168,7 @@ class GCSUploader {
       }
     }
 
+    // 병합 JSON 저장
     final mergedJson = {
       'plateNumber': plateNumber,
       'mergedAt': now.toIso8601String(),
@@ -177,6 +178,7 @@ class GCSUploader {
     final mergedFileName = '$division/$area/$year/$month/$day/logs/merged_${safePlate}_$time.json';
     await uploadJsonData(mergedJson, mergedFileName);
 
+    // 기존 로그 파일 삭제
     for (final obj in matchingObjects) {
       try {
         if (obj.name != null) {
@@ -187,6 +189,41 @@ class GCSUploader {
         debugPrint("❌ 삭제 실패: ${obj.name}, $e");
       }
     }
+
+    // 📌 요약 파일 생성
+    final timestamps = mergedLogs
+        .whereType<Map<String, dynamic>>()
+        .map((e) => DateTime.tryParse(e['timestamp'] ?? ''))
+        .whereType<DateTime>()
+        .toList()
+      ..sort();
+
+    final inputTime = timestamps.isNotEmpty ? timestamps.first.toIso8601String() : null;
+    final outputTime = timestamps.isNotEmpty ? timestamps.last.toIso8601String() : null;
+
+    final latestAdjustmentLog = mergedLogs
+        .whereType<Map<String, dynamic>>()
+        .where((log) => log['action'] == '사전 정산')
+        .fold<Map<String, dynamic>?>(null, (prev, curr) {
+      final currTime = DateTime.tryParse(curr['timestamp'] ?? '');
+      final prevTime = prev != null ? DateTime.tryParse(prev['timestamp'] ?? '') : null;
+      if (prevTime == null || (currTime != null && currTime.isAfter(prevTime))) {
+        return curr;
+      }
+      return prev;
+    });
+
+    final summaryJson = {
+      'plateNumber': plateNumber,
+      'inputTime': inputTime,
+      'outputTime': outputTime,
+      'lockedFee': latestAdjustmentLog?['lockedFee'],
+      'paymentMethod': latestAdjustmentLog?['paymentMethod'],
+      'adjustmentType': latestAdjustmentLog?['adjustmentType'],
+    };
+
+    final summaryFileName = '$division/$area/$year/$month/$day/sources/${safePlate}_$time.json';
+    await uploadJsonData(summaryJson, summaryFileName);
 
     client.close();
   }
