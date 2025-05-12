@@ -157,23 +157,25 @@ class PageBottomNavigation extends StatelessWidget {
             final bool isSelected = pageState.selectedIndex == index;
 
             // 출차 완료만 selectedDate 반영
-            if (pageInfo.collectionKey == PlateType.departureCompleted) {
-              final int count = plateState
-                  .getPlatesByCollection(
-                    PlateType.departureCompleted,
-                    selectedDate: selectedDate,
-                  )
-                  .where((p) => p.type == PlateType.departureCompleted.firestoreValue && p.area == currentArea)
-                  .length;
-
-              return _buildNavItem(
-                count,
-                pageInfo.title,
-                isSelected,
-                selectedColor,
-                unselectedColor,
-              );
-            }
+            return BottomNavigationBarItem(
+              icon: FutureBuilder<int>(
+                future: plateRepository.getPlateCountByTypeAndArea(
+                  pageInfo.collectionKey,
+                  currentArea,
+                ),
+                builder: (context, snapshot) {
+                  final count = snapshot.data ?? 0;
+                  return _buildCountIcon(
+                    count,
+                    isSelected,
+                    selectedColor,
+                    unselectedColor,
+                    pageInfo.title,
+                  );
+                },
+              ),
+              label: '',
+            );
 
             return BottomNavigationBarItem(
               icon: FutureBuilder<int>(

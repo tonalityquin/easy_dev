@@ -401,9 +401,12 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                   } else {
                     _isSearchMode ? _resetSearch(context) : _showSearchDialog(context);
                   }
-                } else if (index == 1 && isPlateSelected) {
-                  _handleParkingCompleted(context);
-                } else if (index == 2) {
+                } else if (index == 1 && !isPlateSelected) {
+                  final area = context.read<AreaState>().currentArea;
+                  await GCSUploader().deleteLockedDepartureDocs(area);
+                  showSuccessSnackbar(context, "출차 완료 문서가 삭제되었습니다.");
+                }
+                else if (index == 2) {
                   if (isPlateSelected) {
                     final selectedPlate = plateState.getSelectedPlate(PlateType.parkingRequests, userName);
                     if (selectedPlate != null) {

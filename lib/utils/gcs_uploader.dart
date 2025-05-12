@@ -128,7 +128,7 @@ class GCSUploader {
     final day = _two(now.day);
     final time = '${_two(now.hour)}${_two(now.minute)}${_two(now.second)}';
 
-    final safePlate = plateNumber.replaceAll(RegExp(r'\\s'), ''); // ✅ 추가된 부분
+    final safePlate = plateNumber.replaceAll(RegExp(r'\\s'), '');
     final prefix = '$division/$area/$year/$month/$day/logs/';
 
     final credentialsJson = await rootBundle.loadString(serviceAccountPath);
@@ -181,32 +181,29 @@ class GCSUploader {
       try {
         if (obj.name != null) {
           await storage.objects.delete(bucketName, obj.name!);
+          debugPrint("🗑️ 삭제 완료: ${obj.name}");
         }
-        debugPrint("🗑️ 삭제 완료: ${obj.name}");
       } catch (e) {
         debugPrint("❌ 삭제 실패: ${obj.name}, $e");
       }
     }
 
-    try {
-      final firestore = FirebaseFirestore.instance;
-      final snapshot = await firestore
-          .collection('plates')
-          .where('plate_number', isEqualTo: plateNumber)
-          .where('type', isEqualTo: 'departure_completed')
-          .where('area', isEqualTo: area)
-          .where('isLockedFee', isEqualTo: true)
-          .get();
-
-      for (final doc in snapshot.docs) {
-        await doc.reference.delete();
-        debugPrint("🔥 Firestore 삭제 완료: ${doc.id}");
-      }
-    } catch (e) {
-      debugPrint("❌ Firestore 삭제 실패: $e");
-    }
-
     client.close();
+  }
+
+  Future<void> deleteLockedDepartureDocs(String area) async {
+    final firestore = FirebaseFirestore.instance;
+    final snapshot = await firestore
+        .collection('plates')
+        .where('type', isEqualTo: 'departure_completed')
+        .where('area', isEqualTo: area)
+        .where('isLockedFee', isEqualTo: true)
+        .get();
+
+    for (final doc in snapshot.docs) {
+      await doc.reference.delete();
+      debugPrint("🔥 Firestore 삭제 완료: ${doc.id}");
+    }
   }
 
   Future<List<String>> listMergedPlateLogs(String division, String area) async {
