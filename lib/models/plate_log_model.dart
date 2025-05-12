@@ -7,7 +7,8 @@ class PlateLogModel {
   final String action;
   final String performedBy;
   final DateTime timestamp;
-  final String? adjustmentType; // nullable 타입
+  final String? adjustmentType;
+  final Map<String, dynamic>? updatedFields; // ✅ 추가
 
   PlateLogModel({
     required this.plateNumber,
@@ -19,10 +20,11 @@ class PlateLogModel {
     required this.performedBy,
     required this.timestamp,
     this.adjustmentType,
+    this.updatedFields,
   });
 
   Map<String, dynamic> toMap() {
-    final map = {
+    final Map<String, dynamic> map = {
       'plateNumber': plateNumber,
       'division': division,
       'area': area,
@@ -33,10 +35,13 @@ class PlateLogModel {
       'timestamp': timestamp.toIso8601String(),
     };
 
-    // ✅ null 또는 공백인 경우 adjustmentType 제외
     final cleanAdjustmentType = adjustmentType?.trim();
     if (cleanAdjustmentType != null && cleanAdjustmentType.isNotEmpty) {
       map['adjustmentType'] = cleanAdjustmentType;
+    }
+
+    if (updatedFields != null && updatedFields!.isNotEmpty) {
+      map['updatedFields'] = updatedFields;
     }
 
     return map;
@@ -62,7 +67,14 @@ class PlateLogModel {
       action: map['action'] ?? '',
       performedBy: map['performedBy'] ?? '',
       timestamp: parsedTime,
-      adjustmentType: map['adjustmentType'] as String?, // ✅ 안전한 캐스팅
+      adjustmentType: map['adjustmentType'] as String?,
+      updatedFields: map['updatedFields'] is Map
+          ? Map<String, dynamic>.from(
+              (map['updatedFields'] as Map).map(
+                (key, value) => MapEntry(key, Map<String, dynamic>.from(value)),
+              ),
+            )
+          : null,
     );
   }
 }

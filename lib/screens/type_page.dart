@@ -11,7 +11,6 @@ import '../states/page/page_info.dart';
 import '../screens/input_pages/input_3_digit.dart';
 import 'secondary_page.dart';
 import '../repositories/plate/plate_repository.dart';
-import '../enums/plate_type.dart';
 
 class TypePage extends StatelessWidget {
   const TypePage({super.key});
@@ -140,7 +139,6 @@ class PageBottomNavigation extends StatelessWidget {
         final selectedColor = AppColors.selectedItemColor;
         final unselectedColor = Colors.grey;
 
-        final selectedDate = selectedDateState.selectedDate ?? DateTime.now();
         final currentArea = context.read<AreaState>().currentArea;
         final plateRepository = context.read<PlateRepository>();
 
@@ -176,48 +174,9 @@ class PageBottomNavigation extends StatelessWidget {
               ),
               label: '',
             );
-
-            return BottomNavigationBarItem(
-              icon: FutureBuilder<int>(
-                future: plateRepository.getPlateCountByTypeAndArea(
-                  pageInfo.collectionKey,
-                  currentArea,
-                ),
-                builder: (context, snapshot) {
-                  final count = snapshot.data ?? 0;
-                  return _buildCountIcon(
-                    count,
-                    isSelected,
-                    selectedColor,
-                    unselectedColor,
-                    pageInfo.title,
-                  );
-                },
-              ),
-              label: '',
-            );
           }),
         );
       },
-    );
-  }
-
-  BottomNavigationBarItem _buildNavItem(
-    int count,
-    String pageTitle,
-    bool isSelected,
-    Color selectedColor,
-    Color unselectedColor,
-  ) {
-    return BottomNavigationBarItem(
-      icon: _buildCountIcon(
-        count,
-        isSelected,
-        selectedColor,
-        unselectedColor,
-        pageTitle,
-      ),
-      label: '',
     );
   }
 

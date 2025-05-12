@@ -150,6 +150,28 @@ class PlateModel {
         PlateFields.paymentMethod: paymentMethod, // ✅ 추가됨
     };
   }
+  Map<String, dynamic> diff(PlateModel other) {
+    final changes = <String, dynamic>{};
+
+    if (location != other.location) {
+      changes['location'] = {'before': location, 'after': other.location};
+    }
+    if (adjustmentType != other.adjustmentType) {
+      changes['adjustmentType'] = {'before': adjustmentType, 'after': other.adjustmentType};
+    }
+    if (statusList.toString() != other.statusList.toString()) {
+      changes['statusList'] = {'before': statusList, 'after': other.statusList};
+    }
+    if (paymentMethod != other.paymentMethod) {
+      changes['paymentMethod'] = {'before': paymentMethod, 'after': other.paymentMethod};
+    }
+    if (lockedFeeAmount != other.lockedFeeAmount) {
+      changes['lockedFeeAmount'] = {'before': lockedFeeAmount, 'after': other.lockedFeeAmount};
+    }
+
+    return changes;
+  }
+
 
   PlateModel copyWith({
     String? id,

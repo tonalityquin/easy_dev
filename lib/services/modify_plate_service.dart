@@ -8,13 +8,15 @@ import '../states/area/area_state.dart';
 import '../states/user/user_state.dart';
 import '../utils/gcs_uploader.dart';
 import '../enums/plate_type.dart';
+import '../models/plate_model.dart';
+import '../models/plate_log_model.dart';
 
 class ModifyPlateService {
   final BuildContext context;
   final List<XFile> capturedImages;
   final List<String> existingImageUrls;
   final PlateType collectionKey;
-  final dynamic originalPlate;
+  final PlateModel originalPlate;
 
   // form controllers
   final TextEditingController controller3digit;
@@ -64,7 +66,8 @@ class ModifyPlateService {
     for (var image in capturedImages) {
       final file = File(image.path);
       final now = DateTime.now();
-      final formattedDate = '${now.year.toString().padLeft(4, '0')}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}'
+      final formattedDate =
+          '${now.year.toString().padLeft(4, '0')}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}'
           '_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
 
       final fileName = '${formattedDate}_${area}_${plateNumber}_$performedBy.jpg';
@@ -91,6 +94,45 @@ class ModifyPlateService {
     final areaState = context.read<AreaState>();
     final userState = context.read<UserState>();
 
+    // ✅ 수정된 Plate 인스턴스 생성
+    final updatedPlate = originalPlate.copyWith(
+      plateNumber: plateNumber,
+      location: newLocation,
+      adjustmentType: newAdjustmentType,
+      statusList: selectedStatuses,
+      basicStandard: selectedBasicStandard,
+      basicAmount: selectedBasicAmount,
+      addStandard: selectedAddStandard,
+      addAmount: selectedAddAmount,
+      region: dropdownValue,
+      imageUrls: imageUrls,
+    );
+
+    // ✅ 변경 사항 비교 및 로그 저장
+    final changes = originalPlate.diff(updatedPlate);
+    if (changes.isNotEmpty) {
+      final log = PlateLogModel(
+        plateNumber: updatedPlate.plateNumber,
+        division: areaState.currentDivision,
+        area: areaState.currentArea,
+        from: originalPlate.type,
+        to: updatedPlate.type,
+        action: '정보 수정',
+        performedBy: userState.name,
+        timestamp: DateTime.now(),
+        adjustmentType: updatedPlate.adjustmentType,
+        updatedFields: changes, // ✅ 반드시 포함
+      );
+
+      await GCSUploader().uploadLogJson(
+        log.toMap(),
+        updatedPlate.plateNumber,
+        log.division,
+        log.area,
+      );
+    }
+
+    // ✅ 실제 저장
     return await modifyState.updatePlateInfo(
       context: context,
       plate: originalPlate,
