@@ -66,18 +66,15 @@ class _MergedLogSectionState extends State<MergedLogSection> {
   Widget build(BuildContext context) {
     final searchQuery = context.watch<FilterPlate>().searchQuery;
 
-    final filteredLogs = widget.mergedLogs
-        .where((log) {
+    final filteredLogs = widget.mergedLogs.where((log) {
       final plate = (log['plateNumber'] ?? '').toString();
       return searchQuery.isEmpty || plate.endsWith(searchQuery);
-    })
-        .toList()
+    }).toList()
       ..sort((a, b) {
         final aTime = DateTime.tryParse(a['mergedAt'] ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
         final bTime = DateTime.tryParse(b['mergedAt'] ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
         return bTime.compareTo(aTime); // 최신 순 정렬
       });
-
 
     final totalLockedFee = filteredLogs.map((log) {
       final logs = (log['logs'] as List?) ?? [];

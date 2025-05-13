@@ -77,252 +77,262 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
     firestorePlates
         .sort((a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime));
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const TopNavigation(),
-        // ✅ title로만 사용
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
-      ),
-      body: Stack(
-        children: [
-          ListView(
-            padding: const EdgeInsets.all(8.0),
+    return WillPopScope(
+        onWillPop: () async {
+          if (_showMergedLog) {
+            setState(() {
+              _showMergedLog = false;
+            });
+            return false;
+          }
+          return false;
+        },
+        child: Scaffold(
+          appBar: AppBar(
+            title: const TopNavigation(),
+            // ✅ title···
+            centerTitle: true,
+            backgroundColor: Colors.white,
+            foregroundColor: Colors.black,
+            elevation: 0,
+          ),
+          body: Stack(
             children: [
-              PlateContainer(
-                data: firestorePlates,
-                collection: PlateType.departureCompleted,
-                filterCondition: (_) => true,
-                onPlateTap: (plateNumber, area) {
-                  plateState.toggleIsSelected(
+              ListView(
+                padding: const EdgeInsets.all(8.0),
+                children: [
+                  PlateContainer(
+                    data: firestorePlates,
                     collection: PlateType.departureCompleted,
-                    plateNumber: plateNumber,
-                    userName: userName,
-                    onError: (msg) => showFailedSnackbar(context, msg),
-                  );
-                },
+                    filterCondition: (_) => true,
+                    onPlateTap: (plateNumber, area) {
+                      plateState.toggleIsSelected(
+                        collection: PlateType.departureCompleted,
+                        plateNumber: plateNumber,
+                        userName: userName,
+                        onError: (msg) => showFailedSnackbar(context, msg),
+                      );
+                    },
+                  ),
+                ],
               ),
-            ],
-          ),
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 300),
-            bottom: _showMergedLog ? 0 : -600,
-            left: 0,
-            right: 0,
-            height: 400,
-            child: Container(
-              color: Colors.white,
-              child: FutureBuilder<List<Map<String, dynamic>>>(
-                future: GCSUploader().fetchMergedLogsForArea(division, area, filterDate: selectedDate),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (snapshot.hasError) {
-                    return const Center(child: Text("병합 로그 로딩 실패"));
-                  }
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 300),
+                bottom: _showMergedLog ? 0 : -600,
+                left: 0,
+                right: 0,
+                height: 400,
+                child: Container(
+                  color: Colors.white,
+                  child: FutureBuilder<List<Map<String, dynamic>>>(
+                    future: GCSUploader().fetchMergedLogsForArea(division, area, filterDate: selectedDate),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      if (snapshot.hasError) {
+                        return const Center(child: Text("병합 로그 로딩 실패"));
+                      }
 
-                  final mergedLogs = snapshot.data ?? [];
+                      final mergedLogs = snapshot.data ?? [];
 
-                  return Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Align(
-                          alignment: Alignment.centerRight,
-                        ),
-                      ),
-                      Expanded(
-                        child: SingleChildScrollView(
-                          child: MergedLogSection(
-                            mergedLogs: mergedLogs,
-                            division: division,
-                            area: area,
-                            selectedDate: selectedDate,
+                      return Column(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: Align(
+                              alignment: Alignment.centerRight,
+                            ),
                           ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: Consumer<PlateState>(
-        builder: (context, plateState, child) {
-          final selectedPlate = plateState.getSelectedPlate(PlateType.departureCompleted, userName);
-          final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
-          final selectedDate = context.watch<FieldSelectedDateState>().selectedDate ?? DateTime.now();
-          final formattedDate =
-              '${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}';
-
-          return BottomNavigationBar(
-            items: [
-              BottomNavigationBarItem(
-                icon: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 300),
-                  transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
-                  child: isPlateSelected
-                      ? (selectedPlate.isLockedFee
-                          ? const Icon(Icons.lock_open, key: ValueKey('unlock'), color: Colors.grey)
-                          : const Icon(Icons.lock, key: ValueKey('lock'), color: Colors.grey))
-                      : Icon(
-                          _isSearchMode ? Icons.cancel : Icons.search,
-                          key: ValueKey(_isSearchMode),
-                          color: _isSearchMode ? Colors.orange : Colors.grey,
-                        ),
-                ),
-                label: isPlateSelected
-                    ? (selectedPlate.isLockedFee ? '정산 취소' : '사전 정산')
-                    : (_isSearchMode ? '검색 초기화' : '번호판 검색'),
-              ),
-              BottomNavigationBarItem(
-                icon: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 300),
-                  transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
-                  child: Icon(
-                    _showMergedLog ? Icons.expand_more : Icons.list_alt,
-                    key: ValueKey(_showMergedLog),
-                    color: Colors.grey,
+                          Expanded(
+                            child: SingleChildScrollView(
+                              child: MergedLogSection(
+                                mergedLogs: mergedLogs,
+                                division: division,
+                                area: area,
+                                selectedDate: selectedDate,
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ),
-                label: _showMergedLog ? '감추기' : '병합 로그',
-              ),
-              BottomNavigationBarItem(
-                icon: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 300),
-                  transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
-                  child: isPlateSelected
-                      ? const Icon(Icons.settings, key: ValueKey('setting'))
-                      : const Icon(Icons.calendar_today, key: ValueKey('calendar'), color: Colors.grey),
-                ),
-                label: isPlateSelected ? '상태 수정' : formattedDate,
               ),
             ],
-            onTap: (index) async {
-              if (index == 0) {
-                if (isPlateSelected) {
-                  final adjustmentType = selectedPlate.adjustmentType;
+          ),
+          bottomNavigationBar: Consumer<PlateState>(
+            builder: (context, plateState, child) {
+              final selectedPlate = plateState.getSelectedPlate(PlateType.departureCompleted, userName);
+              final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
+              final selectedDate = context.watch<FieldSelectedDateState>().selectedDate ?? DateTime.now();
+              final formattedDate =
+                  '${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}';
 
-                  // ✅ 정산 타입 필수 확인
-                  if (adjustmentType == null || adjustmentType.trim().isEmpty) {
-                    showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
-                    return;
-                  }
-
-                  final now = DateTime.now();
-                  final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
-                  final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
-
-                  if (selectedPlate.isLockedFee) {
-                    showFailedSnackbar(context, '정산 완료된 항목은 취소할 수 없습니다.');
-                    return;
-                  }
-
-                  // ✅ 정산 다이얼로그 호출
-                  final result = await showAdjustmentTypeConfirmDialog(
-                    context: context,
-                    entryTimeInSeconds: entryTime,
-                    currentTimeInSeconds: currentTime,
-                    basicStandard: selectedPlate.basicStandard ?? 0,
-                    basicAmount: selectedPlate.basicAmount ?? 0,
-                    addStandard: selectedPlate.addStandard ?? 0,
-                    addAmount: selectedPlate.addAmount ?? 0,
-                  );
-
-                  if (result == null) return;
-
-                  final updatedPlate = selectedPlate.copyWith(
-                    isLockedFee: true,
-                    lockedAtTimeInSeconds: currentTime,
-                    lockedFeeAmount: result.lockedFee,
-                    paymentMethod: result.paymentMethod,
-                  );
-
-                  await context.read<PlateRepository>().addOrUpdatePlate(
-                    selectedPlate.id,
-                    updatedPlate,
-                  );
-
-                  if (!context.mounted) return;
-                  await context.read<PlateState>().updatePlateLocally(
-                    PlateType.departureCompleted,
-                    updatedPlate,
-                  );
-
-                  if (!context.mounted) return;
-
-                  // ✅ GCS 로그 저장
-                  final uploader = GCSUploader();
-                  final division = context.read<AreaState>().currentDivision;
-                  final area = context.read<AreaState>().currentArea.trim();
-                  final userName = context.read<UserState>().name;
-
-                  final log = {
-                    'plateNumber': selectedPlate.plateNumber,
-                    'action': '사전 정산',
-                    'performedBy': userName,
-                    'timestamp': DateTime.now().toIso8601String(),
-                    'lockedFee': result.lockedFee,
-                    'paymentMethod': result.paymentMethod,
-                  };
-                  if (adjustmentType.trim().isNotEmpty) {
-                    log['adjustmentType'] = adjustmentType;
-                  }
-
-                  await uploader.uploadLogJson(
-                    log,
-                    selectedPlate.plateNumber,
-                    division,
-                    area,
-                    adjustmentType: adjustmentType,
-                  );
-
-                  showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
-                } else {
-                  _isSearchMode ? _resetSearch(context) : _showSearchDialog(context);
-                }
-              } else if (index == 1) {
-                // 🔁 병합 로그 toggle
-                setState(() {
-                  _showMergedLog = !_showMergedLog;
-                });
-              } else if (index == 2) {
-                if (isPlateSelected) {
-                  showDialog(
-                    context: context,
-                    builder: (context) => DepartureCompletedStatusDialog(
-                      plate: selectedPlate,
-                      plateNumber: selectedPlate.plateNumber,
-                      area: selectedPlate.area,
-                      onDelete: () {},
+              return BottomNavigationBar(
+                items: [
+                  BottomNavigationBarItem(
+                    icon: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 300),
+                      transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+                      child: isPlateSelected
+                          ? (selectedPlate.isLockedFee
+                              ? const Icon(Icons.lock_open, key: ValueKey('unlock'), color: Colors.grey)
+                              : const Icon(Icons.lock, key: ValueKey('lock'), color: Colors.grey))
+                          : Icon(
+                              _isSearchMode ? Icons.cancel : Icons.search,
+                              key: ValueKey(_isSearchMode),
+                              color: _isSearchMode ? Colors.orange : Colors.grey,
+                            ),
                     ),
-                  );
-                } else {
-                  if (!_hasCalendarBeenReset) {
-                    context.read<FieldSelectedDateState>().setSelectedDate(DateTime.now());
+                    label: isPlateSelected
+                        ? (selectedPlate.isLockedFee ? '정산 취소' : '사전 정산')
+                        : (_isSearchMode ? '검색 초기화' : '번호판 검색'),
+                  ),
+                  BottomNavigationBarItem(
+                    icon: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 300),
+                      transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+                      child: Icon(
+                        _showMergedLog ? Icons.expand_more : Icons.list_alt,
+                        key: ValueKey(_showMergedLog),
+                        color: Colors.grey,
+                      ),
+                    ),
+                    label: _showMergedLog ? '감추기' : '병합 로그',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 300),
+                      transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+                      child: isPlateSelected
+                          ? const Icon(Icons.settings, key: ValueKey('setting'))
+                          : const Icon(Icons.calendar_today, key: ValueKey('calendar'), color: Colors.grey),
+                    ),
+                    label: isPlateSelected ? '상태 수정' : formattedDate,
+                  ),
+                ],
+                onTap: (index) async {
+                  if (index == 0) {
+                    if (isPlateSelected) {
+                      final adjustmentType = selectedPlate.adjustmentType;
+
+                      // ✅ 정산 타입 필수 확인
+                      if (adjustmentType == null || adjustmentType.trim().isEmpty) {
+                        showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
+                        return;
+                      }
+
+                      final now = DateTime.now();
+                      final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
+                      final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
+
+                      if (selectedPlate.isLockedFee) {
+                        showFailedSnackbar(context, '정산 완료된 항목은 취소할 수 없습니다.');
+                        return;
+                      }
+
+                      // ✅ 정산 다이얼로그 호출
+                      final result = await showAdjustmentTypeConfirmDialog(
+                        context: context,
+                        entryTimeInSeconds: entryTime,
+                        currentTimeInSeconds: currentTime,
+                        basicStandard: selectedPlate.basicStandard ?? 0,
+                        basicAmount: selectedPlate.basicAmount ?? 0,
+                        addStandard: selectedPlate.addStandard ?? 0,
+                        addAmount: selectedPlate.addAmount ?? 0,
+                      );
+
+                      if (result == null) return;
+
+                      final updatedPlate = selectedPlate.copyWith(
+                        isLockedFee: true,
+                        lockedAtTimeInSeconds: currentTime,
+                        lockedFeeAmount: result.lockedFee,
+                        paymentMethod: result.paymentMethod,
+                      );
+
+                      await context.read<PlateRepository>().addOrUpdatePlate(
+                            selectedPlate.id,
+                            updatedPlate,
+                          );
+
+                      if (!context.mounted) return;
+                      await context.read<PlateState>().updatePlateLocally(
+                            PlateType.departureCompleted,
+                            updatedPlate,
+                          );
+
+                      if (!context.mounted) return;
+
+                      // ✅ GCS 로그 저장
+                      final uploader = GCSUploader();
+                      final division = context.read<AreaState>().currentDivision;
+                      final area = context.read<AreaState>().currentArea.trim();
+                      final userName = context.read<UserState>().name;
+
+                      final log = {
+                        'plateNumber': selectedPlate.plateNumber,
+                        'action': '사전 정산',
+                        'performedBy': userName,
+                        'timestamp': DateTime.now().toIso8601String(),
+                        'lockedFee': result.lockedFee,
+                        'paymentMethod': result.paymentMethod,
+                      };
+                      if (adjustmentType.trim().isNotEmpty) {
+                        log['adjustmentType'] = adjustmentType;
+                      }
+
+                      await uploader.uploadLogJson(
+                        log,
+                        selectedPlate.plateNumber,
+                        division,
+                        area,
+                        adjustmentType: adjustmentType,
+                      );
+
+                      showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
+                    } else {
+                      _isSearchMode ? _resetSearch(context) : _showSearchDialog(context);
+                    }
+                  } else if (index == 1) {
+                    // 🔁 병합 로그 toggle
                     setState(() {
-                      _hasCalendarBeenReset = true;
+                      _showMergedLog = !_showMergedLog;
                     });
-                  } else {
-                    setState(() {
-                      _hasCalendarBeenReset = false;
-                    });
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const FieldCalendarPage()),
-                    );
+                  } else if (index == 2) {
+                    if (isPlateSelected) {
+                      showDialog(
+                        context: context,
+                        builder: (context) => DepartureCompletedStatusDialog(
+                          plate: selectedPlate,
+                          plateNumber: selectedPlate.plateNumber,
+                          area: selectedPlate.area,
+                          onDelete: () {},
+                        ),
+                      );
+                    } else {
+                      if (!_hasCalendarBeenReset) {
+                        context.read<FieldSelectedDateState>().setSelectedDate(DateTime.now());
+                        setState(() {
+                          _hasCalendarBeenReset = true;
+                        });
+                      } else {
+                        setState(() {
+                          _hasCalendarBeenReset = false;
+                        });
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const FieldCalendarPage()),
+                        );
+                      }
+                    }
                   }
-                }
-              }
+                },
+              );
             },
-          );
-        },
-      ),
-    );
+          ),
+        ));
   }
 }
