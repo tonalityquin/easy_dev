@@ -143,6 +143,9 @@ class GCSUploader {
   }
 
   Future<void> mergeAndReplaceLogs(String plateNumber, String division, String area) async {
+    // ✅ 출차 후 사전 정산 로그가 올라올 시간을 기다림 (최대 3초)
+    await Future.delayed(Duration(seconds: 3));
+
     final now = DateTime.now();
     final year = now.year;
     final month = _two(now.month);
