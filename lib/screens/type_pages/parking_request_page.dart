@@ -30,6 +30,7 @@ class ParkingRequestPage extends StatefulWidget {
 class _ParkingRequestPageState extends State<ParkingRequestPage> {
   bool _isSorted = true;
   bool _isSearchMode = false;
+  bool _showReportDialog = false; // 👈 추가
 
   void _toggleSortIcon() {
     setState(() {
@@ -154,10 +155,12 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
     final userName = context.read<UserState>().name;
 
     return PopScope(
-      canPop: false, // ✅ 뒤로가기 완전 차단
+      canPop: false,
       onPopInvoked: (didPop) async {
-        // ✅ 화면은 닫히지 않지만, 선택된 번호판이 있으면 선택 해제
-        final selectedPlate = plateState.getSelectedPlate(PlateType.parkingRequests, userName);
+        final selectedPlate = plateState.getSelectedPlate(
+          PlateType.parkingRequests,
+          userName,
+        );
         if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
           await plateState.toggleIsSelected(
             collection: PlateType.parkingRequests,
@@ -167,7 +170,10 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
           );
         }
 
-        // ❌ didPop 여부와 관계없이 화면은 절대 pop되지 않음
+        // ✅ 보고 다이얼로그가 열려 있으면 닫는다
+        if (_showReportDialog) {
+          setState(() => _showReportDialog = false);
+        }
       },
       child: Scaffold(
         appBar: AppBar(
@@ -178,19 +184,37 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
           foregroundColor: Colors.black,
           elevation: 0,
         ),
-        body: Consumer2<PlateState, AreaState>(
-          builder: (context, plateState, areaState, child) {
-            if (_isSearchMode) {
-              // 🔍 검색 모드일 때만 FutureBuilder 사용
-              return FutureBuilder<List<PlateModel>>(
-                future: context.read<FilterPlate>().fetchPlatesBySearchQuery(),
-                builder: (context, snapshot) {
-                  final searchResults = snapshot.data ?? [];
+        body: Stack(
+          children: [
+            Consumer2<PlateState, AreaState>(
+              builder: (context, plateState, areaState, child) {
+                if (_isSearchMode) {
+                  return FutureBuilder<List<PlateModel>>(
+                    future: context.read<FilterPlate>().fetchPlatesBySearchQuery(),
+                    builder: (context, snapshot) {
+                      final searchResults = snapshot.data ?? [];
+                      return ListView(
+                        padding: const EdgeInsets.all(8.0),
+                        children: [
+                          PlateContainer(
+                            data: searchResults,
+                            collection: PlateType.parkingRequests,
+                            filterCondition: (request) => request.type == PlateType.parkingRequests.firestoreValue,
+                            onPlateTap: (plateNumber, area) {
+                              _handlePlateTap(context, plateNumber, area);
+                            },
+                          ),
+                        ],
+                      );
+                    },
+                  );
+                } else {
+                  final plates = plateState.getPlatesByCollection(PlateType.parkingRequests);
                   return ListView(
                     padding: const EdgeInsets.all(8.0),
                     children: [
                       PlateContainer(
-                        data: searchResults,
+                        data: plates,
                         collection: PlateType.parkingRequests,
                         filterCondition: (request) => request.type == PlateType.parkingRequests.firestoreValue,
                         onPlateTap: (plateNumber, area) {
@@ -199,27 +223,69 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                       ),
                     ],
                   );
-                },
-              );
-            } else {
-              // ✅ 실시간 PlateState 데이터 감지 (정렬 포함)
-              final plates = plateState.getPlatesByCollection(PlateType.parkingRequests);
+                }
+              },
+            ),
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 300),
+              bottom: _showReportDialog ? 0 : -600,
+              left: 0,
+              right: 0,
+              child: Material(
+                elevation: 8,
+                color: Colors.white,
+                child: SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      bottom: MediaQuery.of(context).viewInsets.bottom,
+                      left: 16,
+                      right: 16,
+                      top: 16,
+                    ),
+                    child: SingleChildScrollView(
+                      child: ParkingReportContent(
+                        onReport: (type, content) async {
+                          if (type == 'cancel') {
+                            setState(() => _showReportDialog = false);
+                            return;
+                          }
 
-              return ListView(
-                padding: const EdgeInsets.all(8.0),
-                children: [
-                  PlateContainer(
-                    data: plates,
-                    collection: PlateType.parkingRequests,
-                    filterCondition: (request) => request.type == PlateType.parkingRequests.firestoreValue,
-                    onPlateTap: (plateNumber, area) {
-                      _handlePlateTap(context, plateNumber, area);
-                    },
+                          final area = context.read<AreaState>().currentArea;
+                          final division = context.read<AreaState>().currentDivision;
+                          final userName = context.read<UserState>().name;
+
+                          if (type == 'end') {
+                            final reportLog = {
+                              'division': division,
+                              'area': area,
+                              'vehicleCount': content,
+                              'timestamp': DateTime.now().toIso8601String(),
+                            };
+
+                            await GCSUploader().uploadEndWorkReportJson(
+                              report: reportLog,
+                              division: division,
+                              area: area,
+                              userName: userName,
+                            );
+
+                            await GCSUploader().deleteLockedDepartureDocs(area);
+
+                            showSuccessSnackbar(context, "업무 종료 보고 업로드 및 출차 문서 삭제 완료 (차량 수: $content)");
+                          } else if (type == 'start') {
+                            showSuccessSnackbar(context, "업무 시작 보고 완료: $content");
+                          }
+
+                          setState(() => _showReportDialog = false);
+                        },
+                      ),
+                    ),
                   ),
-                ],
-              );
-            }
-          },
+                ),
+              ),
+            ),
+          ],
         ),
         bottomNavigationBar: Consumer<PlateState>(
           builder: (context, plateState, child) {
@@ -406,41 +472,9 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                   if (isPlateSelected) {
                     _handleParkingCompleted(context);
                   } else {
-                    showDialog(
-                      context: context,
-                      builder: (_) => ParkingReportDialog(
-                        onReport: (type, content) async {
-                          final area = context.read<AreaState>().currentArea;
-                          final division = context.read<AreaState>().currentDivision;
-                          final userName = context.read<UserState>().name;
-
-                          if (type == 'end') {
-                            // 1. 보고 로그 데이터 구성
-                            final reportLog = {
-                              'division': division,
-                              'area': area,
-                              'vehicleCount': content,
-                              'timestamp': DateTime.now().toIso8601String(),
-                            };
-
-                            // 2. 기존 방식과 동일한 로직으로 업로드 (Firestore 등)
-                            await GCSUploader().uploadEndWorkReportJson(
-                              report: reportLog,
-                              division: division,
-                              area: area,
-                              userName: userName,
-                            );
-
-                            // 3. 출차 완료 문서 삭제
-                            await GCSUploader().deleteLockedDepartureDocs(area);
-
-                            showSuccessSnackbar(context, "업무 종료 보고 업로드 및 출차 문서 삭제 완료 (차량 수: $content)");
-                          } else if (type == 'start') {
-                            showSuccessSnackbar(context, "업무 시작 보고 완료: $content");
-                          }
-                        },
-                      ),
-                    );
+                    setState(() {
+                      _showReportDialog = !_showReportDialog; // ✅ 이미 열려있으면 닫히게!
+                    });
                   }
                 } else if (index == 2) {
                   if (isPlateSelected) {
