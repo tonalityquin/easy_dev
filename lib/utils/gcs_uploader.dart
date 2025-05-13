@@ -242,7 +242,7 @@ class GCSUploader {
       'adjustmentType': latestAdjustmentLog?['adjustmentType'],
     };
 
-    final summaryFileName = '$division/$area/$year/$month/$day/sources/${safePlate}_$time.json';
+    final summaryFileName = '$division/$area/sources/${safePlate}_$time.json';
     await uploadJsonData(summaryJson, summaryFileName);
 
     client.close();
