@@ -248,6 +248,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
 
                       final updatedPlate = selectedPlate.copyWith(
                         isLockedFee: true,
+                        isSelected: false,
                         lockedAtTimeInSeconds: currentTime,
                         lockedFeeAmount: result.lockedFee,
                         paymentMethod: result.paymentMethod,
