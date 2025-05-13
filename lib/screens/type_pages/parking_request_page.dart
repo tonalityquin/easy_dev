@@ -409,10 +409,37 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                     showDialog(
                       context: context,
                       builder: (_) => ParkingReportDialog(
-                        onReport: () async {
+                        onReport: (type, content) async {
                           final area = context.read<AreaState>().currentArea;
-                          await GCSUploader().deleteLockedDepartureDocs(area);
-                          showSuccessSnackbar(context, "출차 완료 문서가 삭제되었습니다.");
+                          final division = context.read<AreaState>().currentDivision;
+                          final userName = context.read<UserState>().name;
+
+                          if (type == 'end') {
+                            // 1. 보고 로그 데이터 구성
+                            final reportLog = {
+                              'type': '업무 종료 보고',
+                              'reportedBy': userName,
+                              'division': division,
+                              'area': area,
+                              'vehicleCount': content,
+                              'timestamp': DateTime.now().toIso8601String(),
+                            };
+
+                            // 2. 기존 방식과 동일한 로직으로 업로드 (Firestore 등)
+                            await GCSUploader().uploadEndWorkReportJson(
+                              report: reportLog,
+                              division: division,
+                              area: area,
+                              userName: userName,
+                            );
+
+                            // 3. 출차 완료 문서 삭제
+                            await GCSUploader().deleteLockedDepartureDocs(area);
+
+                            showSuccessSnackbar(context, "업무 종료 보고 업로드 및 출차 문서 삭제 완료 (차량 수: $content)");
+                          } else if (type == 'start') {
+                            showSuccessSnackbar(context, "업무 시작 보고 완료: $content");
+                          }
                         },
                       ),
                     );

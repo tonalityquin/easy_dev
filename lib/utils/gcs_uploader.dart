@@ -121,6 +121,27 @@ class GCSUploader {
     return await uploadJsonData(logData, fileName);
   }
 
+  Future<String?> uploadEndWorkReportJson({
+    required Map<String, dynamic> report,
+    required String division,
+    required String area,
+    required String userName,
+  }) async {
+    final now = DateTime.now();
+
+    final dateStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final timeStr =
+        '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
+
+    final safeUser = userName.replaceAll(RegExp(r'\\s+'), '');
+    final fileName = '업무종료보고_${safeUser}_${dateStr}_$timeStr.json';
+    final destinationPath = '$division/$area/reports/$fileName';
+
+    report['timestamp'] = dateStr;
+
+    return await uploadJsonData(report, destinationPath);
+  }
+
   Future<void> mergeAndReplaceLogs(String plateNumber, String division, String area) async {
     final now = DateTime.now();
     final year = now.year;

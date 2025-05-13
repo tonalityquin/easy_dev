@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class ParkingReportDialog extends StatefulWidget {
-  final VoidCallback onReport;
+  final void Function(String reportType, String content) onReport;
 
   const ParkingReportDialog({super.key, required this.onReport});
 
@@ -61,8 +61,18 @@ class _ParkingReportDialogState extends State<ParkingReportDialog> {
         ),
         TextButton(
           onPressed: () {
-            // 필요한 경우 입력값을 활용해서 onReport에 전달할 수 있음
-            widget.onReport();
+            String type = _selectedTabIndex == 0 ? 'start' : 'end';
+            String content =
+                _selectedTabIndex == 0 ? _startReportController.text.trim() : _vehicleCountController.text.trim();
+
+            if (content.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('내용을 입력해주세요.')),
+              );
+              return;
+            }
+
+            widget.onReport(type, content);
             Navigator.pop(context);
           },
           child: const Text('Report'),
