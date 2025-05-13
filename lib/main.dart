@@ -43,7 +43,7 @@ void main() async {
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
-
+  
   Future<void> _initializeAreaIfNeeded(BuildContext context) async {
     final userState = context.read<UserState>();
     final areaState = context.read<AreaState>();

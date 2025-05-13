@@ -20,38 +20,41 @@ class _HeadquarterState extends State<Headquarter> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const TopNavigation(),
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
-      ),
-      body: Center(
-        child: Text(
-          _tabContents[_selectedIndex],
-          style: const TextStyle(fontSize: 16),
+    return WillPopScope(
+      onWillPop: () async => false,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const TopNavigation(),
+          centerTitle: true,
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
+          elevation: 0,
         ),
-      ),
-      bottomNavigationBar: HqMiniNavigation(
-        height: 56,
-        iconSize: 22,
-        icons: const [
-          Icons.dashboard,
-          Icons.analytics,
-          Icons.settings,
-        ],
-        labels: const [
-          'Dashboard',
-          'Analytics',
-          'Settings',
-        ],
-        onIconTapped: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-        },
+        body: Center(
+          child: Text(
+            _tabContents[_selectedIndex],
+            style: const TextStyle(fontSize: 16),
+          ),
+        ),
+        bottomNavigationBar: HqMiniNavigation(
+          height: 56,
+          iconSize: 22,
+          icons: const [
+            Icons.dashboard,
+            Icons.analytics,
+            Icons.settings,
+          ],
+          labels: const [
+            'Dashboard',
+            'Analytics',
+            'Settings',
+          ],
+          onIconTapped: (index) {
+            setState(() {
+              _selectedIndex = index;
+            });
+          },
+        ),
       ),
     );
   }

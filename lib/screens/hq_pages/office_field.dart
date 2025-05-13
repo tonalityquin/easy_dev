@@ -87,44 +87,47 @@ class _OfficeFieldState extends State<OfficeField> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const TopNavigation(),
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
-        actions: _selectedIndex == 0
-            ? [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: '다시 불러오기',
-            onPressed: _isLoading ? null : _fetchAreaCounts,
-          ),
-        ]
-            : null,
-      ),
-      body: _selectedIndex == 0
-          ? _buildTodayFieldBody()
-          : const Center(child: Text('해당 탭의 콘텐츠는 준비 중입니다.')),
-      bottomNavigationBar: HqMiniNavigation(
-        height: 56,
-        iconSize: 22,
-        icons: const [
-          Icons.today,
-          Icons.input,
-          Icons.account_box,
-        ],
-        labels: const [
-          'Today Field',
-          'In&Out Doc.',
-          'Account Doc.',
-        ],
-        onIconTapped: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-        },
+    return WillPopScope(
+      onWillPop: () async => false,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const TopNavigation(),
+          centerTitle: true,
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
+          elevation: 0,
+          actions: _selectedIndex == 0
+              ? [
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              tooltip: '다시 불러오기',
+              onPressed: _isLoading ? null : _fetchAreaCounts,
+            ),
+          ]
+              : null,
+        ),
+        body: _selectedIndex == 0
+            ? _buildTodayFieldBody()
+            : const Center(child: Text('해당 탭의 콘텐츠는 준비 중입니다.')),
+        bottomNavigationBar: HqMiniNavigation(
+          height: 56,
+          iconSize: 22,
+          icons: const [
+            Icons.today,
+            Icons.input,
+            Icons.account_box,
+          ],
+          labels: const [
+            'Today Field',
+            'In&Out Doc.',
+            'Account Doc.',
+          ],
+          onIconTapped: (index) {
+            setState(() {
+              _selectedIndex = index;
+            });
+          },
+        ),
       ),
     );
   }
