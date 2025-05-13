@@ -417,8 +417,6 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                           if (type == 'end') {
                             // 1. 보고 로그 데이터 구성
                             final reportLog = {
-                              'type': '업무 종료 보고',
-                              'reportedBy': userName,
                               'division': division,
                               'area': area,
                               'vehicleCount': content,

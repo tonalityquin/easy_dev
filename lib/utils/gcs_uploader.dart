@@ -133,8 +133,7 @@ class GCSUploader {
     final timeStr =
         '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
 
-    final safeUser = userName.replaceAll(RegExp(r'\\s+'), '');
-    final fileName = '업무종료보고_${safeUser}_${dateStr}_$timeStr.json';
+    final fileName = '업무 종료 보고_$dateStr.json';
     final destinationPath = '$division/$area/reports/$fileName';
 
     report['timestamp'] = dateStr;
