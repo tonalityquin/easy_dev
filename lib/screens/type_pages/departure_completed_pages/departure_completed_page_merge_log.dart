@@ -32,9 +32,10 @@ class _MergedLogSectionState extends State<MergedLogSection> {
       builder: (context) => AlertDialog(
         title: const Text('병합 로그 새로고침'),
         content: const Text(
-          '이 작업은 GCS에서 병합 로그를 새로 불러오며,\n'
-          '약간의 데이터 사용량이 발생할 수 있습니다.\n\n'
-          '계속하시겠습니까?',
+          '본 작업은 이하에 해당될 경우에만 수행하세요,\n'
+          '1. 차량 사고 등의 이슈가 발생하였을 때.\n\n'
+          '2. 고객 컴플레인 등의 이슈가 발생하였을 때.\n\n\n'
+          '계속 하시겠습니까?',
         ),
         actions: [
           TextButton(
@@ -43,7 +44,7 @@ class _MergedLogSectionState extends State<MergedLogSection> {
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('동의하고 새로고침'),
+            child: const Text('동의'),
           ),
         ],
       ),
