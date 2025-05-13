@@ -1,3 +1,4 @@
+import 'package:easydev/screens/type_pages/parking_requests_pages/report_dialog.dart';
 import 'package:easydev/states/plate/filter_plate.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -308,15 +309,15 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
 
                       if (!context.mounted) return;
                       await context.read<PlateRepository>().addOrUpdatePlate(
-                        selectedPlate.id,
-                        updatedPlate,
-                      );
+                            selectedPlate.id,
+                            updatedPlate,
+                          );
 
                       if (!context.mounted) return;
                       await context.read<PlateState>().updatePlateLocally(
-                        PlateType.parkingRequests,
-                        updatedPlate,
-                      );
+                            PlateType.parkingRequests,
+                            updatedPlate,
+                          );
 
                       if (!context.mounted) return;
 
@@ -364,15 +365,15 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                     );
 
                     await context.read<PlateRepository>().addOrUpdatePlate(
-                      selectedPlate.id,
-                      updatedPlate,
-                    );
+                          selectedPlate.id,
+                          updatedPlate,
+                        );
 
                     if (!context.mounted) return;
                     await context.read<PlateState>().updatePlateLocally(
-                      PlateType.parkingRequests,
-                      updatedPlate,
-                    );
+                          PlateType.parkingRequests,
+                          updatedPlate,
+                        );
 
                     if (!context.mounted) return;
 
@@ -403,15 +404,20 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                   }
                 } else if (index == 1) {
                   if (isPlateSelected) {
-                    _handleParkingCompleted(context); // ✅ 입차 완료로 이동
+                    _handleParkingCompleted(context);
                   } else {
-                    final area = context.read<AreaState>().currentArea;
-                    await GCSUploader().deleteLockedDepartureDocs(area);
-                    showSuccessSnackbar(context, "출차 완료 문서가 삭제되었습니다.");
+                    showDialog(
+                      context: context,
+                      builder: (_) => ParkingReportDialog(
+                        onReport: () async {
+                          final area = context.read<AreaState>().currentArea;
+                          await GCSUploader().deleteLockedDepartureDocs(area);
+                          showSuccessSnackbar(context, "출차 완료 문서가 삭제되었습니다.");
+                        },
+                      ),
+                    );
                   }
-                }
-
-                else if (index == 2) {
+                } else if (index == 2) {
                   if (isPlateSelected) {
                     final selectedPlate = plateState.getSelectedPlate(PlateType.parkingRequests, userName);
                     if (selectedPlate != null) {
