@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import '../../../widgets/navigation/hq_mini_navigation.dart';
 import '../../widgets/navigation/top_navigation.dart';
-import 'office_fields/today_field.dart'; // 완전히 분리된 TodayField 위젯
+import 'office_to_fields/today_field.dart';
+import 'office_to_fields/parallel_graph.dart';
+import 'office_to_fields/statistical_calendar.dart';
 
-class OfficeField extends StatefulWidget {
-  const OfficeField({super.key});
+class OfficeToField extends StatefulWidget {
+  const OfficeToField({super.key});
 
   @override
-  State<OfficeField> createState() => _OfficeFieldState();
+  State<OfficeToField> createState() => _OfficeToFieldState();
 }
 
-class _OfficeFieldState extends State<OfficeField> {
+class _OfficeToFieldState extends State<OfficeToField> {
   int _selectedIndex = 0;
 
   @override
@@ -27,19 +29,23 @@ class _OfficeFieldState extends State<OfficeField> {
         ),
         body: _selectedIndex == 0
             ? const TodayField()
-            : const Center(child: Text('해당 탭의 콘텐츠는 준비 중입니다.')),
+            : _selectedIndex == 1
+                ? const StatisticalCalendar() // ✅ 새로운 탭 연결
+                : _selectedIndex == 2
+                    ? const ParallelGraph() // ✅ 새로운 탭 연결
+                    : const Center(child: Text('해당 탭의 콘텐츠는 준비 중입니다.')),
         bottomNavigationBar: HqMiniNavigation(
           height: 56,
           iconSize: 22,
           icons: const [
             Icons.today,
             Icons.input,
-            Icons.account_box,
+            Icons.auto_graph,
           ],
           labels: const [
             'Today Field',
-            'In&Out Doc.',
-            'Account Doc.',
+            'Statistical Calendar',
+            'Parallel graph',
           ],
           onIconTapped: (index) {
             setState(() {

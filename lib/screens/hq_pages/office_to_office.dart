@@ -1,22 +1,19 @@
 import 'package:flutter/material.dart';
 import '../../../widgets/navigation/hq_mini_navigation.dart';
 import '../../widgets/navigation/top_navigation.dart';
+import 'office_to_offices/todo_calendar.dart';
+import 'office_to_offices/todo_checklist.dart';
+import 'office_to_offices/todo_tasks.dart';
 
-class FieldOffice extends StatefulWidget {
-  const FieldOffice({super.key});
+class OfficeToOffice extends StatefulWidget {
+  const OfficeToOffice({super.key});
 
   @override
-  State<FieldOffice> createState() => _FieldOfficeState();
+  State<OfficeToOffice> createState() => _OfficeToOfficeState();
 }
 
-class _FieldOfficeState extends State<FieldOffice> {
+class _OfficeToOfficeState extends State<OfficeToOffice> {
   int _selectedIndex = 0;
-
-  final List<String> _tabContents = [
-    '📂 Open 콘텐츠 준비 중',
-    '💬 Comment 콘텐츠 준비 중',
-    '❌ Close 콘텐츠 준비 중',
-  ];
 
   @override
   Widget build(BuildContext context) {
@@ -30,24 +27,25 @@ class _FieldOfficeState extends State<FieldOffice> {
           foregroundColor: Colors.black,
           elevation: 0,
         ),
-        body: Center(
-          child: Text(
-            _tabContents[_selectedIndex],
-            style: const TextStyle(fontSize: 16),
-          ),
-        ),
+        body: _selectedIndex == 0
+            ? const TodoCalendar()
+            : _selectedIndex == 1
+            ? const TodoTasks() // ✅ 새로운 탭 연결
+            : _selectedIndex == 2
+            ? const TodoChecklist() // ✅ 새로운 탭 연결
+            : const Center(child: Text('해당 탭의 콘텐츠는 준비 중입니다.')),
         bottomNavigationBar: HqMiniNavigation(
           height: 56,
           iconSize: 22,
           icons: const [
-            Icons.folder_open,
-            Icons.comment,
-            Icons.close,
+            Icons.today,
+            Icons.input,
+            Icons.auto_graph,
           ],
           labels: const [
-            'Open',
-            'Comment',
-            'Close',
+            'ToDo Calendar',
+            'ToDo Tasks',
+            'Todo Checklist',
           ],
           onIconTapped: (index) {
             setState(() {
