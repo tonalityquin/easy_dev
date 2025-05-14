@@ -3,50 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'area_managements/add_area_tab.dart';
 import 'area_managements/division_management_tab.dart';
 import 'area_managements/user_account_tab.dart';
-import 'area_managements/plate_limit_management_tab.dart'; // ✅ 추가
-
-/// ✅ 앱 어디서든 호출 가능하게끔 전역 함수로 정의
-Future<void> registerDevResources() async {
-  final firestore = FirebaseFirestore.instance;
-
-  final divisionDoc = firestore.collection('divisions').doc('dev');
-  if (!(await divisionDoc.get()).exists) {
-    await divisionDoc.set({
-      'name': 'dev',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-  }
-
-  final areaQuery = await firestore.collection('areas').where('division', isEqualTo: 'dev').get();
-  if (areaQuery.docs.isEmpty) {
-    await firestore.collection('areas').doc('dev-dev').set({
-      'name': 'dev',
-      'division': 'dev',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-  }
-
-  const devPhone = '00000000000';
-  const devArea = 'dev';
-  const devAccountId = '$devPhone-$devArea';
-
-  final userDoc = firestore.collection('user_accounts').doc(devAccountId);
-  if (!(await userDoc.get()).exists) {
-    await userDoc.set({
-      'name': 'developer',
-      'phone': devPhone,
-      'email': 'dev@gmail.com',
-      'password': '00000',
-      'divisions': ['dev'],
-      'areas': ['dev'],
-      'role': 'dev',
-      'isWorking': false,
-      'isSaved': false,
-      'isSelected': false,
-      'currentArea': null,
-    });
-  }
-}
+import 'area_managements/plate_limit_management_tab.dart';
 
 class AreaManagement extends StatefulWidget {
   const AreaManagement({super.key});

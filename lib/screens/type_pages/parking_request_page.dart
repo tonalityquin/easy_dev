@@ -170,7 +170,6 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
           );
         }
 
-        // ✅ 보고 다이얼로그가 열려 있으면 닫는다
         if (_showReportDialog) {
           setState(() => _showReportDialog = false);
         }
@@ -178,7 +177,6 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
       child: Scaffold(
         appBar: AppBar(
           title: const TopNavigation(),
-          // ✅ title로만 사용
           centerTitle: true,
           backgroundColor: Colors.white,
           foregroundColor: Colors.black,
@@ -244,42 +242,44 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                       top: 16,
                     ),
                     child: SingleChildScrollView(
-                      child: ParkingReportContent(
-                        onReport: (type, content) async {
-                          if (type == 'cancel') {
+                        child: ParkingReportContent(
+                          onReport: (type, content) async {
+                            if (type == 'cancel') {
+                              setState(() => _showReportDialog = false);
+                              return;
+                            }
+
+                            final area = context.read<AreaState>().currentArea;
+                            final division = context.read<AreaState>().currentDivision;
+                            final userName = context.read<UserState>().name;
+
+                            if (type == 'end') {
+                              final reportLog = {
+                                'division': division,
+                                'area': area,
+                                'vehicleCount': content,
+                                'timestamp': DateTime.now().toIso8601String(),
+                              };
+
+                              await uploadEndWorkReportJson(
+                                report: reportLog,
+                                division: division,
+                                area: area,
+                                userName: userName,
+                              );
+
+                              await deleteLockedDepartureDocs(area);
+
+                              showSuccessSnackbar(context, "업무 종료 보고 업로드 및 출차 초기화 (차량 수: \$content)");
+                            } else if (type == 'start') {
+                              showSuccessSnackbar(context, "업무 시작 보고 완료: \$content");
+                            } else if (type == 'middle') {
+                              showSuccessSnackbar(context, "보고란 제출 완료: \$content");
+                            }
+
                             setState(() => _showReportDialog = false);
-                            return;
-                          }
-
-                          final area = context.read<AreaState>().currentArea;
-                          final division = context.read<AreaState>().currentDivision;
-                          final userName = context.read<UserState>().name;
-
-                          if (type == 'end') {
-                            final reportLog = {
-                              'division': division,
-                              'area': area,
-                              'vehicleCount': content,
-                              'timestamp': DateTime.now().toIso8601String(),
-                            };
-
-                            await uploadEndWorkReportJson(
-                              report: reportLog,
-                              division: division,
-                              area: area,
-                              userName: userName,
-                            );
-
-                            await deleteLockedDepartureDocs(area);
-
-                            showSuccessSnackbar(context, "업무 종료 보고 업로드 및 출차 문서 삭제 완료 (차량 수: $content)");
-                          } else if (type == 'start') {
-                            showSuccessSnackbar(context, "업무 시작 보고 완료: $content");
-                          }
-
-                          setState(() => _showReportDialog = false);
-                        },
-                      ),
+                          },
+                        ),
                     ),
                   ),
                 ),

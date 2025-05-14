@@ -119,8 +119,8 @@ class _ParkingReportContentState extends State<ParkingReportContent> {
       child: TextField(
         controller: _middleReportController,
         decoration: const InputDecoration(
-          labelText: '보고란 내용',
-          hintText: '예: 특별 상황, 민원, 기타 보고 사항 입력',
+          labelText: '코멘트 섹션',
+          hintText: '예: 게시된 이슈에 대한 약식 답변',
           border: OutlineInputBorder(),
         ),
         maxLines: 3,

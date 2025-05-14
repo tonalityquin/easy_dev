@@ -9,7 +9,7 @@ import 'theme.dart';
 import 'states/user/user_state.dart';
 import 'services/plate_tts_listener_service.dart';
 import 'states/area/area_state.dart';
-import 'screens/secondary_pages/dev_mode_pages/area_management.dart';
+import 'utils/init/dev_initializer.dart';
 import 'dart:developer' as dev;
 
 const String initialRoute = AppRoutes.login;

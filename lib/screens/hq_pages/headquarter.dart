@@ -1,5 +1,5 @@
 import 'package:easydev/screens/hq_pages/hq_pages/hq_board.dart';
-import 'package:easydev/screens/hq_pages/hq_pages/hq_chat.dart';
+import 'package:easydev/screens/hq_pages/hq_pages/hq_issue_input.dart';
 import 'package:flutter/material.dart';
 import '../../../widgets/navigation/hq_mini_navigation.dart';
 import '../../widgets/navigation/top_navigation.dart';
@@ -30,7 +30,7 @@ class _HeadquarterState extends State<Headquarter> {
         body: _selectedIndex == 0
             ? const HqBoard()
             : _selectedIndex == 1
-            ? const HqChat() // ✅ 새로운 탭 연결
+            ? const HqIssueInput() // ✅ 새로운 탭 연결
             : const Center(child: Text('해당 탭의 콘텐츠는 준비 중입니다.')),
         bottomNavigationBar: HqMiniNavigation(
           height: 56,
@@ -41,7 +41,7 @@ class _HeadquarterState extends State<Headquarter> {
           ],
           labels: const [
             'HQ Board',
-            'HQ Chat',
+            'HQ Issue Input',
           ],
           onIconTapped: (index) {
             setState(() {
