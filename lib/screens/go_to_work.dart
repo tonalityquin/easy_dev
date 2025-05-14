@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
+import '../../routes.dart';
 import '../../../states/user/user_state.dart';
 import '../../../states/area/area_state.dart';
 import '../../../models/user_model.dart';
@@ -63,9 +64,9 @@ class _GoToWorkState extends State<GoToWork> {
         final doc = await FirebaseFirestore.instance.collection('areas').doc('$division-$area').get();
 
         if (doc.exists && doc['isHeadquarter'] == true) {
-          Navigator.pushReplacementNamed(context, '/headquarter_page');
+          Navigator.pushReplacementNamed(context, AppRoutes.headquarterPage);
         } else {
-          Navigator.pushReplacementNamed(context, '/type_page');
+          Navigator.pushReplacementNamed(context, AppRoutes.typePage);
         }
       }
     } catch (e) {
@@ -114,7 +115,7 @@ class _GoToWorkState extends State<GoToWork> {
     final int yCol = yesterday.day;
     final existingYesterday = cellData[userId]?[yCol];
     if (existingYesterday != null && existingYesterday.split('\n').length == 1) {
-      // 퇴근 기록 누락 → 자동 03:00 기록 추가
+      cellData.putIfAbsent(userId, () => {});
       cellData[userId]![yCol] = '$existingYesterday\n03:00';
     }
 
@@ -123,7 +124,7 @@ class _GoToWorkState extends State<GoToWork> {
       return;
     }
 
-    cellData[userId] ??= {};
+    cellData.putIfAbsent(userId, () => {});
     cellData[userId]![dayColumn] = time;
 
     final encoded = jsonEncode(
