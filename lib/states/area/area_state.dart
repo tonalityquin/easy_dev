@@ -34,7 +34,7 @@ class AreaState with ChangeNotifier {
   }
 
   /// ✅ 특정 유저의 지역만 Firestore에서 가져와 초기화
-  Future<void> initialize(String userArea) async {
+  Future<void> initializeArea(String userArea) async {
     try {
       final snapshot = await _firestore
           .collection('areas')

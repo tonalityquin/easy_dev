@@ -111,7 +111,7 @@ class UserState extends ChangeNotifier {
       _user = userData.copyWith(isSaved: true);
       notifyListeners();
 
-      PlateTtsListenerService.start(currentArea);
+      Future.microtask(() => PlateTtsListenerService.start(currentArea));
       debugPrint("[TTS] 감지 시작: $currentArea");
     } catch (e) {
       debugPrint("[DEBUG] 자동 로그인 오류: $e");

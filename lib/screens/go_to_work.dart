@@ -34,7 +34,7 @@ class _GoToWorkState extends State<GoToWork> {
 
       final areaToInit = (storedArea != null && storedArea.isNotEmpty) ? storedArea : userState.area;
 
-      await areaState.initialize(userState.area);
+      await areaState.initializeArea(userState.area);
 
       debugPrint('[GoToWork] SharedPreferences에서 불러온 area: $storedArea');
       debugPrint('[GoToWork] 최종 초기화 area: $areaToInit');

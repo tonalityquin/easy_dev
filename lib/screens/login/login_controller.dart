@@ -47,6 +47,25 @@ class LoginController {
     obscurePassword = !obscurePassword;
   }
 
+  /// ✅ 전화번호 자동 하이픈 포맷팅
+  void formatPhoneNumber(String value, StateSetter setState) {
+    final numbersOnly = value.replaceAll(RegExp(r'\D'), '');
+    String formatted = numbersOnly;
+
+    if (numbersOnly.length >= 11) {
+      formatted = '${numbersOnly.substring(0, 3)}-${numbersOnly.substring(3, 7)}-${numbersOnly.substring(7, 11)}';
+    } else if (numbersOnly.length >= 10) {
+      formatted = '${numbersOnly.substring(0, 3)}-${numbersOnly.substring(3, 6)}-${numbersOnly.substring(6, 10)}';
+    }
+
+    setState(() {
+      phoneController.value = TextEditingValue(
+        text: formatted,
+        selection: TextSelection.collapsed(offset: formatted.length),
+      );
+    });
+  }
+
   InputDecoration inputDecoration({
     required String label,
     IconData? icon,

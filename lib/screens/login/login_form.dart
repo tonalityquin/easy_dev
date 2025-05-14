@@ -40,6 +40,7 @@ class _LoginFormState extends State<LoginForm> {
           focusNode: _controller.phoneFocus,
           keyboardType: TextInputType.phone,
           textInputAction: TextInputAction.next,
+          onChanged: (value) => _controller.formatPhoneNumber(value, setState), // ✅ 포맷팅 추가
           onSubmitted: (_) => FocusScope.of(context).requestFocus(_controller.passwordFocus),
           decoration: _controller.inputDecoration(label: "전화번호", icon: Icons.phone),
         ),
