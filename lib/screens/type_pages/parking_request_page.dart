@@ -263,14 +263,14 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                               'timestamp': DateTime.now().toIso8601String(),
                             };
 
-                            await GCSUploader().uploadEndWorkReportJson(
+                            await uploadEndWorkReportJson(
                               report: reportLog,
                               division: division,
                               area: area,
                               userName: userName,
                             );
 
-                            await GCSUploader().deleteLockedDepartureDocs(area);
+                            await deleteLockedDepartureDocs(area);
 
                             showSuccessSnackbar(context, "업무 종료 보고 업로드 및 출차 문서 삭제 완료 (차량 수: $content)");
                           } else if (type == 'start') {

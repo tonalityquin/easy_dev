@@ -1,5 +1,13 @@
+import 'dart:convert';
+import 'dart:io';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:googleapis_auth/auth_io.dart';
+import 'package:googleapis/storage/v1.dart';
+
+const String kBucketName = 'easydev-image';
+const String kServiceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
 
 class ParkingReportContent extends StatefulWidget {
   final void Function(String reportType, String content) onReport;
@@ -20,7 +28,10 @@ class _ParkingReportContentState extends State<ParkingReportContent> {
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
+        bottom: MediaQuery
+            .of(context)
+            .viewInsets
+            .bottom,
         top: 16,
         left: 16,
         right: 16,
@@ -52,10 +63,11 @@ class _ParkingReportContentState extends State<ParkingReportContent> {
             const SizedBox(height: 16),
             if (_selectedTabIndex == 0)
               _buildStartReportField()
-            else if (_selectedTabIndex == 1)
-              _buildMiddleReportField()
             else
-              _buildEndReportField(),
+              if (_selectedTabIndex == 1)
+                _buildMiddleReportField()
+              else
+                _buildEndReportField(),
             const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -155,5 +167,68 @@ class _ParkingReportContentState extends State<ParkingReportContent> {
     }
 
     widget.onReport(type, content);
+  }
+}
+
+// ==== GCS 관련 메서드 ====
+
+Future<String?> uploadEndWorkReportJson({
+  required Map<String, dynamic> report,
+  required String division,
+  required String area,
+  required String userName,
+}) async {
+  final dateStr = DateTime
+      .now()
+      .toIso8601String()
+      .split('T')
+      .first; // yyyy-mm-dd
+  final fileName = '업무 종료 보고_$dateStr.json';
+  final destinationPath = '$division/$area/reports/$fileName';
+
+  report['timestamp'] = dateStr;
+
+  final jsonString = jsonEncode(report);
+  final tempFile = File('${Directory.systemTemp.path}/temp_upload.json');
+  await tempFile.writeAsString(jsonString);
+
+  final credentialsJson = await rootBundle.loadString(kServiceAccountPath);
+  final accountCredentials = ServiceAccountCredentials.fromJson(credentialsJson);
+  final scopes = [StorageApi.devstorageFullControlScope];
+  final client = await clientViaServiceAccount(accountCredentials, scopes);
+  final storage = StorageApi(client);
+
+  final media = Media(tempFile.openRead(), tempFile.lengthSync());
+  final object = await storage.objects.insert(
+    Object()
+      ..name = destinationPath
+      ..acl = [ObjectAccessControl()
+        ..entity = 'allUsers'
+        ..role = 'READER'
+      ],
+    kBucketName,
+    uploadMedia: media,
+  );
+
+  client.close();
+
+  final uploadedUrl = 'https://storage.googleapis.com/$kBucketName/${object.name}';
+  debugPrint('✅ GCS 업로드 완료: $uploadedUrl');
+  return uploadedUrl;
+}
+
+
+Future<void> deleteLockedDepartureDocs(String area) async {
+  final firestore = FirebaseFirestore.instance;
+  final snapshot = await firestore
+      .collection('plates')
+      .where('type', isEqualTo: 'departure_completed')
+      .where('area', isEqualTo: area)
+      .where('isLockedFee', isEqualTo: true)
+      .get();
+
+  for (final doc in snapshot.docs) {
+    await doc.reference.delete();
+    debugPrint("🔥 Firestore 삭제 완료: \${doc.id}");
   }
 }

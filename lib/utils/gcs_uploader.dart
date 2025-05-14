@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'dart:convert';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:googleapis_auth/auth_io.dart';
@@ -121,24 +120,6 @@ class GCSUploader {
     return await uploadJsonData(logData, fileName);
   }
 
-  Future<String?> uploadEndWorkReportJson({
-    required Map<String, dynamic> report,
-    required String division,
-    required String area,
-    required String userName,
-  }) async {
-    final now = DateTime.now();
-
-    final dateStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-
-    final fileName = '업무 종료 보고_$dateStr.json';
-    final destinationPath = '$division/$area/reports/$fileName';
-
-    report['timestamp'] = dateStr;
-
-    return await uploadJsonData(report, destinationPath);
-  }
-
   Future<void> mergeAndReplaceLogs(String plateNumber, String division, String area) async {
     await Future.delayed(Duration(seconds: 3));
 
@@ -246,21 +227,6 @@ class GCSUploader {
     await uploadJsonData(summaryJson, summaryFileName);
 
     client.close();
-  }
-
-  Future<void> deleteLockedDepartureDocs(String area) async {
-    final firestore = FirebaseFirestore.instance;
-    final snapshot = await firestore
-        .collection('plates')
-        .where('type', isEqualTo: 'departure_completed')
-        .where('area', isEqualTo: area)
-        .where('isLockedFee', isEqualTo: true)
-        .get();
-
-    for (final doc in snapshot.docs) {
-      await doc.reference.delete();
-      debugPrint("🔥 Firestore 삭제 완료: ${doc.id}");
-    }
   }
 
   Future<List<String>> listMergedPlateLogs(String division, String area) async {
