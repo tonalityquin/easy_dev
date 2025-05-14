@@ -47,43 +47,50 @@ class _GoToWorkState extends State<GoToWork> {
     setState(() => _isLoading = true);
 
     try {
-      if (!userState.isWorking) {
-        await _recordAttendance(context);
-      }
-
-      await userState.isHeWorking();
-
-      if (!userState.isWorking) {
-        await _uploadAttendanceSilently(context);
-      }
-
-      if (userState.isWorking && mounted) {
-        final division = userState.user?.divisions.first ?? '';
-        final area = userState.area;
-
-        final doc = await FirebaseFirestore.instance.collection('areas').doc('$division-$area').get();
-
-        if (doc.exists && doc['isHeadquarter'] == true) {
-          Navigator.pushReplacementNamed(context, AppRoutes.headquarterPage);
-        } else {
-          Navigator.pushReplacementNamed(context, AppRoutes.typePage);
-        }
-      }
+      await _prepareAttendanceIfNeeded(context, userState);
+      await _navigateToProperPageIfWorking(context, userState);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('작업 처리 중 오류가 발생했습니다. 다시 시도해주세요.'),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
+      _showWorkError(context);
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Future<void> _prepareAttendanceIfNeeded(BuildContext context, UserState userState) async {
+    if (!userState.isWorking) {
+      await _recordAttendance(context);
+    }
+
+    await userState.isHeWorking();
+
+    if (!userState.isWorking) {
+      await _uploadAttendanceSilently(context);
+    }
+  }
+
+  Future<void> _navigateToProperPageIfWorking(BuildContext context, UserState userState) async {
+    if (!userState.isWorking || !mounted) return;
+
+    final division = userState.user?.divisions.first ?? '';
+    final area = userState.area;
+    final doc = await FirebaseFirestore.instance.collection('areas').doc('$division-$area').get();
+
+    if (!mounted) return;
+
+    final isHq = doc.exists && doc['isHeadquarter'] == true;
+    Navigator.pushReplacementNamed(context, isHq ? AppRoutes.headquarterPage : AppRoutes.typePage);
+  }
+
+  void _showWorkError(BuildContext context) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('작업 처리 중 오류가 발생했습니다. 다시 시도해주세요.'),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: Colors.redAccent,
+      ),
+    );
   }
 
   Future<void> _recordAttendance(BuildContext context) async {
@@ -110,7 +117,6 @@ class _GoToWorkState extends State<GoToWork> {
 
     final existing = cellData[userId]?[dayColumn];
 
-// 🔹 전날 퇴근 누락 확인
     final yesterday = now.subtract(const Duration(days: 1));
     final int yCol = yesterday.day;
     final existingYesterday = cellData[userId]?[yCol];
