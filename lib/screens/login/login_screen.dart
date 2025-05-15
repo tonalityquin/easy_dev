@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
-import 'login_form.dart';
+import 'widgets/login_form.dart';
 import 'login_controller.dart';
 
-class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
 
   @override
-  State<LoginPage> createState() => _LoginPageState();
+  State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
   late final LoginController _controller;
   late final AnimationController _animationController;
   late final Animation<Offset> _offsetAnimation;

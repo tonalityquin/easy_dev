@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'login_controller.dart';
+import '../login_controller.dart';
 
 class LoginForm extends StatefulWidget {
   final LoginController controller;

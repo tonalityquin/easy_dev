@@ -6,7 +6,7 @@ import '../../states/area/area_state.dart';
 import '../../repositories/user/user_repository.dart';
 import '../../utils/snackbar_helper.dart';
 import '../../utils/login_network_service.dart';
-import 'login_view_model.dart';
+import 'widgets/login_view_model.dart';
 
 class LoginController {
   final BuildContext context;
