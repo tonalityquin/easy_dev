@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 // Field Mode Pages
 import '../../screens/secondary_pages/dev_mode_pages/function_test.dart';
-import '../../screens/secondary_pages/field_mode_pages/dash_board.dart';
+import '../../screens/secondary_pages/field_mode_pages/dash_board/dash_board_screen.dart';
 import '../../screens/secondary_pages/field_mode_pages/docu_sign.dart';
 import '../../screens/secondary_pages/field_mode_pages/chat.dart';
 import '../../screens/secondary_pages/field_mode_pages/wireless.dart';
@@ -32,7 +32,7 @@ class SecondaryInfo {
 
 /// 🔹 Field Mode Pages
 final List<SecondaryInfo> fieldModePages = [
-  SecondaryInfo('대시보드', DashBoard(), Icon(Icons.dashboard)),
+  SecondaryInfo('대시보드', DashBoardScreen(), Icon(Icons.dashboard)),
   SecondaryInfo('Wireless', Wireless(), Icon(Icons.wifi)),
   SecondaryInfo('Chat', Chat(), Icon(Icons.message)),
   SecondaryInfo('DocuSign', DocuSign(), Icon(Icons.document_scanner)),
