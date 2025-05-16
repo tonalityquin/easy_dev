@@ -6,15 +6,12 @@ import '../../widgets/keypad/kor_keypad.dart';
 import '../../widgets/navigation/bottom_navigation.dart';
 import '../../widgets/dialog/parking_location_dialog.dart';
 import '../../widgets/dialog/camera_preview_dialog.dart';
-import '../../utils/snackbar_helper.dart';
 import '../../utils/camera_helper.dart';
 import '../../utils/button/animated_parking_button.dart';
 import '../../utils/button/animated_photo_button.dart';
 import '../../utils/button/animated_action_button.dart';
-import 'input_plate_service.dart';
 import '../../states/adjustment/adjustment_state.dart';
 import '../../states/status/status_state.dart';
-import '../../states/user/user_state.dart';
 import '../../states/area/area_state.dart';
 
 import 'input_plate_controller.dart';
@@ -94,64 +91,6 @@ class _Input3DigitScreenState extends State<Input3DigitScreen> {
         },
       ),
     );
-  }
-
-  Future<void> _handleAction() async {
-    final plateNumber = controller.buildPlateNumber();
-    final area = context.read<AreaState>().currentArea;
-    final userName = context.read<UserState>().name;
-    final adjustmentList = context.read<AdjustmentState>().adjustments;
-
-    if (adjustmentList.isNotEmpty && controller.selectedAdjustment == null) {
-      showFailedSnackbar(context, '정산 유형을 선택해주세요');
-      return;
-    }
-
-    setState(() => controller.isLoading = true);
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
-    );
-
-    try {
-      final uploaded = await InputPlateService.uploadCapturedImages(
-        controller.capturedImages,
-        plateNumber,
-        area,
-        userName,
-      );
-
-      final wasSuccessful = await InputPlateService.savePlateEntry(
-        context: context,
-        plateNumber: plateNumber,
-        location: controller.locationController.text,
-        isLocationSelected: controller.isLocationSelected,
-        imageUrls: uploaded,
-        selectedAdjustment: controller.selectedAdjustment,
-        selectedStatuses: controller.selectedStatuses,
-        basicStandard: controller.selectedBasicStandard,
-        basicAmount: controller.selectedBasicAmount,
-        addStandard: controller.selectedAddStandard,
-        addAmount: controller.selectedAddAmount,
-        region: controller.dropdownValue,
-      );
-
-      if (mounted) {
-        Navigator.of(context).pop(); // 로딩 종료
-        if (wasSuccessful) {
-          showSuccessSnackbar(context, '차량 정보 등록 완료');
-          setState(() => controller.resetForm());
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        Navigator.of(context).pop();
-        showFailedSnackbar(context, '등록 실패: ${e.toString()}');
-      }
-    } finally {
-      if (mounted) setState(() => controller.isLoading = false);
-    }
   }
 
   @override
@@ -249,9 +188,7 @@ class _Input3DigitScreenState extends State<Input3DigitScreen> {
                   child: AnimatedParkingButton(
                     isLocationSelected: controller.isLocationSelected,
                     onPressed: controller.isLocationSelected
-                        ? () {
-                            setState(() => controller.clearLocation());
-                          }
+                        ? () => setState(() => controller.clearLocation())
                         : _selectParkingLocation,
                   ),
                 ),
@@ -261,7 +198,7 @@ class _Input3DigitScreenState extends State<Input3DigitScreen> {
             AnimatedActionButton(
               isLoading: controller.isLoading,
               isLocationSelected: controller.isLocationSelected,
-              onPressed: _handleAction,
+              onPressed: () => controller.handleAction(context, mounted, () => setState(() {})),
             ),
           ],
         ),

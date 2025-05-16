@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+import 'package:provider/provider.dart';
+
+import '../../utils/snackbar_helper.dart';
+import 'input_plate_service.dart';
+import '../../states/adjustment/adjustment_state.dart';
+import '../../states/user/user_state.dart';
+import '../../states/area/area_state.dart';
 
 class InputPlateController {
-  // 입력 필드 컨트롤러
   final TextEditingController controller3digit = TextEditingController();
   final TextEditingController controller1digit = TextEditingController();
   final TextEditingController controller4digit = TextEditingController();
   final TextEditingController locationController = TextEditingController();
 
-  // 상태 값
   bool showKeypad = true;
   bool isLoading = false;
   bool isLocationSelected = false;
@@ -19,22 +24,32 @@ class InputPlateController {
   int selectedAddStandard = 0;
   int selectedAddAmount = 0;
 
-  // 상태 선택
   List<String> statuses = [];
   List<bool> isSelected = [];
   List<String> selectedStatuses = [];
 
-  // 지역 선택
   final List<String> regions = [
-    '전국', '강원', '경기', '경남', '경북', '광주', '대구',
-    '대전', '부산', '서울', '울산', '인천', '전남',
-    '전북', '제주', '충남', '충북'
+    '전국',
+    '강원',
+    '경기',
+    '경남',
+    '경북',
+    '광주',
+    '대구',
+    '대전',
+    '부산',
+    '서울',
+    '울산',
+    '인천',
+    '전남',
+    '전북',
+    '제주',
+    '충남',
+    '충북'
   ];
 
-  // 입력 포커스 관리
   late TextEditingController activeController;
 
-  // 이미지
   final List<XFile> capturedImages = [];
 
   InputPlateController() {
@@ -55,7 +70,6 @@ class InputPlateController {
   }
 
   void _handleInputChange() {
-    // 이 함수는 외부에서 필요 시 override하거나 콜백 처리
   }
 
   void setActiveController(TextEditingController controller) {
@@ -94,9 +108,7 @@ class InputPlateController {
   }
 
   bool isInputValid() {
-    return controller3digit.text.length == 3 &&
-        controller1digit.text.length == 1 &&
-        controller4digit.text.length == 4;
+    return controller3digit.text.length == 3 && controller1digit.text.length == 1 && controller4digit.text.length == 4;
   }
 
   void toggleStatus(int index) {
@@ -115,5 +127,65 @@ class InputPlateController {
     controller1digit.dispose();
     controller4digit.dispose();
     locationController.dispose();
+  }
+
+  Future<void> handleAction(BuildContext context, bool mounted, VoidCallback refreshUI) async {
+    final plateNumber = buildPlateNumber();
+    final area = context.read<AreaState>().currentArea;
+    final userName = context.read<UserState>().name;
+    final adjustmentList = context.read<AdjustmentState>().adjustments;
+
+    if (adjustmentList.isNotEmpty && selectedAdjustment == null) {
+      showFailedSnackbar(context, '정산 유형을 선택해주세요');
+      return;
+    }
+
+    isLoading = true;
+    refreshUI();
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final uploaded = await InputPlateService.uploadCapturedImages(
+        capturedImages,
+        plateNumber,
+        area,
+        userName,
+      );
+
+      final wasSuccessful = await InputPlateService.savePlateEntry(
+        context: context,
+        plateNumber: plateNumber,
+        location: locationController.text,
+        isLocationSelected: isLocationSelected,
+        imageUrls: uploaded,
+        selectedAdjustment: selectedAdjustment,
+        selectedStatuses: selectedStatuses,
+        basicStandard: selectedBasicStandard,
+        basicAmount: selectedBasicAmount,
+        addStandard: selectedAddStandard,
+        addAmount: selectedAddAmount,
+        region: dropdownValue,
+      );
+
+      if (mounted) {
+        Navigator.of(context).pop(); // 로딩 종료
+        if (wasSuccessful) {
+          showSuccessSnackbar(context, '차량 정보 등록 완료');
+          resetForm();
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop();
+        showFailedSnackbar(context, '등록 실패: ${e.toString()}');
+      }
+    } finally {
+      isLoading = false;
+      if (mounted) refreshUI();
+    }
   }
 }

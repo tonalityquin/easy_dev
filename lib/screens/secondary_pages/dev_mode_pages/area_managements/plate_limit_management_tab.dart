@@ -34,8 +34,7 @@ class _PlateLimitManagementTabState extends State<PlateLimitManagementTab> {
       final areaId = doc.id;
 
       newControllers[areaId] = {
-        for (final type in plateTypes)
-          type: TextEditingController(text: (data[type] ?? 6).toString()),
+        for (final type in plateTypes) type: TextEditingController(text: (data[type] ?? 6).toString()),
       };
     }
 
@@ -59,10 +58,7 @@ class _PlateLimitManagementTabState extends State<PlateLimitManagementTab> {
       // ✅ 하이픈 뒤쪽만 문서 ID로 사용
       final area = rawArea.contains('-') ? rawArea.split('-').last : rawArea;
 
-      await FirebaseFirestore.instance
-          .collection('area_limits')
-          .doc(area)
-          .set({type: value}, SetOptions(merge: true));
+      await FirebaseFirestore.instance.collection('area_limits').doc(area).set({type: value}, SetOptions(merge: true));
 
       // ✅ PlateState 재구독
       if (context.mounted) {
@@ -137,7 +133,7 @@ class _PlateLimitManagementTabState extends State<PlateLimitManagementTab> {
                       ],
                     ),
                   );
-                }).toList(),
+                }),
               ],
             ),
           ),
