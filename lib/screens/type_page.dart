@@ -8,7 +8,7 @@ import '../utils/app_colors.dart';
 import '../utils/snackbar_helper.dart';
 import '../states/page/page_state.dart';
 import '../states/page/page_info.dart';
-import '../screens/input_pages/input_3_digit.dart';
+import '../screens/input_pages/input_3_digit_screen.dart';
 import 'secondary_page.dart';
 import '../repositories/plate/plate_repository.dart';
 
@@ -79,7 +79,7 @@ class RefreshableBody extends StatelessWidget {
 
   void _handleDrag(BuildContext context, double velocity) {
     if (velocity > 0) {
-      Navigator.of(context).push(_slidePage(const Input3Digit(), fromLeft: true));
+      Navigator.of(context).push(_slidePage(const Input3DigitScreen(), fromLeft: true));
     } else if (velocity < 0) {
       Navigator.of(context).push(_slidePage(const SecondaryPage(), fromLeft: false));
     } else {

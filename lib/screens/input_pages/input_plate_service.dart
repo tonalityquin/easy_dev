@@ -1,14 +1,13 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../utils/gcs_uploader.dart';
-import '../states/plate/input_plate.dart';
-import '../states/area/area_state.dart';
-import '../states/user/user_state.dart';
+import '../../utils/gcs_uploader.dart';
+import '../../states/plate/input_plate.dart';
+import '../../states/area/area_state.dart';
+import '../../states/user/user_state.dart';
 import 'package:camera/camera.dart';
 
 class InputPlateService {
-  /// 이미지 업로드
   static Future<List<String>> uploadCapturedImages(
     List<XFile> images,
     String plateNumber,
@@ -40,7 +39,6 @@ class InputPlateService {
     return uploadedUrls;
   }
 
-  /// plate 저장 처리
   static Future<bool> savePlateEntry({
     required BuildContext context,
     required String plateNumber,
