@@ -4,16 +4,20 @@ class NumKeypad extends StatelessWidget {
   final TextEditingController controller;
   final int maxLength;
   final VoidCallback? onComplete;
+  final ValueChanged<bool>? onChangeDigitMode;
   final Color? backgroundColor;
   final TextStyle? textStyle;
+  final bool enableDigitModeSwitch; // ✅ 앞/뒷자리용 여부 구분
 
   const NumKeypad({
     super.key,
     required this.controller,
     required this.maxLength,
     this.onComplete,
+    this.onChangeDigitMode,
     this.backgroundColor,
     this.textStyle,
+    this.enableDigitModeSwitch = true, // ✅ 기본값: 앞자리용
   });
 
   @override
@@ -27,7 +31,9 @@ class NumKeypad extends StatelessWidget {
           _buildRow(['1', '2', '3']),
           _buildRow(['4', '5', '6']),
           _buildRow(['7', '8', '9']),
-          _buildRow(['두자리', '0', '세자리']),
+          enableDigitModeSwitch
+              ? _buildRow(['두자리', '0', '세자리']) // 앞자리: 자리 수 선택 포함
+              : _buildRow(['', '0', '']),          // 뒷자리: 숫자만
         ],
       ),
     );
@@ -75,15 +81,21 @@ class NumKeypad extends StatelessWidget {
   void _handleKeyTap(String key) {
     debugPrint('키 입력: $key, 현재 텍스트: ${controller.text}');
 
+    if (key == '두자리') {
+      onChangeDigitMode?.call(false); // 두자리 모드
+      return;
+    } else if (key == '세자리') {
+      onChangeDigitMode?.call(true); // 세자리 모드
+      return;
+    }
+
     if (controller.text.length < maxLength) {
       controller.text += key;
       debugPrint('숫자 추가 후 텍스트: ${controller.text}');
       if (controller.text.length == maxLength) {
         Future.microtask(() {
           debugPrint('onComplete 호출 - 입력 완료 상태: ${controller.text}');
-          if (onComplete != null) {
-            onComplete!();
-          }
+          onComplete?.call();
         });
       }
     }

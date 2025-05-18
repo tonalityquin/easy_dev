@@ -99,8 +99,14 @@ class _Input3DigitScreenState extends State<Input3DigitScreen> {
     if (active == controller.controller3digit) {
       return NumKeypad(
         controller: controller.controller3digit,
-        maxLength: 3,
+        maxLength: controller.isThreeDigit ? 3 : 2,
         onComplete: () => setState(() => controller.setActiveController(controller.controller1digit)),
+        onChangeDigitMode: (isThree) {
+          setState(() {
+            controller.setDigitMode(isThree);
+          });
+        },
+        enableDigitModeSwitch: true, // ✅ 앞자리 입력용
       );
     }
 
@@ -115,6 +121,7 @@ class _Input3DigitScreenState extends State<Input3DigitScreen> {
       controller: controller.controller4digit,
       maxLength: 4,
       onComplete: () => setState(() => controller.showKeypad = false),
+      enableDigitModeSwitch: false, // ✅ 뒷자리 입력용
     );
   }
 
@@ -152,9 +159,10 @@ class _Input3DigitScreenState extends State<Input3DigitScreen> {
               controller1digit: controller.controller1digit,
               controller4digit: controller.controller4digit,
               activeController: controller.activeController,
-              onKeypadStateChanged: (ctrl) {
+              onKeypadStateChanged: (_) {
                 setState(() {
-                  controller.setActiveController(ctrl);
+                  controller.clearInput(); // ✅ 모든 입력 필드 초기화
+                  controller.setActiveController(controller.controller3digit); // ✅ 앞자리부터 시작
                 });
               },
               onRegionChanged: (region) {
@@ -162,6 +170,7 @@ class _Input3DigitScreenState extends State<Input3DigitScreen> {
                   controller.dropdownValue = region;
                 });
               },
+              isThreeDigit: controller.isThreeDigit, // ✅ 자리 수 상태 전달
             ),
             const SizedBox(height: 32),
             ParkingLocationSection(locationController: controller.locationController),
