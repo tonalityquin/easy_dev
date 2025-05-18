@@ -19,9 +19,6 @@ class KorKeypadUtils {
   }
 
   static Widget buildKeyButton(String key, VoidCallback? onTap) {
-    final isReset = key == 'Reset';
-    final isErase = key == '지우기';
-
     return Expanded(
       child: Padding(
         padding: const EdgeInsets.all(4.0),
@@ -30,7 +27,7 @@ class KorKeypadUtils {
           child: InkWell(
             onTap: onTap,
             borderRadius: BorderRadius.circular(8.0),
-            splashColor: Colors.purple.withValues(alpha: 0.2),
+            splashColor: Colors.purple.withAlpha(50),
             child: Container(
               padding: const EdgeInsets.all(16.0),
               decoration: BoxDecoration(
@@ -41,14 +38,10 @@ class KorKeypadUtils {
               child: Center(
                 child: Text(
                   key,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
-                    color: isReset
-                        ? Colors.red
-                        : isErase
-                        ? Colors.orange
-                        : Colors.black,
+                    color: Colors.black, // 단일 색상 처리
                   ),
                 ),
               ),

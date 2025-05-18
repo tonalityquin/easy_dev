@@ -1,15 +1,15 @@
 import 'package:camera/camera.dart';
-import 'package:easydev/screens/modify_pages/sections/adjustment_section.dart';
-import 'package:easydev/screens/modify_pages/sections/parking_location_section.dart';
-import 'package:easydev/screens/modify_pages/sections/photo_section.dart';
-import 'package:easydev/screens/modify_pages/sections/plate_input_section.dart';
-import 'package:easydev/screens/modify_pages/sections/status_chip_section.dart';
+import 'package:easydev/screens/modify_pages/sections/adjustment_modify_section.dart';
+import 'package:easydev/screens/modify_pages/sections/parking_location_modify_section.dart';
+import 'package:easydev/screens/modify_pages/sections/photo_modify_section.dart';
+import 'package:easydev/screens/modify_pages/sections/plate_modify_section.dart';
+import 'package:easydev/screens/modify_pages/sections/status_chip_modify_section.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:easydev/states/adjustment/adjustment_state.dart';
 import 'package:easydev/states/status/status_state.dart';
-import 'package:easydev/widgets/keypad/num_keypad.dart';
-import 'package:easydev/widgets/keypad/kor_keypad.dart';
+import 'package:easydev/screens/input_pages/keypad/num_keypad.dart';
+import 'package:easydev/screens/input_pages/keypad/kor_keypad.dart';
 import 'package:easydev/widgets/navigation/bottom_navigation.dart';
 import 'package:easydev/states/area/area_state.dart';
 import 'package:easydev/utils/snackbar_helper.dart';
@@ -18,7 +18,7 @@ import 'package:easydev/utils/camera_helper.dart';
 import 'package:easydev/widgets/dialog/camera_preview_dialog.dart';
 import 'package:easydev/models/plate_model.dart';
 
-import 'package:easydev/services/modify_plate_service.dart';
+import 'package:easydev/screens/modify_pages/modify_plate_service.dart';
 
 import 'package:easydev/utils/button/animated_parking_button.dart';
 import 'package:easydev/utils/button/animated_photo_button.dart';
@@ -408,7 +408,7 @@ class _Modify3Digit extends State<Modify3Digit> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  PlateInputSection(
+                  PlateModifySection(
                     dropdownValue: dropdownValue,
                     regions: regions,
                     controller3digit: controller3digit,
@@ -420,14 +420,14 @@ class _Modify3Digit extends State<Modify3Digit> {
                     },
                   ),
                   const SizedBox(height: 32.0),
-                  ParkingLocationSection(locationController: locationController),
+                  ParkingLocationModifySection(locationController: locationController),
                   const SizedBox(height: 32.0),
-                  PhotoSection(
+                  PhotoModifySection(
                     capturedImages: _capturedImages,
                     existingImageUrls: _existingImageUrls,
                   ),
                   const SizedBox(height: 32.0),
-                  AdjustmentSection(
+                  AdjustmentModifySection(
                     collectionKey: widget.collectionKey,
                     selectedAdjustment: selectedAdjustment,
                     onChanged: (value) => setState(() => selectedAdjustment = value),
@@ -442,7 +442,7 @@ class _Modify3Digit extends State<Modify3Digit> {
                     },
                   ),
                   const SizedBox(height: 32.0),
-                  StatusChipSection(
+                  StatusChipModifySection(
                     statuses: statuses,
                     isSelected: isSelected,
                     onToggle: (index) {

@@ -47,9 +47,7 @@ class _KorKeypadState extends State<KorKeypad> {
     return Container(
       color: const Color(0xFFFef7FF),
       padding: const EdgeInsets.symmetric(vertical: 10.0),
-      child: activeSubLayout == null
-          ? _buildMainLayout()
-          : _buildActiveSubLayout(),
+      child: activeSubLayout == null ? _buildMainLayout() : _buildActiveSubLayout(),
     );
   }
 
@@ -59,7 +57,7 @@ class _KorKeypadState extends State<KorKeypad> {
         ['ㄱ', 'ㄴ', 'ㄷ'],
         ['ㄹ', 'ㅁ', 'ㅂ'],
         ['ㅅ', 'ㅇ', 'ㅈ'],
-        ['지우기', 'ㅎ', 'Reset'],
+        ['', 'ㅎ', ''],
       ],
       _handleMainKeyTap,
     );
@@ -96,10 +94,6 @@ class _KorKeypadState extends State<KorKeypad> {
     setState(() {
       if (keyToSubLayout.containsKey(key)) {
         activeSubLayout = keyToSubLayout[key];
-      } else if (key == '지우기') {
-        widget.controller.clear();
-      } else if (key == 'Reset' && widget.onReset != null) {
-        widget.onReset!();
       } else {
         _processKeyInput(key);
       }
@@ -143,9 +137,6 @@ Widget buildSubLayout(List<List<String>> keyRows, Function(String) onKeyTap) {
 }
 
 Widget buildKeyButton(String key, VoidCallback? onTap) {
-  final isReset = key == 'Reset';
-  final isErase = key == '지우기';
-
   return Expanded(
     child: Padding(
       padding: const EdgeInsets.all(4.0),
@@ -154,7 +145,7 @@ Widget buildKeyButton(String key, VoidCallback? onTap) {
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(8.0),
-          splashColor: Colors.purple.withValues(alpha: 0.2),
+          splashColor: Colors.purple.withAlpha(50),
           child: Container(
             padding: const EdgeInsets.all(16.0),
             decoration: BoxDecoration(
@@ -165,14 +156,10 @@ Widget buildKeyButton(String key, VoidCallback? onTap) {
             child: Center(
               child: Text(
                 key,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
-                  color: isReset
-                      ? Colors.red
-                      : isErase
-                      ? Colors.orange
-                      : Colors.black,
+                  color: Colors.black, // 단일 색상 처리
                 ),
               ),
             ),

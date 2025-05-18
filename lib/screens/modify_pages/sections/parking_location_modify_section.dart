@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:easydev/widgets/input_field/location_field.dart';
 
-class ParkingLocationSection extends StatelessWidget {
+class ParkingLocationModifySection extends StatelessWidget {
   final TextEditingController locationController; // locationController를 필수 매개변수로 받음
 
-  const ParkingLocationSection({
+  const ParkingLocationModifySection({
     super.key,
     required this.locationController, // locationController 매개변수를 필수로 받음
   });

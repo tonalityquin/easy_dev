@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
-import '../../../utils/keypad_utils.dart';
+import 'keypad_utils.dart';
 
-class Kor8 extends StatelessWidget {
+class Kor5 extends StatelessWidget {
   final Function(String) onKeyTap;
 
-  const Kor8({super.key, required this.onKeyTap});
+  const Kor5({super.key, required this.onKeyTap});
 
   @override
   Widget build(BuildContext context) {
     final keyRows = [
-      ['', '오', ''],
-      ['어', 'back', '아'],
-      ['임', '우', '육'],
+      ['', '모', ''],
+      ['머', 'back', '마'],
+      ['', '무', ''],
       ['', '', ''],
     ];
     return KorKeypadUtils.buildSubLayout(keyRows, onKeyTap);

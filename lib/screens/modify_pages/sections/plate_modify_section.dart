@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:easydev/widgets/input_field/modify_plate_field.dart';
 import 'package:easydev/widgets/dialog/region_picker_dialog.dart';
 
-class PlateInputSection extends StatelessWidget {
+class PlateModifySection extends StatelessWidget {
   final String dropdownValue;
   final List<String> regions;
   final TextEditingController controller3digit;
@@ -11,7 +11,7 @@ class PlateInputSection extends StatelessWidget {
   final bool isEditable;
   final ValueChanged<String> onRegionChanged;
 
-  const PlateInputSection({
+  const PlateModifySection({
     super.key,
     required this.dropdownValue,
     required this.regions,

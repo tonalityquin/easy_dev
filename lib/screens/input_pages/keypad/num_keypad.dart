@@ -4,7 +4,6 @@ class NumKeypad extends StatelessWidget {
   final TextEditingController controller;
   final int maxLength;
   final VoidCallback? onComplete;
-  final VoidCallback? onReset;
   final Color? backgroundColor;
   final TextStyle? textStyle;
 
@@ -13,7 +12,6 @@ class NumKeypad extends StatelessWidget {
     required this.controller,
     required this.maxLength,
     this.onComplete,
-    this.onReset,
     this.backgroundColor,
     this.textStyle,
   });
@@ -29,7 +27,7 @@ class NumKeypad extends StatelessWidget {
           _buildRow(['1', '2', '3']),
           _buildRow(['4', '5', '6']),
           _buildRow(['7', '8', '9']),
-          _buildRow(['지우기', '0', 'Reset']),
+          _buildRow(['', '0', '']), // '지우기' 및 'Reset' 제거됨
         ],
       ),
     );
@@ -43,18 +41,15 @@ class NumKeypad extends StatelessWidget {
   }
 
   Widget _buildKeyButton(String key) {
-    final isReset = key == 'Reset';
-    final isErase = key == '지우기';
-
     return Expanded(
       child: Padding(
         padding: const EdgeInsets.all(4.0),
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: () => _handleKeyTap(key),
+            onTap: key.isNotEmpty ? () => _handleKeyTap(key) : null,
             borderRadius: BorderRadius.circular(8.0),
-            splashColor: Colors.purple.withValues(alpha: 0.2),
+            splashColor: Colors.purple.withAlpha(50),
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 16.0),
               decoration: BoxDecoration(
@@ -67,13 +62,7 @@ class NumKeypad extends StatelessWidget {
                   key,
                   style: (textStyle ??
                       const TextStyle(fontSize: 20, fontWeight: FontWeight.bold))
-                      .copyWith(
-                    color: isReset
-                        ? Colors.red
-                        : isErase
-                        ? Colors.orange
-                        : Colors.black,
-                  ),
+                      .copyWith(color: Colors.black),
                 ),
               ),
             ),
@@ -86,15 +75,7 @@ class NumKeypad extends StatelessWidget {
   void _handleKeyTap(String key) {
     debugPrint('키 입력: $key, 현재 텍스트: ${controller.text}');
 
-    if (key == '지우기') {
-      if (controller.text.isNotEmpty) {
-        controller.text = controller.text.substring(0, controller.text.length - 1);
-        debugPrint('지우기: ${controller.text}');
-      }
-    } else if (key == 'Reset') {
-      debugPrint('Reset 호출');
-      if (onReset != null) onReset!();
-    } else if (controller.text.length < maxLength) {
+    if (controller.text.length < maxLength) {
       controller.text += key;
       debugPrint('숫자 추가 후 텍스트: ${controller.text}');
       if (controller.text.length == maxLength) {

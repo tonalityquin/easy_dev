@@ -5,14 +5,14 @@ import 'package:easydev/models/adjustment_model.dart';
 import 'package:easydev/utils/button/custom_adjustment_dropdown.dart';
 import 'package:easydev/enums/plate_type.dart';
 
-class AdjustmentSection extends StatelessWidget {
+class AdjustmentModifySection extends StatelessWidget {
   final PlateType collectionKey;
   final String? selectedAdjustment;
   final ValueChanged<String?> onChanged;
   final Future<bool> Function() onRefresh;
   final ValueChanged<AdjustmentModel> onAutoFill;
 
-  const AdjustmentSection({
+  const AdjustmentModifySection({
     super.key,
     required this.collectionKey,
     required this.selectedAdjustment,

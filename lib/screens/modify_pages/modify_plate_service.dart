@@ -3,13 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:camera/camera.dart';
 
-import '../states/plate/modify_plate.dart';
-import '../states/area/area_state.dart';
-import '../states/user/user_state.dart';
-import '../utils/gcs_uploader.dart';
-import '../enums/plate_type.dart';
-import '../models/plate_model.dart';
-import '../models/plate_log_model.dart';
+import '../../states/plate/modify_plate.dart';
+import '../../states/area/area_state.dart';
+import '../../states/user/user_state.dart';
+import '../../utils/gcs_uploader.dart';
+import '../../enums/plate_type.dart';
+import '../../models/plate_model.dart';
+import '../../models/plate_log_model.dart';
 
 class ModifyPlateService {
   final BuildContext context;

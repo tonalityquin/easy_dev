@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../widgets/keypad/num_keypad.dart';
-import '../../widgets/keypad/kor_keypad.dart';
+import 'keypad/num_keypad.dart';
+import 'keypad/kor_keypad.dart';
 import '../../widgets/navigation/bottom_navigation.dart';
 import '../../widgets/dialog/parking_location_dialog.dart';
 import '../../widgets/dialog/camera_preview_dialog.dart';
@@ -93,6 +93,37 @@ class _Input3DigitScreenState extends State<Input3DigitScreen> {
     );
   }
 
+  Widget _buildKeypad() {
+    final active = controller.activeController;
+
+    if (active == controller.controller3digit) {
+      return NumKeypad(
+        controller: controller.controller3digit,
+        maxLength: 3,
+        onComplete: () => setState(() => controller.setActiveController(controller.controller1digit)),
+      );
+    }
+
+    if (active == controller.controller1digit) {
+      return KorKeypad(
+        controller: controller.controller1digit,
+        onComplete: () => setState(() => controller.setActiveController(controller.controller4digit)),
+      );
+    }
+
+    return NumKeypad(
+      controller: controller.controller4digit,
+      maxLength: 4,
+      onComplete: () => setState(() => controller.showKeypad = false),
+    );
+  }
+
+  VoidCallback _buildLocationAction() {
+    return controller.isLocationSelected
+        ? () => setState(() => controller.clearLocation())
+        : _selectParkingLocation;
+  }
+
   @override
   void dispose() {
     controller.dispose();
@@ -104,7 +135,6 @@ class _Input3DigitScreenState extends State<Input3DigitScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('번호 등록'),
         centerTitle: true,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
@@ -157,22 +187,7 @@ class _Input3DigitScreenState extends State<Input3DigitScreen> {
       ),
       bottomNavigationBar: BottomNavigation(
         showKeypad: controller.showKeypad,
-        keypad: controller.activeController == controller.controller3digit
-            ? NumKeypad(
-                controller: controller.controller3digit,
-                maxLength: 3,
-                onComplete: () => setState(() => controller.setActiveController(controller.controller1digit)),
-              )
-            : controller.activeController == controller.controller1digit
-                ? KorKeypad(
-                    controller: controller.controller1digit,
-                    onComplete: () => setState(() => controller.setActiveController(controller.controller4digit)),
-                  )
-                : NumKeypad(
-                    controller: controller.controller4digit,
-                    maxLength: 4,
-                    onComplete: () => setState(() => controller.showKeypad = false),
-                  ),
+        keypad: _buildKeypad(),
         actionButton: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -187,9 +202,7 @@ class _Input3DigitScreenState extends State<Input3DigitScreen> {
                 Expanded(
                   child: AnimatedParkingButton(
                     isLocationSelected: controller.isLocationSelected,
-                    onPressed: controller.isLocationSelected
-                        ? () => setState(() => controller.clearLocation())
-                        : _selectParkingLocation,
+                    onPressed: _buildLocationAction(),
                   ),
                 ),
               ],
