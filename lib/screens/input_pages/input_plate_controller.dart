@@ -13,6 +13,7 @@ class InputPlateController {
   final TextEditingController controller1digit = TextEditingController();
   final TextEditingController controller4digit = TextEditingController();
   final TextEditingController locationController = TextEditingController();
+  final TextEditingController customStatusController = TextEditingController(); // ✅ 추가 상태 입력용
 
   bool showKeypad = true;
   bool isLoading = false;
@@ -31,31 +32,10 @@ class InputPlateController {
   List<String> selectedStatuses = [];
 
   final List<String> regions = [
-    '전국',
-    '강원',
-    '경기',
-    '경남',
-    '경북',
-    '광주',
-    '대구',
-    '대전',
-    '부산',
-    '서울',
-    '울산',
-    '인천',
-    '전남',
-    '전북',
-    '제주',
-    '충남',
-    '충북',
-    '국기',
-    '대표',
-    '영사',
-    '외교',
-    '임시',
-    '준영',
-    '준외',
-    '협정'
+    '전국', '강원', '경기', '경남', '경북', '광주',
+    '대구', '대전', '부산', '서울', '울산', '인천',
+    '전남', '전북', '제주', '충남', '충북', '국기',
+    '대표', '영사', '외교', '임시', '준영', '준외', '협정',
   ];
 
   late TextEditingController activeController;
@@ -80,7 +60,7 @@ class InputPlateController {
   }
 
   void _handleInputChange() {
-    // 추후 입력 검증, 포맷 변경에 활용 가능
+    // 입력 검증이나 변환 로직에 사용 가능
   }
 
   void setActiveController(TextEditingController controller) {
@@ -117,6 +97,7 @@ class InputPlateController {
     selectedBasicAmount = 0;
     selectedAddStandard = 0;
     selectedAddAmount = 0;
+    customStatusController.clear(); // ✅ 수기 입력 필드 초기화
     isSelected = List.generate(statuses.length, (_) => false);
     isThreeDigit = true;
   }
@@ -126,9 +107,12 @@ class InputPlateController {
   }
 
   bool isInputValid() {
-    final validFront = isThreeDigit ? controller3digit.text.length == 3 : controller3digit.text.length == 2;
-
-    return validFront && controller1digit.text.length == 1 && controller4digit.text.length == 4;
+    final validFront = isThreeDigit
+        ? controller3digit.text.length == 3
+        : controller3digit.text.length == 2;
+    return validFront &&
+        controller1digit.text.length == 1 &&
+        controller4digit.text.length == 4;
   }
 
   void toggleStatus(int index) {
@@ -147,6 +131,7 @@ class InputPlateController {
     controller1digit.dispose();
     controller4digit.dispose();
     locationController.dispose();
+    customStatusController.dispose(); // ✅ 해제 추가
   }
 
   Future<void> handleAction(BuildContext context, bool mounted, VoidCallback refreshUI) async {
@@ -190,6 +175,7 @@ class InputPlateController {
         addStandard: selectedAddStandard,
         addAmount: selectedAddAmount,
         region: dropdownValue,
+        customStatus: customStatusController.text, // ✅ 실제 저장 요청에 메모 포함
       );
 
       if (mounted) {

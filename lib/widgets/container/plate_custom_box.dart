@@ -96,6 +96,12 @@ class PlateCustomBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ bottomLeft 부분 텍스트 조합
+    final combinedBottomLeftText = [
+      bottomLeftLeftText,
+      if (bottomLeftCenterText.isNotEmpty) bottomLeftCenterText
+    ].join(' ');
+
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
@@ -107,13 +113,13 @@ class PlateCustomBox extends StatelessWidget {
         transformAlignment: Alignment.center,
         transform: isSelected ? (Matrix4.identity()..scale(0.95)) : Matrix4.identity(),
         decoration: BoxDecoration(
-          color: backgroundColor ?? (isSelected ? Colors.blue.withValues(alpha: 0.2) : Colors.white),
+          color: backgroundColor ?? (isSelected ? Colors.blue.withOpacity(0.2) : Colors.white),
           border: Border.all(color: Colors.black, width: 2.0),
           borderRadius: BorderRadius.circular(10),
           boxShadow: [
             if (isSelected)
               BoxShadow(
-                color: Colors.blue.withValues(alpha: 0.3),
+                color: Colors.blue.withOpacity(0.3),
                 blurRadius: 10,
                 spreadRadius: 2,
               ),
@@ -147,7 +153,7 @@ class PlateCustomBox extends StatelessWidget {
                 ),
                 const Divider(height: 1.0, color: Colors.black),
                 buildRow(
-                  leftText: "$bottomLeftLeftText, $bottomLeftCenterText",
+                  leftText: combinedBottomLeftText, // ✅ 수정 적용
                   rightText: bottomRightText,
                   leftFlex: 7,
                   rightFlex: 3,

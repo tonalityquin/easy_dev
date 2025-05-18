@@ -30,7 +30,8 @@ class PlateFields {
   static const String lockedAtTimeInSeconds = 'lockedAtTimeInSeconds';
   static const String lockedFeeAmount = 'lockedFeeAmount';
   static const String updatedAt = 'updatedAt';
-  static const String paymentMethod = 'paymentMethod'; // ✅ 추가됨
+  static const String paymentMethod = 'paymentMethod';
+  static const String customStatus = 'customStatus'; // ✅ 추가됨
 }
 
 class PlateModel {
@@ -57,7 +58,8 @@ class PlateModel {
   final int? lockedAtTimeInSeconds;
   final int? lockedFeeAmount;
   final DateTime? updatedAt;
-  final String? paymentMethod; // ✅ 추가됨
+  final String? paymentMethod;
+  final String? customStatus; // ✅ 추가됨
 
   PlateModel({
     required this.id,
@@ -83,7 +85,8 @@ class PlateModel {
     this.lockedAtTimeInSeconds,
     this.lockedFeeAmount,
     this.updatedAt,
-    this.paymentMethod, // ✅ 추가됨
+    this.paymentMethod,
+    this.customStatus, // ✅ 추가됨
   });
 
   factory PlateModel.fromDocument(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -116,7 +119,8 @@ class PlateModel {
       lockedAtTimeInSeconds: parseInt(data[PlateFields.lockedAtTimeInSeconds]),
       lockedFeeAmount: parseInt(data[PlateFields.lockedFeeAmount]),
       updatedAt: (updatedTimestamp is Timestamp) ? updatedTimestamp.toDate() : null,
-      paymentMethod: data[PlateFields.paymentMethod], // ✅ 추가됨
+      paymentMethod: data[PlateFields.paymentMethod],
+      customStatus: data[PlateFields.customStatus], // ✅ 추가됨
     );
   }
 
@@ -147,9 +151,12 @@ class PlateModel {
       if (updatedAt != null)
         PlateFields.updatedAt: Timestamp.fromDate(updatedAt!),
       if (paymentMethod != null)
-        PlateFields.paymentMethod: paymentMethod, // ✅ 추가됨
+        PlateFields.paymentMethod: paymentMethod,
+      if (customStatus != null)
+        PlateFields.customStatus: customStatus, // ✅ 추가됨
     };
   }
+
   Map<String, dynamic> diff(PlateModel other) {
     final changes = <String, dynamic>{};
 
@@ -168,10 +175,12 @@ class PlateModel {
     if (lockedFeeAmount != other.lockedFeeAmount) {
       changes['lockedFeeAmount'] = {'before': lockedFeeAmount, 'after': other.lockedFeeAmount};
     }
+    if (customStatus != other.customStatus) {
+      changes['customStatus'] = {'before': customStatus, 'after': other.customStatus}; // ✅ 추가됨
+    }
 
     return changes;
   }
-
 
   PlateModel copyWith({
     String? id,
@@ -197,7 +206,8 @@ class PlateModel {
     int? lockedAtTimeInSeconds,
     int? lockedFeeAmount,
     DateTime? updatedAt,
-    String? paymentMethod, // ✅ 추가됨
+    String? paymentMethod,
+    String? customStatus, // ✅ 추가됨
   }) {
     return PlateModel(
       id: id ?? this.id,
@@ -223,7 +233,8 @@ class PlateModel {
       lockedAtTimeInSeconds: lockedAtTimeInSeconds ?? this.lockedAtTimeInSeconds,
       lockedFeeAmount: lockedFeeAmount ?? this.lockedFeeAmount,
       updatedAt: updatedAt ?? this.updatedAt,
-      paymentMethod: paymentMethod ?? this.paymentMethod, // ✅ 추가됨
+      paymentMethod: paymentMethod ?? this.paymentMethod,
+      customStatus: customStatus ?? this.customStatus, // ✅ 추가됨
     );
   }
 

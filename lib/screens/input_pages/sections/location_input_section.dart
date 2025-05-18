@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../../widgets/input_field/location_field.dart';
 
-class ParkingLocationSection extends StatelessWidget {
+class LocationInputSection extends StatelessWidget {
   final TextEditingController locationController;
 
-  const ParkingLocationSection({
+  const LocationInputSection({
     super.key,
     required this.locationController,
   });

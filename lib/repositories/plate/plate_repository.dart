@@ -50,8 +50,10 @@ abstract class PlateRepository {
     int? lockedAtTimeInSeconds,
     int? lockedFeeAmount,
     DateTime? endTime,
-    String? paymentMethod, // ✅ 추가
+    String? paymentMethod,
+    String? customStatus,
   });
+
 
   Future<List<String>> getAvailableLocations(String area);
 

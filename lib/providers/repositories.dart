@@ -48,8 +48,10 @@ class DummyPlateRepository implements PlateRepository {
     int? lockedFeeAmount,
     DateTime? endTime,
     String? paymentMethod,
+    String? customStatus,
   }) =>
       throw UnimplementedError();
+
 
   @override
   Future<void> deletePlate(String documentId) => throw UnimplementedError();

@@ -134,6 +134,13 @@ class FirestorePlateRepository implements PlateRepository {
     return PlateModel.fromDocument(doc);
   }
 
+  String _mergeCustomStatus(String prev, String current) {
+    final prevSet = prev.split(',').map((e) => e.trim()).toSet();
+    final currentSet = current.split(',').map((e) => e.trim()).toSet();
+    final mergedSet = {...prevSet, ...currentSet}..removeWhere((e) => e.isEmpty);
+    return mergedSet.join(', ');
+  }
+
   @override
   Future<void> addRequestOrCompleted({
     required String plateNumber,
@@ -153,7 +160,8 @@ class FirestorePlateRepository implements PlateRepository {
     int? lockedAtTimeInSeconds,
     int? lockedFeeAmount,
     DateTime? endTime,
-    String? paymentMethod, // ✅ 추가됨
+    String? paymentMethod,
+    String? customStatus,
   }) async {
     final documentId = '${plateNumber}_$area';
 
@@ -189,7 +197,6 @@ class FirestorePlateRepository implements PlateRepository {
     final plateFourDigit = plateNumber.length >= 4 ? plateNumber.substring(plateNumber.length - 4) : plateNumber;
     final bool effectiveIsLockedFee = isLockedFee || (adjustmentType == null || adjustmentType.trim().isEmpty);
 
-
     final plate = PlateModel(
       id: documentId,
       plateNumber: plateNumber,
@@ -210,14 +217,43 @@ class FirestorePlateRepository implements PlateRepository {
       imageUrls: imageUrls,
       isSelected: false,
       selectedBy: null,
-      isLockedFee: effectiveIsLockedFee, // ✅ 수정된 부분
+      isLockedFee: effectiveIsLockedFee,
       lockedAtTimeInSeconds: lockedAtTimeInSeconds,
       lockedFeeAmount: lockedFeeAmount,
-      paymentMethod: paymentMethod, // ✅ 반영
+      paymentMethod: paymentMethod,
+      customStatus: customStatus,
     );
 
     dev.log('🔥 저장할 PlateModel: ${plate.toMap()}');
     await addOrUpdatePlate(documentId, plate);
+
+    if (customStatus != null && customStatus.trim().isNotEmpty) {
+      final statusDocRef = _firestore.collection('plate_status').doc(documentId);
+      final existingStatusDoc = await statusDocRef.get();
+
+      final expireAt = Timestamp.fromDate(
+        DateTime.now().add(const Duration(days: 30)),
+      );
+
+      if (existingStatusDoc.exists) {
+        final prev = existingStatusDoc.data()?['customStatus'] ?? '';
+        final merged = _mergeCustomStatus(prev, customStatus);
+
+        await statusDocRef.set({
+          'customStatus': merged,
+          'updatedAt': Timestamp.now(),
+          'createdBy': userName,
+          'expireAt': expireAt,
+        }, SetOptions(merge: true));
+      } else {
+        await statusDocRef.set({
+          'customStatus': customStatus,
+          'updatedAt': Timestamp.now(),
+          'createdBy': userName,
+          'expireAt': expireAt,
+        });
+      }
+    }
   }
 
   @override

@@ -15,11 +15,12 @@ import '../../states/status/status_state.dart';
 import '../../states/area/area_state.dart';
 
 import 'input_plate_controller.dart';
-import 'sections/adjustment_section.dart';
-import 'sections/parking_location_section.dart';
-import 'sections/photo_section.dart';
+import 'sections/adjustment_input_section.dart';
+import 'sections/location_input_section.dart';
+import 'sections/photo_input_section.dart';
 import 'sections/plate_input_section.dart';
 import 'sections/car_status_section.dart';
+import 'custom_status_dialog.dart'; // ✅ 다이얼로그 import
 
 class InputPlateScreen extends StatefulWidget {
   const InputPlateScreen({super.key});
@@ -37,6 +38,16 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     super.initState();
     _cameraHelper = CameraHelper();
     _cameraHelper.initializeCamera().then((_) => setState(() {}));
+
+    // ✅ customStatus 조회용 4자리 입력 리스너 추가
+    controller.controller4digit.addListener(() async {
+      final text = controller.controller4digit.text;
+      if (text.length == 4 && controller.isInputValid()) {
+        final plateNumber = controller.buildPlateNumber();
+        final area = context.read<AreaState>().currentArea;
+        await showCustomStatusDialog(context, plateNumber, area);
+      }
+    });
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final adjustmentState = context.read<AdjustmentState>();
@@ -188,11 +199,11 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
               isThreeDigit: controller.isThreeDigit,
             ),
             const SizedBox(height: 32),
-            ParkingLocationSection(locationController: controller.locationController),
+            LocationInputSection(locationController: controller.locationController),
             const SizedBox(height: 32),
-            PhotoSection(capturedImages: controller.capturedImages),
+            PhotoInputSection(capturedImages: controller.capturedImages),
             const SizedBox(height: 32),
-            AdjustmentSection(
+            AdjustmentInputSection(
               selectedAdjustment: controller.selectedAdjustment,
               onChanged: (value) => setState(() => controller.selectedAdjustment = value),
             ),
@@ -206,6 +217,19 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                 });
               },
             ),
+            const SizedBox(height: 32),
+            const Text('추가 상태 메모 (최대 10자)', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            TextField(
+              controller: controller.customStatusController,
+              maxLength: 10,
+              decoration: InputDecoration(
+                hintText: '예: 뒷범퍼 손상',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              ),
+            ),
+            const SizedBox(height: 32),
           ],
         ),
       ),

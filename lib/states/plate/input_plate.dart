@@ -40,6 +40,7 @@ class InputPlate with ChangeNotifier {
     bool isLockedFee = false,
     int? lockedAtTimeInSeconds,
     int? lockedFeeAmount,
+    String? customStatus, // ✅ 추가됨
   }) async {
     final correctedLocation = location.isEmpty ? '미지정' : location;
     final plateType = isLocationSelected ? PlateType.parkingCompleted : PlateType.parkingRequests;
@@ -69,6 +70,7 @@ class InputPlate with ChangeNotifier {
         isLockedFee: isLockedFee,
         lockedAtTimeInSeconds: lockedAtTimeInSeconds,
         lockedFeeAmount: lockedFeeAmount,
+        customStatus: customStatus, // ✅ 저장 요청에 포함
       );
 
       await _logState.saveLog(
@@ -91,7 +93,9 @@ class InputPlate with ChangeNotifier {
     } catch (error) {
       if (!context.mounted) return false;
 
-      final errorMessage = error.toString().contains('이미 등록된 번호판') ? '이미 등록된 번호판입니다: $plateNumber' : '오류 발생: $error';
+      final errorMessage = error.toString().contains('이미 등록된 번호판')
+          ? '이미 등록된 번호판입니다: $plateNumber'
+          : '오류 발생: $error';
 
       showFailedSnackbar(context, errorMessage);
       return false;
@@ -116,6 +120,7 @@ class InputPlate with ChangeNotifier {
     bool? isLockedFee,
     int? lockedAtTimeInSeconds,
     int? lockedFeeAmount,
+    String? customStatus, // ✅ 추가됨
   }) async {
     try {
       final oldDocumentId = '${plate.plateNumber}_${plate.area}';
@@ -136,7 +141,8 @@ class InputPlate with ChangeNotifier {
         isLockedFee: isLockedFee ?? plate.isLockedFee,
         lockedAtTimeInSeconds: lockedAtTimeInSeconds ?? plate.lockedAtTimeInSeconds,
         lockedFeeAmount: lockedFeeAmount ?? plate.lockedFeeAmount,
-        updatedAt: DateTime.now(), // ✅ 수정시 updatedAt 갱신
+        updatedAt: DateTime.now(),
+        customStatus: customStatus ?? plate.customStatus, // ✅ 반영
       );
 
       if (oldDocumentId != newDocumentId) {

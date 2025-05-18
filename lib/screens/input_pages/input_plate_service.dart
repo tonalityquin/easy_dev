@@ -9,11 +9,11 @@ import 'package:camera/camera.dart';
 
 class InputPlateService {
   static Future<List<String>> uploadCapturedImages(
-    List<XFile> images,
-    String plateNumber,
-    String area,
-    String userName,
-  ) async {
+      List<XFile> images,
+      String plateNumber,
+      String area,
+      String userName,
+      ) async {
     final uploader = GCSUploader();
     final List<String> uploadedUrls = [];
 
@@ -52,6 +52,7 @@ class InputPlateService {
     required int addStandard,
     required int addAmount,
     required String region,
+    String? customStatus,
   }) async {
     final inputState = context.read<InputPlate>();
     final areaState = context.read<AreaState>();
@@ -72,6 +73,7 @@ class InputPlateService {
       addAmount: addAmount,
       region: region,
       imageUrls: imageUrls,
+      customStatus: customStatus,
     );
   }
 }

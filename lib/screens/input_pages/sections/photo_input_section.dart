@@ -3,10 +3,10 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import '../../../utils/fullscreen_viewer.dart';
 
-class PhotoSection extends StatelessWidget {
+class PhotoInputSection extends StatelessWidget {
   final List<XFile> capturedImages;
 
-  const PhotoSection({
+  const PhotoInputSection({
     super.key,
     required this.capturedImages,
   });
