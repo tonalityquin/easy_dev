@@ -39,7 +39,7 @@ class InputPlateService {
     return uploadedUrls;
   }
 
-  static Future<bool> savePlateEntry({
+  static Future<bool> saveInputPlateEntry({
     required BuildContext context,
     required String plateNumber,
     required String location,

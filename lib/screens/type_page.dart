@@ -154,7 +154,6 @@ class PageBottomNavigation extends StatelessWidget {
             final pageInfo = pageState.pages[index];
             final bool isSelected = pageState.selectedIndex == index;
 
-            // 출차 완료만 selectedDate 반영
             return BottomNavigationBarItem(
               icon: FutureBuilder<int>(
                 future: plateRepository.getPlateCountByTypeAndArea(

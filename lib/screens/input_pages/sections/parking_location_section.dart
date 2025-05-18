@@ -1,5 +1,3 @@
-// 파일 위치: input_pages/sections/parking_location_section.dart
-
 import 'package:flutter/material.dart';
 import '../../../widgets/input_field/location_field.dart';
 

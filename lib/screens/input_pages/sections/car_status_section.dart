@@ -1,13 +1,11 @@
-// 파일 위치: input_pages/sections/status_chip_section.dart
-
 import 'package:flutter/material.dart';
 
-class StatusChipSection extends StatelessWidget {
+class CarStatusSection extends StatelessWidget {
   final List<String> statuses;
   final List<bool> isSelected;
   final ValueChanged<int> onToggle;
 
-  const StatusChipSection({
+  const CarStatusSection({
     super.key,
     required this.statuses,
     required this.isSelected,
@@ -24,15 +22,15 @@ class StatusChipSection extends StatelessWidget {
         statuses.isEmpty
             ? const Text('등록된 차량 상태가 없습니다.')
             : Wrap(
-          spacing: 8.0,
-          children: List.generate(statuses.length, (index) {
-            return ChoiceChip(
-              label: Text(statuses[index]),
-              selected: isSelected[index],
-              onSelected: (_) => onToggle(index),
-            );
-          }),
-        ),
+                spacing: 8.0,
+                children: List.generate(statuses.length, (index) {
+                  return ChoiceChip(
+                    label: Text(statuses[index]),
+                    selected: isSelected[index],
+                    onSelected: (_) => onToggle(index),
+                  );
+                }),
+              ),
       ],
     );
   }

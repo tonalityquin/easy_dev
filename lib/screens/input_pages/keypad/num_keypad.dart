@@ -7,7 +7,7 @@ class NumKeypad extends StatelessWidget {
   final ValueChanged<bool>? onChangeDigitMode;
   final Color? backgroundColor;
   final TextStyle? textStyle;
-  final bool enableDigitModeSwitch; // ✅ 앞/뒷자리용 여부 구분
+  final bool enableDigitModeSwitch;
 
   const NumKeypad({
     super.key,
@@ -17,7 +17,7 @@ class NumKeypad extends StatelessWidget {
     this.onChangeDigitMode,
     this.backgroundColor,
     this.textStyle,
-    this.enableDigitModeSwitch = true, // ✅ 기본값: 앞자리용
+    this.enableDigitModeSwitch = true,
   });
 
   @override
@@ -31,9 +31,7 @@ class NumKeypad extends StatelessWidget {
           _buildRow(['1', '2', '3']),
           _buildRow(['4', '5', '6']),
           _buildRow(['7', '8', '9']),
-          enableDigitModeSwitch
-              ? _buildRow(['두자리', '0', '세자리']) // 앞자리: 자리 수 선택 포함
-              : _buildRow(['', '0', '']),          // 뒷자리: 숫자만
+          enableDigitModeSwitch ? _buildRow(['두자리', '0', '세자리']) : _buildRow(['', '0', '']),
         ],
       ),
     );
@@ -66,8 +64,7 @@ class NumKeypad extends StatelessWidget {
               child: Center(
                 child: Text(
                   key,
-                  style: (textStyle ??
-                      const TextStyle(fontSize: 20, fontWeight: FontWeight.bold))
+                  style: (textStyle ?? const TextStyle(fontSize: 20, fontWeight: FontWeight.bold))
                       .copyWith(color: Colors.black),
                 ),
               ),
@@ -82,10 +79,10 @@ class NumKeypad extends StatelessWidget {
     debugPrint('키 입력: $key, 현재 텍스트: ${controller.text}');
 
     if (key == '두자리') {
-      onChangeDigitMode?.call(false); // 두자리 모드
+      onChangeDigitMode?.call(false);
       return;
     } else if (key == '세자리') {
-      onChangeDigitMode?.call(true); // 세자리 모드
+      onChangeDigitMode?.call(true);
       return;
     }
 

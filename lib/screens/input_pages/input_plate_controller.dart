@@ -9,13 +9,11 @@ import '../../states/user/user_state.dart';
 import '../../states/area/area_state.dart';
 
 class InputPlateController {
-  // 번호판 입력 컨트롤러
   final TextEditingController controller3digit = TextEditingController();
   final TextEditingController controller1digit = TextEditingController();
   final TextEditingController controller4digit = TextEditingController();
   final TextEditingController locationController = TextEditingController();
 
-  // 상태 변수
   bool showKeypad = true;
   bool isLoading = false;
   bool isLocationSelected = false;
@@ -26,15 +24,12 @@ class InputPlateController {
   int selectedAddStandard = 0;
   int selectedAddAmount = 0;
 
-  // ✅ 앞자리 자리수 설정 (true: 3자리, false: 2자리)
   bool isThreeDigit = true;
 
-  // 상태칩 관련
   List<String> statuses = [];
   List<bool> isSelected = [];
   List<String> selectedStatuses = [];
 
-  // 지역 리스트
   final List<String> regions = [
     '전국',
     '강원',
@@ -63,10 +58,8 @@ class InputPlateController {
     '협정'
   ];
 
-  // 현재 입력 중인 컨트롤러 추적
   late TextEditingController activeController;
 
-  // 촬영된 사진 리스트
   final List<XFile> capturedImages = [];
 
   InputPlateController() {
@@ -95,7 +88,6 @@ class InputPlateController {
     showKeypad = true;
   }
 
-  // ✅ 자리수 모드 변경: 자리수 전환 시 입력 초기화
   void setDigitMode(bool isThree) {
     isThreeDigit = isThree;
     controller3digit.clear();
@@ -126,15 +118,13 @@ class InputPlateController {
     selectedAddStandard = 0;
     selectedAddAmount = 0;
     isSelected = List.generate(statuses.length, (_) => false);
-    isThreeDigit = true; // ✅ 자리수 상태 초기화
+    isThreeDigit = true;
   }
 
-  // 번호판 완성 문자열 반환
   String buildPlateNumber() {
     return '${controller3digit.text}-${controller1digit.text}-${controller4digit.text}';
   }
 
-  // 입력 유효성 검사
   bool isInputValid() {
     final validFront = isThreeDigit ? controller3digit.text.length == 3 : controller3digit.text.length == 2;
 
@@ -187,7 +177,7 @@ class InputPlateController {
         userName,
       );
 
-      final wasSuccessful = await InputPlateService.savePlateEntry(
+      final wasSuccessful = await InputPlateService.saveInputPlateEntry(
         context: context,
         plateNumber: plateNumber,
         location: locationController.text,
@@ -203,7 +193,7 @@ class InputPlateController {
       );
 
       if (mounted) {
-        Navigator.of(context).pop(); // 로딩 종료
+        Navigator.of(context).pop();
         if (wasSuccessful) {
           showSuccessSnackbar(context, '차량 정보 등록 완료');
           resetForm();

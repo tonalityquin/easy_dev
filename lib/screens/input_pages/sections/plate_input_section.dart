@@ -11,7 +11,7 @@ class PlateInputSection extends StatelessWidget {
   final TextEditingController activeController;
   final ValueChanged<TextEditingController> onKeypadStateChanged;
   final ValueChanged<String> onRegionChanged;
-  final bool isThreeDigit; // ✅ 추가됨
+  final bool isThreeDigit;
 
   const PlateInputSection({
     super.key,
@@ -23,7 +23,7 @@ class PlateInputSection extends StatelessWidget {
     required this.activeController,
     required this.onKeypadStateChanged,
     required this.onRegionChanged,
-    required this.isThreeDigit, // ✅ 생성자에 추가
+    required this.isThreeDigit,
   });
 
   @override
@@ -62,7 +62,7 @@ class PlateInputSection extends StatelessWidget {
             const SizedBox(width: 16),
             Expanded(
               child: CommonPlateInput(
-                frontDigitCount: isThreeDigit ? 3 : 2, // ✅ 동적으로 자리 수 결정
+                frontDigitCount: isThreeDigit ? 3 : 2,
                 hasMiddleChar: true,
                 backDigitCount: 4,
                 frontController: controller3digit,

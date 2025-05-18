@@ -1,5 +1,3 @@
-// 파일 위치: input_pages/sections/photo_section.dart
-
 import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -25,32 +23,32 @@ class PhotoSection extends StatelessWidget {
           child: capturedImages.isEmpty
               ? const Center(child: Text('촬영된 사진 없음'))
               : ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: capturedImages.length,
-            itemBuilder: (context, index) {
-              final imageFile = capturedImages[index];
-              return GestureDetector(
-                onTap: () => showFullScreenImageViewer(context, capturedImages, index),
-                child: Padding(
-                  padding: const EdgeInsets.all(4.0),
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 400),
-                    transitionBuilder: (child, animation) => ScaleTransition(
-                      scale: CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
-                      child: FadeTransition(opacity: animation, child: child),
-                    ),
-                    child: Image.file(
-                      File(imageFile.path),
-                      key: ValueKey(imageFile.path),
-                      width: 100,
-                      height: 100,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
+                  scrollDirection: Axis.horizontal,
+                  itemCount: capturedImages.length,
+                  itemBuilder: (context, index) {
+                    final imageFile = capturedImages[index];
+                    return GestureDetector(
+                      onTap: () => showFullScreenImageViewer(context, capturedImages, index),
+                      child: Padding(
+                        padding: const EdgeInsets.all(4.0),
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 400),
+                          transitionBuilder: (child, animation) => ScaleTransition(
+                            scale: CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
+                            child: FadeTransition(opacity: animation, child: child),
+                          ),
+                          child: Image.file(
+                            File(imageFile.path),
+                            key: ValueKey(imageFile.path),
+                            width: 100,
+                            height: 100,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
-              );
-            },
-          ),
         ),
       ],
     );

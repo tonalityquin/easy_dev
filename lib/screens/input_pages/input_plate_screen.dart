@@ -19,7 +19,7 @@ import 'sections/adjustment_section.dart';
 import 'sections/parking_location_section.dart';
 import 'sections/photo_section.dart';
 import 'sections/plate_input_section.dart';
-import 'sections/status_chip_section.dart';
+import 'sections/car_status_section.dart';
 
 class InputPlateScreen extends StatefulWidget {
   const InputPlateScreen({super.key});
@@ -150,7 +150,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ✅ 자리 수 상태 표시 뱃지 추가
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
@@ -168,7 +167,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
               ],
             ),
             const SizedBox(height: 8),
-
             PlateInputSection(
               dropdownValue: controller.dropdownValue,
               regions: controller.regions,
@@ -199,7 +197,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
               onChanged: (value) => setState(() => controller.selectedAdjustment = value),
             ),
             const SizedBox(height: 32),
-            StatusChipSection(
+            CarStatusSection(
               statuses: controller.statuses,
               isSelected: controller.isSelected,
               onToggle: (index) {

@@ -1,5 +1,3 @@
-// 파일 위치: input_pages/sections/adjustment_section.dart
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../states/adjustment/adjustment_state.dart';
