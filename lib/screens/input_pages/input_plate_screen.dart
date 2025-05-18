@@ -21,14 +21,14 @@ import 'sections/photo_section.dart';
 import 'sections/plate_input_section.dart';
 import 'sections/status_chip_section.dart';
 
-class Input3DigitScreen extends StatefulWidget {
-  const Input3DigitScreen({super.key});
+class InputPlateScreen extends StatefulWidget {
+  const InputPlateScreen({super.key});
 
   @override
-  State<Input3DigitScreen> createState() => _Input3DigitScreenState();
+  State<InputPlateScreen> createState() => _InputPlateScreenState();
 }
 
-class _Input3DigitScreenState extends State<Input3DigitScreen> {
+class _InputPlateScreenState extends State<InputPlateScreen> {
   final controller = InputPlateController();
   late CameraHelper _cameraHelper;
 
@@ -106,7 +106,7 @@ class _Input3DigitScreenState extends State<Input3DigitScreen> {
             controller.setDigitMode(isThree);
           });
         },
-        enableDigitModeSwitch: true, // ✅ 앞자리 입력용
+        enableDigitModeSwitch: true,
       );
     }
 
@@ -121,14 +121,12 @@ class _Input3DigitScreenState extends State<Input3DigitScreen> {
       controller: controller.controller4digit,
       maxLength: 4,
       onComplete: () => setState(() => controller.showKeypad = false),
-      enableDigitModeSwitch: false, // ✅ 뒷자리 입력용
+      enableDigitModeSwitch: false,
     );
   }
 
   VoidCallback _buildLocationAction() {
-    return controller.isLocationSelected
-        ? () => setState(() => controller.clearLocation())
-        : _selectParkingLocation;
+    return controller.isLocationSelected ? () => setState(() => controller.clearLocation()) : _selectParkingLocation;
   }
 
   @override
@@ -152,6 +150,25 @@ class _Input3DigitScreenState extends State<Input3DigitScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ✅ 자리 수 상태 표시 뱃지 추가
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    controller.isThreeDigit ? '현재 앞자리: 세자리' : '현재 앞자리: 두자리',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+
             PlateInputSection(
               dropdownValue: controller.dropdownValue,
               regions: controller.regions,
@@ -161,8 +178,8 @@ class _Input3DigitScreenState extends State<Input3DigitScreen> {
               activeController: controller.activeController,
               onKeypadStateChanged: (_) {
                 setState(() {
-                  controller.clearInput(); // ✅ 모든 입력 필드 초기화
-                  controller.setActiveController(controller.controller3digit); // ✅ 앞자리부터 시작
+                  controller.clearInput();
+                  controller.setActiveController(controller.controller3digit);
                 });
               },
               onRegionChanged: (region) {
@@ -170,7 +187,7 @@ class _Input3DigitScreenState extends State<Input3DigitScreen> {
                   controller.dropdownValue = region;
                 });
               },
-              isThreeDigit: controller.isThreeDigit, // ✅ 자리 수 상태 전달
+              isThreeDigit: controller.isThreeDigit,
             ),
             const SizedBox(height: 32),
             ParkingLocationSection(locationController: controller.locationController),

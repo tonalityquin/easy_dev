@@ -36,9 +36,31 @@ class InputPlateController {
 
   // 지역 리스트
   final List<String> regions = [
-    '전국', '강원', '경기', '경남', '경북', '광주',
-    '대구', '대전', '부산', '서울', '울산', '인천',
-    '전남', '전북', '제주', '충남', '충북'
+    '전국',
+    '강원',
+    '경기',
+    '경남',
+    '경북',
+    '광주',
+    '대구',
+    '대전',
+    '부산',
+    '서울',
+    '울산',
+    '인천',
+    '전남',
+    '전북',
+    '제주',
+    '충남',
+    '충북',
+    '국기',
+    '대표',
+    '영사',
+    '외교',
+    '임시',
+    '준영',
+    '준외',
+    '협정'
   ];
 
   // 현재 입력 중인 컨트롤러 추적
@@ -114,13 +136,9 @@ class InputPlateController {
 
   // 입력 유효성 검사
   bool isInputValid() {
-    final validFront = isThreeDigit
-        ? controller3digit.text.length == 3
-        : controller3digit.text.length == 2;
+    final validFront = isThreeDigit ? controller3digit.text.length == 3 : controller3digit.text.length == 2;
 
-    return validFront &&
-        controller1digit.text.length == 1 &&
-        controller4digit.text.length == 4;
+    return validFront && controller1digit.text.length == 1 && controller4digit.text.length == 4;
   }
 
   void toggleStatus(int index) {

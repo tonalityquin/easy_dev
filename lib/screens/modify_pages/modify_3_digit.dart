@@ -58,7 +58,15 @@ class _Modify3Digit extends State<Modify3Digit> {
     '전북',
     '제주',
     '충남',
-    '충북'
+    '충북',
+    '국기',
+    '대표',
+    '영사',
+    '외교',
+    '임시',
+    '준영',
+    '준외',
+    '협정'
   ];
   String dropdownValue = '전국'; // ✅ 드롭다운 값 상태 변수
   List<String> selectedStatuses = [];

@@ -57,7 +57,7 @@ class _KorKeypadState extends State<KorKeypad> {
         ['ㄱ', 'ㄴ', 'ㄷ'],
         ['ㄹ', 'ㅁ', 'ㅂ'],
         ['ㅅ', 'ㅇ', 'ㅈ'],
-        ['', 'ㅎ', ''],
+        ['공란', 'ㅎ', '공란'],
       ],
       _handleMainKeyTap,
     );
@@ -94,6 +94,12 @@ class _KorKeypadState extends State<KorKeypad> {
     setState(() {
       if (keyToSubLayout.containsKey(key)) {
         activeSubLayout = keyToSubLayout[key];
+      } else if (key == '공란') {
+        if (widget.onComplete != null) {
+          Future.microtask(() {
+            widget.onComplete!();
+          });
+        }
       } else {
         _processKeyInput(key);
       }
