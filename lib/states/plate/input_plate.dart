@@ -93,9 +93,7 @@ class InputPlate with ChangeNotifier {
     } catch (error) {
       if (!context.mounted) return false;
 
-      final errorMessage = error.toString().contains('이미 등록된 번호판')
-          ? '이미 등록된 번호판입니다: $plateNumber'
-          : '오류 발생: $error';
+      final errorMessage = error.toString().contains('이미 등록된 번호판') ? '이미 등록된 번호판입니다: $plateNumber' : '오류 발생: $error';
 
       showFailedSnackbar(context, errorMessage);
       return false;

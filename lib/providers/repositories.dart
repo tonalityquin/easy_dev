@@ -52,7 +52,6 @@ class DummyPlateRepository implements PlateRepository {
   }) =>
       throw UnimplementedError();
 
-
   @override
   Future<void> deletePlate(String documentId) => throw UnimplementedError();
 

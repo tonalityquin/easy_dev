@@ -97,10 +97,8 @@ class PlateCustomBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // ✅ bottomLeft 부분 텍스트 조합
-    final combinedBottomLeftText = [
-      bottomLeftLeftText,
-      if (bottomLeftCenterText.isNotEmpty) bottomLeftCenterText
-    ].join(' ');
+    final combinedBottomLeftText =
+        [bottomLeftLeftText, if (bottomLeftCenterText.isNotEmpty) bottomLeftCenterText].join(' ');
 
     return GestureDetector(
       onTap: onTap,
@@ -153,7 +151,7 @@ class PlateCustomBox extends StatelessWidget {
                 ),
                 const Divider(height: 1.0, color: Colors.black),
                 buildRow(
-                  leftText: combinedBottomLeftText, // ✅ 수정 적용
+                  leftText: combinedBottomLeftText,
                   rightText: bottomRightText,
                   leftFlex: 7,
                   rightFlex: 3,

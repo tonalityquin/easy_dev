@@ -144,16 +144,11 @@ class PlateModel {
       PlateFields.addAmount: addAmount,
       PlateFields.region: region,
       PlateFields.isLockedFee: isLockedFee,
-      if (lockedAtTimeInSeconds != null)
-        PlateFields.lockedAtTimeInSeconds: lockedAtTimeInSeconds,
-      if (lockedFeeAmount != null)
-        PlateFields.lockedFeeAmount: lockedFeeAmount,
-      if (updatedAt != null)
-        PlateFields.updatedAt: Timestamp.fromDate(updatedAt!),
-      if (paymentMethod != null)
-        PlateFields.paymentMethod: paymentMethod,
-      if (customStatus != null)
-        PlateFields.customStatus: customStatus, // ✅ 추가됨
+      if (lockedAtTimeInSeconds != null) PlateFields.lockedAtTimeInSeconds: lockedAtTimeInSeconds,
+      if (lockedFeeAmount != null) PlateFields.lockedFeeAmount: lockedFeeAmount,
+      if (updatedAt != null) PlateFields.updatedAt: Timestamp.fromDate(updatedAt!),
+      if (paymentMethod != null) PlateFields.paymentMethod: paymentMethod,
+      if (customStatus != null) PlateFields.customStatus: customStatus, // ✅ 추가됨
     };
   }
 
@@ -239,8 +234,7 @@ class PlateModel {
   }
 
   @override
-  String toString() =>
-      'PlateModel(id: $id, plateNumber: $plateNumber, user: $userName, area: $area)';
+  String toString() => 'PlateModel(id: $id, plateNumber: $plateNumber, user: $userName, area: $area)';
 }
 
 extension PlateModelTypeExtension on PlateModel {

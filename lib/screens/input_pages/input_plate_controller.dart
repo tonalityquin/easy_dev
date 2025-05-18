@@ -32,10 +32,31 @@ class InputPlateController {
   List<String> selectedStatuses = [];
 
   final List<String> regions = [
-    '전국', '강원', '경기', '경남', '경북', '광주',
-    '대구', '대전', '부산', '서울', '울산', '인천',
-    '전남', '전북', '제주', '충남', '충북', '국기',
-    '대표', '영사', '외교', '임시', '준영', '준외', '협정',
+    '전국',
+    '강원',
+    '경기',
+    '경남',
+    '경북',
+    '광주',
+    '대구',
+    '대전',
+    '부산',
+    '서울',
+    '울산',
+    '인천',
+    '전남',
+    '전북',
+    '제주',
+    '충남',
+    '충북',
+    '국기',
+    '대표',
+    '영사',
+    '외교',
+    '임시',
+    '준영',
+    '준외',
+    '협정',
   ];
 
   late TextEditingController activeController;
@@ -107,12 +128,8 @@ class InputPlateController {
   }
 
   bool isInputValid() {
-    final validFront = isThreeDigit
-        ? controller3digit.text.length == 3
-        : controller3digit.text.length == 2;
-    return validFront &&
-        controller1digit.text.length == 1 &&
-        controller4digit.text.length == 4;
+    final validFront = isThreeDigit ? controller3digit.text.length == 3 : controller3digit.text.length == 2;
+    return validFront && controller1digit.text.length == 1 && controller4digit.text.length == 4;
   }
 
   void toggleStatus(int index) {

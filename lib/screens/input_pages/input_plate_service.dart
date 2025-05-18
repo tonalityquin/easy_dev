@@ -9,11 +9,11 @@ import 'package:camera/camera.dart';
 
 class InputPlateService {
   static Future<List<String>> uploadCapturedImages(
-      List<XFile> images,
-      String plateNumber,
-      String area,
-      String userName,
-      ) async {
+    List<XFile> images,
+    String plateNumber,
+    String area,
+    String userName,
+  ) async {
     final uploader = GCSUploader();
     final List<String> uploadedUrls = [];
 

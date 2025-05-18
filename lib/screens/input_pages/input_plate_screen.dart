@@ -20,7 +20,7 @@ import 'sections/location_input_section.dart';
 import 'sections/photo_input_section.dart';
 import 'sections/plate_input_section.dart';
 import 'sections/car_status_section.dart';
-import 'custom_status_dialog.dart'; // ✅ 다이얼로그 import
+import 'widgets/custom_status_dialog.dart';
 
 class InputPlateScreen extends StatefulWidget {
   const InputPlateScreen({super.key});

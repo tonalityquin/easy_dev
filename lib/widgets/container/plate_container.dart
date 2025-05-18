@@ -101,10 +101,9 @@ class PlateContainer extends StatelessWidget {
               midLeftText: item.location,
               midCenterText: displayUser,
               midRightText: CustomDateUtils.formatTimeForUI(item.requestTime),
-              bottomLeftLeftText: item.statusList.isNotEmpty
-                  ? item.statusList.join(", ")
-                  : "주의사항 없음",
-              bottomLeftCenterText: item.customStatus ?? '', // ✅ 수정된 부분
+              bottomLeftLeftText: item.statusList.isNotEmpty ? item.statusList.join(", ") : "주의사항 없음",
+              bottomLeftCenterText: item.customStatus ?? '',
+              // ✅ 수정된 부분
               bottomRightText: elapsedText,
               isSelected: isSelected,
               backgroundColor: backgroundColor,
@@ -117,7 +116,7 @@ class PlateContainer extends StatelessWidget {
                 }
 
                 final alreadySelected = data.any(
-                      (p) => p.isSelected && p.selectedBy == userName && p.id != item.id,
+                  (p) => p.isSelected && p.selectedBy == userName && p.id != item.id,
                 );
 
                 if (alreadySelected && !item.isSelected) {
