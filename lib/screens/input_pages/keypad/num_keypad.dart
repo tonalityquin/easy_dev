@@ -27,7 +27,7 @@ class NumKeypad extends StatelessWidget {
           _buildRow(['1', '2', '3']),
           _buildRow(['4', '5', '6']),
           _buildRow(['7', '8', '9']),
-          _buildRow(['', '0', '']), // '지우기' 및 'Reset' 제거됨
+          _buildRow(['두자리', '0', '세자리']),
         ],
       ),
     );
