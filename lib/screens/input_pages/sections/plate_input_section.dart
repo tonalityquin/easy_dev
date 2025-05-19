@@ -5,9 +5,9 @@ import '../../../widgets/dialog/region_picker_dialog.dart';
 class PlateInputSection extends StatelessWidget {
   final String dropdownValue;
   final List<String> regions;
-  final TextEditingController controller3digit;
-  final TextEditingController controller1digit;
-  final TextEditingController controller4digit;
+  final TextEditingController controllerFrontDigit;
+  final TextEditingController controllerMidDigit;
+  final TextEditingController controllerBackDigit;
   final TextEditingController activeController;
   final ValueChanged<TextEditingController> onKeypadStateChanged;
   final ValueChanged<String> onRegionChanged;
@@ -17,9 +17,9 @@ class PlateInputSection extends StatelessWidget {
     super.key,
     required this.dropdownValue,
     required this.regions,
-    required this.controller3digit,
-    required this.controller1digit,
-    required this.controller4digit,
+    required this.controllerFrontDigit,
+    required this.controllerMidDigit,
+    required this.controllerBackDigit,
     required this.activeController,
     required this.onKeypadStateChanged,
     required this.onRegionChanged,
@@ -65,9 +65,9 @@ class PlateInputSection extends StatelessWidget {
                 frontDigitCount: isThreeDigit ? 3 : 2,
                 hasMiddleChar: true,
                 backDigitCount: 4,
-                frontController: controller3digit,
-                middleController: controller1digit,
-                backController: controller4digit,
+                frontController: controllerFrontDigit,
+                middleController: controllerMidDigit,
+                backController: controllerBackDigit,
                 activeController: activeController,
                 onKeypadStateChanged: onKeypadStateChanged,
               ),

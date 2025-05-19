@@ -10,11 +10,11 @@ import '../../states/user/user_state.dart';
 import '../../states/area/area_state.dart';
 
 class InputPlateController {
-  final TextEditingController controller3digit = TextEditingController();
-  final TextEditingController controller1digit = TextEditingController();
-  final TextEditingController controller4digit = TextEditingController();
+  final TextEditingController controllerFrontDigit = TextEditingController();
+  final TextEditingController controllerMidDigit = TextEditingController();
+  final TextEditingController controllerBackDigit = TextEditingController();
   final TextEditingController locationController = TextEditingController();
-  final TextEditingController customStatusController = TextEditingController(); // ✅ 수기 메모 입력용
+  final TextEditingController customStatusController = TextEditingController();
 
   bool showKeypad = true;
   bool isLoading = false;
@@ -28,41 +28,61 @@ class InputPlateController {
 
   bool isThreeDigit = true;
 
-  String? fetchedCustomStatus; // ✅ Firestore에서 가져온 자동 메모 저장용
+  String? fetchedCustomStatus;
 
   List<String> statuses = [];
   List<bool> isSelected = [];
   List<String> selectedStatuses = [];
 
   final List<String> regions = [
-    '전국', '강원', '경기', '경남', '경북', '광주', '대구', '대전',
-    '부산', '서울', '울산', '인천', '전남', '전북', '제주',
-    '충남', '충북', '국기', '대표', '영사', '외교', '임시', '준영',
-    '준외', '협정',
+    '전국',
+    '강원',
+    '경기',
+    '경남',
+    '경북',
+    '광주',
+    '대구',
+    '대전',
+    '부산',
+    '서울',
+    '울산',
+    '인천',
+    '전남',
+    '전북',
+    '제주',
+    '충남',
+    '충북',
+    '국기',
+    '대표',
+    '영사',
+    '외교',
+    '임시',
+    '준영',
+    '준외',
+    '협정',
   ];
 
   late TextEditingController activeController;
   final List<XFile> capturedImages = [];
 
   InputPlateController() {
-    activeController = controller3digit;
+    activeController = controllerFrontDigit;
     _addInputListeners();
   }
 
   void _addInputListeners() {
-    controller3digit.addListener(_handleInputChange);
-    controller1digit.addListener(_handleInputChange);
-    controller4digit.addListener(_handleInputChange);
+    controllerFrontDigit.addListener(_handleInputChange);
+    controllerMidDigit.addListener(_handleInputChange);
+    controllerBackDigit.addListener(_handleInputChange);
   }
 
   void _removeInputListeners() {
-    controller3digit.removeListener(_handleInputChange);
-    controller1digit.removeListener(_handleInputChange);
-    controller4digit.removeListener(_handleInputChange);
+    controllerFrontDigit.removeListener(_handleInputChange);
+    controllerMidDigit.removeListener(_handleInputChange);
+    controllerBackDigit.removeListener(_handleInputChange);
   }
 
   void _handleInputChange() {
-    // 필요 시 입력 검증 등
   }
 
   void setActiveController(TextEditingController controller) {
@@ -70,17 +90,17 @@ class InputPlateController {
     showKeypad = true;
   }
 
-  void setDigitMode(bool isThree) {
+  void setFrontDigitMode(bool isThree) {
     isThreeDigit = isThree;
-    controller3digit.clear();
-    setActiveController(controller3digit);
+    controllerFrontDigit.clear();
+    setActiveController(controllerFrontDigit);
   }
 
   void clearInput() {
-    controller3digit.clear();
-    controller1digit.clear();
-    controller4digit.clear();
-    activeController = controller3digit;
+    controllerFrontDigit.clear();
+    controllerMidDigit.clear();
+    controllerBackDigit.clear();
+    activeController = controllerFrontDigit;
     showKeypad = true;
   }
 
@@ -99,23 +119,19 @@ class InputPlateController {
     selectedBasicAmount = 0;
     selectedAddStandard = 0;
     selectedAddAmount = 0;
-    customStatusController.clear(); // 수기 입력 메모
-    fetchedCustomStatus = null;     // ✅ 자동 가져온 메모 초기화
+    customStatusController.clear();
+    fetchedCustomStatus = null;
     isSelected = List.generate(statuses.length, (_) => false);
     isThreeDigit = true;
   }
 
   String buildPlateNumber() {
-    return '${controller3digit.text}-${controller1digit.text}-${controller4digit.text}';
+    return '${controllerFrontDigit.text}-${controllerMidDigit.text}-${controllerBackDigit.text}';
   }
 
   bool isInputValid() {
-    final validFront = isThreeDigit
-        ? controller3digit.text.length == 3
-        : controller3digit.text.length == 2;
-    return validFront &&
-        controller1digit.text.length == 1 &&
-        controller4digit.text.length == 4;
+    final validFront = isThreeDigit ? controllerFrontDigit.text.length == 3 : controllerFrontDigit.text.length == 2;
+    return validFront && controllerMidDigit.text.length == 1 && controllerBackDigit.text.length == 4;
   }
 
   void toggleStatus(int index) {
@@ -130,14 +146,13 @@ class InputPlateController {
 
   void dispose() {
     _removeInputListeners();
-    controller3digit.dispose();
-    controller1digit.dispose();
-    controller4digit.dispose();
+    controllerFrontDigit.dispose();
+    controllerMidDigit.dispose();
+    controllerBackDigit.dispose();
     locationController.dispose();
     customStatusController.dispose();
   }
 
-  /// ✅ Firestore plate_status 문서 삭제 메서드
   Future<void> deleteCustomStatusFromFirestore(BuildContext context) async {
     final plateNumber = buildPlateNumber();
     final area = context.read<AreaState>().currentArea;
@@ -194,9 +209,8 @@ class InputPlateController {
         addStandard: selectedAddStandard,
         addAmount: selectedAddAmount,
         region: dropdownValue,
-        customStatus: customStatusController.text.trim().isNotEmpty
-            ? customStatusController.text
-            : fetchedCustomStatus ?? '',
+        customStatus:
+            customStatusController.text.trim().isNotEmpty ? customStatusController.text : fetchedCustomStatus ?? '',
       );
 
       if (mounted) {

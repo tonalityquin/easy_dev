@@ -19,7 +19,7 @@ import 'sections/adjustment_input_section.dart';
 import 'sections/location_input_section.dart';
 import 'sections/photo_input_section.dart';
 import 'sections/plate_input_section.dart';
-import 'sections/car_status_section.dart';
+import 'sections/status_on_tap_section.dart';
 import 'widgets/custom_status_dialog.dart';
 
 class InputPlateScreen extends StatefulWidget {
@@ -39,9 +39,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     _cameraHelper = CameraHelper();
     _cameraHelper.initializeCamera().then((_) => setState(() {}));
 
-    // ✅ customStatus 조회용 4자리 입력 리스너 추가
-    controller.controller4digit.addListener(() async {
-      final text = controller.controller4digit.text;
+    controller.controllerBackDigit.addListener(() async {
+      final text = controller.controllerBackDigit.text;
       if (text.length == 4 && controller.isInputValid()) {
         final plateNumber = controller.buildPlateNumber();
         final area = context.read<AreaState>().currentArea;
@@ -58,12 +57,12 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final adjustmentState = context.read<AdjustmentState>();
       final statusState = context.read<StatusState>();
-      final area = context.read<AreaState>().currentArea;
+      final currentArea = context.read<AreaState>().currentArea;
 
       adjustmentState.syncWithAreaState();
 
       final areaStatuses = statusState.statuses
-          .where((status) => status.area == area && status.isActive)
+          .where((status) => status.area == currentArea && status.isActive)
           .map((status) => status.name)
           .toList();
 
@@ -113,29 +112,29 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   Widget _buildKeypad() {
     final active = controller.activeController;
 
-    if (active == controller.controller3digit) {
+    if (active == controller.controllerFrontDigit) {
       return NumKeypad(
-        controller: controller.controller3digit,
+        controller: controller.controllerFrontDigit,
         maxLength: controller.isThreeDigit ? 3 : 2,
-        onComplete: () => setState(() => controller.setActiveController(controller.controller1digit)),
+        onComplete: () => setState(() => controller.setActiveController(controller.controllerMidDigit)),
         onChangeDigitMode: (isThree) {
           setState(() {
-            controller.setDigitMode(isThree);
+            controller.setFrontDigitMode(isThree);
           });
         },
         enableDigitModeSwitch: true,
       );
     }
 
-    if (active == controller.controller1digit) {
+    if (active == controller.controllerMidDigit) {
       return KorKeypad(
-        controller: controller.controller1digit,
-        onComplete: () => setState(() => controller.setActiveController(controller.controller4digit)),
+        controller: controller.controllerMidDigit,
+        onComplete: () => setState(() => controller.setActiveController(controller.controllerBackDigit)),
       );
     }
 
     return NumKeypad(
-      controller: controller.controller4digit,
+      controller: controller.controllerBackDigit,
       maxLength: 4,
       onComplete: () => setState(() => controller.showKeypad = false),
       enableDigitModeSwitch: false,
@@ -187,14 +186,14 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
             PlateInputSection(
               dropdownValue: controller.dropdownValue,
               regions: controller.regions,
-              controller3digit: controller.controller3digit,
-              controller1digit: controller.controller1digit,
-              controller4digit: controller.controller4digit,
+              controllerFrontDigit: controller.controllerFrontDigit,
+              controllerMidDigit: controller.controllerMidDigit,
+              controllerBackDigit: controller.controllerBackDigit,
               activeController: controller.activeController,
               onKeypadStateChanged: (_) {
                 setState(() {
                   controller.clearInput();
-                  controller.setActiveController(controller.controller3digit);
+                  controller.setActiveController(controller.controllerFrontDigit);
                 });
               },
               onRegionChanged: (region) {
@@ -214,7 +213,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
               onChanged: (value) => setState(() => controller.selectedAdjustment = value),
             ),
             const SizedBox(height: 32),
-            CarStatusSection(
+            StatusOnTapSection(
               statuses: controller.statuses,
               isSelected: controller.isSelected,
               onToggle: (index) {
@@ -235,7 +234,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                 contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               ),
             ),
-            // ✅ readOnly로 customStatus 표시
             if (controller.fetchedCustomStatus != null) ...[
               const SizedBox(height: 24),
               const Text('자동 불러온 상태 메모', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -260,8 +258,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                   IconButton(
                     onPressed: () async {
                       try {
-                        await controller.deleteCustomStatusFromFirestore(context); // 🔥 실제 문서 삭제
-                        setState(() {}); // 상태 갱신
+                        await controller.deleteCustomStatusFromFirestore(context);
+                        setState(() {});
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('자동 메모가 삭제되었습니다')),
                         );
