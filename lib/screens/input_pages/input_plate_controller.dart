@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../utils/snackbar_helper.dart';
 import 'input_plate_service.dart';
@@ -134,6 +135,22 @@ class InputPlateController {
     controller4digit.dispose();
     locationController.dispose();
     customStatusController.dispose();
+  }
+
+  /// ✅ Firestore plate_status 문서 삭제 메서드
+  Future<void> deleteCustomStatusFromFirestore(BuildContext context) async {
+    final plateNumber = buildPlateNumber();
+    final area = context.read<AreaState>().currentArea;
+    final docId = '${plateNumber}_$area';
+
+    try {
+      final docRef = FirebaseFirestore.instance.collection('plate_status').doc(docId);
+      await docRef.delete();
+      fetchedCustomStatus = null;
+    } catch (e) {
+      debugPrint('❌ customStatus 삭제 실패: $e');
+      rethrow;
+    }
   }
 
   Future<void> handleAction(BuildContext context, bool mounted, VoidCallback refreshUI) async {

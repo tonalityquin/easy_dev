@@ -135,13 +135,6 @@ class FirestorePlateRepository implements PlateRepository {
     return PlateModel.fromDocument(doc);
   }
 
-  String _mergeCustomStatus(String prev, String current) {
-    final prevSet = prev.split(',').map((e) => e.trim()).toSet();
-    final currentSet = current.split(',').map((e) => e.trim()).toSet();
-    final mergedSet = {...prevSet, ...currentSet}..removeWhere((e) => e.isEmpty);
-    return mergedSet.join(', ');
-  }
-
   @override
   Future<void> addRequestOrCompleted({
     required String plateNumber,
@@ -179,6 +172,7 @@ class FirestorePlateRepository implements PlateRepository {
     if (adjustmentType != null) {
       try {
         final adjustmentDoc = await _firestore.collection('adjustment').doc('${adjustmentType}_$area').get();
+
         if (adjustmentDoc.exists) {
           final adjustmentData = adjustmentDoc.data()!;
           dev.log('🔥 Firestore에서 가져온 정산 데이터: $adjustmentData');
@@ -196,6 +190,7 @@ class FirestorePlateRepository implements PlateRepository {
     }
 
     final plateFourDigit = plateNumber.length >= 4 ? plateNumber.substring(plateNumber.length - 4) : plateNumber;
+
     final bool effectiveIsLockedFee = isLockedFee || (adjustmentType == null || adjustmentType.trim().isEmpty);
 
     final plate = PlateModel(
@@ -230,30 +225,15 @@ class FirestorePlateRepository implements PlateRepository {
 
     if (customStatus != null && customStatus.trim().isNotEmpty) {
       final statusDocRef = _firestore.collection('plate_status').doc(documentId);
-      final existingStatusDoc = await statusDocRef.get();
+      final expireAt = Timestamp.fromDate(DateTime.now().add(const Duration(days: 1)));
 
-      final expireAt = Timestamp.fromDate(
-        DateTime.now().add(const Duration(days: 1)),
-      );
-
-      if (existingStatusDoc.exists) {
-        final prev = existingStatusDoc.data()?['customStatus'] ?? '';
-        final merged = _mergeCustomStatus(prev, customStatus);
-
-        await statusDocRef.set({
-          'customStatus': merged,
-          'updatedAt': Timestamp.now(),
-          'createdBy': userName,
-          'expireAt': expireAt,
-        }, SetOptions(merge: true));
-      } else {
-        await statusDocRef.set({
-          'customStatus': customStatus,
-          'updatedAt': Timestamp.now(),
-          'createdBy': userName,
-          'expireAt': expireAt,
-        });
-      }
+      /// ✅ 항상 새 customStatus로 덮어씀 (병합 X)
+      await statusDocRef.set({
+        'customStatus': customStatus,
+        'updatedAt': Timestamp.now(),
+        'createdBy': userName,
+        'expireAt': expireAt,
+      });
     }
   }
 
@@ -283,14 +263,9 @@ class FirestorePlateRepository implements PlateRepository {
   @override
   Future<List<LocationModel>> getAvailableLocations(String area) async {
     try {
-      final querySnapshot = await _firestore
-          .collection('locations')
-          .where('area', isEqualTo: area)
-          .get();
+      final querySnapshot = await _firestore.collection('locations').where('area', isEqualTo: area).get();
 
-      return querySnapshot.docs
-          .map((doc) => LocationModel.fromMap(doc.id, doc.data()))
-          .toList();
+      return querySnapshot.docs.map((doc) => LocationModel.fromMap(doc.id, doc.data())).toList();
     } catch (e) {
       dev.log("🔥 Firestore 에러 (getAvailableLocations): $e", name: "Firestore");
       throw Exception('Firestore에서 사용 가능한 위치 목록을 가져오지 못했습니다: $e');
