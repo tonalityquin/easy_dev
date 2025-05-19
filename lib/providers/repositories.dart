@@ -130,6 +130,9 @@ class DummyLocationRepository implements LocationRepository {
 
   @override
   Future<void> toggleLocationSelection(String id, bool selected) => throw UnimplementedError();
+  @override
+  Future<void> addCompositeLocation(String parent, List<String> subs, String area) => throw UnimplementedError();
+
 }
 
 class DummyUserRepository implements UserRepository {

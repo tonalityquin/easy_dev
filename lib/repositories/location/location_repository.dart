@@ -5,4 +5,5 @@ abstract class LocationRepository {
   Future<void> addLocation(LocationModel location);
   Future<void> deleteLocations(List<String> ids);
   Future<void> toggleLocationSelection(String id, bool isSelected);
+  Future<void> addCompositeLocation(String parent, List<String> subs, String area);
 }

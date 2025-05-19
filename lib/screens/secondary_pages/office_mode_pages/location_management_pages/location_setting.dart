@@ -13,7 +13,7 @@ class _LocationSettingState extends State<LocationSetting> {
   final TextEditingController _locationController = TextEditingController(); // 단일 또는 상위
   final FocusNode _locationFocus = FocusNode();
 
-  List<TextEditingController> _subControllers = []; // 하위 구역 리스트
+  final List<TextEditingController> _subControllers = []; // 하위 구역 리스트
 
   String? _errorMessage;
   bool _isSingle = true; // 기본값: 단일 주차 구역

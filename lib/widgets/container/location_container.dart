@@ -5,47 +5,84 @@ class LocationContainer extends StatelessWidget {
   final bool isSelected;
   final VoidCallback onTap;
 
+  // 🔹 추가 필드: 구역 타입 및 상위 구역 이름
+  final String? type;   // 'single' 또는 'composite'
+  final String? parent;
+
   const LocationContainer({
     super.key,
     required this.location,
     required this.isSelected,
     required this.onTap,
+    this.type,
+    this.parent,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isComposite = type == 'composite';
+
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300), // ✅ 애니메이션 지속 시간
-        curve: Curves.easeInOut, // ✅ 부드러운 전환 애니메이션
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
         width: double.infinity,
         height: 80,
-        alignment: Alignment.center, // ✅ 중앙 기준으로 정렬
-        transformAlignment: Alignment.center, // ✅ 축소 시 중앙 기준 유지
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        alignment: Alignment.centerLeft,
+        transformAlignment: Alignment.center,
         transform: isSelected
-            ? (Matrix4.identity()..scale(0.95)) // ✅ 선택되면 95% 크기로 축소
+            ? (Matrix4.identity()..scale(0.97))
             : Matrix4.identity(),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.blue.withValues(alpha: 0.2) : Colors.white,
-          border: Border.all(color: Colors.black, width: 2.0),
-          borderRadius: BorderRadius.circular(8),
+          color: isComposite ? Colors.grey.shade100 : Colors.white,
+          border: Border.all(
+            color: isSelected ? Colors.blue : Colors.black87,
+            width: 2.0,
+          ),
+          borderRadius: BorderRadius.circular(12),
           boxShadow: [
             if (isSelected)
               BoxShadow(
-                color: Colors.blue.withValues(alpha: 0.3),
-                blurRadius: 10,
+                color: Colors.blue.withOpacity(0.3),
+                blurRadius: 8,
                 spreadRadius: 2,
               ),
           ],
         ),
-        child: Text(
-          location,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-            color: Colors.black,
-          ),
+        child: Row(
+          children: [
+            Icon(
+              isComposite ? Icons.layers : Icons.place,
+              color: isComposite ? Colors.blueAccent : Colors.grey,
+              size: 28,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    location,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  if (isComposite && parent != null)
+                    Text(
+                      '복합 주차 구역 (상위: $parent)',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
