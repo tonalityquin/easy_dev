@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../repositories/plate/plate_repository.dart';
 import '../../states/area/area_state.dart';
+import '../../models/location_model.dart';
 
 class ParkingLocationDialog extends StatelessWidget {
   final TextEditingController locationController;
@@ -27,7 +28,7 @@ class ParkingLocationDialog extends StatelessWidget {
             Text('주차 구역 선택', style: TextStyle(fontWeight: FontWeight.bold)),
           ],
         ),
-        content: FutureBuilder<List<String>>(
+        content: FutureBuilder<List<LocationModel>>(
           future: context.read<PlateRepository>().getAvailableLocations(currentArea),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
@@ -54,11 +55,20 @@ class ParkingLocationDialog extends StatelessWidget {
                 separatorBuilder: (_, __) => const Divider(height: 1),
                 itemBuilder: (context, index) {
                   final location = locations[index];
+                  final isComposite = location.type == 'composite';
+
+                  final displayName = isComposite
+                      ? '${location.parent} - ${location.locationName}'
+                      : location.locationName;
+
                   return ListTile(
-                    title: Text(location),
-                    leading: const Icon(Icons.local_parking),
+                    title: Text(displayName),
+                    leading: Icon(
+                      isComposite ? Icons.layers : Icons.place,
+                      color: isComposite ? Colors.blueAccent : Colors.grey,
+                    ),
                     onTap: () {
-                      onLocationSelected(location);
+                      onLocationSelected(displayName); // 전달도 수정된 이름으로
                       Navigator.pop(context);
                     },
                   );

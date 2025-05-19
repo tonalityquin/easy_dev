@@ -11,14 +11,13 @@ class FirestoreLocationRepository implements LocationRepository {
         .collection('locations')
         .where('area', isEqualTo: area)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-        .map((doc) => LocationModel.fromMap(doc.id, doc.data()))
-        .toList());
+        .map((snapshot) => snapshot.docs.map((doc) => LocationModel.fromMap(doc.id, doc.data())).toList());
   }
 
   @override
   Future<void> addLocation(LocationModel location) async {
-    final docRef = _firestore.collection('locations').doc(location.id);
+    final docId = '${location.id}_${location.area}';
+    final docRef = _firestore.collection('locations').doc(docId);
     await docRef.set(location.toMap());
   }
 
@@ -31,10 +30,7 @@ class FirestoreLocationRepository implements LocationRepository {
 
   @override
   Future<void> toggleLocationSelection(String id, bool isSelected) async {
-    await _firestore
-        .collection('locations')
-        .doc(id)
-        .update({'isSelected': isSelected});
+    await _firestore.collection('locations').doc(id).update({'isSelected': isSelected});
   }
 
   @override
@@ -42,7 +38,7 @@ class FirestoreLocationRepository implements LocationRepository {
     final now = FieldValue.serverTimestamp();
 
     for (final sub in subs) {
-      final id = '$parent-$sub'; // 복합 구역 ID는 고유하게 생성
+      final id = '$parent-$sub\_$area';
       await _firestore.collection('locations').doc(id).set({
         'id': id,
         'locationName': sub,

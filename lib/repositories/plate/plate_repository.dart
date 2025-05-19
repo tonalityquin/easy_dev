@@ -1,4 +1,5 @@
 import '../../enums/plate_type.dart';
+import '../../models/location_model.dart';
 import '../../models/plate_model.dart';
 
 abstract class PlateRepository {
@@ -55,7 +56,7 @@ abstract class PlateRepository {
   });
 
 
-  Future<List<String>> getAvailableLocations(String area);
+  Future<List<LocationModel>> getAvailableLocations(String area);
 
   Future<int> getPlateCountByType(PlateType type, {
     DateTime? selectedDate,

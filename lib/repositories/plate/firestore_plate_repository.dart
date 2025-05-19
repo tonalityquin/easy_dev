@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../enums/plate_type.dart';
+import '../../models/location_model.dart';
 import '../../models/plate_model.dart';
 import 'plate_repository.dart';
 import 'dart:developer' as dev;
@@ -280,10 +281,16 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
-  Future<List<String>> getAvailableLocations(String area) async {
+  Future<List<LocationModel>> getAvailableLocations(String area) async {
     try {
-      final querySnapshot = await _firestore.collection('locations').where('area', isEqualTo: area).get();
-      return querySnapshot.docs.map((doc) => doc['locationName'] as String).toList();
+      final querySnapshot = await _firestore
+          .collection('locations')
+          .where('area', isEqualTo: area)
+          .get();
+
+      return querySnapshot.docs
+          .map((doc) => LocationModel.fromMap(doc.id, doc.data()))
+          .toList();
     } catch (e) {
       dev.log("🔥 Firestore 에러 (getAvailableLocations): $e", name: "Firestore");
       throw Exception('Firestore에서 사용 가능한 위치 목록을 가져오지 못했습니다: $e');

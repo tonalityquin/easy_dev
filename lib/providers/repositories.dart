@@ -72,7 +72,7 @@ class DummyPlateRepository implements PlateRepository {
   Future<void> updatePlateStatus(String plateId, String status) => throw UnimplementedError();
 
   @override
-  Future<List<String>> getAvailableLocations(String area) => throw UnimplementedError();
+  Future<List<LocationModel>> getAvailableLocations(String area) => throw UnimplementedError();
 
   @override
   Stream<List<PlateModel>> getPlatesByTypeAndArea(
@@ -130,9 +130,9 @@ class DummyLocationRepository implements LocationRepository {
 
   @override
   Future<void> toggleLocationSelection(String id, bool selected) => throw UnimplementedError();
+
   @override
   Future<void> addCompositeLocation(String parent, List<String> subs, String area) => throw UnimplementedError();
-
 }
 
 class DummyUserRepository implements UserRepository {
