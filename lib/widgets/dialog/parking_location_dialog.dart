@@ -4,7 +4,7 @@ import '../../repositories/plate/plate_repository.dart';
 import '../../states/area/area_state.dart';
 import '../../models/location_model.dart';
 
-class ParkingLocationDialog extends StatelessWidget {
+class ParkingLocationDialog extends StatefulWidget {
   final TextEditingController locationController;
   final Function(String) onLocationSelected;
 
@@ -13,6 +13,13 @@ class ParkingLocationDialog extends StatelessWidget {
     required this.locationController,
     required this.onLocationSelected,
   });
+
+  @override
+  State<ParkingLocationDialog> createState() => _ParkingLocationDialogState();
+}
+
+class _ParkingLocationDialogState extends State<ParkingLocationDialog> {
+  String? selectedParent;
 
   @override
   Widget build(BuildContext context) {
@@ -46,35 +53,68 @@ class ParkingLocationDialog extends StatelessWidget {
             }
 
             final locations = snapshot.data!;
-            return SizedBox(
-              width: double.maxFinite,
-              height: 300,
-              child: ListView.separated(
-                shrinkWrap: true,
-                itemCount: locations.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
-                itemBuilder: (context, index) {
-                  final location = locations[index];
-                  final isComposite = location.type == 'composite';
+            final singles = locations.where((l) => l.type == 'single').toList();
+            final composites = locations.where((l) => l.type == 'composite').toList();
 
-                  final displayName = isComposite
-                      ? '${location.parent} - ${location.locationName}'
-                      : location.locationName;
+            if (selectedParent != null) {
+              // 하위 구역 선택 화면
+              final subLocations = composites
+                  .where((l) => l.parent == selectedParent)
+                  .toList();
 
-                  return ListTile(
-                    title: Text(displayName),
-                    leading: Icon(
-                      isComposite ? Icons.layers : Icons.place,
-                      color: isComposite ? Colors.blueAccent : Colors.grey,
-                    ),
-                    onTap: () {
-                      onLocationSelected(displayName); // 전달도 수정된 이름으로
-                      Navigator.pop(context);
-                    },
-                  );
-                },
-              ),
-            );
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.arrow_back),
+                    title: const Text('뒤로가기'),
+                    onTap: () => setState(() => selectedParent = null),
+                  ),
+                  const Divider(),
+                  ...subLocations.map((loc) {
+                    final displayName = '${loc.parent} - ${loc.locationName}';
+                    return ListTile(
+                      title: Text(displayName),
+                      leading: const Icon(Icons.subdirectory_arrow_right),
+                      onTap: () {
+                        widget.onLocationSelected(displayName);
+                        Navigator.pop(context);
+                      },
+                    );
+                  }),
+                ],
+              );
+            } else {
+              // 상위 구역 또는 단일 구역 선택 화면
+              final parentSet = composites.map((e) => e.parent).toSet().toList();
+              return SizedBox(
+                width: double.maxFinite,
+                height: 300,
+                child: ListView(
+                  children: [
+                    ...singles.map((loc) {
+                      return ListTile(
+                        title: Text(loc.locationName),
+                        leading: const Icon(Icons.place),
+                        onTap: () {
+                          widget.onLocationSelected(loc.locationName);
+                          Navigator.pop(context);
+                        },
+                      );
+                    }),
+                    const Divider(),
+                    ...parentSet.map((parent) {
+                      return ListTile(
+                        title: Text('복합 구역: $parent'),
+                        leading: const Icon(Icons.layers),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => setState(() => selectedParent = parent),
+                      );
+                    }),
+                  ],
+                ),
+              );
+            }
           },
         ),
       ),
@@ -91,7 +131,8 @@ class ScaleTransitionDialog extends StatefulWidget {
   State<ScaleTransitionDialog> createState() => _ScaleTransitionDialogState();
 }
 
-class _ScaleTransitionDialogState extends State<ScaleTransitionDialog> with SingleTickerProviderStateMixin {
+class _ScaleTransitionDialogState extends State<ScaleTransitionDialog>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
 
