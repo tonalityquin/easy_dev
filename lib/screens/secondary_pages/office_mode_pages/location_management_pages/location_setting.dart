@@ -14,6 +14,9 @@ class _LocationSettingState extends State<LocationSetting> {
   final FocusNode _locationFocus = FocusNode();
   String? _errorMessage;
 
+  // 주차 구역 유형 상태 (true: 단일, false: 복합)
+  bool _isSingle = true;
+
   @override
   void dispose() {
     _locationController.dispose();
@@ -40,6 +43,34 @@ class _LocationSettingState extends State<LocationSetting> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // 단일/복합 버튼
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ChoiceChip(
+                  label: const Text('단일 주차 구역'),
+                  selected: _isSingle,
+                  onSelected: (selected) {
+                    setState(() {
+                      _isSingle = true;
+                    });
+                  },
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: const Text('복합 주차 구역'),
+                  selected: !_isSingle,
+                  onSelected: (selected) {
+                    setState(() {
+                      _isSingle = false;
+                    });
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // 위치 입력 필드
             TextField(
               controller: _locationController,
               focusNode: _locationFocus,
@@ -52,12 +83,17 @@ class _LocationSettingState extends State<LocationSetting> {
               ),
             ),
             const SizedBox(height: 16),
+
+            // 에러 메시지
             if (_errorMessage != null)
               Text(
                 _errorMessage!,
                 style: const TextStyle(color: Colors.red),
               ),
+
             const Spacer(),
+
+            // 버튼 영역
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
