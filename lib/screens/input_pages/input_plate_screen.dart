@@ -45,7 +45,13 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       if (text.length == 4 && controller.isInputValid()) {
         final plateNumber = controller.buildPlateNumber();
         final area = context.read<AreaState>().currentArea;
-        await showCustomStatusDialog(context, plateNumber, area);
+        final customStatus = await showCustomStatusDialog(context, plateNumber, area);
+
+        if (customStatus != null && mounted) {
+          setState(() {
+            controller.fetchedCustomStatus = customStatus;
+          });
+        }
       }
     });
 
@@ -229,6 +235,23 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                 contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               ),
             ),
+            // ✅ readOnly로 customStatus 표시
+            if (controller.fetchedCustomStatus != null) ...[
+              const SizedBox(height: 24),
+              const Text('자동 불러온 상태 메모', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: TextEditingController(text: controller.fetchedCustomStatus),
+                readOnly: true,
+                maxLines: null,
+                style: const TextStyle(color: Colors.grey),
+                decoration: InputDecoration(
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  filled: true,
+                  fillColor: Colors.grey.shade100,
+                ),
+              ),
+            ],
             const SizedBox(height: 32),
           ],
         ),
@@ -242,9 +265,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
             Row(
               children: [
                 Expanded(
-                  child: AnimatedPhotoButton(
-                    onPressed: _showCameraPreviewDialog,
-                  ),
+                  child: AnimatedPhotoButton(onPressed: _showCameraPreviewDialog),
                 ),
                 const SizedBox(width: 10),
                 Expanded(

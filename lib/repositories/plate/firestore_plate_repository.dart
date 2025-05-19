@@ -233,7 +233,7 @@ class FirestorePlateRepository implements PlateRepository {
       final existingStatusDoc = await statusDocRef.get();
 
       final expireAt = Timestamp.fromDate(
-        DateTime.now().add(const Duration(days: 30)),
+        DateTime.now().add(const Duration(days: 1)),
       );
 
       if (existingStatusDoc.exists) {

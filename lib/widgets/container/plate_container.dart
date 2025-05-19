@@ -101,7 +101,7 @@ class PlateContainer extends StatelessWidget {
               midLeftText: item.location,
               midCenterText: displayUser,
               midRightText: CustomDateUtils.formatTimeForUI(item.requestTime),
-              bottomLeftLeftText: item.statusList.isNotEmpty ? item.statusList.join(", ") : "주의사항 없음",
+              bottomLeftLeftText: item.statusList.isNotEmpty ? item.statusList.join(", ") : "",
               bottomLeftCenterText: item.customStatus ?? '',
               // ✅ 수정된 부분
               bottomRightText: elapsedText,

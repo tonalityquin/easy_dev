@@ -2,9 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
-Future<void> showCustomStatusDialog(BuildContext context, String plateNumber, String area) async {
+/// Firestore에서 plate 상태 정보를 조회하고, 사용자에게 주의사항이 있으면 알림 다이얼로그를 띄움.
+/// 다이얼로그를 띄운 경우에는 customStatus 값을 반환하고, 없으면 null 반환.
+Future<String?> showCustomStatusDialog(BuildContext context, String plateNumber, String area) async {
   final docId = '${plateNumber}_$area';
-  final docSnapshot = await FirebaseFirestore.instance.collection('plate_status').doc(docId).get();
+  final docSnapshot = await FirebaseFirestore.instance
+      .collection('plate_status')
+      .doc(docId)
+      .get();
 
   if (docSnapshot.exists) {
     final data = docSnapshot.data();
@@ -12,8 +17,9 @@ Future<void> showCustomStatusDialog(BuildContext context, String plateNumber, St
     final Timestamp? updatedAt = data?['updatedAt'];
 
     if (customStatus != null && customStatus.toString().trim().isNotEmpty) {
-      final formattedTime =
-          updatedAt != null ? DateFormat('yyyy-MM-dd HH:mm:ss').format(updatedAt.toDate()) : '시간 정보 없음';
+      final formattedTime = updatedAt != null
+          ? DateFormat('yyyy-MM-dd HH:mm:ss').format(updatedAt.toDate())
+          : '시간 정보 없음';
 
       await showDialog(
         context: context,
@@ -54,14 +60,16 @@ Future<void> showCustomStatusDialog(BuildContext context, String plateNumber, St
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.orange,
-              ),
+              style: TextButton.styleFrom(foregroundColor: Colors.orange),
               child: const Text('확인'),
             ),
           ],
         ),
       );
+
+      return customStatus; // ✅ 다이얼로그 띄운 후 상태값 반환
     }
   }
+
+  return null; // 🔁 문서가 없거나 customStatus가 비어있다면 null 반환
 }
