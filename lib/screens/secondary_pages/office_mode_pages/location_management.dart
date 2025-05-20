@@ -19,16 +19,14 @@ class _LocationManagementState extends State<LocationManagement> {
   String _filter = 'all'; // all, single, composite
 
   void handleIconTapped(int index, LocationState locationState, BuildContext context) {
-    final selectedIds = locationState.selectedLocations.keys
-        .where((id) => locationState.selectedLocations[id] == true)
-        .toList();
+    final selectedIds =
+        locationState.selectedLocations.keys.where((id) => locationState.selectedLocations[id] == true).toList();
 
     if (locationState.navigationIcons[index] == Icons.add) {
       showDialog(
         context: context,
         builder: (BuildContext dialogContext) {
-          final currentArea =
-              Provider.of<AreaState>(dialogContext, listen: false).currentArea;
+          final currentArea = Provider.of<AreaState>(dialogContext, listen: false).currentArea;
 
           return LocationSetting(
             onSave: (location) {
@@ -39,7 +37,9 @@ class _LocationManagementState extends State<LocationManagement> {
                   onError: (error) {
                     showFailedSnackbar(context, '🚨 주차 구역 추가 실패: $error');
                   },
-                );
+                ).then((_) {
+                  showSuccessSnackbar(context, '✅ 주차 구역이 추가되었습니다. 앱을 재실행하세요.');
+                });
               } else if (location is Map<String, dynamic>) {
                 final parent = location['parent'];
                 final subs = List<String>.from(location['subs'] ?? []);
@@ -50,7 +50,9 @@ class _LocationManagementState extends State<LocationManagement> {
                   onError: (error) {
                     showFailedSnackbar(context, '🚨 복합 주차 구역 추가 실패: $error');
                   },
-                );
+                ).then((_) {
+                  showSuccessSnackbar(context, '✅ 복합 주차 구역이 추가되었습니다. 앱을 재실행하세요.');
+                });
               } else {
                 showFailedSnackbar(context, '❗ 알 수 없는 형식의 주차 구역 데이터입니다.');
               }
@@ -58,8 +60,7 @@ class _LocationManagementState extends State<LocationManagement> {
           );
         },
       );
-    } else if (locationState.navigationIcons[index] == Icons.delete &&
-        selectedIds.isNotEmpty) {
+    } else if (locationState.navigationIcons[index] == Icons.delete && selectedIds.isNotEmpty) {
       locationState.deleteLocations(
         selectedIds,
         onError: (error) {
@@ -76,9 +77,7 @@ class _LocationManagementState extends State<LocationManagement> {
     final locationState = context.watch<LocationState>();
     final currentArea = context.watch<AreaState>().currentArea;
 
-    final allLocations = locationState.locations
-        .where((location) => location.area == currentArea)
-        .toList();
+    final allLocations = locationState.locations.where((location) => location.area == currentArea).toList();
 
     final singles = allLocations.where((loc) => loc.type == 'single').toList();
     final composites = allLocations.where((loc) => loc.type == 'composite').toList();
@@ -105,60 +104,60 @@ class _LocationManagementState extends State<LocationManagement> {
       body: locationState.isLoading
           ? const Center(child: CircularProgressIndicator())
           : allLocations.isEmpty
-          ? const Center(child: Text('No locations in this area.'))
-          : Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ChoiceChip(
-                  label: const Text('전체'),
-                  selected: _filter == 'all',
-                  onSelected: (_) => setState(() => _filter = 'all'),
+              ? const Center(child: Text('No locations in this area.'))
+              : Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          ChoiceChip(
+                            label: const Text('전체'),
+                            selected: _filter == 'all',
+                            onSelected: (_) => setState(() => _filter = 'all'),
+                          ),
+                          const SizedBox(width: 8),
+                          ChoiceChip(
+                            label: const Text('단일'),
+                            selected: _filter == 'single',
+                            onSelected: (_) => setState(() => _filter = 'single'),
+                          ),
+                          const SizedBox(width: 8),
+                          ChoiceChip(
+                            label: const Text('복합'),
+                            selected: _filter == 'composite',
+                            onSelected: (_) => setState(() => _filter = 'composite'),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    Expanded(
+                      child: _filter == 'single'
+                          ? _buildList(singles, locationState)
+                          : _filter == 'composite'
+                              ? _buildGroupedList(grouped, locationState)
+                              : Column(
+                                  children: [
+                                    if (singles.isNotEmpty)
+                                      const Padding(
+                                        padding: EdgeInsets.all(8.0),
+                                        child: Text('단일 주차 구역'),
+                                      ),
+                                    _buildList(singles, locationState),
+                                    const Divider(),
+                                    if (grouped.isNotEmpty)
+                                      const Padding(
+                                        padding: EdgeInsets.all(8.0),
+                                        child: Text('복합 주차 구역'),
+                                      ),
+                                    Expanded(child: _buildGroupedList(grouped, locationState)),
+                                  ],
+                                ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                ChoiceChip(
-                  label: const Text('단일'),
-                  selected: _filter == 'single',
-                  onSelected: (_) => setState(() => _filter = 'single'),
-                ),
-                const SizedBox(width: 8),
-                ChoiceChip(
-                  label: const Text('복합'),
-                  selected: _filter == 'composite',
-                  onSelected: (_) => setState(() => _filter = 'composite'),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-          Expanded(
-            child: _filter == 'single'
-                ? _buildList(singles, locationState)
-                : _filter == 'composite'
-                ? _buildGroupedList(grouped, locationState)
-                : Column(
-              children: [
-                if (singles.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: const Text('단일 주차 구역'),
-                  ),
-                _buildList(singles, locationState),
-                const Divider(),
-                if (grouped.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: const Text('복합 주차 구역'),
-                  ),
-                Expanded(child: _buildGroupedList(grouped, locationState)),
-              ],
-            ),
-          ),
-        ],
-      ),
       bottomNavigationBar: SecondaryMiniNavigation(
         icons: locationState.navigationIcons,
         onIconTapped: (index) => handleIconTapped(index, locationState, context),

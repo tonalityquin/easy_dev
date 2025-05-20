@@ -66,7 +66,6 @@ class _LocationSettingState extends State<LocationSetting> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Add Parking Location'),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),

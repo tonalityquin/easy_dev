@@ -50,7 +50,7 @@ class _AdjustmentManagementState extends State<AdjustmentManagement> {
                       adjustmentData['addAmount'].toString(),
                     );
                 if (context.mounted) {
-                  showSuccessSnackbar(context, '✅ 정산 데이터가 성공적으로 추가되었습니다.');
+                  showSuccessSnackbar(context, '✅ 정산 데이터가 성공적으로 추가되었습니다. 앱을 재실행하세요.');
                 }
               } catch (e) {
                 debugPrint("🔥 데이터 추가 중 예외 발생: $e");
