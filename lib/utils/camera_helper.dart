@@ -6,7 +6,7 @@ class CameraHelper {
   bool isCameraInitialized = false;
   final List<XFile> capturedImages = [];
 
-  Future<void> initializeCamera() async {
+  Future<void> initializeInputCamera() async {
     debugPrint('📸 CameraHelper: initializeCamera() 호출');
     final cameras = await availableCameras();
     final backCamera = cameras.first;

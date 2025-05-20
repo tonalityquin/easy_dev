@@ -8,9 +8,32 @@ class FirestoreAdjustmentRepository implements AdjustmentRepository {
 
   @override
   Stream<List<AdjustmentModel>> getAdjustmentStream(String currentArea) {
-    return _firestore.collection('adjustment').where('area', isEqualTo: currentArea).snapshots().map((snapshot) {
-      return snapshot.docs.map((doc) => AdjustmentModel.fromMap(doc.id, doc.data())).toList();
+    return _firestore
+        .collection('adjustment')
+        .where('area', isEqualTo: currentArea)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs
+          .map((doc) => AdjustmentModel.fromMap(doc.id, doc.data()))
+          .toList();
     });
+  }
+
+  @override
+  Future<List<AdjustmentModel>> getAdjustmentsOnce(String area) async {
+    try {
+      final snapshot = await _firestore
+          .collection('adjustment')
+          .where('area', isEqualTo: area)
+          .get();
+
+      return snapshot.docs
+          .map((doc) => AdjustmentModel.fromMap(doc.id, doc.data()))
+          .toList();
+    } catch (e) {
+      debugPrint("🔥 Firestore 단발성 조회 실패: $e");
+      rethrow;
+    }
   }
 
   @override
@@ -19,11 +42,9 @@ class FirestoreAdjustmentRepository implements AdjustmentRepository {
     final data = adjustment.toMap();
 
     // Null 값이나 잘못된 데이터 제거
-    data.removeWhere((key, value) =>
-    value == null || value
-        .toString()
-        .trim()
-        .isEmpty);
+    data.removeWhere(
+          (key, value) => value == null || value.toString().trim().isEmpty,
+    );
 
     debugPrint("📌 Firestore에 저장할 데이터: $data");
 
@@ -36,7 +57,6 @@ class FirestoreAdjustmentRepository implements AdjustmentRepository {
       rethrow;
     }
   }
-
 
   @override
   Future<void> deleteAdjustment(List<String> ids) async {

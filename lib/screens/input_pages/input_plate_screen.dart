@@ -38,7 +38,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   void initState() {
     super.initState();
     _cameraHelper = CameraHelper();
-    _cameraHelper.initializeCamera().then((_) => setState(() {}));
+    _cameraHelper.initializeInputCamera().then((_) => setState(() {}));
 
     controller.controllerBackDigit.addListener(() async {
       final text = controller.controllerBackDigit.text;
@@ -58,9 +58,11 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final adjustmentState = context.read<AdjustmentState>();
       final statusState = context.read<StatusState>();
-      final currentArea = context.read<AreaState>().currentArea;
+      final areaState = context.read<AreaState>();
+      final currentArea = areaState.currentArea;
 
-      adjustmentState.syncWithAreaState();
+      await adjustmentState.syncWithAreaAdjustmentState();
+      await statusState.syncWithAreaStatusState();
 
       final areaStatuses = statusState.statuses
           .where((status) => status.area == currentArea && status.isActive)
@@ -76,7 +78,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   }
 
   void _showCameraPreviewDialog() async {
-    await _cameraHelper.initializeCamera();
+    await _cameraHelper.initializeInputCamera();
 
     if (!mounted) return;
     await showDialog(

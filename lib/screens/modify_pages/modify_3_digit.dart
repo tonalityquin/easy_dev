@@ -103,7 +103,7 @@ class _Modify3Digit extends State<Modify3Digit> {
       _existingImageUrls.addAll(widget.plate.imageUrls!);
     }
     _cameraHelper = CameraHelper();
-    _cameraHelper.initializeCamera().then((_) {
+    _cameraHelper.initializeInputCamera().then((_) {
       if (mounted) setState(() {}); // 초기화 완료 후 UI 갱신
     });
     // ✅ 차량 정보 반영: 텍스트필드 및 드롭다운 등
@@ -216,7 +216,7 @@ class _Modify3Digit extends State<Modify3Digit> {
     debugPrint('📸 _showCameraPreviewDialog() 호출됨');
 
     // 카메라 초기화
-    await _cameraHelper.initializeCamera();
+    await _cameraHelper.initializeInputCamera();
 
     // showDialog 호출 전에 mounted 체크
     if (!context.mounted) return;
@@ -373,7 +373,7 @@ class _Modify3Digit extends State<Modify3Digit> {
   Future<bool> _refreshAdjustments() async {
     final adjustmentState = context.read<AdjustmentState>();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      adjustmentState.syncWithAreaState();
+      adjustmentState.syncWithAreaAdjustmentState();
     });
     await Future.delayed(const Duration(milliseconds: 500));
     return adjustmentState.adjustments.isNotEmpty;

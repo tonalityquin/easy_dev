@@ -31,7 +31,7 @@ class _CameraPreviewDialogState extends State<CameraPreviewDialog> {
 
   Future<void> _initializeCamera() async {
     debugPrint('📸 CameraHelper: initializeCamera() 호출');
-    await _cameraHelper.initializeCamera();
+    await _cameraHelper.initializeInputCamera();
     setState(() => _isCameraReady = true);
     debugPrint('✅ CameraHelper: 카메라 초기화 완료');
   }

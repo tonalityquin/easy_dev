@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../repositories/status/status_repository.dart';
 import '../../models/status_model.dart';
@@ -10,43 +9,46 @@ class StatusState extends ChangeNotifier {
   final TextEditingController textController = TextEditingController();
 
   StatusState(this._repository, this._areaState) {
-    _fetchStatusToggles();
-    _areaState.addListener(_fetchStatusToggles); // 지역 변경 감지
+    syncWithAreaStatusState(); // 🔁 초기화 시 비동기 데이터 로딩
+    _areaState.addListener(syncWithAreaStatusState); // 지역 변경 감지
   }
 
   List<StatusModel> _toggleItems = [];
   String? _selectedItemId;
   String _previousArea = '';
-  StreamSubscription<List<StatusModel>>? _subscription;
 
   List<StatusModel> get toggleItems => _toggleItems;
 
   String? get selectedItemId => _selectedItemId;
 
   List<StatusModel> get statuses {
-    return _toggleItems.where((status) => status.area == _areaState.currentArea).toList();
+    return _toggleItems
+        .where((status) => status.area == _areaState.currentArea)
+        .toList();
   }
 
-  void _fetchStatusToggles() {
+  /// ✅ 지역 변화 시 상태를 일회성 조회로 가져옴
+  Future<void> syncWithAreaStatusState() async {
     final String currentArea = _areaState.currentArea;
 
-    if (currentArea.isEmpty || _previousArea == currentArea) return;
+    if (currentArea.isEmpty || _previousArea == currentArea) {
+      debugPrint('✅ 상태 재조회 생략: 동일 지역 ($currentArea)');
+      return;
+    }
 
+    debugPrint('🔥 상태 조회 시작: $_previousArea → $currentArea');
     _previousArea = currentArea;
 
-    _subscription?.cancel(); // ✅ 기존 스트림 해제
-
-    _subscription = _repository.getStatusStream(currentArea).listen(
-      (statusList) {
-        _toggleItems = statusList;
-        notifyListeners();
-      },
-      onError: (error) {
-        debugPrint('🔥 Status stream error: $error');
-      },
-    );
+    try {
+      final statusList = await _repository.getStatusesOnce(currentArea);
+      _toggleItems = statusList;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('🔥 상태 목록 조회 실패: $e');
+    }
   }
 
+  /// ✅ 항목 추가
   Future<void> addToggleItem(String name) async {
     final String currentArea = _areaState.currentArea;
     if (currentArea.isEmpty) return;
@@ -59,8 +61,10 @@ class StatusState extends ChangeNotifier {
     );
 
     await _repository.addToggleItem(newItem);
+    await syncWithAreaStatusState(); // 추가 후 상태 갱신
   }
 
+  /// ✅ 항목 상태 토글
   Future<void> toggleItem(String id) async {
     final index = _toggleItems.indexWhere((item) => item.id == id);
     if (index != -1) {
@@ -78,10 +82,13 @@ class StatusState extends ChangeNotifier {
     }
   }
 
+  /// ✅ 항목 삭제
   Future<void> removeToggleItem(String id) async {
     await _repository.deleteToggleItem(id);
+    await syncWithAreaStatusState(); // 삭제 후 상태 갱신
   }
 
+  /// ✅ 선택 항목 ID 설정
   void selectItem(String? id) {
     _selectedItemId = (_selectedItemId == id) ? null : id;
     notifyListeners();
@@ -89,8 +96,7 @@ class StatusState extends ChangeNotifier {
 
   @override
   void dispose() {
-    _subscription?.cancel(); // ✅ 상태 해제 시 스트림도 해제
-    _areaState.removeListener(_fetchStatusToggles); // 리스너 해제
+    _areaState.removeListener(syncWithAreaStatusState); // 리스너 해제
     textController.dispose();
     super.dispose();
   }

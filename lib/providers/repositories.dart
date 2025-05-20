@@ -129,6 +129,9 @@ class DummyLocationRepository implements LocationRepository {
   Stream<List<LocationModel>> getLocationsStream(String area) => throw UnimplementedError();
 
   @override
+  Future<List<LocationModel>> getLocationsOnce(String area) => throw UnimplementedError();
+
+  @override
   Future<void> toggleLocationSelection(String id, bool selected) => throw UnimplementedError();
 
   @override
@@ -178,6 +181,9 @@ class DummyAdjustmentRepository implements AdjustmentRepository {
 
   @override
   Stream<List<AdjustmentModel>> getAdjustmentStream(String locationId) => throw UnimplementedError();
+
+  @override
+  Future<List<AdjustmentModel>> getAdjustmentsOnce(String area) => throw UnimplementedError();
 }
 
 class DummyStatusRepository implements StatusRepository {
@@ -192,6 +198,9 @@ class DummyStatusRepository implements StatusRepository {
 
   @override
   Future<void> updateToggleStatus(String id, bool status) => throw UnimplementedError();
+
+  @override
+  Future<List<StatusModel>> getStatusesOnce(String area) => throw UnimplementedError();
 }
 
 final List<SingleChildWidget> repositoryProviders = [

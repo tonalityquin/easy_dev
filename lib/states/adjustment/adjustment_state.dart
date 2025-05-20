@@ -8,20 +8,69 @@ class AdjustmentState extends ChangeNotifier {
   final AreaState _areaState;
 
   AdjustmentState(this._repository, this._areaState) {
-    _initializeAdjustments();
+    syncWithAreaAdjustmentState(); // 🔄 초기화 시 비동기 동기화 실행
   }
 
   List<AdjustmentModel> _adjustments = [];
   Map<String, bool> _selectedAdjustments = {};
   bool _isLoading = true;
 
-  String _previousArea = ''; // ✅ 이전 지역 캐시 변수 추가
+  String _previousArea = '';
 
   List<AdjustmentModel> get adjustments => _adjustments;
 
   Map<String, bool> get selectedAdjustments => _selectedAdjustments;
 
   bool get isLoading => _isLoading;
+
+  /// 🔄 지역 상태 변경 감지 및 데이터 로딩
+  Future<void> syncWithAreaAdjustmentState() async {
+    try {
+      final currentArea = _areaState.currentArea.trim();
+
+      if (_previousArea == currentArea) {
+        debugPrint('✅ 동일 지역 감지됨 ($currentArea) → 재조회 생략');
+        return;
+      }
+
+      debugPrint('🔥 지역 변경 감지됨 ($_previousArea → $currentArea) → 데이터 새로 가져옴');
+      _previousArea = currentArea;
+
+      await _initializeAdjustments(); // 🔁 비동기화 적용
+    } catch (e) {
+      debugPrint("🔥 Error syncing area state: $e");
+    }
+  }
+
+  /// ✅ Firestore에서 일회성 조회로 데이터 로딩
+  Future<void> _initializeAdjustments() async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final currentArea = _areaState.currentArea;
+
+      final data = await _repository.getAdjustmentsOnce(currentArea);
+
+      _adjustments.clear();
+      _adjustments = data;
+
+      for (var adj in data) {
+        debugPrint("📌 Firestore에서 불러온 데이터: $adj");
+      }
+
+      if (data.isEmpty) {
+        debugPrint("⚠️ Firestore에서 가져온 데이터가 없음. 기존 값 유지");
+      }
+
+      _selectedAdjustments = {for (var adj in _adjustments) adj.id: false};
+    } catch (e) {
+      debugPrint("🔥 Firestore 조정 데이터 조회 실패: $e");
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
 
   Future<void> addAdjustments(
       String countType,
@@ -47,64 +96,18 @@ class AdjustmentState extends ChangeNotifier {
       await _repository.addAdjustment(adjustment);
       debugPrint("✅ 데이터 저장 성공");
 
-      // ✅ Firestore 스트림을 통해 자동으로 반영되도록 유도
-      syncWithAreaState();
+      await syncWithAreaAdjustmentState(); // 🔄 저장 후 다시 불러오기
     } catch (e) {
       debugPrint('🔥 데이터 추가 중 오류 발생: $e');
       rethrow;
     }
   }
 
-  void syncWithAreaState() {
-    try {
-      final currentArea = _areaState.currentArea.trim();
-
-      // ✅ 이전 지역과 비교하여 동일하면 재조회 생략
-      if (_previousArea == currentArea) {
-        debugPrint('✅ 동일 지역 감지됨 ($currentArea) → 재조회 생략');
-        return;
-      }
-
-      debugPrint('🔥 지역 변경 감지됨 ($_previousArea → $currentArea) → 데이터 새로 가져옴');
-      _previousArea = currentArea;
-      _initializeAdjustments();
-    } catch (e) {
-      debugPrint("🔥 Error syncing area state: $e");
-    }
-  }
-
-  void _initializeAdjustments() {
-    final currentArea = _areaState.currentArea;
-
-    // 기존 스트림을 제거하고 새로운 스트림을 추가
-    _repository.getAdjustmentStream(currentArea).listen(
-          (data) {
-        _adjustments.clear(); // 기존 데이터 초기화
-
-        for (var adj in data) {
-          debugPrint("📌 Firestore에서 불러온 데이터: $adj");
-        }
-
-        if (data.isNotEmpty) {
-          _adjustments = data;
-        } else {
-          debugPrint("⚠️ Firestore에서 가져온 데이터가 없음. 기존 값 유지");
-        }
-
-        _selectedAdjustments = {for (var adj in _adjustments) adj.id: false};
-        _isLoading = false;
-        notifyListeners();
-      },
-      onError: (error) {
-        debugPrint('🔥 Firestore 데이터 불러오기 오류: $error');
-      },
-    );
-  }
-
   Future<void> addAdjustment(AdjustmentModel adjustment, {void Function(String)? onError}) async {
     debugPrint("📌 저장하는 데이터: $adjustment");
     try {
       await _repository.addAdjustment(adjustment);
+      await syncWithAreaAdjustmentState(); // ✅ 저장 후 갱신
     } catch (e) {
       onError?.call('🚨 조정 데이터 추가 실패: $e');
     }
@@ -113,6 +116,7 @@ class AdjustmentState extends ChangeNotifier {
   Future<void> deleteAdjustments(List<String> ids, {void Function(String)? onError}) async {
     try {
       await _repository.deleteAdjustment(ids);
+      await syncWithAreaAdjustmentState(); // ✅ 삭제 후 갱신
     } catch (e) {
       onError?.call('🚨 조정 데이터 삭제 실패: $e');
     }

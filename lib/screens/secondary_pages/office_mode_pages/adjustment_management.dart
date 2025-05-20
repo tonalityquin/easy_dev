@@ -21,7 +21,7 @@ class _AdjustmentManagementState extends State<AdjustmentManagement> {
     Future.delayed(Duration.zero, () {
       if (context.mounted) {
         // ignore: use_build_context_synchronously
-        context.read<AdjustmentState>().syncWithAreaState();
+        context.read<AdjustmentState>().syncWithAreaAdjustmentState();
       }
     });
   }
