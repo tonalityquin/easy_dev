@@ -5,7 +5,7 @@ import 'location_repository.dart';
 class FirestoreLocationRepository implements LocationRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  /// 🔁 기존 실시간 스트림 방식
+  /// 🔁 실시간 스트림 (필요 없으면 사용 안 해도 됨)
   @override
   Stream<List<LocationModel>> getLocationsStream(String area) {
     return _firestore
@@ -16,7 +16,7 @@ class FirestoreLocationRepository implements LocationRepository {
         snapshot.docs.map((doc) => LocationModel.fromMap(doc.id, doc.data())).toList());
   }
 
-  /// ✅ 새로 추가된 단발성 조회 방식 (.get())
+  /// ✅ 단발성 조회 (.get() 기반)
   @override
   Future<List<LocationModel>> getLocationsOnce(String area) async {
     try {
@@ -29,48 +29,64 @@ class FirestoreLocationRepository implements LocationRepository {
           .map((doc) => LocationModel.fromMap(doc.id, doc.data()))
           .toList();
     } catch (e) {
-      print('🔥 위치 단발성 조회 실패: $e');
       rethrow;
     }
   }
 
+  /// ➕ 단일 주차 구역 추가
   @override
   Future<void> addLocation(LocationModel location) async {
-    final docId = '${location.id}_${location.area}';
-    final docRef = _firestore.collection('locations').doc(docId);
-    await docRef.set(location.toMap());
+    final docRef = _firestore.collection('locations').doc(location.id);
+    await docRef.set(location.toFirestoreMap());
   }
 
-  /// ✅ 여러 위치 삭제
+  /// ❌ 여러 주차 구역 삭제
   @override
   Future<void> deleteLocations(List<String> ids) async {
-    for (String id in ids) {
-      await _firestore.collection('locations').doc(id).delete();
+    final batch = _firestore.batch();
+    for (final id in ids) {
+      final docRef = _firestore.collection('locations').doc(id);
+      batch.delete(docRef);
     }
+    await batch.commit();
   }
 
-  /// ✅ 선택 상태 토글
+  /// ✅ 선택 여부 토글
   @override
   Future<void> toggleLocationSelection(String id, bool isSelected) async {
-    await _firestore.collection('locations').doc(id).update({'isSelected': isSelected});
+    final docRef = _firestore.collection('locations').doc(id);
+    await docRef.update({'isSelected': isSelected});
   }
 
-  /// ✅ 복합 위치 추가
+  /// ➕ 복합 주차 구역 추가 (상위 + 하위)
   @override
   Future<void> addCompositeLocation(String parent, List<String> subs, String area) async {
-    final now = FieldValue.serverTimestamp();
+    final batch = _firestore.batch();
 
+    // 상위 구역
+    final parentRef = _firestore.collection('locations').doc(parent);
+    batch.set(parentRef, {
+      'locationName': parent,
+      'area': area,
+      'parent': area,
+      'type': 'composite',
+      'isSelected': false,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+
+    // 하위 구역들
     for (final sub in subs) {
-      final id = '$parent-$sub\_$area';
-      await _firestore.collection('locations').doc(id).set({
-        'id': id,
+      final subRef = _firestore.collection('locations').doc(sub);
+      batch.set(subRef, {
         'locationName': sub,
-        'parent': parent,
         'area': area,
-        'type': 'composite',
+        'parent': parent,
+        'type': 'single',
         'isSelected': false,
-        'timestamp': now,
+        'timestamp': FieldValue.serverTimestamp(),
       });
     }
+
+    await batch.commit();
   }
 }
