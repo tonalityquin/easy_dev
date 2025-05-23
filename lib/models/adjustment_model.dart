@@ -19,6 +19,7 @@ class AdjustmentModel {
     required this.addAmount,
   });
 
+  /// ✅ Firestore → 모델
   factory AdjustmentModel.fromMap(String id, Map<String, dynamic> data) {
     try {
       return AdjustmentModel(
@@ -28,11 +29,15 @@ class AdjustmentModel {
         basicStandard: (data['basicStandard'] is int)
             ? data['basicStandard']
             : int.tryParse(data['basicStandard'].toString()) ?? 0,
-        basicAmount:
-            (data['basicAmount'] is int) ? data['basicAmount'] : int.tryParse(data['basicAmount'].toString()) ?? 0,
-        addStandard:
-            (data['addStandard'] is int) ? data['addStandard'] : int.tryParse(data['addStandard'].toString()) ?? 0,
-        addAmount: (data['addAmount'] is int) ? data['addAmount'] : int.tryParse(data['addAmount'].toString()) ?? 0,
+        basicAmount: (data['basicAmount'] is int)
+            ? data['basicAmount']
+            : int.tryParse(data['basicAmount'].toString()) ?? 0,
+        addStandard: (data['addStandard'] is int)
+            ? data['addStandard']
+            : int.tryParse(data['addStandard'].toString()) ?? 0,
+        addAmount: (data['addAmount'] is int)
+            ? data['addAmount']
+            : int.tryParse(data['addAmount'].toString()) ?? 0,
       );
     } catch (e) {
       debugPrint("🔥 Firestore 데이터 변환 오류: $e");
@@ -40,7 +45,8 @@ class AdjustmentModel {
     }
   }
 
-  Map<String, dynamic> toMap() {
+  /// ✅ Firestore 저장용
+  Map<String, dynamic> toFirestoreMap() {
     return {
       'CountType': countType,
       'area': area,
@@ -49,6 +55,32 @@ class AdjustmentModel {
       'addStandard': addStandard,
       'addAmount': addAmount,
     };
+  }
+
+  /// ✅ 캐시 저장용
+  Map<String, dynamic> toCacheMap() {
+    return {
+      'id': id,
+      'CountType': countType,
+      'area': area,
+      'basicStandard': basicStandard,
+      'basicAmount': basicAmount,
+      'addStandard': addStandard,
+      'addAmount': addAmount,
+    };
+  }
+
+  /// ✅ 캐시 복원용
+  factory AdjustmentModel.fromCacheMap(Map<String, dynamic> data) {
+    return AdjustmentModel(
+      id: data['id'] ?? '',
+      countType: data['CountType'] ?? '',
+      area: data['area'] ?? '',
+      basicStandard: data['basicStandard'] ?? 0,
+      basicAmount: data['basicAmount'] ?? 0,
+      addStandard: data['addStandard'] ?? 0,
+      addAmount: data['addAmount'] ?? 0,
+    );
   }
 
   @override

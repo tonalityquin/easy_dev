@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+
 import '../../repositories/adjustment/adjustment_repository.dart';
 import '../../models/adjustment_model.dart';
 import '../../states/area/area_state.dart';
@@ -8,7 +11,8 @@ class AdjustmentState extends ChangeNotifier {
   final AreaState _areaState;
 
   AdjustmentState(this._repository, this._areaState) {
-    syncWithAreaAdjustmentState(); // 🔄 초기화 시 비동기 동기화 실행
+    loadFromCache();             // ✅ 캐시 먼저 로딩
+    syncWithAreaAdjustmentState(); // ✅ 이후 Firestore 최신화
   }
 
   List<AdjustmentModel> _adjustments = [];
@@ -18,60 +22,66 @@ class AdjustmentState extends ChangeNotifier {
   String _previousArea = '';
 
   List<AdjustmentModel> get adjustments => _adjustments;
-
   Map<String, bool> get selectedAdjustments => _selectedAdjustments;
-
   bool get isLoading => _isLoading;
 
-  /// 🔄 지역 상태 변경 감지 및 데이터 로딩
-  Future<void> syncWithAreaAdjustmentState() async {
-    try {
-      final currentArea = _areaState.currentArea.trim();
+  /// ✅ SharedPreferences 캐시에서 로드
+  Future<void> loadFromCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    final currentArea = _areaState.currentArea.trim();
+    final cachedJson = prefs.getString('cached_adjustments_$currentArea');
 
-      if (_previousArea == currentArea) {
-        debugPrint('✅ 동일 지역 감지됨 ($currentArea) → 재조회 생략');
-        return;
+    if (cachedJson != null) {
+      try {
+        final decoded = json.decode(cachedJson) as List;
+        _adjustments = decoded.map((e) => AdjustmentModel.fromCacheMap(Map<String, dynamic>.from(e))).toList();
+        _selectedAdjustments = {for (var adj in _adjustments) adj.id: false};
+        _previousArea = currentArea;
+        _isLoading = false;
+        notifyListeners();
+        debugPrint('✅ Adjustment 캐시 로드 성공 (area: $currentArea)');
+      } catch (e) {
+        debugPrint('⚠️ Adjustment 캐시 파싱 실패: $e');
       }
-
-      debugPrint('🔥 지역 변경 감지됨 ($_previousArea → $currentArea) → 데이터 새로 가져옴');
-      _previousArea = currentArea;
-
-      await _initializeAdjustments(); // 🔁 비동기화 적용
-    } catch (e) {
-      debugPrint("🔥 Error syncing area state: $e");
     }
   }
 
-  /// ✅ Firestore에서 일회성 조회로 데이터 로딩
-  Future<void> _initializeAdjustments() async {
+  /// 🔄 지역 상태 변경 감지 및 Firestore 동기화
+  Future<void> syncWithAreaAdjustmentState() async {
+    final currentArea = _areaState.currentArea.trim();
+
+    if (currentArea.isEmpty || _previousArea == currentArea) {
+      debugPrint('✅ Adjustment 재조회 생략: 동일 지역 ($currentArea)');
+      return;
+    }
+
+    debugPrint('🔥 Adjustment 지역 변경 감지: $_previousArea → $currentArea');
+    _previousArea = currentArea;
+
     _isLoading = true;
     notifyListeners();
 
     try {
-      final currentArea = _areaState.currentArea;
-
       final data = await _repository.getAdjustmentsOnce(currentArea);
 
-      _adjustments.clear();
       _adjustments = data;
-
-      for (var adj in data) {
-        debugPrint("📌 Firestore에서 불러온 데이터: $adj");
-      }
-
-      if (data.isEmpty) {
-        debugPrint("⚠️ Firestore에서 가져온 데이터가 없음. 기존 값 유지");
-      }
-
       _selectedAdjustments = {for (var adj in _adjustments) adj.id: false};
+
+      // ✅ 캐시 저장
+      final prefs = await SharedPreferences.getInstance();
+      final jsonData = json.encode(data.map((e) => e.toCacheMap()).toList());
+      await prefs.setString('cached_adjustments_$currentArea', jsonData);
+
+      debugPrint("✅ Firestore에서 Adjustment 데이터 새로 불러옴");
     } catch (e) {
-      debugPrint("🔥 Firestore 조정 데이터 조회 실패: $e");
+      debugPrint("🔥 Adjustment Firestore 동기화 실패: $e");
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
+  /// ✅ 조정 데이터 추가 (문자열 기반)
   Future<void> addAdjustments(
       String countType,
       String area,
@@ -91,32 +101,29 @@ class AdjustmentState extends ChangeNotifier {
         addAmount: int.tryParse(addAmount) ?? 0,
       );
 
-      debugPrint("📌 저장할 데이터: $adjustment");
-
       await _repository.addAdjustment(adjustment);
-      debugPrint("✅ 데이터 저장 성공");
-
-      await syncWithAreaAdjustmentState(); // 🔄 저장 후 다시 불러오기
+      await syncWithAreaAdjustmentState();
     } catch (e) {
-      debugPrint('🔥 데이터 추가 중 오류 발생: $e');
+      debugPrint('🔥 Adjustment 추가 실패: $e');
       rethrow;
     }
   }
 
+  /// ✅ 조정 모델 추가
   Future<void> addAdjustment(AdjustmentModel adjustment, {void Function(String)? onError}) async {
-    debugPrint("📌 저장하는 데이터: $adjustment");
     try {
       await _repository.addAdjustment(adjustment);
-      await syncWithAreaAdjustmentState(); // ✅ 저장 후 갱신
+      await syncWithAreaAdjustmentState();
     } catch (e) {
       onError?.call('🚨 조정 데이터 추가 실패: $e');
     }
   }
 
+  /// ✅ 삭제
   Future<void> deleteAdjustments(List<String> ids, {void Function(String)? onError}) async {
     try {
       await _repository.deleteAdjustment(ids);
-      await syncWithAreaAdjustmentState(); // ✅ 삭제 후 갱신
+      await syncWithAreaAdjustmentState();
     } catch (e) {
       onError?.call('🚨 조정 데이터 삭제 실패: $e');
     }
