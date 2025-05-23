@@ -34,7 +34,6 @@ class FirestoreLocationRepository implements LocationRepository {
     }
   }
 
-  /// ✅ 개별 위치 추가
   @override
   Future<void> addLocation(LocationModel location) async {
     final docId = '${location.id}_${location.area}';

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../repositories/plate/plate_repository.dart';
 import '../../states/area/area_state.dart';
 import '../../models/location_model.dart';
+import '../../states/location/location_state.dart';
 
 class ParkingLocationDialog extends StatefulWidget {
   final TextEditingController locationController;
@@ -20,11 +20,28 @@ class ParkingLocationDialog extends StatefulWidget {
 
 class _ParkingLocationDialogState extends State<ParkingLocationDialog> {
   String? selectedParent;
+  String? _previousArea;
+  Future<List<LocationModel>>? _futureLocations;
+
+  @override
+  void initState() {
+    super.initState();
+    _prepareLocationData();
+  }
+
+  void _prepareLocationData() {
+    final currentArea = context.read<AreaState>().currentArea;
+    final locationState = context.read<LocationState>();
+
+    if (_previousArea != currentArea) {
+      _previousArea = currentArea;
+      _futureLocations = Future.value(locationState.locations);
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
-    final currentArea = context.watch<AreaState>().currentArea;
-
     return ScaleTransitionDialog(
       child: AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -36,7 +53,7 @@ class _ParkingLocationDialogState extends State<ParkingLocationDialog> {
           ],
         ),
         content: FutureBuilder<List<LocationModel>>(
-          future: context.read<PlateRepository>().getAvailableLocations(currentArea),
+          future: _futureLocations,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const SizedBox(
@@ -57,10 +74,7 @@ class _ParkingLocationDialogState extends State<ParkingLocationDialog> {
             final composites = locations.where((l) => l.type == 'composite').toList();
 
             if (selectedParent != null) {
-              // 하위 구역 선택 화면
-              final subLocations = composites
-                  .where((l) => l.parent == selectedParent)
-                  .toList();
+              final subLocations = composites.where((l) => l.parent == selectedParent).toList();
 
               return Column(
                 mainAxisSize: MainAxisSize.min,
@@ -85,7 +99,6 @@ class _ParkingLocationDialogState extends State<ParkingLocationDialog> {
                 ],
               );
             } else {
-              // 상위 구역 또는 단일 구역 선택 화면
               final parentSet = composites.map((e) => e.parent).toSet().toList();
               return SizedBox(
                 width: double.maxFinite,
@@ -131,8 +144,7 @@ class ScaleTransitionDialog extends StatefulWidget {
   State<ScaleTransitionDialog> createState() => _ScaleTransitionDialogState();
 }
 
-class _ScaleTransitionDialogState extends State<ScaleTransitionDialog>
-    with SingleTickerProviderStateMixin {
+class _ScaleTransitionDialogState extends State<ScaleTransitionDialog> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
 
