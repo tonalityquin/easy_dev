@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:image/image.dart' as img;
 
 class CameraHelper {
   CameraController? cameraController;
@@ -33,11 +35,26 @@ class CameraHelper {
 
     try {
       final XFile image = await cameraController!.takePicture();
-      capturedImages.add(image);
       debugPrint('✅ CameraHelper: 사진 촬영 성공 - ${image.path}');
+
+      // JPEG 압축 적용
+      final originalFile = File(image.path);
+      final bytes = await originalFile.readAsBytes();
+      final decodedImage = img.decodeImage(bytes);
+
+      if (decodedImage == null) {
+        debugPrint('❌ 이미지 디코딩 실패');
+        return null;
+      }
+
+      final compressedBytes = img.encodeJpg(decodedImage, quality: 75); // 압축 품질 설정
+      await originalFile.writeAsBytes(compressedBytes);
+      debugPrint('✅ 이미지 압축 완료 - ${compressedBytes.length ~/ 1024}KB');
+
+      capturedImages.add(image);
       return image;
     } catch (e) {
-      debugPrint("❌ CameraHelper: 사진 촬영 오류: $e");
+      debugPrint("❌ CameraHelper: 사진 촬영 또는 압축 오류: $e");
       return null;
     }
   }
