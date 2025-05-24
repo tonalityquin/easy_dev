@@ -171,9 +171,10 @@ class InputPlateController {
 
   Future<void> handleAction(BuildContext context, bool mounted, VoidCallback refreshUI) async {
     final plateNumber = buildPlateNumber();
-    final area = context.read<AreaState>().currentArea;
+    final areaState = context.read<AreaState>();
+    final area = areaState.currentArea;
+    final division = areaState.currentDivision; // ✅ 지역 기반 division 사용
     final userName = context.read<UserState>().name;
-    final division = context.read<UserState>().division; // ✅ 유저 소속에서 동적 추출
     final adjustmentList = context.read<AdjustmentState>().adjustments;
 
     if (adjustmentList.isNotEmpty && selectedAdjustment == null) {
@@ -196,7 +197,7 @@ class InputPlateController {
         plateNumber,
         area,
         userName,
-        division, // ✅ 5번째 인자 추가
+        division,
       );
 
       final wasSuccessful = await InputPlateService.saveInputPlateEntry(
@@ -212,8 +213,9 @@ class InputPlateController {
         addStandard: selectedAddStandard,
         addAmount: selectedAddAmount,
         region: dropdownValue,
-        customStatus:
-        customStatusController.text.trim().isNotEmpty ? customStatusController.text : fetchedCustomStatus ?? '',
+        customStatus: customStatusController.text.trim().isNotEmpty
+            ? customStatusController.text
+            : fetchedCustomStatus ?? '',
       );
 
       if (mounted) {
