@@ -69,8 +69,14 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
     final rawPlates = context
         .watch<PlateState>()
         .getPlatesByCollection(PlateType.departureCompleted, selectedDate: selectedDate)
-        .where((p) => !p.isLockedFee && p.area.trim() == area)
-        .toList();
+        .where((p) {
+      final isSearching = context.read<FilterPlate>().searchQuery.length == 4;
+      if (isSearching) {
+        return p.area.trim() == area; // 검색 중엔 잠금 무시
+      } else {
+        return !p.isLockedFee && p.area.trim() == area; // 기본 필터
+      }
+    }).toList();
 
     final firestorePlates = context.watch<FilterPlate>().filterPlatesByQuery(rawPlates);
 
