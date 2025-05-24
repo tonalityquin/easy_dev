@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../states/adjustment/adjustment_state.dart';
-import '../../../utils/button/custom_adjustment_dropdown.dart';
+import '../utils/buttons/custom_adjustment_dropdown.dart';
 
-class AdjustmentInputSection extends StatelessWidget {
+class InputAdjustmentSection extends StatelessWidget {
   final String? selectedAdjustment;
   final ValueChanged<String?> onChanged;
 
-  const AdjustmentInputSection({
+  const InputAdjustmentSection({
     super.key,
     required this.selectedAdjustment,
     required this.onChanged,

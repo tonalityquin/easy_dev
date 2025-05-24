@@ -1,11 +1,12 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:camera/camera.dart';
 import '../../utils/gcs_uploader.dart';
 import '../../states/plate/input_plate.dart';
 import '../../states/area/area_state.dart';
 import '../../states/user/user_state.dart';
-import 'package:camera/camera.dart';
+
 
 class InputPlateService {
   static Future<List<String>> uploadCapturedImages(

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 /// 공통 번호판 입력 필드 위젯
-class CommonPlateInput extends StatelessWidget {
+class InputPlateField extends StatelessWidget {
   final int frontDigitCount;
   final bool hasMiddleChar;
   final int backDigitCount;
@@ -12,7 +12,7 @@ class CommonPlateInput extends StatelessWidget {
   final TextEditingController activeController;
   final Function(TextEditingController) onKeypadStateChanged;
 
-  const CommonPlateInput({
+  const InputPlateField({
     super.key,
     required this.frontDigitCount,
     required this.hasMiddleChar,

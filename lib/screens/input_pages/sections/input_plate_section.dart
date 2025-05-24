@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../../widgets/input_field/common_plate_field.dart';
-import '../../../widgets/dialog/region_picker_dialog.dart';
+import '../utils/input_plate_field.dart';
+import '../widgets/region_picker_dialog.dart';
 
-class PlateInputSection extends StatelessWidget {
+class InputPlateSection extends StatelessWidget {
   final String dropdownValue;
   final List<String> regions;
   final TextEditingController controllerFrontDigit;
@@ -13,7 +13,7 @@ class PlateInputSection extends StatelessWidget {
   final ValueChanged<String> onRegionChanged;
   final bool isThreeDigit;
 
-  const PlateInputSection({
+  const InputPlateSection({
     super.key,
     required this.dropdownValue,
     required this.regions,
@@ -61,7 +61,7 @@ class PlateInputSection extends StatelessWidget {
             ),
             const SizedBox(width: 16),
             Expanded(
-              child: CommonPlateInput(
+              child: InputPlateField(
                 frontDigitCount: isThreeDigit ? 3 : 2,
                 hasMiddleChar: true,
                 backDigitCount: 4,

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import '../../../widgets/input_field/location_field.dart';
+import '../utils/input_location_field.dart';
 
-class LocationInputSection extends StatelessWidget {
+class InputLocationSection extends StatelessWidget {
   final TextEditingController locationController;
 
-  const LocationInputSection({
+  const InputLocationSection({
     super.key,
     required this.locationController,
   });
@@ -20,7 +20,7 @@ class LocationInputSection extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              LocationField(
+              InputLocationField(
                 controller: locationController,
                 widthFactor: 0.7,
               ),

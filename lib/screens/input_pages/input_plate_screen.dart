@@ -1,27 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'keypad/num_keypad.dart';
-import 'keypad/kor_keypad.dart';
 import '../../widgets/navigation/bottom_navigation.dart';
-import '../../widgets/dialog/parking_location_dialog.dart';
-import '../../widgets/dialog/camera_preview_dialog.dart';
-import '../../utils/camera_helper.dart';
-import '../../utils/button/animated_parking_button.dart';
-import '../../utils/button/animated_photo_button.dart';
-import '../../utils/button/animated_action_button.dart';
 import '../../states/adjustment/adjustment_state.dart';
 import '../../states/status/status_state.dart';
 import '../../states/area/area_state.dart';
 
 import 'input_plate_controller.dart';
-import 'sections/adjustment_input_section.dart';
-import 'sections/custom_status_section.dart';
-import 'sections/location_input_section.dart';
-import 'sections/photo_input_section.dart';
-import 'sections/plate_input_section.dart';
+import 'sections/input_adjustment_section.dart';
+import 'sections/status_custom_section.dart';
+import 'sections/input_location_section.dart';
+import 'sections/input_photo_section.dart';
+import 'sections/input_plate_section.dart';
 import 'sections/status_on_tap_section.dart';
+
+import 'utils/camera_helper.dart';
+import 'utils/buttons/animated_parking_button.dart';
+import 'utils/buttons/animated_photo_button.dart';
+import 'utils/buttons/animated_action_button.dart';
+
+import 'widgets/input_location_dialog.dart';
+import 'widgets/camera_preview_dialog.dart';
 import 'widgets/custom_status_dialog.dart';
+import 'keypad/num_keypad.dart';
+import 'keypad/kor_keypad.dart';
 
 class InputPlateScreen extends StatefulWidget {
   const InputPlateScreen({super.key});
@@ -100,7 +102,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   void _selectParkingLocation() {
     showDialog(
       context: context,
-      builder: (_) => ParkingLocationDialog(
+      builder: (_) => InputLocationDialog(
         locationController: controller.locationController,
         onLocationSelected: (location) {
           setState(() {
@@ -192,7 +194,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
               ],
             ),
             const SizedBox(height: 8),
-            PlateInputSection(
+            InputPlateSection(
               dropdownValue: controller.dropdownValue,
               regions: controller.regions,
               controllerFrontDigit: controller.controllerFrontDigit,
@@ -213,11 +215,11 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
               isThreeDigit: controller.isThreeDigit,
             ),
             const SizedBox(height: 32),
-            LocationInputSection(locationController: controller.locationController),
+            InputLocationSection(locationController: controller.locationController),
             const SizedBox(height: 32),
-            PhotoInputSection(capturedImages: controller.capturedImages),
+            InputPhotoSection(capturedImages: controller.capturedImages),
             const SizedBox(height: 32),
-            AdjustmentInputSection(
+            InputAdjustmentSection(
               selectedAdjustment: controller.selectedAdjustment,
               onChanged: (value) => setState(() => controller.selectedAdjustment = value),
             ),
@@ -244,7 +246,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
               ),
             ),
             if (controller.fetchedCustomStatus != null)
-              CustomStatusSection(
+              StatusCustomSection(
                 customStatus: controller.fetchedCustomStatus!,
                 onDelete: () async {
                   try {
