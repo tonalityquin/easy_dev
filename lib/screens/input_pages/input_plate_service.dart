@@ -9,39 +9,70 @@ import 'package:camera/camera.dart';
 
 class InputPlateService {
   static Future<List<String>> uploadCapturedImages(
-      List<XFile> images,
-      String plateNumber,
-      String area,
-      String userName,
-      String division, // ✅ 추가됨
-      ) async {
+    List<XFile> images,
+    String plateNumber,
+    String area,
+    String userName,
+    String division,
+  ) async {
     final uploader = GCSUploader();
     final List<String> uploadedUrls = [];
+    final List<String> failedFiles = [];
 
-    for (var image in images) {
+    debugPrint('📸 총 업로드 시도 이미지 수: ${images.length}');
+
+    for (int i = 0; i < images.length; i++) {
+      final image = images[i];
       final file = File(image.path);
-      final now = DateTime.now();
 
+      // ✅ 파일 존재 여부 사전 체크
+      if (!file.existsSync()) {
+        debugPrint('❌ [${i + 1}/${images.length}] 파일이 존재하지 않음: ${file.path}');
+        failedFiles.add(file.path);
+        continue;
+      }
+
+      final now = DateTime.now();
       final dateStr = '${now.year.toString().padLeft(4, '0')}-'
           '${now.month.toString().padLeft(2, '0')}-'
           '${now.day.toString().padLeft(2, '0')}';
 
-      final timeStr = '${now.hour.toString().padLeft(2, '0')}'
-          '${now.minute.toString().padLeft(2, '0')}'
-          '${now.second.toString().padLeft(2, '0')}';
+      // ✅ 밀리초까지 포함
+      final timeStr = now.millisecondsSinceEpoch.toString();
 
-      final fileName = '${dateStr}_${timeStr}_${plateNumber}_$userName.jpg';
-
+      final fileName = '${dateStr}_$timeStr${plateNumber}_$userName.jpg';
       final gcsPath = '$division/$area/images/$fileName';
 
-      final gcsUrl = await uploader.uploadImageFromInput(file, gcsPath);
-
-      if (gcsUrl == null) {
-        debugPrint('이미지 업로드 실패 (파일 경로: ${file.path})');
-        throw Exception('이미지 업로드에 실패했습니다. 다시 시도해주세요.');
+      String? gcsUrl;
+      for (int attempt = 0; attempt < 3; attempt++) {
+        try {
+          debugPrint('⬆️ [${i + 1}/${images.length}] 업로드 시도 #${attempt + 1}: $gcsPath');
+          gcsUrl = await uploader.uploadImageFromInput(file, gcsPath);
+          if (gcsUrl != null) {
+            debugPrint('✅ 업로드 성공: $gcsUrl');
+            break;
+          }
+        } catch (e) {
+          debugPrint('❌ [시도 ${attempt + 1}] 업로드 실패 (${file.path}): $e');
+          await Future.delayed(const Duration(milliseconds: 500));
+        }
       }
 
-      uploadedUrls.add(gcsUrl);
+      if (gcsUrl == null) {
+        debugPrint('❌ 업로드 최종 실패: ${file.path}');
+        failedFiles.add(file.path);
+      } else {
+        uploadedUrls.add(gcsUrl);
+      }
+
+      await Future.delayed(const Duration(milliseconds: 100)); // ✅ 업로드 간 간격 확보
+    }
+
+    if (failedFiles.isNotEmpty) {
+      debugPrint('⚠️ 업로드 실패 (${failedFiles.length}/${images.length})');
+      for (final f in failedFiles) {
+        debugPrint(' - 실패 파일: $f');
+      }
     }
 
     return uploadedUrls;
