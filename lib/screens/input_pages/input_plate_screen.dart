@@ -120,9 +120,9 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         controller: controller.controllerFrontDigit,
         maxLength: controller.isThreeDigit ? 3 : 2,
         onComplete: () => setState(() => controller.setActiveController(controller.controllerMidDigit)),
-        onChangeDigitMode: (isThree) {
+        onChangeFrontDigitMode: (defaultThree) {
           setState(() {
-            controller.setFrontDigitMode(isThree);
+            controller.setFrontDigitMode(defaultThree);
           });
         },
         enableDigitModeSwitch: true,
@@ -141,6 +141,12 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       maxLength: 4,
       onComplete: () => setState(() => controller.showKeypad = false),
       enableDigitModeSwitch: false,
+      onReset: () {
+        setState(() {
+          controller.clearInput(); // 전체 입력 초기화
+          controller.setActiveController(controller.controllerFrontDigit); // 앞자리부터 다시 시작
+        });
+      },
     );
   }
 

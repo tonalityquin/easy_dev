@@ -4,7 +4,8 @@ class NumKeypad extends StatelessWidget {
   final TextEditingController controller;
   final int maxLength;
   final VoidCallback? onComplete;
-  final ValueChanged<bool>? onChangeDigitMode;
+  final ValueChanged<bool>? onChangeFrontDigitMode;
+  final VoidCallback? onReset;
   final Color? backgroundColor;
   final TextStyle? textStyle;
   final bool enableDigitModeSwitch;
@@ -14,7 +15,8 @@ class NumKeypad extends StatelessWidget {
     required this.controller,
     required this.maxLength,
     this.onComplete,
-    this.onChangeDigitMode,
+    this.onChangeFrontDigitMode,
+    this.onReset,
     this.backgroundColor,
     this.textStyle,
     this.enableDigitModeSwitch = true,
@@ -31,10 +33,20 @@ class NumKeypad extends StatelessWidget {
           _buildRow(['1', '2', '3']),
           _buildRow(['4', '5', '6']),
           _buildRow(['7', '8', '9']),
-          enableDigitModeSwitch ? _buildRow(['두자리', '0', '세자리']) : _buildRow(['', '0', '']),
+          _buildRow(_lastRowKeys()),
         ],
       ),
     );
+  }
+
+  List<String> _lastRowKeys() {
+    if (enableDigitModeSwitch) {
+      return ['두자리', '0', '세자리'];
+    } else if (onReset != null) {
+      return ['처음', '0', '처음'];
+    } else {
+      return ['', '0', ''];
+    }
   }
 
   Widget _buildRow(List<String> keys) {
@@ -79,10 +91,13 @@ class NumKeypad extends StatelessWidget {
     debugPrint('키 입력: $key, 현재 텍스트: ${controller.text}');
 
     if (key == '두자리') {
-      onChangeDigitMode?.call(false);
+      onChangeFrontDigitMode?.call(false);
       return;
     } else if (key == '세자리') {
-      onChangeDigitMode?.call(true);
+      onChangeFrontDigitMode?.call(true);
+      return;
+    } else if (key == '처음') {
+      onReset?.call();
       return;
     }
 
