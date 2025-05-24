@@ -112,6 +112,10 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     );
   }
 
+  VoidCallback _buildLocationAction() {
+    return controller.isLocationSelected ? () => setState(() => controller.clearLocation()) : _selectParkingLocation;
+  }
+
   Widget _buildKeypad() {
     final active = controller.activeController;
 
@@ -148,10 +152,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         });
       },
     );
-  }
-
-  VoidCallback _buildLocationAction() {
-    return controller.isLocationSelected ? () => setState(() => controller.clearLocation()) : _selectParkingLocation;
   }
 
   @override
@@ -236,7 +236,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
             const SizedBox(height: 8),
             TextField(
               controller: controller.customStatusController,
-              maxLength: 10,
+              maxLength: 20,
               decoration: InputDecoration(
                 hintText: '예: 뒷범퍼 손상',
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),

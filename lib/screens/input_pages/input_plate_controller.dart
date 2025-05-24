@@ -83,6 +83,7 @@ class InputPlateController {
   }
 
   void _handleInputChange() {
+    // 입력 변화 감지 로직 필요 시 추가
   }
 
   void setActiveController(TextEditingController controller) {
@@ -172,6 +173,7 @@ class InputPlateController {
     final plateNumber = buildPlateNumber();
     final area = context.read<AreaState>().currentArea;
     final userName = context.read<UserState>().name;
+    final division = context.read<UserState>().division; // ✅ 유저 소속에서 동적 추출
     final adjustmentList = context.read<AdjustmentState>().adjustments;
 
     if (adjustmentList.isNotEmpty && selectedAdjustment == null) {
@@ -194,6 +196,7 @@ class InputPlateController {
         plateNumber,
         area,
         userName,
+        division, // ✅ 5번째 인자 추가
       );
 
       final wasSuccessful = await InputPlateService.saveInputPlateEntry(
@@ -210,7 +213,7 @@ class InputPlateController {
         addAmount: selectedAddAmount,
         region: dropdownValue,
         customStatus:
-            customStatusController.text.trim().isNotEmpty ? customStatusController.text : fetchedCustomStatus ?? '',
+        customStatusController.text.trim().isNotEmpty ? customStatusController.text : fetchedCustomStatus ?? '',
       );
 
       if (mounted) {

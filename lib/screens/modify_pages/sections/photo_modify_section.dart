@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
-import 'package:easydev/utils/fullscreen_viewer.dart';
+import 'package:easydev/utils/camera_fullscreen_viewer.dart';
 
 class PhotoModifySection extends StatelessWidget {
   final List<String> existingImageUrls;

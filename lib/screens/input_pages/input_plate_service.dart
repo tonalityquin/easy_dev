@@ -9,24 +9,32 @@ import 'package:camera/camera.dart';
 
 class InputPlateService {
   static Future<List<String>> uploadCapturedImages(
-    List<XFile> images,
-    String plateNumber,
-    String area,
-    String userName,
-  ) async {
+      List<XFile> images,
+      String plateNumber,
+      String area,
+      String userName,
+      String division, // ✅ 추가됨
+      ) async {
     final uploader = GCSUploader();
     final List<String> uploadedUrls = [];
 
     for (var image in images) {
       final file = File(image.path);
       final now = DateTime.now();
-      final formattedDate =
-          '${now.year.toString().padLeft(4, '0')}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}'
-          '_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
 
-      final fileName = '${formattedDate}_${area}_${plateNumber}_$userName.jpg';
+      final dateStr = '${now.year.toString().padLeft(4, '0')}-'
+          '${now.month.toString().padLeft(2, '0')}-'
+          '${now.day.toString().padLeft(2, '0')}';
 
-      final gcsUrl = await uploader.uploadImageFromInput(file, 'plates/$fileName');
+      final timeStr = '${now.hour.toString().padLeft(2, '0')}'
+          '${now.minute.toString().padLeft(2, '0')}'
+          '${now.second.toString().padLeft(2, '0')}';
+
+      final fileName = '${dateStr}_${timeStr}_${plateNumber}_$userName.jpg';
+
+      final gcsPath = '$division/$area/images/$fileName';
+
+      final gcsUrl = await uploader.uploadImageFromInput(file, gcsPath);
 
       if (gcsUrl == null) {
         debugPrint('이미지 업로드 실패 (파일 경로: ${file.path})');
