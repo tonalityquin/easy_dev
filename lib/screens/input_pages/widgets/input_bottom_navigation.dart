@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 
-import '../../utils/app_colors.dart';
+import '../../../utils/app_colors.dart';
 
-class BottomNavigation extends StatelessWidget {
+class InputBottomNavigation extends StatelessWidget {
   final bool showKeypad;
   final Widget keypad;
   final Widget actionButton;
   final VoidCallback? onTap;
   final Color? backgroundColor;
 
-  const BottomNavigation({
+  const InputBottomNavigation({
     super.key,
     required this.showKeypad,
     required this.keypad,

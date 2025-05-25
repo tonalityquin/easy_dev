@@ -40,7 +40,8 @@ class _LoginFormState extends State<LoginForm> {
           focusNode: _controller.phoneFocus,
           keyboardType: TextInputType.phone,
           textInputAction: TextInputAction.next,
-          onChanged: (value) => _controller.formatPhoneNumber(value, setState), // ✅ 포맷팅 추가
+          onChanged: (value) => _controller.formatPhoneNumber(value, setState),
+          // ✅ 포맷팅 추가
           onSubmitted: (_) => FocusScope.of(context).requestFocus(_controller.passwordFocus),
           decoration: _controller.inputDecoration(label: "전화번호", icon: Icons.phone),
         ),
@@ -89,22 +90,22 @@ class _LoginFormState extends State<LoginForm> {
               child: Center(
                 child: _controller.isLoading
                     ? const SizedBox(
-                  height: 24,
-                  width: 24,
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 2,
-                  ),
-                )
+                        height: 24,
+                        width: 24,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
                     : const Text(
-                  "로그인",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.2,
-                  ),
-                ),
+                        "로그인",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
               ),
             ),
           ),

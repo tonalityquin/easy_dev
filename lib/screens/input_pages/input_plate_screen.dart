@@ -1,18 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../widgets/navigation/bottom_navigation.dart';
 import '../../states/adjustment/adjustment_state.dart';
 import '../../states/status/status_state.dart';
 import '../../states/area/area_state.dart';
 
 import 'input_plate_controller.dart';
 import 'sections/input_adjustment_section.dart';
-import 'sections/status_custom_section.dart';
 import 'sections/input_location_section.dart';
 import 'sections/input_photo_section.dart';
 import 'sections/input_plate_section.dart';
 import 'sections/status_on_tap_section.dart';
+import 'sections/status_custom_section.dart';
 
 import 'utils/camera_helper.dart';
 import 'utils/buttons/animated_parking_button.dart';
@@ -22,6 +21,7 @@ import 'utils/buttons/animated_action_button.dart';
 import 'widgets/input_location_dialog.dart';
 import 'widgets/camera_preview_dialog.dart';
 import 'widgets/custom_status_dialog.dart';
+import 'widgets/input_bottom_navigation.dart';
 import 'keypad/num_keypad.dart';
 import 'keypad/kor_keypad.dart';
 
@@ -266,7 +266,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: BottomNavigation(
+      bottomNavigationBar: InputBottomNavigation(
         showKeypad: controller.showKeypad,
         keypad: _buildKeypad(),
         actionButton: Column(

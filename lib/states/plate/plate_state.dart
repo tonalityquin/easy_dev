@@ -1,10 +1,14 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
 import '../../repositories/plate/plate_repository.dart';
+
 import '../../models/plate_model.dart';
-import '../area/area_state.dart';
 import '../../enums/plate_type.dart';
+
+import '../area/area_state.dart';
+
 import '../../utils/gcs_uploader.dart';
 
 class PlateState extends ChangeNotifier {

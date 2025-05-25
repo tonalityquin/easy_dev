@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'widgets/login_validate.dart';
+
+import '../../repositories/user/user_repository.dart';
+
 import '../../states/user/user_state.dart';
 import '../../states/area/area_state.dart';
-import '../../repositories/user/user_repository.dart';
+
 import '../../utils/snackbar_helper.dart';
 import '../../utils/login_network_service.dart';
-import 'widgets/login_view_model.dart';
 
 class LoginController {
   final BuildContext context;
@@ -92,8 +96,8 @@ class LoginController {
     final phone = phoneController.text.trim().replaceAll(RegExp(r'\D'), '');
     final password = passwordController.text.trim();
 
-    final phoneError = LoginValidator.validatePhone(phone);
-    final passwordError = LoginValidator.validatePassword(password);
+    final phoneError = LoginValidate.validatePhone(phone);
+    final passwordError = LoginValidate.validatePassword(password);
 
     if (name.isEmpty) {
       showFailedSnackbar(context, '이름을 입력해주세요.');

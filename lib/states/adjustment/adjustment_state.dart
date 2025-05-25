@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
-import '../../repositories/adjustment/adjustment_repository.dart';
 import '../../models/adjustment_model.dart';
+
+import '../../repositories/adjustment/adjustment_repository.dart';
+
 import '../../states/area/area_state.dart';
 
 class AdjustmentState extends ChangeNotifier {
@@ -11,7 +13,7 @@ class AdjustmentState extends ChangeNotifier {
   final AreaState _areaState;
 
   AdjustmentState(this._repository, this._areaState) {
-    loadFromCache();             // ✅ 캐시 먼저 로딩
+    loadFromCache(); // ✅ 캐시 먼저 로딩
     syncWithAreaAdjustmentState(); // ✅ 이후 Firestore 최신화
   }
 
@@ -22,10 +24,11 @@ class AdjustmentState extends ChangeNotifier {
   String _previousArea = '';
 
   List<AdjustmentModel> get adjustments => _adjustments;
+
   Map<String, bool> get selectedAdjustments => _selectedAdjustments;
+
   bool get isLoading => _isLoading;
 
-  /// ✅ SharedPreferences 캐시에서 로드
   Future<void> loadFromCache() async {
     final prefs = await SharedPreferences.getInstance();
     final currentArea = _areaState.currentArea.trim();
@@ -83,13 +86,13 @@ class AdjustmentState extends ChangeNotifier {
 
   /// ✅ 조정 데이터 추가 (문자열 기반)
   Future<void> addAdjustments(
-      String countType,
-      String area,
-      String basicStandard,
-      String basicAmount,
-      String addStandard,
-      String addAmount,
-      ) async {
+    String countType,
+    String area,
+    String basicStandard,
+    String basicAmount,
+    String addStandard,
+    String addAmount,
+  ) async {
     try {
       final adjustment = AdjustmentModel(
         id: '${countType}_$area',
@@ -106,16 +109,6 @@ class AdjustmentState extends ChangeNotifier {
     } catch (e) {
       debugPrint('🔥 Adjustment 추가 실패: $e');
       rethrow;
-    }
-  }
-
-  /// ✅ 조정 모델 추가
-  Future<void> addAdjustment(AdjustmentModel adjustment, {void Function(String)? onError}) async {
-    try {
-      await _repository.addAdjustment(adjustment);
-      await syncWithAreaAdjustmentState();
-    } catch (e) {
-      onError?.call('🚨 조정 데이터 추가 실패: $e');
     }
   }
 

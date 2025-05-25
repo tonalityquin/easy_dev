@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../states/area/area_state.dart';
-import '../states/calendar/field_selected_date_state.dart';
-import '../states/plate/plate_state.dart';
-import '../states/user/user_state.dart';
-import '../utils/app_colors.dart';
-import '../utils/snackbar_helper.dart';
+
+import '../repositories/plate/plate_repository.dart';
+
 import '../states/page/page_state.dart';
 import '../states/page/page_info.dart';
+import '../states/area/area_state.dart';
+import '../states/plate/plate_state.dart';
+import '../states/user/user_state.dart';
+import '../states/calendar/field_selected_date_state.dart';
+
+import '../utils/app_colors.dart';
+import '../utils/snackbar_helper.dart';
+
 import '../screens/input_pages/input_plate_screen.dart';
 import 'secondary_page.dart';
-import '../repositories/plate/plate_repository.dart';
 
 class TypePage extends StatelessWidget {
   const TypePage({super.key});
