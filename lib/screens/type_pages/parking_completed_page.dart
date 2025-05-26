@@ -20,6 +20,7 @@ import '../../widgets/dialog/parking_completed_status_dialog.dart';
 import '../../widgets/dialog/parking_request_delete_dialog.dart';
 import '../../utils/snackbar_helper.dart';
 import '../../enums/plate_type.dart';
+import 'sections/parking_completed_control_buttons.dart';
 
 class ParkingCompletedPage extends StatefulWidget {
   const ParkingCompletedPage({super.key});
@@ -274,234 +275,17 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
               );
             },
           ),
-          bottomNavigationBar: Consumer<PlateState>(
-            builder: (context, plateState, child) {
-              final userName = context.read<UserState>().name;
-              final selectedPlate = plateState.getSelectedPlate(PlateType.parkingCompleted, userName);
-              final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
-              return BottomNavigationBar(
-                  items: [
-                    BottomNavigationBarItem(
-                      icon: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 300),
-                        transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
-                        child: isPlateSelected
-                            ? (selectedPlate.isLockedFee
-                                ? const Icon(Icons.lock_open, key: ValueKey('unlock'), color: Colors.grey)
-                                : const Icon(Icons.lock, key: ValueKey('lock'), color: Colors.grey))
-                            : Icon(
-                                _isSearchMode ? Icons.cancel : Icons.search,
-                                key: ValueKey(_isSearchMode),
-                                color: _isSearchMode ? Colors.orange : Colors.grey,
-                              ),
-                      ),
-                      label: isPlateSelected
-                          ? (selectedPlate.isLockedFee ? '정산 취소' : '사전 정산')
-                          : (_isSearchMode ? '검색 초기화' : '번호판 검색'),
-                    ),
-                    BottomNavigationBarItem(
-                      icon: Icon(
-                        isPlateSelected ? Icons.check_circle : Icons.local_parking,
-                        color: isPlateSelected ? Colors.green : Colors.grey,
-                      ),
-                      label: isPlateSelected ? '출차 요청' : (_isParkingAreaMode ? '주차 구역 초기화' : '주차 구역'),
-                    ),
-                    BottomNavigationBarItem(
-                      icon: AnimatedRotation(
-                        turns: _isSorted ? 0.5 : 0.0,
-                        duration: const Duration(milliseconds: 300),
-                        child: Transform.scale(
-                          scaleX: _isSorted ? -1 : 1,
-                          child: Icon(
-                            isPlateSelected ? Icons.settings : Icons.sort,
-                          ),
-                        ),
-                      ),
-                      label: isPlateSelected ? '상태 수정' : (_isSorted ? '최신순' : '오래된순'),
-                    ),
-                  ],
-                  onTap: (index) async {
-                    if (index == 0) {
-                      if (isPlateSelected) {
-                        final adjustmentType = selectedPlate.adjustmentType;
-
-                        // ✅ 정산 타입이 없는 경우 → 사전 정산 불가
-                        if (adjustmentType == null || adjustmentType.trim().isEmpty) {
-                          showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
-                          return;
-                        }
-
-                        final now = DateTime.now();
-                        final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
-                        final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
-                        final uploader = GCSUploader();
-                        final division = context.read<AreaState>().currentDivision;
-                        final area = context.read<AreaState>().currentArea.trim();
-                        final userName = context.read<UserState>().name;
-
-                        // ✅ 정산 취소 가능 (확인 다이얼로그 표시)
-                        if (selectedPlate.isLockedFee) {
-                          final confirm = await showDialog<bool>(
-                            context: context,
-                            builder: (context) => const ConfirmCancelFeeDialog(),
-                          );
-
-                          if (confirm == true) {
-                            final updatedPlate = selectedPlate.copyWith(
-                              isLockedFee: false,
-                              lockedAtTimeInSeconds: null,
-                              lockedFeeAmount: null,
-                              paymentMethod: null,
-                            );
-
-                            if (!context.mounted) return;
-
-                            await context.read<PlateRepository>().addOrUpdatePlate(
-                              selectedPlate.id,
-                              updatedPlate,
-                            );
-
-                            if (!context.mounted) return;
-
-                            await context.read<PlateState>().updatePlateLocally(
-                              PlateType.parkingCompleted,
-                              updatedPlate,
-                            );
-
-                            if (!context.mounted) return;
-
-                            // ✅ 로그 데이터 구성
-                            final cancelLog = {
-                              'plateNumber': selectedPlate.plateNumber,
-                              'action': '사전 정산 취소',
-                              'performedBy': userName,
-                              'timestamp': DateTime.now().toIso8601String(),
-                            };
-                            if (adjustmentType.trim().isNotEmpty) {
-                              cancelLog['adjustmentType'] = adjustmentType;
-                            }
-
-                            await uploader.uploadLogJson(
-                              cancelLog,
-                              selectedPlate.plateNumber,
-                              division,
-                              area,
-                              adjustmentType: adjustmentType,
-                            );
-
-                            showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
-                          }
-
-                          return; // ✅ 정산 취소한 경우 여기서 종료
-                        }
-
-                        // ✅ 정산 다이얼로그 호출 (요금 + 결제 방식)
-                        final result = await showAdjustmentTypeConfirmDialog(
-                          context: context,
-                          entryTimeInSeconds: entryTime,
-                          currentTimeInSeconds: currentTime,
-                          basicStandard: selectedPlate.basicStandard ?? 0,
-                          basicAmount: selectedPlate.basicAmount ?? 0,
-                          addStandard: selectedPlate.addStandard ?? 0,
-                          addAmount: selectedPlate.addAmount ?? 0,
-                        );
-
-                        if (result == null) return;
-
-                        final updatedPlate = selectedPlate.copyWith(
-                          isLockedFee: true,
-                          lockedAtTimeInSeconds: currentTime,
-                          lockedFeeAmount: result.lockedFee,
-                          paymentMethod: result.paymentMethod,
-                        );
-
-                        await context.read<PlateRepository>().addOrUpdatePlate(
-                          selectedPlate.id,
-                          updatedPlate,
-                        );
-
-                        if (!context.mounted) return;
-
-                        await context.read<PlateState>().updatePlateLocally(
-                          PlateType.parkingCompleted,
-                          updatedPlate,
-                        );
-
-                        if (!context.mounted) return;
-
-                        // ✅ 사전 정산 완료 로그
-                        final log = {
-                          'plateNumber': selectedPlate.plateNumber,
-                          'action': '사전 정산',
-                          'performedBy': userName,
-                          'timestamp': DateTime.now().toIso8601String(),
-                          'lockedFee': result.lockedFee,
-                          'paymentMethod': result.paymentMethod,
-                        };
-                        if (adjustmentType.trim().isNotEmpty) {
-                          log['adjustmentType'] = adjustmentType;
-                        }
-
-                        await uploader.uploadLogJson(
-                          log,
-                          selectedPlate.plateNumber,
-                          division,
-                          area,
-                          adjustmentType: adjustmentType,
-                        );
-
-                        showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
-                      } else {
-                        _isSearchMode ? _resetSearch(context) : _showSearchDialog(context);
-                      }
-                    } else if (index == 1) {
-                      if (isPlateSelected) {
-                        showDialog(
-                          context: context,
-                          builder: (context) => DepartureRequestConfirmDialog(
-                            onConfirm: () => _handleDepartureRequested(context),
-                          ),
-                        );
-                      } else {
-                        if (_isParkingAreaMode) {
-                          _resetParkingAreaFilter(context);
-                        } else {
-                          _showParkingAreaDialog(context);
-                        }
-                      }
-                    } else if (index == 2) {
-                      if (isPlateSelected) {
-                        showDialog(
-                          context: context,
-                          builder: (context) => ParkingCompletedStatusDialog(
-                            plate: selectedPlate,
-                            plateNumber: selectedPlate.plateNumber,
-                            area: selectedPlate.area,
-                            onRequestEntry: () {
-                              handleEntryParkingRequest(context, selectedPlate.plateNumber, selectedPlate.area);
-                            },
-                            onDelete: () {
-                              showDialog(
-                                context: context,
-                                builder: (context) => ParkingRequestDeleteDialog(
-                                  onConfirm: () {
-                                    context.read<DeletePlate>().deleteFromParkingCompleted(
-                                          selectedPlate.plateNumber,
-                                          selectedPlate.area,
-                                        );
-                                    showSuccessSnackbar(context, "삭제 완료: ${selectedPlate.plateNumber}");
-                                  },
-                                ),
-                              );
-                            },
-                          ),
-                        );
-                      } else {
-                        _toggleSortIcon();
-                      }
-                    }
-                  });
-            },
+          bottomNavigationBar: ParkingCompletedControlBar(
+            isSearchMode: _isSearchMode,
+            isParkingAreaMode: _isParkingAreaMode,
+            isSorted: _isSorted,
+            showSearchDialog: () => _showSearchDialog(context),
+            resetSearch: () => _resetSearch(context),
+            showParkingAreaDialog: () => _showParkingAreaDialog(context),
+            resetParkingAreaFilter: () => _resetParkingAreaFilter(context),
+            toggleSortIcon: _toggleSortIcon, // VoidCallback 그대로 전달 가능
+            handleEntryParkingRequest: handleEntryParkingRequest, // (context, plate, area)
+            handleDepartureRequested: _handleDepartureRequested,  // (context)
           ),
         ));
   }
