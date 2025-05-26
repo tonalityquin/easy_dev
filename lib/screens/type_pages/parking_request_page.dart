@@ -1,20 +1,26 @@
-import 'package:easydev/screens/type_pages/parking_requests_pages/report_dialog.dart';
-import 'package:easydev/states/plate/filter_plate.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
+
+import '../../repositories/plate/plate_repository.dart';
+
+import '../../states/plate/filter_plate.dart';
 import '../../states/plate/plate_state.dart';
 import '../../states/plate/movement_plate.dart';
 import '../../states/area/area_state.dart';
 import '../../states/user/user_state.dart';
-import '../../widgets/container/plate_container.dart';
+
+import '../../utils/snackbar_helper.dart';
+
 import '../../widgets/navigation/top_navigation.dart';
 import '../../widgets/dialog/plate_search_dialog.dart';
-import '../../utils/snackbar_helper.dart';
 import '../../widgets/dialog/parking_location_dialog.dart';
-import '../../repositories/plate/plate_repository.dart';
-import '../../enums/plate_type.dart';
-import 'sections/parking_request_control_buttons.dart';
+import '../../widgets/container/plate_container.dart';
+
+import 'parking_requests_pages/report_dialog.dart';
+import 'parking_requests_pages/parking_request_control_buttons.dart';
 
 class ParkingRequestPage extends StatefulWidget {
   const ParkingRequestPage({super.key});
@@ -238,44 +244,44 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                       top: 16,
                     ),
                     child: SingleChildScrollView(
-                        child: ParkingReportContent(
-                          onReport: (type, content) async {
-                            if (type == 'cancel') {
-                              setState(() => _showReportDialog = false);
-                              return;
-                            }
-
-                            final area = context.read<AreaState>().currentArea;
-                            final division = context.read<AreaState>().currentDivision;
-                            final userName = context.read<UserState>().name;
-
-                            if (type == 'end') {
-                              final reportLog = {
-                                'division': division,
-                                'area': area,
-                                'vehicleCount': content,
-                                'timestamp': DateTime.now().toIso8601String(),
-                              };
-
-                              await uploadEndWorkReportJson(
-                                report: reportLog,
-                                division: division,
-                                area: area,
-                                userName: userName,
-                              );
-
-                              await deleteLockedDepartureDocs(area);
-
-                              showSuccessSnackbar(context, "업무 종료 보고 업로드 및 출차 초기화 (차량 수: \$content)");
-                            } else if (type == 'start') {
-                              showSuccessSnackbar(context, "업무 시작 보고 완료: \$content");
-                            } else if (type == 'middle') {
-                              showSuccessSnackbar(context, "보고란 제출 완료: \$content");
-                            }
-
+                      child: ParkingReportContent(
+                        onReport: (type, content) async {
+                          if (type == 'cancel') {
                             setState(() => _showReportDialog = false);
-                          },
-                        ),
+                            return;
+                          }
+
+                          final area = context.read<AreaState>().currentArea;
+                          final division = context.read<AreaState>().currentDivision;
+                          final userName = context.read<UserState>().name;
+
+                          if (type == 'end') {
+                            final reportLog = {
+                              'division': division,
+                              'area': area,
+                              'vehicleCount': content,
+                              'timestamp': DateTime.now().toIso8601String(),
+                            };
+
+                            await uploadEndWorkReportJson(
+                              report: reportLog,
+                              division: division,
+                              area: area,
+                              userName: userName,
+                            );
+
+                            await deleteLockedDepartureDocs(area);
+
+                            showSuccessSnackbar(context, "업무 종료 보고 업로드 및 출차 초기화 (차량 수: \$content)");
+                          } else if (type == 'start') {
+                            showSuccessSnackbar(context, "업무 시작 보고 완료: \$content");
+                          } else if (type == 'middle') {
+                            showSuccessSnackbar(context, "보고란 제출 완료: \$content");
+                          }
+
+                          setState(() => _showReportDialog = false);
+                        },
+                      ),
                     ),
                   ),
                 ),

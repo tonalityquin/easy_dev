@@ -1,19 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../states/calendar/field_selected_date_state.dart';
+
+import '../../enums/plate_type.dart';
+
 import '../../states/plate/filter_plate.dart';
 import '../../states/plate/plate_state.dart';
 import '../../states/area/area_state.dart';
 import '../../states/user/user_state.dart';
+import '../../states/calendar/field_selected_date_state.dart';
+
+import '../../utils/snackbar_helper.dart';
 import '../../utils/gcs_uploader.dart';
+
+import '../../widgets/navigation/top_navigation.dart';
 import '../../widgets/container/plate_container.dart';
 import '../../widgets/dialog/plate_search_dialog.dart';
-import '../../widgets/navigation/top_navigation.dart';
-import '../../utils/snackbar_helper.dart';
 import '../mini_calendars/field_calendar.dart';
-import '../../enums/plate_type.dart';
+
 import 'departure_completed_pages/departure_completed_page_merge_log.dart';
-import 'sections/departure_completed_control_buttons.dart';
+import 'departure_completed_pages/departure_completed_control_buttons.dart';
 
 class DepartureCompletedPage extends StatefulWidget {
   const DepartureCompletedPage({super.key});

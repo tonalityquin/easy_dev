@@ -1,19 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../models/plate_model.dart';
+import '../../enums/plate_type.dart';
+
+import '../../states/area/area_state.dart'; // AreaState 상태 관리
+import '../../states/plate/filter_plate.dart';
 import '../../states/plate/plate_state.dart'; // PlateState 상태 관리
 import '../../states/plate/movement_plate.dart';
-import '../../states/area/area_state.dart'; // AreaState 상태 관리
 import '../../states/user/user_state.dart';
-import '../../states/plate/filter_plate.dart';
-import '../../widgets/container/plate_container.dart'; // 번호판 컨테이너 위젯
-import '../../widgets/dialog/parking_location_dialog.dart';
+
+import '../../utils/snackbar_helper.dart';
+
 import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바
 import '../../widgets/dialog/plate_search_dialog.dart'; // ✅ PlateSearchDialog 추가
 import '../../widgets/dialog/parking_completed_status_dialog.dart';
-import '../../utils/snackbar_helper.dart';
-import '../../enums/plate_type.dart';
-import 'sections/parking_completed_control_buttons.dart';
+import '../../widgets/dialog/parking_location_dialog.dart';
+import '../../widgets/container/plate_container.dart'; // 번호판 컨테이너 위젯
+
+import 'parking_completed_pages/parking_completed_control_buttons.dart';
 
 class ParkingCompletedPage extends StatefulWidget {
   const ParkingCompletedPage({super.key});
@@ -276,9 +281,11 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
             resetSearch: () => _resetSearch(context),
             showParkingAreaDialog: () => _showParkingAreaDialog(context),
             resetParkingAreaFilter: () => _resetParkingAreaFilter(context),
-            toggleSortIcon: _toggleSortIcon, // VoidCallback 그대로 전달 가능
-            handleEntryParkingRequest: handleEntryParkingRequest, // (context, plate, area)
-            handleDepartureRequested: _handleDepartureRequested,  // (context)
+            toggleSortIcon: _toggleSortIcon,
+            // VoidCallback 그대로 전달 가능
+            handleEntryParkingRequest: handleEntryParkingRequest,
+            // (context, plate, area)
+            handleDepartureRequested: _handleDepartureRequested, // (context)
           ),
         ));
   }
