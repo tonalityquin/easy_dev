@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../repositories/plate/plate_repository.dart';
 import '../../states/calendar/field_selected_date_state.dart';
 import '../../states/plate/filter_plate.dart';
 import '../../states/plate/plate_state.dart';
@@ -8,8 +7,6 @@ import '../../states/area/area_state.dart';
 import '../../states/user/user_state.dart';
 import '../../utils/gcs_uploader.dart';
 import '../../widgets/container/plate_container.dart';
-import '../../widgets/dialog/adjustment_type_confirm_dialog.dart';
-import '../../widgets/dialog/departure_completed_status_dialog.dart';
 import '../../widgets/dialog/plate_search_dialog.dart';
 import '../../widgets/navigation/top_navigation.dart';
 import '../../utils/snackbar_helper.dart';

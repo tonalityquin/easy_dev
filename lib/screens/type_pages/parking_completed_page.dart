@@ -1,23 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/plate_model.dart';
-import '../../repositories/plate/plate_repository.dart';
 import '../../states/plate/plate_state.dart'; // PlateState 상태 관리
-import '../../states/plate/delete_plate.dart';
 import '../../states/plate/movement_plate.dart';
 import '../../states/area/area_state.dart'; // AreaState 상태 관리
 import '../../states/user/user_state.dart';
 import '../../states/plate/filter_plate.dart';
-import '../../utils/gcs_uploader.dart';
 import '../../widgets/container/plate_container.dart'; // 번호판 컨테이너 위젯
-import '../../widgets/dialog/adjustment_type_confirm_dialog.dart';
-import '../../widgets/dialog/confirm_cancel_fee_dialog.dart';
-import '../../widgets/dialog/departure_request_confirmation_dialog.dart';
 import '../../widgets/dialog/parking_location_dialog.dart';
 import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바
 import '../../widgets/dialog/plate_search_dialog.dart'; // ✅ PlateSearchDialog 추가
 import '../../widgets/dialog/parking_completed_status_dialog.dart';
-import '../../widgets/dialog/parking_request_delete_dialog.dart';
 import '../../utils/snackbar_helper.dart';
 import '../../enums/plate_type.dart';
 import 'sections/parking_completed_control_buttons.dart';
