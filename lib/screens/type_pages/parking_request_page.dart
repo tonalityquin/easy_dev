@@ -32,7 +32,7 @@ class ParkingRequestPage extends StatefulWidget {
 class _ParkingRequestPageState extends State<ParkingRequestPage> {
   bool _isSorted = true;
   bool _isSearchMode = false;
-  bool _showReportDialog = false; // 👈 추가
+  bool _showReportDialog = false;
 
   void _toggleSortIcon() {
     setState(() {
@@ -41,7 +41,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
 
     context.read<PlateState>().updateSortOrder(
           PlateType.parkingRequests,
-          _isSorted, // true: 최신순, false: 오래된순
+          _isSorted,
         );
   }
 
@@ -128,7 +128,6 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
         area: area,
         userName: context.read<UserState>().name,
         plateType: PlateType.parkingCompleted,
-        // ✅ 수정된 부분
         adjustmentType: null,
         statusList: [],
         basicStandard: 0,

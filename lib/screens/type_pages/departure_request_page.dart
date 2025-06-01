@@ -276,37 +276,23 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
             },
           ),
           bottomNavigationBar: DepartureRequestControlButtons(
-            isSorted: _isSorted,
             isSearchMode: _isSearchMode,
             isParkingAreaMode: _isParkingAreaMode,
-            onSortToggle: _toggleSortIcon,
-            onSearch: () => _showSearchDialog(context),
-            onResetSearch: () => _resetSearch(context),
-            onParkingAreaToggle: () => _showParkingAreaDialog(context),
-            onResetParkingAreaFilter: () => _resetParkingAreaFilter(context),
-            onDepartureCompleted: () => _handleDepartureCompleted(context),
-            onRequestEntry: () {
-              final plate = context.read<PlateState>().getSelectedPlate(
-                    PlateType.departureRequests,
-                    context.read<UserState>().name,
-                  );
-              if (plate != null) {
-                handleEntryParkingRequest(context, plate.plateNumber, plate.area);
-              }
+            isSorted: _isSorted,
+            showSearchDialog: () => _showSearchDialog(context),
+            resetSearch: () => _resetSearch(context),
+            showParkingAreaDialog: () => _showParkingAreaDialog(context),
+            resetParkingAreaFilter: () => _resetParkingAreaFilter(context),
+            toggleSortIcon: _toggleSortIcon,
+
+            handleDepartureCompleted: (ctx) => _handleDepartureCompleted(ctx),
+
+            handleEntryParkingRequest: (ctx, plateNumber, area) {
+              handleEntryParkingRequest(ctx, plateNumber, area);
             },
-            onCompleteEntry: () {
-              final plate = context.read<PlateState>().getSelectedPlate(
-                    PlateType.departureRequests,
-                    context.read<UserState>().name,
-                  );
-              if (plate != null) {
-                handleEntryParkingCompleted(
-                  context,
-                  plate.plateNumber,
-                  plate.area,
-                  plate.location,
-                );
-              }
+
+            handleEntryParkingCompleted: (ctx, plateNumber, area, location) {
+              handleEntryParkingCompleted(ctx, plateNumber, area, location);
             },
           ),
         ));

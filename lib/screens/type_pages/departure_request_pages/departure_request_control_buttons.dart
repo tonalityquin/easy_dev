@@ -1,3 +1,4 @@
+// ⚙️ import 생략 없이 정리
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -16,31 +17,33 @@ import '../../../widgets/dialog/departure_request_status_dialog.dart';
 import '../../../widgets/dialog/parking_request_delete_dialog.dart';
 
 class DepartureRequestControlButtons extends StatelessWidget {
-  final bool isSorted;
   final bool isSearchMode;
   final bool isParkingAreaMode;
-  final VoidCallback onSortToggle;
-  final VoidCallback onSearch;
-  final VoidCallback onResetSearch;
-  final VoidCallback onParkingAreaToggle;
-  final VoidCallback onResetParkingAreaFilter;
-  final VoidCallback onDepartureCompleted;
-  final void Function() onRequestEntry;
-  final void Function() onCompleteEntry;
+  final bool isSorted;
+
+  final VoidCallback showSearchDialog;
+  final VoidCallback resetSearch;
+  final VoidCallback showParkingAreaDialog;
+  final VoidCallback resetParkingAreaFilter;
+  final VoidCallback toggleSortIcon;
+
+  final Function(BuildContext context) handleDepartureCompleted;
+  final Function(BuildContext context, String plateNumber, String area) handleEntryParkingRequest;
+  final Function(BuildContext context, String plateNumber, String area, String location) handleEntryParkingCompleted;
 
   const DepartureRequestControlButtons({
     super.key,
-    required this.isSorted,
     required this.isSearchMode,
     required this.isParkingAreaMode,
-    required this.onSortToggle,
-    required this.onSearch,
-    required this.onResetSearch,
-    required this.onParkingAreaToggle,
-    required this.onResetParkingAreaFilter,
-    required this.onDepartureCompleted,
-    required this.onRequestEntry,
-    required this.onCompleteEntry,
+    required this.isSorted,
+    required this.showSearchDialog,
+    required this.resetSearch,
+    required this.showParkingAreaDialog,
+    required this.resetParkingAreaFilter,
+    required this.toggleSortIcon,
+    required this.handleDepartureCompleted,
+    required this.handleEntryParkingRequest,
+    required this.handleEntryParkingCompleted,
   });
 
   @override
@@ -98,15 +101,15 @@ class DepartureRequestControlButtons extends StatelessWidget {
             ),
           ],
           onTap: (index) async {
-            final userName = context.read<UserState>().name;
-            final selectedPlate = context.read<PlateState>().getSelectedPlate(PlateType.departureRequests, userName);
-            final plateRepo = context.read<PlateRepository>();
-            final uploader = GCSUploader();
+            final repo = context.read<PlateRepository>();
             final division = context.read<AreaState>().currentDivision;
             final area = context.read<AreaState>().currentArea.trim();
+            final uploader = GCSUploader();
 
-            if (!isPlateSelected && index == 0) {
-              isSearchMode ? onResetSearch() : onSearch();
+            if (!isPlateSelected) {
+              if (index == 0) isSearchMode ? resetSearch() : showSearchDialog();
+              if (index == 1) isParkingAreaMode ? resetParkingAreaFilter() : showParkingAreaDialog();
+              if (index == 2) toggleSortIcon();
               return;
             }
 
@@ -128,7 +131,6 @@ class DepartureRequestControlButtons extends StatelessWidget {
                   context: context,
                   builder: (_) => const ConfirmCancelFeeDialog(),
                 );
-
                 if (confirm != true) return;
 
                 final updatedPlate = selectedPlate.copyWith(
@@ -138,21 +140,16 @@ class DepartureRequestControlButtons extends StatelessWidget {
                   paymentMethod: null,
                 );
 
-                await plateRepo.addOrUpdatePlate(selectedPlate.id, updatedPlate);
-                await context.read<PlateState>().updatePlateLocally(PlateType.departureRequests, updatedPlate);
+                await repo.addOrUpdatePlate(selectedPlate.id, updatedPlate);
+                await plateState.updatePlateLocally(PlateType.departureRequests, updatedPlate);
 
-                await uploader.uploadLogJson(
-                  {
-                    'plateNumber': selectedPlate.plateNumber,
-                    'action': '사전 정산 취소',
-                    'performedBy': userName,
-                    'timestamp': now.toIso8601String(),
-                    'adjustmentType': adjustmentType,
-                  },
-                  selectedPlate.plateNumber,
-                  division,
-                  area,
-                );
+                await uploader.uploadLogJson({
+                  'plateNumber': selectedPlate.plateNumber,
+                  'action': '사전 정산 취소',
+                  'performedBy': context.read<UserState>().name,
+                  'timestamp': now.toIso8601String(),
+                  'adjustmentType': adjustmentType,
+                }, selectedPlate.plateNumber, division, area);
 
                 showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
               } else {
@@ -174,23 +171,18 @@ class DepartureRequestControlButtons extends StatelessWidget {
                   paymentMethod: result.paymentMethod,
                 );
 
-                await plateRepo.addOrUpdatePlate(selectedPlate.id, updatedPlate);
-                await context.read<PlateState>().updatePlateLocally(PlateType.departureRequests, updatedPlate);
+                await repo.addOrUpdatePlate(selectedPlate.id, updatedPlate);
+                await plateState.updatePlateLocally(PlateType.departureRequests, updatedPlate);
 
-                await uploader.uploadLogJson(
-                  {
-                    'plateNumber': selectedPlate.plateNumber,
-                    'action': '사전 정산',
-                    'performedBy': userName,
-                    'timestamp': now.toIso8601String(),
-                    'lockedFee': result.lockedFee,
-                    'paymentMethod': result.paymentMethod,
-                    'adjustmentType': adjustmentType,
-                  },
-                  selectedPlate.plateNumber,
-                  division,
-                  area,
-                );
+                await uploader.uploadLogJson({
+                  'plateNumber': selectedPlate.plateNumber,
+                  'action': '사전 정산',
+                  'performedBy': context.read<UserState>().name,
+                  'timestamp': now.toIso8601String(),
+                  'lockedFee': result.lockedFee,
+                  'paymentMethod': result.paymentMethod,
+                  'adjustmentType': adjustmentType,
+                }, selectedPlate.plateNumber, division, area);
 
                 showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
               }
@@ -198,7 +190,7 @@ class DepartureRequestControlButtons extends StatelessWidget {
               showDialog(
                 context: context,
                 builder: (_) => DepartureCompletedConfirmDialog(
-                  onConfirm: onDepartureCompleted,
+                  onConfirm: () => handleDepartureCompleted(context),
                 ),
               );
             } else if (index == 2) {
@@ -208,8 +200,17 @@ class DepartureRequestControlButtons extends StatelessWidget {
                   plate: selectedPlate,
                   plateNumber: selectedPlate.plateNumber,
                   area: selectedPlate.area,
-                  onRequestEntry: onRequestEntry,
-                  onCompleteEntry: onCompleteEntry,
+                  onRequestEntry: () => handleEntryParkingRequest(
+                    context,
+                    selectedPlate.plateNumber,
+                    selectedPlate.area,
+                  ),
+                  onCompleteEntry: () => handleEntryParkingCompleted(
+                    context,
+                    selectedPlate.plateNumber,
+                    selectedPlate.area,
+                    selectedPlate.location,
+                  ),
                   onDelete: () {
                     showDialog(
                       context: context,

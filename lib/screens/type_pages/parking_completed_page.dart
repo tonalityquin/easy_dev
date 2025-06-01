@@ -273,7 +273,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
               );
             },
           ),
-          bottomNavigationBar: ParkingCompletedControlBar(
+          bottomNavigationBar: ParkingCompletedControlButtons(
             isSearchMode: _isSearchMode,
             isParkingAreaMode: _isParkingAreaMode,
             isSorted: _isSorted,

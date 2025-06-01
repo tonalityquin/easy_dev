@@ -19,7 +19,7 @@ import '../../../widgets/dialog/departure_request_confirmation_dialog.dart';
 import '../../../widgets/dialog/parking_completed_status_dialog.dart';
 import '../../../widgets/dialog/parking_request_delete_dialog.dart';
 
-class ParkingCompletedControlBar extends StatelessWidget {
+class ParkingCompletedControlButtons extends StatelessWidget {
   final bool isSearchMode;
   final bool isParkingAreaMode;
   final bool isSorted;
@@ -31,7 +31,7 @@ class ParkingCompletedControlBar extends StatelessWidget {
   final Function(BuildContext context, String plateNumber, String area) handleEntryParkingRequest;
   final Function(BuildContext context) handleDepartureRequested;
 
-  const ParkingCompletedControlBar({
+  const ParkingCompletedControlButtons({
     super.key,
     required this.isSearchMode,
     required this.isParkingAreaMode,
