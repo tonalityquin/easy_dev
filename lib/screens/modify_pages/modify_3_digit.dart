@@ -81,12 +81,6 @@ class _Modify3Digit extends State<Modify3Digit> {
   bool isLoading = false;
   bool isLocationSelected = false;
   String? selectedAdjustment;
-
-  final ButtonStyle commonButtonStyle = ElevatedButton.styleFrom(
-    backgroundColor: Colors.grey[300],
-    foregroundColor: Colors.black,
-    padding: const EdgeInsets.symmetric(horizontal: 150.0, vertical: 15.0),
-  );
   late CameraHelper _cameraHelper;
   final List<XFile> _capturedImages = [];
   final List<String> _existingImageUrls = [];
@@ -94,44 +88,57 @@ class _Modify3Digit extends State<Modify3Digit> {
   @override
   void initState() {
     super.initState();
+    _initializePlate();
+    _initializeCamera();
+    _initializeFieldValues();
+    _initializeAsyncData();
+  }
+
+  void _initializePlate() {
     isLoading = true;
     if (widget.plate.imageUrls != null) {
       _existingImageUrls.addAll(widget.plate.imageUrls!);
     }
+  }
+
+  void _initializeCamera() {
     _cameraHelper = CameraHelper();
     _cameraHelper.initializeInputCamera().then((_) {
       if (mounted) setState(() {}); // 초기화 완료 후 UI 갱신
     });
-    // ✅ 차량 정보 반영: 텍스트필드 및 드롭다운 등
-    final plate = widget.plate;
-    final plateNum = widget.plate.plateNumber.replaceAll('-', '');
+  }
 
-    // 번호판 분해: 123 가 4567 → 앞 3, 가운데 1, 뒤 4자리로 나누기
-    if (plateNum.length >= 8) {
-      controller3digit.text = plateNum.substring(0, 3);
-      controller1digit.text = plateNum.substring(3, 4);
-      controller4digit.text = plateNum.substring(4);
+  void _initializeFieldValues() {
+    final plate = widget.plate;
+    final plateNum = plate.plateNumber.replaceAll('-', '');
+
+    // ✅ 앞자리가 2~3자리, 중간은 한글 0~1글자, 뒤 4자리
+    final regExp = RegExp(r'^(\d{2,3})([가-힣]?)(\d{4})$');
+    final match = regExp.firstMatch(plateNum);
+
+    if (match != null) {
+      controller3digit.text = match.group(1) ?? '';
+      controller1digit.text = match.group(2) ?? '';
+      controller4digit.text = match.group(3) ?? '';
+    } else {
+      // ⚠️ 파싱 실패 시 로그 출력 (디버깅용)
+      debugPrint('번호판 형식을 파싱하지 못했습니다: $plateNum');
     }
 
-    // 지역 세팅
     dropdownValue = plate.region ?? '전국';
-
-    // 위치
     locationController.text = plate.location;
 
-    // 정산
     selectedAdjustment = plate.adjustmentType;
     selectedBasicStandard = plate.basicStandard ?? 0;
     selectedBasicAmount = plate.basicAmount ?? 0;
     selectedAddStandard = plate.addStandard ?? 0;
     selectedAddAmount = plate.addAmount ?? 0;
 
-    // 상태 목록은 이후 fetch 후 반영
     selectedStatuses = List<String>.from(plate.statusList);
-
     isLocationSelected = locationController.text.isNotEmpty;
+  }
 
-    // 비동기 초기화
+  void _initializeAsyncData() {
     Future.delayed(const Duration(milliseconds: 100), () async {
       try {
         await Future.wait([
@@ -161,8 +168,8 @@ class _Modify3Digit extends State<Modify3Digit> {
     }
 
     final fetchedStatuses = statusState.statuses
-        .where((status) => status.area == currentArea && status.isActive) // ✅ 수정됨
-        .map((status) => status.name) // ✅ 수정됨
+        .where((status) => status.area == currentArea && status.isActive)
+        .map((status) => status.name)
         .toList();
 
     setState(() {
@@ -233,7 +240,6 @@ class _Modify3Digit extends State<Modify3Digit> {
   Future<void> _handleAction() async {
     final adjustmentList = context.read<AdjustmentState>().adjustments;
 
-    // ✅ 정산 타입이 존재하는데 선택 안 한 경우 → 중단 + 스낵바 알림
     if (adjustmentList.isNotEmpty && (selectedAdjustment == null || selectedAdjustment!.isEmpty)) {
       showFailedSnackbar(context, '정산 유형을 선택해주세요');
       return;
@@ -425,7 +431,7 @@ class _Modify3Digit extends State<Modify3Digit> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: AnimatedParkingButton(
-                    isLocationSelected: true,
+                    isLocationSelected: isLocationSelected,
                     onPressed: _selectParkingLocation,
                     buttonLabel: '구역 수정',
                   ),
