@@ -113,8 +113,6 @@ class DepartureRequestControlButtons extends StatelessWidget {
               return;
             }
 
-            if (selectedPlate == null) return;
-
             if (index == 0) {
               final adjustmentType = selectedPlate.adjustmentType;
               if (adjustmentType == null || adjustmentType.trim().isEmpty) {
