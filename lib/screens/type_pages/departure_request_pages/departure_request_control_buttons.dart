@@ -62,13 +62,13 @@ class DepartureRequestControlButtons extends StatelessWidget {
                 transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
                 child: isPlateSelected
                     ? (selectedPlate.isLockedFee
-                    ? const Icon(Icons.lock_open, key: ValueKey('unlock'), color: Colors.grey)
-                    : const Icon(Icons.lock, key: ValueKey('lock'), color: Colors.grey))
+                        ? const Icon(Icons.lock_open, key: ValueKey('unlock'), color: Colors.grey)
+                        : const Icon(Icons.lock, key: ValueKey('lock'), color: Colors.grey))
                     : Icon(
-                  isSearchMode ? Icons.cancel : Icons.search,
-                  key: ValueKey(isSearchMode),
-                  color: isSearchMode ? Colors.orange : Colors.grey,
-                ),
+                        isSearchMode ? Icons.cancel : Icons.search,
+                        key: ValueKey(isSearchMode),
+                        color: isSearchMode ? Colors.orange : Colors.grey,
+                      ),
               ),
               label: isPlateSelected
                   ? (selectedPlate.isLockedFee ? '정산 취소' : '사전 정산')
@@ -81,10 +81,10 @@ class DepartureRequestControlButtons extends StatelessWidget {
                 child: isPlateSelected
                     ? const Icon(Icons.check_circle, key: ValueKey('selected'), color: Colors.green)
                     : Icon(
-                  isParkingAreaMode ? Icons.clear : Icons.local_parking,
-                  key: ValueKey(isParkingAreaMode),
-                  color: isParkingAreaMode ? Colors.orange : Colors.grey,
-                ),
+                        isParkingAreaMode ? Icons.clear : Icons.local_parking,
+                        key: ValueKey(isParkingAreaMode),
+                        color: isParkingAreaMode ? Colors.orange : Colors.grey,
+                      ),
               ),
               label: isPlateSelected ? '출차 완료' : (isParkingAreaMode ? '구역 초기화' : '주차 구역'),
             ),
@@ -217,9 +217,9 @@ class DepartureRequestControlButtons extends StatelessWidget {
                       builder: (_) => ParkingRequestDeleteDialog(
                         onConfirm: () {
                           context.read<DeletePlate>().deleteFromDepartureRequest(
-                            selectedPlate.plateNumber,
-                            selectedPlate.area,
-                          );
+                                selectedPlate.plateNumber,
+                                selectedPlate.area,
+                              );
                           showSuccessSnackbar(context, "삭제 완료: ${selectedPlate.plateNumber}");
                         },
                       ),

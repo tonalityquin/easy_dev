@@ -4,13 +4,11 @@ import 'package:easydev/screens/modify_pages/sections/parking_location_modify_se
 import 'package:easydev/screens/modify_pages/sections/photo_modify_section.dart';
 import 'package:easydev/screens/modify_pages/sections/plate_modify_section.dart';
 import 'package:easydev/screens/modify_pages/sections/status_chip_modify_section.dart';
+import 'package:easydev/widgets/navigation/modify_bottom_navigation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:easydev/states/adjustment/adjustment_state.dart';
 import 'package:easydev/states/status/status_state.dart';
-import 'package:easydev/screens/input_pages/keypad/num_keypad.dart';
-import 'package:easydev/screens/input_pages/keypad/kor_keypad.dart';
-import 'package:easydev/widgets/navigation/bottom_navigation.dart';
 import 'package:easydev/states/area/area_state.dart';
 import 'package:easydev/utils/snackbar_helper.dart';
 import 'package:easydev/widgets/dialog/parking_location_dialog.dart';
@@ -80,8 +78,6 @@ class _Modify3Digit extends State<Modify3Digit> {
   final TextEditingController controller1digit = TextEditingController();
   final TextEditingController controller4digit = TextEditingController();
   final TextEditingController locationController = TextEditingController();
-  late TextEditingController activeController;
-  bool showKeypad = false;
   bool isLoading = false;
   bool isLocationSelected = false;
   String? selectedAdjustment;
@@ -133,8 +129,6 @@ class _Modify3Digit extends State<Modify3Digit> {
     // 상태 목록은 이후 fetch 후 반영
     selectedStatuses = List<String>.from(plate.statusList);
 
-    activeController = controller3digit;
-    _addInputListeners();
     isLocationSelected = locationController.text.isNotEmpty;
 
     // 비동기 초기화
@@ -175,41 +169,6 @@ class _Modify3Digit extends State<Modify3Digit> {
       statuses = fetchedStatuses;
       isSelected = statuses.map((s) => selectedStatuses.contains(s)).toList();
     });
-  }
-
-  void _addInputListeners() {
-    controller3digit.addListener(_handleInputChange);
-    controller1digit.addListener(_handleInputChange);
-    controller4digit.addListener(_handleInputChange);
-  }
-
-  void _removeInputListeners() {
-    controller3digit.removeListener(_handleInputChange);
-    controller1digit.removeListener(_handleInputChange);
-    controller4digit.removeListener(_handleInputChange);
-  }
-
-  void _handleInputChange() {
-    if (controller3digit.text.isEmpty && controller1digit.text.isEmpty && controller4digit.text.isEmpty) {
-      return;
-    }
-    if (!_validateField(controller3digit, 3) ||
-        !_validateField(controller1digit, 1) ||
-        !_validateField(controller4digit, 4)) {
-      showFailedSnackbar(context, '입력값이 유효하지 않습니다. 다시 확인해주세요.');
-      return;
-    }
-    if (controller3digit.text.length == 3 && controller1digit.text.length == 1 && controller4digit.text.length == 4) {
-      setState(() {
-        showKeypad = false;
-      });
-      return;
-    }
-    if (activeController == controller3digit && controller3digit.text.length == 3) {
-      _setActiveController(controller1digit);
-    } else if (activeController == controller1digit && controller1digit.text.length == 1) {
-      _setActiveController(controller4digit);
-    }
   }
 
   Future<void> _showCameraPreviewDialog() async {
@@ -256,24 +215,11 @@ class _Modify3Digit extends State<Modify3Digit> {
     }
   }
 
-  void _setActiveController(TextEditingController controller) {
-    setState(() {
-      activeController = controller;
-      showKeypad = true;
-    });
-  }
-
-  bool _validateField(TextEditingController controller, int maxLength) {
-    return controller.text.length <= maxLength;
-  }
-
   void clearInput() {
     setState(() {
       controller3digit.clear();
       controller1digit.clear();
       controller4digit.clear();
-      activeController = controller3digit;
-      showKeypad = true;
     });
   }
 
@@ -381,7 +327,6 @@ class _Modify3Digit extends State<Modify3Digit> {
 
   @override
   void dispose() {
-    _removeInputListeners();
     controller3digit.dispose();
     controller1digit.dispose();
     controller4digit.dispose();
@@ -467,24 +412,7 @@ class _Modify3Digit extends State<Modify3Digit> {
           ),
         ],
       ),
-      bottomNavigationBar: BottomNavigation(
-        showKeypad: showKeypad,
-        keypad: activeController == controller3digit
-            ? NumKeypad(
-                controller: controller3digit,
-                maxLength: 3,
-                onComplete: () => _setActiveController(controller1digit),
-              )
-            : activeController == controller1digit
-                ? KorKeypad(
-                    controller: controller1digit,
-                    onComplete: () => _setActiveController(controller4digit),
-                  )
-                : NumKeypad(
-                    controller: controller4digit,
-                    maxLength: 4,
-                    onComplete: () => setState(() => showKeypad = false),
-                  ),
+      bottomNavigationBar: ModifyBottomNavigation(
         actionButton: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -512,15 +440,12 @@ class _Modify3Digit extends State<Modify3Digit> {
               onPressed: () async {
                 setState(() => isLoading = true); // 비동기 작업 전 로딩 상태 설정
 
-                // 비동기 작업을 처리
-                await _handleAction();
+                await _handleAction(); // 비동기 작업 처리
 
-                // 비동기 작업 후, mounted 체크 후 UI 업데이트
                 if (!mounted) return;
 
-                setState(() => isLoading = false); // 비동기 작업 후 로딩 상태 해제
+                setState(() => isLoading = false); // 비동기 작업 후 로딩 해제
 
-                // 비동기 작업 완료 후 스낵바 표시
                 if (mounted) {
                   showSuccessSnackbar(context, "수정이 완료되었습니다!");
                 }

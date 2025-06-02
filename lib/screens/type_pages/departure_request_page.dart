@@ -284,13 +284,10 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
             showParkingAreaDialog: () => _showParkingAreaDialog(context),
             resetParkingAreaFilter: () => _resetParkingAreaFilter(context),
             toggleSortIcon: _toggleSortIcon,
-
             handleDepartureCompleted: (ctx) => _handleDepartureCompleted(ctx),
-
             handleEntryParkingRequest: (ctx, plateNumber, area) {
               handleEntryParkingRequest(ctx, plateNumber, area);
             },
-
             handleEntryParkingCompleted: (ctx, plateNumber, area, location) {
               handleEntryParkingCompleted(ctx, plateNumber, area, location);
             },
