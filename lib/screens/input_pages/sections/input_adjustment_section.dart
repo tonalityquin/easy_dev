@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../states/adjustment/adjustment_state.dart';
-import '../utils/buttons/custom_adjustment_dropdown.dart';
+import '../utils/buttons/input_custom_adjustment_dropdown.dart';
 
 class InputAdjustmentSection extends StatelessWidget {
   final String? selectedAdjustment;
@@ -44,7 +44,7 @@ class InputAdjustmentSection extends StatelessWidget {
             ),
           )
         else
-          CustomAdjustmentDropdown(
+          InputCustomAdjustmentDropdown(
             items: adjustmentList.map((adj) => adj.countType).toList(),
             selectedValue: selectedAdjustment,
             onChanged: onChanged,

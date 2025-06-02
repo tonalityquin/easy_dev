@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
-class AnimatedActionButton extends StatefulWidget {
+class InputAnimatedActionButton extends StatefulWidget {
   final bool isLoading;
   final bool isLocationSelected;
   final Future<void> Function() onPressed;
   final String? buttonLabel;
 
-  const AnimatedActionButton({
+  const InputAnimatedActionButton({
     super.key,
     required this.isLoading,
     required this.isLocationSelected,
@@ -15,10 +15,10 @@ class AnimatedActionButton extends StatefulWidget {
   });
 
   @override
-  State<AnimatedActionButton> createState() => _AnimatedActionButtonState();
+  State<InputAnimatedActionButton> createState() => _InputAnimatedActionButtonState();
 }
 
-class _AnimatedActionButtonState extends State<AnimatedActionButton>
+class _InputAnimatedActionButtonState extends State<InputAnimatedActionButton>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;

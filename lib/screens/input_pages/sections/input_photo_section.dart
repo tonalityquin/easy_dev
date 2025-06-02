@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import '../utils/camera_fullscreen_viewer.dart';
+import '../utils/input_camera_fullscreen_viewer.dart';
 
 class InputPhotoSection extends StatelessWidget {
   final List<XFile> capturedImages;

@@ -3,7 +3,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 
-class CameraHelper {
+class ModifyCameraHelper {
   CameraController? cameraController;
   bool isCameraInitialized = false;
   final List<XFile> capturedImages = [];

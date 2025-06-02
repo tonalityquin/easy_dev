@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../models/plate_model.dart';
-import '../../screens/modify_pages/modify_3_digit.dart';
+import '../../screens/modify_pages/modify_plate_screen.dart';
 import '../../screens/logs/plate_log_viewer_page.dart';
 import '../../states/area/area_state.dart';
 import '../../states/plate/movement_plate.dart';
@@ -73,7 +73,7 @@ class ParkingCompletedStatusDialog extends StatelessWidget {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => Modify3Digit(
+                      builder: (_) => ModifyPlateScreen(
                         plate: plate,
                         collectionKey: PlateType.parkingCompleted,
                       ),

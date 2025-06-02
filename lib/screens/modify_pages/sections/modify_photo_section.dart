@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:easydev/utils/camera_fullscreen_viewer.dart';
 
-class PhotoModifySection extends StatelessWidget {
+class ModifyPhotoSection extends StatelessWidget {
   final List<String> existingImageUrls;
   final List<XFile> capturedImages;
 
-  const PhotoModifySection({
+  const ModifyPhotoSection({
     super.key,
     required this.existingImageUrls,
     required this.capturedImages,

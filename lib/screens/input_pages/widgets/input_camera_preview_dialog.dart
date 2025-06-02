@@ -1,31 +1,31 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
-import '../utils/camera_helper.dart';
+import '../utils/input_camera_helper.dart';
 
-class CameraPreviewDialog extends StatefulWidget {
+class InputCameraPreviewDialog extends StatefulWidget {
   final void Function(List<XFile>)? onCaptureComplete;
   final void Function(XFile)? onImageCaptured;
 
-  const CameraPreviewDialog({
+  const InputCameraPreviewDialog({
     super.key,
     this.onCaptureComplete,
     this.onImageCaptured,
   });
 
   @override
-  State<CameraPreviewDialog> createState() => _CameraPreviewDialogState();
+  State<InputCameraPreviewDialog> createState() => _InputCameraPreviewDialogState();
 }
 
-class _CameraPreviewDialogState extends State<CameraPreviewDialog> {
-  late final CameraHelper _cameraHelper;
+class _InputCameraPreviewDialogState extends State<InputCameraPreviewDialog> {
+  late final InputCameraHelper _cameraHelper;
   final List<XFile> _capturedImages = [];
   bool _isCameraReady = false;
 
   @override
   void initState() {
     super.initState();
-    _cameraHelper = CameraHelper();
+    _cameraHelper = InputCameraHelper();
     _initializeCamera();
   }
 

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../utils/input_plate_field.dart';
-import '../widgets/region_picker_dialog.dart';
+import '../widgets/input_region_picker_dialog.dart';
 
 class InputPlateSection extends StatelessWidget {
   final String dropdownValue;

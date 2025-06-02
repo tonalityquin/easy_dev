@@ -1,31 +1,31 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
-import '../../utils/camera_helper.dart';
+import '../utils/modify_camera_helper.dart';
 
-class CameraPreviewDialog extends StatefulWidget {
+class ModifyCameraPreviewDialog extends StatefulWidget {
   final void Function(List<XFile>)? onCaptureComplete;
   final void Function(XFile)? onImageCaptured;
 
-  const CameraPreviewDialog({
+  const ModifyCameraPreviewDialog({
     super.key,
     this.onCaptureComplete,
     this.onImageCaptured,
   });
 
   @override
-  State<CameraPreviewDialog> createState() => _CameraPreviewDialogState();
+  State<ModifyCameraPreviewDialog> createState() => _ModifyCameraPreviewDialogState();
 }
 
-class _CameraPreviewDialogState extends State<CameraPreviewDialog> {
-  late final CameraHelper _cameraHelper;
+class _ModifyCameraPreviewDialogState extends State<ModifyCameraPreviewDialog> {
+  late final ModifyCameraHelper _cameraHelper;
   final List<XFile> _capturedImages = [];
   bool _isCameraReady = false;
 
   @override
   void initState() {
     super.initState();
-    _cameraHelper = CameraHelper();
+    _cameraHelper = ModifyCameraHelper();
     _initializeCamera();
   }
 
@@ -90,7 +90,6 @@ class _CameraPreviewDialogState extends State<CameraPreviewDialog> {
               )
             else
               const Center(child: CircularProgressIndicator()),
-
             if (_capturedImages.isNotEmpty)
               Positioned(
                 top: 16,
@@ -116,7 +115,6 @@ class _CameraPreviewDialogState extends State<CameraPreviewDialog> {
                   ),
                 ),
               ),
-
             Positioned(
               bottom: 20,
               left: 0,

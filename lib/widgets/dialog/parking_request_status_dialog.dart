@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/plate_model.dart'; // ✅ PlateModel import
-import '../../screens/modify_pages/modify_3_digit.dart'; // ✅ 정보 수정 화면 import
+import '../../screens/modify_pages/modify_plate_screen.dart'; // ✅ 정보 수정 화면 import
 import '../../screens/logs/plate_log_viewer_page.dart';
 import '../../states/area/area_state.dart';
 import '../../states/plate/movement_plate.dart';
@@ -71,7 +71,7 @@ class ParkingRequestStatusDialog extends StatelessWidget {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => Modify3Digit(
+                      builder: (_) => ModifyPlateScreen(
                         plate: plate,
                         collectionKey: PlateType.parkingRequests,
                       ),

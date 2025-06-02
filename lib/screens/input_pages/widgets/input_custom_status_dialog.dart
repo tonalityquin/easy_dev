@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
-/// Firestore에서 plate 상태 정보를 조회하고, 사용자에게 주의사항이 있으면 알림 다이얼로그를 띄움.
-/// 다이얼로그를 띄운 경우에는 customStatus 값을 반환하고, 없으면 null 반환.
 Future<String?> showCustomStatusDialog(BuildContext context, String plateNumber, String area) async {
   final docId = '${plateNumber}_$area';
   final docSnapshot = await FirebaseFirestore.instance

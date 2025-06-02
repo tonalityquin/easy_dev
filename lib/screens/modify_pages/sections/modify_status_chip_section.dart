@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
-class StatusChipModifySection extends StatelessWidget {
+class ModifyStatusChipSection extends StatelessWidget {
   final List<String> statuses;
   final List<bool> isSelected;
   final ValueChanged<int> onToggle;
 
-  const StatusChipModifySection({
+  const ModifyStatusChipSection({
     super.key,
     required this.statuses,
     required this.isSelected,

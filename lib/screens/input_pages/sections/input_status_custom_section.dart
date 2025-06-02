@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-class StatusCustomSection extends StatelessWidget {
+class InputStatusCustomSection extends StatelessWidget {
   final String customStatus;
   final VoidCallback onDelete;
 
-  const StatusCustomSection({
+  const InputStatusCustomSection({
     super.key,
     required this.customStatus,
     required this.onDelete,

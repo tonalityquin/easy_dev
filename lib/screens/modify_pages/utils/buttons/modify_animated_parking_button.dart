@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
-class AnimatedParkingButton extends StatefulWidget {
+class ModifyAnimatedParkingButton extends StatefulWidget {
   final bool isLocationSelected;
   final VoidCallback onPressed;
   final String? buttonLabel;
 
-  const AnimatedParkingButton({
+  const ModifyAnimatedParkingButton({
     super.key,
     required this.isLocationSelected,
     required this.onPressed,
@@ -13,10 +13,10 @@ class AnimatedParkingButton extends StatefulWidget {
   });
 
   @override
-  State<AnimatedParkingButton> createState() => _AnimatedParkingButtonState();
+  State<ModifyAnimatedParkingButton> createState() => _ModifyAnimatedParkingButtonState();
 }
 
-class _AnimatedParkingButtonState extends State<AnimatedParkingButton>
+class _ModifyAnimatedParkingButtonState extends State<ModifyAnimatedParkingButton>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;

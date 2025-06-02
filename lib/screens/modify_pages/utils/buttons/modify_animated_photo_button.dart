@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 
-class AnimatedPhotoButton extends StatefulWidget {
+class ModifyAnimatedPhotoButton extends StatefulWidget {
   final VoidCallback onPressed;
 
-  const AnimatedPhotoButton({super.key, required this.onPressed});
+  const ModifyAnimatedPhotoButton({super.key, required this.onPressed});
 
   @override
-  State<AnimatedPhotoButton> createState() => _AnimatedPhotoButtonState();
+  State<ModifyAnimatedPhotoButton> createState() => _ModifyAnimatedPhotoButtonState();
 }
 
-class _AnimatedPhotoButtonState extends State<AnimatedPhotoButton> with SingleTickerProviderStateMixin {
+class _ModifyAnimatedPhotoButtonState extends State<ModifyAnimatedPhotoButton> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
 

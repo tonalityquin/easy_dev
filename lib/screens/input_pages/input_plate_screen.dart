@@ -10,17 +10,17 @@ import 'sections/input_adjustment_section.dart';
 import 'sections/input_location_section.dart';
 import 'sections/input_photo_section.dart';
 import 'sections/input_plate_section.dart';
-import 'sections/status_on_tap_section.dart';
-import 'sections/status_custom_section.dart';
+import 'sections/input_status_on_tap_section.dart';
+import 'sections/input_status_custom_section.dart';
 
-import 'utils/camera_helper.dart';
-import 'utils/buttons/animated_parking_button.dart';
-import 'utils/buttons/animated_photo_button.dart';
-import 'utils/buttons/animated_action_button.dart';
+import 'utils/input_camera_helper.dart';
+import 'utils/buttons/input_animated_parking_button.dart';
+import 'utils/buttons/input_animated_photo_button.dart';
+import 'utils/buttons/input_animated_action_button.dart';
 
 import 'widgets/input_location_dialog.dart';
-import 'widgets/camera_preview_dialog.dart';
-import 'widgets/custom_status_dialog.dart';
+import 'widgets/input_camera_preview_dialog.dart';
+import 'widgets/input_custom_status_dialog.dart';
 import 'widgets/input_bottom_navigation.dart';
 import 'keypad/num_keypad.dart';
 import 'keypad/kor_keypad.dart';
@@ -34,12 +34,12 @@ class InputPlateScreen extends StatefulWidget {
 
 class _InputPlateScreenState extends State<InputPlateScreen> {
   final controller = InputPlateController();
-  late CameraHelper _cameraHelper;
+  late InputCameraHelper _cameraHelper;
 
   @override
   void initState() {
     super.initState();
-    _cameraHelper = CameraHelper();
+    _cameraHelper = InputCameraHelper();
     _cameraHelper.initializeInputCamera().then((_) => setState(() {}));
 
     controller.controllerBackDigit.addListener(() async {
@@ -85,7 +85,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     if (!mounted) return;
     await showDialog(
       context: context,
-      builder: (context) => CameraPreviewDialog(
+      builder: (context) => InputCameraPreviewDialog(
         onImageCaptured: (image) {
           setState(() {
             controller.capturedImages.add(image);
@@ -224,7 +224,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
               onChanged: (value) => setState(() => controller.selectedAdjustment = value),
             ),
             const SizedBox(height: 32),
-            StatusOnTapSection(
+            InputStatusOnTapSection(
               statuses: controller.statuses,
               isSelected: controller.isSelected,
               onToggle: (index) {
@@ -246,7 +246,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
               ),
             ),
             if (controller.fetchedCustomStatus != null)
-              StatusCustomSection(
+              InputStatusCustomSection(
                 customStatus: controller.fetchedCustomStatus!,
                 onDelete: () async {
                   try {
@@ -275,11 +275,11 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
             Row(
               children: [
                 Expanded(
-                  child: AnimatedPhotoButton(onPressed: _showCameraPreviewDialog),
+                  child: InputAnimatedPhotoButton(onPressed: _showCameraPreviewDialog),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: AnimatedParkingButton(
+                  child: InputAnimatedParkingButton(
                     isLocationSelected: controller.isLocationSelected,
                     onPressed: _buildLocationAction(),
                   ),
@@ -287,7 +287,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
               ],
             ),
             const SizedBox(height: 15),
-            AnimatedActionButton(
+            InputAnimatedActionButton(
               isLoading: controller.isLoading,
               isLocationSelected: controller.isLocationSelected,
               onPressed: () => controller.handleAction(context, mounted, () => setState(() {})),

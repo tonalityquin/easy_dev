@@ -10,37 +10,40 @@ import '../../states/adjustment/adjustment_state.dart';
 import '../../states/status/status_state.dart';
 import '../../states/area/area_state.dart';
 
-import '../../screens/modify_pages/modify_plate_service.dart';
-import '../../screens/modify_pages/sections/adjustment_modify_section.dart';
-import '../../screens/modify_pages/sections/parking_location_modify_section.dart';
-import '../../screens/modify_pages/sections/photo_modify_section.dart';
-import '../../screens/modify_pages/sections/plate_modify_section.dart';
-import '../../screens/modify_pages/sections/status_chip_modify_section.dart';
+import 'modify_plate_service.dart';
 
-import '../../utils/button/animated_action_button.dart';
-import '../../utils/button/animated_parking_button.dart';
-import '../../utils/button/animated_photo_button.dart';
-import '../../utils/snackbar_helper.dart';
-import '../../utils/camera_helper.dart';
+import 'sections/modify_adjustment_section.dart';
+import 'sections/modify_parking_location_section.dart';
+import 'sections/modify_photo_section.dart';
+import 'sections/modify_plate_section.dart';
+import 'sections/modify_status_chip_section.dart';
 
-import '../../widgets/dialog/camera_preview_dialog.dart';
+import 'utils/buttons/modify_animated_action_button.dart';
+import 'utils/buttons/modify_animated_parking_button.dart';
+import 'utils/buttons/modify_animated_photo_button.dart';
+import 'utils/modify_camera_helper.dart';
+
+import 'widgets/modify_camera_preview_dialog.dart';
+import 'widgets/modify_bottom_navigation.dart';
+
 import '../../widgets/dialog/parking_location_dialog.dart';
-import '../../widgets/navigation/modify_bottom_navigation.dart';
+import '../../utils/snackbar_helper.dart';
 
-class Modify3Digit extends StatefulWidget {
-  final PlateModel plate; // ✅ plate 파라미터 추가
-  final PlateType collectionKey; // ✅ 추가
+class ModifyPlateScreen extends StatefulWidget {
+  final PlateModel plate;
+  final PlateType collectionKey;
 
-  const Modify3Digit({
+  const ModifyPlateScreen({
     super.key,
     required this.plate,
     required this.collectionKey,
-  }); // ✅ 생성자에 추가
+  });
+
   @override
-  State<Modify3Digit> createState() => _Modify3Digit();
+  State<ModifyPlateScreen> createState() => _ModifyPlateScreen();
 }
 
-class _Modify3Digit extends State<Modify3Digit> {
+class _ModifyPlateScreen extends State<ModifyPlateScreen> {
   final List<String> regions = [
     '전국',
     '강원',
@@ -68,7 +71,7 @@ class _Modify3Digit extends State<Modify3Digit> {
     '준외',
     '협정'
   ];
-  String dropdownValue = '전국'; // ✅ 드롭다운 값 상태 변수
+  String dropdownValue = '전국';
   List<String> selectedStatuses = [];
   List<bool> isSelected = [];
   List<String> statuses = [];
@@ -83,7 +86,7 @@ class _Modify3Digit extends State<Modify3Digit> {
   bool isLoading = false;
   bool isLocationSelected = false;
   String? selectedAdjustment;
-  late CameraHelper _cameraHelper;
+  late ModifyCameraHelper _cameraHelper;
   final List<XFile> _capturedImages = [];
   final List<String> _existingImageUrls = [];
 
@@ -104,9 +107,9 @@ class _Modify3Digit extends State<Modify3Digit> {
   }
 
   void _initializeCamera() {
-    _cameraHelper = CameraHelper();
+    _cameraHelper = ModifyCameraHelper();
     _cameraHelper.initializeInputCamera().then((_) {
-      if (mounted) setState(() {}); // 초기화 완료 후 UI 갱신
+      if (mounted) setState(() {});
     });
   }
 
@@ -114,7 +117,6 @@ class _Modify3Digit extends State<Modify3Digit> {
     final plate = widget.plate;
     final plateNum = plate.plateNumber.replaceAll('-', '');
 
-    // ✅ 앞자리가 2~3자리, 중간은 한글 0~1글자, 뒤 4자리
     final regExp = RegExp(r'^(\d{2,3})([가-힣]?)(\d{4})$');
     final match = regExp.firstMatch(plateNum);
 
@@ -123,7 +125,6 @@ class _Modify3Digit extends State<Modify3Digit> {
       controller1digit.text = match.group(2) ?? '';
       controller4digit.text = match.group(3) ?? '';
     } else {
-      // ⚠️ 파싱 실패 시 로그 출력 (디버깅용)
       debugPrint('번호판 형식을 파싱하지 못했습니다: $plateNum');
     }
 
@@ -183,19 +184,15 @@ class _Modify3Digit extends State<Modify3Digit> {
   Future<void> _showCameraPreviewDialog() async {
     debugPrint('📸 _showCameraPreviewDialog() 호출됨');
 
-    // 카메라 초기화
     await _cameraHelper.initializeInputCamera();
 
-    // showDialog 호출 전에 mounted 체크
     if (!context.mounted) return;
 
-    // 다이얼로그 표시
     await showDialog(
       context: context,
       builder: (context) {
-        return CameraPreviewDialog(
+        return ModifyCameraPreviewDialog(
           onImageCaptured: (image) {
-            // 다이얼로그에서 이미지를 캡처한 후 setState 호출 전에 mounted 체크
             if (context.mounted) {
               setState(() {
                 _capturedImages.add(image);
@@ -209,16 +206,13 @@ class _Modify3Digit extends State<Modify3Digit> {
 
     debugPrint('📸 다이얼로그 닫힘 → dispose() 호출 전');
 
-    // dispose 호출 전 mounted 체크
     if (context.mounted) {
       await _cameraHelper.dispose();
     }
 
     debugPrint('📸 dispose 완료 후 200ms 지연');
-    // 200ms 지연 후 setState 호출
     await Future.delayed(const Duration(milliseconds: 200));
 
-    // setState 호출 전에 여전히 위젯이 마운트되었는지 확인
     if (context.mounted) {
       setState(() {});
     }
@@ -279,8 +273,6 @@ class _Modify3Digit extends State<Modify3Digit> {
       newLocation: newLocation,
       newAdjustmentType: newAdjustmentType,
     );
-
-    // ✅ 로그 저장은 정책상 제거 → logPlateChange 제거
 
     if (success) {
       final updatedPlate = widget.plate.copyWith(
@@ -369,7 +361,7 @@ class _Modify3Digit extends State<Modify3Digit> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  PlateModifySection(
+                  ModifyPlateSection(
                     dropdownValue: dropdownValue,
                     regions: regions,
                     controller3digit: controller3digit,
@@ -381,14 +373,14 @@ class _Modify3Digit extends State<Modify3Digit> {
                     },
                   ),
                   const SizedBox(height: 32.0),
-                  ParkingLocationModifySection(locationController: locationController),
+                  ModifyParkingLocationSection(locationController: locationController),
                   const SizedBox(height: 32.0),
-                  PhotoModifySection(
+                  ModifyPhotoSection(
                     capturedImages: _capturedImages,
                     existingImageUrls: _existingImageUrls,
                   ),
                   const SizedBox(height: 32.0),
-                  AdjustmentModifySection(
+                  ModifyAdjustmentSection(
                     collectionKey: widget.collectionKey,
                     selectedAdjustment: selectedAdjustment,
                     onChanged: (value) => setState(() => selectedAdjustment = value),
@@ -403,7 +395,7 @@ class _Modify3Digit extends State<Modify3Digit> {
                     },
                   ),
                   const SizedBox(height: 32.0),
-                  StatusChipModifySection(
+                  ModifyStatusChipSection(
                     statuses: statuses,
                     isSelected: isSelected,
                     onToggle: (index) {
@@ -428,11 +420,11 @@ class _Modify3Digit extends State<Modify3Digit> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
-                  child: AnimatedPhotoButton(onPressed: _showCameraPreviewDialog),
+                  child: ModifyAnimatedPhotoButton(onPressed: _showCameraPreviewDialog),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: AnimatedParkingButton(
+                  child: ModifyAnimatedParkingButton(
                     isLocationSelected: isLocationSelected,
                     onPressed: _selectParkingLocation,
                     buttonLabel: '구역 수정',
@@ -441,7 +433,7 @@ class _Modify3Digit extends State<Modify3Digit> {
               ],
             ),
             const SizedBox(height: 15),
-            AnimatedActionButton(
+            ModifyAnimatedActionButton(
               isLoading: isLoading,
               isLocationSelected: isLocationSelected,
               buttonLabel: '수정 완료',
