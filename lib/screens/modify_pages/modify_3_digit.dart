@@ -1,29 +1,31 @@
-import 'package:camera/camera.dart';
-import 'package:easydev/screens/modify_pages/sections/adjustment_modify_section.dart';
-import 'package:easydev/screens/modify_pages/sections/parking_location_modify_section.dart';
-import 'package:easydev/screens/modify_pages/sections/photo_modify_section.dart';
-import 'package:easydev/screens/modify_pages/sections/plate_modify_section.dart';
-import 'package:easydev/screens/modify_pages/sections/status_chip_modify_section.dart';
-import 'package:easydev/widgets/navigation/modify_bottom_navigation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:easydev/states/adjustment/adjustment_state.dart';
-import 'package:easydev/states/status/status_state.dart';
-import 'package:easydev/states/area/area_state.dart';
-import 'package:easydev/utils/snackbar_helper.dart';
-import 'package:easydev/widgets/dialog/parking_location_dialog.dart';
-import 'package:easydev/utils/camera_helper.dart';
-import 'package:easydev/widgets/dialog/camera_preview_dialog.dart';
-import 'package:easydev/models/plate_model.dart';
+import 'package:camera/camera.dart';
 
-import 'package:easydev/screens/modify_pages/modify_plate_service.dart';
+import '../../models/plate_model.dart';
+import '../../enums/plate_type.dart';
 
-import 'package:easydev/utils/button/animated_parking_button.dart';
-import 'package:easydev/utils/button/animated_photo_button.dart';
-import 'package:easydev/utils/button/animated_action_button.dart';
+import '../../states/plate/plate_state.dart';
+import '../../states/adjustment/adjustment_state.dart';
+import '../../states/status/status_state.dart';
+import '../../states/area/area_state.dart';
 
-import 'package:easydev/states/plate/plate_state.dart';
-import 'package:easydev/enums/plate_type.dart';
+import '../../screens/modify_pages/modify_plate_service.dart';
+import '../../screens/modify_pages/sections/adjustment_modify_section.dart';
+import '../../screens/modify_pages/sections/parking_location_modify_section.dart';
+import '../../screens/modify_pages/sections/photo_modify_section.dart';
+import '../../screens/modify_pages/sections/plate_modify_section.dart';
+import '../../screens/modify_pages/sections/status_chip_modify_section.dart';
+
+import '../../utils/button/animated_action_button.dart';
+import '../../utils/button/animated_parking_button.dart';
+import '../../utils/button/animated_photo_button.dart';
+import '../../utils/snackbar_helper.dart';
+import '../../utils/camera_helper.dart';
+
+import '../../widgets/dialog/camera_preview_dialog.dart';
+import '../../widgets/dialog/parking_location_dialog.dart';
+import '../../widgets/navigation/modify_bottom_navigation.dart';
 
 class Modify3Digit extends StatefulWidget {
   final PlateModel plate; // ✅ plate 파라미터 추가
