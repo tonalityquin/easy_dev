@@ -9,7 +9,7 @@ import 'sections/modify_adjustment_section.dart';
 import 'sections/modify_parking_location_section.dart';
 import 'sections/modify_photo_section.dart';
 import 'sections/modify_plate_section.dart';
-import 'sections/modify_status_chip_section.dart';
+import 'sections/modify_status_on_tap_section.dart';
 
 import 'utils/buttons/modify_animated_action_button.dart';
 import 'utils/buttons/modify_animated_parking_button.dart';
@@ -154,7 +154,7 @@ class _ModifyPlateScreen extends State<ModifyPlateScreen> {
                     },
                   ),
                   const SizedBox(height: 32.0),
-                  ModifyStatusChipSection(
+                  ModifyStatusOnTapSection(
                     statuses: _controller.statuses,
                     isSelected: _controller.isSelected,
                     onToggle: (index) {
