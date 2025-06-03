@@ -131,65 +131,59 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
         foregroundColor: Colors.black,
         elevation: 1,
       ),
-      body: Stack(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ModifyPlateSection(
-                    dropdownValue: _controller.dropdownValue,
-                    regions: _controller.regions,
-                    controllerFrontdigit: controllerFrontdigit,
-                    controllerMidDigit: controllerMidDigit,
-                    controllerBackDigit: controllerBackDigit,
-                    isEditable: false,
-                    onRegionChanged: (region) {
-                      setState(() => _controller.dropdownValue = region);
-                    },
-                  ),
-                  const SizedBox(height: 32.0),
-                  ModifyParkingLocationSection(locationController: locationController),
-                  const SizedBox(height: 32.0),
-                  ModifyPhotoSection(
-                    capturedImages: _controller.capturedImages,
-                  ),
-                  const SizedBox(height: 32.0),
-                  ModifyAdjustmentSection(
-                    collectionKey: widget.collectionKey,
-                    selectedAdjustment: _controller.selectedAdjustment,
-                    onChanged: (value) => setState(() => _controller.selectedAdjustment = value),
-                    onRefresh: _controller.refreshAdjustments,
-                    onAutoFill: (adj) {
-                      setState(() {
-                        _controller.selectedBasicStandard = adj.basicStandard;
-                        _controller.selectedBasicAmount = adj.basicAmount;
-                        _controller.selectedAddStandard = adj.addStandard;
-                        _controller.selectedAddAmount = adj.addAmount;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 32.0),
-                  ModifyStatusOnTapSection(
-                    statuses: _controller.statuses,
-                    isSelected: _controller.isSelected,
-                    onToggle: (index) {
-                      setState(() {
-                        _controller.isSelected[index] = !_controller.isSelected[index];
-                        final status = _controller.statuses[index];
-                        _controller.isSelected[index]
-                            ? _controller.selectedStatuses.add(status)
-                            : _controller.selectedStatuses.remove(status);
-                      });
-                    },
-                  ),
-                ],
-              ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ModifyPlateSection(
+              dropdownValue: _controller.dropdownValue,
+              regions: _controller.regions,
+              controllerFrontdigit: controllerFrontdigit,
+              controllerMidDigit: controllerMidDigit,
+              controllerBackDigit: controllerBackDigit,
+              isEditable: false,
+              onRegionChanged: (region) {
+                setState(() => _controller.dropdownValue = region);
+              },
             ),
-          ),
-        ],
+            const SizedBox(height: 32.0),
+            ModifyParkingLocationSection(locationController: locationController),
+            const SizedBox(height: 32.0),
+            ModifyPhotoSection(
+              capturedImages: _controller.capturedImages,
+            ),
+            const SizedBox(height: 32.0),
+            ModifyAdjustmentSection(
+              collectionKey: widget.collectionKey,
+              selectedAdjustment: _controller.selectedAdjustment,
+              onChanged: (value) => setState(() => _controller.selectedAdjustment = value),
+              onRefresh: _controller.refreshAdjustments,
+              onAutoFill: (adj) {
+                setState(() {
+                  _controller.selectedBasicStandard = adj.basicStandard;
+                  _controller.selectedBasicAmount = adj.basicAmount;
+                  _controller.selectedAddStandard = adj.addStandard;
+                  _controller.selectedAddAmount = adj.addAmount;
+                });
+              },
+            ),
+            const SizedBox(height: 32.0),
+            ModifyStatusOnTapSection(
+              statuses: _controller.statuses,
+              isSelected: _controller.isSelected,
+              onToggle: (index) {
+                setState(() {
+                  _controller.isSelected[index] = !_controller.isSelected[index];
+                  final status = _controller.statuses[index];
+                  _controller.isSelected[index]
+                      ? _controller.selectedStatuses.add(status)
+                      : _controller.selectedStatuses.remove(status);
+                });
+              },
+            ),
+          ],
+        ),
       ),
       bottomNavigationBar: ModifyBottomNavigation(
         actionButton: Column(
