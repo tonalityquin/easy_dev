@@ -1,4 +1,3 @@
-import 'package:easydev/screens/modify_pages/widgets/modify_location_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 
@@ -7,7 +6,7 @@ import '../../enums/plate_type.dart';
 
 import 'modify_plate_controller.dart';
 import 'sections/modify_adjustment_section.dart';
-import 'sections/modify_parking_location_section.dart';
+import 'sections/modify_location_section.dart';
 import 'sections/modify_photo_section.dart';
 import 'sections/modify_plate_section.dart';
 import 'sections/modify_status_on_tap_section.dart';
@@ -17,8 +16,9 @@ import 'utils/buttons/modify_animated_parking_button.dart';
 import 'utils/buttons/modify_animated_photo_button.dart';
 
 import 'widgets/modify_bottom_navigation.dart';
-import '../../utils/snackbar_helper.dart';
 import 'widgets/modify_camera_preview_dialog.dart';
+import 'widgets/modify_location_dialog.dart';
+import '../../utils/snackbar_helper.dart';
 import 'utils/modify_camera_helper.dart';
 
 class ModifyPlateScreen extends StatefulWidget {
@@ -79,6 +79,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
     await _cameraHelper.initializeInputCamera();
 
     if (!mounted) return;
+
     await showDialog(
       context: context,
       builder: (context) => ModifyCameraPreviewDialog(
@@ -127,9 +128,11 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        centerTitle: true,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 1,
+        title: const Text("번호판 수정", style: TextStyle(color: Colors.grey, fontSize: 16)),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -148,25 +151,15 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
               },
             ),
             const SizedBox(height: 32.0),
-            ModifyParkingLocationSection(locationController: locationController),
+            ModifyLocationSection(locationController: _controller.locationController),
             const SizedBox(height: 32.0),
             ModifyPhotoSection(
               capturedImages: _controller.capturedImages,
             ),
             const SizedBox(height: 32.0),
             ModifyAdjustmentSection(
-              collectionKey: widget.collectionKey,
               selectedAdjustment: _controller.selectedAdjustment,
               onChanged: (value) => setState(() => _controller.selectedAdjustment = value),
-              onRefresh: _controller.refreshAdjustments,
-              onAutoFill: (adj) {
-                setState(() {
-                  _controller.selectedBasicStandard = adj.basicStandard;
-                  _controller.selectedBasicAmount = adj.basicAmount;
-                  _controller.selectedAddStandard = adj.addStandard;
-                  _controller.selectedAddAmount = adj.addAmount;
-                });
-              },
             ),
             const SizedBox(height: 32.0),
             ModifyStatusOnTapSection(
@@ -190,7 +183,6 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
                   child: ModifyAnimatedPhotoButton(onPressed: _showCameraPreviewDialog),
@@ -219,7 +211,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                 });
                 if (mounted) setState(() => isLoading = false);
               },
-            )
+            ),
           ],
         ),
       ),
