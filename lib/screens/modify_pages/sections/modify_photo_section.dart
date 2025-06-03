@@ -1,22 +1,18 @@
 import 'dart:io';
-import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
-import 'package:easydev/utils/camera_fullscreen_viewer.dart';
+import 'package:flutter/material.dart';
+import '../utils/modify_camera_fullscreen_viewer.dart';
 
 class ModifyPhotoSection extends StatelessWidget {
-  final List<String> existingImageUrls;
   final List<XFile> capturedImages;
 
   const ModifyPhotoSection({
     super.key,
-    required this.existingImageUrls,
     required this.capturedImages,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isEmpty = existingImageUrls.isEmpty && capturedImages.isEmpty;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -27,57 +23,61 @@ class ModifyPhotoSection extends StatelessWidget {
         const SizedBox(height: 8.0),
         SizedBox(
           height: 100,
-          child: isEmpty
+          child: capturedImages.isEmpty
               ? const Center(child: Text('촬영된 사진 없음'))
-              : ListView(
+              : ListView.builder(
             scrollDirection: Axis.horizontal,
-            children: [
-              // ✅ 기존 이미지 (URL 기반)
-              ...existingImageUrls.asMap().entries.map((entry) {
-                final index = entry.key;
-                final url = entry.value;
-                return GestureDetector(
-                  onTap: () => showFullScreenImageViewerFromUrls(
-                    context,
-                    existingImageUrls,
-                    index,
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(4.0),
-                    child: Image.network(
-                      url,
-                      width: 100,
-                      height: 100,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) =>
-                      const Icon(Icons.broken_image, size: 50),
-                    ),
-                  ),
-                );
-              }),
+            itemCount: capturedImages.length,
+            itemBuilder: (context, index) {
+              final imageFile = capturedImages[index];
+              return GestureDetector(
+                onTap: () => showFullScreenImageViewer(context, capturedImages, index),
+                child: Padding(
+                  padding: const EdgeInsets.all(4.0),
+                  child: Hero(
+                    tag: imageFile.path,
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 400),
+                      transitionBuilder: (child, animation) => ScaleTransition(
+                        scale: CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeOutBack,
+                        ),
+                        child: FadeTransition(opacity: animation, child: child),
+                      ),
+                      child: FutureBuilder<bool>(
+                        future: File(imageFile.path).exists(),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState != ConnectionState.done) {
+                            return const SizedBox(
+                              width: 100,
+                              height: 100,
+                              child: Center(child: CircularProgressIndicator()),
+                            );
+                          }
 
-              // ✅ 새로 촬영한 로컬 이미지
-              ...capturedImages.asMap().entries.map((entry) {
-                final index = entry.key;
-                final image = entry.value;
-                return GestureDetector(
-                  onTap: () => showFullScreenImageViewer(
-                    context,
-                    capturedImages,
-                    index,
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(4.0),
-                    child: Image.file(
-                      File(image.path),
-                      width: 100,
-                      height: 100,
-                      fit: BoxFit.cover,
+                          if (snapshot.hasError || !(snapshot.data ?? false)) {
+                            return const SizedBox(
+                              width: 100,
+                              height: 100,
+                              child: Center(child: Icon(Icons.broken_image, color: Colors.red)),
+                            );
+                          }
+
+                          return Image.file(
+                            File(imageFile.path),
+                            key: ValueKey(imageFile.path),
+                            width: 100,
+                            height: 100,
+                            fit: BoxFit.cover,
+                          );
+                        },
+                      ),
                     ),
                   ),
-                );
-              }),
-            ],
+                ),
+              );
+            },
           ),
         ),
       ],

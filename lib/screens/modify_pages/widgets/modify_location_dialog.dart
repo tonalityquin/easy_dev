@@ -4,21 +4,21 @@ import '../../../states/area/area_state.dart';
 import '../../../models/location_model.dart';
 import '../../../states/location/location_state.dart';
 
-class ParkingLocationDialog extends StatefulWidget {
+class ModifyLocationDialog extends StatefulWidget {
   final TextEditingController locationController;
   final Function(String) onLocationSelected;
 
-  const ParkingLocationDialog({
+  const ModifyLocationDialog({
     super.key,
     required this.locationController,
     required this.onLocationSelected,
   });
 
   @override
-  State<ParkingLocationDialog> createState() => _ParkingLocationDialogState();
+  State<ModifyLocationDialog> createState() => _ModifyLocationDialogState();
 }
 
-class _ParkingLocationDialogState extends State<ParkingLocationDialog> {
+class _ModifyLocationDialogState extends State<ModifyLocationDialog> {
   String? selectedParent;
   String? _previousArea;
   Future<List<LocationModel>>? _futureLocations;
@@ -155,8 +155,7 @@ class ScaleTransitionDialog extends StatefulWidget {
   State<ScaleTransitionDialog> createState() => _ScaleTransitionDialogState();
 }
 
-class _ScaleTransitionDialogState extends State<ScaleTransitionDialog>
-    with SingleTickerProviderStateMixin {
+class _ScaleTransitionDialogState extends State<ScaleTransitionDialog> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
 

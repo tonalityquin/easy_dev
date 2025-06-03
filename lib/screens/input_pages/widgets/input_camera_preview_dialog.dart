@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+
 import '../utils/input_camera_helper.dart';
 
 class InputCameraPreviewDialog extends StatefulWidget {

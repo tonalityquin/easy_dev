@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+
 import '../utils/modify_camera_helper.dart';
 
 class ModifyCameraPreviewDialog extends StatefulWidget {
@@ -90,6 +91,7 @@ class _ModifyCameraPreviewDialogState extends State<ModifyCameraPreviewDialog> {
               )
             else
               const Center(child: CircularProgressIndicator()),
+
             if (_capturedImages.isNotEmpty)
               Positioned(
                 top: 16,
@@ -115,6 +117,7 @@ class _ModifyCameraPreviewDialogState extends State<ModifyCameraPreviewDialog> {
                   ),
                 ),
               ),
+
             Positioned(
               bottom: 20,
               left: 0,

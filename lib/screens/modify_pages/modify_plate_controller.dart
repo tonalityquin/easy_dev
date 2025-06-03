@@ -10,9 +10,8 @@ import '../../states/adjustment/adjustment_state.dart';
 import '../../states/status/status_state.dart';
 import '../../states/area/area_state.dart';
 
-import 'modify_plate_service.dart';
-import 'utils/modify_camera_helper.dart';
 import '../../utils/snackbar_helper.dart';
+import 'modify_plate_service.dart';
 
 class ModifyPlateController {
   final BuildContext context;
@@ -27,6 +26,10 @@ class ModifyPlateController {
   final List<XFile> capturedImages;
   final List<String> existingImageUrls;
 
+  CameraController? cameraController;
+  bool isCameraInitialized = false;
+  bool _isDisposing = false;
+
   List<String> statuses = [];
   List<String> selectedStatuses = [];
   List<bool> isSelected = [];
@@ -39,8 +42,6 @@ class ModifyPlateController {
   String dropdownValue = '전국';
 
   bool isLocationSelected = false;
-
-  late ModifyCameraHelper cameraHelper;
 
   final List<String> _regions = [
     '전국', '강원', '경기', '경남', '경북', '광주', '대구', '대전', '부산',
@@ -69,8 +70,55 @@ class ModifyPlateController {
   }
 
   Future<void> initializeCamera() async {
-    cameraHelper = ModifyCameraHelper();
-    await cameraHelper.initializeInputCamera();
+    final cameras = await availableCameras();
+    final backCamera = cameras.first;
+    cameraController = CameraController(
+      backCamera,
+      ResolutionPreset.medium,
+      enableAudio: false,
+    );
+    await cameraController!.initialize();
+    isCameraInitialized = true;
+    debugPrint('✅ 카메라 초기화 완료');
+  }
+
+  Future<XFile?> captureImage() async {
+    if (cameraController == null || !cameraController!.value.isInitialized) {
+      debugPrint('⚠️ 카메라 초기화 필요');
+      return null;
+    }
+
+    if (cameraController!.value.isTakingPicture) {
+      debugPrint('⏳ 촬영 중입니다');
+      return null;
+    }
+
+    try {
+      final image = await cameraController!.takePicture();
+      capturedImages.add(image);
+      debugPrint('✅ 사진 촬영 완료: ${image.path}');
+      return image;
+    } catch (e) {
+      debugPrint('❌ 사진 촬영 실패: $e');
+      return null;
+    }
+  }
+
+  Future<void> disposeCamera() async {
+    if (_isDisposing) return;
+    _isDisposing = true;
+
+    try {
+      if (cameraController?.value.isInitialized ?? false) {
+        await cameraController?.dispose();
+      }
+      cameraController = null;
+      isCameraInitialized = false;
+    } catch (e) {
+      debugPrint('❌ disposeCamera 오류: $e');
+    } finally {
+      _isDisposing = false;
+    }
   }
 
   void initializeFieldValues() {
@@ -83,8 +131,7 @@ class ModifyPlateController {
       controllerMidDigit.text = match.group(2) ?? '';
       controllerBackDigit.text = match.group(3) ?? '';
     } else {
-      debugPrint('⚠️ 번호판 형식을 파싱하지 못했습니다: $plateNum');
-      // fallback 설정: 앞자리 숫자 추정, 나머지 기본값
+      debugPrint('⚠️ 번호판 파싱 실패: $plateNum');
       controllerFrontdigit.text = plateNum.length >= 7 ? plateNum.substring(0, 3) : '';
       controllerMidDigit.text = '-';
       controllerBackDigit.text = plateNum.length >= 7 ? plateNum.substring(3) : '';
@@ -100,7 +147,6 @@ class ModifyPlateController {
     selectedStatuses = List<String>.from(plate.statusList);
     isLocationSelected = locationController.text.isNotEmpty;
   }
-
 
   Future<void> initializeStatuses() async {
     final statusState = context.read<StatusState>();
@@ -207,6 +253,6 @@ class ModifyPlateController {
     controllerMidDigit.dispose();
     controllerBackDigit.dispose();
     locationController.dispose();
-    cameraHelper.dispose();
+    disposeCamera();
   }
 }

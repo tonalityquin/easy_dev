@@ -18,6 +18,8 @@ import 'utils/buttons/modify_animated_photo_button.dart';
 import 'widgets/modify_bottom_navigation.dart';
 import '../../widgets/dialog/parking_location_dialog.dart';
 import '../../utils/snackbar_helper.dart';
+import 'widgets/modify_camera_preview_dialog.dart';
+import 'utils/modify_camera_helper.dart'; // 📌 추가
 
 class ModifyPlateScreen extends StatefulWidget {
   final PlateModel plate;
@@ -30,11 +32,12 @@ class ModifyPlateScreen extends StatefulWidget {
   });
 
   @override
-  State<ModifyPlateScreen> createState() => _ModifyPlateScreen();
+  State<ModifyPlateScreen> createState() => _ModifyPlateScreenState();
 }
 
-class _ModifyPlateScreen extends State<ModifyPlateScreen> {
+class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
   late ModifyPlateController _controller;
+  late ModifyCameraHelper _cameraHelper;
 
   final TextEditingController controllerFrontdigit = TextEditingController();
   final TextEditingController controllerMidDigit = TextEditingController();
@@ -49,6 +52,7 @@ class _ModifyPlateScreen extends State<ModifyPlateScreen> {
   @override
   void initState() {
     super.initState();
+
     _controller = ModifyPlateController(
       context: context,
       plate: widget.plate,
@@ -61,20 +65,34 @@ class _ModifyPlateScreen extends State<ModifyPlateScreen> {
       existingImageUrls: _existingImageUrls,
     );
 
+    _cameraHelper = ModifyCameraHelper();
+    _cameraHelper.initializeInputCamera().then((_) => setState(() {}));
+
     _controller.initializePlate();
-    _controller.initializeCamera().then((_) {
-      if (mounted) setState(() {});
-    });
     _controller.initializeFieldValues();
     _controller.initializeStatuses().then((_) {
       if (mounted) setState(() => isLoading = false);
     });
   }
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+  void _showCameraPreviewDialog() async {
+    await _cameraHelper.initializeInputCamera();
+
+    if (!mounted) return;
+    await showDialog(
+      context: context,
+      builder: (context) => ModifyCameraPreviewDialog(
+        onImageCaptured: (image) {
+          setState(() {
+            _controller.capturedImages.add(image); // ✅ 수정됨
+          });
+        },
+      ),
+    );
+
+    await _cameraHelper.dispose();
+    await Future.delayed(const Duration(milliseconds: 200));
+    if (mounted) setState(() {});
   }
 
   void _selectParkingLocation() {
@@ -95,6 +113,13 @@ class _ModifyPlateScreen extends State<ModifyPlateScreen> {
   }
 
   @override
+  void dispose() {
+    _controller.dispose();
+    _cameraHelper.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -102,15 +127,7 @@ class _ModifyPlateScreen extends State<ModifyPlateScreen> {
         foregroundColor: Colors.black,
         elevation: 1,
         centerTitle: true,
-        title: const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(width: 4),
-            Text(" 번호판 수정 ", style: TextStyle(color: Colors.grey, fontSize: 16)),
-            SizedBox(width: 4),
-          ],
-        ),
+        title: const Text(" 번호판 수정 ", style: TextStyle(color: Colors.grey, fontSize: 16)),
       ),
       body: Stack(
         children: [
@@ -135,8 +152,7 @@ class _ModifyPlateScreen extends State<ModifyPlateScreen> {
                   ModifyParkingLocationSection(locationController: locationController),
                   const SizedBox(height: 32.0),
                   ModifyPhotoSection(
-                    capturedImages: _capturedImages,
-                    existingImageUrls: _existingImageUrls,
+                    capturedImages: _controller.capturedImages, // ✅ 수정됨
                   ),
                   const SizedBox(height: 32.0),
                   ModifyAdjustmentSection(
@@ -181,13 +197,7 @@ class _ModifyPlateScreen extends State<ModifyPlateScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
-                  child: ModifyAnimatedPhotoButton(
-                    onPressed: () => _controller.cameraHelper.showCameraPreviewDialog(context, onCaptured: (image) {
-                      setState(() {
-                        _capturedImages.add(image);
-                      });
-                    }),
-                  ),
+                  child: ModifyAnimatedPhotoButton(onPressed: _showCameraPreviewDialog),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
