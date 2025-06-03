@@ -58,26 +58,63 @@ class ModifyPlateService {
   Future<List<String>> uploadAndMergeImages(String plateNumber) async {
     final uploader = GCSUploader();
     final uploadedImageUrls = <String>[];
-    final area = context.read<AreaState>().currentArea;
-    final user = context.read<UserState>().user;
+    final failedFiles = <String>[];
 
+    final area = context.read<AreaState>().currentArea;
+    final division = context.read<AreaState>().currentDivision;
+    final user = context.read<UserState>().user;
     final performedBy = user?.name ?? 'Unknown';
 
-    for (var image in capturedImages) {
+    debugPrint('📸 총 업로드 시도 이미지 수: ${capturedImages.length}');
+
+    for (int i = 0; i < capturedImages.length; i++) {
+      final image = capturedImages[i];
       final file = File(image.path);
+
+      if (!file.existsSync()) {
+        debugPrint('❌ [${i + 1}/${capturedImages.length}] 파일이 존재하지 않음: ${file.path}');
+        failedFiles.add(file.path);
+        continue;
+      }
+
       final now = DateTime.now();
-      final formattedDate =
-          '${now.year.toString().padLeft(4, '0')}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}'
-          '_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
+      final dateStr = '${now.year.toString().padLeft(4, '0')}-'
+          '${now.month.toString().padLeft(2, '0')}-'
+          '${now.day.toString().padLeft(2, '0')}';
+      final millisStr = now.millisecondsSinceEpoch.toString();
 
-      final fileName = '${formattedDate}_${area}_${plateNumber}_$performedBy.jpg';
-      final gcsUrl = await uploader.uploadImageFromModify(file, 'plates/$fileName');
+      final fileName = '${dateStr}_$millisStr${plateNumber}_$performedBy.jpg';
+      final gcsPath = '$division/$area/images/$fileName';
 
-      if (gcsUrl != null) {
-        debugPrint('✅ 이미지 업로드 완료: $gcsUrl');
-        uploadedImageUrls.add(gcsUrl);
+      String? gcsUrl;
+      for (int attempt = 0; attempt < 3; attempt++) {
+        try {
+          debugPrint('⬆️ [${i + 1}/${capturedImages.length}] 업로드 시도 #${attempt + 1}: $gcsPath');
+          gcsUrl = await uploader.uploadImageFromModify(file, gcsPath);
+          if (gcsUrl != null) {
+            debugPrint('✅ 업로드 성공: $gcsUrl');
+            break;
+          }
+        } catch (e) {
+          debugPrint('❌ [시도 ${attempt + 1}] 업로드 실패 (${file.path}): $e');
+          await Future.delayed(const Duration(milliseconds: 500));
+        }
+      }
+
+      if (gcsUrl == null) {
+        debugPrint('❌ 업로드 최종 실패: ${file.path}');
+        failedFiles.add(file.path);
       } else {
-        debugPrint('❌ 이미지 업로드 실패: ${file.path}');
+        uploadedImageUrls.add(gcsUrl);
+      }
+
+      await Future.delayed(const Duration(milliseconds: 100)); // 업로드 간 간격 확보
+    }
+
+    if (failedFiles.isNotEmpty) {
+      debugPrint('⚠️ 업로드 실패 (${failedFiles.length}/${capturedImages.length})');
+      for (final f in failedFiles) {
+        debugPrint(' - 실패 파일: $f');
       }
     }
 
@@ -94,7 +131,6 @@ class ModifyPlateService {
     final areaState = context.read<AreaState>();
     final userState = context.read<UserState>();
 
-    // ✅ 수정된 Plate 인스턴스 생성
     final updatedPlate = originalPlate.copyWith(
       plateNumber: plateNumber,
       location: newLocation,
@@ -108,7 +144,6 @@ class ModifyPlateService {
       imageUrls: imageUrls,
     );
 
-    // ✅ 변경 사항 비교 및 로그 저장
     final changes = originalPlate.diff(updatedPlate);
     if (changes.isNotEmpty) {
       final log = PlateLogModel(
@@ -121,7 +156,7 @@ class ModifyPlateService {
         performedBy: userState.name,
         timestamp: DateTime.now(),
         adjustmentType: updatedPlate.adjustmentType,
-        updatedFields: changes, // ✅ 반드시 포함
+        updatedFields: changes,
       );
 
       await GCSUploader().uploadLogJson(
@@ -132,7 +167,6 @@ class ModifyPlateService {
       );
     }
 
-    // ✅ 실제 저장
     return await modifyState.updatePlateInfo(
       context: context,
       plate: originalPlate,
