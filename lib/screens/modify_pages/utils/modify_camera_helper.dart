@@ -3,10 +3,14 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 
+import '../widgets/modify_camera_preview_dialog.dart';
+
 class ModifyCameraHelper {
   CameraController? cameraController;
   bool isCameraInitialized = false;
   final List<XFile> capturedImages = [];
+
+  bool _isDisposing = false;
 
   Future<void> initializeInputCamera() async {
     debugPrint('📸 CameraHelper: initializeCamera() 호출');
@@ -59,7 +63,30 @@ class ModifyCameraHelper {
     }
   }
 
-  bool _isDisposing = false;
+  Future<void> showCameraPreviewDialog(
+      BuildContext context, {
+        required void Function(XFile) onCaptured,
+      }) async {
+    debugPrint('📸 showCameraPreviewDialog() 호출됨');
+
+    await initializeInputCamera();
+
+    if (!context.mounted) return;
+
+    await showDialog(
+      context: context,
+      builder: (_) => ModifyCameraPreviewDialog(
+        onImageCaptured: (image) {
+          onCaptured(image);
+          debugPrint('📸 이미지 반영됨: ${image.path}');
+        },
+      ),
+    );
+
+    debugPrint('📸 카메라 다이얼로그 종료 → dispose() 호출');
+    await dispose();
+    await Future.delayed(const Duration(milliseconds: 200));
+  }
 
   Future<void> dispose() async {
     debugPrint('🧹 CameraHelper: dispose() 호출');
