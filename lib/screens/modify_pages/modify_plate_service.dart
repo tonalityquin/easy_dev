@@ -19,9 +19,9 @@ class ModifyPlateService {
   final PlateModel originalPlate;
 
   // form controllers
-  final TextEditingController controller3digit;
-  final TextEditingController controller1digit;
-  final TextEditingController controller4digit;
+  final TextEditingController controllerFrontdigit;
+  final TextEditingController controllerMidDigit;
+  final TextEditingController controllerBackDigit;
   final TextEditingController locationController;
 
   final List<String> selectedStatuses;
@@ -38,9 +38,9 @@ class ModifyPlateService {
     required this.existingImageUrls,
     required this.collectionKey,
     required this.originalPlate,
-    required this.controller3digit,
-    required this.controller1digit,
-    required this.controller4digit,
+    required this.controllerFrontdigit,
+    required this.controllerMidDigit,
+    required this.controllerBackDigit,
     required this.locationController,
     required this.selectedStatuses,
     required this.selectedBasicStandard,
@@ -52,7 +52,7 @@ class ModifyPlateService {
   });
 
   String composePlateNumber() {
-    return '${controller3digit.text}-${controller1digit.text}-${controller4digit.text}';
+    return '${controllerFrontdigit.text}-${controllerMidDigit.text}-${controllerBackDigit.text}';
   }
 
   Future<List<String>> uploadAndMergeImages(String plateNumber) async {

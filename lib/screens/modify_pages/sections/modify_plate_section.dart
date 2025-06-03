@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:easydev/widgets/input_field/modify_plate_field.dart';
-import 'package:easydev/widgets/dialog/region_picker_dialog.dart';
+import '../utils/modify_plate_field.dart';
+import '../widgets/region_picker_dialog.dart';
 
 class ModifyPlateSection extends StatelessWidget {
   final String dropdownValue;
   final List<String> regions;
-  final TextEditingController controller3digit;
-  final TextEditingController controller1digit;
-  final TextEditingController controller4digit;
+  final TextEditingController controllerFrontdigit;
+  final TextEditingController controllerMidDigit;
+  final TextEditingController controllerBackDigit;
   final bool isEditable;
   final ValueChanged<String> onRegionChanged;
 
@@ -15,9 +15,9 @@ class ModifyPlateSection extends StatelessWidget {
     super.key,
     required this.dropdownValue,
     required this.regions,
-    required this.controller3digit,
-    required this.controller1digit,
-    required this.controller4digit,
+    required this.controllerFrontdigit,
+    required this.controllerMidDigit,
+    required this.controllerBackDigit,
     this.isEditable = false,
     required this.onRegionChanged,
   });
@@ -72,9 +72,9 @@ class ModifyPlateSection extends StatelessWidget {
                   frontDigitCount: 3,
                   hasMiddleChar: true,
                   backDigitCount: 4,
-                  frontController: controller3digit,
-                  middleController: controller1digit,
-                  backController: controller4digit,
+                  frontController: controllerFrontdigit,
+                  middleController: controllerMidDigit,
+                  backController: controllerBackDigit,
                   isEditable: isEditable,
                 ),
               ),

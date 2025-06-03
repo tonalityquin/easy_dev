@@ -19,9 +19,9 @@ class ModifyPlateController {
   final PlateModel plate;
   final PlateType collectionKey;
 
-  final TextEditingController controller3digit;
-  final TextEditingController controller1digit;
-  final TextEditingController controller4digit;
+  final TextEditingController controllerFrontdigit;
+  final TextEditingController controllerMidDigit;
+  final TextEditingController controllerBackDigit;
   final TextEditingController locationController;
 
   final List<XFile> capturedImages;
@@ -54,9 +54,9 @@ class ModifyPlateController {
     required this.context,
     required this.plate,
     required this.collectionKey,
-    required this.controller3digit,
-    required this.controller1digit,
-    required this.controller4digit,
+    required this.controllerFrontdigit,
+    required this.controllerMidDigit,
+    required this.controllerBackDigit,
     required this.locationController,
     required this.capturedImages,
     required this.existingImageUrls,
@@ -75,15 +75,19 @@ class ModifyPlateController {
 
   void initializeFieldValues() {
     final plateNum = plate.plateNumber.replaceAll('-', '');
-    final regExp = RegExp(r'^(\\d{2,3})([가-힣]?)(\\d{4})$');
+    final regExp = RegExp(r'^(\d{2,3})([가-힣]?)(\d{4})$');
     final match = regExp.firstMatch(plateNum);
 
     if (match != null) {
-      controller3digit.text = match.group(1) ?? '';
-      controller1digit.text = match.group(2) ?? '';
-      controller4digit.text = match.group(3) ?? '';
+      controllerFrontdigit.text = match.group(1) ?? '';
+      controllerMidDigit.text = match.group(2) ?? '';
+      controllerBackDigit.text = match.group(3) ?? '';
     } else {
-      debugPrint('번호판 형식을 파싱하지 못했습니다: $plateNum');
+      debugPrint('⚠️ 번호판 형식을 파싱하지 못했습니다: $plateNum');
+      // fallback 설정: 앞자리 숫자 추정, 나머지 기본값
+      controllerFrontdigit.text = plateNum.length >= 7 ? plateNum.substring(0, 3) : '';
+      controllerMidDigit.text = '-';
+      controllerBackDigit.text = plateNum.length >= 7 ? plateNum.substring(3) : '';
     }
 
     dropdownValue = plate.region ?? '전국';
@@ -96,6 +100,7 @@ class ModifyPlateController {
     selectedStatuses = List<String>.from(plate.statusList);
     isLocationSelected = locationController.text.isNotEmpty;
   }
+
 
   Future<void> initializeStatuses() async {
     final statusState = context.read<StatusState>();
@@ -126,9 +131,9 @@ class ModifyPlateController {
   }
 
   void clearInputs() {
-    controller3digit.clear();
-    controller1digit.clear();
-    controller4digit.clear();
+    controllerFrontdigit.clear();
+    controllerMidDigit.clear();
+    controllerBackDigit.clear();
   }
 
   void clearLocation() {
@@ -151,9 +156,9 @@ class ModifyPlateController {
       existingImageUrls: existingImageUrls,
       collectionKey: collectionKey,
       originalPlate: plate,
-      controller3digit: controller3digit,
-      controller1digit: controller1digit,
-      controller4digit: controller4digit,
+      controllerFrontdigit: controllerFrontdigit,
+      controllerMidDigit: controllerMidDigit,
+      controllerBackDigit: controllerBackDigit,
       locationController: locationController,
       selectedStatuses: selectedStatuses,
       selectedBasicStandard: selectedBasicStandard,
@@ -198,9 +203,9 @@ class ModifyPlateController {
   }
 
   void dispose() {
-    controller3digit.dispose();
-    controller1digit.dispose();
-    controller4digit.dispose();
+    controllerFrontdigit.dispose();
+    controllerMidDigit.dispose();
+    controllerBackDigit.dispose();
     locationController.dispose();
     cameraHelper.dispose();
   }

@@ -36,9 +36,9 @@ class ModifyPlateScreen extends StatefulWidget {
 class _ModifyPlateScreen extends State<ModifyPlateScreen> {
   late ModifyPlateController _controller;
 
-  final TextEditingController controller3digit = TextEditingController();
-  final TextEditingController controller1digit = TextEditingController();
-  final TextEditingController controller4digit = TextEditingController();
+  final TextEditingController controllerFrontdigit = TextEditingController();
+  final TextEditingController controllerMidDigit = TextEditingController();
+  final TextEditingController controllerBackDigit = TextEditingController();
   final TextEditingController locationController = TextEditingController();
 
   final List<XFile> _capturedImages = [];
@@ -53,9 +53,9 @@ class _ModifyPlateScreen extends State<ModifyPlateScreen> {
       context: context,
       plate: widget.plate,
       collectionKey: widget.collectionKey,
-      controller3digit: controller3digit,
-      controller1digit: controller1digit,
-      controller4digit: controller4digit,
+      controllerFrontdigit: controllerFrontdigit,
+      controllerMidDigit: controllerMidDigit,
+      controllerBackDigit: controllerBackDigit,
       locationController: locationController,
       capturedImages: _capturedImages,
       existingImageUrls: _existingImageUrls,
@@ -123,9 +123,9 @@ class _ModifyPlateScreen extends State<ModifyPlateScreen> {
                   ModifyPlateSection(
                     dropdownValue: _controller.dropdownValue,
                     regions: _controller.regions,
-                    controller3digit: controller3digit,
-                    controller1digit: controller1digit,
-                    controller4digit: controller4digit,
+                    controllerFrontdigit: controllerFrontdigit,
+                    controllerMidDigit: controllerMidDigit,
+                    controllerBackDigit: controllerBackDigit,
                     isEditable: false,
                     onRegionChanged: (region) {
                       setState(() => _controller.dropdownValue = region);
