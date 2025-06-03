@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:provider/provider.dart';
@@ -22,6 +23,7 @@ class ModifyPlateController {
   final TextEditingController controllerMidDigit;
   final TextEditingController controllerBackDigit;
   final TextEditingController locationController;
+  final TextEditingController customStatusController = TextEditingController();
 
   final List<XFile> capturedImages;
   final List<String> existingImageUrls;
@@ -43,10 +45,34 @@ class ModifyPlateController {
 
   bool isLocationSelected = false;
 
+  String? fetchedCustomStatus;
+
   final List<String> _regions = [
-    '전국', '강원', '경기', '경남', '경북', '광주', '대구', '대전', '부산',
-    '서울', '울산', '인천', '전남', '전북', '제주', '충남', '충북',
-    '국기', '대표', '영사', '외교', '임시', '준영', '준외', '협정'
+    '전국',
+    '강원',
+    '경기',
+    '경남',
+    '경북',
+    '광주',
+    '대구',
+    '대전',
+    '부산',
+    '서울',
+    '울산',
+    '인천',
+    '전남',
+    '전북',
+    '제주',
+    '충남',
+    '충북',
+    '국기',
+    '대표',
+    '영사',
+    '외교',
+    '임시',
+    '준영',
+    '준외',
+    '협정'
   ];
 
   List<String> get regions => _regions;
@@ -79,27 +105,17 @@ class ModifyPlateController {
     );
     await cameraController!.initialize();
     isCameraInitialized = true;
-    debugPrint('✅ 카메라 초기화 완료');
   }
 
   Future<XFile?> captureImage() async {
-    if (cameraController == null || !cameraController!.value.isInitialized) {
-      debugPrint('⚠️ 카메라 초기화 필요');
-      return null;
-    }
-
-    if (cameraController!.value.isTakingPicture) {
-      debugPrint('⏳ 촬영 중입니다');
-      return null;
-    }
+    if (cameraController == null || !cameraController!.value.isInitialized) return null;
+    if (cameraController!.value.isTakingPicture) return null;
 
     try {
       final image = await cameraController!.takePicture();
       capturedImages.add(image);
-      debugPrint('✅ 사진 촬영 완료: ${image.path}');
       return image;
     } catch (e) {
-      debugPrint('❌ 사진 촬영 실패: $e');
       return null;
     }
   }
@@ -114,11 +130,8 @@ class ModifyPlateController {
       }
       cameraController = null;
       isCameraInitialized = false;
-    } catch (e) {
-      debugPrint('❌ disposeCamera 오류: $e');
-    } finally {
-      _isDisposing = false;
-    }
+    } catch (_) {}
+    _isDisposing = false;
   }
 
   void initializeFieldValues() {
@@ -131,7 +144,6 @@ class ModifyPlateController {
       controllerMidDigit.text = match.group(2) ?? '';
       controllerBackDigit.text = match.group(3) ?? '';
     } else {
-      debugPrint('⚠️ 번호판 파싱 실패: $plateNum');
       controllerFrontdigit.text = plateNum.length >= 7 ? plateNum.substring(0, 3) : '';
       controllerMidDigit.text = '-';
       controllerBackDigit.text = plateNum.length >= 7 ? plateNum.substring(3) : '';
@@ -146,6 +158,9 @@ class ModifyPlateController {
     selectedAddAmount = plate.addAmount ?? 0;
     selectedStatuses = List<String>.from(plate.statusList);
     isLocationSelected = locationController.text.isNotEmpty;
+
+    fetchedCustomStatus = plate.customStatus;
+    customStatusController.text = plate.customStatus ?? '';
   }
 
   Future<void> initializeStatuses() async {
@@ -167,13 +182,40 @@ class ModifyPlateController {
     isSelected = statuses.map((s) => selectedStatuses.contains(s)).toList();
   }
 
-  Future<bool> refreshAdjustments() async {
-    final adjustmentState = context.read<AdjustmentState>();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      adjustmentState.syncWithAreaAdjustmentState();
-    });
-    await Future.delayed(const Duration(milliseconds: 500));
-    return adjustmentState.adjustments.isNotEmpty;
+  Future<void> updateCustomStatusToFirestore() async {
+    final plateNumber = plate.plateNumber; // ✅ 하이픈 유지
+    final area = context.read<AreaState>().currentArea;
+    final docId = '${plateNumber}_$area';
+
+    try {
+      final docRef = FirebaseFirestore.instance.collection('plate_status').doc(docId);
+
+      await docRef.set({
+        'customStatus': customStatusController.text.trim(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'expireAt': Timestamp.fromDate(DateTime.now().add(const Duration(days: 1))),
+        'createdBy': 'devAdmin020',
+      }, SetOptions(merge: true));
+
+      debugPrint('✅ Firestore 문서 업데이트 완료: $docId');
+    } catch (e) {
+      debugPrint('❌ Firestore 문서 업데이트 실패: $e');
+    }
+  }
+
+  Future<void> deleteCustomStatusFromFirestore(BuildContext context) async {
+    final plateNumber = plate.plateNumber.replaceAll('-', '');
+    final area = context.read<AreaState>().currentArea;
+    final docId = '${plateNumber}_$area';
+
+    try {
+      final docRef = FirebaseFirestore.instance.collection('plate_status').doc(docId);
+      await docRef.delete();
+      fetchedCustomStatus = null;
+    } catch (e) {
+      debugPrint('❌ customStatus 삭제 실패: $e');
+      rethrow;
+    }
   }
 
   void toggleStatus(int index) {
@@ -197,11 +239,14 @@ class ModifyPlateController {
     isLocationSelected = false;
   }
 
+  String buildPlateNumber() {
+    return '${controllerFrontdigit.text}${controllerMidDigit.text}${controllerBackDigit.text}';
+  }
+
   Future<void> handleAction(VoidCallback onSuccess) async {
     final adjustmentList = context.read<AdjustmentState>().adjustments;
 
-    if (adjustmentList.isNotEmpty &&
-        (selectedAdjustment == null || selectedAdjustment!.isEmpty)) {
+    if (adjustmentList.isNotEmpty && (selectedAdjustment == null || selectedAdjustment!.isEmpty)) {
       showFailedSnackbar(context, '정산 유형을 선택해주세요');
       return;
     }
@@ -225,9 +270,10 @@ class ModifyPlateController {
       dropdownValue: dropdownValue,
     );
 
-    final plateNumber = service.composePlateNumber();
+    final plateNumber = service.composePlateNumber(); // 하이픈 포함
     final newLocation = locationController.text;
     final newAdjustmentType = selectedAdjustment;
+    final updatedCustomStatus = customStatusController.text.trim();
 
     final mergedImageUrls = await service.uploadAndMergeImages(plateNumber);
 
@@ -239,6 +285,19 @@ class ModifyPlateController {
     );
 
     if (success) {
+      // 🔁 plate_status 동기화
+      final area = context.read<AreaState>().currentArea;
+      final statusDocId = '${plateNumber}_$area';
+      await FirebaseFirestore.instance.collection('plate_status').doc(statusDocId).set({
+        'customStatus': updatedCustomStatus,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'expireAt': Timestamp.fromDate(DateTime.now().add(Duration(days: 1))),
+        'createdBy': 'devAdmin020',
+      }, SetOptions(merge: true));
+
+      // 🔁 plates 동기화
+      await FirebaseFirestore.instance.collection('plates').doc(plate.id).update({'customStatus': updatedCustomStatus});
+
       final updatedPlate = plate.copyWith(
         adjustmentType: newAdjustmentType,
         basicStandard: selectedBasicStandard,
@@ -249,6 +308,7 @@ class ModifyPlateController {
         statusList: selectedStatuses,
         region: dropdownValue,
         imageUrls: mergedImageUrls,
+        customStatus: updatedCustomStatus,
       );
 
       final plateState = context.read<PlateState>();
@@ -263,6 +323,7 @@ class ModifyPlateController {
     controllerMidDigit.dispose();
     controllerBackDigit.dispose();
     locationController.dispose();
+    customStatusController.dispose();
     disposeCamera();
   }
 }

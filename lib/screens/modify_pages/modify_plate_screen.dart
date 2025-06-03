@@ -9,6 +9,7 @@ import 'sections/modify_adjustment_section.dart';
 import 'sections/modify_location_section.dart';
 import 'sections/modify_photo_section.dart';
 import 'sections/modify_plate_section.dart';
+import 'sections/modify_status_custom_section.dart';
 import 'sections/modify_status_on_tap_section.dart';
 
 import 'utils/buttons/modify_animated_action_button.dart';
@@ -77,7 +78,6 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
 
   void _showCameraPreviewDialog() async {
     await _cameraHelper.initializeInputCamera();
-
     if (!mounted) return;
 
     await showDialog(
@@ -166,11 +166,42 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
               statuses: _controller.statuses,
               isSelected: _controller.isSelected,
               onToggle: (index) {
-                setState(() {
-                  _controller.toggleStatus(index);
-                });
+                setState(() => _controller.toggleStatus(index));
               },
             ),
+            const SizedBox(height: 32.0),
+            const Text('추가 상태 메모 (최대 10자)', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _controller.customStatusController,
+              maxLength: 20,
+              decoration: InputDecoration(
+                hintText: '예: 뒷범퍼 손상',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              ),
+            ),
+            if (_controller.fetchedCustomStatus != null)
+              ModifyStatusCustomSection(
+                customStatus: _controller.fetchedCustomStatus!,
+                onDelete: () async {
+                  try {
+                    await _controller.deleteCustomStatusFromFirestore(context);
+                    setState(() {
+                      _controller.fetchedCustomStatus = null;
+                      _controller.customStatusController.clear();
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('자동 메모가 삭제되었습니다')),
+                    );
+                  } catch (_) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('삭제 실패. 다시 시도해주세요')),
+                    );
+                  }
+                },
+              ),
+            const SizedBox(height: 32),
           ],
         ),
       ),

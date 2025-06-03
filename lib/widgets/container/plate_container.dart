@@ -27,10 +27,9 @@ class PlateContainer extends StatelessWidget {
   List<PlateModel> _filterData(List<PlateModel> data, String searchQuery) {
     final seenIds = <String>{};
     return data.where((request) {
-      if (seenIds.contains(request.id)) {
-        return false;
-      }
+      if (seenIds.contains(request.id)) return false;
       seenIds.add(request.id);
+
       if (searchQuery.isNotEmpty) {
         String lastFourDigits = request.plateNumber.length >= 4
             ? request.plateNumber.substring(request.plateNumber.length - 4)
@@ -39,6 +38,7 @@ class PlateContainer extends StatelessWidget {
           return false;
         }
       }
+
       return filterCondition == null || filterCondition!(request);
     }).toList();
   }
@@ -102,8 +102,7 @@ class PlateContainer extends StatelessWidget {
               midCenterText: displayUser,
               midRightText: CustomDateUtils.formatTimeForUI(item.requestTime),
               bottomLeftLeftText: item.statusList.isNotEmpty ? item.statusList.join(", ") : "",
-              bottomLeftCenterText: item.customStatus ?? '',
-              // ✅ 수정된 부분
+              bottomLeftCenterText: item.customStatus ?? '', // ✅ 이 부분이 반영 포인트
               bottomRightText: elapsedText,
               isSelected: isSelected,
               backgroundColor: backgroundColor,
@@ -116,7 +115,7 @@ class PlateContainer extends StatelessWidget {
                 }
 
                 final alreadySelected = data.any(
-                  (p) => p.isSelected && p.selectedBy == userName && p.id != item.id,
+                      (p) => p.isSelected && p.selectedBy == userName && p.id != item.id,
                 );
 
                 if (alreadySelected && !item.isSelected) {
