@@ -1,3 +1,4 @@
+import 'package:easydev/screens/modify_pages/widgets/modify_location_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 
@@ -16,10 +17,9 @@ import 'utils/buttons/modify_animated_parking_button.dart';
 import 'utils/buttons/modify_animated_photo_button.dart';
 
 import 'widgets/modify_bottom_navigation.dart';
-import '../../widgets/dialog/parking_location_dialog.dart';
 import '../../utils/snackbar_helper.dart';
 import 'widgets/modify_camera_preview_dialog.dart';
-import 'utils/modify_camera_helper.dart'; // 📌 추가
+import 'utils/modify_camera_helper.dart';
 
 class ModifyPlateScreen extends StatefulWidget {
   final PlateModel plate;
@@ -84,7 +84,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
       builder: (context) => ModifyCameraPreviewDialog(
         onImageCaptured: (image) {
           setState(() {
-            _controller.capturedImages.add(image); // ✅ 수정됨
+            _controller.capturedImages.add(image);
           });
         },
       ),
@@ -98,18 +98,22 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
   void _selectParkingLocation() {
     showDialog(
       context: context,
-      builder: (BuildContext context) {
-        return ParkingLocationDialog(
-          locationController: locationController,
-          onLocationSelected: (String location) {
-            setState(() {
-              locationController.text = location;
-              _controller.isLocationSelected = true;
-            });
-          },
-        );
-      },
+      builder: (_) => ModifyLocationDialog(
+        locationController: _controller.locationController,
+        onLocationSelected: (location) {
+          setState(() {
+            _controller.locationController.text = location;
+            _controller.isLocationSelected = true;
+          });
+        },
+      ),
     );
+  }
+
+  VoidCallback _buildLocationAction() {
+    return _controller.isLocationSelected
+        ? () => setState(() => _controller.clearLocation())
+        : _selectParkingLocation;
   }
 
   @override
@@ -126,8 +130,6 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 1,
-        centerTitle: true,
-        title: const Text(" 번호판 수정 ", style: TextStyle(color: Colors.grey, fontSize: 16)),
       ),
       body: Stack(
         children: [
@@ -152,7 +154,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                   ModifyParkingLocationSection(locationController: locationController),
                   const SizedBox(height: 32.0),
                   ModifyPhotoSection(
-                    capturedImages: _controller.capturedImages, // ✅ 수정됨
+                    capturedImages: _controller.capturedImages,
                   ),
                   const SizedBox(height: 32.0),
                   ModifyAdjustmentSection(
@@ -203,8 +205,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                 Expanded(
                   child: ModifyAnimatedParkingButton(
                     isLocationSelected: _controller.isLocationSelected,
-                    onPressed: _selectParkingLocation,
-                    buttonLabel: '구역 수정',
+                    onPressed: _buildLocationAction(),
                   ),
                 ),
               ],
