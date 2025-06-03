@@ -176,6 +176,16 @@ class ModifyPlateController {
     return adjustmentState.adjustments.isNotEmpty;
   }
 
+  void toggleStatus(int index) {
+    isSelected[index] = !isSelected[index];
+    final status = statuses[index];
+    if (isSelected[index]) {
+      selectedStatuses.add(status);
+    } else {
+      selectedStatuses.remove(status);
+    }
+  }
+
   void clearInputs() {
     controllerFrontdigit.clear();
     controllerMidDigit.clear();

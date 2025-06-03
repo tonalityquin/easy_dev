@@ -17,10 +17,7 @@ class ModifyStatusOnTapSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          '차량 상태',
-          style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
-        ),
+        const Text('차량 상태', style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8.0),
         statuses.isEmpty
             ? const Text('등록된 차량 상태가 없습니다.')

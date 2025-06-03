@@ -167,11 +167,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
               isSelected: _controller.isSelected,
               onToggle: (index) {
                 setState(() {
-                  _controller.isSelected[index] = !_controller.isSelected[index];
-                  final status = _controller.statuses[index];
-                  _controller.isSelected[index]
-                      ? _controller.selectedStatuses.add(status)
-                      : _controller.selectedStatuses.remove(status);
+                  _controller.toggleStatus(index);
                 });
               },
             ),
