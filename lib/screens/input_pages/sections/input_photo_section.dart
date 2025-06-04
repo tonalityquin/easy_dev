@@ -2,13 +2,16 @@ import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import '../utils/input_camera_fullscreen_viewer.dart';
+import '../input_plate_service.dart'; // 서비스 클래스 임포트 필요
 
 class InputPhotoSection extends StatelessWidget {
   final List<XFile> capturedImages;
+  final String plateNumber;
 
   const InputPhotoSection({
     super.key,
     required this.capturedImages,
+    required this.plateNumber,
   });
 
   @override
@@ -78,6 +81,107 @@ class InputPhotoSection extends StatelessWidget {
                 ),
               );
             },
+          ),
+        ),
+        const SizedBox(height: 12.0),
+        Center(
+          child: SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.black,
+                backgroundColor: Colors.white,
+                side: const BorderSide(color: Colors.black),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.zero,
+                ),
+              ),
+              onPressed: () async {
+                showDialog(
+                  context: context,
+                  builder: (context) => FutureBuilder<List<String>>(
+                    future: InputPlateService.listPlateImages(
+                      context: context,
+                      plateNumber: plateNumber,
+                    ),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const AlertDialog(
+                          content: SizedBox(
+                            height: 100,
+                            child: Center(child: CircularProgressIndicator()),
+                          ),
+                        );
+                      }
+
+                      if (snapshot.hasError) {
+                        return AlertDialog(
+                          title: const Text('에러'),
+                          content: const Text('이미지 불러오기 실패'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('닫기'),
+                            )
+                          ],
+                        );
+                      }
+
+                      final urls = snapshot.data ?? [];
+
+                      if (urls.isEmpty) {
+                        return AlertDialog(
+                          title: const Text('사진 없음'),
+                          content: const Text('GCS에 저장된 이미지가 없습니다.'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('닫기'),
+                            )
+                          ],
+                        );
+                      }
+
+                      return AlertDialog(
+                        title: const Text('저장된 사진 목록'),
+                        content: SizedBox(
+                          width: double.maxFinite,
+                          height: 300,
+                          child: ListView.builder(
+                            itemCount: urls.length,
+                            itemBuilder: (context, index) {
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 4.0),
+                                child: GestureDetector(
+                                  onTap: () => showFullScreenImageViewerFromUrls(
+                                    context,
+                                    urls,
+                                    index,
+                                  ),
+                                  child: Image.network(
+                                    urls[index],
+                                    height: 80,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('닫기'),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                );
+              },
+              child: const Text('사진 불러오기'),
+            ),
           ),
         ),
       ],
