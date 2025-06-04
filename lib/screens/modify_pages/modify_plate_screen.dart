@@ -155,6 +155,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
             const SizedBox(height: 32.0),
             ModifyPhotoSection(
               capturedImages: _controller.capturedImages,
+              imageUrls: widget.plate.imageUrls ?? [],
             ),
             const SizedBox(height: 32.0),
             ModifyAdjustmentSection(
