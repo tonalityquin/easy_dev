@@ -144,6 +144,7 @@ class PlateModel {
       PlateFields.addAmount: addAmount,
       PlateFields.region: region,
       PlateFields.isLockedFee: isLockedFee,
+      if (imageUrls != null) PlateFields.imageUrls: imageUrls,
       if (lockedAtTimeInSeconds != null) PlateFields.lockedAtTimeInSeconds: lockedAtTimeInSeconds,
       if (lockedFeeAmount != null) PlateFields.lockedFeeAmount: lockedFeeAmount,
       if (updatedAt != null) PlateFields.updatedAt: Timestamp.fromDate(updatedAt!),
