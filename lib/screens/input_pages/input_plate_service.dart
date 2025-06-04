@@ -41,7 +41,7 @@ class InputPlateService {
       // ✅ 밀리초까지 포함
       final timeStr = now.millisecondsSinceEpoch.toString();
 
-      final fileName = '${dateStr}_$timeStr${plateNumber}_$userName.jpg';
+      final fileName = '${dateStr}_${timeStr}_${plateNumber}_$userName.jpg';
       final gcsPath = '$division/$area/images/$fileName';
 
       String? gcsUrl;

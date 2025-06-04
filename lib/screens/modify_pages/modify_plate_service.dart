@@ -81,9 +81,9 @@ class ModifyPlateService {
       final dateStr = '${now.year.toString().padLeft(4, '0')}-'
           '${now.month.toString().padLeft(2, '0')}-'
           '${now.day.toString().padLeft(2, '0')}';
-      final millisStr = now.millisecondsSinceEpoch.toString();
+      final timeStr = now.millisecondsSinceEpoch.toString();
 
-      final fileName = '${dateStr}_$millisStr${plateNumber}_$performedBy.jpg';
+      final fileName = '${dateStr}_${timeStr}_${plateNumber}_$performedBy.jpg';
       final gcsPath = '$division/$area/images/$fileName';
 
       String? gcsUrl;
