@@ -182,8 +182,26 @@ class ModifyPlateController {
     isSelected = statuses.map((s) => selectedStatuses.contains(s)).toList();
   }
 
+  /// 🔁 Firestore adjustment 컬렉션에서 기본값을 가져와 필드 업데이트
+  void applyAdjustmentDefaults(String? adjustmentName) {
+    if (adjustmentName == null) return;
+
+    final adjustmentState = context.read<AdjustmentState>();
+    final selected = adjustmentState.adjustments.firstWhere(
+          (a) => a.countType == adjustmentName,
+      orElse: () => adjustmentState.emptyModel,
+    );
+
+    selectedAdjustment = selected.countType;
+    selectedBasicAmount = selected.basicAmount;
+    selectedBasicStandard = selected.basicStandard;
+    selectedAddAmount = selected.addAmount;
+    selectedAddStandard = selected.addStandard;
+  }
+
+
   Future<void> updateCustomStatusToFirestore() async {
-    final plateNumber = plate.plateNumber; // ✅ 하이픈 유지
+    final plateNumber = plate.plateNumber;
     final area = context.read<AreaState>().currentArea;
     final docId = '${plateNumber}_$area';
 
@@ -270,7 +288,7 @@ class ModifyPlateController {
       dropdownValue: dropdownValue,
     );
 
-    final plateNumber = service.composePlateNumber(); // 하이픈 포함
+    final plateNumber = service.composePlateNumber();
     final newLocation = locationController.text;
     final newAdjustmentType = selectedAdjustment;
     final updatedCustomStatus = customStatusController.text.trim();
@@ -285,7 +303,6 @@ class ModifyPlateController {
     );
 
     if (success) {
-      // 🔁 plate_status 동기화
       final area = context.read<AreaState>().currentArea;
       final statusDocId = '${plateNumber}_$area';
       await FirebaseFirestore.instance.collection('plate_status').doc(statusDocId).set({
@@ -295,7 +312,6 @@ class ModifyPlateController {
         'createdBy': 'devAdmin020',
       }, SetOptions(merge: true));
 
-      // 🔁 plates 동기화
       await FirebaseFirestore.instance.collection('plates').doc(plate.id).update({'customStatus': updatedCustomStatus});
 
       final updatedPlate = plate.copyWith(

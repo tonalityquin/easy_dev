@@ -159,7 +159,12 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
             const SizedBox(height: 32.0),
             ModifyAdjustmentSection(
               selectedAdjustment: _controller.selectedAdjustment,
-              onChanged: (value) => setState(() => _controller.selectedAdjustment = value),
+              onChanged: (value) {
+                setState(() {
+                  _controller.selectedAdjustment = value;
+                  _controller.applyAdjustmentDefaults(value); // ✅ 꼭 추가되어야 반영됨
+                });
+              },
             ),
             const SizedBox(height: 32.0),
             ModifyStatusOnTapSection(

@@ -225,87 +225,7 @@ class GCSUploader {
     client.close();
   }
 
-  Future<List<String>> listMergedPlateLogs(String division, String area) async {
-    final now = DateTime.now();
-    final year = now.year;
-    final month = _two(now.month);
-    final day = _two(now.day);
-    final prefix = '$division/$area/$year/$month/$day/logs/';
-
-    final credentialsJson = await rootBundle.loadString(serviceAccountPath);
-    final accountCredentials = ServiceAccountCredentials.fromJson(credentialsJson);
-    final scopes = [StorageApi.devstorageFullControlScope];
-    final client = await clientViaServiceAccount(accountCredentials, scopes);
-    final storage = StorageApi(client);
-
-    final allObjects = await storage.objects.list(bucketName, prefix: prefix);
-    final mergedFiles = allObjects.items
-            ?.where((o) => o.name != null && o.name!.contains('merged_') && o.name!.endsWith('.json'))
-            .map((o) => o.name!)
-            .toList() ??
-        [];
-
-    client.close();
-    return mergedFiles;
-  }
-
-  Future<Map<String, dynamic>> downloadMergedLog(String plateNumber, String division, String area) async {
-    final fileName = '$division/$area/logs/merged_$plateNumber.json';
-
-    final credentialsJson = await rootBundle.loadString(serviceAccountPath);
-    final accountCredentials = ServiceAccountCredentials.fromJson(credentialsJson);
-    final scopes = [StorageApi.devstorageFullControlScope];
-    final client = await clientViaServiceAccount(accountCredentials, scopes);
-    final storage = StorageApi(client);
-
-    try {
-      final media = await storage.objects.get(
-        bucketName,
-        fileName,
-        downloadOptions: DownloadOptions.fullMedia,
-      ) as Media;
-
-      final bytes = await media.stream.expand((e) => e).toList();
-      final content = utf8.decode(bytes);
-      final parsed = jsonDecode(content);
-
-      return parsed;
-    } catch (e) {
-      debugPrint('❌ 병합 로그 다운로드 실패: $e');
-      rethrow;
-    } finally {
-      client.close();
-    }
-  }
-
-  Future<Map<String, dynamic>> downloadMergedLogByPath(String fullFilePath) async {
-    final credentialsJson = await rootBundle.loadString(serviceAccountPath);
-    final accountCredentials = ServiceAccountCredentials.fromJson(credentialsJson);
-    final scopes = [StorageApi.devstorageFullControlScope];
-    final client = await clientViaServiceAccount(accountCredentials, scopes);
-    final storage = StorageApi(client);
-
-    try {
-      final media = await storage.objects.get(
-        bucketName,
-        fullFilePath,
-        downloadOptions: DownloadOptions.fullMedia,
-      ) as Media;
-
-      final bytes = await media.stream.expand((e) => e).toList();
-      final content = utf8.decode(bytes);
-      final parsed = jsonDecode(content);
-
-      return parsed;
-    } catch (e) {
-      debugPrint('❌ 병합 로그 다운로드 실패: $e');
-      rethrow;
-    } finally {
-      client.close();
-    }
-  }
-
-  Future<List<Map<String, dynamic>>> fetchMergedLogsForArea(
+  Future<List<Map<String, dynamic>>> showMergedLogsToDepartureCompletedMergeLog(
     String division,
     String area, {
     DateTime? filterDate,
@@ -323,7 +243,6 @@ class GCSUploader {
     final cacheKey = 'mergedLogCache-$division-$area-$year-$month-$day';
     final raw = prefs.getString(cacheKey);
 
-    // ✅ 캐시가 존재하고 15일 이내면 반환
     if (raw != null) {
       try {
         final decoded = jsonDecode(raw);
@@ -342,7 +261,6 @@ class GCSUploader {
       }
     }
 
-    // 🔄 캐시가 없거나 만료되었으면 GCS에서 가져옴
     final credentialsJson = await rootBundle.loadString(serviceAccountPath);
     final accountCredentials = ServiceAccountCredentials.fromJson(credentialsJson);
     final client = await clientViaServiceAccount(accountCredentials, [StorageApi.devstorageFullControlScope]);
@@ -382,7 +300,6 @@ class GCSUploader {
 
     client.close();
 
-    // ✅ 캐시 저장
     await prefs.setString(
       cacheKey,
       jsonEncode({

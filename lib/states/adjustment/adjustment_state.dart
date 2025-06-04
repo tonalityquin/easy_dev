@@ -3,9 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
 import '../../models/adjustment_model.dart';
-
 import '../../repositories/adjustment/adjustment_repository.dart';
-
 import '../../states/area/area_state.dart';
 
 class AdjustmentState extends ChangeNotifier {
@@ -24,10 +22,19 @@ class AdjustmentState extends ChangeNotifier {
   String _previousArea = '';
 
   List<AdjustmentModel> get adjustments => _adjustments;
-
   Map<String, bool> get selectedAdjustments => _selectedAdjustments;
-
   bool get isLoading => _isLoading;
+
+  /// ✅ 빈 AdjustmentModel 기본 제공
+  AdjustmentModel get emptyModel => AdjustmentModel(
+    id: '',
+    countType: '',
+    area: '',
+    basicStandard: 0,
+    basicAmount: 0,
+    addStandard: 0,
+    addAmount: 0,
+  );
 
   Future<void> loadFromCache() async {
     final prefs = await SharedPreferences.getInstance();
@@ -37,7 +44,9 @@ class AdjustmentState extends ChangeNotifier {
     if (cachedJson != null) {
       try {
         final decoded = json.decode(cachedJson) as List;
-        _adjustments = decoded.map((e) => AdjustmentModel.fromCacheMap(Map<String, dynamic>.from(e))).toList();
+        _adjustments = decoded
+            .map((e) => AdjustmentModel.fromCacheMap(Map<String, dynamic>.from(e)))
+            .toList();
         _selectedAdjustments = {for (var adj in _adjustments) adj.id: false};
         _previousArea = currentArea;
         _isLoading = false;
@@ -86,13 +95,13 @@ class AdjustmentState extends ChangeNotifier {
 
   /// ✅ 조정 데이터 추가 (문자열 기반)
   Future<void> addAdjustments(
-    String countType,
-    String area,
-    String basicStandard,
-    String basicAmount,
-    String addStandard,
-    String addAmount,
-  ) async {
+      String countType,
+      String area,
+      String basicStandard,
+      String basicAmount,
+      String addStandard,
+      String addAmount,
+      ) async {
     try {
       final adjustment = AdjustmentModel(
         id: '${countType}_$area',

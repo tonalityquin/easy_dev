@@ -147,7 +147,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
               child: Container(
                 color: Colors.white,
                 child: FutureBuilder<List<Map<String, dynamic>>>(
-                  future: GCSUploader().fetchMergedLogsForArea(division, area, filterDate: selectedDate),
+                  future: GCSUploader().showMergedLogsToDepartureCompletedMergeLog(division, area, filterDate: selectedDate),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator());
