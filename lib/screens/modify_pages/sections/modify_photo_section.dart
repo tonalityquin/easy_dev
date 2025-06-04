@@ -89,6 +89,38 @@ class ModifyPhotoSection extends StatelessWidget {
             },
           ),
         ),
+        const SizedBox(height: 12.0),
+        Center(
+          child: SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.black,
+                backgroundColor: Colors.white,
+                side: const BorderSide(color: Colors.black),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.zero, // ← 직사각형
+                ),
+              ),
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  builder: (_) => AlertDialog(
+                    title: const Text('테스트'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('닫기'),
+                      ),
+                    ],
+                  ),
+                );
+              },
+              child: const Text('사진 불러오기'),
+            ),
+          ),
+        ),
       ],
     );
   }
