@@ -155,13 +155,14 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
     final plateState = context.read<PlateState>();
     final userName = context.read<UserState>().name;
 
-    return PopScope(
-      canPop: false,
-      onPopInvoked: (didPop) async {
+    return WillPopScope(
+      onWillPop: () async {
         final selectedPlate = plateState.getSelectedPlate(
           PlateType.parkingRequests,
           userName,
         );
+
+        // 조건에 따라 선택 해제 또는 리포트 닫기
         if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
           await plateState.toggleIsSelected(
             collection: PlateType.parkingRequests,
@@ -169,11 +170,15 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
             userName: userName,
             onError: (msg) => debugPrint(msg),
           );
+          return false;
         }
 
         if (_showReportDialog) {
           setState(() => _showReportDialog = false);
+          return false;
         }
+
+        return true;
       },
       child: Scaffold(
         appBar: AppBar(

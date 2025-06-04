@@ -43,7 +43,7 @@ class ModifyPhotoSection extends StatelessWidget {
                   : capturedImages[index - imageUrls.length].path;
 
               return GestureDetector(
-                onTap: () => showFullScreenImageViewer(
+                onTap: () => modifyshowFullScreenImageViewer(
                   context,
                   imageUrls + capturedImages.map((e) => e.path).toList(),
                   index,
@@ -157,7 +157,7 @@ class ModifyPhotoSection extends StatelessWidget {
                               final user = userWithExt.replaceAll('.jpg', '');
 
                               return GestureDetector(
-                                onTap: () => showFullScreenImageViewer(
+                                onTap: () => modifyshowFullScreenImageViewer(
                                   context,
                                   urls,
                                   index,

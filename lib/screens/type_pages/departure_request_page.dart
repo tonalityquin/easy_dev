@@ -143,155 +143,163 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
     final plateState = context.read<PlateState>();
     final userName = context.read<UserState>().name;
 
-    return PopScope(
-        canPop: false, // ✅ 화면 닫힘 방지
-        onPopInvoked: (didPop) async {
-          // ✅ 번호판 선택 해제만 처리
-          final selectedPlate = plateState.getSelectedPlate(PlateType.departureRequests, userName);
-          if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
-            await plateState.toggleIsSelected(
-              collection: PlateType.departureRequests,
-              plateNumber: selectedPlate.plateNumber,
-              userName: userName,
-              onError: (msg) => debugPrint(msg),
-            );
-          }
-        },
-        child: Scaffold(
-          appBar: AppBar(
-            title: const TopNavigation(),
-            // ✅ title로만 사용
-            centerTitle: true,
-            backgroundColor: Colors.white,
-            foregroundColor: Colors.black,
-            elevation: 0,
-          ),
-          body: Consumer2<PlateState, AreaState>(
-            builder: (context, plateState, areaState, child) {
-              final filterState = context.read<FilterPlate>();
-              final userName = context.read<UserState>().name;
+    return WillPopScope(
+      onWillPop: () async {
+        final selectedPlate = plateState.getSelectedPlate(
+          PlateType.departureRequests,
+          userName,
+        );
 
-              if (_isSearchMode) {
-                return FutureBuilder<List<PlateModel>>(
-                  future: filterState.fetchPlatesBySearchQuery(),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState != ConnectionState.done) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
+        if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
+          await plateState.toggleIsSelected(
+            collection: PlateType.departureRequests,
+            plateNumber: selectedPlate.plateNumber,
+            userName: userName,
+            onError: (msg) => debugPrint(msg),
+          );
+          return false; // 선택 해제 후 뒤로가기 차단
+        }
 
-                    final departureRequests = snapshot.data ?? [];
-                    if (departureRequests.isEmpty) {
-                      return const Center(child: Text('검색 결과가 없습니다.'));
-                    }
+        return true; // 선택된 plate 없을 경우 뒤로가기 허용
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const TopNavigation(),
+          centerTitle: true,
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
+          elevation: 0,
+        ),
+        body: Consumer2<PlateState, AreaState>(
+          builder: (context, plateState, areaState, child) {
+            final filterState = context.read<FilterPlate>();
+            final userName = context.read<UserState>().name;
 
-                    return ListView(
-                      padding: const EdgeInsets.all(8.0),
-                      children: [
-                        PlateContainer(
-                          data: departureRequests,
-                          collection: PlateType.departureRequests,
-                          filterCondition: (request) => request.type == PlateType.departureRequests.firestoreValue,
-                          onPlateTap: (plateNumber, area) {
-                            plateState.toggleIsSelected(
-                              collection: PlateType.departureRequests,
-                              plateNumber: plateNumber,
-                              userName: userName,
-                              onError: (errorMessage) {
-                                showFailedSnackbar(context, errorMessage);
-                              },
-                            );
-                          },
-                        ),
-                      ],
-                    );
-                  },
-                );
-              }
+            if (_isSearchMode) {
+              return FutureBuilder<List<PlateModel>>(
+                future: filterState.fetchPlatesBySearchQuery(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState != ConnectionState.done) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
 
-              if (_isParkingAreaMode && _selectedParkingArea != null) {
-                return FutureBuilder<List<PlateModel>>(
-                  future: filterState.fetchPlatesByParkingLocation(
-                    type: PlateType.departureRequests,
-                    location: _selectedParkingArea!,
-                  ),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState != ConnectionState.done) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
+                  final departureRequests = snapshot.data ?? [];
+                  if (departureRequests.isEmpty) {
+                    return const Center(child: Text('검색 결과가 없습니다.'));
+                  }
 
-                    final departureRequests = snapshot.data ?? [];
-                    if (departureRequests.isEmpty) {
-                      return const Center(child: Text('해당 구역의 출차 요청 차량이 없습니다.'));
-                    }
-
-                    return ListView(
-                      padding: const EdgeInsets.all(8.0),
-                      children: [
-                        PlateContainer(
-                          data: departureRequests,
-                          collection: PlateType.departureRequests,
-                          filterCondition: (request) => request.type == PlateType.departureRequests.firestoreValue,
-                          onPlateTap: (plateNumber, area) {
-                            plateState.toggleIsSelected(
-                              collection: PlateType.departureRequests,
-                              plateNumber: plateNumber,
-                              userName: userName,
-                              onError: (errorMessage) {
-                                showFailedSnackbar(context, errorMessage);
-                              },
-                            );
-                          },
-                        ),
-                      ],
-                    );
-                  },
-                );
-              }
-
-              final plates = plateState.getPlatesByCollection(PlateType.departureRequests);
-              if (plates.isEmpty) {
-                return const Center(child: Text('출차 요청 차량이 없습니다.'));
-              }
-
-              return ListView(
-                padding: const EdgeInsets.all(8.0),
-                children: [
-                  PlateContainer(
-                    data: plates,
-                    collection: PlateType.departureRequests,
-                    filterCondition: (request) => request.type == PlateType.departureRequests.firestoreValue,
-                    onPlateTap: (plateNumber, area) {
-                      plateState.toggleIsSelected(
+                  return ListView(
+                    padding: const EdgeInsets.all(8.0),
+                    children: [
+                      PlateContainer(
+                        data: departureRequests,
                         collection: PlateType.departureRequests,
-                        plateNumber: plateNumber,
-                        userName: userName,
-                        onError: (errorMessage) {
-                          showFailedSnackbar(context, errorMessage);
+                        filterCondition: (request) =>
+                        request.type == PlateType.departureRequests.firestoreValue,
+                        onPlateTap: (plateNumber, area) {
+                          plateState.toggleIsSelected(
+                            collection: PlateType.departureRequests,
+                            plateNumber: plateNumber,
+                            userName: userName,
+                            onError: (errorMessage) {
+                              showFailedSnackbar(context, errorMessage);
+                            },
+                          );
                         },
-                      );
-                    },
-                  ),
-                ],
+                      ),
+                    ],
+                  );
+                },
               );
-            },
-          ),
-          bottomNavigationBar: DepartureRequestControlButtons(
-            isSearchMode: _isSearchMode,
-            isParkingAreaMode: _isParkingAreaMode,
-            isSorted: _isSorted,
-            showSearchDialog: () => _showSearchDialog(context),
-            resetSearch: () => _resetSearch(context),
-            showParkingAreaDialog: () => _showParkingAreaDialog(context),
-            resetParkingAreaFilter: () => _resetParkingAreaFilter(context),
-            toggleSortIcon: _toggleSortIcon,
-            handleDepartureCompleted: (ctx) => _handleDepartureCompleted(ctx),
-            handleEntryParkingRequest: (ctx, plateNumber, area) {
-              handleEntryParkingRequest(ctx, plateNumber, area);
-            },
-            handleEntryParkingCompleted: (ctx, plateNumber, area, location) {
-              handleEntryParkingCompleted(ctx, plateNumber, area, location);
-            },
-          ),
-        ));
+            }
+
+            if (_isParkingAreaMode && _selectedParkingArea != null) {
+              return FutureBuilder<List<PlateModel>>(
+                future: filterState.fetchPlatesByParkingLocation(
+                  type: PlateType.departureRequests,
+                  location: _selectedParkingArea!,
+                ),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState != ConnectionState.done) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  final departureRequests = snapshot.data ?? [];
+                  if (departureRequests.isEmpty) {
+                    return const Center(child: Text('해당 구역의 출차 요청 차량이 없습니다.'));
+                  }
+
+                  return ListView(
+                    padding: const EdgeInsets.all(8.0),
+                    children: [
+                      PlateContainer(
+                        data: departureRequests,
+                        collection: PlateType.departureRequests,
+                        filterCondition: (request) =>
+                        request.type == PlateType.departureRequests.firestoreValue,
+                        onPlateTap: (plateNumber, area) {
+                          plateState.toggleIsSelected(
+                            collection: PlateType.departureRequests,
+                            plateNumber: plateNumber,
+                            userName: userName,
+                            onError: (errorMessage) {
+                              showFailedSnackbar(context, errorMessage);
+                            },
+                          );
+                        },
+                      ),
+                    ],
+                  );
+                },
+              );
+            }
+
+            final plates = plateState.getPlatesByCollection(PlateType.departureRequests);
+            if (plates.isEmpty) {
+              return const Center(child: Text('출차 요청 차량이 없습니다.'));
+            }
+
+            return ListView(
+              padding: const EdgeInsets.all(8.0),
+              children: [
+                PlateContainer(
+                  data: plates,
+                  collection: PlateType.departureRequests,
+                  filterCondition: (request) =>
+                  request.type == PlateType.departureRequests.firestoreValue,
+                  onPlateTap: (plateNumber, area) {
+                    plateState.toggleIsSelected(
+                      collection: PlateType.departureRequests,
+                      plateNumber: plateNumber,
+                      userName: userName,
+                      onError: (errorMessage) {
+                        showFailedSnackbar(context, errorMessage);
+                      },
+                    );
+                  },
+                ),
+              ],
+            );
+          },
+        ),
+        bottomNavigationBar: DepartureRequestControlButtons(
+          isSearchMode: _isSearchMode,
+          isParkingAreaMode: _isParkingAreaMode,
+          isSorted: _isSorted,
+          showSearchDialog: () => _showSearchDialog(context),
+          resetSearch: () => _resetSearch(context),
+          showParkingAreaDialog: () => _showParkingAreaDialog(context),
+          resetParkingAreaFilter: () => _resetParkingAreaFilter(context),
+          toggleSortIcon: _toggleSortIcon,
+          handleDepartureCompleted: (ctx) => _handleDepartureCompleted(ctx),
+          handleEntryParkingRequest: (ctx, plateNumber, area) {
+            handleEntryParkingRequest(ctx, plateNumber, area);
+          },
+          handleEntryParkingCompleted: (ctx, plateNumber, area, location) {
+            handleEntryParkingCompleted(ctx, plateNumber, area, location);
+          },
+        ),
+      ),
+    );
   }
 }

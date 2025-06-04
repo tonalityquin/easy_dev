@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 
 /// 전체 화면 이미지 뷰어: 로컬 XFile 또는 URL (String) 지원
-void showFullScreenImageViewer(
+void modifyshowFullScreenImageViewer(
     BuildContext context,
     List<dynamic> images,
     int initialIndex, {

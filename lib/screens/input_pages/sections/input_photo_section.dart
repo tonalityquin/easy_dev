@@ -34,7 +34,7 @@ class InputPhotoSection extends StatelessWidget {
             itemBuilder: (context, index) {
               final imageFile = capturedImages[index];
               return GestureDetector(
-                onTap: () => showFullScreenImageViewer(context, capturedImages, index),
+                onTap: () => inputshowFullScreenImageViewer(context, capturedImages, index),
                 child: Padding(
                   padding: const EdgeInsets.all(4.0),
                   child: Hero(
