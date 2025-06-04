@@ -62,7 +62,7 @@ class MovementPlate {
 
       final logMap = log.toMap()..removeWhere((k, v) => v == null);
 
-      await _uploader.uploadLogJson(logMap, plateNumber, _areaState.currentDivision, area);
+      await _uploader.uploadForPlateLogTypeJson(logMap, plateNumber, _areaState.currentDivision, area);
 
       return true;
     } catch (e) {
@@ -185,7 +185,7 @@ class MovementPlate {
 
       final logMap = log.toMap()..removeWhere((k, v) => v == null);
 
-      await _uploader.uploadLogJson(logMap, plateNumber, _areaState.currentDivision, area);
+      await _uploader.uploadForPlateLogTypeJson(logMap, plateNumber, _areaState.currentDivision, area);
     } catch (e) {
       debugPrint("🚨 복원 오류: $e");
     }
@@ -249,10 +249,10 @@ class MovementPlate {
 
       final logMap = log.toMap()..removeWhere((k, v) => v == null);
 
-      await _uploader.uploadLogJson(logMap, plate.plateNumber, _areaState.currentDivision, plate.area);
+      await _uploader.uploadForPlateLogTypeJson(logMap, plate.plateNumber, _areaState.currentDivision, plate.area);
 
       if (plate.isLockedFee == true) {
-        await _uploader.mergeAndReplaceLogs(plate.plateNumber, _areaState.currentDivision, plate.area);
+        await _uploader.mergeAndSummarizeLogs(plate.plateNumber, _areaState.currentDivision, plate.area);
       }
     } catch (e) {
       debugPrint('🚨 출차 완료 이동 실패: $e');
@@ -294,10 +294,10 @@ class MovementPlate {
 
       final logMap = log.toMap()..removeWhere((k, v) => v == null);
 
-      await _uploader.uploadLogJson(logMap, plate.plateNumber, _areaState.currentDivision, plate.area);
+      await _uploader.uploadForPlateLogTypeJson(logMap, plate.plateNumber, _areaState.currentDivision, plate.area);
 
       if (plate.isLockedFee == true) {
-        await _uploader.mergeAndReplaceLogs(plate.plateNumber, _areaState.currentDivision, plate.area);
+        await _uploader.mergeAndSummarizeLogs(plate.plateNumber, _areaState.currentDivision, plate.area);
       }
     } catch (e) {
       debugPrint('🚨 출차 완료 이동 실패: $e');

@@ -58,6 +58,7 @@ class ParkingCompletedStatusDialog extends StatelessWidget {
                         initialPlateNumber: plateNumber,
                         division: division,
                         area: currentArea,
+                        requestTime: plate.requestTime,
                       ),
                     ),
                   );

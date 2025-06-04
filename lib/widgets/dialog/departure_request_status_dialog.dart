@@ -75,6 +75,7 @@ class DepartureRequestStatusDialog extends StatelessWidget {
                         initialPlateNumber: plateNumber,
                         division: userState.division,
                         area: area,
+                        requestTime: plate.requestTime,
                       ),
                     ),
                   );

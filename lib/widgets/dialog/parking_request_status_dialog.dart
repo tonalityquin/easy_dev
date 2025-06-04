@@ -56,6 +56,7 @@ class ParkingRequestStatusDialog extends StatelessWidget {
                         initialPlateNumber: plateNumber,
                         division: division, // ✅ 추가
                         area: currentArea, // ✅ 추가
+                        requestTime: plate.requestTime,
                       ),
                     ),
                   );

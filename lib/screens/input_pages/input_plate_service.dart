@@ -46,7 +46,7 @@ class InputPlateService {
       for (int attempt = 0; attempt < 3; attempt++) {
         try {
           debugPrint('⬆️ [${i + 1}/${images.length}] 업로드 시도 #${attempt + 1}: $gcsPath');
-          gcsUrl = await uploader.uploadImageFromInput(file, gcsPath);
+          gcsUrl = await uploader.inputUploadImage(file, gcsPath);
           if (gcsUrl != null) {
             debugPrint('✅ 업로드 성공: $gcsUrl');
             break;

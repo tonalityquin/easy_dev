@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../states/plate/filter_plate.dart';
 import '../../../utils/snackbar_helper.dart';
+import 'plate_image_dialog.dart';
 
 class MergedLogSection extends StatefulWidget {
   final List<Map<String, dynamic>> mergedLogs;
@@ -230,8 +231,16 @@ class _MergedLogSectionState extends State<MergedLogSection> {
                           ),
                           const SizedBox(width: 12),
                           ElevatedButton(
-                            onPressed: () {},
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.grey.shade400),
+                            onPressed: () {
+                              showGeneralDialog(
+                                context: context,
+                                barrierDismissible: true,
+                                barrierLabel: "사진 보기",
+                                transitionDuration: const Duration(milliseconds: 300),
+                                pageBuilder: (_, __, ___) => PlateImageDialog(plateNumber: plate),
+                              );
+                            },
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.grey.shade100),
                             child: const Text('사진'),
                           ),
                         ],

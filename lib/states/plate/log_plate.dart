@@ -10,7 +10,7 @@ class LogPlateState with ChangeNotifier {
       final logMap = log.toMap()..removeWhere((key, value) => value == null);
       final plateNumber = log.plateNumber;
 
-      await _uploader.uploadLogJson(logMap, plateNumber, division, area);
+      await _uploader.uploadForPlateLogTypeJson(logMap, plateNumber, division, area);
       debugPrint("✅ 로그가 GCS에 저장되었습니다.");
     } catch (e) {
       debugPrint("❌ GCS 로그 저장 실패: $e");

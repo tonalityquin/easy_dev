@@ -86,7 +86,7 @@ class ModifyPlateService {
       String? gcsUrl;
       for (int attempt = 0; attempt < 3; attempt++) {
         try {
-          gcsUrl = await uploader.uploadImageFromModify(file, gcsPath);
+          gcsUrl = await uploader.modifyUploadImage(file, gcsPath);
           if (gcsUrl != null) break;
         } catch (_) {
           await Future.delayed(const Duration(milliseconds: 500));
@@ -143,7 +143,7 @@ class ModifyPlateService {
         updatedFields: changes,
       );
 
-      await GCSUploader().uploadLogJson(
+      await GCSUploader().uploadForPlateLogTypeJson(
         log.toMap(),
         updatedPlate.plateNumber,
         log.division,

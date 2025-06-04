@@ -141,7 +141,7 @@ class DepartureCompletedControlButtons extends StatelessWidget {
               'adjustmentType': adjustmentType,
             };
 
-            await uploader.uploadLogJson(log, selectedPlate.plateNumber, division, area);
+            await uploader.uploadForPlateLogTypeJson(log, selectedPlate.plateNumber, division, area);
             showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
           } else {
             isSearchMode ? onResetSearch() : onShowSearchDialog();

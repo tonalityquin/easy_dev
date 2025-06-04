@@ -132,7 +132,7 @@ class ParkingRequestControlButtons extends StatelessWidget {
                     cancelLog['adjustmentType'] = adjustmentType;
                   }
 
-                  await uploader.uploadLogJson(cancelLog, selectedPlate.plateNumber, division, area);
+                  await uploader.uploadForPlateLogTypeJson(cancelLog, selectedPlate.plateNumber, division, area);
                   showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
                 } else {
                   final result = await showAdjustmentTypeConfirmDialog(
@@ -170,7 +170,7 @@ class ParkingRequestControlButtons extends StatelessWidget {
                     log['adjustmentType'] = adjustmentType;
                   }
 
-                  await uploader.uploadLogJson(log, selectedPlate.plateNumber, division, area);
+                  await uploader.uploadForPlateLogTypeJson(log, selectedPlate.plateNumber, division, area);
                   showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
                 }
               } else {

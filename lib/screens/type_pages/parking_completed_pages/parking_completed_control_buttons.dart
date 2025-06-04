@@ -134,7 +134,7 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                 await repo.addOrUpdatePlate(selectedPlate.id, updatedPlate);
                 await plateState.updatePlateLocally(PlateType.parkingCompleted, updatedPlate);
 
-                await uploader.uploadLogJson(
+                await uploader.uploadForPlateLogTypeJson(
                   {
                     'plateNumber': selectedPlate.plateNumber,
                     'action': '사전 정산 취소',
@@ -170,7 +170,7 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                 await repo.addOrUpdatePlate(selectedPlate.id, updatedPlate);
                 await plateState.updatePlateLocally(PlateType.parkingCompleted, updatedPlate);
 
-                await uploader.uploadLogJson(
+                await uploader.uploadForPlateLogTypeJson(
                   {
                     'plateNumber': selectedPlate.plateNumber,
                     'action': '사전 정산',

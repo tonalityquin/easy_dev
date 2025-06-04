@@ -141,7 +141,7 @@ class DepartureRequestControlButtons extends StatelessWidget {
                 await repo.addOrUpdatePlate(selectedPlate.id, updatedPlate);
                 await plateState.updatePlateLocally(PlateType.departureRequests, updatedPlate);
 
-                await uploader.uploadLogJson({
+                await uploader.uploadForPlateLogTypeJson({
                   'plateNumber': selectedPlate.plateNumber,
                   'action': '사전 정산 취소',
                   'performedBy': context.read<UserState>().name,
@@ -172,7 +172,7 @@ class DepartureRequestControlButtons extends StatelessWidget {
                 await repo.addOrUpdatePlate(selectedPlate.id, updatedPlate);
                 await plateState.updatePlateLocally(PlateType.departureRequests, updatedPlate);
 
-                await uploader.uploadLogJson({
+                await uploader.uploadForPlateLogTypeJson({
                   'plateNumber': selectedPlate.plateNumber,
                   'action': '사전 정산',
                   'performedBy': context.read<UserState>().name,

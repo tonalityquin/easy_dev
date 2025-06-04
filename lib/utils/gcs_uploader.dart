@@ -11,15 +11,7 @@ class GCSUploader {
   final String projectId = 'easydev-97fb6';
   final String serviceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
 
-  Future<String?> uploadImageFromInput(File imageFile, String destinationPath) async {
-    return await _upload(imageFile, destinationPath);
-  }
-
-  Future<String?> uploadImageFromModify(File imageFile, String destinationPath) async {
-    return await _upload(imageFile, destinationPath);
-  }
-
-  Future<String?> _upload(File file, String destinationPath) async {
+  Future<String?> _uploadForImage(File file, String destinationPath) async {
     try {
       final credentialsJson = await rootBundle.loadString(serviceAccountPath);
       final accountCredentials = ServiceAccountCredentials.fromJson(credentialsJson);
@@ -50,7 +42,15 @@ class GCSUploader {
     }
   }
 
-  Future<String?> uploadJsonData(Map<String, dynamic> jsonData, String destinationPath) async {
+  Future<String?> inputUploadImage(File imageFile, String destinationPath) async {
+    return await _uploadForImage(imageFile, destinationPath);
+  }
+
+  Future<String?> modifyUploadImage(File imageFile, String destinationPath) async {
+    return await _uploadForImage(imageFile, destinationPath);
+  }
+
+  Future<String?> uploadForJsonData(Map<String, dynamic> jsonData, String destinationPath) async {
     try {
       final credentialsJson = await rootBundle.loadString(serviceAccountPath);
       final accountCredentials = ServiceAccountCredentials.fromJson(credentialsJson);
@@ -85,7 +85,7 @@ class GCSUploader {
     }
   }
 
-  Future<String?> uploadLogJson(
+  Future<String?> uploadForPlateLogTypeJson(
     Map<String, dynamic> logData,
     String plateNumber,
     String division,
@@ -101,7 +101,6 @@ class GCSUploader {
     final safePlate = plateNumber.replaceAll(RegExp(r'\\s'), '');
     final fileName = '$division/$area/$year/$month/$day/logs/${safePlate}_$time.json';
 
-    // ✅ adjustmentType이 null이거나 공백일 경우 추가하지 않음
     final cleanAdjustmentType = adjustmentType?.trim();
     if (cleanAdjustmentType != null && cleanAdjustmentType.isNotEmpty) {
       logData['adjustmentType'] = cleanAdjustmentType;
@@ -117,10 +116,10 @@ class GCSUploader {
 
     logData.putIfAbsent('performedBy', () => '시스템');
 
-    return await uploadJsonData(logData, fileName);
+    return await uploadForJsonData(logData, fileName);
   }
 
-  Future<void> mergeAndReplaceLogs(String plateNumber, String division, String area) async {
+  Future<void> mergeAndSummarizeLogs(String plateNumber, String division, String area) async {
     await Future.delayed(Duration(seconds: 3));
 
     final now = DateTime.now();
@@ -169,7 +168,6 @@ class GCSUploader {
       }
     }
 
-    // 병합 JSON 저장
     final mergedJson = {
       'plateNumber': plateNumber,
       'mergedAt': now.toIso8601String(),
@@ -177,9 +175,8 @@ class GCSUploader {
     };
 
     final mergedFileName = '$division/$area/$year/$month/$day/logs/merged_${safePlate}_$time.json';
-    await uploadJsonData(mergedJson, mergedFileName);
+    await uploadForJsonData(mergedJson, mergedFileName);
 
-    // 기존 로그 파일 삭제
     for (final obj in matchingObjects) {
       try {
         if (obj.name != null) {
@@ -191,7 +188,6 @@ class GCSUploader {
       }
     }
 
-    // 📌 요약 파일 생성
     final timestamps = mergedLogs
         .whereType<Map<String, dynamic>>()
         .map((e) => DateTime.tryParse(e['timestamp'] ?? ''))
@@ -224,7 +220,7 @@ class GCSUploader {
     };
 
     final summaryFileName = '$division/$area/sources/${safePlate}_$time.json';
-    await uploadJsonData(summaryJson, summaryFileName);
+    await uploadForJsonData(summaryJson, summaryFileName);
 
     client.close();
   }

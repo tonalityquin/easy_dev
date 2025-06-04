@@ -105,7 +105,7 @@ class PlateState extends ChangeNotifier {
             final previous = previousIsLockedFee[plate.id];
             if (previous == false && plate.isLockedFee == true) {
               final uploader = GCSUploader();
-              await uploader.mergeAndReplaceLogs(
+              await uploader.mergeAndSummarizeLogs(
                 plate.plateNumber,
                 _areaState.currentDivision,
                 plate.area,
