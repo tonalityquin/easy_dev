@@ -219,7 +219,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
             const SizedBox(height: 32),
             InputPhotoSection(
               capturedImages: controller.capturedImages,
-              plateNumber: controller.buildPlateNumber(), // ✅ 이게 맞는 방식
+              plateNumber: controller.buildPlateNumber(),
             ),
             const SizedBox(height: 32),
             InputAdjustmentSection(

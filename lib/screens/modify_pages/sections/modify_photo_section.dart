@@ -3,7 +3,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
 import '../utils/modify_camera_fullscreen_viewer.dart';
-import '../modify_plate_service.dart'; // ModifyPlateService의 static 메서드 사용
+import '../modify_plate_service.dart';
 
 class ModifyPhotoSection extends StatelessWidget {
   final List<XFile> capturedImages;
@@ -59,7 +59,8 @@ class ModifyPhotoSection extends StatelessWidget {
                       width: 100,
                       height: 100,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.red),
+                      errorBuilder: (_, __, ___) =>
+                      const Icon(Icons.broken_image, color: Colors.red),
                     )
                         : FutureBuilder<bool>(
                       future: File(capturedImages[index - imageUrls.length].path).exists(),
@@ -71,7 +72,6 @@ class ModifyPhotoSection extends StatelessWidget {
                             child: Center(child: CircularProgressIndicator()),
                           );
                         }
-
                         if (snapshot.hasError || !(snapshot.data ?? false)) {
                           return const SizedBox(
                             width: 100,
@@ -109,88 +109,102 @@ class ModifyPhotoSection extends StatelessWidget {
                   borderRadius: BorderRadius.zero,
                 ),
               ),
-              onPressed: () async {
-                showDialog(
+              onPressed: () {
+                showGeneralDialog(
                   context: context,
-                  builder: (context) => FutureBuilder<List<String>>(
-                    future: ModifyPlateService.listPlateImages(
-                      context: context,
-                      plateNumber: plateNumber,
-                    ),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const AlertDialog(
-                          content: SizedBox(
-                            height: 100,
-                            child: Center(child: CircularProgressIndicator()),
-                          ),
-                        );
-                      }
-
-                      if (snapshot.hasError) {
-                        return AlertDialog(
-                          title: const Text('에러'),
-                          content: const Text('이미지 불러오기 실패'),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context),
-                              child: const Text('닫기'),
-                            ),
-                          ],
-                        );
-                      }
-
-                      final urls = snapshot.data ?? [];
-
-                      if (urls.isEmpty) {
-                        return AlertDialog(
-                          title: const Text('사진 없음'),
-                          content: const Text('GCS에 저장된 이미지가 없습니다.'),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context),
-                              child: const Text('닫기'),
-                            ),
-                          ],
-                        );
-                      }
-
-                      return AlertDialog(
+                  barrierDismissible: true,
+                  barrierLabel: "사진 불러오기",
+                  transitionDuration: const Duration(milliseconds: 300),
+                  pageBuilder: (context, animation, secondaryAnimation) {
+                    return Scaffold(
+                      backgroundColor: Colors.white,
+                      appBar: AppBar(
+                        centerTitle: true,
                         title: const Text('저장된 사진 목록'),
-                        content: SizedBox(
-                          width: double.maxFinite,
-                          height: 300,
-                          child: ListView.builder(
+                        backgroundColor: Colors.white,
+                        foregroundColor: Colors.black,
+                        elevation: 1,
+                      ),
+                      body: FutureBuilder<List<String>>(
+                        future: ModifyPlateService.listPlateImages(
+                          context: context,
+                          plateNumber: plateNumber,
+                        ),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return const Center(child: CircularProgressIndicator());
+                          }
+
+                          if (snapshot.hasError) {
+                            return const Center(child: Text('이미지 불러오기 실패'));
+                          }
+
+                          final urls = snapshot.data ?? [];
+
+                          if (urls.isEmpty) {
+                            return const Center(child: Text('GCS에 저장된 이미지가 없습니다.'));
+                          }
+
+                          return ListView.builder(
                             itemCount: urls.length,
                             itemBuilder: (context, index) {
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 4.0),
-                                child: GestureDetector(
-                                  onTap: () => showFullScreenImageViewer(
-                                    context,
-                                    urls,
-                                    index,
-                                    isUrlList: true,
-                                  ),
-                                  child: Image.network(
-                                    urls[index],
-                                    height: 80,
-                                    fit: BoxFit.cover,
+                              final url = urls[index];
+                              final segments = url.split('/').last.split('_');
+
+                              final date = segments.length > 0 ? segments[0] : '날짜 없음';
+                              final number = segments.length > 2 ? segments[2] : '번호판 없음';
+                              final userWithExt = segments.length > 3 ? segments[3] : '미상';
+                              final user = userWithExt.replaceAll('.jpg', '');
+
+                              return GestureDetector(
+                                onTap: () => showFullScreenImageViewer(
+                                  context,
+                                  urls,
+                                  index,
+                                  isUrlList: true,
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
+                                  child: Row(
+                                    children: [
+                                      // 썸네일 (2/10)
+                                      Container(
+                                        width: MediaQuery.of(context).size.width * 0.2,
+                                        height: 80,
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(4),
+                                          border: Border.all(color: Colors.grey.shade300),
+                                        ),
+                                        clipBehavior: Clip.hardEdge,
+                                        child: Image.network(
+                                          url,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) =>
+                                          const Icon(Icons.broken_image, color: Colors.red),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      // 정보 (8/10)
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text('📅 $date', style: const TextStyle(fontSize: 14)),
+                                            Text('🚘 $number', style: const TextStyle(fontSize: 14)),
+                                            Text('👤 $user', style: const TextStyle(fontSize: 14)),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               );
                             },
-                          ),
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text('닫기'),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
+                          );
+                        },
+                      ),
+                    );
+                  },
                 );
               },
               child: const Text('사진 불러오기'),

@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 
-/// 통합 이미지 뷰어: 로컬 XFile 또는 URL (String) 지원
+/// 전체 화면 이미지 뷰어: 로컬 XFile 또는 URL (String) 지원
 void showFullScreenImageViewer(
     BuildContext context,
     List<dynamic> images,
@@ -46,7 +46,8 @@ void showFullScreenImageViewer(
                                 if (progress == null) return child;
                                 return const Center(child: CircularProgressIndicator());
                               },
-                              errorBuilder: (_, __, ___) => const Icon(Icons.error, color: Colors.red),
+                              errorBuilder: (_, __, ___) =>
+                              const Icon(Icons.error, color: Colors.red),
                             )
                                 : FutureBuilder<bool>(
                               future: File(image.path).exists(),
@@ -55,7 +56,8 @@ void showFullScreenImageViewer(
                                   return const Center(child: CircularProgressIndicator());
                                 }
                                 if (snapshot.hasError || !(snapshot.data ?? false)) {
-                                  return const Center(child: Icon(Icons.broken_image, color: Colors.red));
+                                  return const Center(
+                                      child: Icon(Icons.broken_image, color: Colors.red));
                                 }
                                 return Image.file(
                                   File(image.path),
@@ -109,26 +111,28 @@ void showFullScreenImageViewer(
   );
 }
 
-/// 메타데이터 파싱 (파일명 기반)
+/// 📦 파일명 기반 메타데이터 추출
 String _parseMetadataFromFileName(String fileName) {
   try {
     final name = fileName.replaceAll('.jpg', '');
     final parts = name.split('_');
     if (parts.length < 4) return '';
     final date = parts[0]; // YYYY-MM-DD
-    final time = parts[1]; // epoch millis
+    final millis = int.tryParse(parts[1]) ?? 0;
     final plate = parts[2];
     final user = parts.sublist(3).join('_');
-    final dateTime = DateTime.fromMillisecondsSinceEpoch(int.parse(time));
+
+    final dateTime = DateTime.fromMillisecondsSinceEpoch(millis);
     final timeFormatted =
         '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}:${dateTime.second.toString().padLeft(2, '0')}';
+
     return '촬영일: $date $timeFormatted\n차량번호: $plate\n촬영자: $user';
   } catch (_) {
     return '';
   }
 }
 
-/// 메타데이터 파싱 (URL 기반)
+/// 🌐 URL 기반 메타데이터 추출
 String _parseMetadataFromUrl(String url) {
   try {
     final segments = Uri.parse(url).pathSegments;
