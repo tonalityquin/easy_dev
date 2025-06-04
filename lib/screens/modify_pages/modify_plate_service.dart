@@ -2,6 +2,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:camera/camera.dart';
+import 'package:googleapis/storage/v1.dart';
+import 'package:googleapis_auth/auth_io.dart';
+import 'package:flutter/services.dart';
 
 import '../../states/plate/modify_plate.dart';
 import '../../states/area/area_state.dart';
@@ -18,7 +21,6 @@ class ModifyPlateService {
   final PlateType collectionKey;
   final PlateModel originalPlate;
 
-  // form controllers
   final TextEditingController controllerFrontdigit;
   final TextEditingController controllerMidDigit;
   final TextEditingController controllerBackDigit;
@@ -65,14 +67,10 @@ class ModifyPlateService {
     final user = context.read<UserState>().user;
     final performedBy = user?.name ?? 'Unknown';
 
-    debugPrint('📸 총 업로드 시도 이미지 수: ${capturedImages.length}');
-
     for (int i = 0; i < capturedImages.length; i++) {
       final image = capturedImages[i];
       final file = File(image.path);
-
       if (!file.existsSync()) {
-        debugPrint('❌ [${i + 1}/${capturedImages.length}] 파일이 존재하지 않음: ${file.path}');
         failedFiles.add(file.path);
         continue;
       }
@@ -82,40 +80,26 @@ class ModifyPlateService {
           '${now.month.toString().padLeft(2, '0')}-'
           '${now.day.toString().padLeft(2, '0')}';
       final timeStr = now.millisecondsSinceEpoch.toString();
-
       final fileName = '${dateStr}_${timeStr}_${plateNumber}_$performedBy.jpg';
       final gcsPath = '$division/$area/images/$fileName';
 
       String? gcsUrl;
       for (int attempt = 0; attempt < 3; attempt++) {
         try {
-          debugPrint('⬆️ [${i + 1}/${capturedImages.length}] 업로드 시도 #${attempt + 1}: $gcsPath');
           gcsUrl = await uploader.uploadImageFromModify(file, gcsPath);
-          if (gcsUrl != null) {
-            debugPrint('✅ 업로드 성공: $gcsUrl');
-            break;
-          }
-        } catch (e) {
-          debugPrint('❌ [시도 ${attempt + 1}] 업로드 실패 (${file.path}): $e');
+          if (gcsUrl != null) break;
+        } catch (_) {
           await Future.delayed(const Duration(milliseconds: 500));
         }
       }
 
-      if (gcsUrl == null) {
-        debugPrint('❌ 업로드 최종 실패: ${file.path}');
-        failedFiles.add(file.path);
-      } else {
+      if (gcsUrl != null) {
         uploadedImageUrls.add(gcsUrl);
+      } else {
+        failedFiles.add(file.path);
       }
 
-      await Future.delayed(const Duration(milliseconds: 100)); // 업로드 간 간격 확보
-    }
-
-    if (failedFiles.isNotEmpty) {
-      debugPrint('⚠️ 업로드 실패 (${failedFiles.length}/${capturedImages.length})');
-      for (final f in failedFiles) {
-        debugPrint(' - 실패 파일: $f');
-      }
+      await Future.delayed(const Duration(milliseconds: 100));
     }
 
     return [...existingImageUrls, ...uploadedImageUrls];
@@ -184,5 +168,35 @@ class ModifyPlateService {
       region: dropdownValue,
       imageUrls: imageUrls,
     );
+  }
+
+  static Future<List<String>> listPlateImages({
+    required BuildContext context,
+    required String plateNumber,
+  }) async {
+    final bucketName = 'easydev-image';
+    final serviceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
+    final area = context.read<AreaState>().currentArea;
+    final division = context.read<AreaState>().currentDivision;
+
+    final credentialsJson = await rootBundle.loadString(serviceAccountPath);
+    final accountCredentials = ServiceAccountCredentials.fromJson(credentialsJson);
+    final client = await clientViaServiceAccount(accountCredentials, [StorageApi.devstorageReadOnlyScope]);
+    final storage = StorageApi(client);
+
+    final prefix = '$division/$area/images/';
+    final objects = await storage.objects.list(bucketName, prefix: prefix);
+
+    final urls = <String>[];
+
+    for (final obj in objects.items ?? []) {
+      final name = obj.name;
+      if (name != null && name.endsWith('.jpg') && name.contains(plateNumber)) {
+        urls.add('https://storage.googleapis.com/$bucketName/$name');
+      }
+    }
+
+    client.close();
+    return urls;
   }
 }

@@ -1,16 +1,20 @@
 import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+
 import '../utils/modify_camera_fullscreen_viewer.dart';
+import '../modify_plate_service.dart'; // ModifyPlateService의 static 메서드 사용
 
 class ModifyPhotoSection extends StatelessWidget {
   final List<XFile> capturedImages;
   final List<String> imageUrls;
+  final String plateNumber;
 
   const ModifyPhotoSection({
     super.key,
     required this.capturedImages,
     required this.imageUrls,
+    required this.plateNumber,
   });
 
   @override
@@ -34,7 +38,9 @@ class ModifyPhotoSection extends StatelessWidget {
             itemCount: totalItems.length,
             itemBuilder: (context, index) {
               final isUrl = index < imageUrls.length;
-              final tag = isUrl ? imageUrls[index] : capturedImages[index - imageUrls.length].path;
+              final tag = isUrl
+                  ? imageUrls[index]
+                  : capturedImages[index - imageUrls.length].path;
 
               return GestureDetector(
                 onTap: () => showFullScreenImageViewer(
@@ -100,20 +106,90 @@ class ModifyPhotoSection extends StatelessWidget {
                 side: const BorderSide(color: Colors.black),
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.zero, // ← 직사각형
+                  borderRadius: BorderRadius.zero,
                 ),
               ),
-              onPressed: () {
+              onPressed: () async {
                 showDialog(
                   context: context,
-                  builder: (_) => AlertDialog(
-                    title: const Text('테스트'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: const Text('닫기'),
-                      ),
-                    ],
+                  builder: (context) => FutureBuilder<List<String>>(
+                    future: ModifyPlateService.listPlateImages(
+                      context: context,
+                      plateNumber: plateNumber,
+                    ),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const AlertDialog(
+                          content: SizedBox(
+                            height: 100,
+                            child: Center(child: CircularProgressIndicator()),
+                          ),
+                        );
+                      }
+
+                      if (snapshot.hasError) {
+                        return AlertDialog(
+                          title: const Text('에러'),
+                          content: const Text('이미지 불러오기 실패'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('닫기'),
+                            ),
+                          ],
+                        );
+                      }
+
+                      final urls = snapshot.data ?? [];
+
+                      if (urls.isEmpty) {
+                        return AlertDialog(
+                          title: const Text('사진 없음'),
+                          content: const Text('GCS에 저장된 이미지가 없습니다.'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('닫기'),
+                            ),
+                          ],
+                        );
+                      }
+
+                      return AlertDialog(
+                        title: const Text('저장된 사진 목록'),
+                        content: SizedBox(
+                          width: double.maxFinite,
+                          height: 300,
+                          child: ListView.builder(
+                            itemCount: urls.length,
+                            itemBuilder: (context, index) {
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 4.0),
+                                child: GestureDetector(
+                                  onTap: () => showFullScreenImageViewer(
+                                    context,
+                                    urls,
+                                    index,
+                                    isUrlList: true,
+                                  ),
+                                  child: Image.network(
+                                    urls[index],
+                                    height: 80,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('닫기'),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 );
               },

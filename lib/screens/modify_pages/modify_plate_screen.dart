@@ -112,9 +112,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
   }
 
   VoidCallback _buildLocationAction() {
-    return _controller.isLocationSelected
-        ? () => setState(() => _controller.clearLocation())
-        : _selectParkingLocation;
+    return _controller.isLocationSelected ? () => setState(() => _controller.clearLocation()) : _selectParkingLocation;
   }
 
   @override
@@ -156,6 +154,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
             ModifyPhotoSection(
               capturedImages: _controller.capturedImages,
               imageUrls: widget.plate.imageUrls ?? [],
+              plateNumber: widget.plate.plateNumber, // ← 이 부분 추가
             ),
             const SizedBox(height: 32.0),
             ModifyAdjustmentSection(
