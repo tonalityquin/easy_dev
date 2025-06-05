@@ -3,7 +3,7 @@ import '../../../widgets/navigation/hq_mini_navigation.dart';
 import '../../widgets/navigation/top_navigation.dart';
 import 'office_to_offices/todo_calendar.dart';
 import 'office_to_offices/todo_checklist.dart';
-import 'office_to_offices/todo_tasks.dart';
+import 'office_to_offices/todo_task_screen.dart';
 
 class OfficeToOffice extends StatefulWidget {
   const OfficeToOffice({super.key});
@@ -30,7 +30,7 @@ class _OfficeToOfficeState extends State<OfficeToOffice> {
         body: _selectedIndex == 0
             ? const TodoCalendar()
             : _selectedIndex == 1
-            ? const TodoTasks() // ✅ 새로운 탭 연결
+            ? const TodoTaskScreen() // ✅ 새로운 탭 연결
             : _selectedIndex == 2
             ? const TodoChecklist() // ✅ 새로운 탭 연결
             : const Center(child: Text('해당 탭의 콘텐츠는 준비 중입니다.')),
