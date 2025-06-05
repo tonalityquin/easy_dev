@@ -6,7 +6,7 @@ import '../../../routes.dart';
 import '../../../states/user/user_state.dart';
 import '../../../states/area/area_state.dart';
 import '../../../utils/snackbar_helper.dart';
-import 'attendance_uploader.dart';
+import 'in_to_work_log_uploader.dart';
 
 class GoToWorkController {
   void initialize(BuildContext context) {
@@ -101,7 +101,7 @@ class GoToWorkController {
       'status': '출근',
     };
 
-    final success = await AttendanceUploader.uploadAttendanceJson(
+    final success = await InToWorkLogUploader.uploadAttendanceJson(
       context: context,
       attendanceData: attendanceJson,
     );

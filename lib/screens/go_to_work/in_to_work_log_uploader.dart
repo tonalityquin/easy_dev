@@ -10,11 +10,10 @@ import 'package:flutter/material.dart';
 import '../../states/area/area_state.dart';
 import '../../states/user/user_state.dart';
 
-class AttendanceUploader {
+class InToWorkLogUploader {
   static const _bucketName = 'easydev-image';
   static const _serviceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
 
-  /// 출근 JSON 업로드 함수 (중복 방지 포함)
   static Future<bool> uploadAttendanceJson({
     required BuildContext context,
     required Map<String, dynamic> attendanceData,
@@ -35,7 +34,6 @@ class AttendanceUploader {
       final fileName = '${dateStr}_${userName}_출근기록.json';
       final gcsPath = '$division/$area/exports/$fileName';
 
-      // ✅ 중복 여부 확인
       final alreadyExists = await checkIfAlreadyUploaded(
         context: context,
         gcsPath: gcsPath,
@@ -46,7 +44,6 @@ class AttendanceUploader {
         return false;
       }
 
-      // ✅ JSON 파일 생성 및 업로드
       final jsonContent = jsonEncode(attendanceData);
       final tempDir = Directory.systemTemp;
       final file = File('${tempDir.path}/$fileName');
@@ -71,7 +68,6 @@ class AttendanceUploader {
     }
   }
 
-  /// GCS에 동일 경로의 파일이 이미 존재하는지 확인
   static Future<bool> checkIfAlreadyUploaded({
     required BuildContext context,
     required String gcsPath,
@@ -85,10 +81,8 @@ class AttendanceUploader {
       await storageApi.objects.get(_bucketName, gcsPath);
 
       client.close();
-      // 객체 조회 성공 = 파일 존재
       return true;
     } catch (e) {
-      // 예외 발생 시 (예: 404) → 파일 존재하지 않음
       debugPrint('ℹ️ GCS 파일 존재하지 않거나 오류 발생: $e');
       return false;
     }
