@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
 
 import '../../../../models/user_model.dart';
+import '../../../states/user/user_state.dart';
 import 'breaks/break_table_row.dart';
 
 class BreakCell extends StatefulWidget {
@@ -58,12 +60,21 @@ class _BreakCellState extends State<BreakCell> {
   }
 
   Future<void> _loadAreas() async {
+    final userState = context.read<UserState>();
+    final userAreas = userState.user?.areas ?? [];
+
+    if (userAreas.isEmpty) {
+      debugPrint('⚠️ 사용자 소속 지역 없음');
+    }
+
     final snapshot = await FirebaseFirestore.instance.collection('areas').get();
-    final areas = snapshot.docs.map((doc) => doc['name'] as String).toList();
+    final allAreas = snapshot.docs.map((doc) => doc['name'] as String).toList();
+    final filteredAreas = allAreas.where((area) => userAreas.contains(area)).toList();
+
     setState(() {
-      _areaList = areas;
-      if (areas.isNotEmpty) {
-        _selectedArea = areas.first;
+      _areaList = filteredAreas;
+      if (filteredAreas.isNotEmpty) {
+        _selectedArea = filteredAreas.first;
         _reloadUsersForArea(_selectedArea!);
       }
     });
@@ -132,7 +143,9 @@ class _BreakCellState extends State<BreakCell> {
                   children: [
                     DropdownButton<int>(
                       value: widget.selectedYear,
-                      items: yearList.map((y) => DropdownMenuItem(value: y, child: Text('$y년'))).toList(),
+                      items: yearList
+                          .map((y) => DropdownMenuItem(value: y, child: Text('$y년')))
+                          .toList(),
                       onChanged: (value) {
                         if (value != null) widget.onYearChanged(value);
                       },
@@ -140,7 +153,9 @@ class _BreakCellState extends State<BreakCell> {
                     const SizedBox(width: 12),
                     DropdownButton<int>(
                       value: widget.selectedMonth,
-                      items: monthList.map((m) => DropdownMenuItem(value: m, child: Text('$m월'))).toList(),
+                      items: monthList
+                          .map((m) => DropdownMenuItem(value: m, child: Text('$m월')))
+                          .toList(),
                       onChanged: (value) {
                         if (value != null) widget.onMonthChanged(value);
                       },

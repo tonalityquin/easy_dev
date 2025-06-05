@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
 
 import '../../../../models/user_model.dart';
+import '../../../states/user/user_state.dart';
 import 'attendances/attendance_table_row.dart';
 
 class AttendanceCell extends StatefulWidget {
@@ -56,12 +58,21 @@ class _AttendanceCellState extends State<AttendanceCell> {
   }
 
   Future<void> _loadAreas() async {
+    final userState = context.read<UserState>();
+    final userAreas = userState.user?.areas ?? [];
+
+    if (userAreas.isEmpty) {
+      debugPrint('⚠️ 사용자 소속 지역 없음');
+    }
+
     final snapshot = await FirebaseFirestore.instance.collection('areas').get();
-    final areas = snapshot.docs.map((doc) => doc['name'] as String).toList();
+    final allAreas = snapshot.docs.map((doc) => doc['name'] as String).toList();
+    final filtered = allAreas.where((area) => userAreas.contains(area)).toList();
+
     setState(() {
-      _areaList = areas;
-      if (areas.isNotEmpty) {
-        _selectedArea = areas.first;
+      _areaList = filtered;
+      if (filtered.isNotEmpty) {
+        _selectedArea = filtered.first;
         _reloadUsersForArea(_selectedArea!);
       }
     });
