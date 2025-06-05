@@ -8,9 +8,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../models/user_model.dart';
 import '../../../../states/area/area_state.dart';
-import '../../../../states/user/user_state.dart';
-import '../../../../utils/excel_helper.dart';
-import '../../../../utils/snackbar_helper.dart';
 
 class AttendanceDocumentBody extends StatelessWidget {
   final TextEditingController controller;
@@ -122,188 +119,22 @@ class AttendanceDocumentBody extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: '사용자 목록 새로고침',
-            onPressed: () async {
-              if (selectedArea.isNotEmpty) {
-                await reloadUsers(selectedArea);
-              } else {
-                showFailedSnackbar(context, '지역을 먼저 선택하세요');
-              }
+            onPressed: () {
+              // TODO: 사용자 목록 새로고침 기능 구현 예정
             },
           ),
           IconButton(
             icon: const Icon(Icons.cloud_download),
             tooltip: '출근부 불러오기',
-            onPressed: () async {
-              if (selectedArea.isEmpty) {
-                showFailedSnackbar(context, '지역을 먼저 선택하세요');
-                return;
-              }
-
-              showSuccessSnackbar(context, '출근부 불러오는 중...');
-
-              try {
-                final safeArea = selectedArea.replaceAll(' ', '_');
-                final Map<String, Map<int, String>> newData = {};
-
-                for (final user in users) {
-                  final safeName = user.name.replaceAll(' ', '_');
-                  final fileName = '출근부_${safeName}_${safeArea}_$selectedYear년_$selectedMonth월.xlsx';
-                  final fileUrl = 'https://storage.googleapis.com/easydev-image/exports/$fileName';
-
-                  debugPrint('🧾 파일 요청: $fileUrl');
-
-                  final response = await http.get(Uri.parse(fileUrl));
-                  if (response.statusCode != 200) {
-                    debugPrint('❌ 파일 없음: $fileName');
-                    continue;
-                  }
-
-                  final workbook = excel.Excel.decodeBytes(response.bodyBytes);
-                  final sheet = workbook['출근부'];
-
-                  for (int row = 1; row < sheet.maxRows; row += 2) {
-                    String? userId =
-                        sheet.cell(excel.CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: row)).value?.toString();
-
-                    if (userId == null || userId.isEmpty || !users.any((u) => u.id == userId)) {
-                      final nameFromCell = sheet
-                          .cell(excel.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row))
-                          .value
-                          ?.toString()
-                          .trim();
-                      final matchedUser = users.firstWhereOrNull((u) => u.name.trim() == nameFromCell);
-                      if (matchedUser == null) {
-                        debugPrint('⚠️ 이름으로도 매칭 실패: $nameFromCell');
-                        continue;
-                      }
-                      userId = matchedUser.id;
-                    }
-
-                    final startRow = sheet.row(row);
-                    final endRow = sheet.row(row + 1);
-                    final startMap = <int, String>{};
-                    final endMap = <int, String>{};
-
-                    for (int day = 0; day < 31; day++) {
-                      final col = day + 3;
-                      final start = startRow[col]?.value?.toString() ?? '';
-                      final end = endRow[col]?.value?.toString() ?? '';
-                      if (start.isNotEmpty) startMap[day + 1] = start;
-                      if (end.isNotEmpty) endMap[day + 1] = end;
-                    }
-
-                    newData[userId] = startMap;
-                    newData['${userId}_out'] = endMap;
-                  }
-                }
-
-                // ✅ 기존 데이터와 병합
-                final prefs = await SharedPreferences.getInstance();
-                final existingJson = prefs.getString('attendance_cell_data_${selectedYear}_$selectedMonth');
-                Map<String, Map<int, String>> mergedData = {};
-
-                if (existingJson != null) {
-                  final decoded = jsonDecode(existingJson);
-                  mergedData = Map<String, Map<int, String>>.from(
-                    decoded.map((key, val) => MapEntry(
-                          key,
-                          Map<int, String>.from((val as Map).map((k, v) => MapEntry(int.parse(k), v))),
-                        )),
-                  );
-                }
-
-                // ✅ newData를 기존 데이터에 덮어쓰기 방식으로 병합
-                for (final entry in newData.entries) {
-                  mergedData[entry.key] ??= {};
-                  mergedData[entry.key]!.addAll(entry.value);
-                }
-
-                // ✅ 메모리 반영
-                cellData.clear();
-                cellData.addAll(mergedData);
-
-                // ✅ SharedPreferences 저장
-                final encoded = jsonEncode(
-                  mergedData.map((key, map) => MapEntry(key, map.map((k, v) => MapEntry(k.toString(), v)))),
-                );
-                await prefs.setString('attendance_cell_data_${selectedYear}_$selectedMonth', encoded);
-                debugPrint('✅ SharedPreferences 병합 저장 완료');
-
-                // Ensure snackbar is shown after the frame has been built
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (context.mounted) {
-                    showSuccessSnackbar(context, '출근부 불러오기 완료!');
-                  }
-                });
-              } catch (e) {
-                // Ensure snackbar is shown after the frame has been built
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (context.mounted) {
-                    showFailedSnackbar(context, '불러오기 중 오류 발생: $e');
-                  }
-                });
-              }
+            onPressed: () {
+              // TODO: 출근부 불러오기 기능 구현 예정
             },
           ),
           IconButton(
             icon: const Icon(Icons.download),
             tooltip: '출근부 내려받기',
-            onPressed: () async {
-              if (selectedArea.isEmpty) {
-                showFailedSnackbar(context, '지역을 먼저 선택하세요');
-                return;
-              }
-
-              showSuccessSnackbar(context, '출근부 생성 중...');
-
-              try {
-                final userState = context.read<UserState>(); // Get UserState before the async call
-                final prefs = await SharedPreferences.getInstance();
-                final raw = prefs.getString('attendance_cell_data_${selectedYear}_$selectedMonth');
-
-                if (raw == null) {
-                  // Ensure snackbar is shown after the current frame is built
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (context.mounted) {
-                      showFailedSnackbar(context, '출근부 데이터가 없습니다.');
-                    }
-                  });
-                  return;
-                }
-
-                final userIdToName = {for (var u in users) u.id: u.name};
-                final userIdsInOrder = users.map((u) => u.id).toList();
-
-                final uploader = ExcelUploader();
-                final urls = await uploader.uploadAttendanceAndBreakExcel(
-                  userIdsInOrder: userIdsInOrder,
-                  userIdToName: userIdToName,
-                  year: selectedYear,
-                  month: selectedMonth,
-                  generatedByName: userState.name,
-                  // Use the user name from the state
-                  generatedByArea: selectedArea,
-                );
-
-                // Ensure snackbar is shown after the current frame is built
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (context.mounted) {
-                    if (urls['출근부'] != null) {
-                      debugPrint('📁 생성 완료: ${urls['출근부']}');
-                      showSuccessSnackbar(context, '출근부 다운로드 링크가 생성되었습니다.');
-                    } else {
-                      showFailedSnackbar(context, '출근부 생성 실패');
-                    }
-                  }
-                });
-              } catch (e) {
-                // Ensure snackbar is shown after the current frame is built
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (context.mounted) {
-                    showFailedSnackbar(context, '다운로드 중 오류: $e');
-                  }
-                });
-              }
+            onPressed: () {
+              // TODO: 출근부 내려받기 기능 구현 예정
             },
           ),
         ],

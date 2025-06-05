@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
-import 'dart:async'; // ← 추가
+import 'dart:async';
 import 'package:provider/provider.dart';
 
 import '../../../../models/user_model.dart';
@@ -31,7 +29,7 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
   List<UserModel> users = [];
 
   String currentArea = '';
-  late StreamSubscription _userStreamSub; // 🔁 사용자 실시간 구독
+  late StreamSubscription _userStreamSub;
 
   @override
   void initState() {
@@ -39,13 +37,12 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
     final now = DateTime.now();
     selectedYear = now.year;
     selectedMonth = now.month;
-    _loadCellDataFromPrefs();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final area = context.read<AreaState>().currentArea;
       if (area.isNotEmpty) {
         currentArea = area;
-        _subscribeToUsers(currentArea); // ✅ 실시간 구독
+        _subscribeToUsers(currentArea);
       }
     });
   }
@@ -60,30 +57,19 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
       setState(() {
         users = updatedUsers;
       });
-      _saveUsersToPrefs();
     });
   }
 
   @override
   void dispose() {
-    _userStreamSub.cancel(); // ✅ 메모리 누수 방지
+    _userStreamSub.cancel();
     _controller.dispose();
     super.dispose();
   }
 
-  String get cellDataKey => 'attendance_cell_data_${selectedYear}_$selectedMonth';
-
-  String get userCacheKey => 'user_list_$currentArea';
-
-  Future<void> _saveUsersToPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    final userJsonList = users.where((u) => u.id.isNotEmpty).map((u) => u.toJson()).toList();
-    await prefs.setString(userCacheKey, jsonEncode(userJsonList));
-  }
-
   Future<List<UserModel>> getUsersByArea(String area) async {
     final snapshot =
-        await FirebaseFirestore.instance.collection('user_accounts').where('currentArea', isEqualTo: area).get();
+    await FirebaseFirestore.instance.collection('user_accounts').where('currentArea', isEqualTo: area).get();
 
     return snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
   }
@@ -91,7 +77,7 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
   Future<void> _reloadUsers(String area) async {
     try {
       final snapshot =
-          await FirebaseFirestore.instance.collection('user_accounts').where('currentArea', isEqualTo: area).get();
+      await FirebaseFirestore.instance.collection('user_accounts').where('currentArea', isEqualTo: area).get();
       final updatedUsers = snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
 
       final currentIds = users.map((u) => u.id).toSet();
@@ -102,7 +88,6 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
         setState(() {
           users = updatedUsers;
         });
-        await _saveUsersToPrefs();
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (context.mounted) {
@@ -136,7 +121,6 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
       _menuOpen = false;
     });
 
-    await _saveCellDataToPrefs();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (context.mounted) showSuccessSnackbar(context, '저장 완료');
     });
@@ -150,76 +134,21 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
       _menuOpen = false;
     });
 
-    await _saveCellDataToPrefs();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (context.mounted) showSuccessSnackbar(context, '삭제 완료');
     });
-  }
-
-  Future<void> _saveCellDataToPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    final stringified = cellData.map(
-      (rowKey, colMap) => MapEntry(rowKey, colMap.map((colIndex, value) => MapEntry(colIndex.toString(), value))),
-    );
-    final encoded = jsonEncode(stringified);
-    await prefs.setString(cellDataKey, encoded);
-  }
-
-  Future<void> _loadCellDataFromPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    final jsonStr = prefs.getString(cellDataKey);
-
-    if (jsonStr != null) {
-      final decoded = jsonDecode(jsonStr);
-      setState(() {
-        cellData = {};
-
-        decoded.forEach((rowKey, colMap) {
-          final parsedMap = Map<int, String>.from(
-            (colMap as Map).map((k, v) => MapEntry(int.parse(k.toString()), v.toString())),
-          );
-
-          if (!rowKey.endsWith('_out')) {
-            for (final entry in parsedMap.entries) {
-              final day = entry.key;
-              final value = entry.value;
-              final parts = value.split('\n');
-
-              if (parts.isNotEmpty && parts[0].trim().isNotEmpty) {
-                cellData[rowKey] ??= {};
-                cellData[rowKey]![day] = parts[0].trim();
-              }
-
-              if (parts.length > 1 && parts[1].trim().isNotEmpty) {
-                final outKey = '${rowKey}_out';
-                cellData[outKey] ??= {};
-                cellData[outKey]![day] = parts[1].trim();
-              }
-            }
-          } else {
-            cellData[rowKey] = parsedMap;
-          }
-        });
-      });
-    } else {
-      setState(() {
-        cellData = {};
-      });
-    }
   }
 
   void _onChangeYear(int year) {
     setState(() {
       selectedYear = year;
     });
-    _loadCellDataFromPrefs();
   }
 
   void _onChangeMonth(int month) {
     setState(() {
       selectedMonth = month;
     });
-    _loadCellDataFromPrefs();
   }
 
   void _onCellTapped(int rowIndex, int colIndex, String rowKey) {
@@ -254,7 +183,7 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
       appendText: _appendText,
       clearText: _clearText,
       toggleMenu: () => setState(() => _menuOpen = !_menuOpen),
-      getUsersByArea: (area) => getUsersByArea(area),
+      getUsersByArea: getUsersByArea,
       reloadUsers: _reloadUsers,
     );
   }

@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
-import 'dart:async'; // ✅ 추가
+import 'dart:async';
 import 'package:provider/provider.dart';
 
 import '../../../../models/user_model.dart';
@@ -23,7 +21,6 @@ class _WorkerBreakDocumentState extends State<WorkerBreakDocument> {
 
   int? selectedRow;
   int? selectedCol;
-
   Set<String> selectedCells = {};
 
   late int selectedYear;
@@ -33,7 +30,7 @@ class _WorkerBreakDocumentState extends State<WorkerBreakDocument> {
   List<UserModel> users = [];
 
   String currentArea = '';
-  late StreamSubscription _userStreamSub; // ✅ 실시간 사용자 구독
+  late StreamSubscription _userStreamSub;
 
   @override
   void initState() {
@@ -41,13 +38,12 @@ class _WorkerBreakDocumentState extends State<WorkerBreakDocument> {
     final now = DateTime.now();
     selectedYear = now.year;
     selectedMonth = now.month;
-    _loadCellDataFromPrefs();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final area = context.read<AreaState>().currentArea;
       if (area.isNotEmpty) {
         currentArea = area;
-        _subscribeToUsers(currentArea); // ✅ 실시간 스트림 시작
+        _subscribeToUsers(currentArea);
       }
     });
   }
@@ -62,19 +58,15 @@ class _WorkerBreakDocumentState extends State<WorkerBreakDocument> {
       setState(() {
         users = updatedUsers;
       });
-      _saveUsersToPrefs(); // 캐시에 저장
     });
   }
 
   @override
   void dispose() {
-    _userStreamSub.cancel(); // ✅ 구독 해제
+    _userStreamSub.cancel();
     _controller.dispose();
     super.dispose();
   }
-
-  String get cellDataKey => 'break_cell_data_${selectedYear}_$selectedMonth';
-  String get userCacheKey => 'user_list_$currentArea';
 
   Future<List<UserModel>> getUsersByArea(String area) async {
     final snapshot = await FirebaseFirestore.instance
@@ -88,7 +80,6 @@ class _WorkerBreakDocumentState extends State<WorkerBreakDocument> {
   Future<void> _reloadUsers(String area) async {
     try {
       final updatedUsers = await getUsersByArea(area);
-
       final currentIds = users.map((u) => u.id).toSet();
       final newIds = updatedUsers.map((u) => u.id).toSet();
       final hasChanged = currentIds.length != newIds.length || !currentIds.containsAll(newIds);
@@ -99,7 +90,6 @@ class _WorkerBreakDocumentState extends State<WorkerBreakDocument> {
         setState(() {
           users = updatedUsers;
         });
-        await _saveUsersToPrefs();
         if (mounted) showSuccessSnackbar(context, '최신 사용자 목록으로 갱신되었습니다');
       } else {
         if (mounted) showSuccessSnackbar(context, '변경 사항 없음');
@@ -107,12 +97,6 @@ class _WorkerBreakDocumentState extends State<WorkerBreakDocument> {
     } catch (e) {
       if (mounted) showFailedSnackbar(context, '사용자 목록을 불러오지 못했습니다');
     }
-  }
-
-  Future<void> _saveUsersToPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    final userJsonList = users.where((u) => u.id.isNotEmpty).map((u) => u.toJson()).toList();
-    await prefs.setString(userCacheKey, jsonEncode(userJsonList));
   }
 
   Future<void> _appendText(String rowKey) async {
@@ -132,7 +116,6 @@ class _WorkerBreakDocumentState extends State<WorkerBreakDocument> {
       _menuOpen = false;
     });
 
-    await _saveCellDataToPrefs();
     if (!mounted) return;
     showSuccessSnackbar(context, '시작 시간 저장 완료');
   }
@@ -154,51 +137,20 @@ class _WorkerBreakDocumentState extends State<WorkerBreakDocument> {
       });
     }
 
-    await _saveCellDataToPrefs();
     if (!mounted) return;
     showSuccessSnackbar(context, '삭제 완료');
-  }
-
-  Future<void> _saveCellDataToPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    final stringified = cellData.map((rowKey, colMap) =>
-        MapEntry(rowKey, colMap.map((colIndex, value) => MapEntry(colIndex.toString(), value))));
-    final encoded = jsonEncode(stringified);
-    await prefs.setString(cellDataKey, encoded);
-  }
-
-  Future<void> _loadCellDataFromPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    final jsonStr = prefs.getString(cellDataKey);
-    if (jsonStr != null) {
-      final decoded = jsonDecode(jsonStr);
-      setState(() {
-        cellData = Map<String, Map<int, String>>.from(
-          decoded.map((rowKey, colMap) => MapEntry(
-            rowKey,
-            Map<int, String>.from((colMap as Map).map((k, v) => MapEntry(int.parse(k), v))),
-          )),
-        );
-      });
-    } else {
-      setState(() {
-        cellData = {};
-      });
-    }
   }
 
   void _onChangeYear(int year) {
     setState(() {
       selectedYear = year;
     });
-    _loadCellDataFromPrefs();
   }
 
   void _onChangeMonth(int month) {
     setState(() {
       selectedMonth = month;
     });
-    _loadCellDataFromPrefs();
   }
 
   void _onCellTapped(int rowIndex, int colIndex, String rowKey) {
