@@ -3,34 +3,32 @@ import 'package:provider/provider.dart';
 
 import '../../../../models/user_model.dart';
 import '../../../../states/area/area_state.dart';
-import 'break_table_row.dart';
+import 'attendances/attendance_table_row.dart';
 
-class BreakDocumentBody extends StatelessWidget {
+class AttendanceCell extends StatelessWidget {
   final TextEditingController controller;
   final bool menuOpen;
   final int? selectedRow;
   final int? selectedCol;
-  final Set<String> selectedCells;
   final List<UserModel> users;
   final Map<String, Map<int, String>> cellData;
   final int selectedYear;
   final int selectedMonth;
   final void Function(int rowIndex, int colIndex, String rowKey) onCellTapped;
   final Future<void> Function(String rowKey) appendText;
-  final Future<void> Function(String rowKey, [List<int>? colIndices]) clearText;
+  final Future<void> Function(String rowKey) clearText;
   final VoidCallback toggleMenu;
   final Future<List<UserModel>> Function(String area) getUsersByArea;
   final Future<void> Function(String area) reloadUsers;
   final void Function(int year) onYearChanged;
   final void Function(int month) onMonthChanged;
 
-  const BreakDocumentBody({
+  const AttendanceCell({
     super.key,
     required this.controller,
     required this.menuOpen,
     required this.selectedRow,
     required this.selectedCol,
-    required this.selectedCells,
     required this.users,
     required this.cellData,
     required this.selectedYear,
@@ -57,7 +55,7 @@ class BreakDocumentBody extends StatelessWidget {
         backgroundColor: Colors.white,
         elevation: 0,
         foregroundColor: Colors.black87,
-        title: const Text('근무자 휴게시간 테이블', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('근무자 출퇴근 테이블', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         automaticallyImplyLeading: false,
         actions: [
@@ -65,21 +63,21 @@ class BreakDocumentBody extends StatelessWidget {
             icon: const Icon(Icons.refresh),
             tooltip: '사용자 목록 새로고침',
             onPressed: () {
-              // TODO: 사용자 새로고침 기능
+              // TODO: 사용자 목록 새로고침 기능 구현 예정
             },
           ),
           IconButton(
             icon: const Icon(Icons.cloud_download),
-            tooltip: '휴게시간 불러오기',
+            tooltip: '출근부 불러오기',
             onPressed: () {
-              // TODO: 휴게시간 불러오기 기능
+              // TODO: 출근부 불러오기 기능 구현 예정
             },
           ),
           IconButton(
             icon: const Icon(Icons.download),
-            tooltip: '휴게시간 내려받기',
+            tooltip: '출근부 내려받기',
             onPressed: () {
-              // TODO: 휴게시간 다운로드 기능
+              // TODO: 출근부 내려받기 기능 구현 예정
             },
           ),
         ],
@@ -94,7 +92,7 @@ class BreakDocumentBody extends StatelessWidget {
               children: [
                 Flexible(
                   child: Text(
-                    '직원 휴게 테이블 (${selectedArea.isNotEmpty ? selectedArea : "지역 미선택"})',
+                    '직원 근무 테이블 (${selectedArea.isNotEmpty ? selectedArea : "지역 미선택"})',
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -130,42 +128,24 @@ class BreakDocumentBody extends StatelessWidget {
                     children: [
                       Row(
                         children: List.generate(34, (index) {
-                          if (index == 0) {
-                            return _buildHeaderCell('');
-                          } else if (index == 1) {
-                            return _buildHeaderCell('시작/종료');
-                          } else if (index == 33) {
-                            return _buildHeaderCell('사인란', width: 120);
-                          } else {
-                            return _buildHeaderCell('${index - 1}');
-                          }
+                          if (index == 0) return _buildHeaderCell('');
+                          if (index == 1) return _buildHeaderCell('출근/퇴근');
+                          if (index == 33) return _buildHeaderCell('사인란', width: 120);
+                          return _buildHeaderCell('${index - 1}');
                         }),
                       ),
                       const SizedBox(height: 8),
-                      ...users.asMap().entries.expand((entry) {
+                      ...users.asMap().entries.expand((entry) sync* {
+                        final rowIndex = entry.key;
                         final user = entry.value;
-                        final rowKey = user.id;
-                        return [
-                          BreakTableRow(
-                            user: user,
-                            label: '시작',
-                            rowIndex: entry.key * 2,
-                            rowKey: rowKey,
-                            selectedCells: selectedCells,
-                            cellData: cellData,
-                            onCellTapped: onCellTapped,
-                          ),
-                          BreakTableRow(
-                            user: user,
-                            label: '종료',
-                            rowIndex: entry.key * 2 + 1,
-                            rowKey: rowKey,
-                            selectedCells: selectedCells,
-                            cellData: cellData,
-                            onCellTapped: onCellTapped,
-                            isStart: false,
-                          ),
-                        ];
+                        yield AttendanceTableRow(
+                          user: user,
+                          rowIndex: rowIndex,
+                          selectedRow: selectedRow,
+                          selectedCol: selectedCol,
+                          cellData: cellData,
+                          onCellTapped: onCellTapped,
+                        );
                       }),
                     ],
                   ),
@@ -186,8 +166,9 @@ class BreakDocumentBody extends StatelessWidget {
                   mini: true,
                   onPressed: () {
                     if (selectedRow != null && selectedRow! ~/ 2 < users.length) {
-                      final rowKey = users[selectedRow! ~/ 2].id;
-                      appendText(rowKey);
+                      final userId = users[selectedRow! ~/ 2].id;
+                      final fullKey = selectedRow! % 2 == 0 ? userId : '${userId}_out';
+                      appendText(fullKey);
                     }
                   },
                   backgroundColor: Colors.green,
@@ -198,19 +179,10 @@ class BreakDocumentBody extends StatelessWidget {
                   heroTag: 'clearBtn',
                   mini: true,
                   onPressed: () {
-                    final Map<String, List<int>> rows = {};
-                    for (final cell in selectedCells) {
-                      final parts = cell.split(':');
-                      if (parts.length == 2) {
-                        final key = parts[0];
-                        final col = int.tryParse(parts[1]);
-                        if (col != null) {
-                          rows.putIfAbsent(key, () => []).add(col);
-                        }
-                      }
-                    }
-                    for (final entry in rows.entries) {
-                      clearText(entry.key, entry.value);
+                    if (selectedRow != null && selectedRow! ~/ 2 < users.length) {
+                      final userId = users[selectedRow! ~/ 2].id;
+                      final fullKey = selectedRow! % 2 == 0 ? userId : '${userId}_out';
+                      clearText(fullKey);
                     }
                   },
                   backgroundColor: Colors.redAccent,
@@ -220,7 +192,7 @@ class BreakDocumentBody extends StatelessWidget {
               ],
             ),
           FloatingActionButton(
-            heroTag: 'breakFab',
+            heroTag: 'attendanceFab',
             onPressed: toggleMenu,
             backgroundColor: Colors.blueAccent,
             child: AnimatedRotation(
@@ -246,7 +218,7 @@ class BreakDocumentBody extends StatelessWidget {
       ),
       child: Text(
         text,
-        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, height: 1.3),
         textAlign: TextAlign.center,
       ),
     );

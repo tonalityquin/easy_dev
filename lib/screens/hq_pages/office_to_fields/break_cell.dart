@@ -3,9 +3,9 @@ import 'package:provider/provider.dart';
 
 import '../../../../models/user_model.dart';
 import '../../../../states/area/area_state.dart';
-import 'break_table_row.dart';
+import 'breaks/break_table_row.dart';
 
-class BreakDocumentBody extends StatelessWidget {
+class BreakCell extends StatelessWidget {
   final TextEditingController controller;
   final bool menuOpen;
   final int? selectedRow;
@@ -24,7 +24,7 @@ class BreakDocumentBody extends StatelessWidget {
   final void Function(int year) onYearChanged;
   final void Function(int month) onMonthChanged;
 
-  const BreakDocumentBody({
+  const BreakCell({
     super.key,
     required this.controller,
     required this.menuOpen,

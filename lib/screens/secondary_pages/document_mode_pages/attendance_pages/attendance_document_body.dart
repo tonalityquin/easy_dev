@@ -1,13 +1,9 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:http/http.dart' as http;
-import 'package:excel/excel.dart' as excel;
-import 'package:collection/collection.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../models/user_model.dart';
 import '../../../../states/area/area_state.dart';
+import 'attendance_table_row.dart';
 
 class AttendanceDocumentBody extends StatelessWidget {
   final TextEditingController controller;
@@ -46,59 +42,6 @@ class AttendanceDocumentBody extends StatelessWidget {
     required this.onYearChanged,
     required this.onMonthChanged,
   });
-
-  Widget _buildCell({
-    required String text,
-    required bool isHeader,
-    required bool isSelected,
-    VoidCallback? onTap,
-    double width = 60,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: width,
-        height: 40,
-        alignment: Alignment.center,
-        margin: const EdgeInsets.symmetric(horizontal: 2),
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey.shade300),
-          color: isHeader
-              ? Colors.grey.shade200
-              : text.contains('03:00')
-              ? Colors.yellow.shade100
-              : isSelected
-              ? Colors.lightBlue.shade100
-              : Colors.white,
-
-        ),
-        child: text.contains('\n')
-            ? Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: text.split('\n').map((line) {
-                  return Text(
-                    line,
-                    style: TextStyle(
-                      fontWeight: isHeader ? FontWeight.bold : FontWeight.normal,
-                      fontSize: 13,
-                      height: 1.3,
-                    ),
-                    textAlign: TextAlign.center,
-                  );
-                }).toList(),
-              )
-            : Text(
-                text,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontWeight: isHeader ? FontWeight.bold : FontWeight.normal,
-                  fontSize: 13,
-                  height: 1.3,
-                ),
-              ),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -142,7 +85,6 @@ class AttendanceDocumentBody extends StatelessWidget {
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 24),
             Row(
@@ -152,7 +94,7 @@ class AttendanceDocumentBody extends StatelessWidget {
                   child: Text(
                     '직원 근무 테이블 (${selectedArea.isNotEmpty ? selectedArea : "지역 미선택"})',
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                    overflow: TextOverflow.ellipsis, // 혹시 너무 길면 "..."으로 처리
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 Row(
@@ -186,54 +128,24 @@ class AttendanceDocumentBody extends StatelessWidget {
                     children: [
                       Row(
                         children: List.generate(34, (index) {
-                          if (index == 0) {
-                            return _buildCell(text: '', isHeader: true, isSelected: false);
-                          } else if (index == 1) {
-                            return _buildCell(text: '출근/퇴근', isHeader: true, isSelected: false);
-                          } else if (index == 33) {
-                            return _buildCell(text: '사인란', isHeader: true, isSelected: false, width: 120);
-                          }
-                          return _buildCell(text: '${index - 1}', isHeader: true, isSelected: false);
+                          if (index == 0) return _buildHeaderCell('');
+                          if (index == 1) return _buildHeaderCell('출근/퇴근');
+                          if (index == 33) return _buildHeaderCell('사인란', width: 120);
+                          return _buildHeaderCell('${index - 1}');
                         }),
                       ),
                       const SizedBox(height: 8),
                       ...users.asMap().entries.expand((entry) sync* {
                         final rowIndex = entry.key;
                         final user = entry.value;
-                        final rowKey = user.id;
-
-                        for (int i = 0; i < 2; i++) {
-                          final isCheckIn = i == 0;
-                          final label = isCheckIn ? '출근' : '퇴근';
-                          final logicalRow = rowIndex * 2 + i;
-
-                          yield Padding(
-                            padding: const EdgeInsets.only(bottom: 4),
-                            child: Row(
-                              children: List.generate(34, (colIndex) {
-                                if (colIndex == 0) {
-                                  return _buildCell(text: user.name, isHeader: true, isSelected: false);
-                                } else if (colIndex == 1) {
-                                  return _buildCell(text: label, isHeader: false, isSelected: false);
-                                } else if (colIndex == 33) {
-                                  return _buildCell(text: '', isHeader: false, isSelected: false, width: 120);
-                                }
-
-                                final dateCol = colIndex - 1;
-                                final fullKey = isCheckIn ? rowKey : '${rowKey}_out';
-                                final isSel = selectedRow == logicalRow && selectedCol == colIndex;
-                                final text = cellData[fullKey]?[dateCol] ?? '';
-
-                                return _buildCell(
-                                  text: text,
-                                  isHeader: false,
-                                  isSelected: isSel,
-                                  onTap: () => onCellTapped(logicalRow, colIndex, fullKey),
-                                );
-                              }),
-                            ),
-                          );
-                        }
+                        yield AttendanceTableRow(
+                          user: user,
+                          rowIndex: rowIndex,
+                          selectedRow: selectedRow,
+                          selectedCol: selectedCol,
+                          cellData: cellData,
+                          onCellTapped: onCellTapped,
+                        );
                       }),
                     ],
                   ),
@@ -253,7 +165,7 @@ class AttendanceDocumentBody extends StatelessWidget {
                   heroTag: 'saveBtn',
                   mini: true,
                   onPressed: () {
-                    if (selectedRow != null && (selectedRow! ~/ 2) < users.length) {
+                    if (selectedRow != null && selectedRow! ~/ 2 < users.length) {
                       final userId = users[selectedRow! ~/ 2].id;
                       final fullKey = selectedRow! % 2 == 0 ? userId : '${userId}_out';
                       appendText(fullKey);
@@ -267,7 +179,7 @@ class AttendanceDocumentBody extends StatelessWidget {
                   heroTag: 'clearBtn',
                   mini: true,
                   onPressed: () {
-                    if (selectedRow != null && (selectedRow! ~/ 2) < users.length) {
+                    if (selectedRow != null && selectedRow! ~/ 2 < users.length) {
                       final userId = users[selectedRow! ~/ 2].id;
                       final fullKey = selectedRow! % 2 == 0 ? userId : '${userId}_out';
                       clearText(fullKey);
@@ -290,6 +202,24 @@ class AttendanceDocumentBody extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderCell(String text, {double width = 60}) {
+    return Container(
+      width: width,
+      height: 40,
+      alignment: Alignment.center,
+      margin: const EdgeInsets.symmetric(horizontal: 2),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade300),
+        color: Colors.grey.shade200,
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, height: 1.3),
+        textAlign: TextAlign.center,
       ),
     );
   }
