@@ -173,7 +173,6 @@ class _AttendanceDocumentState extends State<AttendanceDocument> {
       menuOpen: _menuOpen,
       selectedRow: selectedRow,
       selectedCol: selectedCol,
-      users: users,
       cellData: cellData,
       selectedYear: selectedYear,
       selectedMonth: selectedMonth,

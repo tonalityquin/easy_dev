@@ -1,17 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../../models/user_model.dart';
-import '../../../../states/area/area_state.dart';
 import 'breaks/break_table_row.dart';
 
-class BreakCell extends StatelessWidget {
+class BreakCell extends StatefulWidget {
   final TextEditingController controller;
   final bool menuOpen;
   final int? selectedRow;
   final int? selectedCol;
   final Set<String> selectedCells;
-  final List<UserModel> users;
   final Map<String, Map<int, String>> cellData;
   final int selectedYear;
   final int selectedMonth;
@@ -31,7 +29,6 @@ class BreakCell extends StatelessWidget {
     required this.selectedRow,
     required this.selectedCol,
     required this.selectedCells,
-    required this.users,
     required this.cellData,
     required this.selectedYear,
     required this.selectedMonth,
@@ -46,8 +43,41 @@ class BreakCell extends StatelessWidget {
   });
 
   @override
+  State<BreakCell> createState() => _BreakCellState();
+}
+
+class _BreakCellState extends State<BreakCell> {
+  List<String> _areaList = [];
+  String? _selectedArea;
+  List<UserModel> _users = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAreas();
+  }
+
+  Future<void> _loadAreas() async {
+    final snapshot = await FirebaseFirestore.instance.collection('areas').get();
+    final areas = snapshot.docs.map((doc) => doc['name'] as String).toList();
+    setState(() {
+      _areaList = areas;
+      if (areas.isNotEmpty) {
+        _selectedArea = areas.first;
+        _reloadUsersForArea(_selectedArea!);
+      }
+    });
+  }
+
+  Future<void> _reloadUsersForArea(String area) async {
+    final users = await widget.getUsersByArea(area);
+    setState(() {
+      _users = users;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final selectedArea = context.watch<AreaState>().currentArea;
     final now = DateTime.now();
     final yearList = List.generate(20, (i) => now.year - 5 + i);
     final monthList = List.generate(12, (i) => i + 1);
@@ -65,21 +95,9 @@ class BreakCell extends StatelessWidget {
             icon: const Icon(Icons.refresh),
             tooltip: '사용자 목록 새로고침',
             onPressed: () {
-              // TODO: 사용자 새로고침 기능
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.cloud_download),
-            tooltip: '휴게시간 불러오기',
-            onPressed: () {
-              // TODO: 휴게시간 불러오기 기능
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.download),
-            tooltip: '휴게시간 내려받기',
-            onPressed: () {
-              // TODO: 휴게시간 다운로드 기능
+              if (_selectedArea != null) {
+                _reloadUsersForArea(_selectedArea!);
+              }
             },
           ),
         ],
@@ -92,29 +110,39 @@ class BreakCell extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Flexible(
-                  child: Text(
-                    '직원 휴게 테이블 (${selectedArea.isNotEmpty ? selectedArea : "지역 미선택"})',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                DropdownButton<String>(
+                  value: _selectedArea,
+                  hint: const Text('지역 선택'),
+                  items: _areaList.map((area) {
+                    return DropdownMenuItem(
+                      value: area,
+                      child: Text(area),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() {
+                        _selectedArea = value;
+                      });
+                      _reloadUsersForArea(value);
+                    }
+                  },
                 ),
                 Row(
-                  mainAxisSize: MainAxisSize.min,
                   children: [
                     DropdownButton<int>(
-                      value: selectedYear,
+                      value: widget.selectedYear,
                       items: yearList.map((y) => DropdownMenuItem(value: y, child: Text('$y년'))).toList(),
                       onChanged: (value) {
-                        if (value != null) onYearChanged(value);
+                        if (value != null) widget.onYearChanged(value);
                       },
                     ),
                     const SizedBox(width: 12),
                     DropdownButton<int>(
-                      value: selectedMonth,
+                      value: widget.selectedMonth,
                       items: monthList.map((m) => DropdownMenuItem(value: m, child: Text('$m월'))).toList(),
                       onChanged: (value) {
-                        if (value != null) onMonthChanged(value);
+                        if (value != null) widget.onMonthChanged(value);
                       },
                     ),
                   ],
@@ -130,19 +158,14 @@ class BreakCell extends StatelessWidget {
                     children: [
                       Row(
                         children: List.generate(34, (index) {
-                          if (index == 0) {
-                            return _buildHeaderCell('');
-                          } else if (index == 1) {
-                            return _buildHeaderCell('시작/종료');
-                          } else if (index == 33) {
-                            return _buildHeaderCell('사인란', width: 120);
-                          } else {
-                            return _buildHeaderCell('${index - 1}');
-                          }
+                          if (index == 0) return _buildHeaderCell('');
+                          if (index == 1) return _buildHeaderCell('시작/종료');
+                          if (index == 33) return _buildHeaderCell('사인란', width: 120);
+                          return _buildHeaderCell('${index - 1}');
                         }),
                       ),
                       const SizedBox(height: 8),
-                      ...users.asMap().entries.expand((entry) {
+                      ..._users.asMap().entries.expand((entry) {
                         final user = entry.value;
                         final rowKey = user.id;
                         return [
@@ -151,18 +174,18 @@ class BreakCell extends StatelessWidget {
                             label: '시작',
                             rowIndex: entry.key * 2,
                             rowKey: rowKey,
-                            selectedCells: selectedCells,
-                            cellData: cellData,
-                            onCellTapped: onCellTapped,
+                            selectedCells: widget.selectedCells,
+                            cellData: widget.cellData,
+                            onCellTapped: widget.onCellTapped,
                           ),
                           BreakTableRow(
                             user: user,
                             label: '종료',
                             rowIndex: entry.key * 2 + 1,
                             rowKey: rowKey,
-                            selectedCells: selectedCells,
-                            cellData: cellData,
-                            onCellTapped: onCellTapped,
+                            selectedCells: widget.selectedCells,
+                            cellData: widget.cellData,
+                            onCellTapped: widget.onCellTapped,
                             isStart: false,
                           ),
                         ];
@@ -178,16 +201,17 @@ class BreakCell extends StatelessWidget {
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (menuOpen)
+          if (widget.menuOpen)
             Column(
               children: [
                 FloatingActionButton(
                   heroTag: 'saveBtn',
                   mini: true,
                   onPressed: () {
-                    if (selectedRow != null && selectedRow! ~/ 2 < users.length) {
-                      final rowKey = users[selectedRow! ~/ 2].id;
-                      appendText(rowKey);
+                    final sr = widget.selectedRow;
+                    if (sr != null && sr ~/ 2 < _users.length) {
+                      final rowKey = _users[sr ~/ 2].id;
+                      widget.appendText(rowKey);
                     }
                   },
                   backgroundColor: Colors.green,
@@ -199,7 +223,7 @@ class BreakCell extends StatelessWidget {
                   mini: true,
                   onPressed: () {
                     final Map<String, List<int>> rows = {};
-                    for (final cell in selectedCells) {
+                    for (final cell in widget.selectedCells) {
                       final parts = cell.split(':');
                       if (parts.length == 2) {
                         final key = parts[0];
@@ -210,7 +234,7 @@ class BreakCell extends StatelessWidget {
                       }
                     }
                     for (final entry in rows.entries) {
-                      clearText(entry.key, entry.value);
+                      widget.clearText(entry.key, entry.value);
                     }
                   },
                   backgroundColor: Colors.redAccent,
@@ -221,11 +245,11 @@ class BreakCell extends StatelessWidget {
             ),
           FloatingActionButton(
             heroTag: 'breakFab',
-            onPressed: toggleMenu,
+            onPressed: widget.toggleMenu,
             backgroundColor: Colors.blueAccent,
             child: AnimatedRotation(
               duration: const Duration(milliseconds: 300),
-              turns: menuOpen ? 0.25 : 0.0,
+              turns: widget.menuOpen ? 0.25 : 0.0,
               child: const Icon(Icons.more_vert),
             ),
           ),

@@ -173,7 +173,6 @@ class _BreakDocumentState extends State<BreakDocument> {
       selectedRow: selectedRow,
       selectedCol: selectedCol,
       selectedCells: selectedCells,
-      users: users,
       cellData: cellData,
       selectedYear: selectedYear,
       selectedMonth: selectedMonth,

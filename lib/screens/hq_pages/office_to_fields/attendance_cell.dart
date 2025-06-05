@@ -1,16 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../../models/user_model.dart';
-import '../../../../states/area/area_state.dart';
 import 'attendances/attendance_table_row.dart';
 
-class AttendanceCell extends StatelessWidget {
+class AttendanceCell extends StatefulWidget {
   final TextEditingController controller;
   final bool menuOpen;
   final int? selectedRow;
   final int? selectedCol;
-  final List<UserModel> users;
   final Map<String, Map<int, String>> cellData;
   final int selectedYear;
   final int selectedMonth;
@@ -29,7 +27,6 @@ class AttendanceCell extends StatelessWidget {
     required this.menuOpen,
     required this.selectedRow,
     required this.selectedCol,
-    required this.users,
     required this.cellData,
     required this.selectedYear,
     required this.selectedMonth,
@@ -44,8 +41,41 @@ class AttendanceCell extends StatelessWidget {
   });
 
   @override
+  State<AttendanceCell> createState() => _AttendanceCellState();
+}
+
+class _AttendanceCellState extends State<AttendanceCell> {
+  List<String> _areaList = [];
+  String? _selectedArea;
+  List<UserModel> _localUsers = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAreas();
+  }
+
+  Future<void> _loadAreas() async {
+    final snapshot = await FirebaseFirestore.instance.collection('areas').get();
+    final areas = snapshot.docs.map((doc) => doc['name'] as String).toList();
+    setState(() {
+      _areaList = areas;
+      if (areas.isNotEmpty) {
+        _selectedArea = areas.first;
+        _reloadUsersForArea(_selectedArea!);
+      }
+    });
+  }
+
+  Future<void> _reloadUsersForArea(String area) async {
+    final users = await widget.getUsersByArea(area);
+    setState(() {
+      _localUsers = users;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final selectedArea = context.watch<AreaState>().currentArea;
     final now = DateTime.now();
     final yearList = List.generate(20, (i) => now.year - 5 + i);
     final monthList = List.generate(12, (i) => i + 1);
@@ -63,21 +93,9 @@ class AttendanceCell extends StatelessWidget {
             icon: const Icon(Icons.refresh),
             tooltip: '사용자 목록 새로고침',
             onPressed: () {
-              // TODO: 사용자 목록 새로고침 기능 구현 예정
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.cloud_download),
-            tooltip: '출근부 불러오기',
-            onPressed: () {
-              // TODO: 출근부 불러오기 기능 구현 예정
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.download),
-            tooltip: '출근부 내려받기',
-            onPressed: () {
-              // TODO: 출근부 내려받기 기능 구현 예정
+              if (_selectedArea != null) {
+                _reloadUsersForArea(_selectedArea!);
+              }
             },
           ),
         ],
@@ -90,29 +108,43 @@ class AttendanceCell extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Flexible(
-                  child: Text(
-                    '직원 근무 테이블 (${selectedArea.isNotEmpty ? selectedArea : "지역 미선택"})',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                DropdownButton<String>(
+                  value: _selectedArea,
+                  hint: const Text('지역 선택'),
+                  items: _areaList.map((area) {
+                    return DropdownMenuItem(
+                      value: area,
+                      child: Text(area),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() {
+                        _selectedArea = value;
+                      });
+                      _reloadUsersForArea(value);
+                    }
+                  },
                 ),
                 Row(
-                  mainAxisSize: MainAxisSize.min,
                   children: [
                     DropdownButton<int>(
-                      value: selectedYear,
-                      items: yearList.map((y) => DropdownMenuItem(value: y, child: Text('$y년'))).toList(),
+                      value: widget.selectedYear,
+                      items: yearList
+                          .map((y) => DropdownMenuItem(value: y, child: Text('$y년')))
+                          .toList(),
                       onChanged: (value) {
-                        if (value != null) onYearChanged(value);
+                        if (value != null) widget.onYearChanged(value);
                       },
                     ),
                     const SizedBox(width: 12),
                     DropdownButton<int>(
-                      value: selectedMonth,
-                      items: monthList.map((m) => DropdownMenuItem(value: m, child: Text('$m월'))).toList(),
+                      value: widget.selectedMonth,
+                      items: monthList
+                          .map((m) => DropdownMenuItem(value: m, child: Text('$m월')))
+                          .toList(),
                       onChanged: (value) {
-                        if (value != null) onMonthChanged(value);
+                        if (value != null) widget.onMonthChanged(value);
                       },
                     ),
                   ],
@@ -135,16 +167,16 @@ class AttendanceCell extends StatelessWidget {
                         }),
                       ),
                       const SizedBox(height: 8),
-                      ...users.asMap().entries.expand((entry) sync* {
+                      ..._localUsers.asMap().entries.expand((entry) sync* {
                         final rowIndex = entry.key;
                         final user = entry.value;
                         yield AttendanceTableRow(
                           user: user,
                           rowIndex: rowIndex,
-                          selectedRow: selectedRow,
-                          selectedCol: selectedCol,
-                          cellData: cellData,
-                          onCellTapped: onCellTapped,
+                          selectedRow: widget.selectedRow,
+                          selectedCol: widget.selectedCol,
+                          cellData: widget.cellData,
+                          onCellTapped: widget.onCellTapped,
                         );
                       }),
                     ],
@@ -158,17 +190,18 @@ class AttendanceCell extends StatelessWidget {
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (menuOpen)
+          if (widget.menuOpen)
             Column(
               children: [
                 FloatingActionButton(
                   heroTag: 'saveBtn',
                   mini: true,
                   onPressed: () {
-                    if (selectedRow != null && selectedRow! ~/ 2 < users.length) {
-                      final userId = users[selectedRow! ~/ 2].id;
-                      final fullKey = selectedRow! % 2 == 0 ? userId : '${userId}_out';
-                      appendText(fullKey);
+                    final sr = widget.selectedRow;
+                    if (sr != null && sr ~/ 2 < _localUsers.length) {
+                      final userId = _localUsers[sr ~/ 2].id;
+                      final fullKey = sr % 2 == 0 ? userId : '${userId}_out';
+                      widget.appendText(fullKey);
                     }
                   },
                   backgroundColor: Colors.green,
@@ -179,10 +212,11 @@ class AttendanceCell extends StatelessWidget {
                   heroTag: 'clearBtn',
                   mini: true,
                   onPressed: () {
-                    if (selectedRow != null && selectedRow! ~/ 2 < users.length) {
-                      final userId = users[selectedRow! ~/ 2].id;
-                      final fullKey = selectedRow! % 2 == 0 ? userId : '${userId}_out';
-                      clearText(fullKey);
+                    final sr = widget.selectedRow;
+                    if (sr != null && sr ~/ 2 < _localUsers.length) {
+                      final userId = _localUsers[sr ~/ 2].id;
+                      final fullKey = sr % 2 == 0 ? userId : '${userId}_out';
+                      widget.clearText(fullKey);
                     }
                   },
                   backgroundColor: Colors.redAccent,
@@ -193,11 +227,11 @@ class AttendanceCell extends StatelessWidget {
             ),
           FloatingActionButton(
             heroTag: 'attendanceFab',
-            onPressed: toggleMenu,
+            onPressed: widget.toggleMenu,
             backgroundColor: Colors.blueAccent,
             child: AnimatedRotation(
               duration: const Duration(milliseconds: 300),
-              turns: menuOpen ? 0.25 : 0.0,
+              turns: widget.menuOpen ? 0.25 : 0.0,
               child: const Icon(Icons.more_vert),
             ),
           ),
