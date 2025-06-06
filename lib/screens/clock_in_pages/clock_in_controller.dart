@@ -82,6 +82,7 @@ class ClockInController {
     );
   }
 
+  /// ✅ 수정된 출근 로그 업로드 함수
   Future<void> _uploadAttendanceSilently(BuildContext context) async {
     final userState = Provider.of<UserState>(context, listen: false);
     final area = userState.area;
@@ -92,18 +93,9 @@ class ClockInController {
     final now = DateTime.now();
     final nowTime = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
 
-    final attendanceJson = {
-      'userId': userState.user?.id ?? '',
-      'userName': name,
-      'area': area,
-      'division': userState.user?.divisions.first ?? '',
-      'recordedTime': nowTime,
-      'status': '출근',
-    };
-
     final success = await ClockInLogUploader.uploadAttendanceJson(
       context: context,
-      attendanceData: attendanceJson,
+      recordedTime: nowTime, // ✅ 시간만 전달
     );
 
     if (!context.mounted) return;

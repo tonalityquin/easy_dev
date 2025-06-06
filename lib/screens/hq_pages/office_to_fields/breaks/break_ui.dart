@@ -6,21 +6,22 @@ import 'package:provider/provider.dart';
 import '../../../../models/user_model.dart';
 import '../../../../states/area/area_state.dart';
 import '../../../../utils/snackbar_helper.dart';
-import '../attendance_cell.dart';
+import '../break_cell.dart';
 
-class AttendanceDocument extends StatefulWidget {
-  const AttendanceDocument({super.key});
+class BreakUi extends StatefulWidget {
+  const BreakUi({super.key});
 
   @override
-  State<AttendanceDocument> createState() => _AttendanceDocumentState();
+  State<BreakUi> createState() => _BreakUiState();
 }
 
-class _AttendanceDocumentState extends State<AttendanceDocument> {
+class _BreakUiState extends State<BreakUi> {
   final TextEditingController _controller = TextEditingController();
   bool _menuOpen = false;
 
   int? selectedRow;
   int? selectedCol;
+  Set<String> selectedCells = {};
 
   late int selectedYear;
   late int selectedMonth;
@@ -76,43 +77,35 @@ class _AttendanceDocumentState extends State<AttendanceDocument> {
 
   Future<void> _reloadUsers(String area) async {
     try {
-      final snapshot =
-          await FirebaseFirestore.instance.collection('user_accounts').where('currentArea', isEqualTo: area).get();
-      final updatedUsers = snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
-
+      final updatedUsers = await getUsersByArea(area);
       final currentIds = users.map((u) => u.id).toSet();
       final newIds = updatedUsers.map((u) => u.id).toSet();
       final hasChanged = currentIds.length != newIds.length || !currentIds.containsAll(newIds);
+
+      if (!mounted) return;
 
       if (hasChanged) {
         setState(() {
           users = updatedUsers;
         });
-
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (context.mounted) {
-            showSuccessSnackbar(context, '최신 사용자 목록으로 갱신되었습니다');
-          }
-        });
+        if (mounted) showSuccessSnackbar(context, '최신 사용자 목록으로 갱신되었습니다');
       } else {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (context.mounted) {
-            showSuccessSnackbar(context, '변경 사항 없음');
-          }
-        });
+        if (mounted) showSuccessSnackbar(context, '변경 사항 없음');
       }
     } catch (e) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (context.mounted) {
-          showFailedSnackbar(context, '사용자 목록을 불러오지 못했습니다');
-        }
-      });
+      if (mounted) showFailedSnackbar(context, '사용자 목록을 불러오지 못했습니다');
     }
   }
 
   Future<void> _appendText(String rowKey) async {
     final value = _controller.text.trim();
     if (value.isEmpty || selectedRow == null || selectedCol == null) return;
+
+    if (selectedRow! % 2 != 0) {
+      if (!mounted) return;
+      showFailedSnackbar(context, '휴게시간 종료는 앱에서 자동으로 처리됩니다');
+      return;
+    }
 
     setState(() {
       cellData[rowKey] ??= {};
@@ -121,22 +114,29 @@ class _AttendanceDocumentState extends State<AttendanceDocument> {
       _menuOpen = false;
     });
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (context.mounted) showSuccessSnackbar(context, '저장 완료');
-    });
+    if (!mounted) return;
+    showSuccessSnackbar(context, '시작 시간 저장 완료');
   }
 
-  Future<void> _clearText(String rowKey) async {
-    if (selectedRow == null || selectedCol == null) return;
+  Future<void> _clearText(String rowKey, [List<int>? colIndices]) async {
+    if (colIndices != null && colIndices.isNotEmpty) {
+      setState(() {
+        for (final col in colIndices) {
+          cellData[rowKey]?.remove(col);
+        }
+        _menuOpen = false;
+        selectedCells.removeWhere((e) => e.startsWith('$rowKey:'));
+      });
+    } else if (selectedCol != null) {
+      setState(() {
+        cellData[rowKey]?.remove(selectedCol);
+        _menuOpen = false;
+        selectedCells.remove('$rowKey:${selectedCol!}');
+      });
+    }
 
-    setState(() {
-      cellData[rowKey]?.remove(selectedCol);
-      _menuOpen = false;
-    });
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (context.mounted) showSuccessSnackbar(context, '삭제 완료');
-    });
+    if (!mounted) return;
+    showSuccessSnackbar(context, '삭제 완료');
   }
 
   void _onChangeYear(int year) {
@@ -152,14 +152,13 @@ class _AttendanceDocumentState extends State<AttendanceDocument> {
   }
 
   void _onCellTapped(int rowIndex, int colIndex, String rowKey) {
-    if (colIndex == 0 || colIndex == 32) return;
+    if (colIndex == 0 || colIndex == 33) return;
+    final key = '$rowKey:${colIndex - 1}';
     setState(() {
-      if (selectedRow == rowIndex && selectedCol == colIndex) {
-        selectedRow = null;
-        selectedCol = null;
+      if (selectedCells.contains(key)) {
+        selectedCells.remove(key);
       } else {
-        selectedRow = rowIndex;
-        selectedCol = colIndex;
+        selectedCells.add(key);
       }
     });
   }
@@ -168,11 +167,12 @@ class _AttendanceDocumentState extends State<AttendanceDocument> {
   Widget build(BuildContext context) {
     currentArea = context.watch<AreaState>().currentArea;
 
-    return AttendanceCell(
+    return BreakCell(
       controller: _controller,
       menuOpen: _menuOpen,
       selectedRow: selectedRow,
       selectedCol: selectedCol,
+      selectedCells: selectedCells,
       cellData: cellData,
       selectedYear: selectedYear,
       selectedMonth: selectedMonth,

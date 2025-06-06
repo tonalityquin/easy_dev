@@ -29,28 +29,19 @@ class DashBoardController {
   /// ✅ 퇴근 시간 기록 및 업로드
   Future<bool> _recordLeaveTime(BuildContext context) async {
     try {
-      final userState = Provider.of<UserState>(context, listen: false);
       final now = DateTime.now();
       final time = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
 
-      final leaveJson = {
-        'userId': userState.user?.id ?? '',
-        'userName': userState.name,
-        'area': userState.area,
-        'division': userState.user?.divisions.first ?? '',
-        'recordedTime': time,
-        'status': '퇴근',
-      };
-
       return await ClockOutLogUploader.uploadLeaveJson(
         context: context,
-        data: leaveJson,
+        recordedTime: time, // ✅ 수정된 시그니처에 맞게 전달
       );
     } catch (e) {
       debugPrint('❌ 퇴근 기록 오류: $e');
       return false;
     }
   }
+
 
   Future<void> recordBreakTime(BuildContext context) async {
     try {

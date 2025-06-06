@@ -213,12 +213,24 @@ class _BreakCellState extends State<BreakCell> {
           ],
         ),
       ),
-      floatingActionButton: Column(
+      floatingActionButton: Row(
         mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.end,
         children: [
           if (widget.menuOpen)
-            Column(
+            Row(
               children: [
+                const SizedBox(width: 12),
+                FloatingActionButton(
+                  heroTag: 'loadJsonBtn',
+                  mini: true,
+                  onPressed: () {
+                    // TODO: GCS JSON 다운로드 기능 구현 예정
+                  },
+                  backgroundColor: Colors.orange,
+                  child: const Icon(Icons.cloud_download),
+                ),
+                const SizedBox(width: 12),
                 FloatingActionButton(
                   heroTag: 'saveBtn',
                   mini: true,
@@ -232,7 +244,7 @@ class _BreakCellState extends State<BreakCell> {
                   backgroundColor: Colors.green,
                   child: const Icon(Icons.save),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(width: 12),
                 FloatingActionButton(
                   heroTag: 'clearBtn',
                   mini: true,
@@ -255,11 +267,11 @@ class _BreakCellState extends State<BreakCell> {
                   backgroundColor: Colors.redAccent,
                   child: const Icon(Icons.delete),
                 ),
-                const SizedBox(height: 12),
               ],
             ),
+          const SizedBox(width: 12),
           FloatingActionButton(
-            heroTag: 'breakFab',
+            heroTag: 'menuFab',
             onPressed: widget.toggleMenu,
             backgroundColor: Colors.blueAccent,
             child: AnimatedRotation(

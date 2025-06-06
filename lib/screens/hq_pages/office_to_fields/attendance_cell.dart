@@ -1,9 +1,15 @@
+// 생략된 import 생략 없이 포함
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../models/user_model.dart';
+import '../../../states/area/area_state.dart';
 import '../../../states/user/user_state.dart';
+import '../../clock_in_pages/clock_in_log_uploader.dart';
+import '../../clock_in_pages/clock_in_log_downloader.dart';
+import '../../secondary_pages/field_mode_pages/dash_board/clock_out_log_downloader.dart';
+import '../../secondary_pages/field_mode_pages/dash_board/clock_out_log_uploader.dart';
 import 'attendances/attendance_table_row.dart';
 
 class AttendanceCell extends StatefulWidget {
@@ -22,6 +28,7 @@ class AttendanceCell extends StatefulWidget {
   final Future<void> Function(String area) reloadUsers;
   final void Function(int year) onYearChanged;
   final void Function(int month) onMonthChanged;
+  final Future<void> Function(Map<String, Map<int, String>> newData) onLoadJson;
 
   const AttendanceCell({
     super.key,
@@ -40,6 +47,7 @@ class AttendanceCell extends StatefulWidget {
     required this.reloadUsers,
     required this.onYearChanged,
     required this.onMonthChanged,
+    required this.onLoadJson,
   });
 
   @override
@@ -198,12 +206,83 @@ class _AttendanceCellState extends State<AttendanceCell> {
           ],
         ),
       ),
-      floatingActionButton: Column(
+      floatingActionButton: Row(
         mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.end,
         children: [
           if (widget.menuOpen)
-            Column(
+            Row(
               children: [
+                const SizedBox(width: 12),
+                FloatingActionButton(
+                  heroTag: 'loadJsonBtn',
+                  mini: true,
+                  onPressed: () async {
+                    try {
+                      final areaState = context.read<AreaState>();
+                      final userState = context.read<UserState>();
+
+                      final division = areaState.currentDivision;
+                      final area = areaState.currentArea;
+                      final userName = userState.name;
+
+                      // ✅ 출근 URL 생성
+                      final clockInUrl = ClockInLogUploader.getDownloadPath(
+                        division: division,
+                        area: area,
+                        userName: userName,
+                      );
+                      debugPrint('🌐 출근 기록 다운로드 URL: $clockInUrl');
+
+                      // ✅ 퇴근 URL 생성
+                      final clockOutUrl = ClockOutLogUploader.getDownloadPath(
+                        division: division,
+                        area: area,
+                        userName: userName,
+                      );
+                      debugPrint('🌐 퇴근 기록 다운로드 URL: $clockOutUrl');
+
+                      // ✅ 출근 JSON 다운로드
+                      final clockInData = await downloadAttendanceJsonFromGcs(
+                        publicUrl: clockInUrl,
+                        selectedYear: widget.selectedYear,
+                        selectedMonth: widget.selectedMonth,
+                      );
+
+                      // ✅ 퇴근 JSON 다운로드
+                      final clockOutData = await downloadLeaveJsonFromGcs(
+                        publicUrl: clockOutUrl,
+                        selectedYear: widget.selectedYear,
+                        selectedMonth: widget.selectedMonth,
+                      );
+
+                      // ✅ 병합된 데이터 만들기
+                      final mergedData = <String, Map<int, String>>{};
+                      if (clockInData != null) mergedData.addAll(clockInData);
+                      if (clockOutData != null) mergedData.addAll(clockOutData);
+
+                      if (mergedData.isNotEmpty) {
+                        await widget.onLoadJson(mergedData);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('✅ 출근/퇴근 데이터 불러오기 성공')),
+                        );
+                      } else {
+                        debugPrint('❌ 병합된 JSON 데이터 없음');
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('❌ 출근/퇴근 데이터 없음')),
+                        );
+                      }
+                    } catch (e) {
+                      debugPrint('❌ 출근/퇴근 JSON 로딩 중 예외: $e');
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('❌ 오류 발생: ${e.toString()}')),
+                      );
+                    }
+                  },
+                  backgroundColor: Colors.orange,
+                  child: const Icon(Icons.cloud_download),
+                ),
+                const SizedBox(width: 12),
                 FloatingActionButton(
                   heroTag: 'saveBtn',
                   mini: true,
@@ -218,7 +297,7 @@ class _AttendanceCellState extends State<AttendanceCell> {
                   backgroundColor: Colors.green,
                   child: const Icon(Icons.save),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(width: 12),
                 FloatingActionButton(
                   heroTag: 'clearBtn',
                   mini: true,
@@ -233,9 +312,9 @@ class _AttendanceCellState extends State<AttendanceCell> {
                   backgroundColor: Colors.redAccent,
                   child: const Icon(Icons.delete),
                 ),
-                const SizedBox(height: 12),
               ],
             ),
+          const SizedBox(width: 12),
           FloatingActionButton(
             heroTag: 'attendanceFab',
             onPressed: widget.toggleMenu,

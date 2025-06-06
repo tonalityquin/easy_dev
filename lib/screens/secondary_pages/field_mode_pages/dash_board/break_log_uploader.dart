@@ -47,16 +47,26 @@ class BreakLogUploader {
 
       final credentialsJson = await rootBundle.loadString(_serviceAccountPath);
       final credentials = ServiceAccountCredentials.fromJson(credentialsJson);
-      final client = await clientViaServiceAccount(credentials, [StorageApi.devstorageFullControlScope]);
+      final client = await clientViaServiceAccount(
+        credentials,
+        [StorageApi.devstorageFullControlScope],
+      );
       final storage = StorageApi(client);
 
       final media = Media(file.openRead(), file.lengthSync());
       final object = Object()..name = gcsPath;
 
-      await storage.objects.insert(object, _bucketName, uploadMedia: media);
+      // ✅ GCS 업로드 시 공개 설정
+      await storage.objects.insert(
+        object,
+        _bucketName,
+        uploadMedia: media,
+        predefinedAcl: 'publicRead', // ← 추가된 공개 업로드 설정
+      );
+
       client.close();
 
-      debugPrint('✅ 휴게 기록 업로드 성공: $gcsPath');
+      debugPrint('✅ 휴게 기록 업로드 성공 (공개됨): $gcsPath');
       return true;
     } catch (e) {
       debugPrint('❌ 휴게 기록 업로드 실패: $e');
@@ -68,7 +78,10 @@ class BreakLogUploader {
     try {
       final credentialsJson = await rootBundle.loadString(_serviceAccountPath);
       final credentials = ServiceAccountCredentials.fromJson(credentialsJson);
-      final client = await clientViaServiceAccount(credentials, [StorageApi.devstorageReadOnlyScope]);
+      final client = await clientViaServiceAccount(
+        credentials,
+        [StorageApi.devstorageReadOnlyScope],
+      );
       final storage = StorageApi(client);
 
       await storage.objects.get(_bucketName, gcsPath);

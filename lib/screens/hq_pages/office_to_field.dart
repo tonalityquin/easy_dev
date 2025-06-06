@@ -61,16 +61,25 @@ class _OfficeToFieldState extends State<OfficeToField> {
     });
   }
 
+  Future<void> _mergeJsonData(Map<String, Map<int, String>> newData) async {
+    setState(() {
+      for (final entry in newData.entries) {
+        _cellData[entry.key] = entry.value;
+      }
+    });
+    showSuccessSnackbar(context, '출근 기록 불러오기 완료');
+  }
+
   Future<List<UserModel>> _getUsersByArea(String area) async {
     final snapshot =
-    await FirebaseFirestore.instance.collection('user_accounts').where('currentArea', isEqualTo: area).get();
+        await FirebaseFirestore.instance.collection('user_accounts').where('currentArea', isEqualTo: area).get();
     return snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
   }
 
   Future<void> _reloadUsers(String area) async {
     try {
       final snapshot =
-      await FirebaseFirestore.instance.collection('user_accounts').where('currentArea', isEqualTo: area).get();
+          await FirebaseFirestore.instance.collection('user_accounts').where('currentArea', isEqualTo: area).get();
 
       final updatedUsers = snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
 
@@ -170,54 +179,55 @@ class _OfficeToFieldState extends State<OfficeToField> {
           elevation: 0,
         ),
         body: _selectedIndex == 0
-            ? const TodayField()
-            : _selectedIndex == 1
             ? AttendanceCell(
-          controller: _controller,
-          menuOpen: _menuOpen,
-          selectedRow: _selectedRow,
-          selectedCol: _selectedCol,
-          cellData: _cellData,
-          selectedYear: _selectedYear,
-          selectedMonth: _selectedMonth,
-          onYearChanged: _onChangeYear,
-          onMonthChanged: _onChangeMonth,
-          onCellTapped: _onCellTapped,
-          appendText: _appendText,
-          clearText: _clearText,
-          toggleMenu: () => setState(() => _menuOpen = !_menuOpen),
-          getUsersByArea: _getUsersByArea,
-          reloadUsers: _reloadUsers,
-        )
-            : BreakCell(
-          controller: _controller,
-          menuOpen: _menuOpen,
-          selectedRow: _selectedRow,
-          selectedCol: _selectedCol,
-          selectedCells: _selectedCells,
-          cellData: _cellData,
-          selectedYear: _selectedYear,
-          selectedMonth: _selectedMonth,
-          onYearChanged: _onChangeYear,
-          onMonthChanged: _onChangeMonth,
-          onCellTapped: _onCellTapped,
-          appendText: _appendText,
-          clearText: _clearText,
-          toggleMenu: () => setState(() => _menuOpen = !_menuOpen),
-          getUsersByArea: _getUsersByArea,
-          reloadUsers: _reloadUsers,
-        ),
+                controller: _controller,
+                menuOpen: _menuOpen,
+                selectedRow: _selectedRow,
+                selectedCol: _selectedCol,
+                cellData: _cellData,
+                selectedYear: _selectedYear,
+                selectedMonth: _selectedMonth,
+                onYearChanged: _onChangeYear,
+                onMonthChanged: _onChangeMonth,
+                onCellTapped: _onCellTapped,
+                appendText: _appendText,
+                clearText: _clearText,
+                toggleMenu: () => setState(() => _menuOpen = !_menuOpen),
+                getUsersByArea: _getUsersByArea,
+                reloadUsers: _reloadUsers,
+                onLoadJson: _mergeJsonData, // ✅ 추가
+              )
+            : _selectedIndex == 1
+                ? const TodayField()
+                : BreakCell(
+                    controller: _controller,
+                    menuOpen: _menuOpen,
+                    selectedRow: _selectedRow,
+                    selectedCol: _selectedCol,
+                    selectedCells: _selectedCells,
+                    cellData: _cellData,
+                    selectedYear: _selectedYear,
+                    selectedMonth: _selectedMonth,
+                    onYearChanged: _onChangeYear,
+                    onMonthChanged: _onChangeMonth,
+                    onCellTapped: _onCellTapped,
+                    appendText: _appendText,
+                    clearText: _clearText,
+                    toggleMenu: () => setState(() => _menuOpen = !_menuOpen),
+                    getUsersByArea: _getUsersByArea,
+                    reloadUsers: _reloadUsers,
+                  ),
         bottomNavigationBar: HqMiniNavigation(
           height: 56,
           iconSize: 22,
           icons: const [
-            Icons.today,
             Icons.check_circle,
+            Icons.today,
             Icons.free_breakfast,
           ],
           labels: const [
-            'Today Field',
             'Attendance Cell',
+            'Today Field',
             'Break Cell',
           ],
           onIconTapped: (index) {
