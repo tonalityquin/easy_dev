@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../states/user/user_state.dart';
-import '../into_work_controller.dart';
+import '../clock_in_controller.dart';
 
 class WorkButtonWidget extends StatefulWidget {
-  final IntoWorkController controller;
+  final ClockInController controller;
 
   const WorkButtonWidget({super.key, required this.controller});
 

@@ -6,9 +6,9 @@ import '../../../routes.dart';
 import '../../../states/user/user_state.dart';
 import '../../../states/area/area_state.dart';
 import '../../../utils/snackbar_helper.dart';
-import 'into_work_log_uploader.dart';
+import 'clock_in_log_uploader.dart';
 
-class IntoWorkController {
+class ClockInController {
   void initialize(BuildContext context) {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final userState = context.read<UserState>();
@@ -101,7 +101,7 @@ class IntoWorkController {
       'status': '출근',
     };
 
-    final success = await InToWorkLogUploader.uploadAttendanceJson(
+    final success = await ClockInLogUploader.uploadAttendanceJson(
       context: context,
       attendanceData: attendanceJson,
     );

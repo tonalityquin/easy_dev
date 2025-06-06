@@ -1,3 +1,4 @@
+import 'dart:async'; // ✅ 추가됨
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
@@ -31,6 +32,8 @@ class _OfficeToFieldState extends State<OfficeToField> {
   Map<String, Map<int, String>> _cellData = {};
   List<UserModel> _users = [];
 
+  StreamSubscription? _userSubscription; // ✅ Firestore 구독 저장용
+
   @override
   void initState() {
     super.initState();
@@ -45,11 +48,12 @@ class _OfficeToFieldState extends State<OfficeToField> {
   }
 
   void _subscribeToUsers(String area) {
-    FirebaseFirestore.instance
+    _userSubscription = FirebaseFirestore.instance
         .collection('user_accounts')
         .where('currentArea', isEqualTo: area)
         .snapshots()
         .listen((snapshot) {
+      if (!mounted) return; // ✅ 위젯이 dispose된 경우 무시
       final updatedUsers = snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
       setState(() {
         _users = updatedUsers;
@@ -59,14 +63,14 @@ class _OfficeToFieldState extends State<OfficeToField> {
 
   Future<List<UserModel>> _getUsersByArea(String area) async {
     final snapshot =
-        await FirebaseFirestore.instance.collection('user_accounts').where('currentArea', isEqualTo: area).get();
+    await FirebaseFirestore.instance.collection('user_accounts').where('currentArea', isEqualTo: area).get();
     return snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
   }
 
   Future<void> _reloadUsers(String area) async {
     try {
       final snapshot =
-          await FirebaseFirestore.instance.collection('user_accounts').where('currentArea', isEqualTo: area).get();
+      await FirebaseFirestore.instance.collection('user_accounts').where('currentArea', isEqualTo: area).get();
 
       final updatedUsers = snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
 
@@ -75,21 +79,18 @@ class _OfficeToFieldState extends State<OfficeToField> {
       final hasChanged = currentIds.length != newIds.length || !currentIds.containsAll(newIds);
 
       if (hasChanged) {
+        if (!mounted) return;
         setState(() {
           _users = updatedUsers;
         });
-        if (context.mounted) {
-          showSuccessSnackbar(context, '최신 사용자 목록으로 갱신되었습니다');
-        }
+        showSuccessSnackbar(context, '최신 사용자 목록으로 갱신되었습니다');
       } else {
-        if (context.mounted) {
-          showSuccessSnackbar(context, '변경 사항 없음');
-        }
+        if (!mounted) return;
+        showSuccessSnackbar(context, '변경 사항 없음');
       }
     } catch (_) {
-      if (context.mounted) {
-        showFailedSnackbar(context, '사용자 목록을 불러오지 못했습니다');
-      }
+      if (!mounted) return;
+      showFailedSnackbar(context, '사용자 목록을 불러오지 못했습니다');
     }
   }
 
@@ -150,6 +151,13 @@ class _OfficeToFieldState extends State<OfficeToField> {
   }
 
   @override
+  void dispose() {
+    _userSubscription?.cancel(); // ✅ 리소스 해제
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: () async => false,
@@ -164,41 +172,41 @@ class _OfficeToFieldState extends State<OfficeToField> {
         body: _selectedIndex == 0
             ? const TodayField()
             : _selectedIndex == 1
-                ? AttendanceCell(
-                    controller: _controller,
-                    menuOpen: _menuOpen,
-                    selectedRow: _selectedRow,
-                    selectedCol: _selectedCol,
-                    cellData: _cellData,
-                    selectedYear: _selectedYear,
-                    selectedMonth: _selectedMonth,
-                    onYearChanged: _onChangeYear,
-                    onMonthChanged: _onChangeMonth,
-                    onCellTapped: _onCellTapped,
-                    appendText: _appendText,
-                    clearText: _clearText,
-                    toggleMenu: () => setState(() => _menuOpen = !_menuOpen),
-                    getUsersByArea: _getUsersByArea,
-                    reloadUsers: _reloadUsers,
-                  )
-                : BreakCell(
-                    controller: _controller,
-                    menuOpen: _menuOpen,
-                    selectedRow: _selectedRow,
-                    selectedCol: _selectedCol,
-                    selectedCells: _selectedCells,
-                    cellData: _cellData,
-                    selectedYear: _selectedYear,
-                    selectedMonth: _selectedMonth,
-                    onYearChanged: _onChangeYear,
-                    onMonthChanged: _onChangeMonth,
-                    onCellTapped: _onCellTapped,
-                    appendText: _appendText,
-                    clearText: _clearText,
-                    toggleMenu: () => setState(() => _menuOpen = !_menuOpen),
-                    getUsersByArea: _getUsersByArea,
-                    reloadUsers: _reloadUsers,
-                  ),
+            ? AttendanceCell(
+          controller: _controller,
+          menuOpen: _menuOpen,
+          selectedRow: _selectedRow,
+          selectedCol: _selectedCol,
+          cellData: _cellData,
+          selectedYear: _selectedYear,
+          selectedMonth: _selectedMonth,
+          onYearChanged: _onChangeYear,
+          onMonthChanged: _onChangeMonth,
+          onCellTapped: _onCellTapped,
+          appendText: _appendText,
+          clearText: _clearText,
+          toggleMenu: () => setState(() => _menuOpen = !_menuOpen),
+          getUsersByArea: _getUsersByArea,
+          reloadUsers: _reloadUsers,
+        )
+            : BreakCell(
+          controller: _controller,
+          menuOpen: _menuOpen,
+          selectedRow: _selectedRow,
+          selectedCol: _selectedCol,
+          selectedCells: _selectedCells,
+          cellData: _cellData,
+          selectedYear: _selectedYear,
+          selectedMonth: _selectedMonth,
+          onYearChanged: _onChangeYear,
+          onMonthChanged: _onChangeMonth,
+          onCellTapped: _onCellTapped,
+          appendText: _appendText,
+          clearText: _clearText,
+          toggleMenu: () => setState(() => _menuOpen = !_menuOpen),
+          getUsersByArea: _getUsersByArea,
+          reloadUsers: _reloadUsers,
+        ),
         bottomNavigationBar: HqMiniNavigation(
           height: 56,
           iconSize: 22,

@@ -2,20 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../states/user/user_state.dart';
-import 'into_work_controller.dart';
+import 'clock_in_controller.dart';
 import 'widgets/plate_count_widget.dart';
 import 'widgets/work_button_widget.dart';
 import 'widgets/user_info_card.dart';
 
-class IntoWorkScreen extends StatefulWidget {
-  const IntoWorkScreen({super.key});
+class ClockInWorkScreen extends StatefulWidget {
+  const ClockInWorkScreen({super.key});
 
   @override
-  State<IntoWorkScreen> createState() => _IntoWorkScreenState();
+  State<ClockInWorkScreen> createState() => _ClockInWorkScreenState();
 }
 
-class _IntoWorkScreenState extends State<IntoWorkScreen> {
-  final controller = IntoWorkController();
+class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
+  final controller = ClockInController();
 
   @override
   void initState() {

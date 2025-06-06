@@ -10,7 +10,7 @@ import 'package:flutter/material.dart';
 import '../../../../states/area/area_state.dart';
 import '../../../../states/user/user_state.dart';
 
-class OutToWorkLogUploader {
+class ClockOutLogUploader {
   static const _bucketName = 'easydev-image';
   static const _serviceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
 
@@ -31,7 +31,7 @@ class OutToWorkLogUploader {
           '${now.month.toString().padLeft(2, '0')}-'
           '${now.day.toString().padLeft(2, '0')}';
 
-      final fileName = '${dateStr}_${name}_퇴근기록.json';
+      final fileName = '${dateStr}_${name}_clockOut.json';
       final gcsPath = '$division/$area/exports/$fileName';
 
       final alreadyExists = await _checkIfFileExists(gcsPath);

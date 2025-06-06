@@ -31,7 +31,7 @@ class BreakLogUploader {
           '${now.month.toString().padLeft(2, '0')}-'
           '${now.day.toString().padLeft(2, '0')}';
 
-      final fileName = '${dateStr}_${name}_휴게기록.json';
+      final fileName = '${dateStr}_${name}_breakTime.json';
       final gcsPath = '$division/$area/exports/$fileName';
 
       final alreadyExists = await _checkIfFileExists(gcsPath);

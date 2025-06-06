@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../../../states/user/user_state.dart';
 import '../../../../utils/snackbar_helper.dart';
-import 'out_to_work_log_uploader.dart';
+import 'clock_out_log_uploader.dart';
 import 'break_log_uploader.dart';
 
 class DashBoardController {
@@ -42,7 +42,7 @@ class DashBoardController {
         'status': '퇴근',
       };
 
-      return await OutToWorkLogUploader.uploadLeaveJson(
+      return await ClockOutLogUploader.uploadLeaveJson(
         context: context,
         data: leaveJson,
       );
