@@ -2,20 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../states/user/user_state.dart';
-import 'go_to_work_controller.dart';
+import 'into_work_controller.dart';
 import 'widgets/plate_count_widget.dart';
 import 'widgets/work_button_widget.dart';
 import 'widgets/user_info_card.dart';
 
-class GoToWorkScreen extends StatefulWidget {
-  const GoToWorkScreen({super.key});
+class IntoWorkScreen extends StatefulWidget {
+  const IntoWorkScreen({super.key});
 
   @override
-  State<GoToWorkScreen> createState() => _GoToWorkScreenState();
+  State<IntoWorkScreen> createState() => _IntoWorkScreenState();
 }
 
-class _GoToWorkScreenState extends State<GoToWorkScreen> {
-  final controller = GoToWorkController();
+class _IntoWorkScreenState extends State<IntoWorkScreen> {
+  final controller = IntoWorkController();
 
   @override
   void initState() {

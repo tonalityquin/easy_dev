@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'screens/go_to_work/go_to_work_screen.dart';
+import 'screens/into_work/into_work_screen.dart';
 import 'screens/headquarter_page.dart';
 import 'screens/logins/login_screen.dart';
 import 'screens/type_page.dart';
@@ -15,8 +15,8 @@ class AppRoutes {
 
 final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.login: (context) => const LoginScreen(),
-  AppRoutes.home: (context) => const GoToWorkScreen(),
+  AppRoutes.home: (context) => const IntoWorkScreen(),
+  AppRoutes.headquarterPage: (context) => const HeadquarterPage(),
   AppRoutes.typePage: (context) => const TypePage(),
   AppRoutes.locationManagement: (context) => const LocationManagement(),
-  AppRoutes.headquarterPage: (context) => const HeadquarterPage(),
 };

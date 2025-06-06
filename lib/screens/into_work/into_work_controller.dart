@@ -6,9 +6,9 @@ import '../../../routes.dart';
 import '../../../states/user/user_state.dart';
 import '../../../states/area/area_state.dart';
 import '../../../utils/snackbar_helper.dart';
-import 'in_to_work_log_uploader.dart';
+import 'into_work_log_uploader.dart';
 
-class GoToWorkController {
+class IntoWorkController {
   void initialize(BuildContext context) {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final userState = context.read<UserState>();
