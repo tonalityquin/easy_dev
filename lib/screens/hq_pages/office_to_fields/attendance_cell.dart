@@ -216,59 +216,49 @@ class _AttendanceCellState extends State<AttendanceCell> {
                   onPressed: () async {
                     try {
                       final areaState = context.read<AreaState>();
-                      final userState = context.read<UserState>();
-
                       final division = areaState.currentDivision;
                       final area = areaState.currentArea;
-                      final userId = userState.user?.id ?? ''; // ✅ 정의 추가
 
-                      // ✅ 출근 URL 생성
-                      final clockInUrl = ClockInLogUploader.getDownloadPath(
-                        division: division,
-                        area: area,
-                        userId: userId, // ✅ 필수 파라미터 전달
-                      );
-                      debugPrint('🌐 출근 기록 다운로드 URL: $clockInUrl');
-
-                      // ✅ 퇴근 URL 생성
-                      final clockOutUrl = ClockOutLogUploader.getDownloadPath(
-                        division: division,
-                        area: area,
-                        userId: userId, // ✅ 동일하게 수정
-                      );
-                      debugPrint('🌐 퇴근 기록 다운로드 URL: $clockOutUrl');
-
-                      // ✅ 출근 JSON 다운로드
-                      final clockInData = await downloadAttendanceJsonFromGcs(
-                        publicUrl: clockInUrl,
-                        selectedYear: widget.selectedYear,
-                        selectedMonth: widget.selectedMonth,
-                      );
-
-                      // ✅ 퇴근 JSON 다운로드
-                      final clockOutData = await downloadLeaveJsonFromGcs(
-                        publicUrl: clockOutUrl,
-                        selectedYear: widget.selectedYear,
-                        selectedMonth: widget.selectedMonth,
-                      );
-
-                      // ✅ 병합된 데이터 만들기
                       final mergedData = <String, Map<int, String>>{};
 
-// ✅ 출근 데이터 병합
-                      if (clockInData != null && clockInData.isNotEmpty) {
-                        debugPrint('✅ 출근 데이터 병합: ${clockInData.keys.length}명');
-                        mergedData.addAll(clockInData);
-                      } else {
-                        debugPrint('📭 출근 데이터 없음');
-                      }
+                      for (final user in _localUsers) {
+                        final userId = user.id;
 
-// ✅ 퇴근 데이터 병합
-                      if (clockOutData != null && clockOutData.isNotEmpty) {
-                        debugPrint('✅ 퇴근 데이터 병합: ${clockOutData.keys.length}명');
-                        mergedData.addAll(clockOutData);
-                      } else {
-                        debugPrint('📭 퇴근 데이터 없음');
+                        // ✅ 출근 URL 생성 및 다운로드
+                        final clockInUrl = ClockInLogUploader.getDownloadPath(
+                          division: division,
+                          area: area,
+                          userId: userId,
+                        );
+                        debugPrint('🌐 출근 URL: $clockInUrl');
+
+                        final clockInData = await downloadAttendanceJsonFromGcs(
+                          publicUrl: clockInUrl,
+                          selectedYear: widget.selectedYear,
+                          selectedMonth: widget.selectedMonth,
+                        );
+                        if (clockInData != null && clockInData.isNotEmpty) {
+                          debugPrint('✅ ${userId} 출근 데이터 병합');
+                          mergedData.addAll(clockInData);
+                        }
+
+                        // ✅ 퇴근 URL 생성 및 다운로드
+                        final clockOutUrl = ClockOutLogUploader.getDownloadPath(
+                          division: division,
+                          area: area,
+                          userId: userId,
+                        );
+                        debugPrint('🌐 퇴근 URL: $clockOutUrl');
+
+                        final clockOutData = await downloadLeaveJsonFromGcs(
+                          publicUrl: clockOutUrl,
+                          selectedYear: widget.selectedYear,
+                          selectedMonth: widget.selectedMonth,
+                        );
+                        if (clockOutData != null && clockOutData.isNotEmpty) {
+                          debugPrint('✅ ${userId} 퇴근 데이터 병합');
+                          mergedData.addAll(clockOutData);
+                        }
                       }
 
                       if (mergedData.isNotEmpty) {
@@ -279,11 +269,11 @@ class _AttendanceCellState extends State<AttendanceCell> {
                       } else {
                         debugPrint('❌ 병합된 JSON 데이터 없음');
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('❌ 출근/퇴근 데이터 없음')),
+                          const SnackBar(content: Text('❌ 불러올 데이터가 없습니다')),
                         );
                       }
                     } catch (e) {
-                      debugPrint('❌ 출근/퇴근 JSON 로딩 중 예외: $e');
+                      debugPrint('❌ JSON 로딩 중 예외: $e');
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text('❌ 오류 발생: ${e.toString()}')),
                       );
