@@ -77,8 +77,13 @@ class ClockOutLogUploader {
         logList = [];
       }
 
-      // 날짜 중복 제거 후 append
-      logList.removeWhere((e) => e['recordedDate'] == dateStr);
+      // ✅ 오늘 날짜 기록이 이미 있으면 추가하지 않음
+      final alreadyExistsToday = logList.any((e) => e['recordedDate'] == dateStr);
+      if (alreadyExistsToday) {
+        debugPrint('⚠️ 오늘 퇴근 기록 이미 존재함: $dateStr');
+        return false;
+      }
+
       logList.add(newRecord);
 
       final jsonContent = jsonEncode(logList);

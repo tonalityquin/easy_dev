@@ -35,7 +35,6 @@ class ClockInLogUploader {
 
       final gcsPath = '$division/$area/exports/clock_in/$year/$month/$userId.json';
 
-      // 새 출근 기록
       final newRecord = {
         'userId': userId,
         'userName': userName,
@@ -46,7 +45,6 @@ class ClockInLogUploader {
         'status': '출근',
       };
 
-      // 기존 기록 불러오기
       List<Map<String, dynamic>> logList = [];
 
       try {
@@ -75,21 +73,24 @@ class ClockInLogUploader {
 
         client.close();
       } catch (e) {
-        debugPrint('ℹ️ 기존 파일 없거나 JSON 파싱 실패: $e');
+        debugPrint('ℹ️ 기존 파일 없음 또는 JSON 파싱 실패: $e');
         logList = [];
       }
 
-      // 기존 날짜 기록 제거 후 새 기록 append
-      logList.removeWhere((e) => e['recordedDate'] == dateStr);
+      // ✅ 오늘 날짜 기록이 이미 있으면 추가하지 않음
+      final alreadyExistsToday = logList.any((e) => e['recordedDate'] == dateStr);
+      if (alreadyExistsToday) {
+        debugPrint('⚠️ 오늘 출근 기록 이미 존재함: $dateStr');
+        return false;
+      }
+
       logList.add(newRecord);
 
-      // 저장용 파일 생성
       final jsonContent = jsonEncode(logList);
       final tempDir = Directory.systemTemp;
       final file = File('${tempDir.path}/clockin_$userId.json');
       await file.writeAsString(jsonContent);
 
-      // GCS에 업로드
       final credentialsJson = await rootBundle.loadString(_serviceAccountPath);
       final credentials = ServiceAccountCredentials.fromJson(credentialsJson);
       final client = await clientViaServiceAccount(

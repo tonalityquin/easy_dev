@@ -77,6 +77,7 @@ class _AttendanceCellState extends State<AttendanceCell> {
     final allAreas = snapshot.docs.map((doc) => doc['name'] as String).toList();
     final filtered = allAreas.where((area) => userAreas.contains(area)).toList();
 
+    if (!mounted) return; // ✅ 이 한 줄 추가
     setState(() {
       _areaList = filtered;
       if (filtered.isNotEmpty) {
@@ -86,12 +87,16 @@ class _AttendanceCellState extends State<AttendanceCell> {
     });
   }
 
+
   Future<void> _reloadUsersForArea(String area) async {
     final users = await widget.getUsersByArea(area);
+
+    if (!mounted) return; // ✅ 이 한 줄 추가
     setState(() {
       _localUsers = users;
     });
   }
+
 
   @override
   Widget build(BuildContext context) {
