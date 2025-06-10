@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../../enums/plate_type.dart';
 import '../../../states/user/user_state.dart';
+import 'area_detail_screen.dart'; // 상세 페이지 import
 
 class TodayField extends StatefulWidget {
   const TodayField({super.key});
@@ -115,54 +116,64 @@ class _TodayFieldState extends State<TodayField> {
   }
 
   Widget _buildAreaCard(AreaCount areaCount) {
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '📍 ${areaCount.area}',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: PlateType.values.map((type) {
-                final count = areaCount.counts[type] ?? 0;
-                return Column(
-                  children: [
-                    Text(
-                      type.label,
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(
-                          count > 0 ? Icons.circle : Icons.remove_circle_outline,
-                          color: _getColorByCount(count),
-                          size: 16,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '$count건',
-                          style: TextStyle(
-                            fontSize: 14,
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => AreaDetailScreen(areaName: areaCount.area),
+          ),
+        );
+      },
+      child: Card(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        elevation: 3,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '📍 ${areaCount.area}',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: PlateType.values.map((type) {
+                  final count = areaCount.counts[type] ?? 0;
+                  return Column(
+                    children: [
+                      Text(
+                        type.label,
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            count > 0 ? Icons.circle : Icons.remove_circle_outline,
                             color: _getColorByCount(count),
-                            fontWeight: FontWeight.bold,
+                            size: 16,
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
-                );
-              }).toList(),
-            ),
-          ],
+                          const SizedBox(width: 4),
+                          Text(
+                            '$count건',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: _getColorByCount(count),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
         ),
       ),
     );
