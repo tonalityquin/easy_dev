@@ -3,10 +3,10 @@ import '../../../../models/user_model.dart';
 
 class BreakTableRow extends StatelessWidget {
   final UserModel user;
-  final String label; // 시작 / 종료
+  final String label; // "시작" 또는 "종료"
   final int rowIndex;
-  final String rowKey;
-  final bool isStart;
+  final String rowKey; // 예: userId 또는 userId_break
+  final bool isStart; // 시작 셀 여부
   final Set<String> selectedCells;
   final Map<String, Map<int, String>> cellData;
   final void Function(int rowIndex, int colIndex, String rowKey) onCellTapped;
@@ -29,14 +29,35 @@ class BreakTableRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 4),
       child: Row(
         children: List.generate(34, (colIndex) {
+          // 0번째 열: 사용자 이름
           if (colIndex == 0) {
-            return _buildCell(text: user.name, isHeader: isStart, isSelected: false);
-          } else if (colIndex == 1) {
-            return _buildCell(text: label, isHeader: false, isSelected: false);
-          } else if (colIndex == 33) {
-            return _buildCell(text: '', isHeader: false, isSelected: false, width: 120);
+            return _buildCell(
+              text: user.name,
+              isHeader: isStart,
+              isSelected: false,
+            );
           }
 
+          // 1번째 열: "시작"/"종료" 라벨
+          if (colIndex == 1) {
+            return _buildCell(
+              text: label,
+              isHeader: false,
+              isSelected: false,
+            );
+          }
+
+          // 마지막 열: 비워둔 사인란
+          if (colIndex == 33) {
+            return _buildCell(
+              text: '',
+              isHeader: false,
+              isSelected: false,
+              width: 120,
+            );
+          }
+
+          // 본문 셀 (day index: 1 ~ 31)
           final day = colIndex - 1;
           final key = '$rowKey:$day';
           final text = cellData[rowKey]?[day] ?? '';
@@ -46,7 +67,9 @@ class BreakTableRow extends StatelessWidget {
             text: text,
             isHeader: false,
             isSelected: isSelected,
-            onTap: isStart ? () => onCellTapped(rowIndex, colIndex, rowKey) : null,
+            onTap: isStart
+                ? () => onCellTapped(rowIndex, colIndex, rowKey)
+                : null, // 종료 셀은 선택 불가
           );
         }),
       ),

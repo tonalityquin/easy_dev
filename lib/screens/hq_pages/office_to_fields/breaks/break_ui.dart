@@ -7,6 +7,8 @@ import '../../../../models/user_model.dart';
 import '../../../../states/area/area_state.dart';
 import '../../../../utils/snackbar_helper.dart';
 import '../break_cell.dart';
+import '../../../secondary_pages/field_mode_pages/dash_board/break_log_uploader.dart';
+import '../../../secondary_pages/field_mode_pages/dash_board/break_log_downloader.dart'; // ✅ 추가
 
 class BreakUi extends StatefulWidget {
   const BreakUi({super.key});
@@ -54,7 +56,8 @@ class _BreakUiState extends State<BreakUi> {
         .where('currentArea', isEqualTo: area)
         .snapshots()
         .listen((snapshot) {
-      final updatedUsers = snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
+      final updatedUsers =
+      snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
       setState(() {
         users = updatedUsers;
       });
@@ -69,8 +72,10 @@ class _BreakUiState extends State<BreakUi> {
   }
 
   Future<List<UserModel>> getUsersByArea(String area) async {
-    final snapshot =
-        await FirebaseFirestore.instance.collection('user_accounts').where('currentArea', isEqualTo: area).get();
+    final snapshot = await FirebaseFirestore.instance
+        .collection('user_accounts')
+        .where('currentArea', isEqualTo: area)
+        .get();
 
     return snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
   }
@@ -88,9 +93,9 @@ class _BreakUiState extends State<BreakUi> {
         setState(() {
           users = updatedUsers;
         });
-        if (mounted) showSuccessSnackbar(context, '최신 사용자 목록으로 갱신되었습니다');
+        showSuccessSnackbar(context, '최신 사용자 목록으로 갱신되었습니다');
       } else {
-        if (mounted) showSuccessSnackbar(context, '변경 사항 없음');
+        showSuccessSnackbar(context, '변경 사항 없음');
       }
     } catch (e) {
       if (mounted) showFailedSnackbar(context, '사용자 목록을 불러오지 못했습니다');
@@ -114,7 +119,6 @@ class _BreakUiState extends State<BreakUi> {
       _menuOpen = false;
     });
 
-    if (!mounted) return;
     showSuccessSnackbar(context, '시작 시간 저장 완료');
   }
 
@@ -135,7 +139,6 @@ class _BreakUiState extends State<BreakUi> {
       });
     }
 
-    if (!mounted) return;
     showSuccessSnackbar(context, '삭제 완료');
   }
 
@@ -163,6 +166,47 @@ class _BreakUiState extends State<BreakUi> {
     });
   }
 
+  Future<void> _onLoadJson() async {
+    try {
+      final areaState = context.read<AreaState>();
+      final division = areaState.currentDivision;
+      final area = areaState.currentArea;
+
+      final Map<String, Map<int, String>> merged = {};
+
+      for (final user in users) {
+        final userId = user.id;
+
+        final url = BreakLogUploader.getDownloadPath(
+          division: division,
+          area: area,
+          userId: userId,
+        );
+
+        final jsonData = await downloadBreakJsonFromGcs(
+          publicUrl: url,
+          selectedYear: selectedYear,
+          selectedMonth: selectedMonth,
+        );
+
+        if (jsonData != null && jsonData.isNotEmpty) {
+          merged.addAll(jsonData);
+        }
+      }
+
+      if (merged.isEmpty) {
+        showFailedSnackbar(context, '❌ 휴게시간 데이터 없음');
+      } else {
+        setState(() {
+          cellData = merged;
+        });
+        showSuccessSnackbar(context, '✅ 휴게시간 데이터 불러오기 완료');
+      }
+    } catch (e) {
+      showFailedSnackbar(context, '❌ 휴게시간 데이터 로딩 중 오류: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     currentArea = context.watch<AreaState>().currentArea;
@@ -184,6 +228,7 @@ class _BreakUiState extends State<BreakUi> {
       toggleMenu: () => setState(() => _menuOpen = !_menuOpen),
       getUsersByArea: getUsersByArea,
       reloadUsers: _reloadUsers,
+      onLoadJson: (_) => _onLoadJson(), // ✅ 병합된 데이터 UI 삽입
     );
   }
 }

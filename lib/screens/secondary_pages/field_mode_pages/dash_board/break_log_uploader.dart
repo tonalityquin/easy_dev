@@ -24,25 +24,70 @@ class BreakLogUploader {
 
       final area = areaState.currentArea;
       final division = areaState.currentDivision;
-      final name = userState.name;
+      final userId = userState.user?.id ?? '';
+      final userName = userState.name;
 
       final now = DateTime.now();
-      final dateStr = '${now.year.toString().padLeft(4, '0')}-'
-          '${now.month.toString().padLeft(2, '0')}-'
-          '${now.day.toString().padLeft(2, '0')}';
+      final year = now.year.toString().padLeft(4, '0');
+      final month = now.month.toString().padLeft(2, '0');
+      final day = now.day.toString().padLeft(2, '0');
+      final dateStr = '$year-$month-$day';
 
-      final fileName = '${dateStr}_${name}_breakTime.json';
-      final gcsPath = '$division/$area/exports/$fileName';
+      final gcsPath = '$division/$area/exports/break/$year/$month/$userId.json';
 
-      final alreadyExists = await _checkIfFileExists(gcsPath);
-      if (alreadyExists) {
-        debugPrint('⚠️ 휴게 기록 이미 존재함: $gcsPath');
+      final newRecord = {
+        'userId': userId,
+        'userName': userName,
+        'area': area,
+        'division': division,
+        'recordedDate': dateStr,
+        'recordedTime': data['recordedTime'] ?? '',
+        'status': '휴게',
+      };
+
+      List<Map<String, dynamic>> logList = [];
+
+      try {
+        final credentialsJson = await rootBundle.loadString(_serviceAccountPath);
+        final credentials = ServiceAccountCredentials.fromJson(credentialsJson);
+        final client = await clientViaServiceAccount(
+          credentials,
+          [StorageApi.devstorageReadOnlyScope],
+        );
+        final storageApi = StorageApi(client);
+
+        final media = await storageApi.objects.get(
+          _bucketName,
+          gcsPath,
+          downloadOptions: DownloadOptions.fullMedia,
+        ) as Media;
+
+        final content = await utf8.decoder.bind(media.stream).join();
+        final decoded = jsonDecode(content);
+
+        if (decoded is List) {
+          logList = List<Map<String, dynamic>>.from(decoded);
+        } else if (decoded is Map) {
+          logList = [Map<String, dynamic>.from(decoded)];
+        }
+
+        client.close();
+      } catch (e) {
+        debugPrint('ℹ️ 기존 휴게 기록 없음 또는 파싱 실패: $e');
+        logList = [];
+      }
+
+      final alreadyExistsToday = logList.any((e) => e['recordedDate'] == dateStr);
+      if (alreadyExistsToday) {
+        debugPrint('⚠️ 오늘자 휴게 기록 이미 존재함 → 업로드 생략');
         return false;
       }
 
-      final jsonContent = jsonEncode(data);
+      logList.add(newRecord);
+
+      final jsonContent = jsonEncode(logList);
       final tempDir = Directory.systemTemp;
-      final file = File('${tempDir.path}/$fileName');
+      final file = File('${tempDir.path}/break_${userId}_$year$month.json');
       await file.writeAsString(jsonContent);
 
       final credentialsJson = await rootBundle.loadString(_serviceAccountPath);
@@ -51,22 +96,20 @@ class BreakLogUploader {
         credentials,
         [StorageApi.devstorageFullControlScope],
       );
-      final storage = StorageApi(client);
+      final storageApi = StorageApi(client);
 
       final media = Media(file.openRead(), file.lengthSync());
       final object = Object()..name = gcsPath;
 
-      // ✅ GCS 업로드 시 공개 설정
-      await storage.objects.insert(
+      await storageApi.objects.insert(
         object,
         _bucketName,
         uploadMedia: media,
-        predefinedAcl: 'publicRead', // ← 추가된 공개 업로드 설정
+        predefinedAcl: 'publicRead',
       );
 
       client.close();
-
-      debugPrint('✅ 휴게 기록 업로드 성공 (공개됨): $gcsPath');
+      debugPrint('✅ 휴게 기록 업로드 완료: $gcsPath');
       return true;
     } catch (e) {
       debugPrint('❌ 휴게 기록 업로드 실패: $e');
@@ -74,21 +117,15 @@ class BreakLogUploader {
     }
   }
 
-  static Future<bool> _checkIfFileExists(String gcsPath) async {
-    try {
-      final credentialsJson = await rootBundle.loadString(_serviceAccountPath);
-      final credentials = ServiceAccountCredentials.fromJson(credentialsJson);
-      final client = await clientViaServiceAccount(
-        credentials,
-        [StorageApi.devstorageReadOnlyScope],
-      );
-      final storage = StorageApi(client);
-
-      await storage.objects.get(_bucketName, gcsPath);
-      client.close();
-      return true;
-    } catch (_) {
-      return false;
-    }
+  static String getDownloadPath({
+    required String division,
+    required String area,
+    required String userId,
+    DateTime? dateTime,
+  }) {
+    final dt = dateTime ?? DateTime.now();
+    final year = dt.year.toString().padLeft(4, '0');
+    final month = dt.month.toString().padLeft(2, '0');
+    return 'https://storage.googleapis.com/$_bucketName/$division/$area/exports/break/$year/$month/$userId.json';
   }
 }

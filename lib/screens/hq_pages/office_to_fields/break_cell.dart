@@ -1,9 +1,13 @@
+// 생략 없는 전체 코드
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../models/user_model.dart';
+import '../../../states/area/area_state.dart';
 import '../../../states/user/user_state.dart';
+import '../../secondary_pages/field_mode_pages/dash_board/break_log_downloader.dart';
+import '../../secondary_pages/field_mode_pages/dash_board/break_log_uploader.dart';
 import 'breaks/break_table_row.dart';
 
 class BreakCell extends StatefulWidget {
@@ -23,6 +27,7 @@ class BreakCell extends StatefulWidget {
   final Future<void> Function(String area) reloadUsers;
   final void Function(int year) onYearChanged;
   final void Function(int month) onMonthChanged;
+  final Future<void> Function(Map<String, Map<int, String>> newData) onLoadJson; // ✅ 추가
 
   const BreakCell({
     super.key,
@@ -42,6 +47,7 @@ class BreakCell extends StatefulWidget {
     required this.reloadUsers,
     required this.onYearChanged,
     required this.onMonthChanged,
+    required this.onLoadJson, // ✅ 필수
   });
 
   @override
@@ -224,8 +230,49 @@ class _BreakCellState extends State<BreakCell> {
                 FloatingActionButton(
                   heroTag: 'loadJsonBtn',
                   mini: true,
-                  onPressed: () {
-                    // TODO: GCS JSON 다운로드 기능 구현 예정
+                  onPressed: () async {
+                    final areaState = context.read<AreaState>();
+                    final division = areaState.currentDivision;
+                    final area = areaState.currentArea;
+
+                    final Map<String, Map<int, String>> merged = {};
+
+                    for (final user in _users) {
+                      final userId = user.id;
+
+                      // ✅ 업로더와 동일한 경로 생성 함수 사용
+                      final url = BreakLogUploader.getDownloadPath(
+                        division: division,
+                        area: area,
+                        userId: userId,
+                        dateTime: DateTime(widget.selectedYear, widget.selectedMonth),
+                      );
+
+                      final data = await downloadBreakJsonFromGcs(
+                        publicUrl: url,
+                        selectedYear: widget.selectedYear,
+                        selectedMonth: widget.selectedMonth,
+                      );
+
+                      if (data != null && data.isNotEmpty) {
+                        merged.addAll(data);
+                      }
+                    }
+
+                    if (merged.isNotEmpty) {
+                      await widget.onLoadJson(merged); // ✅ 실제 병합 데이터 전달
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('✅ 휴게시간 데이터 불러오기 완료')),
+                        );
+                      }
+                    } else {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('📭 불러올 휴게시간 데이터가 없습니다')),
+                        );
+                      }
+                    }
                   },
                   backgroundColor: Colors.orange,
                   child: const Icon(Icons.cloud_download),

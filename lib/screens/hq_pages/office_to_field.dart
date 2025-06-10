@@ -53,7 +53,7 @@ class _OfficeToFieldState extends State<OfficeToField> {
         .where('currentArea', isEqualTo: area)
         .snapshots()
         .listen((snapshot) {
-      if (!mounted) return; // ✅ 위젯이 dispose된 경우 무시
+      if (!mounted) return;
       final updatedUsers = snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
       setState(() {
         _users = updatedUsers;
@@ -71,15 +71,19 @@ class _OfficeToFieldState extends State<OfficeToField> {
   }
 
   Future<List<UserModel>> _getUsersByArea(String area) async {
-    final snapshot =
-        await FirebaseFirestore.instance.collection('user_accounts').where('currentArea', isEqualTo: area).get();
+    final snapshot = await FirebaseFirestore.instance
+        .collection('user_accounts')
+        .where('currentArea', isEqualTo: area)
+        .get();
     return snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
   }
 
   Future<void> _reloadUsers(String area) async {
     try {
-      final snapshot =
-          await FirebaseFirestore.instance.collection('user_accounts').where('currentArea', isEqualTo: area).get();
+      final snapshot = await FirebaseFirestore.instance
+          .collection('user_accounts')
+          .where('currentArea', isEqualTo: area)
+          .get();
 
       final updatedUsers = snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
 
@@ -180,43 +184,44 @@ class _OfficeToFieldState extends State<OfficeToField> {
         ),
         body: _selectedIndex == 0
             ? AttendanceCell(
-                controller: _controller,
-                menuOpen: _menuOpen,
-                selectedRow: _selectedRow,
-                selectedCol: _selectedCol,
-                cellData: _cellData,
-                selectedYear: _selectedYear,
-                selectedMonth: _selectedMonth,
-                onYearChanged: _onChangeYear,
-                onMonthChanged: _onChangeMonth,
-                onCellTapped: _onCellTapped,
-                appendText: _appendText,
-                clearText: _clearText,
-                toggleMenu: () => setState(() => _menuOpen = !_menuOpen),
-                getUsersByArea: _getUsersByArea,
-                reloadUsers: _reloadUsers,
-                onLoadJson: _mergeJsonData, // ✅ 추가
-              )
+          controller: _controller,
+          menuOpen: _menuOpen,
+          selectedRow: _selectedRow,
+          selectedCol: _selectedCol,
+          cellData: _cellData,
+          selectedYear: _selectedYear,
+          selectedMonth: _selectedMonth,
+          onYearChanged: _onChangeYear,
+          onMonthChanged: _onChangeMonth,
+          onCellTapped: _onCellTapped,
+          appendText: _appendText,
+          clearText: _clearText,
+          toggleMenu: () => setState(() => _menuOpen = !_menuOpen),
+          getUsersByArea: _getUsersByArea,
+          reloadUsers: _reloadUsers,
+          onLoadJson: _mergeJsonData, // ✅ 출근/퇴근 병합 데이터 적용
+        )
             : _selectedIndex == 1
-                ? const TodayField()
-                : BreakCell(
-                    controller: _controller,
-                    menuOpen: _menuOpen,
-                    selectedRow: _selectedRow,
-                    selectedCol: _selectedCol,
-                    selectedCells: _selectedCells,
-                    cellData: _cellData,
-                    selectedYear: _selectedYear,
-                    selectedMonth: _selectedMonth,
-                    onYearChanged: _onChangeYear,
-                    onMonthChanged: _onChangeMonth,
-                    onCellTapped: _onCellTapped,
-                    appendText: _appendText,
-                    clearText: _clearText,
-                    toggleMenu: () => setState(() => _menuOpen = !_menuOpen),
-                    getUsersByArea: _getUsersByArea,
-                    reloadUsers: _reloadUsers,
-                  ),
+            ? const TodayField()
+            : BreakCell(
+          controller: _controller,
+          menuOpen: _menuOpen,
+          selectedRow: _selectedRow,
+          selectedCol: _selectedCol,
+          selectedCells: _selectedCells,
+          cellData: _cellData,
+          selectedYear: _selectedYear,
+          selectedMonth: _selectedMonth,
+          onYearChanged: _onChangeYear,
+          onMonthChanged: _onChangeMonth,
+          onCellTapped: _onCellTapped,
+          appendText: _appendText,
+          clearText: _clearText,
+          toggleMenu: () => setState(() => _menuOpen = !_menuOpen),
+          getUsersByArea: _getUsersByArea,
+          reloadUsers: _reloadUsers,
+          onLoadJson: _mergeJsonData, // ✅ 휴게시간 데이터 병합용으로 추가
+        ),
         bottomNavigationBar: HqMiniNavigation(
           height: 56,
           iconSize: 22,
