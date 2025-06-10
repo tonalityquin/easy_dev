@@ -16,7 +16,7 @@ class ClockOutLogUploader {
 
   static Future<bool> uploadLeaveJson({
     required BuildContext context,
-    required String recordedTime, // ✅ 시간만 전달받고 JSON 구성은 내부에서 처리
+    required String recordedTime,
   }) async {
     try {
       final areaState = context.read<AreaState>();
@@ -28,21 +28,14 @@ class ClockOutLogUploader {
       final userName = userState.name;
 
       final now = DateTime.now();
-      final dateStr = '${now.year.toString().padLeft(4, '0')}-'
-          '${now.month.toString().padLeft(2, '0')}-'
-          '${now.day.toString().padLeft(2, '0')}';
+      final year = now.year.toString().padLeft(4, '0');
+      final month = now.month.toString().padLeft(2, '0');
+      final day = now.day.toString().padLeft(2, '0');
+      final dateStr = '$year-$month-$day';
 
-      final fileName = '${dateStr}_${userName}_clockOut.json';
-      final gcsPath = '$division/$area/exports/$fileName';
+      final gcsPath = '$division/$area/exports/clock_out/$year/$month/$userId.json';
 
-      final alreadyExists = await checkIfAlreadyUploaded(gcsPath);
-      if (alreadyExists) {
-        debugPrint('⚠️ 퇴근 기록 이미 존재함: $gcsPath');
-        return false;
-      }
-
-      // ✅ JSON 구성
-      final leaveData = {
+      final newRecord = {
         'userId': userId,
         'userName': userName,
         'area': area,
@@ -52,9 +45,45 @@ class ClockOutLogUploader {
         'status': '퇴근',
       };
 
-      final jsonContent = jsonEncode(leaveData);
+      List<Map<String, dynamic>> logList = [];
+
+      try {
+        final credentialsJson = await rootBundle.loadString(_serviceAccountPath);
+        final credentials = ServiceAccountCredentials.fromJson(credentialsJson);
+        final client = await clientViaServiceAccount(
+          credentials,
+          [storage.StorageApi.devstorageReadOnlyScope],
+        );
+        final storageApi = storage.StorageApi(client);
+
+        final media = await storageApi.objects.get(
+          _bucketName,
+          gcsPath,
+          downloadOptions: storage.DownloadOptions.fullMedia,
+        ) as storage.Media;
+
+        final content = await utf8.decoder.bind(media.stream).join();
+        final decoded = jsonDecode(content);
+
+        if (decoded is List) {
+          logList = List<Map<String, dynamic>>.from(decoded);
+        } else if (decoded is Map) {
+          logList = [Map<String, dynamic>.from(decoded)];
+        }
+
+        client.close();
+      } catch (e) {
+        debugPrint('ℹ️ 기존 퇴근 기록 파일 없음 또는 파싱 실패: $e');
+        logList = [];
+      }
+
+      // 날짜 중복 제거 후 append
+      logList.removeWhere((e) => e['recordedDate'] == dateStr);
+      logList.add(newRecord);
+
+      final jsonContent = jsonEncode(logList);
       final tempDir = Directory.systemTemp;
-      final file = File('${tempDir.path}/$fileName');
+      final file = File('${tempDir.path}/clockout_$userId.json');
       await file.writeAsString(jsonContent);
 
       final credentialsJson = await rootBundle.loadString(_serviceAccountPath);
@@ -72,11 +101,11 @@ class ClockOutLogUploader {
         object,
         _bucketName,
         uploadMedia: media,
-        predefinedAcl: 'publicRead', // ✅ 공개 업로드
+        predefinedAcl: 'publicRead',
       );
 
       client.close();
-      debugPrint('✅ 퇴근 기록 업로드 성공 (공개됨): $gcsPath');
+      debugPrint('✅ 퇴근 기록 append & 업로드 성공: $gcsPath');
       return true;
     } catch (e) {
       debugPrint('❌ 퇴근 기록 업로드 실패: $e');
@@ -84,36 +113,15 @@ class ClockOutLogUploader {
     }
   }
 
-  static Future<bool> checkIfAlreadyUploaded(String gcsPath) async {
-    try {
-      final credentialsJson = await rootBundle.loadString(_serviceAccountPath);
-      final credentials = ServiceAccountCredentials.fromJson(credentialsJson);
-      final client = await clientViaServiceAccount(
-        credentials,
-        [storage.StorageApi.devstorageReadOnlyScope],
-      );
-      final storageApi = storage.StorageApi(client);
-
-      await storageApi.objects.get(_bucketName, gcsPath);
-      client.close();
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  /// ✅ 다운로드 경로 생성 함수
   static String getDownloadPath({
     required String division,
     required String area,
-    required String userName,
+    required String userId,
     DateTime? dateTime,
   }) {
     final dt = dateTime ?? DateTime.now();
-    final dateStr = '${dt.year.toString().padLeft(4, '0')}-'
-        '${dt.month.toString().padLeft(2, '0')}-'
-        '${dt.day.toString().padLeft(2, '0')}';
-    final fileName = '${dateStr}_${userName}_clockOut.json';
-    return 'https://storage.googleapis.com/$_bucketName/$division/$area/exports/$fileName';
+    final year = dt.year.toString().padLeft(4, '0');
+    final month = dt.month.toString().padLeft(2, '0');
+    return 'https://storage.googleapis.com/$_bucketName/$division/$area/exports/clock_out/$year/$month/$userId.json';
   }
 }

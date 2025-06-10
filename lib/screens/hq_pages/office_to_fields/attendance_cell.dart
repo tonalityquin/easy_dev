@@ -149,9 +149,7 @@ class _AttendanceCellState extends State<AttendanceCell> {
                   children: [
                     DropdownButton<int>(
                       value: widget.selectedYear,
-                      items: yearList
-                          .map((y) => DropdownMenuItem(value: y, child: Text('$y년')))
-                          .toList(),
+                      items: yearList.map((y) => DropdownMenuItem(value: y, child: Text('$y년'))).toList(),
                       onChanged: (value) {
                         if (value != null) widget.onYearChanged(value);
                       },
@@ -159,9 +157,7 @@ class _AttendanceCellState extends State<AttendanceCell> {
                     const SizedBox(width: 12),
                     DropdownButton<int>(
                       value: widget.selectedMonth,
-                      items: monthList
-                          .map((m) => DropdownMenuItem(value: m, child: Text('$m월')))
-                          .toList(),
+                      items: monthList.map((m) => DropdownMenuItem(value: m, child: Text('$m월'))).toList(),
                       onChanged: (value) {
                         if (value != null) widget.onMonthChanged(value);
                       },
@@ -224,13 +220,13 @@ class _AttendanceCellState extends State<AttendanceCell> {
 
                       final division = areaState.currentDivision;
                       final area = areaState.currentArea;
-                      final userName = userState.name;
+                      final userId = userState.user?.id ?? ''; // ✅ 정의 추가
 
                       // ✅ 출근 URL 생성
                       final clockInUrl = ClockInLogUploader.getDownloadPath(
                         division: division,
                         area: area,
-                        userName: userName,
+                        userId: userId, // ✅ 필수 파라미터 전달
                       );
                       debugPrint('🌐 출근 기록 다운로드 URL: $clockInUrl');
 
@@ -238,7 +234,7 @@ class _AttendanceCellState extends State<AttendanceCell> {
                       final clockOutUrl = ClockOutLogUploader.getDownloadPath(
                         division: division,
                         area: area,
-                        userName: userName,
+                        userId: userId, // ✅ 동일하게 수정
                       );
                       debugPrint('🌐 퇴근 기록 다운로드 URL: $clockOutUrl');
 
@@ -258,8 +254,22 @@ class _AttendanceCellState extends State<AttendanceCell> {
 
                       // ✅ 병합된 데이터 만들기
                       final mergedData = <String, Map<int, String>>{};
-                      if (clockInData != null) mergedData.addAll(clockInData);
-                      if (clockOutData != null) mergedData.addAll(clockOutData);
+
+// ✅ 출근 데이터 병합
+                      if (clockInData != null && clockInData.isNotEmpty) {
+                        debugPrint('✅ 출근 데이터 병합: ${clockInData.keys.length}명');
+                        mergedData.addAll(clockInData);
+                      } else {
+                        debugPrint('📭 출근 데이터 없음');
+                      }
+
+// ✅ 퇴근 데이터 병합
+                      if (clockOutData != null && clockOutData.isNotEmpty) {
+                        debugPrint('✅ 퇴근 데이터 병합: ${clockOutData.keys.length}명');
+                        mergedData.addAll(clockOutData);
+                      } else {
+                        debugPrint('📭 퇴근 데이터 없음');
+                      }
 
                       if (mergedData.isNotEmpty) {
                         await widget.onLoadJson(mergedData);

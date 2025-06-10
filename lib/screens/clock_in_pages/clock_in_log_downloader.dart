@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 /// GCS에서 출근기록 JSON을 다운로드하여 파싱합니다.
+/// JSON은 List<Map> 형식 (append 구조)
 /// 반환 형태: Map<userId, Map<dayIndex, time>>
 Future<Map<String, Map<int, String>>?> downloadAttendanceJsonFromGcs({
   required String publicUrl,
@@ -26,54 +27,77 @@ Future<Map<String, Map<int, String>>?> downloadAttendanceJsonFromGcs({
 
       final raw = jsonDecode(response.body);
 
-      if (raw is! Map<String, dynamic>) {
-        debugPrint('❌ JSON 구조가 Map이 아님');
-        return null;
-      }
+      // ✅ 리스트 형태일 경우 (append 구조)
+      if (raw is List) {
+        final result = <String, Map<int, String>>{};
 
-      debugPrint('📥 decoded JSON map: $raw');
-      debugPrint('📥 available keys: ${raw.keys.join(', ')}');
+        for (final record in raw) {
+          if (record is! Map<String, dynamic>) continue;
 
-      final userId = raw['userId'] as String?;
-      final time = raw['recordedTime'] as String?;
-      final recordedDate = raw['recordedDate'] as String?;
+          final userId = record['userId'] as String?;
+          final time = record['recordedTime'] as String?;
+          final recordedDate = record['recordedDate'] as String?;
 
-      debugPrint('📥 userId=$userId, recordedDate=$recordedDate, recordedTime=$time');
-      debugPrint('📥 raw.keys: ${raw.keys.map((k) => "'$k'").toList()}');
+          if (userId == null || time == null || recordedDate == null) continue;
 
-      if (userId == null || time == null || recordedDate == null) {
-        debugPrint('❌ 필수 필드 누락');
-        return null;
-      }
+          final dateParts = recordedDate.split('-');
+          if (dateParts.length != 3) continue;
 
-      final dateParts = recordedDate.split('-');
-      if (dateParts.length != 3) {
-        debugPrint('❌ recordedDate 형식 오류: $recordedDate');
-        return null;
-      }
+          final year = int.tryParse(dateParts[0]);
+          final month = int.tryParse(dateParts[1]);
+          final day = int.tryParse(dateParts[2]);
 
-      final year = int.parse(dateParts[0]);
-      final month = int.parse(dateParts[1]);
-      final day = int.parse(dateParts[2]);
+          if (year == null || month == null || day == null) continue;
 
-      // ✅ 현재 선택된 연월과 JSON에 저장된 날짜가 일치해야 반영
-      if (year != selectedYear || month != selectedMonth) {
-        debugPrint('📭 선택한 월과 업로드된 날짜가 일치하지 않음 → 무시됨');
-        return null;
-      }
+          if (year != selectedYear || month != selectedMonth) continue;
 
-      debugPrint('✅ 출근 기록 파싱 완료 → $userId [$day] = $time');
-
-      return {
-        userId: {
-          day: time,
+          result.putIfAbsent(userId, () => {})[day] = time;
         }
-      };
+
+        if (result.isEmpty) {
+          debugPrint('📭 선택한 월에 해당하는 데이터 없음');
+          return null;
+        }
+
+        debugPrint('✅ 출근 기록 리스트 파싱 완료: ${result.length}명');
+        return result;
+      }
+
+      // ✅ 예외 처리: 이전 단일 Map 형태를 그대로 사용하는 경우도 대응
+      if (raw is Map<String, dynamic>) {
+        final userId = raw['userId'] as String?;
+        final time = raw['recordedTime'] as String?;
+        final recordedDate = raw['recordedDate'] as String?;
+
+        if (userId == null || time == null || recordedDate == null) {
+          debugPrint('❌ 단일 JSON의 필수 필드 누락');
+          return null;
+        }
+
+        final dateParts = recordedDate.split('-');
+        if (dateParts.length != 3) return null;
+
+        final year = int.tryParse(dateParts[0]);
+        final month = int.tryParse(dateParts[1]);
+        final day = int.tryParse(dateParts[2]);
+
+        if (year == selectedYear && month == selectedMonth && day != null) {
+          return {
+            userId: {
+              day: time,
+            }
+          };
+        } else {
+          return null;
+        }
+      }
+
+      debugPrint('❌ 알 수 없는 JSON 형식');
     } else {
       debugPrint('❌ 서버 응답 오류: ${response.statusCode}');
     }
   } catch (e) {
-    debugPrint('❌ JSON 다운로드 중 예외 발생: $e');
+    debugPrint('❌ 출근 JSON 다운로드 중 예외 발생: $e');
   }
 
   return null;

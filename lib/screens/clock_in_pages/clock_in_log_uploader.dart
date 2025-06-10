@@ -16,7 +16,7 @@ class ClockInLogUploader {
 
   static Future<bool> uploadAttendanceJson({
     required BuildContext context,
-    required String recordedTime, // ✅ 시간만 전달받고 JSON 구성은 이 안에서 함
+    required String recordedTime,
   }) async {
     try {
       final areaState = context.read<AreaState>();
@@ -28,26 +28,16 @@ class ClockInLogUploader {
       final userId = userState.user?.id ?? '';
 
       final now = DateTime.now();
-      final dateStr = '${now.year.toString().padLeft(4, '0')}-'
-          '${now.month.toString().padLeft(2, '0')}-'
-          '${now.day.toString().padLeft(2, '0')}';
+      final year = now.year.toString().padLeft(4, '0');
+      final month = now.month.toString().padLeft(2, '0');
+      final day = now.day.toString().padLeft(2, '0');
+      final dateStr = '$year-$month-$day';
 
-      final fileName = '${dateStr}_${userName}_clockIn.json';
-      final gcsPath = '$division/$area/exports/$fileName';
+      final gcsPath = '$division/$area/exports/clock_in/$year/$month/$userId.json';
 
-      final alreadyExists = await checkIfAlreadyUploaded(
-        context: context,
-        gcsPath: gcsPath,
-      );
-
-      if (alreadyExists) {
-        debugPrint('⚠️ 출근 기록 이미 존재함: $gcsPath');
-        return false;
-      }
-
-      // ✅ JSON 데이터 구성
-      final attendanceData = {
-        'userId': userId,                // ✅ ID 포함
+      // 새 출근 기록
+      final newRecord = {
+        'userId': userId,
         'userName': userName,
         'area': area,
         'division': division,
@@ -56,11 +46,50 @@ class ClockInLogUploader {
         'status': '출근',
       };
 
-      final jsonContent = jsonEncode(attendanceData);
+      // 기존 기록 불러오기
+      List<Map<String, dynamic>> logList = [];
+
+      try {
+        final credentialsJson = await rootBundle.loadString(_serviceAccountPath);
+        final credentials = ServiceAccountCredentials.fromJson(credentialsJson);
+        final client = await clientViaServiceAccount(
+          credentials,
+          [storage.StorageApi.devstorageReadOnlyScope],
+        );
+        final storageApi = storage.StorageApi(client);
+
+        final media = await storageApi.objects.get(
+          _bucketName,
+          gcsPath,
+          downloadOptions: storage.DownloadOptions.fullMedia,
+        ) as storage.Media;
+
+        final content = await utf8.decoder.bind(media.stream).join();
+        final decoded = jsonDecode(content);
+
+        if (decoded is List) {
+          logList = List<Map<String, dynamic>>.from(decoded);
+        } else if (decoded is Map) {
+          logList = [Map<String, dynamic>.from(decoded)];
+        }
+
+        client.close();
+      } catch (e) {
+        debugPrint('ℹ️ 기존 파일 없거나 JSON 파싱 실패: $e');
+        logList = [];
+      }
+
+      // 기존 날짜 기록 제거 후 새 기록 append
+      logList.removeWhere((e) => e['recordedDate'] == dateStr);
+      logList.add(newRecord);
+
+      // 저장용 파일 생성
+      final jsonContent = jsonEncode(logList);
       final tempDir = Directory.systemTemp;
-      final file = File('${tempDir.path}/$fileName');
+      final file = File('${tempDir.path}/clockin_$userId.json');
       await file.writeAsString(jsonContent);
 
+      // GCS에 업로드
       final credentialsJson = await rootBundle.loadString(_serviceAccountPath);
       final credentials = ServiceAccountCredentials.fromJson(credentialsJson);
       final client = await clientViaServiceAccount(
@@ -72,7 +101,6 @@ class ClockInLogUploader {
       final media = storage.Media(file.openRead(), file.lengthSync());
       final object = storage.Object()..name = gcsPath;
 
-      // ✅ 업로드 시 공개 설정
       await storageApi.objects.insert(
         object,
         _bucketName,
@@ -81,7 +109,7 @@ class ClockInLogUploader {
       );
 
       client.close();
-      debugPrint('✅ 출근 기록 업로드 성공 (공개됨): $gcsPath');
+      debugPrint('✅ 출근 기록 append & 업로드 성공: $gcsPath');
       return true;
     } catch (e) {
       debugPrint('❌ 출근 기록 업로드 실패: $e');
@@ -89,40 +117,15 @@ class ClockInLogUploader {
     }
   }
 
-  static Future<bool> checkIfAlreadyUploaded({
-    required BuildContext context,
-    required String gcsPath,
-  }) async {
-    try {
-      final credentialsJson = await rootBundle.loadString(_serviceAccountPath);
-      final credentials = ServiceAccountCredentials.fromJson(credentialsJson);
-      final client = await clientViaServiceAccount(
-        credentials,
-        [storage.StorageApi.devstorageReadOnlyScope],
-      );
-      final storageApi = storage.StorageApi(client);
-
-      await storageApi.objects.get(_bucketName, gcsPath);
-      client.close();
-      return true;
-    } catch (e) {
-      debugPrint('ℹ️ GCS 파일 존재하지 않거나 오류 발생: $e');
-      return false;
-    }
-  }
-
-  /// ✅ 다운로드 경로 생성용 함수
   static String getDownloadPath({
     required String division,
     required String area,
-    required String userName,
+    required String userId,
     DateTime? dateTime,
   }) {
     final dt = dateTime ?? DateTime.now();
-    final dateStr = '${dt.year.toString().padLeft(4, '0')}-'
-        '${dt.month.toString().padLeft(2, '0')}-'
-        '${dt.day.toString().padLeft(2, '0')}';
-    final fileName = '${dateStr}_${userName}_clockIn.json';
-    return 'https://storage.googleapis.com/$_bucketName/$division/$area/exports/$fileName';
+    final year = dt.year.toString().padLeft(4, '0');
+    final month = dt.month.toString().padLeft(2, '0');
+    return 'https://storage.googleapis.com/$_bucketName/$division/$area/exports/clock_in/$year/$month/$userId.json';
   }
 }
