@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:convert';
 
 import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
@@ -249,42 +250,50 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                     ),
                     child: SingleChildScrollView(
                       child: ParkingReportContent(
-                        onReport: (type, content) async {
-                          if (type == 'cancel') {
+                          onReport: (type, content) async {
+                            if (type == 'cancel') {
+                              setState(() => _showReportDialog = false);
+                              return;
+                            }
+
+                            final area = context.read<AreaState>().currentArea;
+                            final division = context.read<AreaState>().currentDivision;
+                            final userName = context.read<UserState>().name;
+
+                            if (type == 'end') {
+                              final parsed = jsonDecode(content); // content는 JSON string
+
+                              final reportLog = {
+                                'division': division,
+                                'area': area,
+                                'vehicleCount': {
+                                  '입차': int.tryParse(parsed['입차'].toString()) ?? 0,
+                                  '출차': int.tryParse(parsed['출차'].toString()) ?? 0,
+                                },
+                                'timestamp': DateTime.now().toIso8601String(),
+                              };
+
+                              await uploadEndWorkReportJson(
+                                report: reportLog,
+                                division: division,
+                                area: area,
+                                userName: userName,
+                              );
+
+                              await deleteLockedDepartureDocs(area);
+
+                              showSuccessSnackbar(
+                                context,
+                                "업무 종료 보고 업로드 및 출차 초기화 (입차: ${parsed['입차']}, 출차: ${parsed['출차']})",
+                              );
+                            } else if (type == 'start') {
+                              showSuccessSnackbar(context, "업무 시작 보고 완료: $content");
+                            } else if (type == 'middle') {
+                              showSuccessSnackbar(context, "보고란 제출 완료: $content");
+                            }
+
                             setState(() => _showReportDialog = false);
-                            return;
-                          }
-
-                          final area = context.read<AreaState>().currentArea;
-                          final division = context.read<AreaState>().currentDivision;
-                          final userName = context.read<UserState>().name;
-
-                          if (type == 'end') {
-                            final reportLog = {
-                              'division': division,
-                              'area': area,
-                              'vehicleCount': content,
-                              'timestamp': DateTime.now().toIso8601String(),
-                            };
-
-                            await uploadEndWorkReportJson(
-                              report: reportLog,
-                              division: division,
-                              area: area,
-                              userName: userName,
-                            );
-
-                            await deleteLockedDepartureDocs(area);
-
-                            showSuccessSnackbar(context, "업무 종료 보고 업로드 및 출차 초기화 (차량 수: \$content)");
-                          } else if (type == 'start') {
-                            showSuccessSnackbar(context, "업무 시작 보고 완료: \$content");
-                          } else if (type == 'middle') {
-                            showSuccessSnackbar(context, "보고란 제출 완료: \$content");
-                          }
-
-                          setState(() => _showReportDialog = false);
-                        },
+                          },
                       ),
                     ),
                   ),

@@ -20,18 +20,47 @@ class ParkingReportContent extends StatefulWidget {
 
 class _ParkingReportContentState extends State<ParkingReportContent> {
   int _selectedTabIndex = 0;
+  bool _canSubmit = false;
+
   final TextEditingController _vehicleCountController = TextEditingController();
+  final TextEditingController _exitVehicleCountController = TextEditingController();
   final TextEditingController _startReportController = TextEditingController();
   final TextEditingController _middleReportController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+
+    _vehicleCountController.addListener(_updateSubmitState);
+    _exitVehicleCountController.addListener(_updateSubmitState);
+    _startReportController.addListener(_updateSubmitState);
+    _middleReportController.addListener(_updateSubmitState);
+  }
+
+  void _updateSubmitState() {
+    bool shouldEnable = false;
+
+    if (_selectedTabIndex == 0) {
+      shouldEnable = _startReportController.text.trim().isNotEmpty;
+    } else if (_selectedTabIndex == 1) {
+      shouldEnable = _middleReportController.text.trim().isNotEmpty;
+    } else {
+      shouldEnable = _vehicleCountController.text.trim().isNotEmpty &&
+          _exitVehicleCountController.text.trim().isNotEmpty;
+    }
+
+    if (_canSubmit != shouldEnable) {
+      setState(() {
+        _canSubmit = shouldEnable;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.only(
-        bottom: MediaQuery
-            .of(context)
-            .viewInsets
-            .bottom,
+        bottom: MediaQuery.of(context).viewInsets.bottom,
         top: 16,
         left: 16,
         right: 16,
@@ -58,16 +87,16 @@ class _ParkingReportContentState extends State<ParkingReportContent> {
                 setState(() {
                   _selectedTabIndex = newSelection.first;
                 });
+                _updateSubmitState(); // 탭 전환 시 상태 갱신
               },
             ),
             const SizedBox(height: 16),
             if (_selectedTabIndex == 0)
               _buildStartReportField()
+            else if (_selectedTabIndex == 1)
+              _buildMiddleReportField()
             else
-              if (_selectedTabIndex == 1)
-                _buildMiddleReportField()
-              else
-                _buildEndReportField(),
+              _buildEndReportField(),
             const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -80,6 +109,7 @@ class _ParkingReportContentState extends State<ParkingReportContent> {
                       _middleReportController.clear();
                     } else {
                       _vehicleCountController.clear();
+                      _exitVehicleCountController.clear();
                     }
                   },
                   child: const Text('지우기'),
@@ -88,7 +118,7 @@ class _ParkingReportContentState extends State<ParkingReportContent> {
                 ElevatedButton.icon(
                   icon: const Icon(Icons.send),
                   label: const Text('제출'),
-                  onPressed: _handleSubmit,
+                  onPressed: _canSubmit ? _handleSubmit : null,
                 ),
               ],
             ),
@@ -129,18 +159,37 @@ class _ParkingReportContentState extends State<ParkingReportContent> {
   }
 
   Widget _buildEndReportField() {
-    return SizedBox(
-      width: 300,
-      child: TextField(
-        controller: _vehicleCountController,
-        keyboardType: TextInputType.number,
-        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-        decoration: const InputDecoration(
-          labelText: '입차 차량 수',
-          hintText: '예: 24',
-          border: OutlineInputBorder(),
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        SizedBox(
+          width: 140,
+          child: TextField(
+            controller: _vehicleCountController,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            decoration: const InputDecoration(
+              labelText: '입차 차량 수',
+              hintText: '예: 24',
+              border: OutlineInputBorder(),
+            ),
+          ),
         ),
-      ),
+        const SizedBox(width: 16),
+        SizedBox(
+          width: 140,
+          child: TextField(
+            controller: _exitVehicleCountController,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            decoration: const InputDecoration(
+              labelText: '출차 차량 수',
+              hintText: '예: 21',
+              border: OutlineInputBorder(),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -156,14 +205,13 @@ class _ParkingReportContentState extends State<ParkingReportContent> {
       content = _middleReportController.text.trim();
     } else {
       type = 'end';
-      content = _vehicleCountController.text.trim();
-    }
+      final entry = _vehicleCountController.text.trim();
+      final exit = _exitVehicleCountController.text.trim();
 
-    if (content.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('내용을 입력해주세요.')),
-      );
-      return;
+      content = jsonEncode({
+        "입차": entry,
+        "출차": exit,
+      });
     }
 
     widget.onReport(type, content);
@@ -178,12 +226,8 @@ Future<String?> uploadEndWorkReportJson({
   required String area,
   required String userName,
 }) async {
-  final dateStr = DateTime
-      .now()
-      .toIso8601String()
-      .split('T')
-      .first; // yyyy-mm-dd
-  final fileName = '업무 종료 보고_$dateStr.json';
+  final dateStr = DateTime.now().toIso8601String().split('T').first;
+  final fileName = 'ToDoReports_$dateStr.json';
   final destinationPath = '$division/$area/reports/$fileName';
 
   report['timestamp'] = dateStr;
@@ -204,8 +248,7 @@ Future<String?> uploadEndWorkReportJson({
       ..name = destinationPath
       ..acl = [ObjectAccessControl()
         ..entity = 'allUsers'
-        ..role = 'READER'
-      ],
+        ..role = 'READER'],
     kBucketName,
     uploadMedia: media,
   );
@@ -216,7 +259,6 @@ Future<String?> uploadEndWorkReportJson({
   debugPrint('✅ GCS 업로드 완료: $uploadedUrl');
   return uploadedUrl;
 }
-
 
 Future<void> deleteLockedDepartureDocs(String area) async {
   final firestore = FirebaseFirestore.instance;
@@ -229,6 +271,6 @@ Future<void> deleteLockedDepartureDocs(String area) async {
 
   for (final doc in snapshot.docs) {
     await doc.reference.delete();
-    debugPrint("🔥 Firestore 삭제 완료: \${doc.id}");
+    debugPrint("🔥 Firestore 삭제 완료: ${doc.id}");
   }
 }
