@@ -40,13 +40,12 @@ class _StatisticsState extends State<Statistics> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('📁 Division: $division',
-                style: const TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
+            Text('📁 Division: $division', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 20),
             const Text('🏷️ Area 선택'),
-            DropdownButton<String>(
+            DropdownButtonFormField<String>(
               value: _selectedArea,
-              hint: const Text('Area 선택'),
+              decoration: const InputDecoration(border: OutlineInputBorder()),
               items: areaList.map((area) {
                 return DropdownMenuItem<String>(
                   value: area,
@@ -57,48 +56,82 @@ class _StatisticsState extends State<Statistics> {
                 setState(() {
                   _selectedArea = val;
                   _reportData = null;
+                  _selectedDate = null;
                 });
               },
             ),
-            const SizedBox(height: 12),
-            ElevatedButton(
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.calendar_today),
+              label: const Text('날짜 선택'),
               onPressed: (_selectedArea != null) ? _pickDate : null,
-              child: const Text('날짜 선택'),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             if (_selectedDate != null)
               Text(
-                '선택된 날짜: ${_selectedDate!.toIso8601String().split("T").first}',
-                style: const TextStyle(fontWeight: FontWeight.bold),
+                '📅 선택 날짜: ${_selectedDate!.toIso8601String().split("T").first}',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
               ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             if (_isLoading)
               const Center(child: CircularProgressIndicator())
             else if (_reportData != null)
-              _buildReportSummary(_reportData!)
+              _buildReportCard(_reportData!)
             else if (_selectedDate != null)
-                const Text('📭 해당 날짜의 보고 내역이 없습니다.'),
+              const Text(
+                '📭 해당 날짜의 보고 내역이 없습니다.',
+                style: TextStyle(color: Colors.grey),
+              ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildReportSummary(Map<String, dynamic> report) {
-    final rawVehicleCount = report['vehicleCount'];
-    final vehicleCount = rawVehicleCount is Map
-        ? Map<String, dynamic>.from(rawVehicleCount)
-        : null;
-
+  Widget _buildReportCard(Map<String, dynamic> report) {
+    final vehicleCount = report['vehicleCount'] as Map<String, dynamic>?;
     final inCount = vehicleCount?['입차']?.toString() ?? '정보 없음';
     final outCount = vehicleCount?['출차']?.toString() ?? '정보 없음';
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('입차 차량 수: $inCount'),
-        Text('출차 차량 수: $outCount'),
-      ],
+    // 선택된 날짜 문자열
+    final dateStr = _selectedDate?.toIso8601String().split('T').first ?? '날짜 없음';
+
+    return Card(
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '📊 통계 결과',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '📅 날짜: $dateStr',
+              style: const TextStyle(color: Colors.grey),
+            ),
+            const Divider(),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('🚗 입차 차량 수', style: TextStyle(fontSize: 15)),
+                Text(inCount, style: const TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('🚙 출차 차량 수', style: TextStyle(fontSize: 15)),
+                Text(outCount, style: const TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -130,8 +163,7 @@ class _StatisticsState extends State<Statistics> {
     final division = context.read<AreaState>().currentDivision;
     final area = _selectedArea ?? context.read<AreaState>().currentArea;
 
-    final url =
-        'https://storage.googleapis.com/easydev-image/$division/$area/reports/ToDoReports_$dateStr.json';
+    final url = 'https://storage.googleapis.com/easydev-image/$division/$area/reports/ToDoReports_$dateStr.json';
 
     try {
       final response = await http.get(Uri.parse(url));
