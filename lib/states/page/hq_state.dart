@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'page_info.dart';
 
 class HqState with ChangeNotifier {
-  int _selectedIndex = 2;
+  int _selectedIndex = 1;
   List<HqPageInfo> _pages;
   bool _isLoading = false;
 

@@ -6,14 +6,14 @@ import '../../../enums/plate_type.dart';
 import '../../../states/user/user_state.dart';
 import 'area_detail_screen.dart'; // 상세 페이지 import
 
-class TodayField extends StatefulWidget {
-  const TodayField({super.key});
+class Field extends StatefulWidget {
+  const Field({super.key});
 
   @override
-  State<TodayField> createState() => _TodayFieldState();
+  State<Field> createState() => _FieldState();
 }
 
-class _TodayFieldState extends State<TodayField> {
+class _FieldState extends State<Field> {
   bool _isLoading = true;
   String? _errorMessage;
   List<AreaCount> _areaCounts = [];

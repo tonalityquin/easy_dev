@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 
-class HqBoard extends StatefulWidget {
-  const HqBoard({super.key});
+class HeadQuarterCalendar extends StatefulWidget {
+  const HeadQuarterCalendar({super.key});
 
   @override
-  State<HqBoard> createState() => _HqBoardState();
+  State<HeadQuarterCalendar> createState() => _HeadQuarterCalendarState();
 }
 
-class _HqBoardState extends State<HqBoard> {
+class _HeadQuarterCalendarState extends State<HeadQuarterCalendar> {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
       body: Center(
         child: Text(
-          'hq 보드 준비중',
+          'hq 캘린더 준비중',
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
       ),

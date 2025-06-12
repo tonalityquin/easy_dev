@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 
-class TodoCalendar extends StatefulWidget {
-  const TodoCalendar({super.key});
+class TodayField extends StatefulWidget {
+  const TodayField({super.key});
 
   @override
-  State<TodoCalendar> createState() => _TodoCalendarState();
+  State<TodayField> createState() => _TodayFieldState();
 }
 
-class _TodoCalendarState extends State<TodoCalendar> {
+class _TodayFieldState extends State<TodayField> {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
       body: Center(
         child: Text(
-          '투두 캘린더 준비중',
+          '공란',
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
       ),

@@ -8,18 +8,18 @@ import '../../widgets/navigation/top_navigation.dart';
 import '../../../../models/user_model.dart';
 import '../../../../states/area/area_state.dart';
 import '../../../../utils/snackbar_helper.dart';
-import 'office_to_fields/today_field.dart';
-import 'office_to_fields/break_cell.dart';
-import 'office_to_fields/attendance_cell.dart';
+import 'human_resource_pages/today_field.dart';
+import 'human_resource_pages/break_cell.dart';
+import 'human_resource_pages/attendance_cell.dart';
 
-class OfficeToField extends StatefulWidget {
-  const OfficeToField({super.key});
+class HumanResource extends StatefulWidget {
+  const HumanResource({super.key});
 
   @override
-  State<OfficeToField> createState() => _OfficeToFieldState();
+  State<HumanResource> createState() => _HumanResourceState();
 }
 
-class _OfficeToFieldState extends State<OfficeToField> {
+class _HumanResourceState extends State<HumanResource> {
   int _selectedIndex = 0;
 
   final TextEditingController _controller = TextEditingController();
@@ -220,20 +220,20 @@ class _OfficeToFieldState extends State<OfficeToField> {
           toggleMenu: () => setState(() => _menuOpen = !_menuOpen),
           getUsersByArea: _getUsersByArea,
           reloadUsers: _reloadUsers,
-          onLoadJson: _mergeJsonData, // ✅ 휴게시간 데이터 병합용으로 추가
+          onLoadJson: _mergeJsonData,
         ),
         bottomNavigationBar: HqMiniNavigation(
           height: 56,
           iconSize: 22,
           icons: const [
-            Icons.check_circle,
+            Icons.how_to_reg,
             Icons.today,
-            Icons.free_breakfast,
+            Icons.self_improvement,
           ],
           labels: const [
-            'Attendance Cell',
+            'ATT',
             'Today Field',
-            'Break Cell',
+            'Brk',
           ],
           onIconTapped: (index) {
             setState(() {

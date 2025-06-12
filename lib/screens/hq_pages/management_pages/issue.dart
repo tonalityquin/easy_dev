@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
-class HqIssueInput extends StatefulWidget {
-  const HqIssueInput({super.key});
+class Issue extends StatefulWidget {
+  const Issue({super.key});
 
   @override
-  State<HqIssueInput> createState() => _HqIssueInputState();
+  State<Issue> createState() => _IssueState();
 }
 
-class _HqIssueInputState extends State<HqIssueInput> {
+class _IssueState extends State<Issue> {
   final TextEditingController _middleReportController = TextEditingController();
 
   void _handleSubmit() {

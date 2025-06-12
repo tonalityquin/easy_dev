@@ -1,18 +1,17 @@
-import 'package:easydev/screens/hq_pages/hq_pages/hq_board.dart';
-import 'package:easydev/screens/hq_pages/hq_pages/hq_issue_input.dart';
 import 'package:flutter/material.dart';
 import '../../../widgets/navigation/hq_mini_navigation.dart';
 import '../../widgets/navigation/top_navigation.dart';
+import 'head_quarter_pages/head_quarter_calendar.dart';
+import 'head_quarter_pages/head_quarter_task.dart';
 
-
-class Headquarter extends StatefulWidget {
-  const Headquarter({super.key});
+class HeadQuarter extends StatefulWidget {
+  const HeadQuarter({super.key});
 
   @override
-  State<Headquarter> createState() => _HeadquarterState();
+  State<HeadQuarter> createState() => _HeadQuarterState();
 }
 
-class _HeadquarterState extends State<Headquarter> {
+class _HeadQuarterState extends State<HeadQuarter> {
   int _selectedIndex = 0;
 
   @override
@@ -28,10 +27,10 @@ class _HeadquarterState extends State<Headquarter> {
           elevation: 0,
         ),
         body: _selectedIndex == 0
-            ? const HqBoard()
+            ? const HeadQuarterTask()
             : _selectedIndex == 1
-            ? const HqIssueInput() // ✅ 새로운 탭 연결
-            : const Center(child: Text('해당 탭의 콘텐츠는 준비 중입니다.')),
+                ? const HeadQuarterCalendar()
+                : const Center(child: Text('해당 탭의 콘텐츠는 준비 중입니다.')),
         bottomNavigationBar: HqMiniNavigation(
           height: 56,
           iconSize: 22,
@@ -40,8 +39,8 @@ class _HeadquarterState extends State<Headquarter> {
             Icons.input,
           ],
           labels: const [
-            'HQ Board',
-            'HQ Issue Input',
+            'Task',
+            'Calendar',
           ],
           onIconTapped: (index) {
             setState(() {

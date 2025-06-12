@@ -1,19 +1,32 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+
 import '../../../widgets/navigation/hq_mini_navigation.dart';
 import '../../widgets/navigation/top_navigation.dart';
-import 'office_to_offices/todo_calendar.dart';
-import 'office_to_offices/todo_checklist.dart';
-import 'office_to_offices/todo_task_screen.dart';
+import 'management_pages/field.dart';
+import 'management_pages/statistics.dart';
+import 'management_pages/issue.dart';
 
-class OfficeToOffice extends StatefulWidget {
-  const OfficeToOffice({super.key});
+class Management extends StatefulWidget {
+  const Management({super.key});
 
   @override
-  State<OfficeToOffice> createState() => _OfficeToOfficeState();
+  State<Management> createState() => _ManagementState();
 }
 
-class _OfficeToOfficeState extends State<OfficeToOffice> {
+class _ManagementState extends State<Management> {
   int _selectedIndex = 0;
+
+  final TextEditingController _controller = TextEditingController();
+
+  StreamSubscription? _userSubscription;
+
+  @override
+  void dispose() {
+    _userSubscription?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,24 +41,24 @@ class _OfficeToOfficeState extends State<OfficeToOffice> {
           elevation: 0,
         ),
         body: _selectedIndex == 0
-            ? const TodoCalendar()
+            ? const Field()
             : _selectedIndex == 1
-            ? const TodoTaskScreen() // ✅ 새로운 탭 연결
+            ? const Issue()
             : _selectedIndex == 2
-            ? const TodoChecklist() // ✅ 새로운 탭 연결
+            ? const Statistics()
             : const Center(child: Text('해당 탭의 콘텐츠는 준비 중입니다.')),
         bottomNavigationBar: HqMiniNavigation(
           height: 56,
           iconSize: 22,
           icons: const [
-            Icons.today,
-            Icons.input,
-            Icons.auto_graph,
+            Icons.directions_walk,    // Field
+            Icons.report_problem,     // Issue
+            Icons.compare_arrows,     // InOut (입출차 통계)
           ],
           labels: const [
-            'ToDo Calendar',
-            'ToDo Tasks',
-            'Todo Checklist',
+            'Field',
+            'Issue',
+            'InOut',
           ],
           onIconTapped: (index) {
             setState(() {
