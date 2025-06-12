@@ -5,9 +5,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:googleapis_auth/auth_io.dart';
 import 'package:googleapis/storage/v1.dart';
+import 'package:provider/provider.dart';
+
+import '../../../states/user/user_state.dart';
 
 const String kBucketName = 'easydev-image';
 const String kServiceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
+
+// 중략: import 부분은 기존과 동일
 
 class ParkingReportContent extends StatefulWidget {
   final void Function(String reportType, String content) onReport;
@@ -27,6 +32,8 @@ class _ParkingReportContentState extends State<ParkingReportContent> {
   final TextEditingController _startReportController = TextEditingController();
   final TextEditingController _middleReportController = TextEditingController();
 
+  List<Map<String, dynamic>> _issues = [];
+
   @override
   void initState() {
     super.initState();
@@ -34,26 +41,62 @@ class _ParkingReportContentState extends State<ParkingReportContent> {
     _exitVehicleCountController.addListener(_updateSubmitState);
     _startReportController.addListener(_updateSubmitState);
     _middleReportController.addListener(_updateSubmitState);
+
+    _fetchIssues(); // 이슈 불러오기
+  }
+
+  Future<void> _fetchIssues() async {
+    try {
+      final firestore = FirebaseFirestore.instance;
+      final user = Provider.of<UserState>(context, listen: false).user;
+
+      if (user == null || user.divisions.isEmpty) return;
+
+      final division = user.divisions.first;
+
+      final snapshot = await firestore.collection('tasks').where('division', isEqualTo: division).get();
+
+      final fetched = snapshot.docs
+          .map((doc) {
+            final data = doc.data();
+            if (!data.containsKey('issue')) return null;
+
+            final issueMap = data['issue'];
+            final title = issueMap is Map ? issueMap['title'] : null;
+
+            return {
+              'title': title?.toString() ?? '(제목 없음)',
+              'createdAt': data['createdAt'] ?? '',
+            };
+          })
+          .whereType<Map<String, dynamic>>()
+          .toList();
+
+      fetched.sort((a, b) {
+        final aDate = DateTime.tryParse(a['createdAt']) ?? DateTime(0);
+        final bDate = DateTime.tryParse(b['createdAt']) ?? DateTime(0);
+        return bDate.compareTo(aDate);
+      });
+
+      setState(() {
+        _issues = fetched;
+      });
+    } catch (e) {
+      debugPrint('❌ 이슈 불러오기 실패: $e');
+    }
   }
 
   void _updateSubmitState() {
     bool shouldEnable = false;
 
     if (_selectedTabIndex == 0) {
-      shouldEnable = _startReportController.text
-          .trim()
-          .isNotEmpty;
+      shouldEnable = _startReportController.text.trim().isNotEmpty;
     } else if (_selectedTabIndex == 1) {
-      shouldEnable = _middleReportController.text
-          .trim()
-          .isNotEmpty;
+      shouldEnable = _middleReportController.text.trim().isNotEmpty && _issues.isNotEmpty;
+      // ⬆️ 이슈 존재 조건 추가됨
     } else {
       shouldEnable =
-          _vehicleCountController.text
-              .trim()
-              .isNotEmpty && _exitVehicleCountController.text
-              .trim()
-              .isNotEmpty;
+          _vehicleCountController.text.trim().isNotEmpty && _exitVehicleCountController.text.trim().isNotEmpty;
     }
 
     if (_canSubmit != shouldEnable) {
@@ -67,10 +110,7 @@ class _ParkingReportContentState extends State<ParkingReportContent> {
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.only(
-        bottom: MediaQuery
-            .of(context)
-            .viewInsets
-            .bottom,
+        bottom: MediaQuery.of(context).viewInsets.bottom,
         top: 16,
         left: 16,
         right: 16,
@@ -78,12 +118,10 @@ class _ParkingReportContentState extends State<ParkingReportContent> {
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             const Text(
               '업무 보고',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 12),
             SegmentedButton<int>(
@@ -94,20 +132,17 @@ class _ParkingReportContentState extends State<ParkingReportContent> {
               ],
               selected: {_selectedTabIndex},
               onSelectionChanged: (newSelection) {
-                setState(() {
-                  _selectedTabIndex = newSelection.first;
-                });
+                setState(() => _selectedTabIndex = newSelection.first);
                 _updateSubmitState();
               },
             ),
             const SizedBox(height: 16),
             if (_selectedTabIndex == 0)
               _buildStartReportField()
+            else if (_selectedTabIndex == 1)
+              _buildMiddleReportField()
             else
-              if (_selectedTabIndex == 1)
-                _buildMiddleReportField()
-              else
-                _buildEndReportField(),
+              _buildEndReportField(),
             const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -155,17 +190,41 @@ class _ParkingReportContentState extends State<ParkingReportContent> {
   }
 
   Widget _buildMiddleReportField() {
-    return SizedBox(
-      width: 300,
-      child: TextField(
-        controller: _middleReportController,
-        decoration: const InputDecoration(
-          labelText: '코멘트 섹션',
-          hintText: '예: 게시된 이슈에 대한 약식 답변',
-          border: OutlineInputBorder(),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_issues.isNotEmpty)
+          ..._issues.map((issue) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Center(
+                  child: Text(
+                    '📌 ${issue['title']}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ),
+              )),
+        const SizedBox(height: 8),
+        Center(
+          child: SizedBox(
+            width: 300,
+            child: TextField(
+              controller: _middleReportController,
+              textAlign: TextAlign.center, // 텍스트 중앙 정렬도 유지
+              decoration: const InputDecoration(
+                labelText: '코멘트 섹션',
+                hintText: '예: 게시된 이슈에 대한 약식 답변',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+            ),
+          ),
         ),
-        maxLines: 3,
-      ),
+      ],
     );
   }
 
@@ -216,11 +275,8 @@ class _ParkingReportContentState extends State<ParkingReportContent> {
       content = _middleReportController.text.trim();
     } else {
       type = 'end';
-      final entryText = _vehicleCountController.text.trim();
-      final exitText = _exitVehicleCountController.text.trim();
-
-      final entry = int.tryParse(entryText);
-      final exit = int.tryParse(exitText);
+      final entry = int.tryParse(_vehicleCountController.text.trim());
+      final exit = int.tryParse(_exitVehicleCountController.text.trim());
 
       if (entry == null || exit == null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -233,9 +289,7 @@ class _ParkingReportContentState extends State<ParkingReportContent> {
         "vehicleInput": entry,
         "vehicleOutput": exit,
       };
-
       content = jsonEncode(reportMap);
-      debugPrint('📤 report content: $content');
     }
 
     widget.onReport(type, content);
@@ -250,11 +304,7 @@ Future<String?> uploadEndWorkReportJson({
   required String area,
   required String userName,
 }) async {
-  final dateStr = DateTime
-      .now()
-      .toIso8601String()
-      .split('T')
-      .first;
+  final dateStr = DateTime.now().toIso8601String().split('T').first;
   final fileName = 'ToDoReports_$dateStr.json';
   final destinationPath = '$division/$area/reports/$fileName';
 
@@ -302,7 +352,6 @@ Future<String?> uploadEndWorkReportJson({
   debugPrint('✅ GCS 업로드 완료: $uploadedUrl');
   return uploadedUrl;
 }
-
 
 Future<void> deleteLockedDepartureDocs(String area) async {
   final firestore = FirebaseFirestore.instance;

@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:convert';
@@ -250,50 +251,64 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                     ),
                     child: SingleChildScrollView(
                       child: ParkingReportContent(
-                          onReport: (type, content) async {
-                            if (type == 'cancel') {
-                              setState(() => _showReportDialog = false);
+                        onReport: (type, content) async {
+                          if (type == 'cancel') {
+                            setState(() => _showReportDialog = false);
+                            return;
+                          }
+
+                          final area = context.read<AreaState>().currentArea;
+                          final division = context.read<AreaState>().currentDivision;
+                          final userName = context.read<UserState>().name;
+
+                          if (type == 'end') {
+                            final parsed = jsonDecode(content); // content는 JSON string
+
+                            final reportLog = {
+                              'division': division,
+                              'area': area,
+                              'vehicleCount': {
+                                'vehicleInput': int.tryParse(parsed['vehicleInput'].toString()) ?? 0,
+                                'vehicleOutput': int.tryParse(parsed['vehicleOutput'].toString()) ?? 0,
+                              },
+                              'timestamp': DateTime.now().toIso8601String(),
+                            };
+
+                            await uploadEndWorkReportJson(
+                              report: reportLog,
+                              division: division,
+                              area: area,
+                              userName: userName,
+                            );
+
+                            await deleteLockedDepartureDocs(area);
+
+                            showSuccessSnackbar(
+                              context,
+                              "업무 종료 보고 업로드 및 출차 초기화 (입차: ${parsed['vehicleInput']}, 출차: ${parsed['vehicleOutput']})",
+                            );
+                          } else if (type == 'start') {
+                            showSuccessSnackbar(context, "업무 시작 보고 완료: $content");
+                          } else if (type == 'middle') {
+                            final user = context.read<UserState>().user;
+
+                            if (user == null || user.divisions.isEmpty) {
+                              showFailedSnackbar(context, '사용자 정보가 없어 보고를 저장할 수 없습니다.');
                               return;
                             }
 
-                            final area = context.read<AreaState>().currentArea;
-                            final division = context.read<AreaState>().currentDivision;
-                            final userName = context.read<UserState>().name;
+                            await FirebaseFirestore.instance.collection('tasks').add({
+                              'creator': user.id,
+                              'division': user.divisions.first,
+                              'answer': content,
+                              'createdAt': DateTime.now().toIso8601String(),
+                            });
 
-                            if (type == 'end') {
-                              final parsed = jsonDecode(content); // content는 JSON string
+                            showSuccessSnackbar(context, "보고란 제출 완료: $content");
+                          }
 
-                              final reportLog = {
-                                'division': division,
-                                'area': area,
-                                'vehicleCount': {
-                                  'vehicleInput': int.tryParse(parsed['vehicleInput'].toString()) ?? 0,
-                                  'vehicleOutput': int.tryParse(parsed['vehicleOutput'].toString()) ?? 0,
-                                },
-                                'timestamp': DateTime.now().toIso8601String(),
-                              };
-
-                              await uploadEndWorkReportJson(
-                                report: reportLog,
-                                division: division,
-                                area: area,
-                                userName: userName,
-                              );
-
-                              await deleteLockedDepartureDocs(area);
-
-                              showSuccessSnackbar(
-                                context,
-                                "업무 종료 보고 업로드 및 출차 초기화 (입차: ${parsed['vehicleInput']}, 출차: ${parsed['vehicleOutput']})",
-                              );
-                            } else if (type == 'start') {
-                              showSuccessSnackbar(context, "업무 시작 보고 완료: $content");
-                            } else if (type == 'middle') {
-                              showSuccessSnackbar(context, "보고란 제출 완료: $content");
-                            }
-
-                            setState(() => _showReportDialog = false);
-                          },
+                          setState(() => _showReportDialog = false);
+                        },
                       ),
                     ),
                   ),
