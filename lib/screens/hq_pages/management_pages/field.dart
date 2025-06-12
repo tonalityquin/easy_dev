@@ -85,12 +85,16 @@ class _FieldState extends State<Field> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_errorMessage != null) {
-      return Center(
+    return Scaffold(
+      appBar: AppBar(title: const Text('필드 별 업무/근퇴 현황'),
+          centerTitle: true,
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
+          elevation: 0),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _errorMessage != null
+          ? Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Text(
@@ -99,18 +103,17 @@ class _FieldState extends State<Field> {
             textAlign: TextAlign.center,
           ),
         ),
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: _fetchAreaCounts,
-      child: ListView.builder(
-        itemCount: _areaCounts.length,
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        itemBuilder: (context, index) {
-          final areaCount = _areaCounts[index];
-          return _buildAreaCard(areaCount);
-        },
+      )
+          : RefreshIndicator(
+        onRefresh: _fetchAreaCounts,
+        child: ListView.builder(
+          itemCount: _areaCounts.length,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          itemBuilder: (context, index) {
+            final areaCount = _areaCounts[index];
+            return _buildAreaCard(areaCount);
+          },
+        ),
       ),
     );
   }
