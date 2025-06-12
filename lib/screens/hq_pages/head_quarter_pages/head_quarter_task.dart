@@ -214,6 +214,10 @@ class _HeadQuarterTaskState extends State<HeadQuarterTask> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Tasks'),
+        centerTitle: true, // 제목 중앙 정렬
+        backgroundColor: Colors.white, // 배경 흰색
+        foregroundColor: Colors.black, // 텍스트/아이콘 검정
+        elevation: 0, // 그림자 제거
         actions: [
           Row(
             children: [

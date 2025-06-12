@@ -129,7 +129,11 @@ class _IssueState extends State<Issue> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('본사 이슈 입력')),
+      appBar: AppBar(title: const Text('본사 이슈 입력'),
+        centerTitle: true,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 0,),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -151,7 +155,7 @@ class _IssueState extends State<Issue> {
               children: [
                 ElevatedButton(
                   onPressed: _deleteNonTaskDocuments,
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.white),
                   child: const Text('이슈 내리기'),
                 ),
                 Row(

@@ -145,6 +145,9 @@ class _HeadQuarterCalendarState extends State<HeadQuarterCalendar> {
       appBar: AppBar(
         title: Text('${_focusedMonth.year}년 ${_focusedMonth.month}월'),
         centerTitle: true,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.chevron_left),
