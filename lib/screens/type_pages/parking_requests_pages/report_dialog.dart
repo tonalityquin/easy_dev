@@ -30,7 +30,6 @@ class _ParkingReportContentState extends State<ParkingReportContent> {
   @override
   void initState() {
     super.initState();
-
     _vehicleCountController.addListener(_updateSubmitState);
     _exitVehicleCountController.addListener(_updateSubmitState);
     _startReportController.addListener(_updateSubmitState);
@@ -45,8 +44,8 @@ class _ParkingReportContentState extends State<ParkingReportContent> {
     } else if (_selectedTabIndex == 1) {
       shouldEnable = _middleReportController.text.trim().isNotEmpty;
     } else {
-      shouldEnable = _vehicleCountController.text.trim().isNotEmpty &&
-          _exitVehicleCountController.text.trim().isNotEmpty;
+      shouldEnable =
+          _vehicleCountController.text.trim().isNotEmpty && _exitVehicleCountController.text.trim().isNotEmpty;
     }
 
     if (_canSubmit != shouldEnable) {
@@ -87,7 +86,7 @@ class _ParkingReportContentState extends State<ParkingReportContent> {
                 setState(() {
                   _selectedTabIndex = newSelection.first;
                 });
-                _updateSubmitState(); // 탭 전환 시 상태 갱신
+                _updateSubmitState();
               },
             ),
             const SizedBox(height: 16),
@@ -205,20 +204,33 @@ class _ParkingReportContentState extends State<ParkingReportContent> {
       content = _middleReportController.text.trim();
     } else {
       type = 'end';
-      final entry = _vehicleCountController.text.trim();
-      final exit = _exitVehicleCountController.text.trim();
+      final entryText = _vehicleCountController.text.trim();
+      final exitText = _exitVehicleCountController.text.trim();
 
-      content = jsonEncode({
+      final entry = int.tryParse(entryText);
+      final exit = int.tryParse(exitText);
+
+      if (entry == null || exit == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('입차/출차 차량 수는 숫자만 입력 가능합니다.')),
+        );
+        return;
+      }
+
+      final reportMap = {
         "입차": entry,
         "출차": exit,
-      });
+      };
+
+      content = jsonEncode(reportMap);
+      debugPrint('📤 report content: $content');
     }
 
     widget.onReport(type, content);
   }
 }
 
-// ==== GCS 관련 메서드 ====
+// ==== GCS 업로드 메서드 ====
 
 Future<String?> uploadEndWorkReportJson({
   required Map<String, dynamic> report,
@@ -231,10 +243,10 @@ Future<String?> uploadEndWorkReportJson({
   final destinationPath = '$division/$area/reports/$fileName';
 
   report['timestamp'] = dateStr;
-
   final jsonString = jsonEncode(report);
+
   final tempFile = File('${Directory.systemTemp.path}/temp_upload.json');
-  await tempFile.writeAsString(jsonString);
+  await tempFile.writeAsString(jsonString, encoding: utf8);
 
   final credentialsJson = await rootBundle.loadString(kServiceAccountPath);
   final accountCredentials = ServiceAccountCredentials.fromJson(credentialsJson);
@@ -242,13 +254,20 @@ Future<String?> uploadEndWorkReportJson({
   final client = await clientViaServiceAccount(accountCredentials, scopes);
   final storage = StorageApi(client);
 
-  final media = Media(tempFile.openRead(), tempFile.lengthSync());
+  final media = Media(
+    tempFile.openRead(),
+    tempFile.lengthSync(),
+    contentType: 'application/json; charset=utf-8',
+  );
+
   final object = await storage.objects.insert(
     Object()
       ..name = destinationPath
-      ..acl = [ObjectAccessControl()
-        ..entity = 'allUsers'
-        ..role = 'READER'],
+      ..acl = [
+        ObjectAccessControl()
+          ..entity = 'allUsers'
+          ..role = 'READER'
+      ],
     kBucketName,
     uploadMedia: media,
   );
