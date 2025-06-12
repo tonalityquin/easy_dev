@@ -267,8 +267,8 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                                 'division': division,
                                 'area': area,
                                 'vehicleCount': {
-                                  '입차': int.tryParse(parsed['입차'].toString()) ?? 0,
-                                  '출차': int.tryParse(parsed['출차'].toString()) ?? 0,
+                                  'vehicleInput': int.tryParse(parsed['vehicleInput'].toString()) ?? 0,
+                                  'vehicleOutput': int.tryParse(parsed['vehicleOutput'].toString()) ?? 0,
                                 },
                                 'timestamp': DateTime.now().toIso8601String(),
                               };
@@ -284,7 +284,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
 
                               showSuccessSnackbar(
                                 context,
-                                "업무 종료 보고 업로드 및 출차 초기화 (입차: ${parsed['입차']}, 출차: ${parsed['출차']})",
+                                "업무 종료 보고 업로드 및 출차 초기화 (입차: ${parsed['vehicleInput']}, 출차: ${parsed['vehicleOutput']})",
                               );
                             } else if (type == 'start') {
                               showSuccessSnackbar(context, "업무 시작 보고 완료: $content");

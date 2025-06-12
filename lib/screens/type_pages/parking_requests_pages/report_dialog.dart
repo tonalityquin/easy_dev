@@ -40,12 +40,20 @@ class _ParkingReportContentState extends State<ParkingReportContent> {
     bool shouldEnable = false;
 
     if (_selectedTabIndex == 0) {
-      shouldEnable = _startReportController.text.trim().isNotEmpty;
+      shouldEnable = _startReportController.text
+          .trim()
+          .isNotEmpty;
     } else if (_selectedTabIndex == 1) {
-      shouldEnable = _middleReportController.text.trim().isNotEmpty;
+      shouldEnable = _middleReportController.text
+          .trim()
+          .isNotEmpty;
     } else {
       shouldEnable =
-          _vehicleCountController.text.trim().isNotEmpty && _exitVehicleCountController.text.trim().isNotEmpty;
+          _vehicleCountController.text
+              .trim()
+              .isNotEmpty && _exitVehicleCountController.text
+              .trim()
+              .isNotEmpty;
     }
 
     if (_canSubmit != shouldEnable) {
@@ -59,7 +67,10 @@ class _ParkingReportContentState extends State<ParkingReportContent> {
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
+        bottom: MediaQuery
+            .of(context)
+            .viewInsets
+            .bottom,
         top: 16,
         left: 16,
         right: 16,
@@ -92,10 +103,11 @@ class _ParkingReportContentState extends State<ParkingReportContent> {
             const SizedBox(height: 16),
             if (_selectedTabIndex == 0)
               _buildStartReportField()
-            else if (_selectedTabIndex == 1)
-              _buildMiddleReportField()
             else
-              _buildEndReportField(),
+              if (_selectedTabIndex == 1)
+                _buildMiddleReportField()
+              else
+                _buildEndReportField(),
             const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -218,8 +230,8 @@ class _ParkingReportContentState extends State<ParkingReportContent> {
       }
 
       final reportMap = {
-        "입차": entry,
-        "출차": exit,
+        "vehicleInput": entry,
+        "vehicleOutput": exit,
       };
 
       content = jsonEncode(reportMap);
@@ -238,31 +250,43 @@ Future<String?> uploadEndWorkReportJson({
   required String area,
   required String userName,
 }) async {
-  final dateStr = DateTime.now().toIso8601String().split('T').first;
+  final dateStr = DateTime
+      .now()
+      .toIso8601String()
+      .split('T')
+      .first;
   final fileName = 'ToDoReports_$dateStr.json';
   final destinationPath = '$division/$area/reports/$fileName';
 
+  // 타임스탬프 추가
   report['timestamp'] = dateStr;
+
+  // JSON 문자열로 변환
   final jsonString = jsonEncode(report);
 
+  // 임시 파일에 저장
   final tempFile = File('${Directory.systemTemp.path}/temp_upload.json');
   await tempFile.writeAsString(jsonString, encoding: utf8);
 
+  // 서비스 계정 인증
   final credentialsJson = await rootBundle.loadString(kServiceAccountPath);
   final accountCredentials = ServiceAccountCredentials.fromJson(credentialsJson);
   final scopes = [StorageApi.devstorageFullControlScope];
   final client = await clientViaServiceAccount(accountCredentials, scopes);
   final storage = StorageApi(client);
 
+  // 업로드 미디어
   final media = Media(
     tempFile.openRead(),
     tempFile.lengthSync(),
-    contentType: 'application/json; charset=utf-8',
+    contentType: 'application/json',
   );
 
+  // ✅ 업로드 객체 설정: 다운로드 강제
   final object = await storage.objects.insert(
     Object()
       ..name = destinationPath
+      ..contentDisposition = 'attachment' // 여기서 다운로드를 유도
       ..acl = [
         ObjectAccessControl()
           ..entity = 'allUsers'
@@ -278,6 +302,7 @@ Future<String?> uploadEndWorkReportJson({
   debugPrint('✅ GCS 업로드 완료: $uploadedUrl');
   return uploadedUrl;
 }
+
 
 Future<void> deleteLockedDepartureDocs(String area) async {
   final firestore = FirebaseFirestore.instance;
