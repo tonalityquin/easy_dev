@@ -47,7 +47,6 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
   int highScore = 0;
   bool gameOver = false;
   bool isPaused = false;
-  Set<Point<int>> recentFixedCells = {};
 
   final List<Block> blockTypes = [
     Block(
@@ -68,7 +67,7 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
     ),
     Block(
       shapes: [
-        [Point(0, 0), Point(0, 1), Point(1, 0), Point(1, 1)],
+        [Point(0, 0), Point(0, 1), Point(1, 0), Point(1, 1)]
       ],
       color: Colors.yellow,
     ),
@@ -115,9 +114,7 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
 
   void _loadHighScore() async {
     final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      highScore = prefs.getInt('highScore') ?? 0;
-    });
+    highScore = prefs.getInt('highScore') ?? 0;
   }
 
   void _saveHighScore() async {
@@ -133,9 +130,7 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
       nextBlock = _randomBlock();
       gameOver = false;
       isPaused = false;
-      recentFixedCells.clear();
     });
-
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(milliseconds: 500), (_) => _tick());
   }
@@ -168,13 +163,11 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
   }
 
   void _fixBlock() {
-    recentFixedCells.clear();
     for (final p in currentBlock!.shape) {
       final x = currentBlock!.position.x + p.x;
       final y = currentBlock!.position.y + p.y;
       if (x >= 0 && x < rowCount && y >= 0 && y < colCount) {
         board[x][y] = currentBlock!.color;
-        recentFixedCells.add(Point(x, y));
       }
     }
   }
@@ -190,7 +183,6 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
           highScore = score;
           _saveHighScore();
         }
-        recentFixedCells.clear();
       });
     }
   }
@@ -236,11 +228,14 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
     _tick();
   }
 
-  void _togglePause() => setState(() => isPaused = !isPaused);
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
 
   Widget _buildCell(int x, int y) {
     Color? color = board[x][y];
-    bool isNew = recentFixedCells.contains(Point(x, y));
     for (final p in currentBlock?.shape ?? []) {
       final px = currentBlock!.position.x + p.x;
       final py = currentBlock!.position.y + p.y;
@@ -250,14 +245,19 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
       }
     }
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 150),
+    return Container(
       margin: const EdgeInsets.all(0.5),
       decoration: BoxDecoration(
         color: color ?? Colors.grey[200],
-        border: isNew ? Border.all(color: Colors.redAccent, width: 2) : Border.all(color: Colors.black12),
+        border: Border.all(color: Colors.black12),
       ),
     );
+  }
+
+  void _togglePause() {
+    setState(() {
+      isPaused = !isPaused;
+    });
   }
 
   Widget _buildPreviewBlock() {
@@ -269,7 +269,7 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
         children: List.generate(16, (index) {
           final row = index ~/ 4;
           final col = index % 4;
-          final isActive = nextBlock!.shape.contains(Point(row, col));
+          final isActive = nextBlock?.shape.contains(Point(row, col)) ?? false;
           return Container(
             margin: const EdgeInsets.all(1),
             decoration: BoxDecoration(
@@ -283,99 +283,101 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
   }
 
   @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      // 게임판 외부 탭 → 회전
-      onTap: _rotate,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('테트리스'),
-          centerTitle: true,
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
-          elevation: 0,
-          actions: [
-            IconButton(
-              icon: Icon(isPaused ? Icons.play_arrow : Icons.pause),
-              onPressed: _togglePause,
-            ),
-          ],
-        ),
-        body: Column(
-          children: [
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                Text('점수: $score', style: const TextStyle(fontSize: 18)),
-                Text('최고 점수: $highScore', style: const TextStyle(fontSize: 18)),
-                Column(children: [const Text('다음 블록'), _buildPreviewBlock()]),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Expanded(
-              child: Row(
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('테트리스'),
+        centerTitle: true,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: Icon(isPaused ? Icons.play_arrow : Icons.pause),
+            onPressed: _togglePause,
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              Text('점수: $score', style: const TextStyle(fontSize: 18)),
+              Text('최고 점수: $highScore', style: const TextStyle(fontSize: 18)),
+              Column(
                 children: [
-                  // 왼쪽 영역 → 왼쪽 이동
-                  Expanded(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.translucent,
-                      onTap: _moveLeft,
-                      child: const SizedBox.expand(),
-                    ),
-                  ),
-                  // 게임판 (중앙 영역) → 하드 드롭
-                  AspectRatio(
-                    aspectRatio: colCount / rowCount,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: _hardDrop,
-                      child: GridView.builder(
-                        physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: colCount,
-                        ),
-                        itemCount: rowCount * colCount,
-                        itemBuilder: (context, index) {
-                          final x = index ~/ colCount;
-                          final y = index % colCount;
-                          return _buildCell(x, y);
-                        },
-                      ),
-                    ),
-                  ),
-                  // 오른쪽 영역 → 오른쪽 이동
-                  Expanded(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.translucent,
-                      onTap: _moveRight,
-                      child: const SizedBox.expand(),
-                    ),
-                  ),
+                  const Text('다음 블록'),
+                  _buildPreviewBlock(),
                 ],
               ),
-            ),
-            const SizedBox(height: 12),
-            if (!gameOver)
-              const Text(
-                '하드 드롭: 게임판 터치  |  회전: 바깥 터치  |  좌우 이동: 화면 양옆',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14, color: Colors.grey),
-              )
-            else
-              ElevatedButton(
-                onPressed: startGame,
-                child: const Text('다시 시작'),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Expanded(
+            child: GestureDetector(
+              onTap: _hardDrop,
+              child: AspectRatio(
+                aspectRatio: colCount / rowCount,
+                child: GridView.builder(
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: colCount,
+                  ),
+                  itemCount: rowCount * colCount,
+                  itemBuilder: (context, index) {
+                    final x = index ~/ colCount;
+                    final y = index % colCount;
+                    return _buildCell(x, y);
+                  },
+                ),
               ),
-            const SizedBox(height: 16),
-          ],
-        ),
+            ),
+          ),
+          if (!gameOver)
+            GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTapDown: (details) {
+                final dx = details.globalPosition.dx;
+                final screenWidth = MediaQuery.of(context).size.width;
+
+                if (dx < screenWidth * 0.4) {
+                  _moveLeft();
+                } else if (dx < screenWidth * 0.7) {
+                  _rotate();
+                } else {
+                  _moveRight();
+                }
+              },
+              child: Container(
+                height: 60,
+                color: Colors.transparent,
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 4,
+                      child: Center(child: Icon(Icons.arrow_left, size: 28)),
+                    ),
+                    Expanded(
+                      flex: 3,
+                      child: Center(child: Icon(Icons.rotate_right, size: 28)),
+                    ),
+                    Expanded(
+                      flex: 3,
+                      child: Center(child: Icon(Icons.arrow_right, size: 28)),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            ElevatedButton(
+              onPressed: startGame,
+              child: const Text('다시 시작'),
+            ),
+          const SizedBox(height: 16),
+        ],
       ),
     );
   }
