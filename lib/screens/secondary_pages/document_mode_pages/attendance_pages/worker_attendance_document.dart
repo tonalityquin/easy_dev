@@ -1,15 +1,10 @@
+// 생략된 imports 유지
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-class WorkerAttendanceDocument extends StatefulWidget {
-  const WorkerAttendanceDocument({super.key});
-
-  @override
-  State<WorkerAttendanceDocument> createState() => _WorkerAttendanceDocumentState();
-}
-
+// Block 클래스 생략 없이 유지
 class Block {
   List<List<Point<int>>> shapes;
   int rotationIndex;
@@ -33,6 +28,13 @@ class Block {
       color: color,
     );
   }
+}
+
+class WorkerAttendanceDocument extends StatefulWidget {
+  const WorkerAttendanceDocument({super.key});
+
+  @override
+  State<WorkerAttendanceDocument> createState() => _WorkerAttendanceDocumentState();
 }
 
 class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
@@ -125,7 +127,7 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
   }
 
   void startGame() {
-    if (!mounted) return; // (선택적 추가)
+    if (!mounted) return;
     setState(() {
       score = 0;
       board = List.generate(rowCount, (_) => List.filled(colCount, null));
@@ -145,7 +147,7 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
   }
 
   void _tick() {
-    if (!mounted || gameOver || isPaused) return; // <-- 추가됨
+    if (!mounted || gameOver || isPaused) return;
     final nextPos = Point(currentBlock!.position.x + 1, currentBlock!.position.y);
     if (_canMove(currentBlock!, nextPos)) {
       setState(() => currentBlock = currentBlock!.copyWith(position: nextPos));
@@ -273,14 +275,30 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
     );
   }
 
-  Widget _controlButton({required IconData icon, required Color color}) {
-    return Expanded(
-      child: InkWell(
-        onTap: () {}, // 비어 있어도 터치 피드백 활성화
-        borderRadius: BorderRadius.circular(12),
-        child: Center(
-          child: Icon(icon, color: color, size: 28),
+  Widget _controlButton({
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: 60,
+        height: 60,
+        margin: const EdgeInsets.symmetric(horizontal: 25),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 6,
+              offset: const Offset(0, 3),
+            ),
+          ],
         ),
+        child: Icon(icon, color: color, size: 28),
       ),
     );
   }
@@ -367,46 +385,15 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
               ),
             ),
           ),
+          const SizedBox(height: 12),
           if (!gameOver)
-            Center(
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onTapDown: (details) {
-                  final box = context.findRenderObject() as RenderBox;
-                  final dx = box.globalToLocal(details.globalPosition).dx;
-                  final width = box.size.width;
-                  if (dx < width * 0.4) {
-                    _moveLeft();
-                  } else if (dx < width * 0.7) {
-                    _rotate();
-                  } else {
-                    _moveRight();
-                  }
-                },
-                child: Container(
-                  width: 280,
-                  height: 60,
-                  margin: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.85),
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 6,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      _controlButton(icon: Icons.arrow_left, color: Colors.blue),
-                      _controlButton(icon: Icons.rotate_right, color: Colors.green),
-                      _controlButton(icon: Icons.arrow_right, color: Colors.red),
-                    ],
-                  ),
-                ),
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _controlButton(icon: Icons.arrow_left, color: Colors.blue, onTap: _moveLeft),
+                _controlButton(icon: Icons.rotate_right, color: Colors.green, onTap: _rotate),
+                _controlButton(icon: Icons.arrow_right, color: Colors.red, onTap: _moveRight),
+              ],
             )
           else
             Column(
