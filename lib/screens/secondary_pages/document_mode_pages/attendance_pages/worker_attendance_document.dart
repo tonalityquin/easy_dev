@@ -1,4 +1,3 @@
-// 생략 없음: 전체 코드 제공
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -39,6 +38,7 @@ class Block {
 class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
   static const int rowCount = 20;
   static const int colCount = 10;
+
   List<List<Color?>> board = List.generate(rowCount, (_) => List.filled(colCount, null));
   Block? currentBlock;
   Block? nextBlock;
@@ -67,7 +67,7 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
     ),
     Block(
       shapes: [
-        [Point(0, 0), Point(0, 1), Point(1, 0), Point(1, 1)]
+        [Point(0, 0), Point(0, 1), Point(1, 0), Point(1, 1)],
       ],
       color: Colors.yellow,
     ),
@@ -114,7 +114,9 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
 
   void _loadHighScore() async {
     final prefs = await SharedPreferences.getInstance();
-    highScore = prefs.getInt('highScore') ?? 0;
+    setState(() {
+      highScore = prefs.getInt('highScore') ?? 0;
+    });
   }
 
   void _saveHighScore() async {
@@ -123,6 +125,7 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
   }
 
   void startGame() {
+    if (!mounted) return; // (선택적 추가)
     setState(() {
       score = 0;
       board = List.generate(rowCount, (_) => List.filled(colCount, null));
@@ -142,7 +145,7 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
   }
 
   void _tick() {
-    if (gameOver || isPaused) return;
+    if (!mounted || gameOver || isPaused) return; // <-- 추가됨
     final nextPos = Point(currentBlock!.position.x + 1, currentBlock!.position.y);
     if (_canMove(currentBlock!, nextPos)) {
       setState(() => currentBlock = currentBlock!.copyWith(position: nextPos));
@@ -220,18 +223,13 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
   }
 
   void _hardDrop() {
+    if (gameOver) return;
     Point<int> dropPos = currentBlock!.position;
     while (_canMove(currentBlock!, Point(dropPos.x + 1, dropPos.y))) {
       dropPos = Point(dropPos.x + 1, dropPos.y);
     }
     setState(() => currentBlock = currentBlock!.copyWith(position: dropPos));
     _tick();
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
   }
 
   Widget _buildCell(int x, int y) {
@@ -244,7 +242,6 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
         break;
       }
     }
-
     return Container(
       margin: const EdgeInsets.all(0.5),
       decoration: BoxDecoration(
@@ -252,12 +249,6 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
         border: Border.all(color: Colors.black12),
       ),
     );
-  }
-
-  void _togglePause() {
-    setState(() {
-      isPaused = !isPaused;
-    });
   }
 
   Widget _buildPreviewBlock() {
@@ -282,101 +273,157 @@ class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
     );
   }
 
+  Widget _controlButton({required IconData icon, required Color color}) {
+    return Expanded(
+      child: InkWell(
+        onTap: () {}, // 비어 있어도 터치 피드백 활성화
+        borderRadius: BorderRadius.circular(12),
+        child: Center(
+          child: Icon(icon, color: color, size: 28),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey[100],
       appBar: AppBar(
         title: const Text('테트리스'),
         centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        elevation: 1,
         actions: [
           IconButton(
             icon: Icon(isPaused ? Icons.play_arrow : Icons.pause),
-            onPressed: _togglePause,
+            onPressed: () => setState(() => isPaused = !isPaused),
           ),
         ],
       ),
       body: Column(
         children: [
           const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              Text('점수: $score', style: const TextStyle(fontSize: 18)),
-              Text('최고 점수: $highScore', style: const TextStyle(fontSize: 18)),
-              Column(
-                children: [
-                  const Text('다음 블록'),
-                  _buildPreviewBlock(),
-                ],
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    Column(
+                      children: [
+                        const Text('점수', style: TextStyle(fontSize: 14, color: Colors.grey)),
+                        Text('$score', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    Column(
+                      children: [
+                        const Text('최고 점수', style: TextStyle(fontSize: 14, color: Colors.grey)),
+                        Text('$highScore', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    Column(
+                      children: [
+                        const Text('다음 블록', style: TextStyle(fontSize: 14, color: Colors.grey)),
+                        const SizedBox(height: 4),
+                        _buildPreviewBlock(),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ],
+            ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 6),
           Expanded(
             child: GestureDetector(
               onTap: _hardDrop,
               child: AspectRatio(
                 aspectRatio: colCount / rowCount,
-                child: GridView.builder(
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: colCount,
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.black),
+                    color: Colors.white,
                   ),
-                  itemCount: rowCount * colCount,
-                  itemBuilder: (context, index) {
-                    final x = index ~/ colCount;
-                    final y = index % colCount;
-                    return _buildCell(x, y);
-                  },
+                  child: GridView.builder(
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: colCount,
+                    ),
+                    itemCount: rowCount * colCount,
+                    itemBuilder: (context, index) {
+                      final x = index ~/ colCount;
+                      final y = index % colCount;
+                      return _buildCell(x, y);
+                    },
+                  ),
                 ),
               ),
             ),
           ),
           if (!gameOver)
-            GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onTapDown: (details) {
-                final dx = details.globalPosition.dx;
-                final screenWidth = MediaQuery.of(context).size.width;
-
-                if (dx < screenWidth * 0.4) {
-                  _moveLeft();
-                } else if (dx < screenWidth * 0.7) {
-                  _rotate();
-                } else {
-                  _moveRight();
-                }
-              },
-              child: Container(
-                height: 60,
-                color: Colors.transparent,
-                child: Row(
-                  children: [
-                    Expanded(
-                      flex: 4,
-                      child: Center(child: Icon(Icons.arrow_left, size: 28)),
-                    ),
-                    Expanded(
-                      flex: 3,
-                      child: Center(child: Icon(Icons.rotate_right, size: 28)),
-                    ),
-                    Expanded(
-                      flex: 3,
-                      child: Center(child: Icon(Icons.arrow_right, size: 28)),
-                    ),
-                  ],
+            Center(
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTapDown: (details) {
+                  final box = context.findRenderObject() as RenderBox;
+                  final dx = box.globalToLocal(details.globalPosition).dx;
+                  final width = box.size.width;
+                  if (dx < width * 0.4) {
+                    _moveLeft();
+                  } else if (dx < width * 0.7) {
+                    _rotate();
+                  } else {
+                    _moveRight();
+                  }
+                },
+                child: Container(
+                  width: 280,
+                  height: 60,
+                  margin: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.85),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 6,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      _controlButton(icon: Icons.arrow_left, color: Colors.blue),
+                      _controlButton(icon: Icons.rotate_right, color: Colors.green),
+                      _controlButton(icon: Icons.arrow_right, color: Colors.red),
+                    ],
+                  ),
                 ),
               ),
             )
           else
-            ElevatedButton(
-              onPressed: startGame,
-              child: const Text('다시 시작'),
+            Column(
+              children: [
+                const Text(
+                  'Game Over',
+                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.redAccent),
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton(
+                  onPressed: startGame,
+                  style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
+                  child: const Text('다시 시작', style: TextStyle(fontSize: 18)),
+                ),
+                const SizedBox(height: 12),
+              ],
             ),
-          const SizedBox(height: 16),
         ],
       ),
     );
