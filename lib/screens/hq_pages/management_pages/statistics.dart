@@ -35,11 +35,13 @@ class _StatisticsState extends State<Statistics> {
     _selectedArea ??= areaState.currentArea;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('입·출차 통계'),
-          centerTitle: true,
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
-          elevation: 0),
+      appBar: AppBar(
+        title: const Text('입·출차 통계'),
+        centerTitle: true,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 0,
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: SingleChildScrollView(
@@ -101,24 +103,16 @@ class _StatisticsState extends State<Statistics> {
                   ),
                 ],
               ),
-
               const SizedBox(height: 20),
               if (_selectedDate != null)
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '📅 선택 날짜: ${_selectedDate!
-                          .toIso8601String()
-                          .split("T")
-                          .first}',
+                      '📅 선택 날짜: ${_selectedDate!.toIso8601String().split("T").first}',
                       style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                     ),
-                    if (_savedReports.any((r) =>
-                    r['date'] == _selectedDate!
-                        .toIso8601String()
-                        .split("T")
-                        .first))
+                    if (_savedReports.any((r) => r['date'] == _selectedDate!.toIso8601String().split("T").first))
                       const Padding(
                         padding: EdgeInsets.only(top: 6),
                         child: Text(
@@ -131,12 +125,10 @@ class _StatisticsState extends State<Statistics> {
               const SizedBox(height: 20),
               if (_isLoading)
                 const Center(child: CircularProgressIndicator())
-              else
-                if (_reportData != null)
-                  _buildReportCard(_reportData!)
-                else
-                  if (_selectedDate != null)
-                    const Text('📭 해당 날짜의 보고 내역이 없습니다.', style: TextStyle(color: Colors.grey)),
+              else if (_reportData != null)
+                _buildReportCard(_reportData!)
+              else if (_selectedDate != null)
+                  const Text('📭 해당 날짜의 보고 내역이 없습니다.', style: TextStyle(color: Colors.grey)),
             ],
           ),
         ),
@@ -148,10 +140,8 @@ class _StatisticsState extends State<Statistics> {
     final vehicleCount = report['vehicleCount'] as Map<String, dynamic>?;
     final inCount = vehicleCount?['vehicleInput']?.toString() ?? '정보 없음';
     final outCount = vehicleCount?['vehicleOutput']?.toString() ?? '정보 없음';
-    final dateStr = _selectedDate
-        ?.toIso8601String()
-        .split('T')
-        .first ?? '날짜 없음';
+    final lockedFee = report['totalLockedFee']?.toString() ?? '정보 없음';
+    final dateStr = _selectedDate?.toIso8601String().split('T').first ?? '날짜 없음';
 
     return Card(
       elevation: 3,
@@ -180,6 +170,14 @@ class _StatisticsState extends State<Statistics> {
                 Text(outCount, style: const TextStyle(fontWeight: FontWeight.bold)),
               ],
             ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('🔒 정산 금액', style: TextStyle(fontSize: 15)),
+                Text('₩$lockedFee', style: const TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
             const SizedBox(height: 16),
             Align(
               alignment: Alignment.centerRight,
@@ -188,15 +186,13 @@ class _StatisticsState extends State<Statistics> {
                 label: const Text('보관'),
                 onPressed: () {
                   if (_selectedDate != null) {
-                    final dateStr = _selectedDate!
-                        .toIso8601String()
-                        .split('T')
-                        .first;
+                    final dateStr = _selectedDate!.toIso8601String().split('T').first;
                     setState(() {
                       _savedReports.add({
                         'date': dateStr,
                         '입차': int.tryParse(inCount) ?? 0,
                         '출차': int.tryParse(outCount) ?? 0,
+                        '정산금': int.tryParse(lockedFee) ?? 0,
                       });
                     });
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -205,7 +201,7 @@ class _StatisticsState extends State<Statistics> {
                   }
                 },
               ),
-            )
+            ),
           ],
         ),
       ),
@@ -236,16 +232,9 @@ class _StatisticsState extends State<Statistics> {
   }
 
   Future<void> _fetchReportData(DateTime date) async {
-    final dateStr = date
-        .toIso8601String()
-        .split('T')
-        .first;
-    final division = context
-        .read<AreaState>()
-        .currentDivision;
-    final area = _selectedArea ?? context
-        .read<AreaState>()
-        .currentArea;
+    final dateStr = date.toIso8601String().split('T').first;
+    final division = context.read<AreaState>().currentDivision;
+    final area = _selectedArea ?? context.read<AreaState>().currentArea;
 
     final url = 'https://storage.googleapis.com/easydev-image/$division/$area/reports/ToDoReports_$dateStr.json';
 
@@ -282,6 +271,7 @@ class _StatisticsState extends State<Statistics> {
         parsedData[date] = {
           'vehicleInput': report['입차'],
           'vehicleOutput': report['출차'],
+          'totalLockedFee': report['정산금'],
         };
       }
     }
