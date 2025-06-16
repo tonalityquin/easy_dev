@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../repositories/user/user_repository.dart';
 import '../../models/user_model.dart';
 import 'package:easydev/services/plate_tts_listener_service.dart';
@@ -17,7 +18,7 @@ class UserState extends ChangeNotifier {
   bool _isLoading = true;
 
   StreamSubscription<List<UserModel>>? _subscription;
-  String _previousArea = '';
+  String _previousSelectedArea = '';
 
   UserState(this._repository, this._areaState) {
     _areaState.addListener(_realtimeUsers);
@@ -25,7 +26,7 @@ class UserState extends ChangeNotifier {
 
   Future<void> loadUsersOnly() async {
     _isLoading = true;
-    _previousArea = ''; // ✅ 무조건 재구독을 유도하기 위해 초기화
+    _previousSelectedArea = ''; // ✅ 무조건 재구독 유도
     notifyListeners();
 
     try {
@@ -73,7 +74,6 @@ class UserState extends ChangeNotifier {
 
     debugPrint("📌 SharedPreferences 저장 완료: phone=${user.phone}, area=${user.currentArea}");
 
-    // 저장된 값 검증용 로그
     final savedPhone = prefs.getString('phone');
     final savedArea = prefs.getString('area');
     final savedDivision = prefs.getString('division');
@@ -105,8 +105,10 @@ class UserState extends ChangeNotifier {
 
       final trimmedPhone = userData.phone.trim();
       final trimmedArea = area.trim();
+
       await _repository.updateCurrentArea(trimmedPhone, trimmedArea, trimmedArea);
       userData = userData.copyWith(currentArea: trimmedArea);
+
       await _repository.updateUserStatus(phone, area, isSaved: true);
       _user = userData.copyWith(isSaved: true);
       notifyListeners();
@@ -119,17 +121,20 @@ class UserState extends ChangeNotifier {
   }
 
   void _realtimeUsers() {
-    final area = _areaState.currentArea;
-    if (area.isEmpty || _previousArea == area) return;
+    final selectedArea = _areaState.currentArea;
+    if (selectedArea.isEmpty || _previousSelectedArea == selectedArea) return;
 
-    _previousArea = area;
+    _previousSelectedArea = selectedArea;
     _subscription?.cancel();
 
-    _isLoading = true; // ✅ 시작 시 로딩 처리
+    _isLoading = true;
     notifyListeners();
 
-    _subscription = _repository.getUsersStream(area).listen(
-      (data) {
+    /// ✅ selectedArea 기반 스트림 구독
+    _subscription = _repository
+        .getUsersBySelectedAreaStream(selectedArea)
+        .listen(
+          (data) {
         _users = data;
         _selectedUsers = {for (var user in data) user.id: user.isSelected};
         _isLoading = false;
@@ -137,12 +142,12 @@ class UserState extends ChangeNotifier {
       },
       onError: (error) {
         debugPrint('Error syncing users: $error');
-        _isLoading = false; // ✅ 에러 시에도 해제
+        _isLoading = false;
         notifyListeners();
       },
       onDone: () {
         if (_isLoading) {
-          _isLoading = false; // ✅ 강제 해제
+          _isLoading = false;
           notifyListeners();
         }
       },

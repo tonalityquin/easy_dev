@@ -8,7 +8,6 @@ enum RoleType {
   fieldLeader,
   fielder;
 
-  /// 한글 표시용 라벨
   String get label {
     switch (this) {
       case RoleType.dev:
@@ -22,18 +21,16 @@ enum RoleType {
     }
   }
 
-  /// Firebase의 role(String) → enum 매핑: 저장된 값이 'dev', 'officer' 등일 때 사용
   static RoleType fromName(String name) {
     return RoleType.values.firstWhere(
-      (e) => e.name == name,
+          (e) => e.name == name,
       orElse: () => RoleType.fielder,
     );
   }
 
-  /// 라벨(String) → enum 매핑: UI에서 선택된 label이 들어올 때 사용
   static RoleType fromLabel(String label) {
     return RoleType.values.firstWhere(
-      (e) => e.label == label,
+          (e) => e.label == label,
       orElse: () => RoleType.fielder,
     );
   }
@@ -41,16 +38,17 @@ enum RoleType {
 
 class UserSetting extends StatefulWidget {
   final Function(
-    String name,
-    String phone,
-    String email,
-    String role,
-    String password,
-    String area,
-    String division,
-    bool isWorking,
-    bool isSaved,
-  ) onSave;
+      String name,
+      String phone,
+      String email,
+      String role,
+      String password,
+      String area,
+      String division,
+      bool isWorking,
+      bool isSaved,
+      String selectedArea,
+      ) onSave;
 
   final String areaValue;
   final String division;
@@ -99,8 +97,8 @@ class _UserAccountsState extends State<UserSetting> {
 
   final Map<String, String Function(String)> _validationRules = {
     '이름': (value) => value.isEmpty ? '이름을 다시 입력하세요' : '',
-    '전화번호': (value) => RegExp(r'^\d{9,}$').hasMatch(value) ? '' : '전화번호를 다시 입력 하세요',
-    '이메일(구글)': (value) => value.isEmpty ? '이메일을 다시 입력 하세요' : '',
+    '전화번호': (value) => RegExp(r'^\d{9,}$').hasMatch(value) ? '' : '전화번호를 다시 입력하세요',
+    '이메일': (value) => value.isEmpty ? '이메일을 입력하세요' : '',
   };
 
   bool _validateInputs() {
@@ -110,7 +108,7 @@ class _UserAccountsState extends State<UserSetting> {
       String inputValue = switch (field) {
         '이름' => _nameController.text,
         '전화번호' => _phoneController.text,
-        '이메일(구글)' => _emailController.text,
+        '이메일' => _emailController.text,
         _ => '',
       };
       final errorMessage = validator(inputValue);
@@ -163,7 +161,7 @@ class _UserAccountsState extends State<UserSetting> {
             decoration: InputDecoration(
               labelText: '전화번호',
               border: const OutlineInputBorder(),
-              errorText: _errorMessage == '전화번호를 다시 입력 하세요' ? _errorMessage : null,
+              errorText: _errorMessage == '전화번호를 다시 입력하세요' ? _errorMessage : null,
             ),
           ),
           const SizedBox(height: 16),
@@ -178,7 +176,7 @@ class _UserAccountsState extends State<UserSetting> {
                   decoration: InputDecoration(
                     labelText: '이메일(구글)',
                     border: const OutlineInputBorder(),
-                    errorText: _errorMessage == '이메일(구글)' ? _errorMessage : null,
+                    errorText: _errorMessage == '이메일을 입력하세요' ? _errorMessage : null,
                   ),
                 ),
               ),
@@ -203,9 +201,9 @@ class _UserAccountsState extends State<UserSetting> {
             ),
             items: RoleType.values
                 .map((role) => DropdownMenuItem<RoleType>(
-                      value: role,
-                      child: Text(role.label),
-                    ))
+              value: role,
+              child: Text(role.label),
+            ))
                 .toList(),
             onChanged: (value) {
               if (value != null) {
@@ -255,12 +253,12 @@ class _UserAccountsState extends State<UserSetting> {
                       _phoneController.text,
                       fullEmail,
                       _selectedRole.name,
-                      // ✅ name 저장
                       _passwordController.text,
                       widget.areaValue,
                       widget.division,
                       false,
                       false,
+                      widget.areaValue,
                     );
                     Navigator.pop(context);
                   }

@@ -9,7 +9,9 @@ class UserModel {
   final List<String> areas;      // ✅ 복수 지역
   final List<String> divisions;  // ✅ 복수 부서
 
-  final String? currentArea;     // ✅ 현재 근무 지역
+  final String? currentArea;     // ✅ 현재 근무 지역 (top bar 등 내부 상태용)
+  final String? selectedArea;    // ✅ 사용자가 명시적으로 선택한 지역
+
   final bool isSelected;
   final bool isWorking;
   final bool isSaved;
@@ -24,6 +26,7 @@ class UserModel {
     required this.areas,
     required this.divisions,
     this.currentArea,
+    this.selectedArea,
     required this.isSelected,
     required this.isWorking,
     required this.isSaved,
@@ -39,6 +42,7 @@ class UserModel {
     List<String>? areas,
     List<String>? divisions,
     String? currentArea,
+    String? selectedArea,
     bool? isSelected,
     bool? isWorking,
     bool? isSaved,
@@ -53,6 +57,7 @@ class UserModel {
       areas: areas ?? this.areas,
       divisions: divisions ?? this.divisions,
       currentArea: currentArea ?? this.currentArea,
+      selectedArea: selectedArea ?? this.selectedArea,
       isSelected: isSelected ?? this.isSelected,
       isWorking: isWorking ?? this.isWorking,
       isSaved: isSaved ?? this.isSaved,
@@ -67,9 +72,10 @@ class UserModel {
       email: data['email'] ?? '',
       role: data['role'] ?? '',
       password: data['password'] ?? '',
-      areas: List<String>.from(data['areas'] ?? []),            // ✅ 리스트 변환
-      divisions: List<String>.from(data['divisions'] ?? []),    // ✅ 리스트 변환
+      areas: List<String>.from(data['areas'] ?? []),
+      divisions: List<String>.from(data['divisions'] ?? []),
       currentArea: data['currentArea'],
+      selectedArea: data['selectedArea'], // ✅ 추가
       isSelected: data['isSelected'] ?? false,
       isWorking: data['isWorking'] ?? false,
       isSaved: data['isSaved'] ?? false,
@@ -83,9 +89,10 @@ class UserModel {
       'email': email,
       'role': role,
       'password': password,
-      'areas': areas,               // ✅ 저장 시 리스트
-      'divisions': divisions,       // ✅ 저장 시 리스트
+      'areas': areas,
+      'divisions': divisions,
       'currentArea': currentArea,
+      'selectedArea': selectedArea, // ✅ 추가
       'isSelected': isSelected,
       'isWorking': isWorking,
       'isSaved': isSaved,
@@ -103,6 +110,7 @@ class UserModel {
       areas: List<String>.from(json['areas'] ?? []),
       divisions: List<String>.from(json['divisions'] ?? []),
       currentArea: json['currentArea'],
+      selectedArea: json['selectedArea'], // ✅ 추가
       isSelected: json['isSelected'] ?? false,
       isWorking: json['isWorking'] ?? false,
       isSaved: json['isSaved'] ?? false,
@@ -120,6 +128,7 @@ class UserModel {
       'areas': areas,
       'divisions': divisions,
       'currentArea': currentArea,
+      'selectedArea': selectedArea, // ✅ 추가
       'isSelected': isSelected,
       'isWorking': isWorking,
       'isSaved': isSaved,

@@ -47,20 +47,7 @@ class FirestoreUserRepository implements UserRepository {
     final data = doc.data()!;
     debugPrint("✅ Firestore 문서 조회 성공 → userId=$userId / 데이터: $data");
 
-    return UserModel(
-      id: doc.id,
-      name: data['name'] ?? '',
-      phone: data['phone'] ?? '',
-      email: data['email'] ?? '',
-      role: data['role'] ?? '',
-      password: data['password'] ?? '',
-      areas: List<String>.from(data['areas'] ?? []),
-      divisions: List<String>.from(data['divisions'] ?? []),
-      currentArea: data['currentArea'],
-      isSelected: data['isSelected'] ?? false,
-      isWorking: data['isWorking'] ?? false,
-      isSaved: data['isSaved'] ?? false,
-    );
+    return UserModel.fromMap(doc.id, data);
   }
 
   @override
@@ -85,9 +72,16 @@ class FirestoreUserRepository implements UserRepository {
   @override
   Stream<List<UserModel>> getUsersStream(String area) {
     return _getCollectionRef()
-        .where('currentArea', isEqualTo: area)
+        .where('areas', arrayContains: area)
         .snapshots()
         .map((snapshot) => snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList());
+  }
+
+  @override
+  Future<void> updateSelectedArea(String userId, String selectedArea) async {
+    await _getCollectionRef().doc(userId).update({
+      'selectedArea': selectedArea,
+    });
   }
 
   @override
@@ -105,5 +99,13 @@ class FirestoreUserRepository implements UserRepository {
   @override
   Future<void> toggleUserSelection(String id, bool isSelected) async {
     await _getCollectionRef().doc(id).update({'isSelected': isSelected});
+  }
+
+  @override
+  Stream<List<UserModel>> getUsersBySelectedAreaStream(String selectedArea) {
+    return _getCollectionRef()
+        .where('areas', arrayContains: selectedArea)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList());
   }
 }

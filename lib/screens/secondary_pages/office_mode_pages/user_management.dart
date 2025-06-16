@@ -30,19 +30,20 @@ class _UserManagementState extends State<UserManagement> {
   }
 
   void buildAddUserDialog(
-    BuildContext context,
-    void Function(
-      String name,
-      String phone,
-      String email,
-      String role,
-      String password,
-      String area,
-      String division,
-      bool isWorking,
-      bool isSaved,
-    ) onSave,
-  ) {
+      BuildContext context,
+      void Function(
+          String name,
+          String phone,
+          String email,
+          String role,
+          String password,
+          String area,
+          String division,
+          bool isWorking,
+          bool isSaved,
+          String selectedArea,
+          ) onSave,
+      ) {
     final areaState = context.read<AreaState>();
     final currentArea = areaState.currentArea;
     final currentDivision = areaState.currentDivision;
@@ -64,22 +65,26 @@ class _UserManagementState extends State<UserManagement> {
   }
 
   void onIconTapped(BuildContext context, int index, UserState userState) {
-    final selectedIds = userState.selectedUsers.keys.where((id) => userState.selectedUsers[id] == true).toList();
+    final selectedIds = userState.selectedUsers.keys
+        .where((id) => userState.selectedUsers[id] == true)
+        .toList();
 
     if (index == 0) {
+      // 계정 추가
       buildAddUserDialog(
         context,
-        (
-          String name,
-          String phone,
-          String email,
-          String role,
-          String password,
-          String area,
-          String division,
-          bool isWorking,
-          bool isSaved,
-        ) {
+            (
+            String name,
+            String phone,
+            String email,
+            String role,
+            String password,
+            String area,
+            String division,
+            bool isWorking,
+            bool isSaved,
+            String selectedArea,
+            ) {
           final newUser = UserModel(
             id: '$phone-$area',
             name: name,
@@ -87,9 +92,10 @@ class _UserManagementState extends State<UserManagement> {
             email: email,
             role: role,
             password: password,
-            areas: [area],
+            areas: [area], // ✅ 리스트 형태
             divisions: [division],
             currentArea: area,
+            selectedArea: selectedArea,
             isSelected: false,
             isWorking: isWorking,
             isSaved: isSaved,
@@ -104,6 +110,7 @@ class _UserManagementState extends State<UserManagement> {
         },
       );
     } else if (index == 1 && selectedIds.isNotEmpty) {
+      // 삭제
       userState.deleteUserCard(
         selectedIds,
         onError: (errorMessage) {
@@ -120,8 +127,10 @@ class _UserManagementState extends State<UserManagement> {
     final currentArea = areaState.currentArea;
     final currentDivision = areaState.currentDivision;
 
+    // ✅ 현재 지역 및 사업소에 속한 사용자만 필터링
     final filteredUsers = userState.users.where((user) {
-      return user.areas.contains(currentArea) && user.divisions.contains(currentDivision);
+      return user.areas.contains(currentArea) &&
+          user.divisions.contains(currentDivision);
     }).toList();
 
     return Scaffold(
@@ -139,28 +148,29 @@ class _UserManagementState extends State<UserManagement> {
       body: userState.isLoading
           ? const Center(child: CircularProgressIndicator())
           : filteredUsers.isEmpty
-              ? Center(
-                  child:
-                      userState.users.isEmpty ? const Text('전체 계정 데이터가 없습니다') : const Text('현재 지역/사업소에 해당하는 계정이 없습니다'),
-                )
-              : ListView.builder(
-                  itemCount: filteredUsers.length,
-                  itemBuilder: (context, index) {
-                    final user = filteredUsers[index];
-                    final isSelected = userState.selectedUsers[user.id] ?? false;
+          ? Center(
+        child: userState.users.isEmpty
+            ? const Text('전체 계정 데이터가 없습니다')
+            : const Text('현재 지역/사업소에 해당하는 계정이 없습니다'),
+      )
+          : ListView.builder(
+        itemCount: filteredUsers.length,
+        itemBuilder: (context, index) {
+          final user = filteredUsers[index];
+          final isSelected = userState.selectedUsers[user.id] ?? false;
 
-                    return UserCustomBox(
-                      topLeftText: user.name,
-                      topRightText: user.email,
-                      midLeftText: user.role,
-                      midCenterText: user.phone,
-                      midRightText: user.areas.firstOrNull ?? '-',
-                      onTap: () => userState.toggleUserCard(user.id),
-                      isSelected: isSelected,
-                      backgroundColor: isSelected ? Colors.green : Colors.white,
-                    );
-                  },
-                ),
+          return UserCustomBox(
+            topLeftText: user.name,
+            topRightText: user.email,
+            midLeftText: user.role,
+            midCenterText: user.phone,
+            midRightText: user.areas.firstOrNull ?? '-',
+            onTap: () => userState.toggleUserCard(user.id),
+            isSelected: isSelected,
+            backgroundColor: isSelected ? Colors.green[100]! : Colors.white,
+          );
+        },
+      ),
       bottomNavigationBar: SecondaryMiniNavigation(
         icons: getNavigationIcons(userState.selectedUsers.containsValue(true)),
         onIconTapped: (index) => onIconTapped(context, index, userState),
