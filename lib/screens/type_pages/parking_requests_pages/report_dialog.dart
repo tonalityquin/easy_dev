@@ -45,6 +45,60 @@ class _ParkingReportContentState extends State<ParkingReportContent> {
     _fetchIssues(); // 이슈 불러오기
   }
 
+  Future<int>? _feeSummaryFuture;
+
+  Future<void> updateLockedFeeSummary(String division, String area) async {
+    final firestore = FirebaseFirestore.instance;
+    final date = DateTime.now();
+    final dateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+
+    final snapshot = await firestore
+        .collection('plates')
+        .where('type', isEqualTo: 'departure_completed')
+        .where('area', isEqualTo: area)
+        .where('isLockedFee', isEqualTo: true)
+        .get();
+
+    int total = 0;
+    int count = 0;
+
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+      final fee = data['lockedFeeAmount'];
+      if (fee is int) {
+        total += fee;
+        count++;
+      } else if (fee is double) {
+        total += fee.round();
+        count++;
+      }
+    }
+
+    final summaryRef = firestore.collection('fee_summaries').doc('${division}_$area\_$dateStr');
+    await summaryRef.set({
+      'division': division,
+      'area': area,
+      'date': dateStr,
+      'totalLockedFee': total,
+      'vehicleCount': count,
+      'lastUpdated': DateTime.now().toIso8601String(),
+    });
+  }
+
+  Future<int> fetchCachedLockedFeeTotal(String division, String area) async {
+    final date = DateTime.now();
+    final dateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
+    final docId = "${division}_$area\_$dateStr";
+
+    final doc = await FirebaseFirestore.instance.collection('fee_summaries').doc(docId).get();
+
+    if (doc.exists) {
+      return doc['totalLockedFee'] ?? 0;
+    } else {
+      return 0;
+    }
+  }
+
   Future<void> _fetchIssues() async {
     try {
       final firestore = FirebaseFirestore.instance;
@@ -214,7 +268,7 @@ class _ParkingReportContentState extends State<ParkingReportContent> {
             width: 300,
             child: TextField(
               controller: _middleReportController,
-              textAlign: TextAlign.center, // 텍스트 중앙 정렬도 유지
+              textAlign: TextAlign.center,
               decoration: const InputDecoration(
                 labelText: '코멘트 섹션',
                 hintText: '예: 게시된 이슈에 대한 약식 답변',
@@ -228,37 +282,90 @@ class _ParkingReportContentState extends State<ParkingReportContent> {
     );
   }
 
+  // 이 필드는 클래스의 상태 변수로 선언되어야 합니다.
+
   Widget _buildEndReportField() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+    final user = Provider.of<UserState>(context, listen: false).user;
+    final division = user?.divisions.first;
+    final area = user?.currentArea;
+
+    return Column(
       children: [
-        SizedBox(
-          width: 140,
-          child: TextField(
-            controller: _vehicleCountController,
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            decoration: const InputDecoration(
-              labelText: '입차 차량 수',
-              hintText: '예: 24',
-              border: OutlineInputBorder(),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 140,
+              child: TextField(
+                controller: _vehicleCountController,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: const InputDecoration(
+                  labelText: '입차 차량 수',
+                  hintText: '예: 24',
+                  border: OutlineInputBorder(),
+                ),
+              ),
             ),
-          ),
-        ),
-        const SizedBox(width: 16),
-        SizedBox(
-          width: 140,
-          child: TextField(
-            controller: _exitVehicleCountController,
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            decoration: const InputDecoration(
-              labelText: '출차 차량 수',
-              hintText: '예: 21',
-              border: OutlineInputBorder(),
+            const SizedBox(width: 16),
+            SizedBox(
+              width: 140,
+              child: TextField(
+                controller: _exitVehicleCountController,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: const InputDecoration(
+                  labelText: '출차 차량 수',
+                  hintText: '예: 21',
+                  border: OutlineInputBorder(),
+                ),
+              ),
             ),
-          ),
+          ],
         ),
+        const SizedBox(height: 12),
+
+        // ✅ 버튼 또는 결과 표시
+        if (_feeSummaryFuture == null)
+          ElevatedButton(
+            onPressed: () async {
+              if (division == null || area == null) return;
+
+              final dateStr = DateTime.now().toIso8601String().split('T').first;
+              final summaryRef =
+                  FirebaseFirestore.instance.collection('fee_summaries').doc('${division}_$area\_$dateStr');
+
+              final doc = await summaryRef.get();
+              if (!doc.exists) {
+                await updateLockedFeeSummary(division, area);
+              }
+
+              setState(() {
+                _feeSummaryFuture = fetchCachedLockedFeeTotal(division, area);
+              });
+            },
+            child: const Text('최종 정산 금액 확인하기'),
+          )
+        else
+          FutureBuilder<int>(
+            future: _feeSummaryFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const CircularProgressIndicator();
+              }
+              if (!snapshot.hasData) {
+                return const Text('정산 금액을 불러올 수 없습니다.');
+              }
+              return Text(
+                '🔒 총 정산금: ₩${snapshot.data}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: Colors.black87,
+                ),
+              );
+            },
+          ),
       ],
     );
   }
