@@ -22,7 +22,7 @@ class ClockOutLogUploader {
       final areaState = context.read<AreaState>();
       final userState = context.read<UserState>();
 
-      final area = areaState.currentArea;
+      final area = userState.user?.selectedArea ?? '';
       final division = areaState.currentDivision;
       final userId = userState.user?.id ?? '';
       final userName = userState.name;

@@ -22,10 +22,12 @@ class ClockInLogUploader {
       final areaState = context.read<AreaState>();
       final userState = context.read<UserState>();
 
-      final area = areaState.currentArea;
+      final area = userState.user?.selectedArea ?? '';
       final division = areaState.currentDivision;
       final userName = userState.name;
       final userId = userState.user?.id ?? '';
+
+      if (area.isEmpty || userId.isEmpty) return false;
 
       final now = DateTime.now();
       final year = now.year.toString().padLeft(4, '0');
@@ -77,7 +79,6 @@ class ClockInLogUploader {
         logList = [];
       }
 
-      // ✅ 오늘 날짜 기록이 이미 있으면 추가하지 않음
       final alreadyExistsToday = logList.any((e) => e['recordedDate'] == dateStr);
       if (alreadyExistsToday) {
         debugPrint('⚠️ 오늘 출근 기록 이미 존재함: $dateStr');
