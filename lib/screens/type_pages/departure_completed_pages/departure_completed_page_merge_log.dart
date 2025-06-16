@@ -208,13 +208,34 @@ class _MergedLogSectionState extends State<MergedLogSection> {
                               showDialog(
                                 context: context,
                                 builder: (_) => AlertDialog(
-                                  title: Text('$plate 로그'),
-                                  content: SizedBox(
-                                    width: double.maxFinite,
+                                  title: Row(
+                                    children: [
+                                      const Icon(Icons.article_outlined, color: Colors.blueGrey),
+                                      const SizedBox(width: 8),
+                                      Text('$plate 로그', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    ],
+                                  ),
+                                  contentPadding: const EdgeInsets.all(16),
+                                  content: Container(
+                                    constraints: const BoxConstraints(maxHeight: 500, maxWidth: 600),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white, // ✅ 밝은 배경으로 전환
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: Colors.grey.shade300),
+                                    ),
+                                    padding: const EdgeInsets.all(12),
                                     child: SingleChildScrollView(
-                                      child: Text(
-                                        const JsonEncoder.withIndent('  ').convert(logs),
-                                        style: const TextStyle(fontSize: 12),
+                                      scrollDirection: Axis.horizontal,
+                                      child: SingleChildScrollView(
+                                        child: Text(
+                                          const JsonEncoder.withIndent('  ').convert(logs),
+                                          style: const TextStyle(
+                                            fontSize: 12,                     // ✅ 폰트 크기 증가
+                                            fontFamily: 'monospace',          // ✅ Android 대응 고정폭
+                                            color: Colors.black,              // ✅ 흰배경 대비 검정 글자
+                                            height: 1.5,                      // ✅ 줄 간격 증가
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ),
