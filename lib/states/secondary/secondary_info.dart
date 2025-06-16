@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 // Field Mode Pages
-import '../../screens/secondary_pages/dev_mode_pages/function_test.dart';
+import '../../screens/secondary_pages/dev_mode_pages/local_data.dart';
 import '../../screens/secondary_pages/field_mode_pages/dash_board/dash_board_screen.dart';
 import '../../screens/secondary_pages/field_mode_pages/docu_sign.dart';
 import '../../screens/secondary_pages/field_mode_pages/chat.dart';
@@ -55,5 +55,5 @@ final List<SecondaryInfo> documentPages = [
 /// 🔹 Dev Mode Pages
 final List<SecondaryInfo> devPages = [
   SecondaryInfo('지역 추가', AreaManagement(), Icon(Icons.tab)),
-  SecondaryInfo('기술 테스트', FunctionTest(), Icon(Icons.tab)),
+  SecondaryInfo('로컬 데이터 관리', LocalData(), Icon(Icons.tab)),
 ];
