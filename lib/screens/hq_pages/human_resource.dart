@@ -50,7 +50,7 @@ class _HumanResourceState extends State<HumanResource> {
   void _subscribeToUsers(String area) {
     _userSubscription = FirebaseFirestore.instance
         .collection('user_accounts')
-        .where('currentArea', isEqualTo: area)
+        .where('selectedArea', isEqualTo: area)
         .snapshots()
         .listen((snapshot) {
       if (!mounted) return;
@@ -73,7 +73,7 @@ class _HumanResourceState extends State<HumanResource> {
   Future<List<UserModel>> _getUsersByArea(String area) async {
     final snapshot = await FirebaseFirestore.instance
         .collection('user_accounts')
-        .where('currentArea', isEqualTo: area)
+        .where('selectedArea', isEqualTo: area)
         .get();
     return snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
   }
@@ -82,7 +82,7 @@ class _HumanResourceState extends State<HumanResource> {
     try {
       final snapshot = await FirebaseFirestore.instance
           .collection('user_accounts')
-          .where('currentArea', isEqualTo: area)
+          .where('selectedArea', isEqualTo: area)
           .get();
 
       final updatedUsers = snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
