@@ -78,6 +78,8 @@ class _HeadQuarterTaskState extends State<HeadQuarterTask> {
 
       final snapshot = await firestore.collection('tasks').where('division', isEqualTo: division).get();
 
+      if (!mounted) return;
+
       final sharedTasks = snapshot.docs
           .map((doc) {
             final data = doc.data();
@@ -100,6 +102,8 @@ class _HeadQuarterTaskState extends State<HeadQuarterTask> {
           .whereType<Task>()
           .toList();
 
+      if (!mounted) return;
+
       setState(() {
         for (final shared in sharedTasks) {
           final alreadyExists = _tasks.any((t) => t.firestoreId == shared.firestoreId);
@@ -109,9 +113,11 @@ class _HeadQuarterTaskState extends State<HeadQuarterTask> {
         }
       });
 
+      if (!mounted) return;
       _saveTasksToPrefs();
     } catch (e) {
       debugPrint('🔥 공유된 작업 로드 실패: $e');
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('공유된 작업 로드 중 오류 발생: $e')),
       );
@@ -120,9 +126,12 @@ class _HeadQuarterTaskState extends State<HeadQuarterTask> {
 
   Future<void> _loadTasksFromPrefs() async {
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+
     final saved = prefs.getString(_storageKey);
     if (saved != null) {
       final decoded = jsonDecode(saved) as List;
+      if (!mounted) return;
       setState(() {
         _tasks.clear();
         _tasks.addAll(decoded.map((e) => Task.fromJson(e)));
@@ -141,6 +150,7 @@ class _HeadQuarterTaskState extends State<HeadQuarterTask> {
       final user = context.read<UserState>().user;
 
       if (user == null) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('사용자 정보가 없습니다. 로그인 상태를 확인하세요.')),
         );
@@ -162,16 +172,21 @@ class _HeadQuarterTaskState extends State<HeadQuarterTask> {
         }
       });
 
+      if (!mounted) return;
       setState(() {
         task.isShared = true;
         task.firestoreId = doc.id;
       });
+
+      if (!mounted) return;
       _saveTasksToPrefs();
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('공유되었습니다')),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('공유 실패: $e')),
       );
@@ -185,16 +200,21 @@ class _HeadQuarterTaskState extends State<HeadQuarterTask> {
       final firestore = FirebaseFirestore.instance;
       await firestore.collection('tasks').doc(task.firestoreId).delete();
 
+      if (!mounted) return;
       setState(() {
         task.isShared = false;
         task.firestoreId = null;
       });
+
+      if (!mounted) return;
       _saveTasksToPrefs();
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('공유 해제되었습니다')),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('공유 해제 실패: $e')),
       );
@@ -214,10 +234,14 @@ class _HeadQuarterTaskState extends State<HeadQuarterTask> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Tasks'),
-        centerTitle: true, // 제목 중앙 정렬
-        backgroundColor: Colors.white, // 배경 흰색
-        foregroundColor: Colors.black, // 텍스트/아이콘 검정
-        elevation: 0, // 그림자 제거
+        centerTitle: true,
+        // 제목 중앙 정렬
+        backgroundColor: Colors.white,
+        // 배경 흰색
+        foregroundColor: Colors.black,
+        // 텍스트/아이콘 검정
+        elevation: 0,
+        // 그림자 제거
         actions: [
           Row(
             children: [
@@ -298,10 +322,7 @@ class _HeadQuarterTaskState extends State<HeadQuarterTask> {
                             // Firestore에 공유된 작업이면 문서도 삭제
                             if (task.firestoreId != null) {
                               try {
-                                await FirebaseFirestore.instance
-                                    .collection('tasks')
-                                    .doc(task.firestoreId)
-                                    .delete();
+                                await FirebaseFirestore.instance.collection('tasks').doc(task.firestoreId).delete();
                                 debugPrint('✅ Firestore 문서 삭제 완료: ${task.firestoreId}');
                               } catch (e) {
                                 debugPrint('❌ Firestore 삭제 실패: $e');
