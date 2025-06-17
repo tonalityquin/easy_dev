@@ -29,13 +29,26 @@ class _ModifyLocationDialogState extends State<ModifyLocationDialog> {
     _prepareLocationData();
   }
 
+  void _showSelfAgain() {
+    if (!mounted) return;
+    Future.delayed(const Duration(milliseconds: 200), () {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (context) => ModifyLocationDialog(
+          locationController: widget.locationController,
+          onLocationSelected: widget.onLocationSelected,
+        ),
+      );
+    });
+  }
+
   void _prepareLocationData() {
     final currentArea = context.read<AreaState>().currentArea;
     final locationState = context.read<LocationState>();
 
     if (_previousArea != currentArea) {
       _previousArea = currentArea;
-      // 캐시 로딩 또는 firestore 동기화 이후 위치 목록 사용
       _futureLocations = Future.value(locationState.locations);
     }
   }
@@ -72,9 +85,27 @@ class _ModifyLocationDialogState extends State<ModifyLocationDialog> {
                 }
 
                 if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return const Padding(
-                    padding: EdgeInsets.all(8.0),
-                    child: Text('사용 가능한 주차 구역이 없습니다.'),
+                  return SizedBox(
+                    height: 100,
+                    child: Center(
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('주차 구역 갱신하기'),
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          Future.microtask(() {
+                            if (!mounted) return;
+                            showDialog(
+                              context: context,
+                              builder: (context) => ModifyLocationDialog(
+                                locationController: widget.locationController,
+                                onLocationSelected: widget.onLocationSelected,
+                              ),
+                            );
+                          });
+                        },
+                      ),
+                    ),
                   );
                 }
 
@@ -84,7 +115,6 @@ class _ModifyLocationDialogState extends State<ModifyLocationDialog> {
 
                 if (selectedParent != null) {
                   final subLocations = composites.where((l) => l.parent == selectedParent).toList();
-
                   return Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -155,7 +185,8 @@ class ScaleTransitionDialog extends StatefulWidget {
   State<ScaleTransitionDialog> createState() => _ScaleTransitionDialogState();
 }
 
-class _ScaleTransitionDialogState extends State<ScaleTransitionDialog> with SingleTickerProviderStateMixin {
+class _ScaleTransitionDialogState extends State<ScaleTransitionDialog>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
 

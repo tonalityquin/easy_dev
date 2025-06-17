@@ -16,7 +16,7 @@ class PageState with ChangeNotifier {
     notifyListeners();
   }
 
-  PageState({required this.pages}) : _selectedIndex = pages.isNotEmpty ? 1 : throw Exception("🚨 페이지 리스트가 비어 있습니다.");
+  PageState({required this.pages}) : _selectedIndex = pages.isNotEmpty ? 0 : throw Exception("🚨 페이지 리스트가 비어 있습니다.");
 
   String get selectedPageTitle => pages[_selectedIndex].title;
 
