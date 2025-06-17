@@ -11,7 +11,6 @@ class FirestorePlateRepository implements PlateRepository {
   Stream<List<PlateModel>> getPlatesByTypeAndArea(
     PlateType type,
     String area, {
-    int? limit,
     bool descending = true,
   }) {
     Query<Map<String, dynamic>> query = _firestore
@@ -19,10 +18,6 @@ class FirestorePlateRepository implements PlateRepository {
         .where('type', isEqualTo: type.firestoreValue)
         .where('area', isEqualTo: area)
         .orderBy('request_time', descending: descending);
-
-    if (limit != null) {
-      query = query.limit(limit);
-    }
 
     return query.snapshots().map(
           (snapshot) => snapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList(),
@@ -226,7 +221,6 @@ class FirestorePlateRepository implements PlateRepository {
       final statusDocRef = _firestore.collection('plate_status').doc(documentId);
       final expireAt = Timestamp.fromDate(DateTime.now().add(const Duration(days: 1)));
 
-      /// ✅ 항상 새 customStatus로 덮어씀 (병합 X)
       await statusDocRef.set({
         'customStatus': customStatus,
         'updatedAt': Timestamp.now(),
@@ -266,10 +260,8 @@ class FirestorePlateRepository implements PlateRepository {
     required String area,
   }) async {
     try {
-      Query<Map<String, dynamic>> query = _firestore
-          .collection('plates')
-          .where('type', isEqualTo: type.firestoreValue)
-          .where('area', isEqualTo: area); // ✅ 필터링 추가
+      Query<Map<String, dynamic>> query =
+          _firestore.collection('plates').where('type', isEqualTo: type.firestoreValue).where('area', isEqualTo: area);
 
       if (selectedDate != null && type == PlateType.departureCompleted) {
         final start = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../repositories/plate/plate_repository.dart';
 
@@ -41,34 +40,6 @@ class PlateState extends ChangeNotifier {
 
   final Map<String, bool> previousIsLockedFee = {};
 
-  Future<Map<PlateType, int>> _fetchLimitMapFromFirestore(String area) async {
-    // ✅ 하이픈이 있을 경우 뒤쪽만 추출 (e.g., "dev-default" → "default")
-    final areaKey = area.contains('-') ? area.split('-').last : area;
-
-    try {
-      final doc = await FirebaseFirestore.instance.collection('area_limits').doc(areaKey).get();
-
-      final data = doc.data() ?? {};
-
-      debugPrint("📥 limit fetch → areaKey: $areaKey, data: $data");
-
-      return {
-        PlateType.parkingRequests: data['parkingRequests'] ?? 6,
-        PlateType.parkingCompleted: data['parkingCompleted'] ?? 6,
-        PlateType.departureRequests: data['departureRequests'] ?? 6,
-        PlateType.departureCompleted: data['departureCompleted'] ?? 10,
-      };
-    } catch (e) {
-      debugPrint("❌ limit 불러오기 실패: $e");
-      return {
-        PlateType.parkingRequests: 6,
-        PlateType.parkingCompleted: 6,
-        PlateType.departureRequests: 6,
-        PlateType.departureCompleted: 10,
-      };
-    }
-  }
-
   void _initializeSubscriptions() async {
     final area = _areaState.currentArea;
     if (area.isEmpty || _previousArea == area) return;
@@ -79,22 +50,16 @@ class PlateState extends ChangeNotifier {
     _isLoading = true;
     plateCounts();
 
-    final limitMap = await _fetchLimitMapFromFirestore(area);
-
     int receivedCount = 0;
     final totalCollections = PlateType.values.length;
 
     for (final collection in PlateType.values) {
       final descending = _isSortedMap[collection] ?? true;
-      final limit = limitMap[collection] ?? 6; // ✅ fallback 안전값 추가
-
-      debugPrint("📦 [LIMIT] $collection → $limit"); // ✅ 로그 출력
 
       final stream = _repository.getPlatesByTypeAndArea(
         collection,
         currentArea,
         descending: descending,
-        limit: limit,
       );
 
       bool firstDataReceived = false;
@@ -187,18 +152,12 @@ class PlateState extends ChangeNotifier {
 
   void _resubscribeForType(PlateType type) async {
     final area = _areaState.currentArea;
-    final descending = _isSortedMap[type] ?? true;
-
-    final limitMap = await _fetchLimitMapFromFirestore(area);
-    final limit = limitMap[type];
 
     _subscriptions[type]?.cancel();
 
     final stream = _repository.getPlatesByTypeAndArea(
       type,
       area,
-      descending: descending,
-      limit: limit,
     );
 
     final subscription = stream.listen((filteredData) {
