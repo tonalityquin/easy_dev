@@ -35,9 +35,21 @@ class _InputLocationDialogState extends State<InputLocationDialog> {
 
     if (_previousArea != currentArea) {
       _previousArea = currentArea;
-      // 캐시 로딩 또는 firestore 동기화 이후 위치 목록 사용
       _futureLocations = Future.value(locationState.locations);
     }
+  }
+
+  void _showSelfAgain(BuildContext outerContext) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showDialog(
+        context: outerContext,
+        builder: (context) => InputLocationDialog(
+          locationController: widget.locationController,
+          onLocationSelected: widget.onLocationSelected,
+        ),
+      );
+    });
   }
 
   @override
@@ -72,9 +84,19 @@ class _InputLocationDialogState extends State<InputLocationDialog> {
                 }
 
                 if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return const Padding(
-                    padding: EdgeInsets.all(8.0),
-                    child: Text('사용 가능한 주차 구역이 없습니다.'),
+                  return SizedBox(
+                    height: 100,
+                    child: Center(
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('주차 구역 갱신하기'),
+                        onPressed: () {
+                          final outerContext = context;
+                          Navigator.pop(context);
+                          _showSelfAgain(outerContext);
+                        },
+                      ),
+                    ),
                   );
                 }
 
@@ -155,8 +177,7 @@ class ScaleTransitionDialog extends StatefulWidget {
   State<ScaleTransitionDialog> createState() => _ScaleTransitionDialogState();
 }
 
-class _ScaleTransitionDialogState extends State<ScaleTransitionDialog>
-    with SingleTickerProviderStateMixin {
+class _ScaleTransitionDialogState extends State<ScaleTransitionDialog> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
 

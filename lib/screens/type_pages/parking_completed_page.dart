@@ -70,20 +70,28 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
   void _showParkingAreaDialog(BuildContext context) {
     showDialog(
       context: context,
+      barrierDismissible: false, // 닫기 불가 → 반드시 선택해야 함
       builder: (context) => ParkingLocationDialog(
         locationController: _locationController,
         onLocationSelected: (selectedLocation) {
+          if (selectedLocation.trim().isEmpty) return; // ❌ 빈 선택 무시
+
           debugPrint("✅ 선택된 주차 구역: $selectedLocation");
-          setState(() {
-            _isParkingAreaMode = true;
-            _selectedParkingArea = selectedLocation;
-          });
+
           final area = context.read<AreaState>().currentArea;
+
           setState(() {
-            context
-                .read<FilterPlate>()
-                .filterByParkingLocation(PlateType.parkingCompleted, area, _selectedParkingArea!);
+            _selectedParkingArea = selectedLocation;
+            _isParkingAreaMode = true;
+
+            context.read<FilterPlate>().filterByParkingLocation(
+              PlateType.parkingCompleted,
+              area,
+              selectedLocation,
+            );
           });
+
+          Navigator.pop(context); // ✅ 다이얼로그 닫기
         },
       ),
     );
