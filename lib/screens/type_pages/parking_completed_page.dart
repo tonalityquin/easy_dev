@@ -67,31 +67,21 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
     }
   }
 
-  void _showParkingAreaDialog(BuildContext context) {
+  void _showParkingAreaDialog(BuildContext parentContext) {
     showDialog(
-      context: context,
-      barrierDismissible: false, // 닫기 불가 → 반드시 선택해야 함
+      context: parentContext, // 이 context를 넘겨받음
       builder: (context) => ParkingLocationDialog(
         locationController: _locationController,
         onLocationSelected: (selectedLocation) {
-          if (selectedLocation.trim().isEmpty) return; // ❌ 빈 선택 무시
-
           debugPrint("✅ 선택된 주차 구역: $selectedLocation");
-
-          final area = context.read<AreaState>().currentArea;
-
           setState(() {
-            _selectedParkingArea = selectedLocation;
             _isParkingAreaMode = true;
-
-            context.read<FilterPlate>().filterByParkingLocation(
-              PlateType.parkingCompleted,
-              area,
-              selectedLocation,
-            );
+            _selectedParkingArea = selectedLocation;
           });
 
-          Navigator.pop(context); // ✅ 다이얼로그 닫기
+          final area = Provider.of<AreaState>(parentContext, listen: false).currentArea;
+          Provider.of<FilterPlate>(parentContext, listen: false)
+              .filterByParkingLocation(PlateType.parkingCompleted, area, selectedLocation);
         },
       ),
     );
@@ -210,8 +200,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                       PlateContainer(
                         data: parkingCompleted,
                         collection: PlateType.parkingCompleted,
-                        filterCondition: (request) =>
-                        request.type == PlateType.parkingCompleted.firestoreValue,
+                        filterCondition: (request) => request.type == PlateType.parkingCompleted.firestoreValue,
                         onPlateTap: (plateNumber, area) {
                           plateState.toggleIsSelected(
                             collection: PlateType.parkingCompleted,
@@ -243,8 +232,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                       PlateContainer(
                         data: parkingCompleted,
                         collection: PlateType.parkingCompleted,
-                        filterCondition: (request) =>
-                        request.type == PlateType.parkingCompleted.firestoreValue,
+                        filterCondition: (request) => request.type == PlateType.parkingCompleted.firestoreValue,
                         onPlateTap: (plateNumber, area) {
                           plateState.toggleIsSelected(
                             collection: PlateType.parkingCompleted,
@@ -270,8 +258,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                 PlateContainer(
                   data: plates,
                   collection: PlateType.parkingCompleted,
-                  filterCondition: (request) =>
-                  request.type == PlateType.parkingCompleted.firestoreValue,
+                  filterCondition: (request) => request.type == PlateType.parkingCompleted.firestoreValue,
                   onPlateTap: (plateNumber, area) {
                     plateState.toggleIsSelected(
                       collection: PlateType.parkingCompleted,

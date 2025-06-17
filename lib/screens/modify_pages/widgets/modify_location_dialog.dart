@@ -29,20 +29,6 @@ class _ModifyLocationDialogState extends State<ModifyLocationDialog> {
     _prepareLocationData();
   }
 
-  void _showSelfAgain() {
-    if (!mounted) return;
-    Future.delayed(const Duration(milliseconds: 200), () {
-      if (!mounted) return;
-      showDialog(
-        context: context,
-        builder: (context) => ModifyLocationDialog(
-          locationController: widget.locationController,
-          onLocationSelected: widget.onLocationSelected,
-        ),
-      );
-    });
-  }
-
   void _prepareLocationData() {
     final currentArea = context.read<AreaState>().currentArea;
     final locationState = context.read<LocationState>();
@@ -185,8 +171,7 @@ class ScaleTransitionDialog extends StatefulWidget {
   State<ScaleTransitionDialog> createState() => _ScaleTransitionDialogState();
 }
 
-class _ScaleTransitionDialogState extends State<ScaleTransitionDialog>
-    with SingleTickerProviderStateMixin {
+class _ScaleTransitionDialogState extends State<ScaleTransitionDialog> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
 
