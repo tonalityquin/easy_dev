@@ -136,22 +136,6 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
     }
   }
 
-  void handleEntryRequest(BuildContext context, String plateNumber, String area) {
-    final movementPlate = context.read<MovementPlate>();
-    final plateState = context.read<PlateState>();
-
-    movementPlate.goBackToParkingRequest(
-      fromType: PlateType.parkingCompleted,
-      plateNumber: plateNumber,
-      area: area,
-      newLocation: "미지정",
-      plateState: plateState,
-    );
-
-    showSuccessSnackbar(context, "입차 요청이 완료되었습니다.");
-  }
-
-  @override
   @override
   Widget build(BuildContext context) {
     final plateState = context.read<PlateState>();
