@@ -188,6 +188,12 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                     return const Center(child: Text('검색 결과가 없습니다.'));
                   }
 
+                  departureRequests.sort((a, b) {
+                    final aTime = a.requestTime;
+                    final bTime = b.requestTime;
+                    return _isSorted ? bTime.compareTo(aTime) : aTime.compareTo(bTime);
+                  });
+
                   return ListView(
                     padding: const EdgeInsets.all(8.0),
                     children: [
@@ -229,6 +235,12 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                     return const Center(child: Text('해당 구역의 출차 요청 차량이 없습니다.'));
                   }
 
+                  departureRequests.sort((a, b) {
+                    final aTime = a.requestTime;
+                    final bTime = b.requestTime;
+                    return _isSorted ? bTime.compareTo(aTime) : aTime.compareTo(bTime);
+                  });
+
                   return ListView(
                     padding: const EdgeInsets.all(8.0),
                     children: [
@@ -254,10 +266,16 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
               );
             }
 
-            final plates = plateState.getPlatesByCollection(PlateType.departureRequests);
+            final plates = [...plateState.getPlatesByCollection(PlateType.departureRequests)];
             if (plates.isEmpty) {
               return const Center(child: Text('출차 요청 차량이 없습니다.'));
             }
+
+            plates.sort((a, b) {
+              final aTime = a.requestTime;
+              final bTime = b.requestTime;
+              return _isSorted ? bTime.compareTo(aTime) : aTime.compareTo(bTime);
+            });
 
             return ListView(
               padding: const EdgeInsets.all(8.0),
