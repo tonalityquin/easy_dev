@@ -69,16 +69,16 @@ class UserState extends ChangeNotifier {
   Future<void> saveCardToUserPhone(UserModel user) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('phone', user.phone);
-    await prefs.setString('area', user.currentArea ?? user.areas.firstOrNull ?? '');
+    await prefs.setString('selectedArea', user.selectedArea ?? '');
     await prefs.setString('division', user.divisions.firstOrNull ?? '');
 
-    debugPrint("📌 SharedPreferences 저장 완료: phone=${user.phone}, area=${user.currentArea}");
+    debugPrint("📌 SharedPreferences 저장 완료: phone=${user.phone}, selectedArea=${user.selectedArea}");
 
     final savedPhone = prefs.getString('phone');
-    final savedArea = prefs.getString('area');
+    final savedSelectedArea = prefs.getString('selectedArea');
     final savedDivision = prefs.getString('division');
 
-    debugPrint("📦 저장 상태 확인 → phone=$savedPhone / area=$savedArea / division=$savedDivision");
+    debugPrint("📦 저장 상태 확인 → phone=$savedPhone / selectedArea=$savedSelectedArea / division=$savedDivision");
   }
 
   Future<void> loadUserToLogIn() async {
@@ -87,16 +87,18 @@ class UserState extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       final phone = prefs.getString('phone')?.trim();
-      final area = prefs.getString('area')?.trim();
+      final selectedArea = prefs.getString('selectedArea')?.trim(); // ✅ 고정 소속
 
-      debugPrint("📥 자동 로그인 정보 → phone=$phone / area=$area");
+      debugPrint("📥 자동 로그인 정보 → phone=$phone / selectedArea=$selectedArea");
 
-      if (phone == null || area == null) {
-        debugPrint("[DEBUG] 자동 로그인 실패 - 저장된 전화번호 또는 지역 없음");
+      if (phone == null || selectedArea == null) {
+        debugPrint("[DEBUG] 자동 로그인 실패 - 저장된 전화번호 또는 소속 없음");
         return;
       }
 
-      final userId = "$phone-$area";
+      final userId = "$phone-$selectedArea";
+      debugPrint("[DEBUG] 시도할 userId: $userId");
+
       var userData = await _repository.getUserById(userId);
       if (userData == null) {
         debugPrint("[DEBUG] Firestore에 사용자 없음");
@@ -104,12 +106,12 @@ class UserState extends ChangeNotifier {
       }
 
       final trimmedPhone = userData.phone.trim();
-      final trimmedArea = area.trim();
+      final trimmedArea = selectedArea.trim();
 
       await _repository.updateCurrentArea(trimmedPhone, trimmedArea, trimmedArea);
       userData = userData.copyWith(currentArea: trimmedArea);
 
-      await _repository.updateUserStatus(phone, area, isSaved: true);
+      await _repository.updateUserStatus(phone, trimmedArea, isSaved: true);
       _user = userData.copyWith(isSaved: true);
       notifyListeners();
 
