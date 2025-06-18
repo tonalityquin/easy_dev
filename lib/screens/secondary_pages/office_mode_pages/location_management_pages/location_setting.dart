@@ -10,20 +10,24 @@ class LocationSetting extends StatefulWidget {
 }
 
 class _LocationSettingState extends State<LocationSetting> {
-  final TextEditingController _locationController = TextEditingController(); // 단일 또는 상위
+  final TextEditingController _locationController = TextEditingController();
+  final TextEditingController _capacityController = TextEditingController(); // 단일용
+
   final FocusNode _locationFocus = FocusNode();
 
-  final List<TextEditingController> _subControllers = []; // 하위 구역 리스트
+  final List<Map<String, TextEditingController>> _subControllers = []; // 이름+숫자
 
   String? _errorMessage;
-  bool _isSingle = true; // 기본값: 단일 주차 구역
+  bool _isSingle = true;
 
   @override
   void dispose() {
     _locationController.dispose();
+    _capacityController.dispose();
     _locationFocus.dispose();
-    for (var controller in _subControllers) {
-      controller.dispose();
+    for (var pair in _subControllers) {
+      pair['name']!.dispose();
+      pair['capacity']!.dispose();
     }
     super.dispose();
   }
@@ -31,19 +35,19 @@ class _LocationSettingState extends State<LocationSetting> {
   bool _validateInput() {
     bool isValid = _locationController.text.isNotEmpty;
 
-    if (!_isSingle) {
-      bool hasValidSub = _subControllers.any((c) => c.text.trim().isNotEmpty);
+    if (_isSingle) {
+      isValid = isValid && _capacityController.text.trim().isNotEmpty;
+    } else {
+      bool hasValidSub = _subControllers.any((map) => map['name']!.text.trim().isNotEmpty);
       isValid = isValid && hasValidSub;
     }
 
     setState(() {
-      if (!isValid) {
-        _errorMessage = _isSingle
-            ? 'Parking location is required.'
-            : 'Both parent and at least one sub-location are required.';
-      } else {
-        _errorMessage = null;
-      }
+      _errorMessage = !isValid
+          ? (_isSingle
+          ? '주차 구역명과 수용 대수를 입력하세요.'
+          : '상위 구역과 하나 이상의 하위 구역이 필요합니다.')
+          : null;
     });
 
     return isValid;
@@ -51,28 +55,37 @@ class _LocationSettingState extends State<LocationSetting> {
 
   void _addSubLocation() {
     setState(() {
-      _subControllers.add(TextEditingController());
+      _subControllers.add({
+        'name': TextEditingController(),
+        'capacity': TextEditingController(),
+      });
     });
   }
 
   void _removeSubLocation(int index) {
     setState(() {
-      _subControllers[index].dispose();
+      _subControllers[index]['name']!.dispose();
+      _subControllers[index]['capacity']!.dispose();
       _subControllers.removeAt(index);
+    });
+  }
+
+  int _calculateTotalSubCapacity() {
+    return _subControllers.fold(0, (total, map) {
+      final cap = int.tryParse(map['capacity']!.text.trim()) ?? 0;
+      return total + cap;
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-      ),
+      appBar: AppBar(title: const Text('주차 구역 설정')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 토글 선택
+            // 유형 선택
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -104,42 +117,56 @@ class _LocationSettingState extends State<LocationSetting> {
             ),
             const SizedBox(height: 16),
 
-            // 입력 필드
+            // 상위 구역 이름
             TextField(
               controller: _locationController,
               focusNode: _locationFocus,
-              textInputAction: TextInputAction.done,
               decoration: InputDecoration(
-                labelText: _isSingle ? 'Parking Location' : 'Parent Parking Area',
+                labelText: _isSingle ? '주차 구역명' : '상위 구역명',
                 border: const OutlineInputBorder(),
-                hintText: _isSingle
-                    ? 'Enter parking location name'
-                    : 'Enter parent area name',
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
 
-            // 복합 주차 구역: 하위 입력 리스트
+            if (_isSingle)
+              TextField(
+                controller: _capacityController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: '수용 가능 차량 수',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+
             if (!_isSingle)
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Sub Parking Areas',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
+                  const Text('하위 구역 목록', style: TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   ...List.generate(_subControllers.length, (index) {
                     return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4.0),
+                      padding: const EdgeInsets.symmetric(vertical: 6.0),
                       child: Row(
                         children: [
                           Expanded(
                             child: TextField(
-                              controller: _subControllers[index],
+                              controller: _subControllers[index]['name'],
                               decoration: InputDecoration(
-                                hintText: 'Sub-location ${index + 1}',
+                                hintText: '하위 구역 ${index + 1}',
                                 border: const OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          SizedBox(
+                            width: 80,
+                            child: TextField(
+                              controller: _subControllers[index]['capacity'],
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                hintText: '수용',
+                                border: OutlineInputBorder(),
                               ),
                             ),
                           ),
@@ -156,49 +183,68 @@ class _LocationSettingState extends State<LocationSetting> {
                     child: TextButton.icon(
                       onPressed: _addSubLocation,
                       icon: const Icon(Icons.add),
-                      label: const Text('Add Sub-location'),
+                      label: const Text('하위 구역 추가'),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 8),
+                  Text(
+                    '총 수용 가능 차량 수: ${_calculateTotalSubCapacity()}대',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
                 ],
               ),
 
-            // 에러 메시지
             if (_errorMessage != null)
-              Text(
-                _errorMessage!,
-                style: const TextStyle(color: Colors.red),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: Text(
+                  _errorMessage!,
+                  style: const TextStyle(color: Colors.red),
+                ),
               ),
 
             const Spacer(),
 
-            // 버튼
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 ElevatedButton(
                   onPressed: () => Navigator.pop(context),
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                  child: const Text('Cancel'),
+                  child: const Text('취소'),
                 ),
                 ElevatedButton(
                   onPressed: () {
                     if (_validateInput()) {
                       if (_isSingle) {
-                        widget.onSave(_locationController.text);
+                        final capacity = int.tryParse(_capacityController.text.trim()) ?? 0;
+                        widget.onSave({
+                          'type': 'single',
+                          'name': _locationController.text.trim(),
+                          'capacity': capacity,
+                        });
                       } else {
-                        final parent = _locationController.text.trim();
                         final subs = _subControllers
-                            .map((c) => c.text.trim())
-                            .where((text) => text.isNotEmpty)
+                            .where((map) => map['name']!.text.trim().isNotEmpty)
+                            .map((map) => {
+                          'name': map['name']!.text.trim(),
+                          'capacity': int.tryParse(map['capacity']!.text.trim()) ?? 0,
+                        })
                             .toList();
-                        widget.onSave({'parent': parent, 'subs': subs});
+
+                        widget.onSave({
+                          'type': 'composite',
+                          'parent': _locationController.text.trim(),
+                          'subs': subs,
+                          'totalCapacity': _calculateTotalSubCapacity(),
+                        });
                       }
                       Navigator.pop(context);
                     }
                   },
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                  child: const Text('Save'),
+                  child: const Text('저장'),
                 ),
               ],
             ),

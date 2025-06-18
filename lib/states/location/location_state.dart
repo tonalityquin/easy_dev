@@ -12,9 +12,9 @@ class LocationState extends ChangeNotifier {
   final List<IconData> _navigationIcons = [Icons.add, Icons.delete];
 
   LocationState(this._repository, this._areaState) {
-    loadFromCache();           // ✅ 앱 실행 시 캐시 우선 적용
-    syncWithAreaState();       // ✅ 이후 Firestore에서 최신화
-    _areaState.addListener(syncWithAreaState); // 지역 변경 감지
+    loadFromCache();
+    syncWithAreaState();
+    _areaState.addListener(syncWithAreaState);
   }
 
   List<LocationModel> _locations = [];
@@ -24,8 +24,11 @@ class LocationState extends ChangeNotifier {
   String _previousArea = '';
 
   List<LocationModel> get locations => _locations;
+
   Map<String, bool> get selectedLocations => _selectedLocations;
+
   bool get isLoading => _isLoading;
+
   List<IconData> get navigationIcons => _navigationIcons;
 
   /// ✅ SharedPreferences 캐시 로드
@@ -37,9 +40,7 @@ class LocationState extends ChangeNotifier {
     if (cachedJson != null) {
       try {
         final decoded = json.decode(cachedJson) as List;
-        _locations = decoded
-            .map((e) => LocationModel.fromCacheMap(e))
-            .toList();
+        _locations = decoded.map((e) => LocationModel.fromCacheMap(e)).toList();
         _selectedLocations = {
           for (var loc in _locations) loc.id: loc.isSelected,
         };
@@ -73,7 +74,6 @@ class LocationState extends ChangeNotifier {
         for (var loc in data) loc.id: loc.isSelected,
       };
 
-      // ✅ 캐시 저장
       final prefs = await SharedPreferences.getInstance();
       final jsonData = json.encode(
         data.map((e) => e.toCacheMap()).toList(),
@@ -88,28 +88,52 @@ class LocationState extends ChangeNotifier {
   }
 
   /// ➕ 단일 주차 구역 추가
-  Future<void> addLocation(String locationName, String area, {void Function(String)? onError}) async {
+  /// ➕ 단일 주차 구역 추가
+  Future<void> addLocation(
+    String locationName,
+    String area, {
+    int capacity = 0,
+    void Function(String)? onError,
+  }) async {
     try {
-      await _repository.addLocation(LocationModel(
-        id: locationName,
+      final location = LocationModel(
+        id: '${locationName}_$area',
+        // 중복 방지
         locationName: locationName,
         area: area,
         parent: area,
         type: 'single',
+        capacity: capacity,
         isSelected: false,
-      ));
-      await syncWithAreaState(); // 🔁 추가 후 최신화
+      );
+
+      await _repository.addLocation(location);
+      await syncWithAreaState();
     } catch (e) {
       onError?.call('🚨 주차 구역 추가 실패: $e');
     }
   }
 
   /// ➕ 복합 주차 구역 추가
-  Future<void> addCompositeLocation(String parent, List<String> subs, String area,
-      {void Function(String)? onError}) async {
+  Future<void> addCompositeLocation(
+    String parent,
+    List<Map<String, dynamic>> subs,
+    String area, {
+    void Function(String)? onError,
+  }) async {
     try {
-      await _repository.addCompositeLocation(parent, subs, area);
-      await syncWithAreaState(); // 🔁 추가 후 최신화
+      // 중복 방지를 위해 상위 구역 이름도 area 포함
+      final safeParent = '${parent}_$area';
+      final safeSubs = subs.map((sub) {
+        final subName = sub['name'];
+        return {
+          'name': '${subName}_$area',
+          'capacity': sub['capacity'] ?? 0,
+        };
+      }).toList();
+
+      await _repository.addCompositeLocation(safeParent, safeSubs, area);
+      await syncWithAreaState();
     } catch (e) {
       onError?.call('🚨 복합 주차 구역 추가 실패: $e');
     }
@@ -119,7 +143,7 @@ class LocationState extends ChangeNotifier {
   Future<void> deleteLocations(List<String> ids, {void Function(String)? onError}) async {
     try {
       await _repository.deleteLocations(ids);
-      await syncWithAreaState(); // 🔁 삭제 후 최신화
+      await syncWithAreaState();
     } catch (e) {
       onError?.call('🚨 주차 구역 삭제 실패: $e');
     }

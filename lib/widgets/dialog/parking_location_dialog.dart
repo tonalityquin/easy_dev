@@ -42,7 +42,6 @@ class _ParkingLocationDialogState extends State<ParkingLocationDialog> {
     });
   }
 
-
   void _prepareLocationData() {
     final currentArea = context.read<AreaState>().currentArea;
     final locationState = context.read<LocationState>();

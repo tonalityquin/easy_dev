@@ -5,9 +5,10 @@ class LocationContainer extends StatelessWidget {
   final bool isSelected;
   final VoidCallback onTap;
 
-  // 🔹 추가 필드: 구역 타입 및 상위 구역 이름
-  final String? type;   // 'single' 또는 'composite'
+  // 🔹 추가 필드: 구역 타입, 상위 구역, 수용 인원 표시용 서브텍스트
+  final String? type;         // 'single' 또는 'composite'
   final String? parent;
+  final String? subtitle;     // 🔹 예: "최대 30대 주차 가능"
 
   const LocationContainer({
     super.key,
@@ -16,6 +17,7 @@ class LocationContainer extends StatelessWidget {
     required this.onTap,
     this.type,
     this.parent,
+    this.subtitle, // ✅ 명시적 서브텍스트
   });
 
   @override
@@ -71,7 +73,15 @@ class LocationContainer extends StatelessWidget {
                       fontSize: 16,
                     ),
                   ),
-                  if (isComposite && parent != null)
+                  if (subtitle != null) // 🔹 새 필드 사용
+                    Text(
+                      subtitle!,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey.shade700,
+                      ),
+                    )
+                  else if (isComposite && parent != null)
                     Text(
                       '복합 주차 구역 (상위: $parent)',
                       style: TextStyle(

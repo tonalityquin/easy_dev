@@ -19,8 +19,10 @@ class _LocationManagementState extends State<LocationManagement> {
   String _filter = 'all'; // all, single, composite
 
   void handleIconTapped(int index, LocationState locationState, BuildContext context) {
-    final selectedIds =
-        locationState.selectedLocations.keys.where((id) => locationState.selectedLocations[id] == true).toList();
+    final selectedIds = locationState.selectedLocations.entries
+        .where((entry) => entry.value)
+        .map((entry) => entry.key)
+        .toList();
 
     if (locationState.navigationIcons[index] == Icons.add) {
       showDialog(
@@ -30,29 +32,43 @@ class _LocationManagementState extends State<LocationManagement> {
 
           return LocationSetting(
             onSave: (location) {
-              if (location is String) {
-                locationState.addLocation(
-                  location,
-                  currentArea,
-                  onError: (error) {
-                    showFailedSnackbar(context, '🚨 주차 구역 추가 실패: $error');
-                  },
-                ).then((_) {
-                  showSuccessSnackbar(context, '✅ 주차 구역이 추가되었습니다. 앱을 재실행하세요.');
-                });
-              } else if (location is Map<String, dynamic>) {
-                final parent = location['parent'];
-                final subs = List<String>.from(location['subs'] ?? []);
-                locationState.addCompositeLocation(
-                  parent,
-                  subs,
-                  currentArea,
-                  onError: (error) {
-                    showFailedSnackbar(context, '🚨 복합 주차 구역 추가 실패: $error');
-                  },
-                ).then((_) {
-                  showSuccessSnackbar(context, '✅ 복합 주차 구역이 추가되었습니다. 앱을 재실행하세요.');
-                });
+              if (location is Map<String, dynamic>) {
+                final type = location['type'];
+
+                if (type == 'single') {
+                  final name = location['name']?.toString() ?? '';
+                  locationState.addLocation(
+                    name,
+                    currentArea,
+                    onError: (error) => showFailedSnackbar(context, '🚨 주차 구역 추가 실패: $error'),
+                  ).then((_) {
+                    showSuccessSnackbar(context, '✅ 주차 구역이 추가되었습니다. 앱을 재실행하세요.');
+                  });
+
+                } else if (type == 'composite') {
+                  final parent = location['parent']?.toString() ?? '';
+                  final rawSubs = location['subs'];
+
+                  final subs = (rawSubs is List)
+                      ? rawSubs
+                      .map<Map<String, dynamic>>((sub) => {
+                    'name': sub['name']?.toString() ?? '',
+                    'capacity': sub['capacity'] ?? 0,
+                  })
+                      .toList()
+                      : <Map<String, dynamic>>[];
+
+                  locationState.addCompositeLocation(
+                    parent,
+                    subs,
+                    currentArea,
+                    onError: (error) => showFailedSnackbar(context, '🚨 복합 주차 구역 추가 실패: $error'),
+                  ).then((_) {
+                    showSuccessSnackbar(context, '✅ 복합 주차 구역이 추가되었습니다. 앱을 재실행하세요.');
+                  });
+                } else {
+                  showFailedSnackbar(context, '❗ 알 수 없는 주차 구역 유형입니다.');
+                }
               } else {
                 showFailedSnackbar(context, '❗ 알 수 없는 형식의 주차 구역 데이터입니다.');
               }
@@ -63,14 +79,13 @@ class _LocationManagementState extends State<LocationManagement> {
     } else if (locationState.navigationIcons[index] == Icons.delete && selectedIds.isNotEmpty) {
       locationState.deleteLocations(
         selectedIds,
-        onError: (error) {
-          showFailedSnackbar(context, '🚨 주차 구역 삭제 실패: $error');
-        },
+        onError: (error) => showFailedSnackbar(context, '🚨 주차 구역 삭제 실패: $error'),
       );
     } else {
       showFailedSnackbar(context, '⚠️ 지원되지 않는 동작입니다.');
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -94,10 +109,7 @@ class _LocationManagementState extends State<LocationManagement> {
         backgroundColor: Colors.white,
         elevation: 0,
         foregroundColor: Colors.black87,
-        title: const Text(
-          '주차구역',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+        title: const Text('주차구역', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         automaticallyImplyLeading: false,
       ),
@@ -172,6 +184,7 @@ class _LocationManagementState extends State<LocationManagement> {
       itemBuilder: (context, index) {
         final location = locations[index];
         final isSelected = state.selectedLocations[location.id] ?? false;
+        final subtitle = location.capacity > 0 ? '(정원 ${location.capacity}대)' : null;
 
         return LocationContainer(
           location: location.locationName,
@@ -179,6 +192,7 @@ class _LocationManagementState extends State<LocationManagement> {
           onTap: () => state.toggleSelection(location.id),
           type: location.type,
           parent: location.parent,
+          subtitle: subtitle,
         );
       },
     );
@@ -187,10 +201,13 @@ class _LocationManagementState extends State<LocationManagement> {
   Widget _buildGroupedList(Map<String, List<LocationModel>> grouped, LocationState state) {
     return ListView(
       children: grouped.entries.map((entry) {
+        final totalCapacity = entry.value.fold<int>(0, (sum, loc) => sum + loc.capacity);
+
         return ExpansionTile(
-          title: Text('상위 구역: ${entry.key}'),
+          title: Text('상위 구역: ${entry.key} (정원 $totalCapacity대)'),
           children: entry.value.map((location) {
             final isSelected = state.selectedLocations[location.id] ?? false;
+            final subtitle = location.capacity > 0 ? '(정원 ${location.capacity}대)' : null;
 
             return LocationContainer(
               location: location.locationName,
@@ -198,6 +215,7 @@ class _LocationManagementState extends State<LocationManagement> {
               onTap: () => state.toggleSelection(location.id),
               type: location.type,
               parent: location.parent,
+              subtitle: subtitle,
             );
           }).toList(),
         );

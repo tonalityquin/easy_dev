@@ -5,33 +5,56 @@ class LocationModel {
   final String locationName;
   final String area;
   final bool isSelected;
+  final int capacity;
 
-  // ✅ 복합 주차 구역 관련 필드
   final String? parent; // 상위 구역 이름 (복합일 경우)
-  final String? type;   // 'composite' 또는 null
+  final String? type;   // 'single' | 'composite'
 
   LocationModel({
     required this.id,
     required this.locationName,
     required this.area,
     required this.isSelected,
+    required this.capacity,
     this.parent,
     this.type,
   });
 
-  /// ✅ Firestore 문서에서 모델로 변환
+  /// ✅ 편의 생성자: ID 자동 생성 (locationName_area 형식)
+  factory LocationModel.create({
+    required String locationName,
+    required String area,
+    required bool isSelected,
+    required int capacity,
+    String? parent,
+    String? type,
+  }) {
+    final generatedId = '${locationName}_$area';
+    return LocationModel(
+      id: generatedId,
+      locationName: locationName,
+      area: area,
+      isSelected: isSelected,
+      capacity: capacity,
+      parent: parent,
+      type: type,
+    );
+  }
+
+  /// ✅ Firestore → 모델
   factory LocationModel.fromMap(String id, Map<String, dynamic> data) {
     return LocationModel(
       id: id,
       locationName: data['locationName'] ?? '',
       area: data['area'] ?? '',
       isSelected: data['isSelected'] ?? false,
+      capacity: (data['capacity'] ?? 0) as int,
       parent: data['parent'],
       type: data['type'],
     );
   }
 
-  /// ✅ Firestore 저장용 Map 변환
+  /// ✅ 모델 → Firestore Map
   Map<String, dynamic> toFirestoreMap() {
     return {
       'locationName': locationName,
@@ -39,11 +62,12 @@ class LocationModel {
       'parent': parent ?? area,
       'type': type ?? 'single',
       'isSelected': isSelected,
+      'capacity': capacity,
       'timestamp': FieldValue.serverTimestamp(),
     };
   }
 
-  /// ✅ SharedPreferences 캐시 저장용 Map 변환
+  /// ✅ 모델 → SharedPreferences 캐시용 Map
   Map<String, dynamic> toCacheMap() {
     return {
       'id': id,
@@ -52,18 +76,41 @@ class LocationModel {
       'parent': parent,
       'type': type,
       'isSelected': isSelected,
+      'capacity': capacity,
     };
   }
 
-  /// ✅ 캐시에서 복원 시 사용
+  /// ✅ SharedPreferences 캐시 → 모델
   factory LocationModel.fromCacheMap(Map<String, dynamic> data) {
     return LocationModel(
       id: data['id'] ?? '',
       locationName: data['locationName'] ?? '',
       area: data['area'] ?? '',
+      isSelected: data['isSelected'] ?? false,
+      capacity: (data['capacity'] ?? 0) as int,
       parent: data['parent'],
       type: data['type'],
-      isSelected: data['isSelected'] ?? false,
+    );
+  }
+
+  /// ✅ 복사 및 수정용 copyWith
+  LocationModel copyWith({
+    String? id,
+    String? locationName,
+    String? area,
+    bool? isSelected,
+    String? parent,
+    String? type,
+    int? capacity,
+  }) {
+    return LocationModel(
+      id: id ?? this.id,
+      locationName: locationName ?? this.locationName,
+      area: area ?? this.area,
+      isSelected: isSelected ?? this.isSelected,
+      parent: parent ?? this.parent,
+      type: type ?? this.type,
+      capacity: capacity ?? this.capacity,
     );
   }
 }

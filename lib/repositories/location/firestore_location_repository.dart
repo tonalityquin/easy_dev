@@ -5,42 +5,32 @@ import 'location_repository.dart';
 class FirestoreLocationRepository implements LocationRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  /// 🔁 실시간 스트림 (필요 없으면 사용 안 해도 됨)
   @override
   Stream<List<LocationModel>> getLocationsStream(String area) {
     return _firestore
         .collection('locations')
         .where('area', isEqualTo: area)
         .snapshots()
-        .map((snapshot) =>
-        snapshot.docs.map((doc) => LocationModel.fromMap(doc.id, doc.data())).toList());
+        .map((snapshot) => snapshot.docs.map((doc) => LocationModel.fromMap(doc.id, doc.data())).toList());
   }
 
-  /// ✅ 단발성 조회 (.get() 기반)
   @override
   Future<List<LocationModel>> getLocationsOnce(String area) async {
     try {
-      final snapshot = await _firestore
-          .collection('locations')
-          .where('area', isEqualTo: area)
-          .get();
+      final snapshot = await _firestore.collection('locations').where('area', isEqualTo: area).get();
 
-      return snapshot.docs
-          .map((doc) => LocationModel.fromMap(doc.id, doc.data()))
-          .toList();
+      return snapshot.docs.map((doc) => LocationModel.fromMap(doc.id, doc.data())).toList();
     } catch (e) {
       rethrow;
     }
   }
 
-  /// ➕ 단일 주차 구역 추가
   @override
   Future<void> addLocation(LocationModel location) async {
     final docRef = _firestore.collection('locations').doc(location.id);
     await docRef.set(location.toFirestoreMap());
   }
 
-  /// ❌ 여러 주차 구역 삭제
   @override
   Future<void> deleteLocations(List<String> ids) async {
     final batch = _firestore.batch();
@@ -51,38 +41,38 @@ class FirestoreLocationRepository implements LocationRepository {
     await batch.commit();
   }
 
-  /// ✅ 선택 여부 토글
   @override
   Future<void> toggleLocationSelection(String id, bool isSelected) async {
     final docRef = _firestore.collection('locations').doc(id);
     await docRef.update({'isSelected': isSelected});
   }
 
-  /// ➕ 복합 주차 구역 추가 (상위 + 하위)
+  /// 🔁 복합 주차 구역 저장 시 용량(capacity)도 포함
   @override
-  Future<void> addCompositeLocation(String parent, List<String> subs, String area) async {
+  Future<void> addCompositeLocation(
+    String parent,
+    List<Map<String, dynamic>> subs, // {name, capacity}
+    String area,
+  ) async {
     final batch = _firestore.batch();
 
-    // 상위 구역
-    final parentRef = _firestore.collection('locations').doc(parent);
-    batch.set(parentRef, {
-      'locationName': parent,
-      'area': area,
-      'parent': area,
-      'type': 'composite',
-      'isSelected': false,
-      'timestamp': FieldValue.serverTimestamp(),
-    });
-
-    // 하위 구역들
     for (final sub in subs) {
-      final subRef = _firestore.collection('locations').doc(sub);
+      final rawName = sub['name'] ?? '';
+
+      // 🔹 지역명이 포함되어 있다면 제거: 예) B-3_Beta → B-3
+      final cleanName = rawName.replaceAll('_$area', '');
+      final cleanParent = parent.replaceAll('_$area', '');
+
+      final subId = '${cleanName}_$area';
+      final subRef = _firestore.collection('locations').doc(subId);
+
       batch.set(subRef, {
-        'locationName': sub,
+        'locationName': cleanName, // ✅ 지역명 없이
         'area': area,
-        'parent': parent,
-        'type': 'single',
+        'parent': cleanParent, // ✅ 지역명 없이
+        'type': 'composite', // 또는 'single' 등 정책에 맞게 조정
         'isSelected': false,
+        'capacity': sub['capacity'] ?? 0,
         'timestamp': FieldValue.serverTimestamp(),
       });
     }
@@ -90,11 +80,10 @@ class FirestoreLocationRepository implements LocationRepository {
     await batch.commit();
   }
 
-  /// 📊 [추가] 특정 locationName 에 해당하는 차량 수 조회 (plates 기준)
   Future<int> getPlateCountByLocation({
     required String locationName,
     required String area,
-    String type = 'parking_completed', // 기본은 완료 상태
+    String type = 'parking_completed',
   }) async {
     final snapshot = await _firestore
         .collection('plates')

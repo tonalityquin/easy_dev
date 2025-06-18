@@ -159,19 +159,19 @@ class _ParkingCompletedLocationDialogState extends State<ParkingCompletedLocatio
                     child: ListView(
                       children: [
                         ...singles.map((loc) => FutureBuilder<int>(
-                          future: _getPlateCount(loc.locationName, currentArea),
-                          builder: (context, countSnapshot) {
-                            final countText = countSnapshot.hasData ? '(${countSnapshot.data})' : '';
-                            return ListTile(
-                              title: Text('${loc.locationName} $countText'),
-                              leading: const Icon(Icons.place),
-                              onTap: () {
-                                widget.onLocationSelected(loc.locationName);
-                                Navigator.pop(context);
+                              future: _getPlateCount(loc.locationName, currentArea),
+                              builder: (context, countSnapshot) {
+                                final countText = countSnapshot.hasData ? '(${countSnapshot.data})' : '';
+                                return ListTile(
+                                  title: Text('${loc.locationName} $countText'),
+                                  leading: const Icon(Icons.place),
+                                  onTap: () {
+                                    widget.onLocationSelected(loc.locationName);
+                                    Navigator.pop(context);
+                                  },
+                                );
                               },
-                            );
-                          },
-                        )),
+                            )),
                         const Divider(),
                         ...parentSet.map((parent) {
                           return ListTile(
