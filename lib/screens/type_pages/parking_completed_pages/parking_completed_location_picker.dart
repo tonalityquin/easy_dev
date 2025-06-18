@@ -15,12 +15,10 @@ class ParkingCompletedLocationPicker extends StatefulWidget {
   });
 
   @override
-  State<ParkingCompletedLocationPicker> createState() =>
-      _ParkingCompletedLocationPickerState();
+  State<ParkingCompletedLocationPicker> createState() => _ParkingCompletedLocationPickerState();
 }
 
-class _ParkingCompletedLocationPickerState
-    extends State<ParkingCompletedLocationPicker> {
+class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocationPicker> {
   String? selectedParent;
   late Future<List<LocationModel>> _futureLocations;
   bool _isRefreshing = false;
@@ -95,8 +93,7 @@ class _ParkingCompletedLocationPickerState
                       },
                       onTapCancel: () => setState(() => _isRefreshing = false),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 16, horizontal: 32),
+                        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 32),
                         decoration: BoxDecoration(
                           border: Border.all(color: Colors.teal),
                           borderRadius: BorderRadius.circular(12),
@@ -128,45 +125,62 @@ class _ParkingCompletedLocationPickerState
               final composites = locations.where((l) => l.type == 'composite').toList();
 
               if (selectedParent != null) {
-                final children = composites
-                    .where((loc) => loc.parent == selectedParent)
-                    .toList();
+                final children = composites.where((loc) => loc.parent == selectedParent).toList();
 
-                return ListView(
-                  padding: const EdgeInsets.all(16),
+                return Column(
                   children: [
-                    ListTile(
-                      leading: const Icon(Icons.arrow_back),
-                      title: const Text('← 복합 구역 목록으로'),
-                      onTap: () => setState(() => selectedParent = null),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          children: [
+                            const Divider(),
+                            ...children.map((loc) {
+                              final displayName = '${loc.parent} - ${loc.locationName}';
+                              return FutureBuilder<int>(
+                                future: _getPlateCount(displayName, area),
+                                builder: (context, countSnap) {
+                                  final subtitle =
+                                      countSnap.hasData ? '등록 ${countSnap.data} / 정원 ${loc.capacity}' : null;
+                                  return _buildTile(
+                                    icon: Icons.subdirectory_arrow_right,
+                                    title: displayName,
+                                    subtitle: subtitle,
+                                    onTap: () => widget.onLocationSelected(displayName),
+                                  );
+                                },
+                              );
+                            }),
+                          ],
+                        ),
+                      ),
                     ),
-                    const Divider(),
-                    ...children.map((loc) {
-                      final displayName = '${loc.parent} - ${loc.locationName}';
-                      return FutureBuilder<int>(
-                        future: _getPlateCount(displayName, area),
-                        builder: (context, countSnap) {
-                          final subtitle = countSnap.hasData
-                              ? '등록 ${countSnap.data} / 정원 ${loc.capacity}'
-                              : null;
-                          return _buildTile(
-                            icon: Icons.subdirectory_arrow_right,
-                            title: displayName,
-                            subtitle: subtitle,
-                            onTap: () => widget.onLocationSelected(displayName),
-                          );
-                        },
-                      );
-                    }),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      child: InkWell(
+                        onTap: () => setState(() => selectedParent = null),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 16.0),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[100],
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: const [
+                              Icon(Icons.arrow_back, color: Colors.black54),
+                              SizedBox(width: 8),
+                              Text('되돌아가기', style: TextStyle(fontSize: 16)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
                 );
               }
 
-              final parentGroups = composites
-                  .map((loc) => loc.parent)
-                  .whereType<String>()
-                  .toSet()
-                  .toList();
+              final parentGroups = composites.map((loc) => loc.parent).whereType<String>().toSet().toList();
 
               return ListView(
                 padding: const EdgeInsets.all(16),
@@ -177,9 +191,7 @@ class _ParkingCompletedLocationPickerState
                     return FutureBuilder<int>(
                       future: _getPlateCount(loc.locationName, area),
                       builder: (context, countSnap) {
-                        final subtitle = countSnap.hasData
-                            ? '등록 ${countSnap.data} / 정원 ${loc.capacity}'
-                            : null;
+                        final subtitle = countSnap.hasData ? '등록 ${countSnap.data} / 정원 ${loc.capacity}' : null;
                         return _buildTile(
                           icon: Icons.place,
                           title: loc.locationName,
@@ -198,14 +210,12 @@ class _ParkingCompletedLocationPickerState
 
                     return FutureBuilder<List<int>>(
                       future: Future.wait(children.map(
-                            (l) => _getPlateCount('${l.parent} - ${l.locationName}', area),
+                        (l) => _getPlateCount('${l.parent} - ${l.locationName}', area),
                       )),
                       builder: (context, snap) {
-                        final totalCount =
-                        snap.hasData ? snap.data!.fold(0, (a, b) => a + b) : null;
-                        final subtitle = totalCount != null
-                            ? '총 등록 $totalCount / 총 정원 $totalCapacity'
-                            : '총 정원 $totalCapacity';
+                        final totalCount = snap.hasData ? snap.data!.fold(0, (a, b) => a + b) : null;
+                        final subtitle =
+                            totalCount != null ? '총 등록 $totalCount / 총 정원 $totalCapacity' : '총 정원 $totalCapacity';
 
                         return _buildTile(
                           icon: Icons.layers,
