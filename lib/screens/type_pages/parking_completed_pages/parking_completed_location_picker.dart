@@ -23,6 +23,7 @@ class _ParkingCompletedLocationPickerState
     extends State<ParkingCompletedLocationPicker> {
   String? selectedParent;
   late Future<List<LocationModel>> _futureLocations;
+  bool _isRefreshing = false;
 
   @override
   void initState() {
@@ -66,7 +67,7 @@ class _ParkingCompletedLocationPickerState
   Widget build(BuildContext context) {
     final area = context.read<AreaState>().currentArea;
 
-    return Material( // ✅ Material 추가
+    return Material(
       color: Colors.white,
       child: Consumer<LocationState>(
         builder: (context, locationState, _) {
@@ -79,14 +80,45 @@ class _ParkingCompletedLocationPickerState
             builder: (context, snapshot) {
               if (!snapshot.hasData || snapshot.data!.isEmpty) {
                 return Center(
-                  child: TextButton.icon(
-                    icon: const Icon(Icons.refresh),
-                    label: const Text("주차 구역 갱신"),
-                    onPressed: () {
-                      setState(() {
-                        _futureLocations = _loadLocations();
-                      });
-                    },
+                  child: AnimatedScale(
+                    scale: _isRefreshing ? 0.95 : 1.0,
+                    duration: const Duration(milliseconds: 150),
+                    curve: Curves.easeInOut,
+                    child: GestureDetector(
+                      onTapDown: (_) => setState(() => _isRefreshing = true),
+                      onTapUp: (_) async {
+                        setState(() => _isRefreshing = false);
+                        await Future.delayed(const Duration(milliseconds: 100));
+                        setState(() {
+                          _futureLocations = _loadLocations();
+                        });
+                      },
+                      onTapCancel: () => setState(() => _isRefreshing = false),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 16, horizontal: 32),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.teal),
+                          borderRadius: BorderRadius.circular(12),
+                          color: Colors.teal.withOpacity(0.05),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Icon(Icons.refresh, color: Colors.teal),
+                            SizedBox(width: 8),
+                            Text(
+                              "주차 구역 갱신",
+                              style: TextStyle(
+                                color: Colors.teal,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                 );
               }
@@ -96,7 +128,9 @@ class _ParkingCompletedLocationPickerState
               final composites = locations.where((l) => l.type == 'composite').toList();
 
               if (selectedParent != null) {
-                final children = composites.where((loc) => loc.parent == selectedParent).toList();
+                final children = composites
+                    .where((loc) => loc.parent == selectedParent)
+                    .toList();
 
                 return ListView(
                   padding: const EdgeInsets.all(16),
@@ -163,12 +197,12 @@ class _ParkingCompletedLocationPickerState
                     final totalCapacity = children.fold(0, (sum, l) => sum + l.capacity);
 
                     return FutureBuilder<List<int>>(
-                      future: Future.wait(children.map((l) =>
-                          _getPlateCount('${l.parent} - ${l.locationName}', area))),
+                      future: Future.wait(children.map(
+                            (l) => _getPlateCount('${l.parent} - ${l.locationName}', area),
+                      )),
                       builder: (context, snap) {
-                        final totalCount = snap.hasData
-                            ? snap.data!.fold(0, (a, b) => a + b)
-                            : null;
+                        final totalCount =
+                        snap.hasData ? snap.data!.fold(0, (a, b) => a + b) : null;
                         final subtitle = totalCount != null
                             ? '총 등록 $totalCount / 총 정원 $totalCapacity'
                             : '총 정원 $totalCapacity';

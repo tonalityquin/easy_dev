@@ -208,13 +208,13 @@ class _ParkingCompletedLocationDialogState extends State<ParkingCompletedLocatio
 
                           return FutureBuilder<List<int>>(
                             future: Future.wait(
-                              childLocations.map((loc) => _getPlateCount('${loc.parent} - ${loc.locationName}', currentArea)),
+                              childLocations
+                                  .map((loc) => _getPlateCount('${loc.parent} - ${loc.locationName}', currentArea)),
                             ),
                             builder: (context, snapshot) {
                               final totalCount = snapshot.hasData ? snapshot.data!.fold(0, (a, b) => a + b) : null;
-                              final subtitle = totalCount != null
-                                  ? '총 등록 $totalCount / 총 정원 $totalCapacity'
-                                  : '총 정원 $totalCapacity';
+                              final subtitle =
+                                  totalCount != null ? '총 등록 $totalCount / 총 정원 $totalCapacity' : '총 정원 $totalCapacity';
 
                               return _buildLocationTile(
                                 icon: Icons.layers,

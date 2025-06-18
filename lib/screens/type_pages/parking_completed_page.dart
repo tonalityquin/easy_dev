@@ -39,9 +39,9 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
     });
 
     context.read<PlateState>().updateSortOrder(
-      PlateType.parkingCompleted,
-      _isSorted,
-    );
+          PlateType.parkingCompleted,
+          _isSorted,
+        );
   }
 
   void _showSearchDialog(BuildContext context) {
@@ -156,10 +156,10 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                 onLocationSelected: (selectedLocation) {
                   final area = context.read<AreaState>().currentArea;
                   context.read<FilterPlate>().filterByParkingLocation(
-                    PlateType.parkingCompleted,
-                    area,
-                    selectedLocation,
-                  );
+                        PlateType.parkingCompleted,
+                        area,
+                        selectedLocation,
+                      );
                   setState(() {
                     _selectedParkingArea = selectedLocation;
                   });
@@ -178,19 +178,17 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
 
                   // ✅ 정렬 적용
                   parkingCompleted.sort((a, b) =>
-                  _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime)
-                  );
+                      _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime));
 
                   return _buildPlateList(parkingCompleted, userName);
                 },
               );
             }
 
-
             // Fallback: 전체 목록
             final plates = [...plateState.getPlatesByCollection(PlateType.parkingCompleted)];
-            plates.sort((a, b) =>
-            _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime));
+            plates.sort(
+                (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime));
             return _buildPlateList(plates, userName);
           },
         ),
@@ -219,13 +217,13 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
           filterCondition: (request) => request.type == PlateType.parkingCompleted.firestoreValue,
           onPlateTap: (plateNumber, area) {
             context.read<PlateState>().toggleIsSelected(
-              collection: PlateType.parkingCompleted,
-              plateNumber: plateNumber,
-              userName: userName,
-              onError: (errorMessage) {
-                showFailedSnackbar(context, errorMessage);
-              },
-            );
+                  collection: PlateType.parkingCompleted,
+                  plateNumber: plateNumber,
+                  userName: userName,
+                  onError: (errorMessage) {
+                    showFailedSnackbar(context, errorMessage);
+                  },
+                );
           },
         ),
       ],

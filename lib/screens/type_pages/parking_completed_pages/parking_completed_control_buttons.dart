@@ -59,13 +59,13 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                 transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
                 child: isPlateSelected
                     ? (selectedPlate.isLockedFee
-                    ? const Icon(Icons.lock_open, key: ValueKey('unlock'), color: Colors.grey)
-                    : const Icon(Icons.lock, key: ValueKey('lock'), color: Colors.grey))
+                        ? const Icon(Icons.lock_open, key: ValueKey('unlock'), color: Colors.grey)
+                        : const Icon(Icons.lock, key: ValueKey('lock'), color: Colors.grey))
                     : Icon(
-                  isSearchMode ? Icons.cancel : Icons.search,
-                  key: ValueKey(isSearchMode),
-                  color: isSearchMode ? Colors.orange : Colors.grey,
-                ),
+                        isSearchMode ? Icons.cancel : Icons.search,
+                        key: ValueKey(isSearchMode),
+                        color: isSearchMode ? Colors.orange : Colors.grey,
+                      ),
               ),
               label: isPlateSelected
                   ? (selectedPlate.isLockedFee ? '정산 취소' : '사전 정산')
@@ -218,9 +218,9 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                       builder: (_) => ParkingRequestDeleteDialog(
                         onConfirm: () {
                           context.read<DeletePlate>().deleteFromParkingCompleted(
-                            selectedPlate.plateNumber,
-                            selectedPlate.area,
-                          );
+                                selectedPlate.plateNumber,
+                                selectedPlate.area,
+                              );
                           showSuccessSnackbar(context, "삭제 완료: ${selectedPlate.plateNumber}");
                         },
                       ),
