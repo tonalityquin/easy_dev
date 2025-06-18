@@ -131,10 +131,8 @@ class UserState extends ChangeNotifier {
     notifyListeners();
 
     /// ✅ selectedArea 기반 스트림 구독
-    _subscription = _repository
-        .getUsersBySelectedAreaStream(selectedArea)
-        .listen(
-          (data) {
+    _subscription = _repository.getUsersBySelectedAreaStream(selectedArea).listen(
+      (data) {
         _users = data;
         _selectedUsers = {for (var user in data) user.id: user.isSelected};
         _isLoading = false;

@@ -152,21 +152,77 @@ class FirestorePlateRepository implements PlateRepository {
     String? customStatus,
   }) async {
     final documentId = '${plateNumber}_$area';
-
     final existingPlate = await getPlate(documentId);
+
+    // 🔁 기존 문서가 있는 경우
     if (existingPlate != null) {
-      if (existingPlate.type == PlateType.departureCompleted.firestoreValue) {
-        dev.log("⚠️ departure_completed 중복 등록 허용: $plateNumber");
-      } else {
-        dev.log("🚨 중복된 번호판 등록 시도: $plateNumber");
-        throw Exception("이미 등록된 번호판입니다: $plateNumber");
+      dev.log("📌 기존 문서 존재 → 병합 및 departure_completed 문서 추가 생성");
+
+      final basePlate = PlateModel(
+        id: documentId,
+        plateNumber: plateNumber,
+        plateFourDigit: _extractLastDigits(plateNumber),
+        type: plateType.firestoreValue,
+        requestTime: DateTime.now(),
+        endTime: endTime,
+        location: location.isNotEmpty ? location : '미지정',
+        area: area,
+        userName: userName,
+        adjustmentType: adjustmentType,
+        statusList: statusList ?? [],
+        basicStandard: basicStandard ?? 0,
+        basicAmount: basicAmount ?? 0,
+        addStandard: addStandard ?? 0,
+        addAmount: addAmount ?? 0,
+        region: region,
+        imageUrls: imageUrls,
+        isSelected: false,
+        selectedBy: null,
+        isLockedFee: isLockedFee || (adjustmentType == null || adjustmentType.trim().isEmpty),
+        lockedAtTimeInSeconds: lockedAtTimeInSeconds,
+        lockedFeeAmount: lockedFeeAmount,
+        paymentMethod: paymentMethod,
+        customStatus: customStatus,
+      );
+
+      // 1️⃣ 기존 문서 병합
+      await addOrUpdatePlate(documentId, basePlate);
+      dev.log("✅ 기존 문서에 병합 완료: $documentId");
+
+      // 2️⃣ departure_completed 타입으로 새 문서 생성 (endTime, isLockedFee 동일하게 유지)
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final newDocumentId = '${timestamp}_${plateNumber}_$area';
+
+      final newPlate = basePlate.copyWith(
+        id: newDocumentId,
+        type: PlateType.departureCompleted.firestoreValue, // ✅ 고정
+        endTime: endTime ?? DateTime.now(), // ✅ 동일한 값 유지
+        isLockedFee: true, // ✅ 동일한 값 유지
+      );
+
+      await addOrUpdatePlate(newDocumentId, newPlate);
+      dev.log("🆕 departure_completed 문서 생성 완료: $newDocumentId");
+
+      // 3️⃣ 부가 문서는 기존 문서에만 적용
+      if (customStatus != null && customStatus.trim().isNotEmpty) {
+        final statusDocRef = _firestore.collection('plate_status').doc(documentId);
+        final expireAt = Timestamp.fromDate(DateTime.now().add(const Duration(days: 1)));
+
+        await statusDocRef.set({
+          'customStatus': customStatus,
+          'updatedAt': Timestamp.now(),
+          'createdBy': userName,
+          'expireAt': expireAt,
+        });
       }
+
+      return;
     }
 
+    // 🆕 기존 문서가 없을 경우 신규 등록
     if (adjustmentType != null) {
       try {
         final adjustmentDoc = await _firestore.collection('adjustment').doc('${adjustmentType}_$area').get();
-
         if (adjustmentDoc.exists) {
           final adjustmentData = adjustmentDoc.data()!;
           dev.log('🔥 Firestore에서 가져온 정산 데이터: $adjustmentData');
@@ -183,14 +239,10 @@ class FirestorePlateRepository implements PlateRepository {
       }
     }
 
-    final plateFourDigit = plateNumber.length >= 4 ? plateNumber.substring(plateNumber.length - 4) : plateNumber;
-
-    final bool effectiveIsLockedFee = isLockedFee || (adjustmentType == null || adjustmentType.trim().isEmpty);
-
     final plate = PlateModel(
       id: documentId,
       plateNumber: plateNumber,
-      plateFourDigit: plateFourDigit,
+      plateFourDigit: _extractLastDigits(plateNumber),
       type: plateType.firestoreValue,
       requestTime: DateTime.now(),
       endTime: endTime,
@@ -207,15 +259,15 @@ class FirestorePlateRepository implements PlateRepository {
       imageUrls: imageUrls,
       isSelected: false,
       selectedBy: null,
-      isLockedFee: effectiveIsLockedFee,
+      isLockedFee: isLockedFee || (adjustmentType == null || adjustmentType.trim().isEmpty),
       lockedAtTimeInSeconds: lockedAtTimeInSeconds,
       lockedFeeAmount: lockedFeeAmount,
       paymentMethod: paymentMethod,
       customStatus: customStatus,
     );
 
-    dev.log('🔥 저장할 PlateModel: ${plate.toMap()}');
     await addOrUpdatePlate(documentId, plate);
+    dev.log('✅ 신규 문서 저장 완료: $documentId');
 
     if (customStatus != null && customStatus.trim().isNotEmpty) {
       final statusDocRef = _firestore.collection('plate_status').doc(documentId);
@@ -228,6 +280,11 @@ class FirestorePlateRepository implements PlateRepository {
         'expireAt': expireAt,
       });
     }
+  }
+
+// 보조 함수
+  String _extractLastDigits(String plateNumber) {
+    return plateNumber.length >= 4 ? plateNumber.substring(plateNumber.length - 4) : plateNumber;
   }
 
   @override

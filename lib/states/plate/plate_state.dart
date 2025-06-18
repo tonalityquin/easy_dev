@@ -195,7 +195,9 @@ class PlateState extends ChangeNotifier {
 
       final index = plateList.indexWhere((p) => p.id == plateId);
       if (index == -1) {
-        throw Exception('🚨 Plate not found in collection $collection: $plateId');
+        final isCloned = RegExp(r'^\d{10,}_').hasMatch(plateId);
+        final reason = isCloned ? '복제된 문서는 선택 기능을 지원하지 않습니다.' : '해당 문서가 데이터 목록에 없습니다.';
+        throw Exception('🚨 다시 생성한 문서의 로그를 확인하세요.: $plateId\n$reason');
       }
 
       final plate = plateList[index];
