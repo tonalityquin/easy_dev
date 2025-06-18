@@ -1,0 +1,193 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+import '../../../models/location_model.dart';
+import '../../../states/area/area_state.dart';
+import '../../../states/location/location_state.dart';
+
+class ParkingCompletedLocationPicker extends StatefulWidget {
+  final Function(String locationName) onLocationSelected;
+
+  const ParkingCompletedLocationPicker({
+    super.key,
+    required this.onLocationSelected,
+  });
+
+  @override
+  State<ParkingCompletedLocationPicker> createState() =>
+      _ParkingCompletedLocationPickerState();
+}
+
+class _ParkingCompletedLocationPickerState
+    extends State<ParkingCompletedLocationPicker> {
+  String? selectedParent;
+  late Future<List<LocationModel>> _futureLocations;
+
+  @override
+  void initState() {
+    super.initState();
+    _futureLocations = _loadLocations();
+  }
+
+  Future<List<LocationModel>> _loadLocations() async {
+    final locationState = context.read<LocationState>();
+    return locationState.locations;
+  }
+
+  Future<int> _getPlateCount(String locationName, String area) async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('plates')
+        .where('location', isEqualTo: locationName)
+        .where('area', isEqualTo: area)
+        .where('type', isEqualTo: 'parking_completed')
+        .count()
+        .get();
+
+    return snapshot.count ?? 0;
+  }
+
+  Widget _buildTile({
+    required IconData icon,
+    required String title,
+    String? subtitle,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      leading: Icon(icon, color: Colors.teal),
+      title: Text(title),
+      subtitle: subtitle != null ? Text(subtitle) : null,
+      trailing: const Icon(Icons.chevron_right),
+      onTap: onTap,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final area = context.read<AreaState>().currentArea;
+
+    return Material( // ✅ Material 추가
+      color: Colors.white,
+      child: Consumer<LocationState>(
+        builder: (context, locationState, _) {
+          if (locationState.isLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          return FutureBuilder<List<LocationModel>>(
+            future: _futureLocations,
+            builder: (context, snapshot) {
+              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return Center(
+                  child: TextButton.icon(
+                    icon: const Icon(Icons.refresh),
+                    label: const Text("주차 구역 갱신"),
+                    onPressed: () {
+                      setState(() {
+                        _futureLocations = _loadLocations();
+                      });
+                    },
+                  ),
+                );
+              }
+
+              final locations = snapshot.data!;
+              final singles = locations.where((l) => l.type == 'single').toList();
+              final composites = locations.where((l) => l.type == 'composite').toList();
+
+              if (selectedParent != null) {
+                final children = composites.where((loc) => loc.parent == selectedParent).toList();
+
+                return ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    ListTile(
+                      leading: const Icon(Icons.arrow_back),
+                      title: const Text('← 복합 구역 목록으로'),
+                      onTap: () => setState(() => selectedParent = null),
+                    ),
+                    const Divider(),
+                    ...children.map((loc) {
+                      final displayName = '${loc.parent} - ${loc.locationName}';
+                      return FutureBuilder<int>(
+                        future: _getPlateCount(displayName, area),
+                        builder: (context, countSnap) {
+                          final subtitle = countSnap.hasData
+                              ? '등록 ${countSnap.data} / 정원 ${loc.capacity}'
+                              : null;
+                          return _buildTile(
+                            icon: Icons.subdirectory_arrow_right,
+                            title: displayName,
+                            subtitle: subtitle,
+                            onTap: () => widget.onLocationSelected(displayName),
+                          );
+                        },
+                      );
+                    }),
+                  ],
+                );
+              }
+
+              final parentGroups = composites
+                  .map((loc) => loc.parent)
+                  .whereType<String>()
+                  .toSet()
+                  .toList();
+
+              return ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  const Text('단일 주차 구역', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  ...singles.map((loc) {
+                    return FutureBuilder<int>(
+                      future: _getPlateCount(loc.locationName, area),
+                      builder: (context, countSnap) {
+                        final subtitle = countSnap.hasData
+                            ? '등록 ${countSnap.data} / 정원 ${loc.capacity}'
+                            : null;
+                        return _buildTile(
+                          icon: Icons.place,
+                          title: loc.locationName,
+                          subtitle: subtitle,
+                          onTap: () => widget.onLocationSelected(loc.locationName),
+                        );
+                      },
+                    );
+                  }),
+                  const Divider(),
+                  const Text('복합 주차 구역', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  ...parentGroups.map((parent) {
+                    final children = composites.where((l) => l.parent == parent).toList();
+                    final totalCapacity = children.fold(0, (sum, l) => sum + l.capacity);
+
+                    return FutureBuilder<List<int>>(
+                      future: Future.wait(children.map((l) =>
+                          _getPlateCount('${l.parent} - ${l.locationName}', area))),
+                      builder: (context, snap) {
+                        final totalCount = snap.hasData
+                            ? snap.data!.fold(0, (a, b) => a + b)
+                            : null;
+                        final subtitle = totalCount != null
+                            ? '총 등록 $totalCount / 총 정원 $totalCapacity'
+                            : '총 정원 $totalCapacity';
+
+                        return _buildTile(
+                          icon: Icons.layers,
+                          title: parent,
+                          subtitle: subtitle,
+                          onTap: () => setState(() => selectedParent = parent),
+                        );
+                      },
+                    );
+                  }),
+                ],
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
