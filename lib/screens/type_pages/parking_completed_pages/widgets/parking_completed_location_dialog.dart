@@ -121,7 +121,7 @@ class _ParkingCompletedLocationDialogState extends State<ParkingCompletedLocatio
                 final composites = locations.where((l) => l.type == 'composite').toList();
 
                 if (selectedParent != null) {
-                  final subLocations = composites.where((l) => l.parent == selectedParent).toList();
+                  final subLocations = singles.where((l) => l.parent == selectedParent).toList();
 
                   return Column(
                     mainAxisSize: MainAxisSize.min,
@@ -137,7 +137,7 @@ class _ParkingCompletedLocationDialogState extends State<ParkingCompletedLocatio
                         return FutureBuilder<int>(
                           future: _getPlateCount(displayName, currentArea),
                           builder: (context, countSnapshot) {
-                            final countText = countSnapshot.hasData ? '(${countSnapshot.data})' : '';
+                            final countText = countSnapshot.hasData ? '(등록 ${countSnapshot.data}, 정원 ${loc.capacity})' : '';
                             return ListTile(
                               title: Text('$displayName $countText'),
                               leading: const Icon(Icons.subdirectory_arrow_right),
@@ -152,30 +152,31 @@ class _ParkingCompletedLocationDialogState extends State<ParkingCompletedLocatio
                     ],
                   );
                 } else {
-                  final parentSet = composites.map((e) => e.parent).toSet().toList();
+                  final parentSet = composites.map((e) => e.locationName).toSet().toList();
                   return SizedBox(
                     width: double.maxFinite,
                     height: 300,
                     child: ListView(
                       children: [
                         ...singles.map((loc) => FutureBuilder<int>(
-                              future: _getPlateCount(loc.locationName, currentArea),
-                              builder: (context, countSnapshot) {
-                                final countText = countSnapshot.hasData ? '(${countSnapshot.data})' : '';
-                                return ListTile(
-                                  title: Text('${loc.locationName} $countText'),
-                                  leading: const Icon(Icons.place),
-                                  onTap: () {
-                                    widget.onLocationSelected(loc.locationName);
-                                    Navigator.pop(context);
-                                  },
-                                );
+                          future: _getPlateCount(loc.locationName, currentArea),
+                          builder: (context, countSnapshot) {
+                            final countText = countSnapshot.hasData ? '(등록 ${countSnapshot.data}, 정원 ${loc.capacity})' : '';
+                            return ListTile(
+                              title: Text('${loc.locationName} $countText'),
+                              leading: const Icon(Icons.place),
+                              onTap: () {
+                                widget.onLocationSelected(loc.locationName);
+                                Navigator.pop(context);
                               },
-                            )),
+                            );
+                          },
+                        )),
                         const Divider(),
                         ...parentSet.map((parent) {
+                          final composite = composites.firstWhere((e) => e.locationName == parent);
                           return ListTile(
-                            title: Text('복합 구역: $parent'),
+                            title: Text('복합 구역: $parent (정원 ${composite.capacity})'),
                             leading: const Icon(Icons.layers),
                             trailing: const Icon(Icons.chevron_right),
                             onTap: () => setState(() => selectedParent = parent),
