@@ -12,10 +12,10 @@ import '../../states/user/user_state.dart';
 
 import '../../utils/snackbar_helper.dart';
 
+import 'parking_completed_pages/widgets/parking_completed_location_dialog.dart';
 import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바
 import '../../widgets/dialog/plate_search_dialog.dart'; // ✅ PlateSearchDialog 추가
 import '../../widgets/dialog/parking_completed_status_dialog.dart';
-import '../../widgets/dialog/parking_location_dialog.dart';
 import '../../widgets/container/plate_container.dart'; // 번호판 컨테이너 위젯
 
 import 'parking_completed_pages/parking_completed_control_buttons.dart';
@@ -70,7 +70,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
   void _showParkingAreaDialog(BuildContext parentContext) {
     showDialog(
       context: parentContext, // 이 context를 넘겨받음
-      builder: (context) => ParkingLocationDialog(
+      builder: (context) => ParkingCompletedLocationDialog(
         locationController: _locationController,
         onLocationSelected: (selectedLocation) {
           debugPrint("✅ 선택된 주차 구역: $selectedLocation");

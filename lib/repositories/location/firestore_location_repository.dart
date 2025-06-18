@@ -89,4 +89,21 @@ class FirestoreLocationRepository implements LocationRepository {
 
     await batch.commit();
   }
+
+  /// 📊 [추가] 특정 locationName 에 해당하는 차량 수 조회 (plates 기준)
+  Future<int> getPlateCountByLocation({
+    required String locationName,
+    required String area,
+    String type = 'parking_completed', // 기본은 완료 상태
+  }) async {
+    final snapshot = await _firestore
+        .collection('plates')
+        .where('location', isEqualTo: locationName)
+        .where('area', isEqualTo: area)
+        .where('type', isEqualTo: type)
+        .count()
+        .get();
+
+    return snapshot.count ?? 0;
+  }
 }
