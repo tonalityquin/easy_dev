@@ -126,6 +126,12 @@ class BreakLogUploader {
     final dt = dateTime ?? DateTime.now();
     final year = dt.year.toString().padLeft(4, '0');
     final month = dt.month.toString().padLeft(2, '0');
-    return 'https://storage.googleapis.com/$_bucketName/$division/$area/exports/break/$year/$month/$userId.json';
+
+    final baseUrl =
+        'https://storage.googleapis.com/$_bucketName/$division/$area/exports/break/$year/$month/$userId.json';
+
+    final version = DateTime.now().millisecondsSinceEpoch; // 캐시 우회용 버전값
+
+    return '$baseUrl?v=$version'; // 🔥 캐시 우회용 쿼리스트링 추가
   }
 }
