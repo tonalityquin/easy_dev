@@ -19,7 +19,14 @@ Future<Map<String, Map<int, String>>?> downloadLeaveJsonFromGcs({
       },
     );
 
-    final response = await http.get(cacheBypassUrl);
+    final response = await http.get(
+      cacheBypassUrl,
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      },
+    );
 
     if (response.statusCode == 200) {
       debugPrint('📥 raw response.body: ${response.body}');

@@ -78,17 +78,29 @@ class TypePage extends StatelessWidget {
   }
 }
 
-class RefreshableBody extends StatelessWidget {
+class RefreshableBody extends StatefulWidget {
   const RefreshableBody({super.key});
 
-  void _handleDrag(BuildContext context, double velocity) {
-    if (velocity > 0) {
+  @override
+  State<RefreshableBody> createState() => _RefreshableBodyState();
+}
+
+class _RefreshableBodyState extends State<RefreshableBody> {
+  double _dragDistance = 0.0;
+
+  void _handleHorizontalDragEnd(BuildContext context, double velocity) {
+    const velocityThreshold = 1000.0;
+    const distanceThreshold = 80.0;
+
+    if (_dragDistance > distanceThreshold && velocity > velocityThreshold) {
       Navigator.of(context).push(_slidePage(const InputPlateScreen(), fromLeft: true));
-    } else if (velocity < 0) {
+    } else if (_dragDistance < -distanceThreshold && velocity < -velocityThreshold) {
       Navigator.of(context).push(_slidePage(const SecondaryPage(), fromLeft: false));
     } else {
-      showFailedSnackbar(context, '드래그 동작이 감지되지 않았습니다.');
+      debugPrint('⏸ 드래그 거리(${_dragDistance.toStringAsFixed(1)}) 또는 속도($velocity) 부족 → 무시됨');
     }
+
+    _dragDistance = 0.0;
   }
 
   PageRouteBuilder _slidePage(Widget page, {required bool fromLeft}) {
@@ -107,8 +119,11 @@ class RefreshableBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
+      onHorizontalDragUpdate: (details) {
+        _dragDistance += details.delta.dx;
+      },
       onHorizontalDragEnd: (details) {
-        _handleDrag(context, details.primaryVelocity ?? 0);
+        _handleHorizontalDragEnd(context, details.primaryVelocity ?? 0);
       },
       child: Consumer<PageState>(
         builder: (context, state, child) {
