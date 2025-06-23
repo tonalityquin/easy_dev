@@ -33,6 +33,17 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
   bool _isParkingAreaMode = true; // ✅ 항상 true로 시작 (주차 구역 선택이 먼저)
   String? _selectedParkingArea;
 
+  @override
+  void didUpdateWidget(ParkingCompletedPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // ✅ 위젯이 트리 안에서 재사용되더라도 상태 초기화
+    setState(() {
+      _selectedParkingArea = null;
+      _isParkingAreaMode = true;
+      _isSearchMode = false;
+    });
+  }
+
   void _toggleSortIcon() {
     setState(() {
       _isSorted = !_isSorted;

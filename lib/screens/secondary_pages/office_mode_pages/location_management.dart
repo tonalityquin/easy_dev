@@ -184,7 +184,7 @@ class _LocationManagementState extends State<LocationManagement> {
       itemBuilder: (context, index) {
         final location = locations[index];
         final isSelected = state.selectedLocations[location.id] ?? false;
-        final subtitle = location.capacity > 0 ? '(정원 ${location.capacity}대)' : null;
+        final subtitle = location.capacity > 0 ? '(공간 ${location.capacity}대)' : null;
 
         return LocationContainer(
           location: location.locationName,
@@ -204,10 +204,10 @@ class _LocationManagementState extends State<LocationManagement> {
         final totalCapacity = entry.value.fold<int>(0, (sum, loc) => sum + loc.capacity);
 
         return ExpansionTile(
-          title: Text('상위 구역: ${entry.key} (정원 $totalCapacity대)'),
+          title: Text('상위 구역: ${entry.key} (공간 $totalCapacity대)'),
           children: entry.value.map((location) {
             final isSelected = state.selectedLocations[location.id] ?? false;
-            final subtitle = location.capacity > 0 ? '(정원 ${location.capacity}대)' : null;
+            final subtitle = location.capacity > 0 ? '(공간 ${location.capacity}대)' : null;
 
             return LocationContainer(
               location: location.locationName,

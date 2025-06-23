@@ -141,7 +141,7 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                                 future: _getPlateCount(displayName, area),
                                 builder: (context, countSnap) {
                                   final subtitle =
-                                      countSnap.hasData ? '등록 ${countSnap.data} / 정원 ${loc.capacity}' : null;
+                                      countSnap.hasData ? '입차 ${countSnap.data} / 공간 ${loc.capacity}' : null;
                                   return _buildTile(
                                     icon: Icons.subdirectory_arrow_right,
                                     title: displayName,
@@ -191,7 +191,7 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                     return FutureBuilder<int>(
                       future: _getPlateCount(loc.locationName, area),
                       builder: (context, countSnap) {
-                        final subtitle = countSnap.hasData ? '등록 ${countSnap.data} / 정원 ${loc.capacity}' : null;
+                        final subtitle = countSnap.hasData ? '입차 ${countSnap.data} / 공간 ${loc.capacity}' : null;
                         return _buildTile(
                           icon: Icons.place,
                           title: loc.locationName,
@@ -215,7 +215,7 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                       builder: (context, snap) {
                         final totalCount = snap.hasData ? snap.data!.fold(0, (a, b) => a + b) : null;
                         final subtitle =
-                            totalCount != null ? '총 등록 $totalCount / 총 정원 $totalCapacity' : '총 정원 $totalCapacity';
+                            totalCount != null ? '총 입차 $totalCount / 총 공간 $totalCapacity' : '총 공간 $totalCapacity';
 
                         return _buildTile(
                           icon: Icons.layers,

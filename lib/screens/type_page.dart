@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../repositories/plate/plate_repository.dart';
-
 import '../states/page/page_state.dart';
 import '../states/page/page_info.dart';
 import '../states/area/area_state.dart';
@@ -92,11 +91,17 @@ class _RefreshableBodyState extends State<RefreshableBody> {
     const distanceThreshold = 80.0;
 
     if (_dragDistance > distanceThreshold && velocity > velocityThreshold) {
-      Navigator.of(context).push(_slidePage(const InputPlateScreen(), fromLeft: true));
+      Navigator.of(context).push(
+        _slidePage(const InputPlateScreen(), fromLeft: true),
+      );
     } else if (_dragDistance < -distanceThreshold && velocity < -velocityThreshold) {
-      Navigator.of(context).push(_slidePage(const SecondaryPage(), fromLeft: false));
+      Navigator.of(context).push(
+        _slidePage(const SecondaryPage(), fromLeft: false),
+      );
     } else {
-      debugPrint('⏸ 드래그 거리(${_dragDistance.toStringAsFixed(1)}) 또는 속도($velocity) 부족 → 무시됨');
+      debugPrint(
+        '⏸ 드래그 거리(${_dragDistance.toStringAsFixed(1)}) 또는 속도($velocity) 부족 → 무시됨',
+      );
     }
 
     _dragDistance = 0.0;
@@ -109,7 +114,10 @@ class _RefreshableBodyState extends State<RefreshableBody> {
       transitionsBuilder: (_, animation, __, child) {
         final begin = Offset(fromLeft ? -1.0 : 1.0, 0);
         final end = Offset.zero;
-        final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeInOut));
+        final tween = Tween(begin: begin, end: end).chain(
+          CurveTween(curve: Curves.easeInOut),
+        );
+
         return SlideTransition(position: animation.drive(tween), child: child);
       },
     );
@@ -118,20 +126,16 @@ class _RefreshableBodyState extends State<RefreshableBody> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onHorizontalDragUpdate: (details) {
-        _dragDistance += details.delta.dx;
-      },
-      onHorizontalDragEnd: (details) {
-        _handleHorizontalDragEnd(context, details.primaryVelocity ?? 0);
-      },
+      onHorizontalDragUpdate: (details) => _dragDistance += details.delta.dx,
+      onHorizontalDragEnd: (details) => _handleHorizontalDragEnd(
+        context,
+        details.primaryVelocity ?? 0,
+      ),
       child: Consumer<PageState>(
         builder: (context, state, child) {
           return Stack(
             children: [
-              IndexedStack(
-                index: state.selectedIndex,
-                children: state.pages.map((pageInfo) => pageInfo.page).toList(),
-              ),
+              _buildCurrentPage(state.selectedIndex),
               if (state.isLoading)
                 Container(
                   color: Colors.black.withAlpha(51),
@@ -144,6 +148,22 @@ class _RefreshableBodyState extends State<RefreshableBody> {
         },
       ),
     );
+  }
+
+  Widget _buildCurrentPage(int index) {
+    if (index == 0) {
+      // ✅ ParkingCompletedPage → 캐시하지 않고 매번 새롭게 생성
+      return defaultPages[0].page;
+    } else {
+      // ✅ 나머지는 IndexedStack 안에 캐싱
+      return IndexedStack(
+        index: index - 1,
+        children: defaultPages
+            .sublist(1)
+            .map((pageInfo) => pageInfo.page)
+            .toList(),
+      );
+    }
   }
 }
 
@@ -168,42 +188,45 @@ class PageBottomNavigation extends StatelessWidget {
           showUnselectedLabels: true,
           type: BottomNavigationBarType.fixed,
           backgroundColor: Colors.white,
-          items: List.generate(pageState.pages.length, (index) {
-            final pageInfo = pageState.pages[index];
-            final bool isSelected = pageState.selectedIndex == index;
+          items: List.generate(
+            pageState.pages.length,
+                (index) {
+              final pageInfo = pageState.pages[index];
+              final bool isSelected = pageState.selectedIndex == index;
 
-            return BottomNavigationBarItem(
-              icon: FutureBuilder<int>(
-                future: plateRepository.getPlateCountByTypeAndArea(
-                  pageInfo.collectionKey,
-                  currentArea,
+              return BottomNavigationBarItem(
+                icon: FutureBuilder<int>(
+                  future: plateRepository.getPlateCountByTypeAndArea(
+                    pageInfo.collectionKey,
+                    currentArea,
+                  ),
+                  builder: (context, snapshot) {
+                    final count = snapshot.data ?? 0;
+                    return _buildCountIcon(
+                      count,
+                      isSelected,
+                      selectedColor,
+                      unselectedColor,
+                      pageInfo.title,
+                    );
+                  },
                 ),
-                builder: (context, snapshot) {
-                  final count = snapshot.data ?? 0;
-                  return _buildCountIcon(
-                    count,
-                    isSelected,
-                    selectedColor,
-                    unselectedColor,
-                    pageInfo.title,
-                  );
-                },
-              ),
-              label: '',
-            );
-          }),
+                label: '',
+              );
+            },
+          ),
         );
       },
     );
   }
 
   Widget _buildCountIcon(
-    int count,
-    bool isSelected,
-    Color selectedColor,
-    Color unselectedColor,
-    String label,
-  ) {
+      int count,
+      bool isSelected,
+      Color selectedColor,
+      Color unselectedColor,
+      String label,
+      ) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -212,7 +235,8 @@ class PageBottomNavigation extends StatelessWidget {
         children: [
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 300),
-            transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+            transitionBuilder: (child, animation) =>
+                ScaleTransition(scale: animation, child: child),
             child: TweenAnimationBuilder<Color?>(
               key: ValueKey(count),
               duration: const Duration(milliseconds: 300),
