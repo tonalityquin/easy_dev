@@ -241,29 +241,6 @@ class UserState extends ChangeNotifier {
     PlateTtsListenerService.start(newArea);
   }
 
-  Future<void> updateSelectedArea(String newSelectedArea) async {
-    if (_user == null) return;
-
-    final updatedUser = _user!.copyWith(selectedArea: newSelectedArea);
-    _user = updatedUser;
-    notifyListeners();
-
-    try {
-      await _repository.updateSelectedArea(
-        _user!.phone.trim(),
-        newSelectedArea.trim(),
-      );
-
-      debugPrint(
-        "✅ Firestore selectedArea 업데이트 완료 → ${_user!.phone.trim()} → $newSelectedArea",
-      );
-    } catch (e) {
-      debugPrint("❌ Firestore selectedArea 업데이트 실패: $e");
-    }
-
-    PlateTtsListenerService.start(newSelectedArea); // 새로운 selectedArea로 TTS 시작
-  }
-
   @override
   void dispose() {
     _subscription?.cancel();

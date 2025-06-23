@@ -70,21 +70,6 @@ class FirestoreUserRepository implements UserRepository {
   }
 
   @override
-  Stream<List<UserModel>> getUsersStream(String area) {
-    return _getCollectionRef()
-        .where('areas', arrayContains: area)
-        .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList());
-  }
-
-  @override
-  Future<void> updateSelectedArea(String userId, String selectedArea) async {
-    await _getCollectionRef().doc(userId).update({
-      'selectedArea': selectedArea,
-    });
-  }
-
-  @override
   Future<void> addUser(UserModel user) async {
     await _getCollectionRef().doc(user.id).set(user.toMap());
   }

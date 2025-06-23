@@ -154,9 +154,6 @@ class DummyUserRepository implements UserRepository {
   Future<UserModel?> getUserByPhone(String phone) => throw UnimplementedError();
 
   @override
-  Stream<List<UserModel>> getUsersStream(String area) => throw UnimplementedError();
-
-  @override
   Future<void> toggleUserSelection(String userId, bool selected) => throw UnimplementedError();
 
   @override
@@ -165,9 +162,6 @@ class DummyUserRepository implements UserRepository {
 
   @override
   Future<void> updateCurrentArea(String phone, String area, String currentArea) => throw UnimplementedError();
-
-  @override
-  Future<void> updateSelectedArea(String userId, String selectedArea) => throw UnimplementedError();
 
   @override
   Stream<List<UserModel>> getUsersBySelectedAreaStream(String selectedArea) => throw UnimplementedError();

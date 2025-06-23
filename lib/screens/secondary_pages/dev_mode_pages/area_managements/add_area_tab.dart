@@ -19,9 +19,11 @@ class AddAreaTab extends StatefulWidget {
 
 class _AddAreaTabState extends State<AddAreaTab> {
   final TextEditingController _areaController = TextEditingController();
+  final TextEditingController _englishAreaController = TextEditingController();
 
   Future<void> _addArea() async {
     final areaName = _areaController.text.trim();
+    final englishAreaName = _englishAreaController.text.trim();
     final division = widget.selectedDivision;
     if (areaName.isEmpty || division == null || division.isEmpty) return;
 
@@ -31,20 +33,13 @@ class _AddAreaTabState extends State<AddAreaTab> {
     final areaDoc = FirebaseFirestore.instance.collection('areas').doc(areaId);
     await areaDoc.set({
       'name': areaName,
+      'englishName': englishAreaName,
       'division': division,
       'createdAt': FieldValue.serverTimestamp(),
     });
 
-    // Firestore: area_limits 문서도 같이 초기화
-    final limitDoc = FirebaseFirestore.instance.collection('area_limits').doc(areaId);
-    await limitDoc.set({
-      'parkingRequests': 6,
-      'parkingCompleted': 6,
-      'departureRequests': 6,
-      'departureCompleted': 10,
-    });
-
     _areaController.clear();
+    _englishAreaController.clear();
     FocusScope.of(context).unfocus();
     setState(() {}); // 🔄 FutureBuilder 리빌드
 
@@ -82,7 +77,6 @@ class _AddAreaTabState extends State<AddAreaTab> {
 
     final areaId = '$division-$areaName';
     await FirebaseFirestore.instance.collection('areas').doc(areaId).delete();
-    await FirebaseFirestore.instance.collection('area_limits').doc(areaId).delete();
 
     setState(() {});
 
@@ -108,7 +102,13 @@ class _AddAreaTabState extends State<AddAreaTab> {
           const SizedBox(height: 12),
           TextField(
             controller: _areaController,
-            decoration: const InputDecoration(labelText: '새 지역 이름'),
+            decoration: const InputDecoration(labelText: '새 지역 이름(한글)'),
+            onSubmitted: (_) => _addArea(),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _englishAreaController,
+            decoration: const InputDecoration(labelText: '새 지역 이름 (영어)'),
             onSubmitted: (_) => _addArea(),
           ),
           const SizedBox(height: 12),
