@@ -11,7 +11,6 @@ import '../states/user/user_state.dart';
 import '../states/calendar/field_selected_date_state.dart';
 
 import '../utils/app_colors.dart';
-import '../utils/snackbar_helper.dart';
 
 import '../screens/input_pages/input_plate_screen.dart';
 import 'secondary_page.dart';

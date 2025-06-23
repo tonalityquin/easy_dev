@@ -28,7 +28,7 @@ class _AttendanceUiState extends State<AttendanceUi> {
   Map<String, Map<int, String>> cellData = {};
   List<UserModel> users = [];
 
-  String currentArea = '';
+  String selectedArea = '';
   late StreamSubscription _userStreamSub;
 
   @override
@@ -39,10 +39,10 @@ class _AttendanceUiState extends State<AttendanceUi> {
     selectedMonth = now.month;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final area = context.read<AreaState>().currentArea;
+      final area = context.read<AreaState>().selectedArea; // ✅ 수정됨
       if (area.isNotEmpty) {
-        currentArea = area;
-        _subscribeToUsers(currentArea);
+        selectedArea = area;
+        _subscribeToUsers(selectedArea); // ✅ 수정됨
       }
     });
   }
@@ -50,10 +50,12 @@ class _AttendanceUiState extends State<AttendanceUi> {
   void _subscribeToUsers(String area) {
     _userStreamSub = FirebaseFirestore.instance
         .collection('user_accounts')
-        .where('currentArea', isEqualTo: area)
+        .where('selectedArea', isEqualTo: area) // ✅ selectedArea 기준
         .snapshots()
         .listen((snapshot) {
-      final updatedUsers = snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
+      final updatedUsers = snapshot.docs
+          .map((doc) => UserModel.fromMap(doc.id, doc.data()))
+          .toList();
       setState(() {
         users = updatedUsers;
       });
@@ -68,21 +70,31 @@ class _AttendanceUiState extends State<AttendanceUi> {
   }
 
   Future<List<UserModel>> getUsersByArea(String area) async {
-    final snapshot =
-        await FirebaseFirestore.instance.collection('user_accounts').where('currentArea', isEqualTo: area).get();
+    final snapshot = await FirebaseFirestore.instance
+        .collection('user_accounts')
+        .where('selectedArea', isEqualTo: area) // ✅ selectedArea 기준
+        .get();
 
-    return snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
+    return snapshot.docs
+        .map((doc) => UserModel.fromMap(doc.id, doc.data()))
+        .toList();
   }
 
   Future<void> _reloadUsers(String area) async {
     try {
-      final snapshot =
-          await FirebaseFirestore.instance.collection('user_accounts').where('currentArea', isEqualTo: area).get();
-      final updatedUsers = snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
+      final snapshot = await FirebaseFirestore.instance
+          .collection('user_accounts')
+          .where('selectedArea', isEqualTo: area) // ✅ selectedArea 기준
+          .get();
+
+      final updatedUsers = snapshot.docs
+          .map((doc) => UserModel.fromMap(doc.id, doc.data()))
+          .toList();
 
       final currentIds = users.map((u) => u.id).toSet();
       final newIds = updatedUsers.map((u) => u.id).toSet();
-      final hasChanged = currentIds.length != newIds.length || !currentIds.containsAll(newIds);
+      final hasChanged =
+          currentIds.length != newIds.length || !currentIds.containsAll(newIds);
 
       if (hasChanged) {
         setState(() {
@@ -165,7 +177,6 @@ class _AttendanceUiState extends State<AttendanceUi> {
     });
   }
 
-  /// ✅ JSON으로부터 받은 출근 데이터를 cellData에 병합
   Future<void> _mergeJsonData(Map<String, Map<int, String>> newData) async {
     setState(() {
       for (final entry in newData.entries) {
@@ -185,7 +196,7 @@ class _AttendanceUiState extends State<AttendanceUi> {
 
   @override
   Widget build(BuildContext context) {
-    currentArea = context.watch<AreaState>().currentArea;
+    selectedArea = context.watch<AreaState>().selectedArea; // ✅ 수정됨
 
     return AttendanceCell(
       controller: _controller,

@@ -41,7 +41,7 @@ class _HumanResourceState extends State<HumanResource> {
     _selectedYear = now.year;
     _selectedMonth = now.month;
 
-    final area = context.read<AreaState>().currentArea;
+    final area = context.read<AreaState>().selectedArea;
     if (area.isNotEmpty) {
       _subscribeToUsers(area);
     }

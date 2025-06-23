@@ -14,19 +14,23 @@ class AreaState with ChangeNotifier {
   String _currentArea = '';
   String _currentDivision = '';
 
+  String _selectedArea = '';
+  String _selectedDivision = '';
+
   bool _isLocked = false;
 
   String get currentArea => _currentArea;
-
   String get currentDivision => _currentDivision;
 
-  List<String> get availableAreas => _availableAreas.toList();
+  String get selectedArea => _selectedArea;
+  String get selectedDivision => _selectedDivision;
 
+  List<String> get availableAreas => _availableAreas.toList();
   bool get isLocked => _isLocked;
 
   AreaState();
 
-  final Map<String, List<String>> _divisionAreaMap = {}; // ✅ division → areas 맵
+  final Map<String, List<String>> _divisionAreaMap = {};
   Map<String, List<String>> get divisionAreaMap => _divisionAreaMap;
 
   /// 모든 division-area 구조 로딩 (관리자용)
@@ -63,10 +67,14 @@ class AreaState with ChangeNotifier {
     debugPrint('🔓 지역 보호 해제됨');
   }
 
-  /// ✅ 특정 유저의 지역만 Firestore에서 가져와 초기화
+  /// ✅ currentArea 초기화
   Future<void> initializeArea(String userArea) async {
     try {
-      final snapshot = await _firestore.collection('areas').where('name', isEqualTo: userArea).limit(1).get();
+      final snapshot = await _firestore
+          .collection('areas')
+          .where('name', isEqualTo: userArea)
+          .limit(1)
+          .get();
 
       if (snapshot.docs.isNotEmpty) {
         final doc = snapshot.docs.first;
@@ -74,7 +82,9 @@ class AreaState with ChangeNotifier {
 
         if (_currentArea != userArea) {
           _currentArea = userArea;
-          _currentDivision = (division != null && division.trim().isNotEmpty) ? division.trim() : 'default';
+          _currentDivision = (division != null && division.trim().isNotEmpty)
+              ? division.trim()
+              : 'default';
 
           _availableAreas.clear();
           _availableAreas.add(userArea);
@@ -98,7 +108,8 @@ class AreaState with ChangeNotifier {
 
   Future<void> addArea(String name, String division) async {
     final trimmedName = name.trim();
-    final trimmedDivision = division.trim().isEmpty ? 'default' : division.trim();
+    final trimmedDivision =
+    division.trim().isEmpty ? 'default' : division.trim();
 
     if (trimmedName.isEmpty || _availableAreas.contains(trimmedName)) {
       debugPrint('⚠️ 이미 존재하거나 빈 값입니다: $trimmedName');
@@ -116,7 +127,8 @@ class AreaState with ChangeNotifier {
 
       _availableAreas.add(trimmedName);
       notifyListeners();
-      debugPrint('🆕 지역 추가됨 (Firestore): $trimmedName, division: $trimmedDivision, id: $customId');
+      debugPrint(
+          '🆕 지역 추가됨 (Firestore): $trimmedName, division: $trimmedDivision, id: $customId');
     } catch (e) {
       debugPrint('❌ Firestore 지역 추가 실패: $e');
     }
@@ -129,7 +141,10 @@ class AreaState with ChangeNotifier {
     }
 
     try {
-      final snapshot = await _firestore.collection('areas').where('name', isEqualTo: area).get();
+      final snapshot = await _firestore
+          .collection('areas')
+          .where('name', isEqualTo: area)
+          .get();
 
       for (var doc in snapshot.docs) {
         await doc.reference.delete();
@@ -139,6 +154,10 @@ class AreaState with ChangeNotifier {
         if (_currentArea == area) {
           _currentArea = '';
           _currentDivision = '';
+        }
+        if (_selectedArea == area) {
+          _selectedArea = '';
+          _selectedDivision = '';
         }
         notifyListeners();
         debugPrint('🗑️ 지역 삭제됨 (Firestore): $area');
@@ -160,14 +179,20 @@ class AreaState with ChangeNotifier {
     }
 
     try {
-      final snapshot = await _firestore.collection('areas').where('name', isEqualTo: newArea).limit(1).get();
+      final snapshot = await _firestore
+          .collection('areas')
+          .where('name', isEqualTo: newArea)
+          .limit(1)
+          .get();
 
       if (snapshot.docs.isNotEmpty) {
         final doc = snapshot.docs.first;
         final division = doc['division'] as String?;
 
         _currentArea = newArea;
-        _currentDivision = (division != null && division.trim().isNotEmpty) ? division.trim() : 'default';
+        _currentDivision = (division != null && division.trim().isNotEmpty)
+            ? division.trim()
+            : 'default';
 
         notifyListeners();
         debugPrint(isSyncing
@@ -184,6 +209,40 @@ class AreaState with ChangeNotifier {
   void initializeOrSyncArea(String area) {
     if (_currentArea != area) {
       updateArea(area, isSyncing: true);
+    }
+  }
+
+  /// ✅ selectedArea 초기화 및 갱신
+  Future<void> updateSelectedArea(String newArea) async {
+    if (_selectedArea == newArea) {
+      debugPrint('ℹ️ selectedArea 변경 없음: $_selectedArea 그대로 유지됨');
+      return;
+    }
+
+    try {
+      final snapshot = await _firestore
+          .collection('areas')
+          .where('name', isEqualTo: newArea)
+          .limit(1)
+          .get();
+
+      if (snapshot.docs.isNotEmpty) {
+        final doc = snapshot.docs.first;
+        final division = doc['division'] as String?;
+
+        _selectedArea = newArea;
+        _selectedDivision = (division != null && division.trim().isNotEmpty)
+            ? division.trim()
+            : 'default';
+
+        notifyListeners();
+        debugPrint(
+            '✅ selectedArea 변경됨: $_selectedArea / division: $_selectedDivision');
+      } else {
+        debugPrint('⚠️ 지역 정보 없음 - selectedArea 변경 무시됨: $newArea');
+      }
+    } catch (e) {
+      debugPrint('❌ selectedArea 변경 실패: $e');
     }
   }
 }

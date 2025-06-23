@@ -233,7 +233,7 @@ class _BreakCellState extends State<BreakCell> {
                   onPressed: () async {
                     final areaState = context.read<AreaState>();
                     final division = areaState.currentDivision;
-                    final area = areaState.currentArea;
+                    final area = _selectedArea ?? '';
 
                     final Map<String, Map<int, String>> merged = {};
 

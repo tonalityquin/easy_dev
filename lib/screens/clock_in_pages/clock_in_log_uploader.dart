@@ -129,11 +129,7 @@ class ClockInLogUploader {
     final year = dt.year.toString().padLeft(4, '0');
     final month = dt.month.toString().padLeft(2, '0');
 
-    final baseUrl =
-        'https://storage.googleapis.com/$_bucketName/$division/$area/exports/clock_in/$year/$month/$userId.json';
-
-    final version = DateTime.now().millisecondsSinceEpoch;
-
-    return '$baseUrl?v=$version'; // 🔥 캐시 우회
+    final path = '$division/$area/exports/clock_in/$year/$month/$userId.json';
+    return 'https://storage.googleapis.com/$_bucketName/$path';
   }
 }

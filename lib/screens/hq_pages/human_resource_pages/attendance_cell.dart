@@ -222,7 +222,7 @@ class _AttendanceCellState extends State<AttendanceCell> {
                     try {
                       final areaState = context.read<AreaState>();
                       final division = areaState.currentDivision;
-                      final area = areaState.currentArea;
+                      final area = _selectedArea ?? '';
 
                       final mergedData = <String, Map<int, String>>{};
 

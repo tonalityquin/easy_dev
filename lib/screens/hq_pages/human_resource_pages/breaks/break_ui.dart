@@ -31,7 +31,7 @@ class _BreakUiState extends State<BreakUi> {
   Map<String, Map<int, String>> cellData = {};
   List<UserModel> users = [];
 
-  String currentArea = '';
+  String selectedArea = '';
   late StreamSubscription _userStreamSub;
 
   @override
@@ -42,10 +42,10 @@ class _BreakUiState extends State<BreakUi> {
     selectedMonth = now.month;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final area = context.read<AreaState>().currentArea;
+      final area = context.read<AreaState>().selectedArea; // ✅ selectedArea 참조
       if (area.isNotEmpty) {
-        currentArea = area;
-        _subscribeToUsers(currentArea);
+        selectedArea = area;
+        _subscribeToUsers(selectedArea); // ✅
       }
     });
   }
@@ -53,11 +53,12 @@ class _BreakUiState extends State<BreakUi> {
   void _subscribeToUsers(String area) {
     _userStreamSub = FirebaseFirestore.instance
         .collection('user_accounts')
-        .where('currentArea', isEqualTo: area)
+        .where('selectedArea', isEqualTo: area) // ✅ selectedArea 기준
         .snapshots()
         .listen((snapshot) {
-      final updatedUsers =
-      snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
+      final updatedUsers = snapshot.docs
+          .map((doc) => UserModel.fromMap(doc.id, doc.data()))
+          .toList();
       setState(() {
         users = updatedUsers;
       });
@@ -74,10 +75,12 @@ class _BreakUiState extends State<BreakUi> {
   Future<List<UserModel>> getUsersByArea(String area) async {
     final snapshot = await FirebaseFirestore.instance
         .collection('user_accounts')
-        .where('currentArea', isEqualTo: area)
+        .where('selectedArea', isEqualTo: area) // ✅ selectedArea 기준
         .get();
 
-    return snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
+    return snapshot.docs
+        .map((doc) => UserModel.fromMap(doc.id, doc.data()))
+        .toList();
   }
 
   Future<void> _reloadUsers(String area) async {
@@ -85,7 +88,8 @@ class _BreakUiState extends State<BreakUi> {
       final updatedUsers = await getUsersByArea(area);
       final currentIds = users.map((u) => u.id).toSet();
       final newIds = updatedUsers.map((u) => u.id).toSet();
-      final hasChanged = currentIds.length != newIds.length || !currentIds.containsAll(newIds);
+      final hasChanged =
+          currentIds.length != newIds.length || !currentIds.containsAll(newIds);
 
       if (!mounted) return;
 
@@ -170,7 +174,7 @@ class _BreakUiState extends State<BreakUi> {
     try {
       final areaState = context.read<AreaState>();
       final division = areaState.currentDivision;
-      final area = areaState.currentArea;
+      final area = areaState.selectedArea; // ✅ selectedArea 참조
 
       final Map<String, Map<int, String>> merged = {};
 
@@ -209,7 +213,7 @@ class _BreakUiState extends State<BreakUi> {
 
   @override
   Widget build(BuildContext context) {
-    currentArea = context.watch<AreaState>().currentArea;
+    selectedArea = context.watch<AreaState>().selectedArea; // ✅ selectedArea 참조
 
     return BreakCell(
       controller: _controller,
@@ -228,7 +232,7 @@ class _BreakUiState extends State<BreakUi> {
       toggleMenu: () => setState(() => _menuOpen = !_menuOpen),
       getUsersByArea: getUsersByArea,
       reloadUsers: _reloadUsers,
-      onLoadJson: (_) => _onLoadJson(), // ✅ 병합된 데이터 UI 삽입
+      onLoadJson: (_) => _onLoadJson(),
     );
   }
 }
