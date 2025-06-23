@@ -22,6 +22,7 @@ class BreakLogUploader {
       final areaState = context.read<AreaState>();
       final userState = context.read<UserState>();
 
+      final areaForGcs = userState.user?.englishSelectedAreaName ?? '';
       final area = userState.user?.selectedArea ?? '';
       final division = areaState.currentDivision;
       final userId = userState.user?.id ?? '';
@@ -33,7 +34,7 @@ class BreakLogUploader {
       final day = now.day.toString().padLeft(2, '0');
       final dateStr = '$year-$month-$day';
 
-      final gcsPath = '$division/$area/exports/break/$year/$month/$userId.json';
+      final gcsPath = '$division/$areaForGcs/exports/break/$year/$month/$userId.json';
 
       final newRecord = {
         'userId': userId,
@@ -130,5 +131,4 @@ class BreakLogUploader {
     final path = '$division/$area/exports/break/$year/$month/$userId.json';
     return 'https://storage.googleapis.com/$_bucketName/$path';
   }
-
 }

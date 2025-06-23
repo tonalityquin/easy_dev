@@ -10,7 +10,6 @@ Future<Map<String, Map<int, String>>?> downloadBreakJsonFromGcs({
   required int selectedMonth,
 }) async {
   try {
-    // ✅ 캐시 무효화를 위한 타임스탬프 쿼리 추가
     final uri = Uri.parse(publicUrl);
     final cacheBypassUrl = uri.replace(
       queryParameters: {
@@ -29,8 +28,11 @@ Future<Map<String, Map<int, String>>?> downloadBreakJsonFromGcs({
     );
 
     if (response.statusCode == 200) {
-      debugPrint('📥 휴게 로그 원본: ${response.body}');
-      final decoded = jsonDecode(response.body);
+      // ✅ 한글 깨짐 방지를 위해 utf8 디코딩
+      final decodedContent = utf8.decode(response.bodyBytes);
+      debugPrint('📥 휴게 로그 원본: $decodedContent');
+
+      final decoded = jsonDecode(decodedContent);
 
       if (decoded is! List) {
         debugPrint('❌ JSON은 List<Map> 형식이어야 합니다.');
@@ -54,7 +56,6 @@ Future<Map<String, Map<int, String>>?> downloadBreakJsonFromGcs({
         final year = int.tryParse(parts[0]);
         final month = int.tryParse(parts[1]);
         final day = int.tryParse(parts[2]);
-
         if (year == null || month == null || day == null) continue;
 
         if (year != selectedYear || month != selectedMonth) {
@@ -62,7 +63,6 @@ Future<Map<String, Map<int, String>>?> downloadBreakJsonFromGcs({
           continue;
         }
 
-        // ✅ 통일된 키(userId) 사용 → _break 접미사 제거
         parsed.putIfAbsent(userId, () => {})[day] = recordedTime;
       }
 

@@ -233,17 +233,16 @@ class _BreakCellState extends State<BreakCell> {
                   onPressed: () async {
                     final areaState = context.read<AreaState>();
                     final division = areaState.currentDivision;
-                    final area = _selectedArea ?? '';
 
                     final Map<String, Map<int, String>> merged = {};
 
                     for (final user in _users) {
                       final userId = user.id;
 
-                      // ✅ 업로더와 동일한 경로 생성 함수 사용
+                      // ✅ 업로드 경로와 동일하게 englishSelectedAreaName 사용
                       final url = BreakLogUploader.getDownloadPath(
                         division: division,
-                        area: area,
+                        area: user.englishSelectedAreaName ?? '',
                         userId: userId,
                         dateTime: DateTime(widget.selectedYear, widget.selectedMonth),
                       );

@@ -10,6 +10,11 @@ class FirestoreUserRepository implements UserRepository {
     return _firestore.collection('user_accounts');
   }
 
+  // 🔍 areas 컬렉션 참조 메서드
+  CollectionReference<Map<String, dynamic>> _getAreasCollectionRef() {
+    return _firestore.collection('areas');
+  }
+
   @override
   Future<UserModel?> getUserByPhone(String phone) async {
     debugPrint("[DEBUG] Firestore 사용자 조회 시작 - phone: $phone");
@@ -59,7 +64,12 @@ class FirestoreUserRepository implements UserRepository {
   }
 
   @override
-  Future<void> updateUserStatus(String phone, String area, {bool? isWorking, bool? isSaved}) async {
+  Future<void> updateUserStatus(
+    String phone,
+    String area, {
+    bool? isWorking,
+    bool? isSaved,
+  }) async {
     final userId = '$phone-$area';
 
     Map<String, dynamic> updates = {};
@@ -93,4 +103,19 @@ class FirestoreUserRepository implements UserRepository {
         .snapshots()
         .map((snapshot) => snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList());
   }
+
+  // ✨ 추가된 부분: areas 컬렉션에서 englishName 조회
+  @override
+  Future<String?> getEnglishNameByArea(String area, String division) async {
+    try {
+      final doc = await _getAreasCollectionRef().doc('$division-$area').get();
+      if (doc.exists) {
+        return doc.data()?['englishName'] as String?;
+      }
+    } catch (e) {
+      debugPrint("[DEBUG] getEnglishNameByArea 실패: $e");
+    }
+    return null;
+  }
+
 }

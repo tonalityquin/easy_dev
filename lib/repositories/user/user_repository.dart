@@ -8,15 +8,19 @@ abstract class UserRepository {
   Future<UserModel?> getUserById(String userId);
 
   /// 사용자의 currentArea를 업데이트
-  Future<void> updateCurrentArea(String phone, String area, String currentArea);
+  Future<void> updateCurrentArea(
+      String phone,
+      String area,
+      String currentArea,
+      );
 
   /// 사용자 상태 업데이트 (근무 여부, 저장 여부 등)
   Future<void> updateUserStatus(
-    String phone,
-    String area, {
-    bool? isWorking,
-    bool? isSaved,
-  });
+      String phone,
+      String area, {
+        bool? isWorking,
+        bool? isSaved,
+      });
 
   /// 사용자 추가
   Future<void> addUser(UserModel user);
@@ -29,4 +33,7 @@ abstract class UserRepository {
 
   /// selectedArea 필드 기준 사용자 필터링
   Stream<List<UserModel>> getUsersBySelectedAreaStream(String selectedArea);
+
+  /// ✨ areas 컬렉션에서 division(=area) 기준 englishName 조회
+  Future<String?> getEnglishNameByArea(String area, String division);
 }

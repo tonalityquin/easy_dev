@@ -222,17 +222,18 @@ class _AttendanceCellState extends State<AttendanceCell> {
                     try {
                       final areaState = context.read<AreaState>();
                       final division = areaState.currentDivision;
-                      final area = _selectedArea ?? '';
 
                       final mergedData = <String, Map<int, String>>{};
 
                       for (final user in _localUsers) {
                         final userId = user.id;
+                        final englishArea = user.englishSelectedAreaName ?? '';
+                        debugPrint('🌍 현재 유저 영어 소속: $englishArea');
 
                         // ✅ 출근 URL 생성 및 다운로드
                         final clockInUrl = ClockInLogUploader.getDownloadPath(
                           division: division,
-                          area: area,
+                          area: englishArea, // ✅ 수정
                           userId: userId,
                         );
                         debugPrint('🌐 출근 URL: $clockInUrl');
@@ -242,6 +243,7 @@ class _AttendanceCellState extends State<AttendanceCell> {
                           selectedYear: widget.selectedYear,
                           selectedMonth: widget.selectedMonth,
                         );
+
                         if (clockInData != null && clockInData.isNotEmpty) {
                           debugPrint('✅ ${userId} 출근 데이터 병합');
                           mergedData.addAll(clockInData);
@@ -250,7 +252,7 @@ class _AttendanceCellState extends State<AttendanceCell> {
                         // ✅ 퇴근 URL 생성 및 다운로드
                         final clockOutUrl = ClockOutLogUploader.getDownloadPath(
                           division: division,
-                          area: area,
+                          area: englishArea, // ✅ 수정
                           userId: userId,
                         );
                         debugPrint('🌐 퇴근 URL: $clockOutUrl');
@@ -260,6 +262,7 @@ class _AttendanceCellState extends State<AttendanceCell> {
                           selectedYear: widget.selectedYear,
                           selectedMonth: widget.selectedMonth,
                         );
+
                         if (clockOutData != null && clockOutData.isNotEmpty) {
                           debugPrint('✅ ${userId} 퇴근 데이터 병합');
                           mergedData.addAll(clockOutData);

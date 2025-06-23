@@ -157,14 +157,28 @@ class DummyUserRepository implements UserRepository {
   Future<void> toggleUserSelection(String userId, bool selected) => throw UnimplementedError();
 
   @override
-  Future<void> updateUserStatus(String userId, String status, {bool? isSaved, bool? isWorking}) =>
+  Future<void> updateUserStatus(
+    String phone,
+    String area, {
+    bool? isSaved,
+    bool? isWorking,
+  }) =>
       throw UnimplementedError();
 
   @override
-  Future<void> updateCurrentArea(String phone, String area, String currentArea) => throw UnimplementedError();
+  Future<void> updateCurrentArea(
+    String phone,
+    String area,
+    String currentArea,
+  ) =>
+      throw UnimplementedError();
 
   @override
   Stream<List<UserModel>> getUsersBySelectedAreaStream(String selectedArea) => throw UnimplementedError();
+
+  // ✨ 추가된 부분
+  @override
+  Future<String?> getEnglishNameByArea(String area, String division) => throw UnimplementedError();
 }
 
 class DummyAdjustmentRepository implements AdjustmentRepository {

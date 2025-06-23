@@ -6,11 +6,11 @@ class UserModel {
   final String role;
   final String password;
 
-  final List<String> areas;      // ✅ 복수 지역
-  final List<String> divisions;  // ✅ 복수 부서
+  final List<String> areas; // ✅ 복수 지역
+  final List<String> divisions; // ✅ 복수 부서
 
-  final String? currentArea;            // ✅ 현재 근무 지역
-  final String? selectedArea;           // ✅ 선택된 지역
+  final String? currentArea; // ✅ 현재 근무 지역
+  final String? selectedArea; // ✅ 선택된 지역
   final String? englishSelectedAreaName; // ✅ 선택된 지역의 영어 이름
 
   final bool isSelected;
@@ -28,7 +28,7 @@ class UserModel {
     required this.divisions,
     this.currentArea,
     this.selectedArea,
-    this.englishSelectedAreaName, // ✅ 추가
+    this.englishSelectedAreaName,
     required this.isSelected,
     required this.isWorking,
     required this.isSaved,
@@ -45,7 +45,7 @@ class UserModel {
     List<String>? divisions,
     String? currentArea,
     String? selectedArea,
-    String? englishSelectedAreaName, // ✅ 추가
+    String? englishSelectedAreaName,
     bool? isSelected,
     bool? isWorking,
     bool? isSaved,
@@ -61,7 +61,8 @@ class UserModel {
       divisions: divisions ?? this.divisions,
       currentArea: currentArea ?? this.currentArea,
       selectedArea: selectedArea ?? this.selectedArea,
-      englishSelectedAreaName: englishSelectedAreaName ?? this.englishSelectedAreaName, // ✅ 추가
+      englishSelectedAreaName:
+      englishSelectedAreaName ?? this.englishSelectedAreaName,
       isSelected: isSelected ?? this.isSelected,
       isWorking: isWorking ?? this.isWorking,
       isSaved: isSaved ?? this.isSaved,
@@ -80,7 +81,7 @@ class UserModel {
       divisions: List<String>.from(data['divisions'] ?? []),
       currentArea: data['currentArea'],
       selectedArea: data['selectedArea'],
-      englishSelectedAreaName: data['englishSelectedAreaName'], // ✅ 추가
+      englishSelectedAreaName: data['englishSelectedAreaName'],
       isSelected: data['isSelected'] ?? false,
       isWorking: data['isWorking'] ?? false,
       isSaved: data['isSaved'] ?? false,
@@ -98,7 +99,7 @@ class UserModel {
       'divisions': divisions,
       'currentArea': currentArea,
       'selectedArea': selectedArea,
-      'englishSelectedAreaName': englishSelectedAreaName, // ✅ 추가
+      'englishSelectedAreaName': englishSelectedAreaName,
       'isSelected': isSelected,
       'isWorking': isWorking,
       'isSaved': isSaved,
@@ -117,7 +118,7 @@ class UserModel {
       divisions: List<String>.from(json['divisions'] ?? []),
       currentArea: json['currentArea'],
       selectedArea: json['selectedArea'],
-      englishSelectedAreaName: json['englishSelectedAreaName'], // ✅ 추가
+      englishSelectedAreaName: json['englishSelectedAreaName'],
       isSelected: json['isSelected'] ?? false,
       isWorking: json['isWorking'] ?? false,
       isSaved: json['isSaved'] ?? false,
@@ -136,7 +137,7 @@ class UserModel {
       'divisions': divisions,
       'currentArea': currentArea,
       'selectedArea': selectedArea,
-      'englishSelectedAreaName': englishSelectedAreaName, // ✅ 추가
+      'englishSelectedAreaName': englishSelectedAreaName,
       'isSelected': isSelected,
       'isWorking': isWorking,
       'isSaved': isSaved,

@@ -29,8 +29,10 @@ Future<Map<String, Map<int, String>>?> downloadLeaveJsonFromGcs({
     );
 
     if (response.statusCode == 200) {
-      debugPrint('📥 raw response.body: ${response.body}');
-      final raw = jsonDecode(response.body);
+      final decodedContent = utf8.decode(response.bodyBytes); // ✅ 한글 깨짐 방지
+      debugPrint('📥 raw response.body: $decodedContent');
+      final raw = jsonDecode(decodedContent);
+
 
       // ✅ append 구조 (List<Map>)
       if (raw is List) {

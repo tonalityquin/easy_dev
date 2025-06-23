@@ -30,9 +30,9 @@ Future<Map<String, Map<int, String>>?> downloadAttendanceJsonFromGcs({
     );
 
     if (response.statusCode == 200) {
-      debugPrint('📥 raw response.body: ${response.body}');
-
-      final raw = jsonDecode(response.body);
+      final decodedContent = utf8.decode(response.bodyBytes); // ✅ 한글 깨짐 방지
+      debugPrint('📥 raw response.body: $decodedContent');    // 디버깅 출력
+      final raw = jsonDecode(decodedContent);                 // 파싱
 
       // ✅ 리스트 형태일 경우 (append 구조)
       if (raw is List) {

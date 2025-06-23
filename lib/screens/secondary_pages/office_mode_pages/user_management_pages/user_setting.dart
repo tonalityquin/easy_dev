@@ -23,14 +23,14 @@ enum RoleType {
 
   static RoleType fromName(String name) {
     return RoleType.values.firstWhere(
-          (e) => e.name == name,
+      (e) => e.name == name,
       orElse: () => RoleType.fielder,
     );
   }
 
   static RoleType fromLabel(String label) {
     return RoleType.values.firstWhere(
-          (e) => e.label == label,
+      (e) => e.label == label,
       orElse: () => RoleType.fielder,
     );
   }
@@ -38,17 +38,17 @@ enum RoleType {
 
 class UserSetting extends StatefulWidget {
   final Function(
-      String name,
-      String phone,
-      String email,
-      String role,
-      String password,
-      String area,
-      String division,
-      bool isWorking,
-      bool isSaved,
-      String selectedArea,
-      ) onSave;
+    String name,
+    String phone,
+    String email,
+    String role,
+    String password,
+    String area,
+    String division,
+    bool isWorking,
+    bool isSaved,
+    String selectedArea,
+  ) onSave;
 
   final String areaValue;
   final String division;
@@ -201,9 +201,9 @@ class _UserAccountsState extends State<UserSetting> {
             ),
             items: RoleType.values
                 .map((role) => DropdownMenuItem<RoleType>(
-              value: role,
-              child: Text(role.label),
-            ))
+                      value: role,
+                      child: Text(role.label),
+                    ))
                 .toList(),
             onChanged: (value) {
               if (value != null) {

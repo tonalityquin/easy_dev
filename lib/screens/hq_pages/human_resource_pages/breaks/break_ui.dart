@@ -56,9 +56,7 @@ class _BreakUiState extends State<BreakUi> {
         .where('selectedArea', isEqualTo: area) // ✅ selectedArea 기준
         .snapshots()
         .listen((snapshot) {
-      final updatedUsers = snapshot.docs
-          .map((doc) => UserModel.fromMap(doc.id, doc.data()))
-          .toList();
+      final updatedUsers = snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
       setState(() {
         users = updatedUsers;
       });
@@ -78,9 +76,7 @@ class _BreakUiState extends State<BreakUi> {
         .where('selectedArea', isEqualTo: area) // ✅ selectedArea 기준
         .get();
 
-    return snapshot.docs
-        .map((doc) => UserModel.fromMap(doc.id, doc.data()))
-        .toList();
+    return snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
   }
 
   Future<void> _reloadUsers(String area) async {
@@ -88,8 +84,7 @@ class _BreakUiState extends State<BreakUi> {
       final updatedUsers = await getUsersByArea(area);
       final currentIds = users.map((u) => u.id).toSet();
       final newIds = updatedUsers.map((u) => u.id).toSet();
-      final hasChanged =
-          currentIds.length != newIds.length || !currentIds.containsAll(newIds);
+      final hasChanged = currentIds.length != newIds.length || !currentIds.containsAll(newIds);
 
       if (!mounted) return;
 
@@ -174,7 +169,6 @@ class _BreakUiState extends State<BreakUi> {
     try {
       final areaState = context.read<AreaState>();
       final division = areaState.currentDivision;
-      final area = areaState.selectedArea; // ✅ selectedArea 참조
 
       final Map<String, Map<int, String>> merged = {};
 
@@ -183,7 +177,7 @@ class _BreakUiState extends State<BreakUi> {
 
         final url = BreakLogUploader.getDownloadPath(
           division: division,
-          area: area,
+          area: user.englishSelectedAreaName ?? '', // ✅ 영어 이름 참조
           userId: userId,
         );
 
