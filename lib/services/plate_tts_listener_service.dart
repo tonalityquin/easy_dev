@@ -31,6 +31,7 @@ class PlateTtsListenerService {
         final docId = doc.id;
         final newType = data['type'];
         final area = data['area'];
+        final location = data['location']; // ⭐️ 수정됨: location 필드 읽기
         final plateNumber = data['plate_number'] ?? '';
         final Timestamp? requestTime = data['request_time'];
         final prevType = _lastTypes[docId];
@@ -46,7 +47,8 @@ class PlateTtsListenerService {
         if (change.type == DocumentChangeType.added) {
           if (requestTime == null ||
               requestTime.toDate().isBefore(_startTime)) {
-            debugPrint('[TTS] 무시됨 (추가) ▶ $docId (요청 시각: ${requestTime?.toDate()})');
+            debugPrint(
+                '[TTS] 무시됨 (추가) ▶ $docId (요청 시각: ${requestTime?.toDate()})');
             continue;
           }
 
@@ -54,8 +56,8 @@ class PlateTtsListenerService {
             debugPrint('[TTS] (추가) 입차 ▶ $docId');
             TtsHelper.speak("입차 요청");
           } else if (newType == 'departure_requests') {
-            debugPrint('[TTS] (추가) 출차 요청 ▶ $docId');
-            TtsHelper.speak("출차 요청 $spokenTail");
+            debugPrint('[TTS] (추가) 출차 요청 ▶ $docId, 번호판: $tailPlate, 위치: $location');
+            TtsHelper.speak("출차 요청 $spokenTail, $location"); // ⭐️ 수정됨
           }
         }
 
@@ -67,13 +69,17 @@ class PlateTtsListenerService {
             TtsHelper.speak("입차 요청");
           } else if (newType == 'departure_requests') {
             if (prevType == 'parking_completed') {
-              debugPrint('[TTS] (수정) 출차 요청으로 변경됨 ▶ $docId (이전: $prevType), 번호판: $tailPlate');
-              TtsHelper.speak("출차 요청 $spokenTail");
+              debugPrint(
+                  '[TTS] (수정) 출차 요청으로 변경됨 ▶ $docId (이전: $prevType), 번호판: $tailPlate, 위치: $location');
+              TtsHelper.speak(
+                  "출차 요청 $spokenTail, $location"); // ⭐️ 수정됨
             } else {
-              debugPrint('[TTS] (수정) 출차 요청이지만 이전 상태가 $prevType ▶ 무시');
+              debugPrint(
+                  '[TTS] (수정) 출차 요청이지만 이전 상태가 $prevType ▶ 무시');
             }
           } else {
-            debugPrint('[TTS] (수정) type 변경 감지됨 ▶ $docId (이전: $prevType → 현재: $newType) ▶ 무시');
+            debugPrint(
+                '[TTS] (수정) type 변경 감지됨 ▶ $docId (이전: $prevType → 현재: $newType) ▶ 무시');
           }
         }
       }
@@ -88,10 +94,17 @@ class PlateTtsListenerService {
 
   static String _convertToKoreanDigits(String digits) {
     const koreanDigits = {
-      '0': '공', '1': '하나', '2': '둘', '3': '삼', '4': '사',
-      '5': '오', '6': '육', '7': '칠', '8': '팔', '9': '구',
+      '0': '공',
+      '1': '하나',
+      '2': '둘',
+      '3': '삼',
+      '4': '사',
+      '5': '오',
+      '6': '육',
+      '7': '칠',
+      '8': '팔',
+      '9': '구',
     };
-
     return digits.split('').map((d) => koreanDigits[d] ?? d).join(', ');
   }
 }
