@@ -190,18 +190,24 @@ class PlateState extends ChangeNotifier {
     try {
       final plateList = _data[collection];
       if (plateList == null) {
-        throw Exception('🚨 Collection not found: $collection');
+        debugPrint('⚠️ Collection not found: $collection');
+        onError('🚨 선택할 수 있는 번호판 리스트가 없습니다.');
+        return;
       }
 
       final index = plateList.indexWhere((p) => p.id == plateId);
       if (index == -1) {
-        throw Exception('🚨 Plate not found in collection $collection: $plateId');
+        debugPrint('⚠️ Plate not found in collection $collection: $plateId');
+        onError('🚨 선택할 수 있는 번호판이 없습니다.');
+        return;
       }
 
       final plate = plateList[index];
 
       if (plate.isSelected && plate.selectedBy != userName) {
-        throw Exception('⚠️ 이미 다른 사용자가 선택한 번호판입니다.');
+        debugPrint('⚠️ 이미 다른 사용자에 의해 선택됨: ${plate.plateNumber}');
+        onError('⚠️ 이미 다른 사용자(${plate.selectedBy})가 선택한 번호판입니다.');
+        return;
       }
 
       final alreadySelected = _data.entries.expand((entry) => entry.value).firstWhere(
@@ -222,10 +228,14 @@ class PlateState extends ChangeNotifier {
 
       if (alreadySelected.id.isNotEmpty && !plate.isSelected) {
         final collectionLabel = _getCollectionLabelForType(alreadySelected.type);
-        throw Exception('⚠️ 이미 다른 번호판을 선택한 상태입니다.\n'
-            '• 선택된 번호판: ${alreadySelected.plateNumber}\n'
-            '• 위치: $collectionLabel\n'
-            '선택을 해제한 후 다시 시도해주세요.');
+        debugPrint('⚠️ 이미 다른 번호판을 선택한 상태임: ${alreadySelected.plateNumber}');
+        onError(
+          '⚠️ 이미 다른 번호판을 선택한 상태입니다.\n'
+          '• 선택된 번호판: ${alreadySelected.plateNumber}\n'
+          '• 위치: $collectionLabel\n'
+          '선택을 해제한 후 다시 시도해 주세요.',
+        );
+        return;
       }
 
       final newIsSelected = !plate.isSelected;
@@ -273,22 +283,15 @@ class PlateState extends ChangeNotifier {
     final plates = _data[collection];
     if (plates == null || plates.isEmpty) return null;
 
-    return plates.firstWhere(
-      (plate) => plate.isSelected && plate.selectedBy == userName,
-      orElse: () => PlateModel(
-        id: '',
-        plateNumber: '',
-        plateFourDigit: '',
-        type: '',
-        requestTime: DateTime.now(),
-        location: '',
-        area: '',
-        userName: '',
-        isSelected: false,
-        statusList: [],
-      ),
-    );
+    try {
+      return plates.firstWhere(
+            (plate) => plate.isSelected && plate.selectedBy == userName,
+      );
+    } catch (_) {
+      return null;
+    }
   }
+
 
   void syncWithAreaState() {
     debugPrint("🔄 PlateState: 지역 변경 감지 및 상태 갱신 호출됨");

@@ -126,47 +126,76 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
         );
   }
 
-  void _handleParkingCompleted(BuildContext context) {
+  Future<void> _handleParkingCompleted(BuildContext context) async {
     final plateState = context.read<PlateState>();
+    final movementPlate = context.read<MovementPlate>();
+    final plateRepository = context.read<PlateRepository>();
     final userName = context.read<UserState>().name;
-    final selectedPlate = plateState.getSelectedPlate(PlateType.parkingRequests, userName);
+
+    final selectedPlate = plateState.getSelectedPlate(
+      PlateType.parkingRequests,
+      userName,
+    );
+
     if (selectedPlate != null) {
       final TextEditingController locationController = TextEditingController();
-      showDialog(
-        context: context,
-        builder: (context) {
-          return ParkingLocationDialog(
-            locationController: locationController,
-            onLocationSelected: (String location) {
-              if (location.isNotEmpty) {
-                _completeParking(
-                  context,
-                  selectedPlate.plateNumber,
-                  selectedPlate.area,
-                  location,
-                  selectedPlate.region ?? '전국',
-                );
-              } else {
-                showFailedSnackbar(context, '주차 구역을 입력해주세요.');
-              }
-            },
+
+      while (true) {
+        final selectedLocation = await showDialog<String>(
+          context: context,
+          builder: (dialogContext) {
+            return ParkingLocationDialog(
+              locationController: locationController,
+            );
+          },
+        );
+
+        if (selectedLocation == null) {
+          // 유저가 닫았을 경우 종료
+          break;
+        } else if (selectedLocation == 'refresh') {
+          // 갱신 요청 → 루프 계속
+          continue;
+        } else if (selectedLocation.isNotEmpty) {
+          // 선택된 경우 처리 후 종료
+          _completeParking(
+            movementPlate: movementPlate,
+            plateState: plateState,
+            plateRepository: plateRepository,
+            userName: userName,
+            plateNumber: selectedPlate.plateNumber,
+            area: selectedPlate.area,
+            location: selectedLocation,
+            region: selectedPlate.region ?? '전국',
           );
-        },
-      );
+          break;
+        } else {
+          showFailedSnackbar(context, '주차 구역을 입력해주세요.');
+          // 루프를 계속 돌려 다시 다이얼로그 띄우기
+        }
+      }
     }
   }
 
-  void _completeParking(BuildContext context, String plateNumber, String area, String location, String region) {
-    final movementPlate = context.read<MovementPlate>();
-    final plateState = context.read<PlateState>();
-    final plateRepository = context.read<PlateRepository>();
 
+
+
+  void _completeParking({
+    required MovementPlate movementPlate,
+    required PlateState plateState,
+    required PlateRepository plateRepository,
+    required String userName,
+    required String plateNumber,
+    required String area,
+    required String location,
+    required String region,
+  }) {
     try {
       plateRepository.addRequestOrCompleted(
         plateNumber: plateNumber,
         location: location,
         area: area,
-        userName: context.read<UserState>().name,
+        userName: userName,
         plateType: PlateType.parkingCompleted,
         adjustmentType: null,
         statusList: [],
@@ -183,9 +212,13 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
         plateState,
         location,
       );
+
+      // ✅ showSuccessSnackbar 호출
       showSuccessSnackbar(context, "입차 완료: $plateNumber ($location)");
     } catch (e) {
-      debugPrint("입차 완료 처리 실패: $e");
+      debugPrint('입차 완료 처리 실패: $e');
+
+      // ✅ showFailedSnackbar 호출
       showFailedSnackbar(context, "입차 완료 처리 중 오류 발생: $e");
     }
   }
@@ -346,7 +379,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                             showSuccessSnackbar(
                               context,
                               "업무 종료 보고 업로드 및 출차 초기화 "
-                                  "(입차: ${parsed['vehicleInput']}, 출차: ${parsed['vehicleOutput']}, 금액: ₩$totalLockedFee)",
+                              "(입차: ${parsed['vehicleInput']}, 출차: ${parsed['vehicleOutput']}, 금액: ₩$totalLockedFee)",
                             );
                           } else if (type == 'start') {
                             showSuccessSnackbar(context, "업무 시작 보고 완료: $content");

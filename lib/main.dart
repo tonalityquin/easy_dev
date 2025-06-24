@@ -1,14 +1,43 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import 'routes.dart';
 import 'providers/providers.dart';
 import 'theme.dart';
 import 'utils/init/dev_initializer.dart';
+import 'utils/foreground_task_handler.dart';
+
+@pragma('vm:entry-point')
+void myForegroundCallback() {
+  FlutterForegroundTask.setTaskHandler(MyTaskHandler());
+}
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+
+  FlutterForegroundTask.init(
+    androidNotificationOptions: AndroidNotificationOptions(
+      channelId: 'foreground_service',
+      channelName: '출차 요청 수신 중',
+      channelDescription: '포그라운드에서 대기 중',
+      channelImportance: NotificationChannelImportance.LOW,
+      priority: NotificationPriority.LOW,
+    ),
+    iosNotificationOptions: const IOSNotificationOptions(
+      showNotification: true,
+      playSound: false,
+    ),
+    foregroundTaskOptions: ForegroundTaskOptions(
+      eventAction: ForegroundTaskEventAction.repeat(5000), // 5초마다 호출
+      autoRunOnBoot: true,
+      allowWakeLock: true,
+      allowWifiLock: true,
+    ),
+  );
+
   runApp(const AppBootstrapper());
 }
 
@@ -38,9 +67,25 @@ class AppBootstrapper extends StatelessWidget {
   Future<void> _initializeApp() async {
     await Firebase.initializeApp();
     await registerDevResources();
+
+    // 📍 런타임 퍼미션 요청
+    var status = await Permission.locationWhenInUse.status;
+    if (!status.isGranted) {
+      status = await Permission.locationWhenInUse.request();
+    }
+
+    // 배터리 최적화 제외 요청
+    await Permission.ignoreBatteryOptimizations.request();
+
+    // Foreground Service 시작
+    await FlutterForegroundTask.startService(
+      notificationTitle: '출차 요청 수신 중',
+      notificationText: '포그라운드에서 대기 중',
+    );
   }
 }
 
+// 나머지는 동일
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 

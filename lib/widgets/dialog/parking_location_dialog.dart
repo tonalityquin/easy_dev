@@ -6,12 +6,10 @@ import '../../../states/location/location_state.dart';
 
 class ParkingLocationDialog extends StatefulWidget {
   final TextEditingController locationController;
-  final Function(String) onLocationSelected;
 
   const ParkingLocationDialog({
     super.key,
     required this.locationController,
-    required this.onLocationSelected,
   });
 
   @override
@@ -29,19 +27,6 @@ class _ParkingLocationDialogState extends State<ParkingLocationDialog> {
     _prepareLocationData();
   }
 
-  void _showSelfAgain(BuildContext outerContext) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      showDialog(
-        context: outerContext,
-        builder: (context) => ParkingLocationDialog(
-          locationController: widget.locationController,
-          onLocationSelected: widget.onLocationSelected,
-        ),
-      );
-    });
-  }
-
   void _prepareLocationData() {
     final currentArea = context.read<AreaState>().currentArea;
     final locationState = context.read<LocationState>();
@@ -56,12 +41,17 @@ class _ParkingLocationDialogState extends State<ParkingLocationDialog> {
   Widget build(BuildContext context) {
     return ScaleTransitionDialog(
       child: AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
         title: Row(
           children: const [
             Icon(Icons.location_on, color: Colors.green),
             SizedBox(width: 8),
-            Text('주차 구역 선택', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text(
+              '주차 구역 선택',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ],
         ),
         content: Consumer<LocationState>(
@@ -69,7 +59,9 @@ class _ParkingLocationDialogState extends State<ParkingLocationDialog> {
             if (locationState.isLoading) {
               return const SizedBox(
                 height: 80,
-                child: Center(child: CircularProgressIndicator()),
+                child: Center(
+                  child: CircularProgressIndicator(),
+                ),
               );
             }
 
@@ -79,7 +71,9 @@ class _ParkingLocationDialogState extends State<ParkingLocationDialog> {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const SizedBox(
                     height: 80,
-                    child: Center(child: CircularProgressIndicator()),
+                    child: Center(
+                      child: CircularProgressIndicator(),
+                    ),
                   );
                 }
 
@@ -91,9 +85,7 @@ class _ParkingLocationDialogState extends State<ParkingLocationDialog> {
                         icon: const Icon(Icons.refresh),
                         label: const Text('주차 구역 갱신하기'),
                         onPressed: () {
-                          final outerContext = context; // 현재 context 저장
-                          Navigator.pop(context); // 닫고
-                          _showSelfAgain(outerContext); // 다시 띄움
+                          Navigator.pop(context, 'refresh'); // 호출자에게 갱신 요청
                         },
                       ),
                     ),
@@ -101,11 +93,15 @@ class _ParkingLocationDialogState extends State<ParkingLocationDialog> {
                 }
 
                 final locations = snapshot.data!;
-                final singles = locations.where((l) => l.type == 'single').toList();
-                final composites = locations.where((l) => l.type == 'composite').toList();
+                final singles =
+                locations.where((l) => l.type == 'single').toList();
+                final composites =
+                locations.where((l) => l.type == 'composite').toList();
 
                 if (selectedParent != null) {
-                  final subLocations = composites.where((l) => l.parent == selectedParent).toList();
+                  final subLocations = composites
+                      .where((l) => l.parent == selectedParent)
+                      .toList();
 
                   return Column(
                     mainAxisSize: MainAxisSize.min,
@@ -121,16 +117,15 @@ class _ParkingLocationDialogState extends State<ParkingLocationDialog> {
                         return ListTile(
                           title: Text(displayName),
                           leading: const Icon(Icons.subdirectory_arrow_right),
-                          onTap: () {
-                            widget.onLocationSelected(displayName);
-                            Navigator.pop(context);
-                          },
+                          onTap: () => Navigator.pop(context, displayName),
                         );
                       }),
                     ],
                   );
                 } else {
-                  final parentSet = composites.map((e) => e.parent).toSet().toList();
+                  final parentSet =
+                  composites.map((e) => e.parent).toSet().toList();
+
                   return SizedBox(
                     width: double.maxFinite,
                     height: 300,
@@ -140,10 +135,10 @@ class _ParkingLocationDialogState extends State<ParkingLocationDialog> {
                           return ListTile(
                             title: Text(loc.locationName),
                             leading: const Icon(Icons.place),
-                            onTap: () {
-                              widget.onLocationSelected(loc.locationName);
-                              Navigator.pop(context);
-                            },
+                            onTap: () => Navigator.pop(
+                              context,
+                              loc.locationName,
+                            ),
                           );
                         }),
                         const Divider(),
@@ -174,10 +169,12 @@ class ScaleTransitionDialog extends StatefulWidget {
   const ScaleTransitionDialog({super.key, required this.child});
 
   @override
-  State<ScaleTransitionDialog> createState() => _ScaleTransitionDialogState();
+  State<ScaleTransitionDialog> createState() =>
+      _ScaleTransitionDialogState();
 }
 
-class _ScaleTransitionDialogState extends State<ScaleTransitionDialog> with SingleTickerProviderStateMixin {
+class _ScaleTransitionDialogState extends State<ScaleTransitionDialog>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
 
@@ -188,10 +185,12 @@ class _ScaleTransitionDialogState extends State<ScaleTransitionDialog> with Sing
       duration: const Duration(milliseconds: 250),
       vsync: this,
     );
+
     _scaleAnimation = CurvedAnimation(
       parent: _controller,
       curve: Curves.easeOutBack,
     );
+
     _controller.forward();
   }
 

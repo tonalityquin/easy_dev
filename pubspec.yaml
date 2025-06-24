@@ -44,11 +44,12 @@ dependencies:
 
   # Excel&GCS
   path_provider: ^2.1.5
-  permission_handler: ^11.4.0
+  permission_handler: ^12.0.0+1
   collection: ^1.19.1
 
   # TTS
   flutter_tts: ^4.2.2
+  flutter_foreground_task: ^9.1.0
 
 
 dev_dependencies:

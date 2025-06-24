@@ -67,27 +67,32 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
     }
   }
 
-  void _showParkingAreaDialog(BuildContext context) {
-    showDialog(
+  Future<void> _showParkingAreaDialog(BuildContext context) async {
+    final selectedLocation = await showDialog<String>(
       context: context,
-      builder: (context) => ParkingLocationDialog(
+      builder: (dialogContext) => ParkingLocationDialog(
         locationController: _locationController,
-        onLocationSelected: (selectedLocation) {
-          debugPrint("✅ 선택된 주차 구역: $selectedLocation");
-          setState(() {
-            _isParkingAreaMode = true;
-            _selectedParkingArea = selectedLocation;
-          });
-          final area = context.read<AreaState>().currentArea;
-          setState(() {
-            context
-                .read<FilterPlate>()
-                .filterByParkingLocation(PlateType.departureRequests, area, _selectedParkingArea!);
-          });
-        },
       ),
     );
+
+    if (selectedLocation != null && selectedLocation.isNotEmpty) {
+      debugPrint("✅ 선택된 주차 구역: $selectedLocation");
+      setState(() {
+        _isParkingAreaMode = true;
+        _selectedParkingArea = selectedLocation;
+      });
+
+      final area = context.read<AreaState>().currentArea;
+      context
+          .read<FilterPlate>()
+          .filterByParkingLocation(
+        PlateType.departureRequests,
+        area,
+        _selectedParkingArea!,
+      );
+    }
   }
+
 
   void _resetParkingAreaFilter(BuildContext context) {
     debugPrint("🔄 주차 구역 초기화 실행됨");
