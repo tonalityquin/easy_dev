@@ -187,7 +187,7 @@ class ModifyPlateController {
 
     final billState = context.read<CommonBillState>();
     final selected = billState.bills.firstWhere(
-          (a) => a.countType == billName,
+      (a) => a.countType == billName,
       orElse: () => billState.emptyModel,
     );
 
@@ -197,7 +197,6 @@ class ModifyPlateController {
     selectedAddAmount = selected.addAmount;
     selectedAddStandard = selected.addStandard;
   }
-
 
   Future<void> updateCustomStatusToFirestore() async {
     final plateNumber = plate.plateNumber;
@@ -304,12 +303,15 @@ class ModifyPlateController {
     if (success) {
       final area = context.read<AreaState>().currentArea;
       final statusDocId = '${plateNumber}_$area';
-      await FirebaseFirestore.instance.collection('plate_status').doc(statusDocId).set({
-        'customStatus': updatedCustomStatus,
-        'updatedAt': FieldValue.serverTimestamp(),
-        'expireAt': Timestamp.fromDate(DateTime.now().add(Duration(days: 1))),
-        'createdBy': 'devAdmin020',
-      }, SetOptions(merge: true));
+      await FirebaseFirestore.instance.collection('plate_status').doc(statusDocId).set(
+        {
+          'customStatus': updatedCustomStatus,
+          'updatedAt': FieldValue.serverTimestamp(),
+          'expireAt': Timestamp.fromDate(DateTime.now().add(Duration(days: 1))),
+          'createdBy': 'devAdmin020',
+        },
+        SetOptions(merge: true),
+      );
 
       await FirebaseFirestore.instance.collection('plates').doc(plate.id).update({'customStatus': updatedCustomStatus});
 
@@ -324,9 +326,22 @@ class ModifyPlateController {
         region: dropdownValue,
         imageUrls: mergedImageUrls,
         customStatus: updatedCustomStatus,
+        isSelected: false,
+        // isSelected를 false로 초기화
+        selectedBy: null, // selectedBy 또한 null로 초기화
       );
 
       final plateState = context.read<PlateState>();
+
+      // Firestore 상태 false로 업데이트
+      await plateState.toggleIsSelected(
+        collection: collectionKey,
+        plateNumber: plateNumber,
+        userName: plate.userName,
+        onError: (error) => debugPrint(error),
+      );
+
+      // 상태 트리에서 isSelected false로 업데이트
       await plateState.updatePlateLocally(collectionKey, updatedPlate);
 
       onSuccess();
