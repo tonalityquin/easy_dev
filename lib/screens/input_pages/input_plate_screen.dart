@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../states/adjustment/adjustment_state.dart';
+import '../../states/bill/common_bill_state.dart';
 import '../../states/status/status_state.dart';
 import '../../states/area/area_state.dart';
 
 import 'input_plate_controller.dart';
-import 'sections/input_adjustment_section.dart';
+import 'sections/input_bill_section.dart';
 import 'sections/input_location_section.dart';
 import 'sections/input_photo_section.dart';
 import 'sections/input_plate_section.dart';
@@ -58,12 +58,12 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final adjustmentState = context.read<AdjustmentState>();
+      final billState = context.read<CommonBillState>();
       final statusState = context.read<StatusState>();
       final areaState = context.read<AreaState>();
       final currentArea = areaState.currentArea;
 
-      await adjustmentState.syncWithAreaAdjustmentState();
+      await billState.syncWithBillState();
       await statusState.syncWithAreaStatusState();
 
       final areaStatuses = statusState.statuses
@@ -222,9 +222,9 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
               plateNumber: controller.buildPlateNumber(),
             ),
             const SizedBox(height: 32),
-            InputAdjustmentSection(
-              selectedAdjustment: controller.selectedAdjustment,
-              onChanged: (value) => setState(() => controller.selectedAdjustment = value),
+            InputBillSection(
+              selectedBill: controller.selectedBill,
+              onChanged: (value) => setState(() => controller.selectedBill = value),
             ),
             const SizedBox(height: 32),
             InputStatusOnTapSection(

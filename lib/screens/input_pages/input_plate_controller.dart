@@ -7,7 +7,7 @@ import '../../utils/snackbar_helper.dart';
 
 import 'input_plate_service.dart';
 
-import '../../states/adjustment/adjustment_state.dart';
+import '../../states/bill/common_bill_state.dart';
 import '../../states/user/user_state.dart';
 import '../../states/area/area_state.dart';
 
@@ -22,7 +22,7 @@ class InputPlateController {
   bool isLoading = false;
   bool isLocationSelected = false;
   String dropdownValue = '전국';
-  String? selectedAdjustment;
+  String? selectedBill;
   int selectedBasicStandard = 0;
   int selectedBasicAmount = 0;
   int selectedAddStandard = 0;
@@ -117,7 +117,7 @@ class InputPlateController {
     clearLocation();
     capturedImages.clear();
     selectedStatuses.clear();
-    selectedAdjustment = null;
+    selectedBill = null;
     selectedBasicStandard = 0;
     selectedBasicAmount = 0;
     selectedAddStandard = 0;
@@ -177,9 +177,9 @@ class InputPlateController {
     final area = areaState.currentArea;
     final division = areaState.currentDivision; // ✅ 지역 기반 division 사용
     final userName = context.read<UserState>().name;
-    final adjustmentList = context.read<AdjustmentState>().adjustments;
+    final billList = context.read<CommonBillState>().bills;
 
-    if (adjustmentList.isNotEmpty && selectedAdjustment == null) {
+    if (billList.isNotEmpty && selectedBill == null) {
       showFailedSnackbar(context, '정산 유형을 선택해주세요');
       return;
     }
@@ -208,7 +208,7 @@ class InputPlateController {
         location: locationController.text,
         isLocationSelected: isLocationSelected,
         imageUrls: uploaded,
-        selectedAdjustment: selectedAdjustment,
+        selectedBill: selectedBill,
         selectedStatuses: selectedStatuses,
         basicStandard: selectedBasicStandard,
         basicAmount: selectedBasicAmount,

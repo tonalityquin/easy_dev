@@ -1,34 +1,34 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import '../../models/adjustment_model.dart';
-import 'adjustment_repository.dart';
+import '../../models/bill_model.dart';
+import 'bill_repository.dart';
 
-class FirestoreAdjustmentRepository implements AdjustmentRepository {
+class FirestoreBillRepository implements BillRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   /// 🔁 실시간 스트림 (사용 안 해도 무방)
   @override
-  Stream<List<AdjustmentModel>> getAdjustmentStream(String currentArea) {
+  Stream<List<BillModel>> getBillStream(String currentArea) {
     return _firestore
-        .collection('adjustment')
+        .collection('bill')
         .where('area', isEqualTo: currentArea)
         .snapshots()
         .map((snapshot) => snapshot.docs
-        .map((doc) => AdjustmentModel.fromMap(doc.id, doc.data()))
+        .map((doc) => BillModel.fromMap(doc.id, doc.data()))
         .toList());
   }
 
   /// ✅ 단발성 Firestore 조회 (.get())
   @override
-  Future<List<AdjustmentModel>> getAdjustmentsOnce(String area) async {
+  Future<List<BillModel>> getBillOnce(String area) async {
     try {
       final snapshot = await _firestore
-          .collection('adjustment')
+          .collection('bill')
           .where('area', isEqualTo: area)
           .get();
 
       final result = snapshot.docs
-          .map((doc) => AdjustmentModel.fromMap(doc.id, doc.data()))
+          .map((doc) => BillModel.fromMap(doc.id, doc.data()))
           .toList();
 
       debugPrint('✅ Firestore 조정 데이터 ${result.length}건 로딩 완료');
@@ -41,9 +41,9 @@ class FirestoreAdjustmentRepository implements AdjustmentRepository {
 
   /// ➕ 조정 데이터 추가
   @override
-  Future<void> addAdjustment(AdjustmentModel adjustment) async {
-    final docRef = _firestore.collection('adjustment').doc(adjustment.id);
-    final data = adjustment.toFirestoreMap();
+  Future<void> addBill(BillModel bill) async {
+    final docRef = _firestore.collection('bill').doc(bill.id);
+    final data = bill.toFirestoreMap();
 
     // Null 또는 공백 제거
     data.removeWhere((key, value) => value == null || value.toString().trim().isEmpty);
@@ -52,7 +52,7 @@ class FirestoreAdjustmentRepository implements AdjustmentRepository {
 
     try {
       await docRef.set(data);
-      debugPrint("✅ Firestore 데이터 저장 성공: ${adjustment.id}");
+      debugPrint("✅ Firestore 데이터 저장 성공: ${bill.id}");
     } catch (e) {
       debugPrint("🔥 Firestore 저장 실패: $e");
       rethrow;
@@ -61,10 +61,10 @@ class FirestoreAdjustmentRepository implements AdjustmentRepository {
 
   /// ❌ 여러 조정 데이터 삭제
   @override
-  Future<void> deleteAdjustment(List<String> ids) async {
+  Future<void> deleteBill(List<String> ids) async {
     final batch = _firestore.batch();
     for (final id in ids) {
-      final docRef = _firestore.collection('adjustment').doc(id);
+      final docRef = _firestore.collection('bill').doc(id);
       batch.delete(docRef);
     }
 

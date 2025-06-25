@@ -7,7 +7,7 @@ class PlateLogModel {
   final String action;
   final String performedBy;
   final DateTime timestamp;
-  final String? adjustmentType;
+  final String? billingType;
   final Map<String, dynamic>? updatedFields; // ✅ 추가
 
   PlateLogModel({
@@ -19,7 +19,7 @@ class PlateLogModel {
     required this.action,
     required this.performedBy,
     required this.timestamp,
-    this.adjustmentType,
+    this.billingType,
     this.updatedFields,
   });
 
@@ -35,9 +35,9 @@ class PlateLogModel {
       'timestamp': timestamp.toIso8601String(),
     };
 
-    final cleanAdjustmentType = adjustmentType?.trim();
-    if (cleanAdjustmentType != null && cleanAdjustmentType.isNotEmpty) {
-      map['adjustmentType'] = cleanAdjustmentType;
+    final cleanBillingType = billingType?.trim();
+    if (cleanBillingType != null && cleanBillingType.isNotEmpty) {
+      map['billType'] = cleanBillingType;
     }
 
     if (updatedFields != null && updatedFields!.isNotEmpty) {
@@ -67,7 +67,7 @@ class PlateLogModel {
       action: map['action'] ?? '',
       performedBy: map['performedBy'] ?? '',
       timestamp: parsedTime,
-      adjustmentType: map['adjustmentType'] as String?,
+      billingType: map['billType'] as String?,
       updatedFields: map['updatedFields'] is Map
           ? Map<String, dynamic>.from(
               (map['updatedFields'] as Map).map(

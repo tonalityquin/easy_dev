@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 
 /// 결과를 담는 모델
-class AdjustmentResult {
+class BillResult {
   final String paymentMethod;
   final int lockedFee;
 
-  AdjustmentResult(this.paymentMethod, this.lockedFee);
+  BillResult(this.paymentMethod, this.lockedFee);
 }
 
 /// 다이얼로그 호출 함수
-Future<AdjustmentResult?> showAdjustmentTypeConfirmDialog({
+Future<BillResult?> showOnTapBillingTypeDialog({
   required BuildContext context,
   required int entryTimeInSeconds,
   required int currentTimeInSeconds,
@@ -18,9 +18,9 @@ Future<AdjustmentResult?> showAdjustmentTypeConfirmDialog({
   required int addStandard,
   required int addAmount,
 }) async {
-  return showDialog<AdjustmentResult>(
+  return showDialog<BillResult>(
     context: context,
-    builder: (context) => AdjustmentTypeConfirmDialog(
+    builder: (context) => OnTapBillingTypeDialog(
       entryTimeInSeconds: entryTimeInSeconds,
       currentTimeInSeconds: currentTimeInSeconds,
       basicStandard: basicStandard,
@@ -32,7 +32,7 @@ Future<AdjustmentResult?> showAdjustmentTypeConfirmDialog({
 }
 
 /// 정산 다이얼로그
-class AdjustmentTypeConfirmDialog extends StatefulWidget {
+class OnTapBillingTypeDialog extends StatefulWidget {
   final int entryTimeInSeconds;
   final int currentTimeInSeconds;
   final int basicStandard;
@@ -40,7 +40,7 @@ class AdjustmentTypeConfirmDialog extends StatefulWidget {
   final int addStandard;
   final int addAmount;
 
-  const AdjustmentTypeConfirmDialog({
+  const OnTapBillingTypeDialog({
     super.key,
     required this.entryTimeInSeconds,
     required this.currentTimeInSeconds,
@@ -51,10 +51,10 @@ class AdjustmentTypeConfirmDialog extends StatefulWidget {
   });
 
   @override
-  State<AdjustmentTypeConfirmDialog> createState() => _AdjustmentTypeConfirmDialogState();
+  State<OnTapBillingTypeDialog> createState() => _OnTapBillingTypeDialogState();
 }
 
-class _AdjustmentTypeConfirmDialogState extends State<AdjustmentTypeConfirmDialog> with SingleTickerProviderStateMixin {
+class _OnTapBillingTypeDialogState extends State<OnTapBillingTypeDialog> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
 
@@ -139,7 +139,7 @@ class _AdjustmentTypeConfirmDialogState extends State<AdjustmentTypeConfirmDialo
           actions: [
             FilledButton(
               onPressed: () {
-                Navigator.of(context).pop(AdjustmentResult(_selected, lockedFee));
+                Navigator.of(context).pop(BillResult(_selected, lockedFee));
               },
               style: FilledButton.styleFrom(
                 backgroundColor: Colors.green,

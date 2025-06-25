@@ -5,7 +5,7 @@ import '../../models/plate_model.dart';
 import '../../enums/plate_type.dart';
 
 import 'modify_plate_controller.dart';
-import 'sections/modify_adjustment_section.dart';
+import 'sections/modify_bill_section.dart';
 import 'sections/modify_location_section.dart';
 import 'sections/modify_photo_section.dart';
 import 'sections/modify_plate_section.dart';
@@ -157,12 +157,12 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
               plateNumber: widget.plate.plateNumber, // ← 이 부분 추가
             ),
             const SizedBox(height: 32.0),
-            ModifyAdjustmentSection(
-              selectedAdjustment: _controller.selectedAdjustment,
+            ModifyBillSection(
+              selectedBill: _controller.selectedBill,
               onChanged: (value) {
                 setState(() {
-                  _controller.selectedAdjustment = value;
-                  _controller.applyAdjustmentDefaults(value); // ✅ 꼭 추가되어야 반영됨
+                  _controller.selectedBill = value;
+                  _controller.applyBillDefaults(value); // ✅ 꼭 추가되어야 반영됨
                 });
               },
             ),

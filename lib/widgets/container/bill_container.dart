@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-class AdjustmentContainer extends StatelessWidget {
+class BillContainer extends StatelessWidget {
   final String countType;
   final String basicStandard;
   final String basicAmount;
@@ -9,7 +9,7 @@ class AdjustmentContainer extends StatelessWidget {
   final bool isSelected;
   final VoidCallback onTap;
 
-  const AdjustmentContainer({
+  const BillContainer({
     super.key,
     required this.countType,
     required this.basicStandard,

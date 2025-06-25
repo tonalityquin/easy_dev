@@ -31,7 +31,7 @@ class ModifyPlateService {
   final int selectedBasicAmount;
   final int selectedAddStandard;
   final int selectedAddAmount;
-  final String? selectedAdjustment;
+  final String? selectedBill;
   final String dropdownValue;
 
   ModifyPlateService({
@@ -49,7 +49,7 @@ class ModifyPlateService {
     required this.selectedBasicAmount,
     required this.selectedAddStandard,
     required this.selectedAddAmount,
-    required this.selectedAdjustment,
+    required this.selectedBill,
     required this.dropdownValue,
   });
 
@@ -109,7 +109,7 @@ class ModifyPlateService {
     required String plateNumber,
     required List<String> imageUrls,
     required String newLocation,
-    required String? newAdjustmentType,
+    required String? newBillingType,
   }) async {
     final modifyState = context.read<ModifyPlate>();
     final areaState = context.read<AreaState>();
@@ -118,7 +118,7 @@ class ModifyPlateService {
     final updatedPlate = originalPlate.copyWith(
       plateNumber: plateNumber,
       location: newLocation,
-      adjustmentType: newAdjustmentType,
+      billingType: newBillingType,
       statusList: selectedStatuses,
       basicStandard: selectedBasicStandard,
       basicAmount: selectedBasicAmount,
@@ -139,7 +139,7 @@ class ModifyPlateService {
         action: '정보 수정',
         performedBy: userState.name,
         timestamp: DateTime.now(),
-        adjustmentType: updatedPlate.adjustmentType,
+        billingType: updatedPlate.billingType,
         updatedFields: changes,
       );
 
@@ -159,7 +159,7 @@ class ModifyPlateService {
       areaState: areaState,
       userState: userState,
       collectionKey: collectionKey.name,
-      adjustmentType: newAdjustmentType,
+      billingType: newBillingType,
       statusList: selectedStatuses,
       basicStandard: selectedBasicStandard,
       basicAmount: selectedBasicAmount,

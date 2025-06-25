@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-class AdjustmentCustomBoxStyles {
+class BillCustomBoxStyles {
   static const TextStyle titleStyle = TextStyle(
     fontWeight: FontWeight.bold,
     fontSize: 16,
@@ -19,7 +19,7 @@ class AdjustmentCustomBoxStyles {
   );
 }
 
-class AdjustmentCustomBox extends StatelessWidget {
+class BillCustomBox extends StatelessWidget {
   final String leftText;
   final String centerTopText;
   final String centerBottomText;
@@ -28,7 +28,7 @@ class AdjustmentCustomBox extends StatelessWidget {
   final VoidCallback onTap;
   final bool isSelected; // ✅ 추가됨
 
-  const AdjustmentCustomBox({
+  const BillCustomBox({
     super.key,
     required this.leftText,
     required this.centerTopText,
@@ -78,12 +78,12 @@ class AdjustmentCustomBox extends StatelessWidget {
               child: Center(
                 child: Text(
                   leftText,
-                  style: AdjustmentCustomBoxStyles.titleStyle,
+                  style: BillCustomBoxStyles.titleStyle,
                   textAlign: TextAlign.center,
                 ),
               ),
             ),
-            AdjustmentCustomBoxStyles.verticalDivider,
+            BillCustomBoxStyles.verticalDivider,
             Expanded(
               flex: 7,
               child: Column(
@@ -96,24 +96,24 @@ class AdjustmentCustomBox extends StatelessWidget {
                           child: Center(
                             child: Text(
                               centerTopText,
-                              style: AdjustmentCustomBoxStyles.subtitleStyle,
+                              style: BillCustomBoxStyles.subtitleStyle,
                             ),
                           ),
                         ),
-                        AdjustmentCustomBoxStyles.verticalDivider,
+                        BillCustomBoxStyles.verticalDivider,
                         Expanded(
                           flex: 4,
                           child: Center(
                             child: Text(
                               centerBottomText,
-                              style: AdjustmentCustomBoxStyles.subtitleStyle,
+                              style: BillCustomBoxStyles.subtitleStyle,
                             ),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  AdjustmentCustomBoxStyles.commonDivider,
+                  BillCustomBoxStyles.commonDivider,
                   Expanded(
                     child: Row(
                       children: [
@@ -122,17 +122,17 @@ class AdjustmentCustomBox extends StatelessWidget {
                           child: Center(
                             child: Text(
                               rightTopText,
-                              style: AdjustmentCustomBoxStyles.subtitleStyle,
+                              style: BillCustomBoxStyles.subtitleStyle,
                             ),
                           ),
                         ),
-                        AdjustmentCustomBoxStyles.verticalDivider,
+                        BillCustomBoxStyles.verticalDivider,
                         Expanded(
                           flex: 4,
                           child: Center(
                             child: Text(
                               rightBottomText,
-                              style: AdjustmentCustomBoxStyles.subtitleStyle,
+                              style: BillCustomBoxStyles.subtitleStyle,
                             ),
                           ),
                         ),

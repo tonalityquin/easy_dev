@@ -9,7 +9,7 @@ import '../../../states/plate/plate_state.dart';
 import '../../../states/user/user_state.dart';
 import '../../../utils/gcs_uploader.dart';
 import '../../../utils/snackbar_helper.dart';
-import '../../../widgets/dialog/adjustment_type_confirm_dialog.dart';
+import '../../../widgets/dialog/on_tap_billing_type_dialog.dart';
 import '../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 import '../../../widgets/dialog/parking_request_status_dialog.dart';
 
@@ -92,9 +92,9 @@ class ParkingRequestControlButtons extends StatelessWidget {
 
             if (index == 0) {
               if (isPlateSelected) {
-                final adjustmentType = selectedPlate.adjustmentType;
+                final billingType = selectedPlate.billingType;
 
-                if (adjustmentType == null || adjustmentType.trim().isEmpty) {
+                if (billingType == null || billingType.trim().isEmpty) {
                   showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
                   return;
                 }
@@ -128,14 +128,14 @@ class ParkingRequestControlButtons extends StatelessWidget {
                     'timestamp': DateTime.now().toIso8601String(),
                   };
 
-                  if (adjustmentType.isNotEmpty) {
-                    cancelLog['adjustmentType'] = adjustmentType;
+                  if (billingType.isNotEmpty) {
+                    cancelLog['billingType'] = billingType;
                   }
 
                   await uploader.uploadForPlateLogTypeJson(cancelLog, selectedPlate.plateNumber, division, area);
                   showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
                 } else {
-                  final result = await showAdjustmentTypeConfirmDialog(
+                  final result = await showOnTapBillingTypeDialog(
                     context: context,
                     entryTimeInSeconds: entryTime,
                     currentTimeInSeconds: currentTime,
@@ -166,8 +166,8 @@ class ParkingRequestControlButtons extends StatelessWidget {
                     'paymentMethod': result.paymentMethod,
                   };
 
-                  if (adjustmentType.isNotEmpty) {
-                    log['adjustmentType'] = adjustmentType;
+                  if (billingType.isNotEmpty) {
+                    log['billingType'] = billingType;
                   }
 
                   await uploader.uploadForPlateLogTypeJson(log, selectedPlate.plateNumber, division, area);

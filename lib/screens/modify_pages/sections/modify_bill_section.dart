@@ -1,23 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../states/adjustment/adjustment_state.dart';
-import '../utils/buttons/modify_custom_adjustment_dropdown.dart';
+import '../../../states/bill/common_bill_state.dart';
+import '../utils/buttons/modify_custom_bill_dropdown.dart';
 
-class ModifyAdjustmentSection extends StatelessWidget {
-  final String? selectedAdjustment;
+class ModifyBillSection extends StatelessWidget {
+  final String? selectedBill;
   final ValueChanged<String?> onChanged;
 
-  const ModifyAdjustmentSection({
+  const ModifyBillSection({
     super.key,
-    required this.selectedAdjustment,
+    required this.selectedBill,
     required this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
-    final adjustmentState = context.watch<AdjustmentState>();
-    final adjustmentList = adjustmentState.adjustments;
-    final isLoading = adjustmentState.isLoading;
+    final billState = context.watch<CommonBillState>();
+    final billList = billState.bills;
+    final isLoading = billState.isLoading;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -32,7 +32,7 @@ class ModifyAdjustmentSection extends StatelessWidget {
             padding: EdgeInsets.symmetric(vertical: 24),
             child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
           )
-        else if (adjustmentList.isEmpty)
+        else if (billList.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 8),
             child: Center(
@@ -44,9 +44,9 @@ class ModifyAdjustmentSection extends StatelessWidget {
             ),
           )
         else
-          ModifyCustomAdjustmentDropdown(
-            items: adjustmentList.map((adj) => adj.countType).toList(),
-            selectedValue: selectedAdjustment,
+          ModifyCustomBillDropdown(
+            items: billList.map((bill) => bill.countType).toList(),
+            selectedValue: selectedBill,
             onChanged: onChanged,
           ),
       ],

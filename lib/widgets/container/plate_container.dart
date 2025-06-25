@@ -86,7 +86,7 @@ class PlateContainer extends StatelessWidget {
 
         // ✅ 배경색 조건 처리
         Color? backgroundColor;
-        if (item.adjustmentType == null || item.adjustmentType!.trim().isEmpty) {
+        if (item.billingType == null || item.billingType!.trim().isEmpty) {
           backgroundColor = Colors.white;
         } else {
           backgroundColor = item.isLockedFee ? Colors.orange[50] : Colors.white;
@@ -96,7 +96,7 @@ class PlateContainer extends StatelessWidget {
           children: [
             PlateCustomBox(
               topLeftText: '${item.region ?? '전국'} ${item.plateNumber}',
-              topRightUpText: item.adjustmentType ?? '없음',
+              topRightUpText: item.billingType ?? '없음',
               topRightDownText: "$currentFee원",
               midLeftText: item.location,
               midCenterText: displayUser,

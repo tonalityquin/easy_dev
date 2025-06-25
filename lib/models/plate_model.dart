@@ -18,7 +18,7 @@ class PlateFields {
   static const String userName = 'userName';
   static const String isSelected = 'isSelected';
   static const String selectedBy = 'selectedBy';
-  static const String adjustmentType = 'adjustmentType';
+  static const String billingType = 'billingType';
   static const String statusList = 'statusList';
   static const String basicStandard = 'basicStandard';
   static const String basicAmount = 'basicAmount';
@@ -46,7 +46,7 @@ class PlateModel {
   final String userName;
   final bool isSelected;
   final String? selectedBy;
-  final String? adjustmentType;
+  final String? billingType;
   final List<String> statusList;
   final int? basicStandard;
   final int? basicAmount;
@@ -73,7 +73,7 @@ class PlateModel {
     required this.userName,
     this.isSelected = false,
     this.selectedBy,
-    this.adjustmentType,
+    this.billingType,
     this.statusList = const [],
     this.basicStandard,
     this.basicAmount,
@@ -107,7 +107,7 @@ class PlateModel {
       userName: data[PlateFields.userName] ?? 'Unknown',
       isSelected: data[PlateFields.isSelected] ?? false,
       selectedBy: data[PlateFields.selectedBy],
-      adjustmentType: data[PlateFields.adjustmentType],
+      billingType: data[PlateFields.billingType],
       statusList: List<String>.from(data[PlateFields.statusList] ?? []),
       basicStandard: parseInt(data[PlateFields.basicStandard]),
       basicAmount: parseInt(data[PlateFields.basicAmount]),
@@ -136,7 +136,7 @@ class PlateModel {
       PlateFields.userName: userName,
       PlateFields.isSelected: isSelected,
       PlateFields.selectedBy: selectedBy,
-      PlateFields.adjustmentType: adjustmentType,
+      PlateFields.billingType: billingType,
       PlateFields.statusList: statusList,
       PlateFields.basicStandard: basicStandard,
       PlateFields.basicAmount: basicAmount,
@@ -159,8 +159,8 @@ class PlateModel {
     if (location != other.location) {
       changes['location'] = {'before': location, 'after': other.location};
     }
-    if (adjustmentType != other.adjustmentType) {
-      changes['adjustmentType'] = {'before': adjustmentType, 'after': other.adjustmentType};
+    if (billingType != other.billingType) {
+      changes['billingType'] = {'before': billingType, 'after': other.billingType};
     }
     if (statusList.toString() != other.statusList.toString()) {
       changes['statusList'] = {'before': statusList, 'after': other.statusList};
@@ -190,7 +190,7 @@ class PlateModel {
     String? userName,
     bool? isSelected,
     String? selectedBy,
-    String? adjustmentType,
+    String? billingType,
     List<String>? statusList,
     int? basicStandard,
     int? basicAmount,
@@ -217,7 +217,7 @@ class PlateModel {
       userName: userName ?? this.userName,
       isSelected: isSelected ?? this.isSelected,
       selectedBy: selectedBy ?? this.selectedBy,
-      adjustmentType: adjustmentType ?? this.adjustmentType,
+      billingType: billingType ?? this.billingType,
       statusList: statusList ?? this.statusList,
       basicStandard: basicStandard ?? this.basicStandard,
       basicAmount: basicAmount ?? this.basicAmount,

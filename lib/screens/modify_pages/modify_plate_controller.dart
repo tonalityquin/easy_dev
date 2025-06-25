@@ -7,7 +7,7 @@ import '../../models/plate_model.dart';
 import '../../enums/plate_type.dart';
 
 import '../../states/plate/plate_state.dart';
-import '../../states/adjustment/adjustment_state.dart';
+import '../../states/bill/common_bill_state.dart';
 import '../../states/status/status_state.dart';
 import '../../states/area/area_state.dart';
 
@@ -40,7 +40,7 @@ class ModifyPlateController {
   int selectedBasicAmount = 0;
   int selectedAddStandard = 0;
   int selectedAddAmount = 0;
-  String? selectedAdjustment;
+  String? selectedBill;
   String dropdownValue = '전국';
 
   bool isLocationSelected = false;
@@ -151,7 +151,7 @@ class ModifyPlateController {
 
     dropdownValue = plate.region ?? '전국';
     locationController.text = plate.location;
-    selectedAdjustment = plate.adjustmentType;
+    selectedBill = plate.billingType;
     selectedBasicStandard = plate.basicStandard ?? 0;
     selectedBasicAmount = plate.basicAmount ?? 0;
     selectedAddStandard = plate.addStandard ?? 0;
@@ -182,17 +182,16 @@ class ModifyPlateController {
     isSelected = statuses.map((s) => selectedStatuses.contains(s)).toList();
   }
 
-  /// 🔁 Firestore adjustment 컬렉션에서 기본값을 가져와 필드 업데이트
-  void applyAdjustmentDefaults(String? adjustmentName) {
-    if (adjustmentName == null) return;
+  void applyBillDefaults(String? billName) {
+    if (billName == null) return;
 
-    final adjustmentState = context.read<AdjustmentState>();
-    final selected = adjustmentState.adjustments.firstWhere(
-          (a) => a.countType == adjustmentName,
-      orElse: () => adjustmentState.emptyModel,
+    final billState = context.read<CommonBillState>();
+    final selected = billState.bills.firstWhere(
+          (a) => a.countType == billName,
+      orElse: () => billState.emptyModel,
     );
 
-    selectedAdjustment = selected.countType;
+    selectedBill = selected.countType;
     selectedBasicAmount = selected.basicAmount;
     selectedBasicStandard = selected.basicStandard;
     selectedAddAmount = selected.addAmount;
@@ -262,9 +261,9 @@ class ModifyPlateController {
   }
 
   Future<void> handleAction(VoidCallback onSuccess) async {
-    final adjustmentList = context.read<AdjustmentState>().adjustments;
+    final billList = context.read<CommonBillState>().bills;
 
-    if (adjustmentList.isNotEmpty && (selectedAdjustment == null || selectedAdjustment!.isEmpty)) {
+    if (billList.isNotEmpty && (selectedBill == null || selectedBill!.isEmpty)) {
       showFailedSnackbar(context, '정산 유형을 선택해주세요');
       return;
     }
@@ -284,13 +283,13 @@ class ModifyPlateController {
       selectedBasicAmount: selectedBasicAmount,
       selectedAddStandard: selectedAddStandard,
       selectedAddAmount: selectedAddAmount,
-      selectedAdjustment: selectedAdjustment,
+      selectedBill: selectedBill,
       dropdownValue: dropdownValue,
     );
 
     final plateNumber = service.composePlateNumber();
     final newLocation = locationController.text;
-    final newAdjustmentType = selectedAdjustment;
+    final newBillingType = selectedBill;
     final updatedCustomStatus = customStatusController.text.trim();
 
     final mergedImageUrls = await service.uploadAndMergeImages(plateNumber);
@@ -299,7 +298,7 @@ class ModifyPlateController {
       plateNumber: plateNumber,
       imageUrls: mergedImageUrls,
       newLocation: newLocation,
-      newAdjustmentType: newAdjustmentType,
+      newBillingType: newBillingType,
     );
 
     if (success) {
@@ -315,7 +314,7 @@ class ModifyPlateController {
       await FirebaseFirestore.instance.collection('plates').doc(plate.id).update({'customStatus': updatedCustomStatus});
 
       final updatedPlate = plate.copyWith(
-        adjustmentType: newAdjustmentType,
+        billingType: newBillingType,
         basicStandard: selectedBasicStandard,
         basicAmount: selectedBasicAmount,
         addStandard: selectedAddStandard,

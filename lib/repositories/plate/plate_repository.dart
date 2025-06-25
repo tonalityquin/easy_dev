@@ -40,7 +40,7 @@ abstract class PlateRepository {
     required String area,
     required PlateType plateType,
     required String userName,
-    String? adjustmentType,
+    String? billingType,
     List<String>? statusList,
     int basicStandard,
     int basicAmount,

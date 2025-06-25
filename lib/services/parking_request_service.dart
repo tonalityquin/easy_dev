@@ -42,7 +42,7 @@ class ParkingRequestService {
         userName: userState.name,
         plateType: PlateType.parkingCompleted,
         // ✅ type으로 구분
-        adjustmentType: null,
+        billingType: null,
         statusList: [],
         basicStandard: 0,
         basicAmount: 0,

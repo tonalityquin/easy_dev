@@ -136,7 +136,7 @@ class FirestorePlateRepository implements PlateRepository {
     required String area,
     required PlateType plateType,
     required String userName,
-    String? adjustmentType,
+    String? billingType,
     List<String>? statusList,
     int? basicStandard,
     int? basicAmount,
@@ -163,17 +163,17 @@ class FirestorePlateRepository implements PlateRepository {
       }
     }
 
-    if (adjustmentType != null) {
+    if (billingType != null) {
       try {
-        final adjustmentDoc = await _firestore.collection('adjustment').doc('${adjustmentType}_$area').get();
+        final billDoc = await _firestore.collection('bill').doc('${billingType}_$area').get();
 
-        if (adjustmentDoc.exists) {
-          final adjustmentData = adjustmentDoc.data()!;
-          dev.log('🔥 Firestore에서 가져온 정산 데이터: $adjustmentData');
-          basicStandard = adjustmentData['basicStandard'] as int? ?? 0;
-          basicAmount = adjustmentData['basicAmount'] as int? ?? 0;
-          addStandard = adjustmentData['addStandard'] as int? ?? 0;
-          addAmount = adjustmentData['addAmount'] as int? ?? 0;
+        if (billDoc.exists) {
+          final billData = billDoc.data()!;
+          dev.log('🔥 Firestore에서 가져온 정산 데이터: $billData');
+          basicStandard = billData['basicStandard'] as int? ?? 0;
+          basicAmount = billData['basicAmount'] as int? ?? 0;
+          addStandard = billData['addStandard'] as int? ?? 0;
+          addAmount = billData['addAmount'] as int? ?? 0;
         } else {
           throw Exception('🚨 Firestore에서 정산 데이터를 찾을 수 없음');
         }
@@ -185,7 +185,7 @@ class FirestorePlateRepository implements PlateRepository {
 
     final plateFourDigit = plateNumber.length >= 4 ? plateNumber.substring(plateNumber.length - 4) : plateNumber;
 
-    final bool effectiveIsLockedFee = isLockedFee || (adjustmentType == null || adjustmentType.trim().isEmpty);
+    final bool effectiveIsLockedFee = isLockedFee || (billingType == null || billingType.trim().isEmpty);
 
     final plate = PlateModel(
       id: documentId,
@@ -197,7 +197,7 @@ class FirestorePlateRepository implements PlateRepository {
       location: location.isNotEmpty ? location : '미지정',
       area: area,
       userName: userName,
-      adjustmentType: adjustmentType,
+      billingType: billingType,
       statusList: statusList ?? [],
       basicStandard: basicStandard ?? 0,
       basicAmount: basicAmount ?? 0,

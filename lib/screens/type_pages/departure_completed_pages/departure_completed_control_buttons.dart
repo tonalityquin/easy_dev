@@ -8,7 +8,7 @@ import '../../../states/user/user_state.dart';
 import '../../../states/calendar/field_selected_date_state.dart';
 import '../../../utils/gcs_uploader.dart';
 import '../../../utils/snackbar_helper.dart';
-import '../../../widgets/dialog/adjustment_type_confirm_dialog.dart';
+import '../../../widgets/dialog/on_tap_billing_type_dialog.dart';
 import '../../../widgets/dialog/departure_completed_status_dialog.dart';
 
 class DepartureCompletedControlButtons extends StatelessWidget {
@@ -89,8 +89,8 @@ class DepartureCompletedControlButtons extends StatelessWidget {
       onTap: (index) async {
         if (index == 0) {
           if (isPlateSelected) {
-            final adjustmentType = selectedPlate.adjustmentType;
-            if (adjustmentType == null || adjustmentType.trim().isEmpty) {
+            final billType = selectedPlate.billingType;
+            if (billType == null || billType.trim().isEmpty) {
               showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
               return;
             }
@@ -104,7 +104,7 @@ class DepartureCompletedControlButtons extends StatelessWidget {
             final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
             final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
 
-            final result = await showAdjustmentTypeConfirmDialog(
+            final result = await showOnTapBillingTypeDialog(
               context: context,
               entryTimeInSeconds: entryTime,
               currentTimeInSeconds: currentTime,
@@ -138,7 +138,7 @@ class DepartureCompletedControlButtons extends StatelessWidget {
               'timestamp': now.toIso8601String(),
               'lockedFee': result.lockedFee,
               'paymentMethod': result.paymentMethod,
-              'adjustmentType': adjustmentType,
+              'billType': billType,
             };
 
             await uploader.uploadForPlateLogTypeJson(log, selectedPlate.plateNumber, division, area);

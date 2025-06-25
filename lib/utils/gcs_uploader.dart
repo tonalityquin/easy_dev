@@ -90,7 +90,7 @@ class GCSUploader {
     String plateNumber,
     String division,
     String area, {
-    String? adjustmentType,
+    String? billType,
   }) async {
     final now = DateTime.now();
     final year = now.year;
@@ -101,9 +101,9 @@ class GCSUploader {
     final safePlate = plateNumber.replaceAll(RegExp(r'\\s'), '');
     final fileName = '$division/$area/$year/$month/$day/logs/${safePlate}_$time.json';
 
-    final cleanAdjustmentType = adjustmentType?.trim();
-    if (cleanAdjustmentType != null && cleanAdjustmentType.isNotEmpty) {
-      logData['adjustmentType'] = cleanAdjustmentType;
+    final cleanBillType = billType?.trim();
+    if (cleanBillType != null && cleanBillType.isNotEmpty) {
+      logData['billType'] = cleanBillType;
     }
 
     if (logData['action'] == '사전 정산') {
@@ -198,7 +198,7 @@ class GCSUploader {
     final inputTime = timestamps.isNotEmpty ? timestamps.first.toIso8601String() : null;
     final outputTime = timestamps.isNotEmpty ? timestamps.last.toIso8601String() : null;
 
-    final latestAdjustmentLog = mergedLogs
+    final latestBillingLog = mergedLogs
         .whereType<Map<String, dynamic>>()
         .where((log) => log['action'] == '사전 정산')
         .fold<Map<String, dynamic>?>(null, (prev, curr) {
@@ -214,9 +214,9 @@ class GCSUploader {
       'plateNumber': plateNumber,
       'inputTime': inputTime,
       'outputTime': outputTime,
-      'lockedFee': latestAdjustmentLog?['lockedFee'],
-      'paymentMethod': latestAdjustmentLog?['paymentMethod'],
-      'adjustmentType': latestAdjustmentLog?['adjustmentType'],
+      'lockedFee': latestBillingLog?['lockedFee'],
+      'paymentMethod': latestBillingLog?['paymentMethod'],
+      'billType': latestBillingLog?['billType'],
     };
 
     final summaryFileName = '$division/$area/sources/${safePlate}_$time.json';

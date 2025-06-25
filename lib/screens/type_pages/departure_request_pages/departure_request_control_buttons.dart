@@ -10,7 +10,7 @@ import '../../../states/plate/plate_state.dart';
 import '../../../states/user/user_state.dart';
 import '../../../utils/gcs_uploader.dart';
 import '../../../utils/snackbar_helper.dart';
-import '../../../widgets/dialog/adjustment_type_confirm_dialog.dart';
+import '../../../widgets/dialog/on_tap_billing_type_dialog.dart';
 import '../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 import '../../../widgets/dialog/departure_completed_confirm_dialog.dart';
 import '../../../widgets/dialog/departure_request_status_dialog.dart';
@@ -114,8 +114,8 @@ class DepartureRequestControlButtons extends StatelessWidget {
             }
 
             if (index == 0) {
-              final adjustmentType = selectedPlate.adjustmentType;
-              if (adjustmentType == null || adjustmentType.trim().isEmpty) {
+              final billingType = selectedPlate.billingType;
+              if (billingType == null || billingType.trim().isEmpty) {
                 showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
                 return;
               }
@@ -146,12 +146,12 @@ class DepartureRequestControlButtons extends StatelessWidget {
                   'action': '사전 정산 취소',
                   'performedBy': context.read<UserState>().name,
                   'timestamp': now.toIso8601String(),
-                  'adjustmentType': adjustmentType,
+                  'billingType': billingType,
                 }, selectedPlate.plateNumber, division, area);
 
                 showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
               } else {
-                final result = await showAdjustmentTypeConfirmDialog(
+                final result = await showOnTapBillingTypeDialog(
                   context: context,
                   entryTimeInSeconds: entryTime,
                   currentTimeInSeconds: currentTime,
@@ -179,7 +179,7 @@ class DepartureRequestControlButtons extends StatelessWidget {
                   'timestamp': now.toIso8601String(),
                   'lockedFee': result.lockedFee,
                   'paymentMethod': result.paymentMethod,
-                  'adjustmentType': adjustmentType,
+                  'billingType': billingType,
                 }, selectedPlate.plateNumber, division, area);
 
                 showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');

@@ -20,7 +20,7 @@ class ModifyPlate with ChangeNotifier {
     required bool isLocationSelected,
     required AreaState areaState,
     required UserState userState,
-    String? adjustmentType,
+    String? billingType,
     List<String>? statusList,
     int basicStandard = 0,
     int basicAmount = 0,
@@ -44,7 +44,7 @@ class ModifyPlate with ChangeNotifier {
         area: areaState.currentArea,
         userName: userState.name,
         plateType: plateType,
-        adjustmentType: adjustmentType,
+        billingType: billingType,
         statusList: statusList ?? [],
         basicStandard: basicStandard,
         basicAmount: basicAmount,
@@ -72,7 +72,7 @@ class ModifyPlate with ChangeNotifier {
     required AreaState areaState,
     required UserState userState,
     required String collectionKey, // ❌ 사용되지 않음 (유지하되 무시)
-    String? adjustmentType,
+    String? billingType,
     List<String>? statusList,
     int? basicStandard,
     int? basicAmount,
@@ -97,7 +97,7 @@ class ModifyPlate with ChangeNotifier {
         plateNumber: newPlateNumber,
         location: location,
         userName: userState.name,
-        adjustmentType: adjustmentType,
+        billingType: billingType,
         statusList: statusList,
         basicStandard: basicStandard,
         basicAmount: basicAmount,
@@ -117,19 +117,19 @@ class ModifyPlate with ChangeNotifier {
       await _plateRepository.addOrUpdatePlate(newDocumentId, updatedPlate);
 
       final isLocationChanged = plate.location != location;
-      final isAdjustmentChanged = plate.adjustmentType != adjustmentType;
+      final isBillChanged = plate.billingType != billingType;
 
-      if (isLocationChanged || isAdjustmentChanged) {
+      if (isLocationChanged || isBillChanged) {
         final changes = <String>[];
 
         if (isLocationChanged) {
           changes.add('위치: ${plate.location} → $location');
         }
 
-        if (isAdjustmentChanged) {
-          final fromAdj = plate.adjustmentType ?? '-';
-          final toAdj = adjustmentType ?? '-';
-          changes.add('정산: $fromAdj → $toAdj');
+        if (isBillChanged) {
+          final fromBill = plate.billingType ?? '-';
+          final toBill = billingType ?? '-';
+          changes.add('정산: $fromBill → $toBill');
         }
 
         dev.log('🗂 변경 내역: ${changes.join(', ')}');

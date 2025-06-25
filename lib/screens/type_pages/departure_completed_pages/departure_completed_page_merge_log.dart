@@ -80,7 +80,7 @@ class _MergedLogSectionState extends State<MergedLogSection> {
 
     final totalLockedFee = filteredLogs.map((log) {
       final logs = (log['logs'] as List?) ?? [];
-      final latestAdjustment = logs
+      final latestBill = logs
           .whereType<Map<String, dynamic>>()
           .where((l) => l['action'] == '사전 정산')
           .fold<Map<String, dynamic>?>(null, (prev, curr) {
@@ -89,7 +89,7 @@ class _MergedLogSectionState extends State<MergedLogSection> {
         if (prevTime == null || (currTime != null && currTime.isAfter(prevTime))) return curr;
         return prev;
       });
-      return latestAdjustment?['lockedFee'] as num? ?? 0;
+      return latestBill?['lockedFee'] as num? ?? 0;
     }).fold<num>(0, (sum, fee) => sum + fee);
 
     return Column(
@@ -148,7 +148,7 @@ class _MergedLogSectionState extends State<MergedLogSection> {
 
           final isExpanded = _expandedPlates.contains(plate);
 
-          final latestAdjustmentLog = (logs as List)
+          final latestBillLog = (logs as List)
               .whereType<Map<String, dynamic>>()
               .where((l) => l['action'] == '사전 정산')
               .fold<Map<String, dynamic>?>(null, (prev, curr) {
@@ -160,9 +160,9 @@ class _MergedLogSectionState extends State<MergedLogSection> {
             return prev;
           });
 
-          final adjustmentTypeText = latestAdjustmentLog?['adjustmentType']?.toString() ?? '-';
-          final paymentMethod = latestAdjustmentLog?['paymentMethod']?.toString() ?? '-';
-          final lockedFee = latestAdjustmentLog?['lockedFee'] ?? '-';
+          final billTypeText = latestBillLog?['billType']?.toString() ?? '-';
+          final paymentMethod = latestBillLog?['paymentMethod']?.toString() ?? '-';
+          final lockedFee = latestBillLog?['lockedFee'] ?? '-';
 
           return Column(
             children: [
@@ -188,7 +188,7 @@ class _MergedLogSectionState extends State<MergedLogSection> {
                       Expanded(flex: 5, child: Center(child: Text(plate, style: const TextStyle(fontSize: 18)))),
                       Expanded(
                           flex: 3,
-                          child: Center(child: Text(adjustmentTypeText, style: const TextStyle(fontSize: 16)))),
+                          child: Center(child: Text(billTypeText, style: const TextStyle(fontSize: 16)))),
                     ],
                   ),
                 ),

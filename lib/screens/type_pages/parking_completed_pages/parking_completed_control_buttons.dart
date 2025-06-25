@@ -13,7 +13,7 @@ import '../../../states/user/user_state.dart';
 import '../../../utils/gcs_uploader.dart';
 import '../../../utils/snackbar_helper.dart';
 
-import '../../../widgets/dialog/adjustment_type_confirm_dialog.dart';
+import '../../../widgets/dialog/on_tap_billing_type_dialog.dart';
 import '../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 import '../../../widgets/dialog/departure_request_confirmation_dialog.dart';
 import '../../../widgets/dialog/parking_completed_status_dialog.dart';
@@ -109,14 +109,14 @@ class ParkingCompletedControlButtons extends StatelessWidget {
             final division = context.read<AreaState>().currentDivision;
             final area = context.read<AreaState>().currentArea.trim();
             final uploader = GCSUploader();
-            final adjustmentType = selectedPlate.adjustmentType;
+            final billingType = selectedPlate.billingType;
             final now = DateTime.now();
             final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
             final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
 
             if (index == 0) {
               // 🔐 사전 정산 or 취소
-              if ((adjustmentType ?? '').trim().isEmpty) {
+              if ((billingType ?? '').trim().isEmpty) {
                 showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
                 return;
               }
@@ -144,7 +144,7 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                     'action': '사전 정산 취소',
                     'performedBy': userName,
                     'timestamp': now.toIso8601String(),
-                    'adjustmentType': adjustmentType,
+                    'billingType': billingType,
                   },
                   selectedPlate.plateNumber,
                   division,
@@ -153,7 +153,7 @@ class ParkingCompletedControlButtons extends StatelessWidget {
 
                 showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
               } else {
-                final result = await showAdjustmentTypeConfirmDialog(
+                final result = await showOnTapBillingTypeDialog(
                   context: context,
                   entryTimeInSeconds: entryTime,
                   currentTimeInSeconds: currentTime,
@@ -182,7 +182,7 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                     'timestamp': now.toIso8601String(),
                     'lockedFee': result.lockedFee,
                     'paymentMethod': result.paymentMethod,
-                    'adjustmentType': adjustmentType,
+                    'billingType': billingType,
                   },
                   selectedPlate.plateNumber,
                   division,

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
-class ModifyCustomAdjustmentDropdown extends StatelessWidget {
+class CustomBillDropdown extends StatelessWidget {
   final List<String> items;
   final String? selectedValue;
   final void Function(String?)? onChanged;
 
-  const ModifyCustomAdjustmentDropdown({
+  const CustomBillDropdown({
     super.key,
     required this.items,
     required this.selectedValue,

@@ -3,7 +3,7 @@ import 'package:provider/single_child_widget.dart';
 import 'dart:developer' as dev;
 
 import '../enums/plate_type.dart';
-import '../repositories/adjustment/firestore_adjustment_repository.dart';
+import '../repositories/bill_repo/firestore_bill_repository.dart';
 import '../repositories/location/firestore_location_repository.dart';
 import '../repositories/plate/firestore_plate_repository.dart';
 import '../repositories/status/firestore_status_repository.dart';
@@ -12,12 +12,12 @@ import '../repositories/user/firestore_user_repository.dart';
 import '../repositories/plate/plate_repository.dart';
 import '../repositories/location/location_repository.dart';
 import '../repositories/user/user_repository.dart';
-import '../repositories/adjustment/adjustment_repository.dart';
+import '../repositories/bill_repo/bill_repository.dart';
 import '../repositories/status/status_repository.dart';
 import '../models/plate_model.dart';
 import '../models/location_model.dart';
 import '../models/user_model.dart';
-import '../models/adjustment_model.dart';
+import '../models/bill_model.dart';
 import '../models/status_model.dart';
 
 /// ⚠️ fallback dummy 구현체들 (필수 메서드 구현 포함)
@@ -36,7 +36,7 @@ class DummyPlateRepository implements PlateRepository {
     required String location,
     required PlateType plateType,
     required String userName,
-    String? adjustmentType,
+    String? billingType,
     List<String>? statusList,
     int basicStandard = 0,
     int basicAmount = 0,
@@ -181,18 +181,18 @@ class DummyUserRepository implements UserRepository {
   Future<String?> getEnglishNameByArea(String area, String division) => throw UnimplementedError();
 }
 
-class DummyAdjustmentRepository implements AdjustmentRepository {
+class DummyBillRepository implements BillRepository {
   @override
-  Future<void> addAdjustment(AdjustmentModel adjustment) => throw UnimplementedError();
+  Future<void> addBill(BillModel bill) => throw UnimplementedError();
 
   @override
-  Future<void> deleteAdjustment(List<String> ids) => throw UnimplementedError();
+  Future<void> deleteBill(List<String> ids) => throw UnimplementedError();
 
   @override
-  Stream<List<AdjustmentModel>> getAdjustmentStream(String locationId) => throw UnimplementedError();
+  Stream<List<BillModel>> getBillStream(String locationId) => throw UnimplementedError();
 
   @override
-  Future<List<AdjustmentModel>> getAdjustmentsOnce(String area) => throw UnimplementedError();
+  Future<List<BillModel>> getBillOnce(String area) => throw UnimplementedError();
 }
 
 class DummyStatusRepository implements StatusRepository {
@@ -243,13 +243,13 @@ final List<SingleChildWidget> repositoryProviders = [
       }
     },
   ),
-  Provider<AdjustmentRepository>(
+  Provider<BillRepository>(
     create: (_) {
       try {
-        return FirestoreAdjustmentRepository();
+        return FirestoreBillRepository();
       } catch (e, s) {
         dev.log("⚠️ AdjustmentRepository 초기화 실패", error: e, stackTrace: s);
-        return DummyAdjustmentRepository();
+        return DummyBillRepository();
       }
     },
   ),

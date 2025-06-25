@@ -2,7 +2,7 @@ import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
 
 // 📦 Repositories
-import '../repositories/adjustment/adjustment_repository.dart';
+import '../repositories/bill_repo/bill_repository.dart';
 import '../repositories/location/firestore_location_repository.dart';
 import '../repositories/plate/plate_repository.dart';
 import '../repositories/status/firestore_status_repository.dart';
@@ -18,7 +18,7 @@ import '../states/plate/log_plate.dart';
 import '../states/plate/modify_plate.dart';
 import '../states/user/user_state.dart';
 import '../states/location/location_state.dart';
-import '../states/adjustment/adjustment_state.dart';
+import '../states/bill/common_bill_state.dart';
 import '../states/status/status_state.dart';
 import '../states/plate/input_plate.dart';
 import '../states/plate/plate_state.dart';
@@ -120,9 +120,9 @@ final List<SingleChildWidget> stateProviders = [
   // 💸 정산 기준 상태
   ChangeNotifierProvider(
     create: (context) {
-      final repo = context.read<AdjustmentRepository>();
+      final repo = context.read<BillRepository>();
       final area = context.read<AreaState>();
-      return AdjustmentState(repo, area);
+      return CommonBillState(repo, area);
     },
   ),
 

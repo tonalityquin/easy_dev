@@ -2,20 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../states/area/area_state.dart';
 
-class AdjustmentSetting extends StatefulWidget {
-  final Function(Map<String, dynamic> adjustmentData) onSave;
+class BillSetting extends StatefulWidget {
+  final Function(Map<String, dynamic> billData) onSave;
 
-  const AdjustmentSetting({super.key, required this.onSave});
+  const BillSetting({super.key, required this.onSave});
 
   @override
-  State<AdjustmentSetting> createState() => _AdjustmentSettingState();
+  State<BillSetting> createState() => _BillSettingState();
 }
 
-class _AdjustmentSettingState extends State<AdjustmentSetting> {
-  final TextEditingController _adjustmentController = TextEditingController();
+class _BillSettingState extends State<BillSetting> {
+  final TextEditingController _billController = TextEditingController();
   final TextEditingController _basicAmountController = TextEditingController();
   final TextEditingController _addAmountController = TextEditingController();
-  final FocusNode _adjustmentFocus = FocusNode();
+  final FocusNode _billFocus = FocusNode();
   final FocusNode _basicAmountFocus = FocusNode();
   final FocusNode _addAmountFocus = FocusNode();
   String? _errorMessage;
@@ -26,10 +26,10 @@ class _AdjustmentSettingState extends State<AdjustmentSetting> {
 
   @override
   void dispose() {
-    _adjustmentController.dispose();
+    _billController.dispose();
     _basicAmountController.dispose();
     _addAmountController.dispose();
-    _adjustmentFocus.dispose();
+    _billFocus.dispose();
     _basicAmountFocus.dispose();
     _addAmountFocus.dispose();
     super.dispose();
@@ -37,7 +37,7 @@ class _AdjustmentSettingState extends State<AdjustmentSetting> {
 
   bool _validateInput() {
     final fields = [
-      _adjustmentController.text,
+      _billController.text,
       _basicAmountController.text,
       _addAmountController.text,
     ];
@@ -57,7 +57,7 @@ class _AdjustmentSettingState extends State<AdjustmentSetting> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Add Adjustment'),
+        title: const Text('Add Bill'),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -66,8 +66,8 @@ class _AdjustmentSettingState extends State<AdjustmentSetting> {
           children: [
             // Count Type 입력 필드
             TextField(
-              controller: _adjustmentController,
-              focusNode: _adjustmentFocus,
+              controller: _billController,
+              focusNode: _billFocus,
               textInputAction: TextInputAction.done,
               keyboardType: TextInputType.text,
               decoration: const InputDecoration(
@@ -186,7 +186,7 @@ class _AdjustmentSettingState extends State<AdjustmentSetting> {
                           "📌 저장 전 변환된 값 - basicStandard: $basicStandardInt, addStandard: $addStandardInt, basicAmount: $basicAmountInt, addAmount: $addAmountInt");
 
                       widget.onSave({
-                        'CountType': _adjustmentController.text,
+                        'CountType': _billController.text,
                         'basicStandard': basicStandardInt,
                         'basicAmount': basicAmountInt,
                         'addStandard': addStandardInt,

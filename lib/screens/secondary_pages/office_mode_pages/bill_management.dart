@@ -1,36 +1,36 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../utils/snackbar_helper.dart';
-import '../../../states/adjustment/adjustment_state.dart';
+import '../../../states/bill/common_bill_state.dart';
 import '../../../states/area/area_state.dart'; // 🔥 지역 상태 추가
 import '../../../widgets/navigation/secondary_mini_navigation.dart';
-import '../../../widgets/container/adjustment_custom_box.dart';
-import 'adjustment_pages/adjustment_setting.dart';
+import '../../../widgets/container/bill_custom_box.dart';
+import 'bill_pages/bill_setting.dart';
 
-class AdjustmentManagement extends StatefulWidget {
-  const AdjustmentManagement({super.key});
+class BillManagement extends StatefulWidget {
+  const BillManagement({super.key});
 
   @override
-  State<AdjustmentManagement> createState() => _AdjustmentManagementState();
+  State<BillManagement> createState() => _BillManagementState();
 }
 
-class _AdjustmentManagementState extends State<AdjustmentManagement> {
+class _BillManagementState extends State<BillManagement> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     Future.delayed(Duration.zero, () {
       if (context.mounted) {
         // ignore: use_build_context_synchronously
-        context.read<AdjustmentState>().syncWithAreaAdjustmentState();
+        context.read<CommonBillState>().syncWithBillState();
       }
     });
   }
 
-  List<String> _getSelectedIds(AdjustmentState state) {
-    return state.selectedAdjustments.entries.where((entry) => entry.value).map((entry) => entry.key).toList();
+  List<String> _getSelectedIds(CommonBillState state) {
+    return state.selectebill.entries.where((entry) => entry.value).map((entry) => entry.key).toList();
   }
 
-  void _showAdjustmentSettingDialog(BuildContext context) {
+  void _showBillSettingDialog(BuildContext context) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -38,16 +38,16 @@ class _AdjustmentManagementState extends State<AdjustmentManagement> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
           ),
-          child: AdjustmentSetting(
-            onSave: (adjustmentData) async {
+          child: BillSetting(
+            onSave: (billData) async {
               try {
-                await context.read<AdjustmentState>().addAdjustments(
-                      adjustmentData['CountType'],
-                      adjustmentData['area'],
-                      adjustmentData['basicStandard'].toString(), // 숫자값을 문자열로 변환하여 전달
-                      adjustmentData['basicAmount'].toString(),
-                      adjustmentData['addStandard'].toString(),
-                      adjustmentData['addAmount'].toString(),
+                await context.read<CommonBillState>().addBill(
+                  billData['CountType'],
+                  billData['area'],
+                  billData['basicStandard'].toString(), // 숫자값을 문자열로 변환하여 전달
+                  billData['basicAmount'].toString(),
+                  billData['addStandard'].toString(),
+                  billData['addAmount'].toString(),
                     );
                 if (context.mounted) {
                   showSuccessSnackbar(context, '✅ 정산 데이터가 성공적으로 추가되었습니다. 앱을 재실행하세요.');
@@ -65,9 +65,9 @@ class _AdjustmentManagementState extends State<AdjustmentManagement> {
     );
   }
 
-  Future<void> _deleteSelectedAdjustments(BuildContext context) async {
-    final adjustmentState = context.read<AdjustmentState>();
-    final selectedIds = _getSelectedIds(adjustmentState);
+  Future<void> _deleteSelectedBill(BuildContext context) async {
+    final billState = context.read<CommonBillState>();
+    final selectedIds = _getSelectedIds(billState);
 
     if (selectedIds.isEmpty) {
       if (context.mounted) {
@@ -77,7 +77,7 @@ class _AdjustmentManagementState extends State<AdjustmentManagement> {
     }
 
     try {
-      await adjustmentState.deleteAdjustments(selectedIds);
+      await billState.deleteBill(selectedIds);
       if (context.mounted) {
         showSuccessSnackbar(context, '선택된 항목이 삭제되었습니다.');
       }
@@ -102,28 +102,28 @@ class _AdjustmentManagementState extends State<AdjustmentManagement> {
         centerTitle: true,
         automaticallyImplyLeading: false,
       ),
-      body: Consumer<AdjustmentState>(
+      body: Consumer<CommonBillState>(
         builder: (context, state, child) {
           final currentArea = context.watch<AreaState>().currentArea.trim();
-          final adjustments = state.adjustments.where((adj) => adj.area.trim() == currentArea).toList();
-          if (adjustments.isEmpty) {
+          final bills = state.bills.where((bill) => bill.area.trim() == currentArea).toList();
+          if (bills.isEmpty) {
             return const Center(child: Text('현재 지역에 해당하는 정산 데이터가 없습니다.'));
           }
           return ListView.builder(
-            itemCount: adjustments.length,
+            itemCount: bills.length,
             itemBuilder: (context, index) {
-              final adjustment = adjustments[index];
-              final id = adjustment.id;
-              final countType = adjustment.countType;
-              final basicStandard = adjustment.basicStandard.toString();
-              final basicAmount = adjustment.basicAmount.toString();
-              final addStandard = adjustment.addStandard.toString();
-              final addAmount = adjustment.addAmount.toString();
-              final isSelected = state.selectedAdjustments[id] ?? false;
+              final bill = bills[index];
+              final id = bill.id;
+              final countType = bill.countType;
+              final basicStandard = bill.basicStandard.toString();
+              final basicAmount = bill.basicAmount.toString();
+              final addStandard = bill.addStandard.toString();
+              final addAmount = bill.addAmount.toString();
+              final isSelected = state.selectebill[id] ?? false;
 
               return Column(
                 children: [
-                  AdjustmentCustomBox(
+                  BillCustomBox(
                     leftText: countType,
                     centerTopText: "기본 기준: $basicStandard",
                     centerBottomText: "기본 금액: $basicAmount",
@@ -148,9 +148,9 @@ class _AdjustmentManagementState extends State<AdjustmentManagement> {
         ],
         onIconTapped: (index) {
           if (index == 0) {
-            _showAdjustmentSettingDialog(context);
+            _showBillSettingDialog(context);
           } else if (index == 1) {
-            _deleteSelectedAdjustments(context);
+            _deleteSelectedBill(context);
           }
         },
       ),

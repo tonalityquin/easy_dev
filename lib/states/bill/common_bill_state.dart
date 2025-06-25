@@ -2,31 +2,30 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
-import '../../models/adjustment_model.dart';
-import '../../repositories/adjustment/adjustment_repository.dart';
+import '../../models/bill_model.dart';
+import '../../repositories/bill_repo/bill_repository.dart';
 import '../../states/area/area_state.dart';
 
-class AdjustmentState extends ChangeNotifier {
-  final AdjustmentRepository _repository;
+class CommonBillState extends ChangeNotifier {
+  final BillRepository _repository;
   final AreaState _areaState;
 
-  AdjustmentState(this._repository, this._areaState) {
+  CommonBillState(this._repository, this._areaState) {
     loadFromCache(); // ✅ 캐시 먼저 로딩
-    syncWithAreaAdjustmentState(); // ✅ 이후 Firestore 최신화
+    syncWithBillState(); // ✅ 이후 Firestore 최신화
   }
 
-  List<AdjustmentModel> _adjustments = [];
-  Map<String, bool> _selectedAdjustments = {};
+  List<BillModel> _bills = [];
+  Map<String, bool> _selectedbill = {};
   bool _isLoading = true;
 
   String _previousArea = '';
 
-  List<AdjustmentModel> get adjustments => _adjustments;
-  Map<String, bool> get selectedAdjustments => _selectedAdjustments;
+  List<BillModel> get bills => _bills;
+  Map<String, bool> get selectebill => _selectedbill;
   bool get isLoading => _isLoading;
 
-  /// ✅ 빈 AdjustmentModel 기본 제공
-  AdjustmentModel get emptyModel => AdjustmentModel(
+  BillModel get emptyModel => BillModel(
     id: '',
     countType: '',
     area: '',
@@ -39,54 +38,54 @@ class AdjustmentState extends ChangeNotifier {
   Future<void> loadFromCache() async {
     final prefs = await SharedPreferences.getInstance();
     final currentArea = _areaState.currentArea.trim();
-    final cachedJson = prefs.getString('cached_adjustments_$currentArea');
+    final cachedJson = prefs.getString('cached_bills_$currentArea');
 
     if (cachedJson != null) {
       try {
         final decoded = json.decode(cachedJson) as List;
-        _adjustments = decoded
-            .map((e) => AdjustmentModel.fromCacheMap(Map<String, dynamic>.from(e)))
+        _bills = decoded
+            .map((e) => BillModel.fromCacheMap(Map<String, dynamic>.from(e)))
             .toList();
-        _selectedAdjustments = {for (var adj in _adjustments) adj.id: false};
+        _selectedbill = {for (var bill in _bills) bill.id: false};
         _previousArea = currentArea;
         _isLoading = false;
         notifyListeners();
-        debugPrint('✅ Adjustment 캐시 로드 성공 (area: $currentArea)');
+        debugPrint('✅ Bill 캐시 로드 성공 (area: $currentArea)');
       } catch (e) {
-        debugPrint('⚠️ Adjustment 캐시 파싱 실패: $e');
+        debugPrint('⚠️ Bill 캐시 파싱 실패: $e');
       }
     }
   }
 
   /// 🔄 지역 상태 변경 감지 및 Firestore 동기화
-  Future<void> syncWithAreaAdjustmentState() async {
+  Future<void> syncWithBillState() async {
     final currentArea = _areaState.currentArea.trim();
 
     if (currentArea.isEmpty || _previousArea == currentArea) {
-      debugPrint('✅ Adjustment 재조회 생략: 동일 지역 ($currentArea)');
+      debugPrint('✅ Bill 재조회 생략: 동일 지역 ($currentArea)');
       return;
     }
 
-    debugPrint('🔥 Adjustment 지역 변경 감지: $_previousArea → $currentArea');
+    debugPrint('🔥 Bill 지역 변경 감지: $_previousArea → $currentArea');
     _previousArea = currentArea;
 
     _isLoading = true;
     notifyListeners();
 
     try {
-      final data = await _repository.getAdjustmentsOnce(currentArea);
+      final data = await _repository.getBillOnce(currentArea);
 
-      _adjustments = data;
-      _selectedAdjustments = {for (var adj in _adjustments) adj.id: false};
+      _bills = data;
+      _selectedbill = {for (var adj in _bills) adj.id: false};
 
       // ✅ 캐시 저장
       final prefs = await SharedPreferences.getInstance();
       final jsonData = json.encode(data.map((e) => e.toCacheMap()).toList());
-      await prefs.setString('cached_adjustments_$currentArea', jsonData);
+      await prefs.setString('cached_bills_$currentArea', jsonData);
 
-      debugPrint("✅ Firestore에서 Adjustment 데이터 새로 불러옴");
+      debugPrint("✅ Firestore에서 Bill 데이터 새로 불러옴");
     } catch (e) {
-      debugPrint("🔥 Adjustment Firestore 동기화 실패: $e");
+      debugPrint("🔥 Bill Firestore 동기화 실패: $e");
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -94,7 +93,7 @@ class AdjustmentState extends ChangeNotifier {
   }
 
   /// ✅ 조정 데이터 추가 (문자열 기반)
-  Future<void> addAdjustments(
+  Future<void> addBill(
       String countType,
       String area,
       String basicStandard,
@@ -103,7 +102,7 @@ class AdjustmentState extends ChangeNotifier {
       String addAmount,
       ) async {
     try {
-      final adjustment = AdjustmentModel(
+      final bill = BillModel(
         id: '${countType}_$area',
         countType: countType,
         area: area,
@@ -113,26 +112,26 @@ class AdjustmentState extends ChangeNotifier {
         addAmount: int.tryParse(addAmount) ?? 0,
       );
 
-      await _repository.addAdjustment(adjustment);
-      await syncWithAreaAdjustmentState();
+      await _repository.addBill(bill);
+      await syncWithBillState();
     } catch (e) {
-      debugPrint('🔥 Adjustment 추가 실패: $e');
+      debugPrint('🔥 Bill 추가 실패: $e');
       rethrow;
     }
   }
 
   /// ✅ 삭제
-  Future<void> deleteAdjustments(List<String> ids, {void Function(String)? onError}) async {
+  Future<void> deleteBill(List<String> ids, {void Function(String)? onError}) async {
     try {
-      await _repository.deleteAdjustment(ids);
-      await syncWithAreaAdjustmentState();
+      await _repository.deleteBill(ids);
+      await syncWithBillState();
     } catch (e) {
       onError?.call('🚨 조정 데이터 삭제 실패: $e');
     }
   }
 
   void toggleSelection(String id) {
-    _selectedAdjustments[id] = !(_selectedAdjustments[id] ?? false);
+    _selectedbill[id] = !(_selectedbill[id] ?? false);
     notifyListeners();
   }
 }

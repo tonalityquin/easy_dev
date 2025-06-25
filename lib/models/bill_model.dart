@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-class AdjustmentModel {
+class BillModel {
   final String id;
   final String countType;
   final String area;
@@ -9,7 +9,7 @@ class AdjustmentModel {
   final int addStandard;
   final int addAmount;
 
-  AdjustmentModel({
+  BillModel({
     required this.id,
     required this.countType,
     required this.area,
@@ -20,9 +20,9 @@ class AdjustmentModel {
   });
 
   /// ✅ Firestore → 모델
-  factory AdjustmentModel.fromMap(String id, Map<String, dynamic> data) {
+  factory BillModel.fromMap(String id, Map<String, dynamic> data) {
     try {
-      return AdjustmentModel(
+      return BillModel(
         id: id,
         countType: data['CountType'] ?? '',
         area: data['area'] ?? '',
@@ -71,8 +71,8 @@ class AdjustmentModel {
   }
 
   /// ✅ 캐시 복원용
-  factory AdjustmentModel.fromCacheMap(Map<String, dynamic> data) {
-    return AdjustmentModel(
+  factory BillModel.fromCacheMap(Map<String, dynamic> data) {
+    return BillModel(
       id: data['id'] ?? '',
       countType: data['CountType'] ?? '',
       area: data['area'] ?? '',
@@ -85,6 +85,6 @@ class AdjustmentModel {
 
   @override
   String toString() {
-    return 'AdjustmentModel(id: $id, countType: $countType, area: $area, basicStandard: $basicStandard, basicAmount: $basicAmount, addStandard: $addStandard, addAmount: $addAmount)';
+    return 'BillModel(id: $id, countType: $countType, area: $area, basicStandard: $basicStandard, basicAmount: $basicAmount, addStandard: $addStandard, addAmount: $addAmount)';
   }
 }

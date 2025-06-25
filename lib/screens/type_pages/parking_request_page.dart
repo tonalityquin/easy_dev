@@ -197,7 +197,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
         area: area,
         userName: userName,
         plateType: PlateType.parkingCompleted,
-        adjustmentType: null,
+        billingType: null,
         statusList: [],
         basicStandard: 0,
         basicAmount: 0,
