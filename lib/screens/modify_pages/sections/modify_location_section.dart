@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:easydev/widgets/input_field/location_field.dart';
+import '../widgets/modify_location_field.dart';
 
 class ModifyLocationSection extends StatelessWidget {
   final TextEditingController locationController; // locationController를 필수 매개변수로 받음
@@ -23,7 +23,7 @@ class ModifyLocationSection extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center, // 가로 정렬 중앙
             children: [
-              LocationField(
+              ModifyLocationField(
                 controller: locationController, // 입력 필드 컨트롤러 전달
                 widthFactor: 0.7, // 입력 필드의 너비 비율 설정
               ),

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
-class LocationField extends StatelessWidget {
+class ModifyLocationField extends StatelessWidget {
   final TextEditingController controller;
   final bool readOnly;
   final double widthFactor;
 
-  const LocationField({
+  const ModifyLocationField({
     super.key,
     required this.controller,
     this.readOnly = false,
