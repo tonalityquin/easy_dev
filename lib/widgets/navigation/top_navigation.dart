@@ -2,7 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../states/area/area_state.dart';
+import '../../states/area/spot_state.dart';
 import '../../states/plate/plate_state.dart';
 import '../../widgets/dialog/area_picker_dialog.dart';
 

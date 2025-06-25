@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
 import '../../utils/snackbar_helper.dart';
-import '../area/area_state.dart';
+import '../area/spot_state.dart';
 import '../user/user_state.dart';
 import '../plate/plate_state.dart'; // ✅ PlateState import
 import '../../repositories/plate/plate_repository.dart';

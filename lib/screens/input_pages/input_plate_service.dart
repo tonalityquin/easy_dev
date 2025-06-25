@@ -8,7 +8,7 @@ import 'package:flutter/services.dart';
 
 import '../../utils/gcs_uploader.dart';
 import '../../states/plate/input_plate.dart';
-import '../../states/area/area_state.dart';
+import '../../states/area/spot_state.dart';
 import '../../states/user/user_state.dart';
 
 class InputPlateService {

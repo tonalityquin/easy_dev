@@ -7,9 +7,9 @@ import '../../models/plate_model.dart';
 import '../../enums/plate_type.dart';
 
 import '../../states/plate/plate_state.dart';
-import '../../states/bill/common_bill_state.dart';
+import '../../states/bill/bill_state.dart';
 import '../../states/status/status_state.dart';
-import '../../states/area/area_state.dart';
+import '../../states/area/spot_state.dart';
 
 import '../../utils/snackbar_helper.dart';
 import 'modify_plate_service.dart';
@@ -185,7 +185,7 @@ class ModifyPlateController {
   void applyBillDefaults(String? billName) {
     if (billName == null) return;
 
-    final billState = context.read<CommonBillState>();
+    final billState = context.read<BillState>();
     final selected = billState.bills.firstWhere(
       (a) => a.countType == billName,
       orElse: () => billState.emptyModel,
@@ -260,7 +260,7 @@ class ModifyPlateController {
   }
 
   Future<void> handleAction(VoidCallback onSuccess) async {
-    final billList = context.read<CommonBillState>().bills;
+    final billList = context.read<BillState>().bills;
 
     if (billList.isNotEmpty && (selectedBill == null || selectedBill!.isEmpty)) {
       showFailedSnackbar(context, '정산 유형을 선택해주세요');

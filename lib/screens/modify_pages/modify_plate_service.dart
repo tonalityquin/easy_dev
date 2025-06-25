@@ -7,7 +7,7 @@ import 'package:googleapis_auth/auth_io.dart';
 import 'package:flutter/services.dart';
 
 import '../../states/plate/modify_plate.dart';
-import '../../states/area/area_state.dart';
+import '../../states/area/spot_state.dart';
 import '../../states/user/user_state.dart';
 import '../../utils/gcs_uploader.dart';
 import '../../enums/plate_type.dart';

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../states/bill/common_bill_state.dart';
+import '../../states/bill/bill_state.dart';
 import '../../states/status/status_state.dart';
-import '../../states/area/area_state.dart';
+import '../../states/area/spot_state.dart';
 
 import 'input_plate_controller.dart';
 import 'sections/input_bill_section.dart';
@@ -58,7 +58,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final billState = context.read<CommonBillState>();
+      final billState = context.read<BillState>();
       final statusState = context.read<StatusState>();
       final areaState = context.read<AreaState>();
       final currentArea = areaState.currentArea;

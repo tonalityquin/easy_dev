@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../routes.dart';
-import '../../states/area/area_state.dart';
+import '../../states/area/spot_state.dart';
 import '../../states/plate/plate_state.dart';
 import '../../states/user/user_state.dart';
 

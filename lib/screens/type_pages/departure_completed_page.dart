@@ -5,7 +5,7 @@ import '../../enums/plate_type.dart';
 
 import '../../states/plate/filter_plate.dart';
 import '../../states/plate/plate_state.dart';
-import '../../states/area/area_state.dart';
+import '../../states/area/spot_state.dart';
 import '../../states/user/user_state.dart';
 import '../../states/calendar/field_selected_date_state.dart';
 

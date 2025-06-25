@@ -5,7 +5,7 @@ import '../../../widgets/navigation/secondary_mini_navigation.dart';
 import 'location_management_pages/location_setting.dart';
 import '../../../widgets/container/location_container.dart';
 import '../../../states/location/location_state.dart';
-import '../../../states/area/area_state.dart';
+import '../../../states/area/spot_state.dart';
 import '../../../models/location_model.dart';
 
 class LocationManagement extends StatefulWidget {

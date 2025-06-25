@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../repositories/status/status_repository.dart';
 import '../../models/status_model.dart';
-import '../area/area_state.dart';
+import '../area/spot_state.dart';
 
 class StatusState extends ChangeNotifier {
   final StatusRepository _repository;

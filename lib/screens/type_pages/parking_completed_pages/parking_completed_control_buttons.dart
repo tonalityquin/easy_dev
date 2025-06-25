@@ -5,7 +5,7 @@ import '../../../enums/plate_type.dart';
 
 import '../../../repositories/plate/plate_repository.dart';
 
-import '../../../states/area/area_state.dart';
+import '../../../states/area/spot_state.dart';
 import '../../../states/plate/delete_plate.dart';
 import '../../../states/plate/plate_state.dart';
 import '../../../states/user/user_state.dart';

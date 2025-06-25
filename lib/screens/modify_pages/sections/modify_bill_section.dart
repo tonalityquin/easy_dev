@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../states/bill/common_bill_state.dart';
+import '../../../states/bill/bill_state.dart';
 import '../utils/buttons/modify_custom_bill_dropdown.dart';
 
 class ModifyBillSection extends StatelessWidget {
@@ -15,7 +15,7 @@ class ModifyBillSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final billState = context.watch<CommonBillState>();
+    final billState = context.watch<BillState>();
     final billList = billState.bills;
     final isLoading = billState.isLoading;
 

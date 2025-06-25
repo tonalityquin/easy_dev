@@ -7,7 +7,7 @@ import '../../models/plate_model.dart';
 import '../../states/plate/filter_plate.dart';
 import '../../states/plate/plate_state.dart'; // 번호판 상태 관리
 import '../../states/plate/movement_plate.dart';
-import '../../states/area/area_state.dart'; // 지역 상태 관리
+import '../../states/area/spot_state.dart'; // 지역 상태 관리
 import '../../states/user/user_state.dart';
 
 import '../../utils/snackbar_helper.dart';

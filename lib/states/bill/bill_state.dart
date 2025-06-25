@@ -4,13 +4,13 @@ import 'dart:convert';
 
 import '../../models/bill_model.dart';
 import '../../repositories/bill_repo/bill_repository.dart';
-import '../../states/area/area_state.dart';
+import '../../states/area/spot_state.dart';
 
-class CommonBillState extends ChangeNotifier {
+class BillState extends ChangeNotifier {
   final BillRepository _repository;
   final AreaState _areaState;
 
-  CommonBillState(this._repository, this._areaState) {
+  BillState(this._repository, this._areaState) {
     loadFromCache(); // ✅ 캐시 먼저 로딩
     syncWithBillState(); // ✅ 이후 Firestore 최신화
   }

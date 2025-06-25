@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../utils/snackbar_helper.dart';
-import '../../../states/bill/common_bill_state.dart';
-import '../../../states/area/area_state.dart'; // 🔥 지역 상태 추가
+import '../../../states/bill/bill_state.dart';
+import '../../../states/area/spot_state.dart'; // 🔥 지역 상태 추가
 import '../../../widgets/navigation/secondary_mini_navigation.dart';
 import '../../../widgets/container/bill_custom_box.dart';
 import 'bill_pages/bill_setting.dart';
@@ -21,12 +21,12 @@ class _BillManagementState extends State<BillManagement> {
     Future.delayed(Duration.zero, () {
       if (context.mounted) {
         // ignore: use_build_context_synchronously
-        context.read<CommonBillState>().syncWithBillState();
+        context.read<BillState>().syncWithBillState();
       }
     });
   }
 
-  List<String> _getSelectedIds(CommonBillState state) {
+  List<String> _getSelectedIds(BillState state) {
     return state.selectebill.entries.where((entry) => entry.value).map((entry) => entry.key).toList();
   }
 
@@ -41,7 +41,7 @@ class _BillManagementState extends State<BillManagement> {
           child: BillSetting(
             onSave: (billData) async {
               try {
-                await context.read<CommonBillState>().addBill(
+                await context.read<BillState>().addBill(
                   billData['CountType'],
                   billData['area'],
                   billData['basicStandard'].toString(), // 숫자값을 문자열로 변환하여 전달
@@ -66,7 +66,7 @@ class _BillManagementState extends State<BillManagement> {
   }
 
   Future<void> _deleteSelectedBill(BuildContext context) async {
-    final billState = context.read<CommonBillState>();
+    final billState = context.read<BillState>();
     final selectedIds = _getSelectedIds(billState);
 
     if (selectedIds.isEmpty) {
@@ -102,7 +102,7 @@ class _BillManagementState extends State<BillManagement> {
         centerTitle: true,
         automaticallyImplyLeading: false,
       ),
-      body: Consumer<CommonBillState>(
+      body: Consumer<BillState>(
         builder: (context, state, child) {
           final currentArea = context.watch<AreaState>().currentArea.trim();
           final bills = state.bills.where((bill) => bill.area.trim() == currentArea).toList();

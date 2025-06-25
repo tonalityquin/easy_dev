@@ -6,7 +6,7 @@ import '../../repositories/plate/plate_repository.dart';
 import '../../models/plate_model.dart';
 import '../../enums/plate_type.dart';
 
-import '../area/area_state.dart';
+import '../area/spot_state.dart';
 
 import '../../utils/gcs_uploader.dart';
 

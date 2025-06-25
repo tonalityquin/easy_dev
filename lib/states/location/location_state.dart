@@ -4,7 +4,7 @@ import 'dart:convert';
 
 import '../../repositories/location/location_repository.dart';
 import '../../models/location_model.dart';
-import '../area/area_state.dart';
+import '../area/spot_state.dart';
 
 class LocationState extends ChangeNotifier {
   final LocationRepository _repository;

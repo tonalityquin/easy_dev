@@ -6,7 +6,7 @@ import 'plate_state.dart';
 import '../../enums/plate_type.dart';
 import '../../models/plate_log_model.dart';
 import '../../utils/gcs_uploader.dart';
-import '../area/area_state.dart';
+import '../area/spot_state.dart';
 
 class MovementPlate {
   final PlateRepository _repository;

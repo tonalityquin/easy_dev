@@ -7,9 +7,9 @@ import '../../utils/snackbar_helper.dart';
 
 import 'input_plate_service.dart';
 
-import '../../states/bill/common_bill_state.dart';
+import '../../states/bill/bill_state.dart';
 import '../../states/user/user_state.dart';
-import '../../states/area/area_state.dart';
+import '../../states/area/spot_state.dart';
 
 class InputPlateController {
   final TextEditingController controllerFrontDigit = TextEditingController();
@@ -177,7 +177,7 @@ class InputPlateController {
     final area = areaState.currentArea;
     final division = areaState.currentDivision; // ✅ 지역 기반 division 사용
     final userName = context.read<UserState>().name;
-    final billList = context.read<CommonBillState>().bills;
+    final billList = context.read<BillState>().bills;
 
     if (billList.isNotEmpty && selectedBill == null) {
       showFailedSnackbar(context, '정산 유형을 선택해주세요');

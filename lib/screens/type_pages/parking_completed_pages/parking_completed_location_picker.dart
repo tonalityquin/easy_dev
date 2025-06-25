@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../models/location_model.dart';
-import '../../../states/area/area_state.dart';
+import '../../../states/area/spot_state.dart';
 import '../../../states/location/location_state.dart';
 
 class ParkingCompletedLocationPicker extends StatefulWidget {

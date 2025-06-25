@@ -7,7 +7,7 @@ import 'package:googleapis_auth/auth_io.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/material.dart';
 
-import '../../../../states/area/area_state.dart';
+import '../../../../states/area/spot_state.dart';
 import '../../../../states/user/user_state.dart';
 
 class BreakLogUploader {
