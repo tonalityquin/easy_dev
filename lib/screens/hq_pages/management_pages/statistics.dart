@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
-import '../../../states/area/spot_state.dart';
+import '../../../states/area/area_state.dart';
 import 'statistics_chart_page.dart';
 
 class Statistics extends StatefulWidget {

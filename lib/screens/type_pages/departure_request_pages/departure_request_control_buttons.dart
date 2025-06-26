@@ -5,15 +5,15 @@ import 'package:provider/provider.dart';
 
 import '../../../enums/plate_type.dart';
 import '../../../repositories/plate/plate_repository.dart';
-import '../../../states/area/spot_state.dart';
+import '../../../states/area/area_state.dart';
 import '../../../states/plate/delete_plate.dart';
 import '../../../states/plate/plate_state.dart';
 import '../../../states/user/user_state.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../widgets/dialog/on_tap_billing_type_dialog.dart';
 import '../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
-import 'set_departure_completed_dialog.dart';
-import 'departure_request_status_dialog.dart';
+import 'widgets/set_departure_completed_dialog.dart';
+import 'widgets/departure_request_status_dialog.dart';
 import '../../../widgets/dialog/plate_remove_dialog.dart';
 
 class DepartureRequestControlButtons extends StatelessWidget {

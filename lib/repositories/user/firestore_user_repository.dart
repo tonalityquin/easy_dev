@@ -65,11 +65,11 @@ class FirestoreUserRepository implements UserRepository {
 
   @override
   Future<void> updateUserStatus(
-      String phone,
-      String area, {
-        bool? isWorking,
-        bool? isSaved,
-      }) async {
+    String phone,
+    String area, {
+    bool? isWorking,
+    bool? isSaved,
+  }) async {
     final userId = '$phone-$area';
     final updates = <String, dynamic>{};
     if (isWorking != null) updates['isWorking'] = isWorking;
@@ -95,16 +95,6 @@ class FirestoreUserRepository implements UserRepository {
     await _getCollectionRef().doc(id).update({'isSelected': isSelected});
   }
 
-  @override
-  Stream<List<UserModel>> getUsersBySelectedAreaStream(String selectedArea) {
-    return _getCollectionRef()
-        .where('areas', arrayContains: selectedArea)
-        .snapshots()
-        .map((snapshot) => snapshot.docs
-        .map((doc) => UserModel.fromMap(doc.id, doc.data()))
-        .toList());
-  }
-
   /// ✅ 캐시에서만 읽기 (Firestore 호출 없음)
   @override
   Future<List<UserModel>> getUsersBySelectedAreaOnceWithCache(String selectedArea) async {
@@ -128,6 +118,7 @@ class FirestoreUserRepository implements UserRepository {
   }
 
   /// 🔄 Firestore 호출 및 캐시 갱신
+  @override
   Future<List<UserModel>> refreshUsersBySelectedArea(String selectedArea) async {
     debugPrint('🔥 Firestore 호출 시작 → $selectedArea');
 

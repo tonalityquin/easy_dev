@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../states/bill/bill_state.dart';
-import '../../../states/area/spot_state.dart'; // 🔥 지역 상태 추가
+import '../../../states/area/area_state.dart'; // 🔥 지역 상태 추가
 import '../../../widgets/navigation/secondary_mini_navigation.dart';
 import '../../../widgets/container/bill_container.dart';
 import 'bill_pages/bill_setting.dart';
@@ -21,13 +21,13 @@ class _BillManagementState extends State<BillManagement> {
     Future.delayed(Duration.zero, () {
       if (context.mounted) {
         // ignore: use_build_context_synchronously
-        context.read<BillState>().syncWithBillState();
+        context.read<BillState>().manualBillRefresh();
       }
     });
   }
 
   List<String> _getSelectedIds(BillState state) {
-    return state.selectebill.entries.where((entry) => entry.value).map((entry) => entry.key).toList();
+    return state.selecteBill.entries.where((entry) => entry.value).map((entry) => entry.key).toList();
   }
 
   void _showBillSettingDialog(BuildContext context) {
@@ -119,7 +119,7 @@ class _BillManagementState extends State<BillManagement> {
               final basicAmount = bill.basicAmount.toString();
               final addStandard = bill.addStandard.toString();
               final addAmount = bill.addAmount.toString();
-              final isSelected = state.selectebill[id] ?? false;
+              final isSelected = state.selecteBill[id] ?? false;
 
               return Column(
                 children: [

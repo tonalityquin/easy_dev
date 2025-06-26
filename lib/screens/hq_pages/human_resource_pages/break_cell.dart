@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../models/user_model.dart';
-import '../../../states/area/spot_state.dart';
+import '../../../states/area/area_state.dart';
 import '../../../states/user/user_state.dart';
 import '../../secondary_pages/field_mode_pages/dash_board/break_log_downloader.dart';
 import '../../secondary_pages/field_mode_pages/dash_board/break_log_uploader.dart';

@@ -9,7 +9,7 @@ import '../../enums/plate_type.dart';
 import '../../states/plate/plate_state.dart';
 import '../../states/bill/bill_state.dart';
 import '../../states/status/status_state.dart';
-import '../../states/area/spot_state.dart';
+import '../../states/area/area_state.dart';
 
 import '../../utils/snackbar_helper.dart';
 import 'modify_plate_service.dart';

@@ -6,7 +6,7 @@ import '../../enums/plate_type.dart';
 
 import '../../states/plate/filter_plate.dart';
 import '../../states/plate/plate_state.dart';
-import '../../states/area/spot_state.dart';
+import '../../states/area/area_state.dart';
 import '../../states/user/user_state.dart';
 import '../../states/calendar/field_selected_date_state.dart';
 
@@ -17,7 +17,7 @@ import '../../widgets/container/plate_container.dart';
 import '../../widgets/dialog/plate_search_dialog.dart';
 import 'departure_completed_pages/field_calendar.dart';
 
-import 'departure_completed_pages/departure_completed_page_merge_log.dart';
+import 'departure_completed_pages/widgets/departure_completed_page_merge_log.dart';
 import 'departure_completed_pages/departure_completed_control_buttons.dart';
 
 class DepartureCompletedPage extends StatefulWidget {

@@ -4,7 +4,7 @@ import 'dart:async';
 import 'package:provider/provider.dart';
 
 import '../../../../models/user_model.dart';
-import '../../../../states/area/spot_state.dart';
+import '../../../../states/area/area_state.dart';
 import '../../../../utils/snackbar_helper.dart';
 import '../attendance_cell.dart';
 

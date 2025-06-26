@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../states/area/spot_state.dart';
+import '../../../states/area/area_state.dart';
 import '../../../models/location_model.dart';
 import '../../../states/location/location_state.dart';
 

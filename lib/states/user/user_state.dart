@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../repositories/user/user_repository.dart';
 import '../../models/user_model.dart';
 import 'package:easydev/services/plate_tts_listener_service.dart';
-import '../area/spot_state.dart';
+import '../area/area_state.dart';
 
 class UserState extends ChangeNotifier {
   final UserRepository _repository;

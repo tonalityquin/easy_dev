@@ -8,7 +8,7 @@ import '../../../widgets/navigation/secondary_mini_navigation.dart';
 import 'user_management_pages/user_setting.dart';
 import '../../../widgets/container/user_container.dart';
 import '../../../states/user/user_state.dart';
-import '../../../states/area/spot_state.dart';
+import '../../../states/area/area_state.dart';
 
 extension SafeFirst<T> on List<T> {
   T? get firstOrNull => isNotEmpty ? first : null;

@@ -6,30 +6,13 @@ import 'bill_repository.dart';
 class FirestoreBillRepository implements BillRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  /// 🔁 실시간 스트림 (사용 안 해도 무방)
-  @override
-  Stream<List<BillModel>> getBillStream(String currentArea) {
-    return _firestore
-        .collection('bill')
-        .where('area', isEqualTo: currentArea)
-        .snapshots()
-        .map((snapshot) => snapshot.docs
-        .map((doc) => BillModel.fromMap(doc.id, doc.data()))
-        .toList());
-  }
-
   /// ✅ 단발성 Firestore 조회 (.get())
   @override
   Future<List<BillModel>> getBillOnce(String area) async {
     try {
-      final snapshot = await _firestore
-          .collection('bill')
-          .where('area', isEqualTo: area)
-          .get();
+      final snapshot = await _firestore.collection('bill').where('area', isEqualTo: area).get();
 
-      final result = snapshot.docs
-          .map((doc) => BillModel.fromMap(doc.id, doc.data()))
-          .toList();
+      final result = snapshot.docs.map((doc) => BillModel.fromMap(doc.id, doc.data())).toList();
 
       debugPrint('✅ Firestore 조정 데이터 ${result.length}건 로딩 완료');
       return result;

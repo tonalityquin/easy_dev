@@ -7,7 +7,7 @@ import 'package:googleapis_auth/auth_io.dart';
 import 'package:googleapis/storage/v1.dart';
 import 'package:provider/provider.dart';
 
-import '../../../states/user/user_state.dart';
+import '../../../../states/user/user_state.dart';
 
 const String kBucketName = 'easydev-image';
 const String kServiceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';

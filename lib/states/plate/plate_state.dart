@@ -7,18 +7,12 @@ import '../../models/plate_model.dart';
 import '../../enums/plate_type.dart';
 
 import '../../utils/gcs_json_uploader.dart';
-import '../area/spot_state.dart';
-
+import '../area/area_state.dart';
 
 class PlateState extends ChangeNotifier {
   final PlateRepository _repository;
   final AreaState _areaState;
-
-  PlateState(this._repository, this._areaState) {
-    _initializeSubscriptions();
-    _areaState.addListener(_onAreaChanged);
-  }
-
+  final Map<String, bool> previousIsLockedFee = {};
   final Map<PlateType, List<PlateModel>> _data = {
     for (var c in PlateType.values) c: [],
   };
@@ -28,17 +22,19 @@ class PlateState extends ChangeNotifier {
     for (var c in PlateType.values) c: true,
   };
 
-  String? _searchQuery;
-  String _previousArea = '';
-  bool _isLoading = true;
-
-  bool get isLoading => _isLoading;
+  PlateState(this._repository, this._areaState) {
+    _initializeSubscriptions();
+    _areaState.addListener(_onAreaChanged);
+  }
 
   String get searchQuery => _searchQuery ?? "";
 
   String get currentArea => _areaState.currentArea;
+  String? _searchQuery;
+  String _previousArea = '';
 
-  final Map<String, bool> previousIsLockedFee = {};
+  bool get isLoading => _isLoading;
+  bool _isLoading = true;
 
   void _initializeSubscriptions() async {
     final area = _areaState.currentArea;
@@ -285,16 +281,15 @@ class PlateState extends ChangeNotifier {
 
     try {
       return plates.firstWhere(
-            (plate) => plate.isSelected && plate.selectedBy == userName,
+        (plate) => plate.isSelected && plate.selectedBy == userName,
       );
     } catch (_) {
       return null;
     }
   }
 
-
   void syncWithAreaState() {
-    debugPrint("🔄 PlateState: 지역 변경 감지 및 상태 갱신 호출됨");
+    debugPrint("🔄 syncWithAreaState : 지역 변경 감지 및 상태 갱신 호출됨");
     _previousArea = '';
     _initializeSubscriptions();
   }

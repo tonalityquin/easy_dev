@@ -22,27 +22,18 @@ class FilterPlate extends ChangeNotifier {
   String? _locationQuery;
 
   String get searchQuery => _searchQuery ?? "";
+
   String get locationQuery => _locationQuery ?? "";
 
   /// 🕰 캐싱을 위한 필드
   final Map<String, List<PlateModel>> _plateCache = {};
-  final Map<String, DateTime> _cacheTimestamps = {};
-  final Duration cacheDuration = const Duration(minutes: 10);
 
   List<PlateModel>? _getCached(String key) {
-    if (!_plateCache.containsKey(key)) return null;
-    final timestamp = _cacheTimestamps[key];
-    if (timestamp == null || DateTime.now().difference(timestamp) > cacheDuration) {
-      _plateCache.remove(key);
-      _cacheTimestamps.remove(key);
-      return null;
-    }
-    return _plateCache[key];
+    return _plateCache[key]; // 유효 기간 검사 없이 캐시에 있으면 무조건 반환
   }
 
   void _setCache(String key, List<PlateModel> plates) {
     _plateCache[key] = plates;
-    _cacheTimestamps[key] = DateTime.now();
   }
 
   /// 🔁 지역 기반으로 PlateType별 스트림 구독

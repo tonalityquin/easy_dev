@@ -6,15 +6,6 @@ class FirestoreLocationRepository implements LocationRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   @override
-  Stream<List<LocationModel>> getLocationsStream(String area) {
-    return _firestore
-        .collection('locations')
-        .where('area', isEqualTo: area)
-        .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => LocationModel.fromMap(doc.id, doc.data())).toList());
-  }
-
-  @override
   Future<List<LocationModel>> getLocationsOnce(String area) async {
     try {
       final snapshot = await _firestore.collection('locations').where('area', isEqualTo: area).get();

@@ -4,12 +4,12 @@ import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../utils/snackbar_helper.dart';
-
 import 'input_plate_service.dart';
 
 import '../../states/bill/bill_state.dart';
 import '../../states/user/user_state.dart';
-import '../../states/area/spot_state.dart';
+import '../../states/area/area_state.dart';
+import '../../states/status/status_state.dart';
 
 class InputPlateController {
   final TextEditingController controllerFrontDigit = TextEditingController();
@@ -37,31 +37,10 @@ class InputPlateController {
   List<String> selectedStatuses = [];
 
   final List<String> regions = [
-    '전국',
-    '강원',
-    '경기',
-    '경남',
-    '경북',
-    '광주',
-    '대구',
-    '대전',
-    '부산',
-    '서울',
-    '울산',
-    '인천',
-    '전남',
-    '전북',
-    '제주',
-    '충남',
-    '충북',
-    '국기',
-    '대표',
-    '영사',
-    '외교',
-    '임시',
-    '준영',
-    '준외',
-    '협정',
+    '전국', '강원', '경기', '경남', '경북', '광주', '대구', '대전',
+    '부산', '서울', '울산', '인천', '전남', '전북', '제주',
+    '충남', '충북', '국기', '대표', '영사', '외교', '임시',
+    '준영', '준외', '협정',
   ];
 
   late TextEditingController activeController;
@@ -85,7 +64,7 @@ class InputPlateController {
   }
 
   void _handleInputChange() {
-    // 입력 변화 감지 로직 필요 시 추가
+    // 필요 시 입력 변화를 처리
   }
 
   void setActiveController(TextEditingController controller) {
@@ -162,8 +141,7 @@ class InputPlateController {
     final docId = '${plateNumber}_$area';
 
     try {
-      final docRef = FirebaseFirestore.instance.collection('plate_status').doc(docId);
-      await docRef.delete();
+      await FirebaseFirestore.instance.collection('plate_status').doc(docId).delete();
       fetchedCustomStatus = null;
     } catch (e) {
       debugPrint('❌ customStatus 삭제 실패: $e');
@@ -175,7 +153,7 @@ class InputPlateController {
     final plateNumber = buildPlateNumber();
     final areaState = context.read<AreaState>();
     final area = areaState.currentArea;
-    final division = areaState.currentDivision; // ✅ 지역 기반 division 사용
+    final division = areaState.currentDivision;
     final userName = context.read<UserState>().name;
     final billList = context.read<BillState>().bills;
 
@@ -194,7 +172,7 @@ class InputPlateController {
     );
 
     try {
-      final uploaded = await InputPlateService.uploadCapturedImages(
+      final uploadedUrls = await InputPlateService.uploadCapturedImages(
         capturedImages,
         plateNumber,
         area,
@@ -207,7 +185,7 @@ class InputPlateController {
         plateNumber: plateNumber,
         location: locationController.text,
         isLocationSelected: isLocationSelected,
-        imageUrls: uploaded,
+        imageUrls: uploadedUrls,
         selectedBill: selectedBill,
         selectedStatuses: selectedStatuses,
         basicStandard: selectedBasicStandard,
@@ -236,5 +214,12 @@ class InputPlateController {
       isLoading = false;
       if (mounted) refreshUI();
     }
+  }
+
+  /// ✅ 상태 캐싱된 데이터를 StatusState에서 불러오기
+  void loadStatusesFromCache(BuildContext context) {
+    final statusState = context.read<StatusState>();
+    statuses = statusState.statuses.map((s) => s.name).toList();
+    isSelected = List.generate(statuses.length, (_) => false);
   }
 }

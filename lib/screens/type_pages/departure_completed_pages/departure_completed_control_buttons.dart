@@ -3,13 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../enums/plate_type.dart';
 import '../../../repositories/plate/plate_repository.dart';
-import '../../../states/area/spot_state.dart';
+import '../../../states/area/area_state.dart';
 import '../../../states/plate/plate_state.dart';
 import '../../../states/user/user_state.dart';
 import '../../../states/calendar/field_selected_date_state.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../widgets/dialog/on_tap_billing_type_dialog.dart';
-import 'departure_completed_status_dialog.dart';
+import 'widgets/departure_completed_status_dialog.dart';
 
 class DepartureCompletedControlButtons extends StatelessWidget {
   final bool isSearchMode;

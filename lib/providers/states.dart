@@ -10,11 +10,11 @@ import '../repositories/status/status_repository.dart';
 import '../repositories/user/user_repository.dart';
 
 // 📦 States
-import '../states/area/spot_state.dart';
+import '../states/area/area_state.dart';
 import '../states/calendar/selected_date_store.dart';
 import '../states/page/page_info.dart';
 import '../states/page/page_state.dart';
-import '../states/plate/log_plate.dart';
+import '../states/plate/input_log_plate.dart';
 import '../states/plate/modify_plate.dart';
 import '../states/user/user_state.dart';
 import '../states/location/location_state.dart';
@@ -46,7 +46,7 @@ final List<SingleChildWidget> stateProviders = [
 
   // ✅ 로그 기록 상태 (GCS 업로드용 내부 구현 사용)
   ChangeNotifierProvider(
-    create: (_) => LogPlateState(),
+    create: (_) => InputLogPlate(),
   ),
 
   // 🔧 차량 정보 수정 상태
@@ -60,7 +60,7 @@ final List<SingleChildWidget> stateProviders = [
   ChangeNotifierProvider(
     create: (context) => InputPlate(
       context.read<PlateRepository>(),
-      context.read<LogPlateState>(),
+      context.read<InputLogPlate>(),
     ),
   ),
 

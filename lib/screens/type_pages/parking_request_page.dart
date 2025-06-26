@@ -11,7 +11,7 @@ import '../../repositories/plate/plate_repository.dart';
 import '../../states/plate/filter_plate.dart';
 import '../../states/plate/plate_state.dart';
 import '../../states/plate/movement_plate.dart';
-import '../../states/area/spot_state.dart';
+import '../../states/area/area_state.dart';
 import '../../states/user/user_state.dart';
 
 import '../../utils/snackbar_helper.dart';
@@ -21,7 +21,7 @@ import '../../widgets/dialog/plate_search_dialog.dart';
 import '../../widgets/dialog/parking_location_dialog.dart';
 import '../../widgets/container/plate_container.dart';
 
-import 'parking_requests_pages/report_dialog.dart';
+import 'parking_requests_pages/widgets/report_dialog.dart';
 import 'parking_requests_pages/parking_request_control_buttons.dart';
 
 class ParkingRequestPage extends StatefulWidget {
@@ -176,9 +176,6 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
       }
     }
   }
-
-
-
 
   void _completeParking({
     required MovementPlate movementPlate,

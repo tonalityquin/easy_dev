@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../repositories/status/status_repository.dart';
 import '../../models/status_model.dart';
-import '../area/spot_state.dart';
+import '../area/area_state.dart';
 
 class StatusState extends ChangeNotifier {
   final StatusRepository _repository;
@@ -13,8 +13,7 @@ class StatusState extends ChangeNotifier {
 
   StatusState(this._repository, this._areaState) {
     loadFromCache(); // ✅ 캐시 우선 로드
-    syncWithAreaStatusState(); // ✅ 이후 Firestore에서 동기화
-    _areaState.addListener(syncWithAreaStatusState);
+    _areaState.addListener(_handleAreaChange); // 지역 변경 감지
   }
 
   List<StatusModel> _toggleItems = [];
@@ -23,70 +22,98 @@ class StatusState extends ChangeNotifier {
   bool _isLoading = true;
 
   List<StatusModel> get toggleItems => _toggleItems;
+  List<StatusModel> get statuses =>
+      _toggleItems.where((s) => s.area == _areaState.currentArea).toList();
 
   String? get selectedItemId => _selectedItemId;
-
   bool get isLoading => _isLoading;
 
-  List<StatusModel> get statuses {
-    return _toggleItems.where((status) => status.area == _areaState.currentArea).toList();
-  }
-
+  /// ✅ 캐시에서 상태 우선 로드 (유효기간 검사 없음)
   Future<void> loadFromCache() async {
-    final prefs = await SharedPreferences.getInstance();
     final currentArea = _areaState.currentArea.trim();
-    final cachedJson = prefs.getString('cached_statuses_$currentArea');
+    final prefs = await SharedPreferences.getInstance();
+
+    final cacheKey = 'statuses_$currentArea';
+    final cachedJson = prefs.getString(cacheKey);
 
     if (cachedJson != null) {
       try {
         final decoded = json.decode(cachedJson) as List;
-        _toggleItems = decoded.map((e) => StatusModel.fromCacheMap(Map<String, dynamic>.from(e))).toList();
+        _toggleItems = decoded
+            .map((e) => StatusModel.fromCacheMap(Map<String, dynamic>.from(e)))
+            .toList();
         _previousArea = currentArea;
         _isLoading = false;
-        notifyListeners();
-        debugPrint("✅ 상태 캐시 로딩 완료 (area: $currentArea)");
+        debugPrint('✅ 상태 캐시 로딩 완료 (area: $currentArea)');
       } catch (e) {
-        debugPrint("⚠️ 상태 캐시 로드 실패: $e");
+        debugPrint('⚠️ 상태 캐시 디코딩 실패: $e');
       }
+    } else {
+      debugPrint('⚠️ 상태 캐시 없음 → Firestore 호출 대기');
+      await fetchStatusesFromFirestore(currentArea); // 최초 호출
     }
+
+    notifyListeners();
   }
 
-  /// ✅ Firestore 동기화 + 캐시 저장
-  Future<void> syncWithAreaStatusState() async {
-    final currentArea = _areaState.currentArea;
-
-    if (currentArea.isEmpty || _previousArea == currentArea) {
-      debugPrint('✅ 상태 재조회 생략: 동일 지역 ($currentArea)');
-      return;
-    }
-
-    debugPrint('🔥 상태 조회 시작: $_previousArea → $currentArea');
-    _previousArea = currentArea;
+  /// ✅ Firestore 호출 + 캐시 갱신
+  Future<void> fetchStatusesFromFirestore(String area) async {
+    debugPrint('🔥 상태 Firestore 호출 → $area');
 
     _isLoading = true;
     notifyListeners();
 
     try {
-      final statusList = await _repository.getStatusesOnce(currentArea);
+      final statusList = await _repository.getStatusesOnce(area);
       _toggleItems = statusList;
-
-      // ✅ 캐시에 저장
-      final prefs = await SharedPreferences.getInstance();
-      final jsonData = json.encode(statusList.map((e) => e.toCacheMap()).toList());
-      await prefs.setString('cached_statuses_$currentArea', jsonData);
-
-      debugPrint("✅ 상태 Firestore 동기화 완료: ${statusList.length}건");
+      await _updateCacheWithStatuses(area, statusList); // 캐시 갱신
+      debugPrint('✅ 상태 Firestore 동기화 완료: ${statusList.length}건');
     } catch (e) {
-      debugPrint('🔥 상태 목록 조회 실패: $e');
+      debugPrint('🔥 상태 Firestore 조회 실패: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
+  /// ✅ 캐시 갱신
+  Future<void> _updateCacheWithStatuses(
+      String area, List<StatusModel> statuses) async {
+    final cacheKey = 'statuses_$area';
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.setString(
+      cacheKey,
+      json.encode(
+        statuses.map((status) => status.toCacheMap()).toList(),
+      ),
+    );
+
+    debugPrint('✅ 상태 캐시 갱신 완료 → $area (${statuses.length}개)');
+  }
+
+  /// 🧠 지역 변경 트리거
+  Future<void> _handleAreaChange() async {
+    final currentArea = _areaState.currentArea.trim();
+
+    if (currentArea.isEmpty || _previousArea == currentArea) {
+      debugPrint('✅ 상태 재조회 생략: 동일 지역 ($currentArea)');
+      return;
+    }
+
+    _previousArea = currentArea;
+    await fetchStatusesFromFirestore(currentArea);
+  }
+
+  /// 🔄 수동 Firestore 호출 트리거 (예: 새로고침 버튼)
+  Future<void> manualRefresh() async {
+    final currentArea = _areaState.currentArea.trim();
+    await fetchStatusesFromFirestore(currentArea);
+  }
+
   /// Single-status_management.dart
   Future<void> addToggleItem(String name) async {
-    final String currentArea = _areaState.currentArea;
+    final currentArea = _areaState.currentArea;
     if (currentArea.isEmpty) return;
 
     final newItem = StatusModel(
@@ -97,7 +124,7 @@ class StatusState extends ChangeNotifier {
     );
 
     await _repository.addToggleItem(newItem);
-    await syncWithAreaStatusState();
+    await fetchStatusesFromFirestore(currentArea); // 캐시 갱신
   }
 
   Future<void> toggleItem(String id) async {
@@ -119,7 +146,7 @@ class StatusState extends ChangeNotifier {
 
   Future<void> removeToggleItem(String id) async {
     await _repository.deleteToggleItem(id);
-    await syncWithAreaStatusState();
+    await fetchStatusesFromFirestore(_areaState.currentArea); // 캐시 갱신
   }
 
   void selectItem(String? id) {
@@ -129,7 +156,7 @@ class StatusState extends ChangeNotifier {
 
   @override
   void dispose() {
-    _areaState.removeListener(syncWithAreaStatusState);
+    _areaState.removeListener(_handleAreaChange);
     textController.dispose();
     super.dispose();
   }

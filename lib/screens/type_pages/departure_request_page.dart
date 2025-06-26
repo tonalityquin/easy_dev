@@ -7,7 +7,7 @@ import '../../models/plate_model.dart';
 import '../../states/plate/filter_plate.dart';
 import '../../states/plate/plate_state.dart'; // 번호판 상태 관리
 import '../../states/plate/movement_plate.dart';
-import '../../states/area/spot_state.dart'; // 지역 상태 관리
+import '../../states/area/area_state.dart'; // 지역 상태 관리
 import '../../states/user/user_state.dart';
 
 import '../../utils/snackbar_helper.dart';
@@ -15,7 +15,7 @@ import '../../utils/snackbar_helper.dart';
 import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바
 import '../../widgets/dialog/parking_location_dialog.dart';
 import '../../widgets/dialog/plate_search_dialog.dart'; // ✅ PlateSearchDialog 추가
-import 'departure_request_pages/departure_request_status_dialog.dart';
+import 'departure_request_pages/widgets/departure_request_status_dialog.dart';
 import '../../widgets/container/plate_container.dart'; // 번호판 컨테이너 위젯
 
 import 'departure_request_pages/departure_request_control_buttons.dart';

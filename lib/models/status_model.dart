@@ -50,6 +50,16 @@ class StatusModel {
     );
   }
 
+  /// ✅ 캐싱이나 Firestore 호출 시 ID 포함 Map 반환
+  Map<String, dynamic> toMapWithId() {
+    return {
+      'id': id,
+      'name': name,
+      'isActive': isActive,
+      'area': area,
+    };
+  }
+
   @override
   String toString() {
     return 'StatusModel(id: $id, name: $name, isActive: $isActive, area: $area)';

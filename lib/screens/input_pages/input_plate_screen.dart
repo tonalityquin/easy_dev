@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../states/bill/bill_state.dart';
 import '../../states/status/status_state.dart';
-import '../../states/area/spot_state.dart';
+import '../../states/area/area_state.dart';
 
 import 'input_plate_controller.dart';
 import 'sections/input_bill_section.dart';
@@ -63,8 +63,9 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       final areaState = context.read<AreaState>();
       final currentArea = areaState.currentArea;
 
-      await billState.syncWithBillState();
-      await statusState.syncWithAreaStatusState();
+      // ✅ Firestore 호출 대신 캐시만 우선 읽기
+      await billState.manualBillRefresh();
+      await statusState.loadFromCache(); // 캐시 우선
 
       final areaStatuses = statusState.statuses
           .where((status) => status.area == currentArea && status.isActive)

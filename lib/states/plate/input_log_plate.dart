@@ -2,7 +2,7 @@ import 'package:easydev/utils/gcs_json_uploader.dart';
 import 'package:flutter/material.dart';
 import '../../../models/plate_log_model.dart';
 
-class LogPlateState with ChangeNotifier {
+class InputLogPlate with ChangeNotifier {
   final GcsJsonUploader _uploader = GcsJsonUploader();
 
   Future<void> saveLog(PlateLogModel log, {required String division, required String area}) async {

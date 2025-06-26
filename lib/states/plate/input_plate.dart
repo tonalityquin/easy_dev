@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
 import '../../enums/plate_type.dart';
-import '../../models/plate_model.dart';
 import '../../utils/snackbar_helper.dart';
-import '../area/spot_state.dart';
+import '../area/area_state.dart';
 import '../user/user_state.dart';
 import '../../repositories/plate/plate_repository.dart';
-import 'log_plate.dart';
+import 'input_log_plate.dart';
 import '../../models/plate_log_model.dart';
 
 class InputPlate with ChangeNotifier {
   final PlateRepository _plateRepository;
-  final LogPlateState _logState;
+  final InputLogPlate _logState;
 
   InputPlate(this._plateRepository, this._logState);
 
@@ -21,7 +20,7 @@ class InputPlate with ChangeNotifier {
     );
   }
 
-  Future<bool> handlePlateEntry({
+  Future<bool> inputPlateEntry({
     required BuildContext context,
     required String plateNumber,
     required String location,
@@ -96,67 +95,6 @@ class InputPlate with ChangeNotifier {
       final errorMessage = error.toString().contains('이미 등록된 번호판') ? '이미 등록된 번호판입니다: $plateNumber' : '오류 발생: $error';
 
       showFailedSnackbar(context, errorMessage);
-      return false;
-    }
-  }
-
-  Future<bool> updatePlateInfo({
-    required BuildContext context,
-    required PlateModel plate,
-    required String newPlateNumber,
-    required String location,
-    required AreaState areaState,
-    required UserState userState,
-    String? billType,
-    List<String>? statusList,
-    int? basicStandard,
-    int? basicAmount,
-    int? addStandard,
-    int? addAmount,
-    String? region,
-    List<String>? imageUrls,
-    bool? isLockedFee,
-    int? lockedAtTimeInSeconds,
-    int? lockedFeeAmount,
-    String? customStatus, // ✅ 추가됨
-  }) async {
-    try {
-      final oldDocumentId = '${plate.plateNumber}_${plate.area}';
-      final newDocumentId = '${newPlateNumber}_${plate.area}';
-
-      final updatedPlate = plate.copyWith(
-        plateNumber: newPlateNumber,
-        location: location,
-        userName: userState.name,
-        billingType: billType,
-        statusList: statusList,
-        basicStandard: basicStandard,
-        basicAmount: basicAmount,
-        addStandard: addStandard,
-        addAmount: addAmount,
-        region: region,
-        imageUrls: imageUrls,
-        isLockedFee: isLockedFee ?? plate.isLockedFee,
-        lockedAtTimeInSeconds: lockedAtTimeInSeconds ?? plate.lockedAtTimeInSeconds,
-        lockedFeeAmount: lockedFeeAmount ?? plate.lockedFeeAmount,
-        updatedAt: DateTime.now(),
-        customStatus: customStatus ?? plate.customStatus, // ✅ 반영
-      );
-
-      if (oldDocumentId != newDocumentId) {
-        await _plateRepository.deletePlate(oldDocumentId);
-      }
-
-      await _plateRepository.addOrUpdatePlate(newDocumentId, updatedPlate);
-
-      if (!context.mounted) return false;
-      showSuccessSnackbar(context, '정보 수정 완료');
-      notifyListeners();
-
-      return true;
-    } catch (e) {
-      if (!context.mounted) return false;
-      showFailedSnackbar(context, '정보 수정 실패: $e');
       return false;
     }
   }

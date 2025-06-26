@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
 import '../../utils/snackbar_helper.dart';
-import '../area/spot_state.dart';
+import '../area/area_state.dart';
 import '../user/user_state.dart';
 import '../plate/plate_state.dart'; // ✅ PlateState import
 import '../../repositories/plate/plate_repository.dart';
@@ -13,58 +12,8 @@ class ModifyPlate with ChangeNotifier {
   final PlateRepository _plateRepository;
 
   ModifyPlate(this._plateRepository);
-  Future<void> handlePlateEntry({
-    required BuildContext context,
-    required String plateNumber,
-    required String location,
-    required bool isLocationSelected,
-    required AreaState areaState,
-    required UserState userState,
-    String? billingType,
-    List<String>? statusList,
-    int basicStandard = 0,
-    int basicAmount = 0,
-    int addStandard = 0,
-    int addAmount = 0,
-    required String region,
-    bool isLockedFee = false,
-    int? lockedAtTimeInSeconds,
-    int? lockedFeeAmount,
-  }) async {
 
-
-
-    final correctedLocation = location.isEmpty ? '미지정' : location;
-    final plateType = isLocationSelected ? PlateType.parkingCompleted : PlateType.parkingRequests;
-
-    try {
-      await _plateRepository.addRequestOrCompleted(
-        plateNumber: plateNumber,
-        location: correctedLocation,
-        area: areaState.currentArea,
-        userName: userState.name,
-        plateType: plateType,
-        billingType: billingType,
-        statusList: statusList ?? [],
-        basicStandard: basicStandard,
-        basicAmount: basicAmount,
-        addStandard: addStandard,
-        addAmount: addAmount,
-        region: region,
-        isLockedFee: isLockedFee,
-        lockedAtTimeInSeconds: lockedAtTimeInSeconds,
-        lockedFeeAmount: lockedFeeAmount,
-      );
-
-      if (!context.mounted) return;
-      showSuccessSnackbar(context, '${plateType.label} 완료');
-    } catch (error) {
-      if (!context.mounted) return;
-      showFailedSnackbar(context, '오류 발생: $error');
-    }
-  }
-
-  Future<bool> updatePlateInfo({
+  Future<bool> modifyPlateInfo({
     required BuildContext context,
     required PlateModel plate,
     required String newPlateNumber,

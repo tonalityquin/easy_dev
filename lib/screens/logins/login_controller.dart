@@ -7,7 +7,7 @@ import 'widgets/login_validate.dart';
 import '../../repositories/user/user_repository.dart';
 
 import '../../states/user/user_state.dart';
-import '../../states/area/spot_state.dart';
+import '../../states/area/area_state.dart';
 
 import '../../utils/snackbar_helper.dart';
 import '../../utils/login_network_service.dart';

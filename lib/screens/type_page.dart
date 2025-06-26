@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import '../repositories/plate/plate_repository.dart';
 import '../states/page/page_state.dart';
 import '../states/page/page_info.dart';
-import '../states/area/spot_state.dart';
+import '../states/area/area_state.dart';
 import '../states/plate/plate_state.dart';
 import '../states/user/user_state.dart';
 import '../states/calendar/field_selected_date_state.dart';

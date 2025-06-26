@@ -4,7 +4,7 @@ import 'dart:convert';
 
 import '../../repositories/location/location_repository.dart';
 import '../../models/location_model.dart';
-import '../area/spot_state.dart';
+import '../area/area_state.dart';
 
 class LocationState extends ChangeNotifier {
   final LocationRepository _repository;
@@ -12,26 +12,32 @@ class LocationState extends ChangeNotifier {
   final List<IconData> _navigationIcons = [Icons.add, Icons.delete];
 
   LocationState(this._repository, this._areaState) {
+    // ✅ 앱 시작 시 캐시만 우선적으로 읽기
     loadFromCache();
-    syncWithAreaState();
-    _areaState.addListener(syncWithAreaState);
+
+    // ✅ 지역 상태가 변경되면 캐시만 다시 읽기 (Firestore 호출 없음)
+    _areaState.addListener(() async {
+      final currentArea = _areaState.currentArea.trim();
+      if (currentArea != _previousArea) {
+        _previousArea = currentArea;
+        await loadFromCache();
+      }
+    });
   }
 
   List<LocationModel> _locations = [];
-  Map<String, bool> _selectedLocations = {};
-  bool _isLoading = true;
-
-  String _previousArea = '';
-
   List<LocationModel> get locations => _locations;
-
-  Map<String, bool> get selectedLocations => _selectedLocations;
-
-  bool get isLoading => _isLoading;
 
   List<IconData> get navigationIcons => _navigationIcons;
 
-  /// ✅ SharedPreferences 캐시 로드
+  Map<String, bool> _selectedLocations = {};
+  Map<String, bool> get selectedLocations => _selectedLocations;
+
+  String _previousArea = '';
+  bool _isLoading = true;
+  bool get isLoading => _isLoading;
+
+  /// ✅ SharedPreferences 캐시 우선 조회
   Future<void> loadFromCache() async {
     final prefs = await SharedPreferences.getInstance();
     final currentArea = _areaState.currentArea.trim();
@@ -40,47 +46,56 @@ class LocationState extends ChangeNotifier {
     if (cachedJson != null) {
       try {
         final decoded = json.decode(cachedJson) as List;
-        _locations = decoded.map((e) => LocationModel.fromCacheMap(e)).toList();
-        _selectedLocations = {
-          for (var loc in _locations) loc.id: loc.isSelected,
-        };
+        _locations = decoded
+            .map((e) => LocationModel.fromCacheMap(Map<String, dynamic>.from(e)))
+            .toList();
+        _selectedLocations = {for (var loc in _locations) loc.id: loc.isSelected};
         _previousArea = currentArea;
         _isLoading = false;
         notifyListeners();
+        debugPrint('✅ 캐시에서 주차 구역 ${_locations.length}건 로드 (area: $currentArea)');
       } catch (e) {
-        debugPrint('⚠️ 위치 캐시 로드 실패: $e');
+        debugPrint('⚠️ 주차 구역 캐시 디코딩 실패: $e');
       }
+    } else {
+      debugPrint('⚠️ 캐시에 없음 → Firestore 호출 없음 (수동 새로고침에서만 호출)');
+      _locations = [];
+      _selectedLocations = {};
+      _isLoading = false;
+      notifyListeners();
     }
   }
 
-  /// ✅ 지역 상태와 동기화 (Firestore 기준 최신화, 캐시 저장 포함)
-  Future<void> syncWithAreaState() async {
+  /// 🔄 수동 Firestore 호출 트리거
+  Future<void> manualRefresh() async {
     final currentArea = _areaState.currentArea.trim();
-    if (currentArea.isEmpty || _previousArea == currentArea) {
-      debugPrint('✅ 위치 재조회 생략: 동일 지역 ($currentArea)');
-      return;
-    }
-
-    debugPrint('🔥 위치 재조회: $_previousArea → $currentArea');
-    _previousArea = currentArea;
+    debugPrint('🔥 수동 새로고침 Firestore 호출 → $currentArea');
 
     _isLoading = true;
     notifyListeners();
 
     try {
       final data = await _repository.getLocationsOnce(currentArea);
-      _locations = data;
-      _selectedLocations = {
-        for (var loc in data) loc.id: loc.isSelected,
-      };
 
-      final prefs = await SharedPreferences.getInstance();
-      final jsonData = json.encode(
-        data.map((e) => e.toCacheMap()).toList(),
-      );
-      await prefs.setString('cached_locations_$currentArea', jsonData);
+      // 캐시된 목록과 Firestore 데이터를 비교
+      final currentIds = _locations.map((e) => e.id).toSet();
+      final newIds = data.map((e) => e.id).toSet();
+      final isIdentical = currentIds.length == newIds.length && currentIds.containsAll(newIds);
+
+      if (isIdentical) {
+        debugPrint('✅ Firestore 데이터가 캐시와 동일 → 갱신 없음');
+      } else {
+        _locations = data;
+        _selectedLocations = {for (var loc in data) loc.id: loc.isSelected};
+
+        final prefs = await SharedPreferences.getInstance();
+        final jsonData = json.encode(data.map((e) => e.toCacheMap()).toList());
+        await prefs.setString('cached_locations_$currentArea', jsonData);
+
+        debugPrint('✅ Firestore 데이터 캐시에 갱신됨 (area: $currentArea)');
+      }
     } catch (e) {
-      debugPrint('🔥 위치 동기화 중 오류 발생: $e');
+      debugPrint('🔥 Firestore 주차 구역 조회 실패: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -88,17 +103,15 @@ class LocationState extends ChangeNotifier {
   }
 
   /// ➕ 단일 주차 구역 추가
-  /// ➕ 단일 주차 구역 추가
   Future<void> addLocation(
-    String locationName,
-    String area, {
-    int capacity = 0,
-    void Function(String)? onError,
-  }) async {
+      String locationName,
+      String area, {
+        int capacity = 0,
+        void Function(String)? onError,
+      }) async {
     try {
       final location = LocationModel(
         id: '${locationName}_$area',
-        // 중복 방지
         locationName: locationName,
         area: area,
         parent: area,
@@ -108,7 +121,7 @@ class LocationState extends ChangeNotifier {
       );
 
       await _repository.addLocation(location);
-      await syncWithAreaState();
+      await manualRefresh(); // Firestore 호출 트리거
     } catch (e) {
       onError?.call('🚨 주차 구역 추가 실패: $e');
     }
@@ -116,57 +129,55 @@ class LocationState extends ChangeNotifier {
 
   /// ➕ 복합 주차 구역 추가
   Future<void> addCompositeLocation(
-    String parent,
-    List<Map<String, dynamic>> subs,
-    String area, {
-    void Function(String)? onError,
-  }) async {
+      String parent,
+      List<Map<String, dynamic>> subs,
+      String area, {
+        void Function(String)? onError,
+      }) async {
     try {
-      // 중복 방지를 위해 상위 구역 이름도 area 포함
       final safeParent = '${parent}_$area';
       final safeSubs = subs.map((sub) {
         final subName = sub['name'];
-        return {
-          'name': '${subName}_$area',
-          'capacity': sub['capacity'] ?? 0,
-        };
+        return {'name': '${subName}_$area', 'capacity': sub['capacity'] ?? 0};
       }).toList();
 
       await _repository.addCompositeLocation(safeParent, safeSubs, area);
-      await syncWithAreaState();
+      await manualRefresh();
     } catch (e) {
       onError?.call('🚨 복합 주차 구역 추가 실패: $e');
     }
   }
 
   /// ❌ 주차 구역 삭제
-  Future<void> deleteLocations(List<String> ids, {void Function(String)? onError}) async {
+  Future<void> deleteLocations(
+      List<String> ids, {
+        void Function(String)? onError,
+      }) async {
     try {
       await _repository.deleteLocations(ids);
-      await syncWithAreaState();
+      await manualRefresh();
     } catch (e) {
       onError?.call('🚨 주차 구역 삭제 실패: $e');
     }
   }
 
-  /// ✅ 선택 여부 토글
+  /// ✅ 선택 상태 토글
   Future<void> toggleSelection(String id) async {
-    final previousState = _selectedLocations[id] ?? false;
-    _selectedLocations[id] = !previousState;
+    final prev = _selectedLocations[id] ?? false;
+    _selectedLocations[id] = !prev;
     notifyListeners();
 
     try {
-      await _repository.toggleLocationSelection(id, !previousState);
+      await _repository.toggleLocationSelection(id, !prev);
     } catch (e) {
       debugPrint('🔥 선택 상태 전환 오류: $e');
-      _selectedLocations[id] = previousState;
+      _selectedLocations[id] = prev;
       notifyListeners();
     }
   }
 
   @override
   void dispose() {
-    _areaState.removeListener(syncWithAreaState);
     super.dispose();
   }
 }

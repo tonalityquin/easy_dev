@@ -4,25 +4,33 @@ import 'dart:convert';
 
 import '../../models/bill_model.dart';
 import '../../repositories/bill_repo/bill_repository.dart';
-import '../../states/area/spot_state.dart';
+import '../area/area_state.dart';
 
 class BillState extends ChangeNotifier {
   final BillRepository _repository;
   final AreaState _areaState;
 
   BillState(this._repository, this._areaState) {
-    loadFromCache(); // ✅ 캐시 먼저 로딩
-    syncWithBillState(); // ✅ 이후 Firestore 최신화
+    // ✅ 앱 시작 시 캐시 우선 호출
+    loadFromCache();
+
+    // ✅ 지역 상태가 바뀔 경우 캐시만 다시 읽고 Firestore 호출 트리거 안 함
+    _areaState.addListener(() async {
+      final currentArea = _areaState.currentArea.trim();
+      if (currentArea != _previousArea) {
+        _previousArea = currentArea;
+        await loadFromCache();
+      }
+    });
   }
 
   List<BillModel> _bills = [];
-  Map<String, bool> _selectedbill = {};
+  Map<String, bool> _selectedBill = {};
   bool _isLoading = true;
-
   String _previousArea = '';
 
   List<BillModel> get bills => _bills;
-  Map<String, bool> get selectebill => _selectedbill;
+  Map<String, bool> get selecteBill => _selectedBill;
   bool get isLoading => _isLoading;
 
   BillModel get emptyModel => BillModel(
@@ -35,6 +43,7 @@ class BillState extends ChangeNotifier {
     addAmount: 0,
   );
 
+  /// ✅ SharedPreferences 캐시 우선 로드
   Future<void> loadFromCache() async {
     final prefs = await SharedPreferences.getInstance();
     final currentArea = _areaState.currentArea.trim();
@@ -46,7 +55,7 @@ class BillState extends ChangeNotifier {
         _bills = decoded
             .map((e) => BillModel.fromCacheMap(Map<String, dynamic>.from(e)))
             .toList();
-        _selectedbill = {for (var bill in _bills) bill.id: false};
+        _selectedBill = {for (var bill in _bills) bill.id: false};
         _previousArea = currentArea;
         _isLoading = false;
         notifyListeners();
@@ -54,20 +63,19 @@ class BillState extends ChangeNotifier {
       } catch (e) {
         debugPrint('⚠️ Bill 캐시 파싱 실패: $e');
       }
+    } else {
+      debugPrint('⚠️ 캐시에 정산 데이터 없음 → Firestore 호출 없음');
+      _bills = [];
+      _selectedBill = {};
+      _isLoading = false;
+      notifyListeners();
     }
   }
 
-  /// 🔄 지역 상태 변경 감지 및 Firestore 동기화
-  Future<void> syncWithBillState() async {
+  /// 🔄 수동 새로고침 Firestore 호출 → 캐시 비교 후 갱신
+  Future<void> manualBillRefresh() async {
     final currentArea = _areaState.currentArea.trim();
-
-    if (currentArea.isEmpty || _previousArea == currentArea) {
-      debugPrint('✅ Bill 재조회 생략: 동일 지역 ($currentArea)');
-      return;
-    }
-
-    debugPrint('🔥 Bill 지역 변경 감지: $_previousArea → $currentArea');
-    _previousArea = currentArea;
+    debugPrint('🔥 수동 새로고침 Firestore 호출 → $currentArea');
 
     _isLoading = true;
     notifyListeners();
@@ -75,24 +83,32 @@ class BillState extends ChangeNotifier {
     try {
       final data = await _repository.getBillOnce(currentArea);
 
-      _bills = data;
-      _selectedbill = {for (var adj in _bills) adj.id: false};
+      final currentIds = _bills.map((e) => e.id).toSet();
+      final newIds = data.map((e) => e.id).toSet();
 
-      // ✅ 캐시 저장
-      final prefs = await SharedPreferences.getInstance();
-      final jsonData = json.encode(data.map((e) => e.toCacheMap()).toList());
-      await prefs.setString('cached_bills_$currentArea', jsonData);
+      final isIdentical = currentIds.length == newIds.length && currentIds.containsAll(newIds);
 
-      debugPrint("✅ Firestore에서 Bill 데이터 새로 불러옴");
+      if (isIdentical) {
+        debugPrint('✅ Firestore 데이터가 캐시와 동일 → 갱신 없음');
+      } else {
+        _bills = data;
+        _selectedBill = {for (var b in data) b.id: false};
+
+        final prefs = await SharedPreferences.getInstance();
+        final jsonData = json.encode(data.map((e) => e.toCacheMap()).toList());
+        await prefs.setString('cached_bills_$currentArea', jsonData);
+
+        debugPrint('✅ Firestore 정산 데이터 캐시에 갱신됨 (area: $currentArea)');
+      }
     } catch (e) {
-      debugPrint("🔥 Bill Firestore 동기화 실패: $e");
+      debugPrint('🔥 Firestore 정산 데이터 조회 실패: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  /// ✅ 조정 데이터 추가 (문자열 기반)
+  /// ✅ 정산 데이터 추가
   Future<void> addBill(
       String countType,
       String area,
@@ -113,25 +129,31 @@ class BillState extends ChangeNotifier {
       );
 
       await _repository.addBill(bill);
-      await syncWithBillState();
+      // ✅ 추가 후 수동 새로고침 호출
+      await manualBillRefresh();
     } catch (e) {
       debugPrint('🔥 Bill 추가 실패: $e');
       rethrow;
     }
   }
 
-  /// ✅ 삭제
-  Future<void> deleteBill(List<String> ids, {void Function(String)? onError}) async {
+  /// ✅ 정산 데이터 삭제
+  Future<void> deleteBill(
+      List<String> ids, {
+        void Function(String)? onError,
+      }) async {
     try {
       await _repository.deleteBill(ids);
-      await syncWithBillState();
+      // ✅ 삭제 후 수동 새로고침 호출
+      await manualBillRefresh();
     } catch (e) {
-      onError?.call('🚨 조정 데이터 삭제 실패: $e');
+      onError?.call('🚨 정산 데이터 삭제 실패: $e');
     }
   }
 
+  /// ✅ 선택 상태 토글
   void toggleSelection(String id) {
-    _selectedbill[id] = !(_selectedbill[id] ?? false);
+    _selectedBill[id] = !(_selectedBill[id] ?? false);
     notifyListeners();
   }
 }

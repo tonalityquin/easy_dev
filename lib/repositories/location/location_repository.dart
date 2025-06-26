@@ -1,7 +1,6 @@
 import '../../models/location_model.dart';
 
 abstract class LocationRepository {
-  Stream<List<LocationModel>> getLocationsStream(String area);
 
   Future<List<LocationModel>> getLocationsOnce(String area);
 

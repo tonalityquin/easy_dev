@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../../states/plate/filter_plate.dart';
-import '../../../utils/snackbar_helper.dart';
+import '../../../../states/plate/filter_plate.dart';
+import '../../../../utils/snackbar_helper.dart';
 import 'plate_image_dialog.dart';
 
 class MergedLogSection extends StatefulWidget {

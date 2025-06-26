@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart'; // 💡 추가
 import '../../../../states/calendar/field_calendar_state.dart';
 import '../../../../states/calendar/field_selected_date_state.dart'; // 💡 추가
-import 'field_calendar_dialog.dart';
+import 'widgets/field_calendar_dialog.dart';
 import '../../../../utils/snackbar_helper.dart';
 
 class FieldCalendarPage extends StatefulWidget {

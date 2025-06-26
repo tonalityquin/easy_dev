@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/plate_model.dart';
 import '../../enums/plate_type.dart';
 
-import '../../states/area/spot_state.dart';
+import '../../states/area/area_state.dart';
 import '../../states/plate/filter_plate.dart';
 import '../../states/plate/plate_state.dart';
 import '../../states/plate/movement_plate.dart';

@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
-import '../../modify_pages/modify_plate_service.dart';
+import '../../../modify_pages/modify_plate_service.dart';
 
 /// 저장된 사진 목록을 보여주는 다이얼로그
 class PlateImageDialog extends StatelessWidget {

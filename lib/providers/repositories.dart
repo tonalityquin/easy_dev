@@ -69,8 +69,6 @@ class DummyPlateRepository implements PlateRepository {
 
   Future<void> logPlateAction(PlateModel plate, String action) => throw UnimplementedError();
 
-  Future<void> updatePlateStatus(String plateId, String status) => throw UnimplementedError();
-
   @override
   Stream<List<PlateModel>> getPlatesByTypeAndArea(
     PlateType type,
@@ -123,9 +121,6 @@ class DummyLocationRepository implements LocationRepository {
   Future<void> deleteLocations(List<String> ids) => throw UnimplementedError();
 
   @override
-  Stream<List<LocationModel>> getLocationsStream(String area) => throw UnimplementedError();
-
-  @override
   Future<List<LocationModel>> getLocationsOnce(String area) => throw UnimplementedError();
 
   @override
@@ -174,9 +169,6 @@ class DummyUserRepository implements UserRepository {
       throw UnimplementedError();
 
   @override
-  Stream<List<UserModel>> getUsersBySelectedAreaStream(String selectedArea) => throw UnimplementedError();
-
-  @override
   Future<String?> getEnglishNameByArea(String area, String division) => throw UnimplementedError();
 
   @override
@@ -194,27 +186,24 @@ class DummyBillRepository implements BillRepository {
   Future<void> deleteBill(List<String> ids) => throw UnimplementedError();
 
   @override
-  Stream<List<BillModel>> getBillStream(String locationId) => throw UnimplementedError();
-
-  @override
   Future<List<BillModel>> getBillOnce(String area) => throw UnimplementedError();
 }
 
 class DummyStatusRepository implements StatusRepository {
   @override
-  Future<void> addToggleItem(StatusModel item) => throw UnimplementedError();
+  Future<void> addToggleItem(StatusModel status) => throw UnimplementedError();
 
   @override
   Future<void> deleteToggleItem(String id) => throw UnimplementedError();
-
-  @override
-  Stream<List<StatusModel>> getStatusStream(String type) => throw UnimplementedError();
 
   @override
   Future<void> updateToggleStatus(String id, bool status) => throw UnimplementedError();
 
   @override
   Future<List<StatusModel>> getStatusesOnce(String area) => throw UnimplementedError();
+
+  @override
+  Future<List<StatusModel>> getStatusesOnceWithCache(String area) => throw UnimplementedError();
 }
 
 final List<SingleChildWidget> repositoryProviders = [

@@ -9,18 +9,18 @@ abstract class UserRepository {
 
   /// 📝 사용자의 currentArea를 업데이트
   Future<void> updateCurrentArea(
-      String phone,
-      String area,
-      String currentArea,
-      );
+    String phone,
+    String area,
+    String currentArea,
+  );
 
   /// 🔄 사용자 상태 업데이트 (근무 여부, 저장 여부 등)
   Future<void> updateUserStatus(
-      String phone,
-      String area, {
-        bool? isWorking,
-        bool? isSaved,
-      });
+    String phone,
+    String area, {
+    bool? isWorking,
+    bool? isSaved,
+  });
 
   /// ➕ 사용자 추가
   Future<void> addUser(UserModel user);
@@ -30,9 +30,6 @@ abstract class UserRepository {
 
   /// ✅ 선택 상태 토글
   Future<void> toggleUserSelection(String id, bool isSelected);
-
-  /// 🎥 selectedArea 기준 사용자 스트리밍
-  Stream<List<UserModel>> getUsersBySelectedAreaStream(String selectedArea);
 
   /// 📂 캐시에 우선 조회
   Future<List<UserModel>> getUsersBySelectedAreaOnceWithCache(String selectedArea);

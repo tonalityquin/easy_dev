@@ -17,20 +17,39 @@ class InputStatusOnTapSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('차량 상태', style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold)),
+        const Text(
+          '차량 상태',
+          style: TextStyle(
+            fontSize: 18.0,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         const SizedBox(height: 8.0),
-        statuses.isEmpty
-            ? const Text('등록된 차량 상태가 없습니다.')
-            : Wrap(
-                spacing: 8.0,
-                children: List.generate(statuses.length, (index) {
-                  return ChoiceChip(
-                    label: Text(statuses[index]),
-                    selected: isSelected[index],
-                    onSelected: (_) => onToggle(index),
-                  );
-                }),
-              ),
+        if (statuses.isEmpty)
+          const Text(
+            '등록된 차량 상태가 없습니다.',
+            style: TextStyle(
+              color: Colors.black54,
+              fontSize: 14.0,
+            ),
+          )
+        else
+          Wrap(
+            spacing: 8.0,
+            runSpacing: 8.0,
+            children: List.generate(statuses.length, (index) {
+              return ChoiceChip(
+                label: Text(statuses[index]),
+                selected: isSelected[index],
+                onSelected: (_) => onToggle(index),
+                selectedColor: Theme.of(context).primaryColor.withOpacity(0.2),
+                labelStyle: TextStyle(
+                  color: isSelected[index] ? Theme.of(context).primaryColor : Colors.black87,
+                  fontWeight: isSelected[index] ? FontWeight.bold : FontWeight.normal,
+                ),
+              );
+            }),
+          ),
       ],
     );
   }
