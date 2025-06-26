@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-class DepartureRequestConfirmDialog extends StatelessWidget {
+class SetDepartureRequestDialog extends StatelessWidget {
   final VoidCallback onConfirm;
 
-  const DepartureRequestConfirmDialog({super.key, required this.onConfirm});
+  const SetDepartureRequestDialog({super.key, required this.onConfirm});
 
   @override
   Widget build(BuildContext context) {

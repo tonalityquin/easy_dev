@@ -1,3 +1,4 @@
+import 'package:easydev/utils/gcs_json_uploader.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../enums/plate_type.dart';
@@ -6,10 +7,9 @@ import '../../../states/area/spot_state.dart';
 import '../../../states/plate/plate_state.dart';
 import '../../../states/user/user_state.dart';
 import '../../../states/calendar/field_selected_date_state.dart';
-import '../../../utils/gcs_uploader.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../widgets/dialog/on_tap_billing_type_dialog.dart';
-import '../../../widgets/dialog/departure_completed_status_dialog.dart';
+import 'departure_completed_status_dialog.dart';
 
 class DepartureCompletedControlButtons extends StatelessWidget {
   final bool isSearchMode;
@@ -127,7 +127,7 @@ class DepartureCompletedControlButtons extends StatelessWidget {
             await context.read<PlateRepository>().addOrUpdatePlate(selectedPlate.id, updatedPlate);
             await context.read<PlateState>().updatePlateLocally(PlateType.departureCompleted, updatedPlate);
 
-            final uploader = GCSUploader();
+            final uploader = GcsJsonUploader();
             final division = context.read<AreaState>().currentDivision;
             final area = context.read<AreaState>().currentArea.trim();
 

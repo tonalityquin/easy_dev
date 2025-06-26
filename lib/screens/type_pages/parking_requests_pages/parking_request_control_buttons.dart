@@ -1,3 +1,4 @@
+import 'package:easydev/utils/gcs_json_uploader.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -7,11 +8,10 @@ import '../../../states/area/spot_state.dart';
 import '../../../states/plate/delete_plate.dart';
 import '../../../states/plate/plate_state.dart';
 import '../../../states/user/user_state.dart';
-import '../../../utils/gcs_uploader.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../widgets/dialog/on_tap_billing_type_dialog.dart';
 import '../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
-import '../../../widgets/dialog/parking_request_status_dialog.dart';
+import 'parking_request_status_dialog.dart';
 
 class ParkingRequestControlButtons extends StatelessWidget {
   final bool isSorted;
@@ -86,7 +86,7 @@ class ParkingRequestControlButtons extends StatelessWidget {
           ],
           onTap: (index) async {
             final repo = context.read<PlateRepository>();
-            final uploader = GCSUploader();
+            final uploader = GcsJsonUploader();
             final division = context.read<AreaState>().currentDivision;
             final area = context.read<AreaState>().currentArea.trim();
 

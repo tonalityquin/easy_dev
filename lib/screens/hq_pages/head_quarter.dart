@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../widgets/navigation/hq_mini_navigation.dart';
+import '../../../widgets/navigation/navigation_hq_mini.dart';
 import '../../widgets/navigation/top_navigation.dart';
 import 'head_quarter_pages/head_quarter_calendar.dart';
 import 'head_quarter_pages/head_quarter_task.dart';

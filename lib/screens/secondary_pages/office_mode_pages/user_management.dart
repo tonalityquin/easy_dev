@@ -6,7 +6,7 @@ import '../../../repositories/user/user_repository.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../widgets/navigation/secondary_mini_navigation.dart';
 import 'user_management_pages/user_setting.dart';
-import '../../../widgets/container/user_custom_box.dart';
+import '../../../widgets/container/user_container.dart';
 import '../../../states/user/user_state.dart';
 import '../../../states/area/spot_state.dart';
 
@@ -31,20 +31,20 @@ class _UserManagementState extends State<UserManagement> {
   }
 
   void buildAddUserDialog(
-    BuildContext context,
-    void Function(
-      String name,
-      String phone,
-      String email,
-      String role,
-      String password,
-      String area,
-      String division,
-      bool isWorking,
-      bool isSaved,
-      String selectedArea,
-    ) onSave,
-  ) {
+      BuildContext context,
+      void Function(
+          String name,
+          String phone,
+          String email,
+          String role,
+          String password,
+          String area,
+          String division,
+          bool isWorking,
+          bool isSaved,
+          String selectedArea,
+          ) onSave,
+      ) {
     final areaState = context.read<AreaState>();
     final currentArea = areaState.currentArea;
     final currentDivision = areaState.currentDivision;
@@ -72,18 +72,18 @@ class _UserManagementState extends State<UserManagement> {
       // 계정 추가
       buildAddUserDialog(
         context,
-        (
-          String name,
-          String phone,
-          String email,
-          String role,
-          String password,
-          String area,
-          String division,
-          bool isWorking,
-          bool isSaved,
-          String selectedArea,
-        ) async {
+            (
+            String name,
+            String phone,
+            String email,
+            String role,
+            String password,
+            String area,
+            String division,
+            bool isWorking,
+            bool isSaved,
+            String selectedArea,
+            ) async {
           try {
             // Firestore에서 englishName 조회
             final englishName = await context.read<UserRepository>()
@@ -101,7 +101,6 @@ class _UserManagementState extends State<UserManagement> {
               currentArea: area,
               selectedArea: selectedArea,
               englishSelectedAreaName: englishName ?? area,
-              // ✅ 추가
               isSelected: false,
               isWorking: isWorking,
               isSaved: isSaved,
@@ -136,7 +135,6 @@ class _UserManagementState extends State<UserManagement> {
     final currentArea = areaState.currentArea;
     final currentDivision = areaState.currentDivision;
 
-    // ✅ 현재 지역 및 사업소에 속한 사용자만 필터링
     final filteredUsers = userState.users.where((user) {
       return user.areas.contains(currentArea) && user.divisions.contains(currentDivision);
     }).toList();
@@ -152,32 +150,47 @@ class _UserManagementState extends State<UserManagement> {
         ),
         centerTitle: true,
         automaticallyImplyLeading: false,
+        actions: [
+          IconButton(
+            tooltip: '캐시 초기화 후 새로고침',
+            icon: const Icon(Icons.refresh),
+            onPressed: () async {
+              try {
+                await userState.refreshUsersBySelectedAreaAndCache();
+                showSuccessSnackbar(context, '캐시 초기화 후 사용자 목록을 새로고침했습니다.');
+              } catch (e) {
+                showFailedSnackbar(context, '사용자 갱신 실패: $e');
+              }
+            },
+          ),
+        ],
       ),
       body: userState.isLoading
           ? const Center(child: CircularProgressIndicator())
           : filteredUsers.isEmpty
-              ? Center(
-                  child:
-                      userState.users.isEmpty ? const Text('전체 계정 데이터가 없습니다') : const Text('현재 지역/사업소에 해당하는 계정이 없습니다'),
-                )
-              : ListView.builder(
-                  itemCount: filteredUsers.length,
-                  itemBuilder: (context, index) {
-                    final user = filteredUsers[index];
-                    final isSelected = userState.selectedUsers[user.id] ?? false;
+          ? Center(
+        child: userState.users.isEmpty
+            ? const Text('전체 계정 데이터가 없습니다')
+            : const Text('현재 지역/사업소에 해당하는 계정이 없습니다'),
+      )
+          : ListView.builder(
+        itemCount: filteredUsers.length,
+        itemBuilder: (context, index) {
+          final user = filteredUsers[index];
+          final isSelected = userState.selectedUsers[user.id] ?? false;
 
-                    return UserCustomBox(
-                      topLeftText: user.name,
-                      topRightText: user.email,
-                      midLeftText: user.role,
-                      midCenterText: user.phone,
-                      midRightText: user.areas.firstOrNull ?? '-',
-                      onTap: () => userState.toggleUserCard(user.id),
-                      isSelected: isSelected,
-                      backgroundColor: isSelected ? Colors.green[100]! : Colors.white,
-                    );
-                  },
-                ),
+          return UserContainer(
+            topLeftText: user.name,
+            topRightText: user.email,
+            midLeftText: user.role,
+            midCenterText: user.phone,
+            midRightText: user.areas.firstOrNull ?? '-',
+            onTap: () => userState.toggleUserCard(user.id),
+            isSelected: isSelected,
+            backgroundColor: isSelected ? Colors.green[100]! : Colors.white,
+          );
+        },
+      ),
       bottomNavigationBar: SecondaryMiniNavigation(
         icons: getNavigationIcons(userState.selectedUsers.containsValue(true)),
         onIconTapped: (index) => onIconTapped(context, index, userState),

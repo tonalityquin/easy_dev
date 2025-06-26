@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
-import '../../../widgets/navigation/hq_mini_navigation.dart';
+import '../../../widgets/navigation/navigation_hq_mini.dart';
 import '../../widgets/navigation/top_navigation.dart';
 import 'management_pages/field.dart';
 import 'management_pages/statistics.dart';

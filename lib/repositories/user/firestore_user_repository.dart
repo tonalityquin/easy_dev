@@ -1,5 +1,8 @@
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../models/user_model.dart';
 import 'user_repository.dart';
 
@@ -10,7 +13,6 @@ class FirestoreUserRepository implements UserRepository {
     return _firestore.collection('user_accounts');
   }
 
-  // 🔍 areas 컬렉션 참조 메서드
   CollectionReference<Map<String, dynamic>> _getAreasCollectionRef() {
     return _firestore.collection('areas');
   }
@@ -58,21 +60,18 @@ class FirestoreUserRepository implements UserRepository {
   @override
   Future<void> updateCurrentArea(String phone, String area, String currentArea) async {
     final userId = '$phone-$area';
-    await _getCollectionRef().doc(userId).update({
-      'currentArea': currentArea,
-    });
+    await _getCollectionRef().doc(userId).update({'currentArea': currentArea});
   }
 
   @override
   Future<void> updateUserStatus(
-    String phone,
-    String area, {
-    bool? isWorking,
-    bool? isSaved,
-  }) async {
+      String phone,
+      String area, {
+        bool? isWorking,
+        bool? isSaved,
+      }) async {
     final userId = '$phone-$area';
-
-    Map<String, dynamic> updates = {};
+    final updates = <String, dynamic>{};
     if (isWorking != null) updates['isWorking'] = isWorking;
     if (isSaved != null) updates['isSaved'] = isSaved;
 
@@ -86,7 +85,7 @@ class FirestoreUserRepository implements UserRepository {
 
   @override
   Future<void> deleteUsers(List<String> ids) async {
-    for (String id in ids) {
+    for (final id in ids) {
       await _getCollectionRef().doc(id).delete();
     }
   }
@@ -101,21 +100,79 @@ class FirestoreUserRepository implements UserRepository {
     return _getCollectionRef()
         .where('areas', arrayContains: selectedArea)
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList());
+        .map((snapshot) => snapshot.docs
+        .map((doc) => UserModel.fromMap(doc.id, doc.data()))
+        .toList());
   }
 
-  // ✨ 추가된 부분: areas 컬렉션에서 englishName 조회
+  /// ✅ 캐시에서만 읽기 (Firestore 호출 없음)
+  @override
+  Future<List<UserModel>> getUsersBySelectedAreaOnceWithCache(String selectedArea) async {
+    final cacheKey = 'users_$selectedArea';
+    final prefs = await SharedPreferences.getInstance();
+    final cachedJson = prefs.getString(cacheKey);
+
+    if (cachedJson != null) {
+      try {
+        debugPrint('✅ 캐시 반환: $selectedArea');
+        final decoded = json.decode(cachedJson) as List;
+        return decoded.map((e) => UserModel.fromMap(e['id'], e)).toList();
+      } catch (e) {
+        debugPrint('⚠️ 캐시 디코딩 실패: $e → 캐시 비움');
+        await clearUserCache(selectedArea);
+      }
+    }
+
+    debugPrint('⚠️ 캐시에 없음 → Firestore 호출 없음. 호출 위해 refreshUsersBySelectedArea() 호출 필요');
+    return [];
+  }
+
+  /// 🔄 Firestore 호출 및 캐시 갱신
+  Future<List<UserModel>> refreshUsersBySelectedArea(String selectedArea) async {
+    debugPrint('🔥 Firestore 호출 시작 → $selectedArea');
+
+    final querySnapshot = await _getCollectionRef().where('areas', arrayContains: selectedArea).get();
+
+    final users = querySnapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
+    await _updateCacheWithUsers(selectedArea, users);
+    return users;
+  }
+
+  /// 🧹 캐시 수동 초기화
+  Future<void> clearUserCache(String selectedArea) async {
+    final cacheKey = 'users_$selectedArea';
+    final cacheTsKey = 'users_${selectedArea}_ts';
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.remove(cacheKey);
+    await prefs.remove(cacheTsKey);
+
+    debugPrint('🧹 캐시 수동 초기화 완료 → $selectedArea');
+  }
+
+  Future<void> _updateCacheWithUsers(String selectedArea, List<UserModel> users) async {
+    final cacheKey = 'users_$selectedArea';
+    final cacheTsKey = 'users_${selectedArea}_ts';
+    final prefs = await SharedPreferences.getInstance();
+
+    final jsonData = json.encode(users.map((user) => user.toMapWithId()).toList());
+    await prefs.setString(cacheKey, jsonData);
+    await prefs.setInt(
+      cacheTsKey,
+      DateTime.now().millisecondsSinceEpoch,
+    );
+
+    debugPrint('✅ 캐시 갱신 완료 → $selectedArea (${users.length}명)');
+  }
+
   @override
   Future<String?> getEnglishNameByArea(String area, String division) async {
     try {
       final doc = await _getAreasCollectionRef().doc('$division-$area').get();
-      if (doc.exists) {
-        return doc.data()?['englishName'] as String?;
-      }
+      if (doc.exists) return doc.data()?['englishName'] as String?;
     } catch (e) {
       debugPrint("[DEBUG] getEnglishNameByArea 실패: $e");
     }
     return null;
   }
-
 }

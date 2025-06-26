@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:easydev/utils/gcs_json_uploader.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:camera/camera.dart';
@@ -9,7 +10,7 @@ import 'package:flutter/services.dart';
 import '../../states/plate/modify_plate.dart';
 import '../../states/area/spot_state.dart';
 import '../../states/user/user_state.dart';
-import '../../utils/gcs_uploader.dart';
+import '../../utils/gcs_image_uploader.dart';
 import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
 import '../../models/plate_log_model.dart';
@@ -58,7 +59,7 @@ class ModifyPlateService {
   }
 
   Future<List<String>> uploadAndMergeImages(String plateNumber) async {
-    final uploader = GCSUploader();
+    final uploader = GcsImageUploader();
     final uploadedImageUrls = <String>[];
     final failedFiles = <String>[];
 
@@ -143,7 +144,7 @@ class ModifyPlateService {
         updatedFields: changes,
       );
 
-      await GCSUploader().uploadForPlateLogTypeJson(
+      await GcsJsonUploader().uploadForPlateLogTypeJson(
         log.toMap(),
         updatedPlate.plateNumber,
         log.division,

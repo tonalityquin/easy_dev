@@ -1,3 +1,4 @@
+import 'package:easydev/utils/gcs_json_uploader.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -10,12 +11,11 @@ import '../../states/user/user_state.dart';
 import '../../states/calendar/field_selected_date_state.dart';
 
 import '../../utils/snackbar_helper.dart';
-import '../../utils/gcs_uploader.dart';
 
 import '../../widgets/navigation/top_navigation.dart';
 import '../../widgets/container/plate_container.dart';
 import '../../widgets/dialog/plate_search_dialog.dart';
-import '../mini_calendars/field_calendar.dart';
+import 'departure_completed_pages/field_calendar.dart';
 
 import 'departure_completed_pages/departure_completed_page_merge_log.dart';
 import 'departure_completed_pages/departure_completed_control_buttons.dart';
@@ -81,7 +81,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
       }
     }).toList();
 
-    final firestorePlates = context.watch<FilterPlate>().filterPlatesByQuery(rawPlates);
+    final firestorePlates = context.watch<FilterPlate>().filterPlateCountByQuery(rawPlates);
 
     firestorePlates.sort((a, b) =>
     _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime));
@@ -147,7 +147,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
               child: Container(
                 color: Colors.white,
                 child: FutureBuilder<List<Map<String, dynamic>>>(
-                  future: GCSUploader().showMergedLogsToDepartureCompletedMergeLog(division, area, filterDate: selectedDate),
+                  future: GcsJsonUploader().showMergedLogsToDepartureCompletedMergeLog(division, area, filterDate: selectedDate),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator());

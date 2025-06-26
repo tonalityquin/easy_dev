@@ -2,10 +2,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../models/plate_model.dart';
 import '../../repositories/plate/plate_repository.dart';
+import '../../utils/gcs_json_uploader.dart';
 import 'plate_state.dart';
 import '../../enums/plate_type.dart';
 import '../../models/plate_log_model.dart';
-import '../../utils/gcs_uploader.dart';
 import '../area/spot_state.dart';
 
 class MovementPlate {
@@ -14,7 +14,7 @@ class MovementPlate {
 
   MovementPlate(this._repository, this._areaState);
 
-  final _uploader = GCSUploader();
+  final _uploader = GcsJsonUploader();
 
   Future<bool> _transferData({
     required PlateType fromType,

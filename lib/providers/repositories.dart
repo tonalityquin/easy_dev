@@ -176,9 +176,14 @@ class DummyUserRepository implements UserRepository {
   @override
   Stream<List<UserModel>> getUsersBySelectedAreaStream(String selectedArea) => throw UnimplementedError();
 
-  // ✨ 추가된 부분
   @override
   Future<String?> getEnglishNameByArea(String area, String division) => throw UnimplementedError();
+
+  @override
+  Future<List<UserModel>> getUsersBySelectedAreaOnceWithCache(String selectedArea) => throw UnimplementedError();
+
+  @override
+  Future<List<UserModel>> refreshUsersBySelectedArea(String selectedArea) => throw UnimplementedError();
 }
 
 class DummyBillRepository implements BillRepository {

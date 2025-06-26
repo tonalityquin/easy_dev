@@ -4,7 +4,7 @@ import '../../../utils/snackbar_helper.dart';
 import '../../../states/bill/bill_state.dart';
 import '../../../states/area/spot_state.dart'; // 🔥 지역 상태 추가
 import '../../../widgets/navigation/secondary_mini_navigation.dart';
-import '../../../widgets/container/bill_custom_box.dart';
+import '../../../widgets/container/bill_container.dart';
 import 'bill_pages/bill_setting.dart';
 
 class BillManagement extends StatefulWidget {
@@ -123,7 +123,7 @@ class _BillManagementState extends State<BillManagement> {
 
               return Column(
                 children: [
-                  BillCustomBox(
+                  BillContainer(
                     leftText: countType,
                     centerTopText: "기본 기준: $basicStandard",
                     centerBottomText: "기본 금액: $basicAmount",

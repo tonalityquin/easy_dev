@@ -1,28 +1,39 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../../states/calendar/office_calendar_state.dart';
-import '../../../widgets/dialog/calendar/calendar_dialogs.dart';
-import '../../../utils/snackbar_helper.dart';
+import 'package:provider/provider.dart'; // 💡 추가
+import '../../../../states/calendar/field_calendar_state.dart';
+import '../../../../states/calendar/field_selected_date_state.dart'; // 💡 추가
+import 'field_calendar_dialog.dart';
+import '../../../../utils/snackbar_helper.dart';
 
-class OfficeCalenderPage extends StatefulWidget {
-  const OfficeCalenderPage({super.key});
+class FieldCalendarPage extends StatefulWidget {
+  const FieldCalendarPage({super.key});
 
   @override
-  State<OfficeCalenderPage> createState() => _OfficeCalenderPage();
+  State<FieldCalendarPage> createState() => _FieldCalendarPage();
 }
 
-class _OfficeCalenderPage extends State<OfficeCalenderPage> {
-  late OfficeCalendarState calendar;
+class _FieldCalendarPage extends State<FieldCalendarPage> {
+  late FieldCalendarState calendar;
   Map<String, String> _memoMap = {};
   String? _memoKey;
-
   @override
   void initState() {
     super.initState();
-    calendar = OfficeCalendarState();
+    calendar = FieldCalendarState();
+
+    // ✅ 선택 날짜를 오늘로 초기화
+    calendar.selectDate(DateTime.now());
+
+    // ✅ 전역 Provider 상태도 초기화
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<FieldSelectedDateState>().setSelectedDate(DateTime.now());
+    });
+
     _initUserMemoKey();
   }
+
 
   Future<void> _initUserMemoKey() async {
     final prefs = await SharedPreferences.getInstance();
@@ -61,15 +72,15 @@ class _OfficeCalenderPage extends State<OfficeCalenderPage> {
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        foregroundColor: Colors.black87,
-        title: const Text(
-          '달력(기능 미정)',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        centerTitle: true,
         automaticallyImplyLeading: false,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 1,
+        centerTitle: true,
+        title: const Text(
+          "출차 기록은 2주일까지만 보관",
+          style: TextStyle(color: Colors.grey, fontSize: 16),
+        ),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -77,7 +88,7 @@ class _OfficeCalenderPage extends State<OfficeCalenderPage> {
           children: [
             _buildMonthNavigation(),
             _buildDayHeaders(context),
-            _buildDateGrid(context),
+            _buildDateGrid(context), // 💡 날짜 선택 처리 포함됨
             const SizedBox(height: 16),
             TextField(
               readOnly: true,
@@ -198,6 +209,7 @@ class _OfficeCalenderPage extends State<OfficeCalenderPage> {
             setState(() {
               calendar.selectDate(currentDate);
             });
+            context.read<FieldSelectedDateState>().setSelectedDate(currentDate); // 💡 상태에 저장
             showSelectedSnackbar(context, '선택된 날짜: ${calendar.formatDate(currentDate)}');
           },
           child: Container(

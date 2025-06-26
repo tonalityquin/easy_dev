@@ -1,3 +1,4 @@
+import 'package:easydev/utils/gcs_json_uploader.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -10,14 +11,13 @@ import '../../../states/plate/delete_plate.dart';
 import '../../../states/plate/plate_state.dart';
 import '../../../states/user/user_state.dart';
 
-import '../../../utils/gcs_uploader.dart';
 import '../../../utils/snackbar_helper.dart';
 
 import '../../../widgets/dialog/on_tap_billing_type_dialog.dart';
 import '../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
-import '../../../widgets/dialog/departure_request_confirmation_dialog.dart';
-import '../../../widgets/dialog/parking_completed_status_dialog.dart';
-import '../../../widgets/dialog/parking_request_delete_dialog.dart';
+import 'widgets/set_departure_request_dialog.dart';
+import 'widgets/parking_completed_status_dialog.dart';
+import '../../../widgets/dialog/plate_remove_dialog.dart';
 
 class ParkingCompletedControlButtons extends StatelessWidget {
   final bool isSearchMode;
@@ -108,7 +108,7 @@ class ParkingCompletedControlButtons extends StatelessWidget {
             final repo = context.read<PlateRepository>();
             final division = context.read<AreaState>().currentDivision;
             final area = context.read<AreaState>().currentArea.trim();
-            final uploader = GCSUploader();
+            final uploader = GcsJsonUploader();
             final billingType = selectedPlate.billingType;
             final now = DateTime.now();
             final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
@@ -195,7 +195,7 @@ class ParkingCompletedControlButtons extends StatelessWidget {
               // 🚗 출차 요청
               showDialog(
                 context: context,
-                builder: (context) => DepartureRequestConfirmDialog(
+                builder: (context) => SetDepartureRequestDialog(
                   onConfirm: () => handleDepartureRequested(context),
                 ),
               );
@@ -215,7 +215,7 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                   onDelete: () {
                     showDialog(
                       context: context,
-                      builder: (_) => ParkingRequestDeleteDialog(
+                      builder: (_) => PlateRemoveDialog(
                         onConfirm: () {
                           context.read<DeletePlate>().deleteFromParkingCompleted(
                                 selectedPlate.plateNumber,

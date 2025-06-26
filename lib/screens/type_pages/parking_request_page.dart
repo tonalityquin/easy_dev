@@ -267,7 +267,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
               builder: (context, plateState, areaState, child) {
                 if (_isSearchMode) {
                   return FutureBuilder<List<PlateModel>>(
-                    future: context.read<FilterPlate>().fetchPlatesBySearchQuery(),
+                    future: context.read<FilterPlate>().fetchPlatesCountsBySearchQuery(),
                     builder: (context, snapshot) {
                       final searchResults = snapshot.data ?? [];
                       return ListView(

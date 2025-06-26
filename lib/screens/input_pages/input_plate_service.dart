@@ -6,7 +6,7 @@ import 'package:googleapis/storage/v1.dart';
 import 'package:googleapis_auth/auth_io.dart';
 import 'package:flutter/services.dart';
 
-import '../../utils/gcs_uploader.dart';
+import '../../utils/gcs_image_uploader.dart';
 import '../../states/plate/input_plate.dart';
 import '../../states/area/spot_state.dart';
 import '../../states/user/user_state.dart';
@@ -17,7 +17,7 @@ class InputPlateService {
       String area,
       String userName,
       String division,) async {
-    final uploader = GCSUploader();
+    final uploader = GcsImageUploader();
     final List<String> uploadedUrls = [];
     final List<String> failedFiles = [];
 

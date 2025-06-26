@@ -9,7 +9,6 @@ import '../../screens/secondary_pages/field_mode_pages/wireless.dart';
 
 // Office Mode Pages
 import '../../screens/secondary_pages/office_mode_pages/bill_management.dart';
-import '../../screens/secondary_pages/office_mode_pages/office_calender.dart';
 import '../../screens/secondary_pages/office_mode_pages/location_management.dart';
 import '../../screens/secondary_pages/office_mode_pages/status_management.dart';
 import '../../screens/secondary_pages/office_mode_pages/user_management.dart';
@@ -43,7 +42,6 @@ final List<SecondaryInfo> officeModePages = [
   SecondaryInfo('구역 관리', LocationManagement(), Icon(Icons.location_on)),
   SecondaryInfo('정산 관리', BillManagement(), Icon(Icons.adjust)),
   SecondaryInfo('상태창 관리', StatusManagement(), Icon(Icons.tune)),
-  SecondaryInfo('투두 달력', OfficeCalenderPage(), Icon(Icons.calendar_today)),
 ];
 
 /// 🔹 Document Mode Pages

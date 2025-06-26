@@ -12,8 +12,8 @@ class StatusState extends ChangeNotifier {
   final TextEditingController textController = TextEditingController();
 
   StatusState(this._repository, this._areaState) {
-    loadFromCache();               // ✅ 캐시 우선 로드
-    syncWithAreaStatusState();     // ✅ 이후 Firestore에서 동기화
+    loadFromCache(); // ✅ 캐시 우선 로드
+    syncWithAreaStatusState(); // ✅ 이후 Firestore에서 동기화
     _areaState.addListener(syncWithAreaStatusState);
   }
 
@@ -23,16 +23,15 @@ class StatusState extends ChangeNotifier {
   bool _isLoading = true;
 
   List<StatusModel> get toggleItems => _toggleItems;
+
   String? get selectedItemId => _selectedItemId;
+
   bool get isLoading => _isLoading;
 
   List<StatusModel> get statuses {
-    return _toggleItems
-        .where((status) => status.area == _areaState.currentArea)
-        .toList();
+    return _toggleItems.where((status) => status.area == _areaState.currentArea).toList();
   }
 
-  /// ✅ 캐시에서 로드
   Future<void> loadFromCache() async {
     final prefs = await SharedPreferences.getInstance();
     final currentArea = _areaState.currentArea.trim();
@@ -41,9 +40,7 @@ class StatusState extends ChangeNotifier {
     if (cachedJson != null) {
       try {
         final decoded = json.decode(cachedJson) as List;
-        _toggleItems = decoded
-            .map((e) => StatusModel.fromCacheMap(Map<String, dynamic>.from(e)))
-            .toList();
+        _toggleItems = decoded.map((e) => StatusModel.fromCacheMap(Map<String, dynamic>.from(e))).toList();
         _previousArea = currentArea;
         _isLoading = false;
         notifyListeners();
@@ -87,7 +84,7 @@ class StatusState extends ChangeNotifier {
     }
   }
 
-  /// ✅ 항목 추가
+  /// Single-status_management.dart
   Future<void> addToggleItem(String name) async {
     final String currentArea = _areaState.currentArea;
     if (currentArea.isEmpty) return;
@@ -103,7 +100,6 @@ class StatusState extends ChangeNotifier {
     await syncWithAreaStatusState();
   }
 
-  /// ✅ 항목 상태 토글
   Future<void> toggleItem(String id) async {
     final index = _toggleItems.indexWhere((item) => item.id == id);
     if (index != -1) {
@@ -121,13 +117,11 @@ class StatusState extends ChangeNotifier {
     }
   }
 
-  /// ✅ 항목 삭제
   Future<void> removeToggleItem(String id) async {
     await _repository.deleteToggleItem(id);
     await syncWithAreaStatusState();
   }
 
-  /// ✅ 선택 항목 토글
   void selectItem(String? id) {
     _selectedItemId = (_selectedItemId == id) ? null : id;
     notifyListeners();

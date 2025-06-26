@@ -143,4 +143,9 @@ class UserModel {
       'isSaved': isSaved,
     };
   }
+
+  /// ✅ 캐싱용 ID 포함 toJson 헬퍼
+  Map<String, dynamic> toMapWithId() {
+    return toJson(); // toJson() 자체가 id를 포함하므로 별도의 수정 없이 반환
+  }
 }

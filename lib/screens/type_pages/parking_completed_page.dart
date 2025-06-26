@@ -14,7 +14,7 @@ import '../../utils/snackbar_helper.dart';
 
 import '../../widgets/navigation/top_navigation.dart';
 import '../../widgets/dialog/plate_search_dialog.dart';
-import '../../widgets/dialog/parking_completed_status_dialog.dart';
+import 'parking_completed_pages/widgets/parking_completed_status_dialog.dart';
 import '../../widgets/container/plate_container.dart';
 
 import 'parking_completed_pages/parking_completed_control_buttons.dart';
@@ -153,7 +153,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
 
             if (_isSearchMode) {
               return FutureBuilder<List<PlateModel>>(
-                future: filterState.fetchPlatesBySearchQuery(),
+                future: filterState.fetchPlatesCountsBySearchQuery(),
                 builder: (context, snapshot) {
                   final parkingCompleted = snapshot.data ?? [];
                   return _buildPlateList(parkingCompleted, userName);
@@ -180,7 +180,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
 
             if (_isParkingAreaMode && _selectedParkingArea != null) {
               return FutureBuilder<List<PlateModel>>(
-                future: filterState.fetchPlatesByParkingLocation(
+                future: filterState.fetchPlatesByParkingLocationWithCache(
                   type: PlateType.parkingCompleted,
                   location: _selectedParkingArea!,
                 ),

@@ -6,9 +6,9 @@ import '../../repositories/plate/plate_repository.dart';
 import '../../models/plate_model.dart';
 import '../../enums/plate_type.dart';
 
+import '../../utils/gcs_json_uploader.dart';
 import '../area/spot_state.dart';
 
-import '../../utils/gcs_uploader.dart';
 
 class PlateState extends ChangeNotifier {
   final PlateRepository _repository;
@@ -69,7 +69,7 @@ class PlateState extends ChangeNotifier {
           for (final plate in filteredData) {
             final previous = previousIsLockedFee[plate.id];
             if (previous == false && plate.isLockedFee == true) {
-              final uploader = GCSUploader();
+              final uploader = GcsJsonUploader();
               await uploader.mergeAndSummarizeLogs(
                 plate.plateNumber,
                 _areaState.currentDivision,

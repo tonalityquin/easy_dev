@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 
-import '../../../widgets/navigation/hq_mini_navigation.dart';
+import '../../../widgets/navigation/navigation_hq_mini.dart';
 import '../../widgets/navigation/top_navigation.dart';
 import '../../../../models/user_model.dart';
 import '../../../../states/area/spot_state.dart';
