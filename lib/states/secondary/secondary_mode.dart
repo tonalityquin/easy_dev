@@ -12,13 +12,13 @@ extension ModeStatusExtension on ModeStatus {
   String get label {
     switch (this) {
       case ModeStatus.field:
-        return 'Field Mode';
+        return '보조 페이지';
       case ModeStatus.office:
-        return 'Office Mode';
+        return '관리 페이지';
       case ModeStatus.document:
-        return 'Document Mode';
+        return '이스터 에그';
       case ModeStatus.dev:
-        return 'Dev Mode';
+        return '개발자 페이지';
     }
   }
 

@@ -28,7 +28,7 @@ class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWi
     ].contains(userRole);
 
     final selectedModeLabel =
-    userRole == RoleType.fielder ? 'Field Mode' : manageState.currentStatus.label;
+    userRole == RoleType.fielder ? '보조 페이지' : manageState.currentStatus.label;
 
     return AppBar(
       backgroundColor: Colors.white,
@@ -69,7 +69,7 @@ class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWi
   }
 
   List<String> _getFilteredAvailableStatus(RoleType userRole, List<String> availableStatus) {
-    if (userRole == RoleType.fielder) return ['Field Mode'];
+    if (userRole == RoleType.fielder) return ['보조 페이지'];
 
     if (userRole == RoleType.fieldLeader) {
       return availableStatus
