@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../../../states/user/user_state.dart';
+import '../../utils/snackbar_helper.dart';
+import 'widgets/report_dialog.dart';
 import 'clock_in_controller.dart';
 import 'widgets/plate_count_widget.dart';
-import 'widgets/show_report_dialog.dart';
 import 'widgets/work_button_widget.dart';
 import 'widgets/user_info_card.dart';
 
@@ -28,7 +30,15 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
   Future<void> _handleLogout(BuildContext context) async {
     try {
       final userState = Provider.of<UserState>(context, listen: false);
+
+      // ✅ TTS 포그라운드 서비스 종료
+      await FlutterForegroundTask.stopService();
+
+      // ✅ 유저 상태 초기화
       await userState.clearUserToPhone();
+
+      // ✅ 잠시 대기 후 앱 종료
+      await Future.delayed(const Duration(milliseconds: 500));
       SystemChannels.platform.invokeMethod('SystemNavigator.pop');
     } catch (e) {
       if (context.mounted) {
@@ -75,6 +85,8 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
                           const UserInfoCard(),
                           const PlateCountWidget(),
                           const SizedBox(height: 32),
+
+                          // ✅ 같은 줄에 보고 작성, 출근하기 버튼
                           Row(
                             children: [
                               Expanded(
@@ -91,7 +103,47 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                   ),
-                                  onPressed: () => showReportDialog(context),
+                                  onPressed: () {
+                                    // 보고 작성 다이얼로그 표시
+                                    showDialog(
+                                      context: context,
+                                      barrierDismissible: false,
+                                      builder: (context) {
+                                        return Dialog(
+                                          backgroundColor: Colors.white,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(16),
+                                          ),
+                                          insetPadding: const EdgeInsets.symmetric(
+                                              horizontal: 16, vertical: 24),
+                                          child: Padding(
+                                            padding: EdgeInsets.only(
+                                              bottom: MediaQuery.of(context)
+                                                  .viewInsets
+                                                  .bottom,
+                                            ),
+                                            child: SingleChildScrollView(
+                                              child: Padding(
+                                                padding: const EdgeInsets.all(20),
+                                                child: ParkingReportContent(
+                                                  onReport: (type, content) async {
+                                                    if (type == 'cancel') {
+                                                      Navigator.pop(context);
+                                                      return;
+                                                    }
+
+                                                    showSuccessSnackbar(
+                                                        context, "보고 처리됨: $content");
+                                                    Navigator.pop(context);
+                                                  },
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    );
+                                  },
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -100,6 +152,7 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
                               ),
                             ],
                           ),
+
                           const SizedBox(height: 32),
                         ],
                       ),

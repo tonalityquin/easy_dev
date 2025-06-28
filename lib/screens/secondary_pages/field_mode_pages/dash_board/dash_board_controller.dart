@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../../../../states/user/user_state.dart';
 import '../../../../utils/snackbar_helper.dart';
@@ -18,23 +19,29 @@ class DashBoardController {
         showFailedSnackbar(context, '퇴근 기록 업로드 실패 또는 중복');
       }
 
+      // ✅ 포그라운드 서비스 중지
+      await FlutterForegroundTask.stopService();
+
       await userState.isHeWorking();
       await Future.delayed(const Duration(seconds: 1));
+
+      // 앱 종료
       SystemNavigator.pop();
     } else {
       await userState.isHeWorking();
     }
   }
 
-  /// ✅ 퇴근 시간 기록 및 업로드
+  /// 퇴근 시간 기록 및 업로드
   Future<bool> _recordLeaveTime(BuildContext context) async {
     try {
       final now = DateTime.now();
-      final time = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+      final time =
+          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
 
       return await ClockOutLogUploader.uploadLeaveJson(
         context: context,
-        recordedTime: time, // ✅ 수정된 시그니처에 맞게 전달
+        recordedTime: time,
       );
     } catch (e) {
       debugPrint('❌ 퇴근 기록 오류: $e');
@@ -42,11 +49,13 @@ class DashBoardController {
     }
   }
 
+  /// 휴게 기록
   Future<void> recordBreakTime(BuildContext context) async {
     try {
       final userState = Provider.of<UserState>(context, listen: false);
       final now = DateTime.now();
-      final time = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+      final time =
+          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
 
       final breakJson = {
         'userId': userState.user?.id ?? '',
@@ -76,9 +85,13 @@ class DashBoardController {
     }
   }
 
+  /// 로그아웃
   Future<void> logout(BuildContext context) async {
     try {
       final userState = Provider.of<UserState>(context, listen: false);
+
+      // ✅ 포그라운드 서비스 중지
+      await FlutterForegroundTask.stopService();
 
       await userState.isHeWorking();
       await Future.delayed(const Duration(seconds: 1));
@@ -92,7 +105,5 @@ class DashBoardController {
         showFailedSnackbar(context, '로그아웃 실패: $e');
       }
     }
-
-    SystemChannels.platform.invokeMethod('SystemNavigator.pop');
   }
 }
