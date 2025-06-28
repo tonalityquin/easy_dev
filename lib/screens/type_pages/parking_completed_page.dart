@@ -30,13 +30,12 @@ class ParkingCompletedPage extends StatefulWidget {
 class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
   bool _isSorted = true;
   bool _isSearchMode = false;
-  bool _isParkingAreaMode = true; // ✅ 항상 true로 시작 (주차 구역 선택이 먼저)
+  bool _isParkingAreaMode = true; // 항상 true로 시작
   String? _selectedParkingArea;
 
   @override
   void didUpdateWidget(ParkingCompletedPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // ✅ 위젯이 트리 안에서 재사용되더라도 상태 초기화
     setState(() {
       _selectedParkingArea = null;
       _isParkingAreaMode = true;
@@ -48,11 +47,6 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
     setState(() {
       _isSorted = !_isSorted;
     });
-
-    context.read<PlateState>().updateSortOrder(
-          PlateType.parkingCompleted,
-          _isSorted,
-        );
   }
 
   void _showSearchDialog(BuildContext context) {
@@ -83,7 +77,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
   void _resetParkingAreaFilter(BuildContext context) {
     context.read<FilterPlate>().clearLocationSearchQuery();
     setState(() {
-      _selectedParkingArea = null; // ✅ 구역 초기화만
+      _selectedParkingArea = null;
     });
   }
 
@@ -118,11 +112,10 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
 
   @override
   Widget build(BuildContext context) {
-    final plateState = context.read<PlateState>();
-    final userName = context.read<UserState>().name;
-
     return WillPopScope(
       onWillPop: () async {
+        final plateState = context.read<PlateState>();
+        final userName = context.read<UserState>().name;
         final selectedPlate = plateState.getSelectedPlate(
           PlateType.parkingCompleted,
           userName,
@@ -148,29 +141,37 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
         ),
         body: Consumer2<PlateState, AreaState>(
           builder: (context, plateState, areaState, child) {
-            final filterState = context.read<FilterPlate>();
             final userName = context.read<UserState>().name;
+            final filterState = context.watch<FilterPlate>();
 
+            List<PlateModel> plates = plateState.getPlatesByCollection(PlateType.parkingCompleted);
+
+            // 검색 모드
             if (_isSearchMode) {
-              return FutureBuilder<List<PlateModel>>(
-                future: filterState.fetchPlatesCountsBySearchQuery(),
-                builder: (context, snapshot) {
-                  final parkingCompleted = snapshot.data ?? [];
-                  return _buildPlateList(parkingCompleted, userName);
-                },
-              );
+              final query = filterState.searchQuery;
+              plates = plates
+                  .where((p) => p.plateNumber.endsWith(query))
+                  .toList();
             }
 
-            // ✅ 기본이 LocationPicker
-            if (_isParkingAreaMode && _selectedParkingArea == null) {
+            // 구역 필터 모드
+            if (_isParkingAreaMode && _selectedParkingArea != null) {
+              plates = plates
+                  .where((p) => p.location == _selectedParkingArea)
+                  .toList();
+            }
+
+            // 정렬
+            plates.sort(
+                  (a, b) => _isSorted
+                  ? b.requestTime.compareTo(a.requestTime)
+                  : a.requestTime.compareTo(b.requestTime),
+            );
+
+            // 구역 선택 화면
+            if (_isParkingAreaMode && _selectedParkingArea == null && !_isSearchMode) {
               return ParkingCompletedLocationPicker(
                 onLocationSelected: (selectedLocation) {
-                  final area = context.read<AreaState>().currentArea;
-                  context.read<FilterPlate>().filterByParkingLocation(
-                        PlateType.parkingCompleted,
-                        area,
-                        selectedLocation,
-                      );
                   setState(() {
                     _selectedParkingArea = selectedLocation;
                   });
@@ -178,28 +179,6 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
               );
             }
 
-            if (_isParkingAreaMode && _selectedParkingArea != null) {
-              return FutureBuilder<List<PlateModel>>(
-                future: filterState.fetchPlatesByParkingLocationWithCache(
-                  type: PlateType.parkingCompleted,
-                  location: _selectedParkingArea!,
-                ),
-                builder: (context, snapshot) {
-                  final parkingCompleted = snapshot.data ?? [];
-
-                  // ✅ 정렬 적용
-                  parkingCompleted.sort((a, b) =>
-                      _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime));
-
-                  return _buildPlateList(parkingCompleted, userName);
-                },
-              );
-            }
-
-            // Fallback: 전체 목록
-            final plates = [...plateState.getPlatesByCollection(PlateType.parkingCompleted)];
-            plates.sort(
-                (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime));
             return _buildPlateList(plates, userName);
           },
         ),
@@ -228,13 +207,13 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
           filterCondition: (request) => request.type == PlateType.parkingCompleted.firestoreValue,
           onPlateTap: (plateNumber, area) {
             context.read<PlateState>().toggleIsSelected(
-                  collection: PlateType.parkingCompleted,
-                  plateNumber: plateNumber,
-                  userName: userName,
-                  onError: (errorMessage) {
-                    showFailedSnackbar(context, errorMessage);
-                  },
-                );
+              collection: PlateType.parkingCompleted,
+              plateNumber: plateNumber,
+              userName: userName,
+              onError: (errorMessage) {
+                showFailedSnackbar(context, errorMessage);
+              },
+            );
           },
         ),
       ],

@@ -95,6 +95,7 @@ class PlateContainer extends StatelessWidget {
         return Column(
           children: [
             PlateCustomBox(
+              key: ValueKey(item.id), // ✅ 애니메이션 동작을 위한 고유 Key
               topLeftText: '${item.region ?? '전국'} ${item.plateNumber}',
               topRightUpText: item.billingType ?? '없음',
               topRightDownText: "$currentFee원",
@@ -102,7 +103,7 @@ class PlateContainer extends StatelessWidget {
               midCenterText: displayUser,
               midRightText: CustomDateUtils.formatTimeForUI(item.requestTime),
               bottomLeftLeftText: item.statusList.isNotEmpty ? item.statusList.join(", ") : "",
-              bottomLeftCenterText: item.customStatus ?? '', // ✅ 이 부분이 반영 포인트
+              bottomLeftCenterText: item.customStatus ?? '',
               bottomRightText: elapsedText,
               isSelected: isSelected,
               backgroundColor: backgroundColor,
