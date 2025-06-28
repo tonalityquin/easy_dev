@@ -3,7 +3,7 @@ import 'screens/clock_in_pages/clock_in_work_screen.dart';
 import 'screens/headquarter_page.dart';
 import 'screens/logins/login_screen.dart';
 import 'screens/type_page.dart';
-import 'screens/secondary_pages/office_mode_pages/location_management.dart';
+import 'screens/secondary_pages/field_mode_pages/location_management.dart';
 
 class AppRoutes {
   static const login = '/login';

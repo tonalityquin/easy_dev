@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../states/user/user_state.dart';
-import '../../../../widgets/navigation/secondary_mini_navigation.dart';
 import 'dash_board_controller.dart';
 import 'widgets/user_info_card.dart';
 import 'widgets/break_button_widget.dart';
@@ -105,13 +104,6 @@ class DashBoardScreen extends StatelessWidget {
             ),
           );
         },
-      ),
-      bottomNavigationBar: const SecondaryMiniNavigation(
-        icons: [
-          Icons.search,
-          Icons.person,
-          Icons.sort,
-        ],
       ),
     );
   }
