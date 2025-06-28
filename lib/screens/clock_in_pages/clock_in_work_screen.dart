@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../../../states/user/user_state.dart';
 import 'clock_in_controller.dart';
 import 'widgets/plate_count_widget.dart';
+import 'widgets/show_report_dialog.dart';
 import 'widgets/work_button_widget.dart';
 import 'widgets/user_info_card.dart';
 
@@ -27,10 +28,7 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
   Future<void> _handleLogout(BuildContext context) async {
     try {
       final userState = Provider.of<UserState>(context, listen: false);
-
       await userState.clearUserToPhone();
-
-      // ✅ 앱 종료
       SystemChannels.platform.invokeMethod('SystemNavigator.pop');
     } catch (e) {
       if (context.mounted) {
@@ -65,7 +63,7 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
                             height: 120,
                             child: Image.asset('assets/images/belivus_logo.PNG'),
                           ),
-                          const SizedBox(height: 96),
+                          const SizedBox(height: 48),
                           Center(
                             child: Text(
                               '출근 전 사용자 정보 확인',
@@ -77,7 +75,31 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
                           const UserInfoCard(),
                           const PlateCountWidget(),
                           const SizedBox(height: 32),
-                          WorkButtonWidget(controller: controller),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  icon: const Icon(Icons.assignment),
+                                  label: const Text('보고 작성'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.white,
+                                    foregroundColor: Colors.black,
+                                    padding:
+                                    const EdgeInsets.symmetric(vertical: 14),
+                                    side: const BorderSide(color: Colors.grey),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                  onPressed: () => showReportDialog(context),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: WorkButtonWidget(controller: controller),
+                              ),
+                            ],
+                          ),
                           const SizedBox(height: 32),
                         ],
                       ),

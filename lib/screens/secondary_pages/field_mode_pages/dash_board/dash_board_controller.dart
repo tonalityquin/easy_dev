@@ -42,7 +42,6 @@ class DashBoardController {
     }
   }
 
-
   Future<void> recordBreakTime(BuildContext context) async {
     try {
       final userState = Provider.of<UserState>(context, listen: false);

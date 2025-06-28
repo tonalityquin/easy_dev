@@ -7,6 +7,7 @@ import 'dash_board_controller.dart';
 import 'widgets/user_info_card.dart';
 import 'widgets/break_button_widget.dart';
 import 'widgets/work_button_widget.dart';
+import 'widgets/show_report_dialog.dart';
 
 class DashBoardScreen extends StatelessWidget {
   const DashBoardScreen({super.key});
@@ -67,7 +68,36 @@ class DashBoardScreen extends StatelessWidget {
                     const SizedBox(height: 32),
                     BreakButtonWidget(controller: controller),
                     const SizedBox(height: 16),
-                    WorkButtonWidget(controller: controller, userState: userState),
+                    // ✅ 순서 변경: 보고 작성이 왼쪽, 퇴근하기가 오른쪽
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            icon: const Icon(Icons.assignment),
+                            label: const Text('보고 작성'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: Colors.black,
+                              side: const BorderSide(color: Colors.grey),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            onPressed: () {
+                              showReportDialog(context);
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: WorkButtonWidget(
+                            controller: controller,
+                            userState: userState,
+                          ),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 32),
                   ],
                 ),
