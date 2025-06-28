@@ -23,6 +23,10 @@ import 'parking_completed_pages/parking_completed_location_picker.dart';
 class ParkingCompletedPage extends StatefulWidget {
   const ParkingCompletedPage({super.key});
 
+  static void reset(GlobalKey key) {
+    (key.currentState as _ParkingCompletedPageState?)?._resetInternalState();
+  }
+
   @override
   State<ParkingCompletedPage> createState() => _ParkingCompletedPageState();
 }
@@ -30,16 +34,16 @@ class ParkingCompletedPage extends StatefulWidget {
 class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
   bool _isSorted = true;
   bool _isSearchMode = false;
-  bool _isParkingAreaMode = true; // 항상 true로 시작
+  bool _isParkingAreaMode = true;
   String? _selectedParkingArea;
 
-  @override
-  void didUpdateWidget(ParkingCompletedPage oldWidget) {
-    super.didUpdateWidget(oldWidget);
+  /// ⭐ 상태 초기화 함수
+  void _resetInternalState() {
     setState(() {
       _selectedParkingArea = null;
       _isParkingAreaMode = true;
       _isSearchMode = false;
+      _isSorted = true;
     });
   }
 
@@ -149,23 +153,17 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
             // 검색 모드
             if (_isSearchMode) {
               final query = filterState.searchQuery;
-              plates = plates
-                  .where((p) => p.plateNumber.endsWith(query))
-                  .toList();
+              plates = plates.where((p) => p.plateNumber.endsWith(query)).toList();
             }
 
             // 구역 필터 모드
             if (_isParkingAreaMode && _selectedParkingArea != null) {
-              plates = plates
-                  .where((p) => p.location == _selectedParkingArea)
-                  .toList();
+              plates = plates.where((p) => p.location == _selectedParkingArea).toList();
             }
 
             // 정렬
             plates.sort(
-                  (a, b) => _isSorted
-                  ? b.requestTime.compareTo(a.requestTime)
-                  : a.requestTime.compareTo(b.requestTime),
+              (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime),
             );
 
             // 구역 선택 화면
@@ -207,13 +205,13 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
           filterCondition: (request) => request.type == PlateType.parkingCompleted.firestoreValue,
           onPlateTap: (plateNumber, area) {
             context.read<PlateState>().toggleIsSelected(
-              collection: PlateType.parkingCompleted,
-              plateNumber: plateNumber,
-              userName: userName,
-              onError: (errorMessage) {
-                showFailedSnackbar(context, errorMessage);
-              },
-            );
+                  collection: PlateType.parkingCompleted,
+                  plateNumber: plateNumber,
+                  userName: userName,
+                  onError: (errorMessage) {
+                    showFailedSnackbar(context, errorMessage);
+                  },
+                );
           },
         ),
       ],

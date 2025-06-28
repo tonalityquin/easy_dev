@@ -8,6 +8,9 @@ import '../../screens/hq_pages/human_resource.dart';
 import '../../screens/hq_pages/head_quarter.dart';
 import '../../enums/plate_type.dart';
 
+/// ✅ ParkingCompletedPage에 연결할 GlobalKey
+final GlobalKey parkingCompletedKey = GlobalKey();
+
 class PageInfo {
   final String title;
   final Widget page;
@@ -20,7 +23,7 @@ class PageInfo {
   });
 }
 
-const List<PageInfo> defaultPages = [
+final List<PageInfo> defaultPages = [
   PageInfo(
     title: '입차 요청',
     page: ParkingRequestPage(),
@@ -28,7 +31,7 @@ const List<PageInfo> defaultPages = [
   ),
   PageInfo(
     title: '입차 완료',
-    page: ParkingCompletedPage(),
+    page: ParkingCompletedPage(key: parkingCompletedKey),
     collectionKey: PlateType.parkingCompleted,
   ),
   PageInfo(
@@ -51,7 +54,6 @@ class HqPageInfo {
   const HqPageInfo(this.title, this.page, this.icon);
 }
 
-/// 🔹 hq Pages
 final List<HqPageInfo> hqPage = [
   HqPageInfo('HR', HumanResource(), Icon(Icons.people)),
   HqPageInfo('HQ', HeadQuarter(), Icon(Icons.apartment)),

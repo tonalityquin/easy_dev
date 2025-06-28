@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../screens/type_pages/parking_completed_page.dart';
 import 'page_info.dart';
 
 class PageState with ChangeNotifier {
@@ -16,7 +17,7 @@ class PageState with ChangeNotifier {
     notifyListeners();
   }
 
-  PageState({required this.pages}) : _selectedIndex = pages.isNotEmpty ? 0 : throw Exception("🚨 페이지 리스트가 비어 있습니다.");
+  PageState({required this.pages}) : _selectedIndex = pages.isNotEmpty ? 1 : throw Exception("🚨 페이지 리스트가 비어 있습니다.");
 
   String get selectedPageTitle => pages[_selectedIndex].title;
 
@@ -27,6 +28,12 @@ class PageState with ChangeNotifier {
       if (onError != null) onError(error);
       return;
     }
+
+    // ✅ index가 1이면 ParkingCompletedPage 상태를 초기화
+    if (index == 1) {
+      ParkingCompletedPage.reset(parkingCompletedKey);
+    }
+
     _selectedIndex = index;
     notifyListeners();
   }
