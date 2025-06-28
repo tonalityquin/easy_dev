@@ -34,7 +34,8 @@ class TypePage extends StatelessWidget {
 
               final currentPage = pageState.pages[pageState.selectedIndex];
               final collection = currentPage.collectionKey;
-              final selectedPlate = plateState.getSelectedPlate(collection, userName);
+              final selectedPlate =
+              plateState.getSelectedPlate(collection, userName);
 
               if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
                 await plateState.toggleIsSelected(
@@ -152,10 +153,10 @@ class _RefreshableBodyState extends State<RefreshableBody> {
 
   Widget _buildCurrentPage(int index) {
     if (index == 0) {
-      // ✅ ParkingCompletedPage → 캐시하지 않고 매번 새롭게 생성
+      // ✅ 입차 요청 페이지는 캐싱 안 함
       return defaultPages[0].page;
     } else {
-      // ✅ 나머지는 IndexedStack 안에 캐싱
+      // ✅ 나머지는 IndexedStack으로 유지
       return IndexedStack(
         index: index - 1,
         children: defaultPages
@@ -182,7 +183,17 @@ class PageBottomNavigation extends StatelessWidget {
 
         return BottomNavigationBar(
           currentIndex: pageState.selectedIndex,
-          onTap: pageState.onItemTapped,
+          onTap: (index) {
+            pageState.onItemTapped(
+              context,
+              index,
+              onError: (msg) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(msg)),
+                );
+              },
+            );
+          },
           selectedItemColor: selectedColor,
           unselectedItemColor: unselectedColor,
           showUnselectedLabels: true,
@@ -192,7 +203,7 @@ class PageBottomNavigation extends StatelessWidget {
             pageState.pages.length,
                 (index) {
               final pageInfo = pageState.pages[index];
-              final bool isSelected = pageState.selectedIndex == index;
+              final isSelected = pageState.selectedIndex == index;
 
               return BottomNavigationBarItem(
                 icon: FutureBuilder<int>(
