@@ -17,72 +17,41 @@ class TopNavigation extends StatelessWidget {
     final selectedArea = areaState.currentArea;
     final isAreaSelectable = true;
 
-    return GestureDetector(
-      onTap: () => showAreaPickerDialog(
-        context: context,
-        areaState: areaState,
-        plateState: plateState,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(CupertinoIcons.car, size: 18, color: Colors.blueAccent),
-          const SizedBox(width: 6),
-          Text(
-            selectedArea.isNotEmpty ? selectedArea : '지역 없음',
-            style: const TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w600,
-              color: Colors.black87,
-            ),
+    return Material(
+      // InkWell의 splash/highlight가 보이도록 투명한 Material 배경
+      color: Colors.transparent,
+      child: InkWell(
+        // AppBar 전체 영역을 터치 가능하게
+        onTap: () => showAreaPickerDialog(
+          context: context,
+          areaState: areaState,
+          plateState: plateState,
+        ),
+        splashColor: Colors.grey.withOpacity(0.2),
+        highlightColor: Colors.grey.withOpacity(0.1),
+        child: SizedBox(
+          width: double.infinity,    // 가능한 가로 전체 영역 차지
+          height: kToolbarHeight,    // AppBar 높이만큼 확보
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(CupertinoIcons.car, size: 18, color: Colors.blueAccent),
+              const SizedBox(width: 6),
+              Text(
+                selectedArea.isNotEmpty ? selectedArea : '지역 없음',
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+              if (isAreaSelectable) ...[
+                const SizedBox(width: 4),
+                const Icon(CupertinoIcons.chevron_down, size: 14, color: Colors.grey),
+              ],
+            ],
           ),
-          if (isAreaSelectable) ...[
-            const SizedBox(width: 4),
-            const Icon(CupertinoIcons.chevron_down, size: 14, color: Colors.grey),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-/// ✅ 본사 페이지 예시
-class HeadquarterPage extends StatelessWidget {
-  const HeadquarterPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const TopNavigation(),
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
-      ),
-      body: const Center(
-        child: Text('🏢 본사 페이지'),
-      ),
-    );
-  }
-}
-
-/// ✅ 일반 지역(TypePage) 예시
-class TypePage extends StatelessWidget {
-  const TypePage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const TopNavigation(),
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
-      ),
-      body: const Center(
-        child: Text('🛠 번호 등록 | 업무 보조'),
+        ),
       ),
     );
   }
