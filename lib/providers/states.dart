@@ -73,7 +73,7 @@ final List<SingleChildWidget> stateProviders = [
     },
   ),
 
-  // 🔍 차량 검색 필터 상태
+  // 🔍 차량 검색 필터 상태 - 앱 첫 실행 시 create :, currentArea로 지역 변경 시 update
   ChangeNotifierProxyProvider<AreaState, FilterPlate>(
     create: (context) => FilterPlate(
       context.read<PlateRepository>(),

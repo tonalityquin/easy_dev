@@ -7,15 +7,19 @@ import '../../repositories/bill_repo/bill_repository.dart';
 import '../area/area_state.dart';
 
 class BillState extends ChangeNotifier {
+  // 🔹 1. 필드
   final BillRepository _repository;
   final AreaState _areaState;
 
+  List<BillModel> _bills = [];
+  String? _selectedBillId;
+  bool _isLoading = true;
+  String _previousArea = '';
+
+  // 🔹 2. 생성자
   BillState(this._repository, this._areaState) {
-    debugPrint('✅ BillState 생성됨');
-    // ✅ 앱 시작 시 캐시 우선 호출
     loadFromBillCache();
 
-    // ✅ 지역 상태가 바뀔 경우 캐시만 다시 읽고 Firestore 호출 트리거 안 함
     _areaState.addListener(() async {
       final currentArea = _areaState.currentArea.trim();
       if (currentArea != _previousArea) {
@@ -25,11 +29,7 @@ class BillState extends ChangeNotifier {
     });
   }
 
-  List<BillModel> _bills = [];
-  String? _selectedBillId;
-  bool _isLoading = true;
-  String _previousArea = '';
-
+  // 🔹 3. 게터
   List<BillModel> get bills => _bills;
 
   String? get selectedBillId => _selectedBillId;
@@ -37,14 +37,16 @@ class BillState extends ChangeNotifier {
   bool get isLoading => _isLoading;
 
   BillModel get emptyModel => BillModel(
-    id: '',
-    countType: '',
-    area: '',
-    basicStandard: 0,
-    basicAmount: 0,
-    addStandard: 0,
-    addAmount: 0,
-  );
+        id: '',
+        countType: '',
+        area: '',
+        basicStandard: 0,
+        basicAmount: 0,
+        addStandard: 0,
+        addAmount: 0,
+      );
+
+  // 🔹 4. Public 메서드
 
   /// ✅ SharedPreferences 캐시 우선 로드
   Future<void> loadFromBillCache() async {
@@ -55,9 +57,7 @@ class BillState extends ChangeNotifier {
     if (cachedJson != null) {
       try {
         final decoded = json.decode(cachedJson) as List;
-        _bills = decoded
-            .map((e) => BillModel.fromCacheMap(Map<String, dynamic>.from(e)))
-            .toList();
+        _bills = decoded.map((e) => BillModel.fromCacheMap(Map<String, dynamic>.from(e))).toList();
         _selectedBillId = null;
         _previousArea = currentArea;
         _isLoading = false;
@@ -89,8 +89,7 @@ class BillState extends ChangeNotifier {
       final currentIds = _bills.map((e) => e.id).toSet();
       final newIds = data.map((e) => e.id).toSet();
 
-      final isIdentical =
-          currentIds.length == newIds.length && currentIds.containsAll(newIds);
+      final isIdentical = currentIds.length == newIds.length && currentIds.containsAll(newIds);
 
       if (isIdentical) {
         debugPrint('✅ Firestore 데이터가 캐시와 동일 → 갱신 없음');
@@ -99,8 +98,7 @@ class BillState extends ChangeNotifier {
         _selectedBillId = null;
 
         final prefs = await SharedPreferences.getInstance();
-        final jsonData =
-        json.encode(data.map((e) => e.toCacheMap()).toList());
+        final jsonData = json.encode(data.map((e) => e.toCacheMap()).toList());
         await prefs.setString('cached_bills_$currentArea', jsonData);
 
         debugPrint('✅ Firestore 정산 데이터 캐시에 갱신됨 (area: $currentArea)');
@@ -115,13 +113,13 @@ class BillState extends ChangeNotifier {
 
   /// ✅ 정산 데이터 추가
   Future<void> addBill(
-      String countType,
-      String area,
-      String basicStandard,
-      String basicAmount,
-      String addStandard,
-      String addAmount,
-      ) async {
+    String countType,
+    String area,
+    String basicStandard,
+    String basicAmount,
+    String addStandard,
+    String addAmount,
+  ) async {
     try {
       final bill = BillModel(
         id: '${countType}_$area',
@@ -144,9 +142,9 @@ class BillState extends ChangeNotifier {
 
   /// ✅ 정산 데이터 삭제
   Future<void> deleteBill(
-      List<String> ids, {
-        void Function(String)? onError,
-      }) async {
+    List<String> ids, {
+    void Function(String)? onError,
+  }) async {
     try {
       await _repository.deleteBill(ids);
       // ✅ 삭제 후 수동 새로고침 호출
@@ -161,7 +159,7 @@ class BillState extends ChangeNotifier {
     if (_selectedBillId == id) {
       _selectedBillId = null; // 같은 거 누르면 해제
     } else {
-      _selectedBillId = id;   // 새로 선택
+      _selectedBillId = id; // 새로 선택
     }
     notifyListeners();
   }

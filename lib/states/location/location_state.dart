@@ -7,10 +7,17 @@ import '../../models/location_model.dart';
 import '../area/area_state.dart';
 
 class LocationState extends ChangeNotifier {
+  // 🔹 1. 필드
   final LocationRepository _repository;
   final AreaState _areaState;
   final List<IconData> _navigationIcons = [Icons.add, Icons.delete];
 
+  List<LocationModel> _locations = [];
+  String? _selectedLocationId;
+  String _previousArea = '';
+  bool _isLoading = true;
+
+  // 🔹 2. 생성자
   LocationState(this._repository, this._areaState) {
     loadFromLocationCache();
 
@@ -23,17 +30,16 @@ class LocationState extends ChangeNotifier {
     });
   }
 
-  List<LocationModel> _locations = [];
+  // 🔹 3. 게터
   List<LocationModel> get locations => _locations;
 
   List<IconData> get navigationIcons => _navigationIcons;
 
-  String? _selectedLocationId;
   String? get selectedLocationId => _selectedLocationId;
 
-  String _previousArea = '';
-  bool _isLoading = true;
   bool get isLoading => _isLoading;
+
+  // 🔹 4. Public 메서드
 
   /// ✅ SharedPreferences 캐시 우선 조회
   Future<void> loadFromLocationCache() async {
@@ -166,10 +172,5 @@ class LocationState extends ChangeNotifier {
       _selectedLocationId = id;
     }
     notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
   }
 }

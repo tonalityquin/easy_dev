@@ -8,12 +8,9 @@ import '../../utils/plate_tts_listener_service.dart';
 import '../area/area_state.dart';
 
 class UserState extends ChangeNotifier {
+  // 🔹 1. 필드
   final UserRepository _repository;
   final AreaState _areaState;
-
-  UserState(this._repository, this._areaState) {
-    _areaState.addListener(_fetchUsersByAreaWithCache);
-  }
 
   UserModel? _user;
   List<UserModel> _users = [];
@@ -23,6 +20,12 @@ class UserState extends ChangeNotifier {
   StreamSubscription<List<UserModel>>? _subscription;
   String _previousSelectedArea = '';
 
+  // 🔹 2. 생성자
+  UserState(this._repository, this._areaState) {
+    _areaState.addListener(_fetchUsersByAreaWithCache);
+  }
+
+  // 🔹 3. 게터
   UserModel? get user => _user;
   List<UserModel> get users => _users;
   String? get selectedUserId => _selectedUserId;
@@ -40,25 +43,7 @@ class UserState extends ChangeNotifier {
   String get division => _user?.divisions.firstOrNull ?? '';
   String get currentArea => _user?.currentArea ?? area;
 
-  Future<void> _fetchUsersByAreaWithCache() async {
-    final selectedArea = _areaState.currentArea.trim();
-    if (selectedArea.isEmpty || _previousSelectedArea == selectedArea) return;
-
-    _previousSelectedArea = selectedArea;
-    _isLoading = true;
-    notifyListeners();
-
-    try {
-      final data = await _repository.getUsersBySelectedAreaOnceWithCache(selectedArea);
-      _users = data;
-      _selectedUserId = null;
-    } catch (e) {
-      debugPrint('🔥 Error fetching cached users: $e');
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
+  // 🔹 4. Public 메서드
 
   Future<void> refreshUsersBySelectedAreaAndCache() async {
     final selectedArea = _areaState.currentArea.trim();
@@ -136,9 +121,9 @@ class UserState extends ChangeNotifier {
 
   Future<void> toggleUserCard(String id) async {
     if (_selectedUserId == id) {
-      _selectedUserId = null; // 해제
+      _selectedUserId = null;
     } else {
-      _selectedUserId = id;   // 선택
+      _selectedUserId = id;
     }
     notifyListeners();
   }
@@ -218,6 +203,30 @@ class UserState extends ChangeNotifier {
 
     PlateTtsListenerService.start(newArea);
   }
+
+  // 🔹 5. Private 메서드
+
+  Future<void> _fetchUsersByAreaWithCache() async {
+    final selectedArea = _areaState.currentArea.trim();
+    if (selectedArea.isEmpty || _previousSelectedArea == selectedArea) return;
+
+    _previousSelectedArea = selectedArea;
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final data = await _repository.getUsersBySelectedAreaOnceWithCache(selectedArea);
+      _users = data;
+      _selectedUserId = null;
+    } catch (e) {
+      debugPrint('🔥 Error fetching cached users: $e');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // 🔹 6. Override
 
   @override
   void dispose() {
