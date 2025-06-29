@@ -127,12 +127,12 @@ class LoginController {
       final user = await userRepository.getUserByPhone(phone);
 
       if (context.mounted) {
-        debugPrint("[DEBUG] 입력값 → name: $name, phone: $phone, password: $password");
+        debugPrint("login, 입력값 → name: $name, phone: $phone, password: $password");
 
         if (user != null) {
-          debugPrint("[DEBUG] DB 유저 → name: ${user.name}, phone: ${user.phone}, password: ${user.password}");
+          debugPrint("login, DB 유저 → name: ${user.name}, phone: ${user.phone}, password: ${user.password}");
         } else {
-          debugPrint("[DEBUG] Firestore에서 user가 null로 반환됨");
+          debugPrint("login, DB에서 user가 null로 반환됨");
         }
       }
 
@@ -143,7 +143,7 @@ class LoginController {
         final updatedUser = user.copyWith(isSaved: true);
         userState.updateUserCard(updatedUser);
         final prefs = await SharedPreferences.getInstance();
-        debugPrint("📌 로그인 직후 저장된 phone=${prefs.getString('phone')} / area=${prefs.getString('area')}");
+        debugPrint("login, 로그인 직후 저장된 phone=${prefs.getString('phone')} / area=${prefs.getString('area')}");
         areaState.updateArea(updatedUser.areas.firstOrNull ?? '');
 
         if (context.mounted) {
@@ -153,12 +153,12 @@ class LoginController {
         }
       } else {
         if (context.mounted) {
-          showFailedSnackbar(context, '이름 또는 비밀번호가 올바르지 않습니다.');
+          showFailedSnackbar(context, 'login, 이름 또는 비밀번호가 올바르지 않습니다.');
         }
       }
     } catch (e) {
       if (context.mounted) {
-        showFailedSnackbar(context, '로그인 실패: $e');
+        showFailedSnackbar(context, 'login, 로그인 실패: $e');
       }
     } finally {
       setState(() => isLoading = false);

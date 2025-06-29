@@ -147,19 +147,19 @@ class UserState extends ChangeNotifier {
   }
 
   Future<void> loadUserToLogIn() async {
-    debugPrint("[DEBUG] 자동 로그인 시도");
+    debugPrint("loadUserToLogIn, 자동 로그인 시도");
 
     try {
       final prefs = await SharedPreferences.getInstance();
       final phone = prefs.getString('phone')?.trim();
       final selectedArea = prefs.getString('selectedArea')?.trim();
 
-      debugPrint("📥 자동 로그인 정보 → phone=$phone / selectedArea=$selectedArea");
+      debugPrint("loadUserToLogIn, 자동 로그인 정보 → phone=$phone / selectedArea=$selectedArea");
 
       if (phone == null || selectedArea == null) return;
 
       final userId = "$phone-$selectedArea";
-      debugPrint("[DEBUG] 시도할 userId: $userId");
+      debugPrint("loadUserToLogIn, 시도할 userId: $userId");
 
       var userData = await _repository.getUserById(userId);
       if (userData == null) return;
@@ -175,13 +175,13 @@ class UserState extends ChangeNotifier {
       notifyListeners();
 
       Future.microtask(() => PlateTtsListenerService.start(currentArea));
-      debugPrint("[TTS] 감지 시작: $currentArea");
+      debugPrint("loadUserToLogIn, TTS 감지 시작: $currentArea");
     } catch (e) {
-      debugPrint("[DEBUG] 자동 로그인 오류: $e");
+      debugPrint("loadUserToLogIn, 자동 로그인 오류: $e");
     }
   }
 
-  Future<void> updateCurrentArea(String newArea) async {
+  Future<void> areaPickerCurrentArea(String newArea) async {
     if (_user == null) return;
 
     final updatedUser = _user!.copyWith(currentArea: newArea);
@@ -195,10 +195,10 @@ class UserState extends ChangeNotifier {
         newArea.trim(),
       );
       debugPrint(
-        "✅ Firestore currentArea 업데이트 완료 → ${_user!.phone.trim()}-${_user!.areas.firstOrNull} → $newArea",
+        "areaPickerCurrentArea, currentArea 업데이트 완료 → ${_user!.phone.trim()}-${_user!.areas.firstOrNull} → $newArea",
       );
     } catch (e) {
-      debugPrint("❌ Firestore currentArea 업데이트 실패: $e");
+      debugPrint("areaPickerCurrentArea, currentArea 업데이트 실패: $e");
     }
 
     PlateTtsListenerService.start(newArea);
@@ -219,7 +219,7 @@ class UserState extends ChangeNotifier {
       _users = data;
       _selectedUserId = null;
     } catch (e) {
-      debugPrint('🔥 Error fetching cached users: $e');
+      debugPrint('_fetchUsersByAreaWithCache, Error fetching cached users: $e');
     } finally {
       _isLoading = false;
       notifyListeners();

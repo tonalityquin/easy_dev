@@ -75,7 +75,7 @@ void showAreaPickerDialog({
                       Navigator.of(context).pop();
                       areaState.updateArea(tempSelected);
 
-                      await userState.updateCurrentArea(tempSelected);
+                      await userState.areaPickerCurrentArea(tempSelected);
                       plateState.syncWithAreaState();
 
                       final userDivision = userState.user?.divisions.first ?? '';

@@ -19,23 +19,23 @@ class FirestoreUserRepository implements UserRepository {
 
   @override
   Future<UserModel?> getUserByPhone(String phone) async {
-    debugPrint("[DEBUG] Firestore 사용자 조회 시작 - phone: $phone");
+    debugPrint("getUserByPhone, 사용자 조회 시작 - phone: $phone");
 
     try {
       final querySnapshot = await _getCollectionRef().where('phone', isEqualTo: phone).get();
 
-      debugPrint("[DEBUG] Firestore 조회 완료 - 결과 개수: ${querySnapshot.docs.length}");
+      debugPrint("getUserByPhone, 조회 완료 - 결과 개수: ${querySnapshot.docs.length}");
 
       if (querySnapshot.docs.isNotEmpty) {
         final doc = querySnapshot.docs.first;
-        debugPrint("[DEBUG] 사용자 찾음 - ID: ${doc.id}, 데이터: ${doc.data()}");
+        debugPrint("getUserByPhone, 사용자 찾음 - ID: ${doc.id}, 데이터: ${doc.data()}");
 
         return UserModel.fromMap(doc.id, doc.data());
       } else {
-        debugPrint("[DEBUG] Firestore에서 해당 전화번호 사용자를 찾을 수 없음");
+        debugPrint("getUserByPhone, DB에서 해당 전화번호 사용자를 찾을 수 없음");
       }
     } catch (e) {
-      debugPrint("[DEBUG] Firestore 사용자 조회 중 예외 발생: $e");
+      debugPrint("getUserByPhone, DB에서 사용자 조회 중 예외 발생: $e");
     }
 
     return null;
@@ -43,16 +43,16 @@ class FirestoreUserRepository implements UserRepository {
 
   @override
   Future<UserModel?> getUserById(String userId) async {
-    debugPrint("📥 getUserById() 호출됨 → 요청 ID: $userId");
+    debugPrint("getUserById, 호출됨 → 요청 ID: $userId");
 
     final doc = await _getCollectionRef().doc(userId).get();
     if (!doc.exists) {
-      debugPrint("❌ Firestore 문서 없음 → userId=$userId");
+      debugPrint("getUserById, DB 문서 없음 → userId=$userId");
       return null;
     }
 
     final data = doc.data()!;
-    debugPrint("✅ Firestore 문서 조회 성공 → userId=$userId / 데이터: $data");
+    debugPrint("getUserById, DB에서 문서 조회 성공 → userId=$userId / 데이터: $data");
 
     return UserModel.fromMap(doc.id, data);
   }
