@@ -32,12 +32,6 @@ class FirestoreLocationRepository implements LocationRepository {
     await batch.commit();
   }
 
-  @override
-  Future<void> toggleLocationSelection(String id, bool isSelected) async {
-    final docRef = _firestore.collection('locations').doc(id);
-    await docRef.update({'isSelected': isSelected});
-  }
-
   /// 🔁 복합 주차 구역 저장 시 용량(capacity)도 포함
   @override
   Future<void> addCompositeLocation(

@@ -8,7 +8,6 @@ abstract class LocationRepository {
 
   Future<void> deleteLocations(List<String> ids);
 
-  Future<void> toggleLocationSelection(String id, bool isSelected);
 
   /// ✅ 수정: 하위 구역 이름과 용량 정보 포함
   Future<void> addCompositeLocation(

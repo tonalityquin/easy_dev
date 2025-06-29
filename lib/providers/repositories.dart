@@ -124,9 +124,6 @@ class DummyLocationRepository implements LocationRepository {
   Future<List<LocationModel>> getLocationsOnce(String area) => throw UnimplementedError();
 
   @override
-  Future<void> toggleLocationSelection(String id, bool selected) => throw UnimplementedError();
-
-  @override
   Future<void> addCompositeLocation(
     String parent,
     List<Map<String, dynamic>> subs, // ✅ 수정된 부분
