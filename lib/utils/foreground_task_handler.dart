@@ -1,5 +1,5 @@
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
-import '../services/plate_tts_listener_service.dart';
+import 'plate_tts_listener_service.dart';
 
 @pragma('vm:entry-point')
 class MyTaskHandler implements TaskHandler {
