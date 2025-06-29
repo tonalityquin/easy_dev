@@ -65,7 +65,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
       // ✅ Firestore 호출 대신 캐시만 우선 읽기
       await billState.manualBillRefresh();
-      await statusState.loadFromCache(); // 캐시 우선
+      await statusState.loadFromStatusCache(); // 캐시 우선
 
       final areaStatuses = statusState.statuses
           .where((status) => status.area == currentArea && status.isActive)

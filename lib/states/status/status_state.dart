@@ -12,7 +12,7 @@ class StatusState extends ChangeNotifier {
   final TextEditingController textController = TextEditingController();
 
   StatusState(this._repository, this._areaState) {
-    loadFromCache(); // ✅ 캐시 우선 로드
+    loadFromStatusCache(); // ✅ 캐시 우선 로드
     _areaState.addListener(_handleAreaChange); // 지역 변경 감지
   }
 
@@ -29,7 +29,7 @@ class StatusState extends ChangeNotifier {
   bool get isLoading => _isLoading;
 
   /// ✅ 캐시에서 상태 우선 로드 (유효기간 검사 없음)
-  Future<void> loadFromCache() async {
+  Future<void> loadFromStatusCache() async {
     final currentArea = _areaState.currentArea.trim();
     final prefs = await SharedPreferences.getInstance();
 
