@@ -43,17 +43,14 @@ class FirestoreBillRepository implements BillRepository {
   /// 정산 유형 삭제
   @override
   Future<void> deleteBill(List<String> ids) async {
-    final batch = _firestore.batch();
-    for (final id in ids) {
-      final docRef = _firestore.collection('bill').doc(id);
-      batch.delete(docRef);
-    }
+    if (ids.isEmpty) return;
 
+    final docRef = _firestore.collection('bill').doc(ids.first);
     try {
-      await batch.commit();
-      debugPrint("✅ Firestore 조정 데이터 ${ids.length}건 삭제 완료");
+      await docRef.delete();
+      debugPrint("✅ Firestore 문서 삭제 성공: ${ids.first}");
     } catch (e) {
-      debugPrint("🔥 Firestore 조정 삭제 실패: $e");
+      debugPrint("🔥 Firestore 문서 삭제 실패: $e");
       rethrow;
     }
   }
