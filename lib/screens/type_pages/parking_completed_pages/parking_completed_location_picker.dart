@@ -73,7 +73,7 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
               )
             : const Icon(Icons.refresh),
         label: const Text(
-          "주차 구역 수동 새로고침",
+          "수동 새로고침",
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
         onPressed: _isRefreshing

@@ -146,7 +146,6 @@ class BillState extends ChangeNotifier {
   }) async {
     try {
       await _repository.deleteBill(ids);
-      // ✅ 삭제 후 수동 새로고침 호출
       await loadFromBillCache();
     } catch (e) {
       onError?.call('🚨 정산 데이터 삭제 실패: $e');

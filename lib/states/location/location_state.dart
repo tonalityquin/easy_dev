@@ -124,7 +124,7 @@ class LocationState extends ChangeNotifier {
       );
 
       await _repository.addLocation(location);
-      await manualLocationRefresh();
+      await loadFromLocationCache();
     } catch (e) {
       onError?.call('🚨 주차 구역 추가 실패: $e');
     }
@@ -145,7 +145,7 @@ class LocationState extends ChangeNotifier {
       }).toList();
 
       await _repository.addCompositeLocation(safeParent, safeSubs, area);
-      await manualLocationRefresh();
+      await loadFromLocationCache();
     } catch (e) {
       onError?.call('🚨 복합 주차 구역 추가 실패: $e');
     }
@@ -158,7 +158,7 @@ class LocationState extends ChangeNotifier {
       }) async {
     try {
       await _repository.deleteLocations(ids);
-      await manualLocationRefresh();
+      await loadFromLocationCache();
     } catch (e) {
       onError?.call('🚨 주차 구역 삭제 실패: $e');
     }
