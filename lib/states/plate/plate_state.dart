@@ -44,7 +44,7 @@ class PlateState extends ChangeNotifier {
     _cancelAllSubscriptions();
 
     _isLoading = true;
-    plateCounts();
+    plateCountsForDebugPrint();
 
     int receivedCount = 0;
     final totalCollections = PlateType.values.length;
@@ -86,7 +86,7 @@ class PlateState extends ChangeNotifier {
 
         if (receivedCount == totalCollections) {
           _isLoading = false;
-          plateCounts();
+          plateCountsForDebugPrint();
         }
       }, onError: (error) {
         debugPrint('🔥 Plate stream error: $error');
@@ -108,7 +108,7 @@ class PlateState extends ChangeNotifier {
     _initializeSubscriptions();
   }
 
-  void plateCounts() {
+  void plateCountsForDebugPrint() {
     if (_isLoading) {
       debugPrint('🕐 지역 Plate 상태 수신 대기 중...');
     } else {

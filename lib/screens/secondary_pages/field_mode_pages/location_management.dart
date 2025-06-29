@@ -37,7 +37,7 @@ class _LocationManagementState extends State<LocationManagement> {
 
                 if (type == 'single') {
                   final name = location['name']?.toString() ?? '';
-                  locationState.addLocation(
+                  locationState.addSingleLocation(
                     name,
                     currentArea,
                     onError: (error) => showFailedSnackbar(context, '🚨 주차 구역 추가 실패: $error'),

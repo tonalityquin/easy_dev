@@ -103,7 +103,7 @@ class LocationState extends ChangeNotifier {
   }
 
   /// ➕ 단일 주차 구역 추가
-  Future<void> addLocation(
+  Future<void> addSingleLocation(
       String locationName,
       String area, {
         int capacity = 0,

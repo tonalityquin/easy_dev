@@ -15,7 +15,7 @@ class FilterPlate extends ChangeNotifier {
 
   FilterPlate(this._repository, this.currentArea) {
     debugPrint("✅ FilterPlate created with area: $currentArea");
-    _initializeData();
+    _initializeFilterData();
   }
 
   String? _searchQuery;
@@ -37,7 +37,7 @@ class FilterPlate extends ChangeNotifier {
   }
 
   /// 🔁 지역 기반으로 PlateType별 스트림 구독
-  void _initializeData() {
+  void _initializeFilterData() {
     for (final plateType in PlateType.values) {
       _subscriptions[plateType]?.cancel();
 
