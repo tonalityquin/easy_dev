@@ -132,8 +132,7 @@ class BillState extends ChangeNotifier {
       );
 
       await _repository.addBill(bill);
-      // ✅ 추가 후 수동 새로고침 호출
-      await manualBillRefresh();
+      await loadFromBillCache();
     } catch (e) {
       debugPrint('🔥 Bill 추가 실패: $e');
       rethrow;
@@ -148,7 +147,7 @@ class BillState extends ChangeNotifier {
     try {
       await _repository.deleteBill(ids);
       // ✅ 삭제 후 수동 새로고침 호출
-      await manualBillRefresh();
+      await loadFromBillCache();
     } catch (e) {
       onError?.call('🚨 정산 데이터 삭제 실패: $e');
     }
