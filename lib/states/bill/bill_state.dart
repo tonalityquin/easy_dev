@@ -12,14 +12,14 @@ class BillState extends ChangeNotifier {
 
   BillState(this._repository, this._areaState) {
     // ✅ 앱 시작 시 캐시 우선 호출
-    loadFromCache();
+    loadFromBillCache();
 
     // ✅ 지역 상태가 바뀔 경우 캐시만 다시 읽고 Firestore 호출 트리거 안 함
     _areaState.addListener(() async {
       final currentArea = _areaState.currentArea.trim();
       if (currentArea != _previousArea) {
         _previousArea = currentArea;
-        await loadFromCache();
+        await loadFromBillCache();
       }
     });
   }
@@ -44,7 +44,7 @@ class BillState extends ChangeNotifier {
   );
 
   /// ✅ SharedPreferences 캐시 우선 로드
-  Future<void> loadFromCache() async {
+  Future<void> loadFromBillCache() async {
     final prefs = await SharedPreferences.getInstance();
     final currentArea = _areaState.currentArea.trim();
     final cachedJson = prefs.getString('cached_bills_$currentArea');
@@ -152,7 +152,7 @@ class BillState extends ChangeNotifier {
   }
 
   /// ✅ 선택 상태 토글
-  void toggleSelection(String id) {
+  void toggleBillSelection(String id) {
     _selectedBill[id] = !(_selectedBill[id] ?? false);
     notifyListeners();
   }

@@ -189,7 +189,7 @@ class _LocationManagementState extends State<LocationManagement> {
         return LocationContainer(
           location: location.locationName,
           isSelected: isSelected,
-          onTap: () => state.toggleSelection(location.id),
+          onTap: () => state.toggleLocationSelection(location.id),
           type: location.type,
           parent: location.parent,
           subtitle: subtitle,
@@ -212,7 +212,7 @@ class _LocationManagementState extends State<LocationManagement> {
             return LocationContainer(
               location: location.locationName,
               isSelected: isSelected,
-              onTap: () => state.toggleSelection(location.id),
+              onTap: () => state.toggleLocationSelection(location.id),
               type: location.type,
               parent: location.parent,
               subtitle: subtitle,

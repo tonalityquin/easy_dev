@@ -13,14 +13,14 @@ class LocationState extends ChangeNotifier {
 
   LocationState(this._repository, this._areaState) {
     // ✅ 앱 시작 시 캐시만 우선적으로 읽기
-    loadFromCache();
+    loadFromLocationCache();
 
     // ✅ 지역 상태가 변경되면 캐시만 다시 읽기 (Firestore 호출 없음)
     _areaState.addListener(() async {
       final currentArea = _areaState.currentArea.trim();
       if (currentArea != _previousArea) {
         _previousArea = currentArea;
-        await loadFromCache();
+        await loadFromLocationCache();
       }
     });
   }
@@ -38,7 +38,7 @@ class LocationState extends ChangeNotifier {
   bool get isLoading => _isLoading;
 
   /// ✅ SharedPreferences 캐시 우선 조회
-  Future<void> loadFromCache() async {
+  Future<void> loadFromLocationCache() async {
     final prefs = await SharedPreferences.getInstance();
     final currentArea = _areaState.currentArea.trim();
     final cachedJson = prefs.getString('cached_locations_$currentArea');
@@ -67,7 +67,7 @@ class LocationState extends ChangeNotifier {
   }
 
   /// 🔄 수동 Firestore 호출 트리거
-  Future<void> manualRefresh() async {
+  Future<void> manualLocationRefresh() async {
     final currentArea = _areaState.currentArea.trim();
     debugPrint('🔥 수동 새로고침 Firestore 호출 → $currentArea');
 
@@ -121,7 +121,7 @@ class LocationState extends ChangeNotifier {
       );
 
       await _repository.addLocation(location);
-      await manualRefresh(); // Firestore 호출 트리거
+      await manualLocationRefresh(); // Firestore 호출 트리거
     } catch (e) {
       onError?.call('🚨 주차 구역 추가 실패: $e');
     }
@@ -142,7 +142,7 @@ class LocationState extends ChangeNotifier {
       }).toList();
 
       await _repository.addCompositeLocation(safeParent, safeSubs, area);
-      await manualRefresh();
+      await manualLocationRefresh();
     } catch (e) {
       onError?.call('🚨 복합 주차 구역 추가 실패: $e');
     }
@@ -155,14 +155,14 @@ class LocationState extends ChangeNotifier {
       }) async {
     try {
       await _repository.deleteLocations(ids);
-      await manualRefresh();
+      await manualLocationRefresh();
     } catch (e) {
       onError?.call('🚨 주차 구역 삭제 실패: $e');
     }
   }
 
   /// ✅ 선택 상태 토글
-  Future<void> toggleSelection(String id) async {
+  Future<void> toggleLocationSelection(String id) async {
     final prev = _selectedLocations[id] ?? false;
     _selectedLocations[id] = !prev;
     notifyListeners();

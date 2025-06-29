@@ -70,20 +70,4 @@ class FirestoreLocationRepository implements LocationRepository {
 
     await batch.commit();
   }
-
-  Future<int> getPlateCountByLocation({
-    required String locationName,
-    required String area,
-    String type = 'parking_completed',
-  }) async {
-    final snapshot = await _firestore
-        .collection('plates')
-        .where('location', isEqualTo: locationName)
-        .where('area', isEqualTo: area)
-        .where('type', isEqualTo: type)
-        .count()
-        .get();
-
-    return snapshot.count ?? 0;
-  }
 }

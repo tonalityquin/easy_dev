@@ -130,7 +130,7 @@ class _BillManagementState extends State<BillManagement> {
                     rightTopText: "추가 기준: $addStandard",
                     rightBottomText: "추가 금액: $addAmount",
                     onTap: () {
-                      state.toggleSelection(id);
+                      state.toggleBillSelection(id);
                     },
                     isSelected: isSelected,
                   ),

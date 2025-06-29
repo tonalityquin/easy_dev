@@ -141,12 +141,7 @@ class PlateState extends ChangeNotifier {
     return plates;
   }
 
-  void updateSortOrder(PlateType type, bool descending) {
-    _isSortedMap[type] = descending;
-    _resubscribeForType(type);
-  }
-
-  void _resubscribeForType(PlateType type) async {
+  void _resubscribeForSort(PlateType type) async {
     final area = _areaState.currentArea;
 
     _subscriptions[type]?.cancel();
@@ -162,6 +157,11 @@ class PlateState extends ChangeNotifier {
     });
 
     _subscriptions[type] = subscription;
+  }
+
+  void updateSortOrder(PlateType type, bool descending) {
+    _isSortedMap[type] = descending;
+    _resubscribeForSort(type);
   }
 
   Future<void> updatePlateLocally(PlateType collection, PlateModel updatedPlate) async {

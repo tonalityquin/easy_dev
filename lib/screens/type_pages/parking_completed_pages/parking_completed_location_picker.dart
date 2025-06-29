@@ -82,7 +82,7 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                 setState(() => _isRefreshing = true);
 
                 // ✅ 주차 구역 새로고침
-                await locationState.manualRefresh();
+                await locationState.manualLocationRefresh();
 
                 // ✅ 정산 정보 새로고침
                 await context.read<BillState>().manualBillRefresh();
@@ -119,7 +119,7 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                     await Future.delayed(const Duration(milliseconds: 100));
 
                     // 📍 주차 구역 새로고침
-                    await locationState.manualRefresh();
+                    await locationState.manualLocationRefresh();
 
                     // 📍 정산 정보 새로고침
                     await context.read<BillState>().manualBillRefresh();
