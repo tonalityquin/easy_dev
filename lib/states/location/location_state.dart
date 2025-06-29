@@ -12,10 +12,8 @@ class LocationState extends ChangeNotifier {
   final List<IconData> _navigationIcons = [Icons.add, Icons.delete];
 
   LocationState(this._repository, this._areaState) {
-    // ✅ 앱 시작 시 캐시만 우선적으로 읽기
     loadFromLocationCache();
 
-    // ✅ 지역 상태가 변경되면 캐시만 다시 읽기 (Firestore 호출 없음)
     _areaState.addListener(() async {
       final currentArea = _areaState.currentArea.trim();
       if (currentArea != _previousArea) {
@@ -30,8 +28,8 @@ class LocationState extends ChangeNotifier {
 
   List<IconData> get navigationIcons => _navigationIcons;
 
-  Map<String, bool> _selectedLocations = {};
-  Map<String, bool> get selectedLocations => _selectedLocations;
+  String? _selectedLocationId;
+  String? get selectedLocationId => _selectedLocationId;
 
   String _previousArea = '';
   bool _isLoading = true;
@@ -49,7 +47,7 @@ class LocationState extends ChangeNotifier {
         _locations = decoded
             .map((e) => LocationModel.fromCacheMap(Map<String, dynamic>.from(e)))
             .toList();
-        _selectedLocations = {for (var loc in _locations) loc.id: loc.isSelected};
+        _selectedLocationId = null;
         _previousArea = currentArea;
         _isLoading = false;
         notifyListeners();
@@ -60,7 +58,7 @@ class LocationState extends ChangeNotifier {
     } else {
       debugPrint('⚠️ 캐시에 없음 → Firestore 호출 없음 (수동 새로고침에서만 호출)');
       _locations = [];
-      _selectedLocations = {};
+      _selectedLocationId = null;
       _isLoading = false;
       notifyListeners();
     }
@@ -77,7 +75,6 @@ class LocationState extends ChangeNotifier {
     try {
       final data = await _repository.getLocationsOnce(currentArea);
 
-      // 캐시된 목록과 Firestore 데이터를 비교
       final currentIds = _locations.map((e) => e.id).toSet();
       final newIds = data.map((e) => e.id).toSet();
       final isIdentical = currentIds.length == newIds.length && currentIds.containsAll(newIds);
@@ -86,7 +83,7 @@ class LocationState extends ChangeNotifier {
         debugPrint('✅ Firestore 데이터가 캐시와 동일 → 갱신 없음');
       } else {
         _locations = data;
-        _selectedLocations = {for (var loc in data) loc.id: loc.isSelected};
+        _selectedLocationId = null;
 
         final prefs = await SharedPreferences.getInstance();
         final jsonData = json.encode(data.map((e) => e.toCacheMap()).toList());
@@ -121,7 +118,7 @@ class LocationState extends ChangeNotifier {
       );
 
       await _repository.addLocation(location);
-      await manualLocationRefresh(); // Firestore 호출 트리거
+      await manualLocationRefresh();
     } catch (e) {
       onError?.call('🚨 주차 구역 추가 실패: $e');
     }
@@ -161,19 +158,14 @@ class LocationState extends ChangeNotifier {
     }
   }
 
-  /// ✅ 선택 상태 토글
+  /// ✅ 단일 선택 상태 토글
   Future<void> toggleLocationSelection(String id) async {
-    final prev = _selectedLocations[id] ?? false;
-    _selectedLocations[id] = !prev;
-    notifyListeners();
-
-    try {
-      await _repository.toggleLocationSelection(id, !prev);
-    } catch (e) {
-      debugPrint('🔥 선택 상태 전환 오류: $e');
-      _selectedLocations[id] = prev;
-      notifyListeners();
+    if (_selectedLocationId == id) {
+      _selectedLocationId = null;
+    } else {
+      _selectedLocationId = id;
     }
+    notifyListeners();
   }
 
   @override

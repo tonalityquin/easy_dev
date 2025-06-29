@@ -26,10 +26,6 @@ class _BillManagementState extends State<BillManagement> {
     });
   }
 
-  List<String> _getSelectedIds(BillState state) {
-    return state.selectedBill.entries.where((entry) => entry.value).map((entry) => entry.key).toList();
-  }
-
   void _showBillSettingDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -44,18 +40,24 @@ class _BillManagementState extends State<BillManagement> {
                 await context.read<BillState>().addBill(
                   billData['CountType'],
                   billData['area'],
-                  billData['basicStandard'].toString(), // 숫자값을 문자열로 변환하여 전달
+                  billData['basicStandard'].toString(),
                   billData['basicAmount'].toString(),
                   billData['addStandard'].toString(),
                   billData['addAmount'].toString(),
-                    );
+                );
                 if (context.mounted) {
-                  showSuccessSnackbar(context, '✅ 정산 데이터가 성공적으로 추가되었습니다. 앱을 재실행하세요.');
+                  showSuccessSnackbar(
+                    context,
+                    '✅ 정산 데이터가 성공적으로 추가되었습니다. 앱을 재실행하세요.',
+                  );
                 }
               } catch (e) {
                 debugPrint("🔥 데이터 추가 중 예외 발생: $e");
                 if (context.mounted) {
-                  showFailedSnackbar(context, '🚨 데이터 추가 중 오류가 발생했습니다: $e');
+                  showFailedSnackbar(
+                    context,
+                    '🚨 데이터 추가 중 오류가 발생했습니다: $e',
+                  );
                 }
               }
             },
@@ -67,9 +69,9 @@ class _BillManagementState extends State<BillManagement> {
 
   Future<void> _deleteSelectedBill(BuildContext context) async {
     final billState = context.read<BillState>();
-    final selectedIds = _getSelectedIds(billState);
+    final selectedId = billState.selectedBillId;
 
-    if (selectedIds.isEmpty) {
+    if (selectedId == null) {
       if (context.mounted) {
         showFailedSnackbar(context, '삭제할 항목을 선택하세요.');
       }
@@ -77,7 +79,7 @@ class _BillManagementState extends State<BillManagement> {
     }
 
     try {
-      await billState.deleteBill(selectedIds);
+      await billState.deleteBill([selectedId]);
       if (context.mounted) {
         showSuccessSnackbar(context, '선택된 항목이 삭제되었습니다.');
       }
@@ -104,10 +106,15 @@ class _BillManagementState extends State<BillManagement> {
       ),
       body: Consumer<BillState>(
         builder: (context, state, child) {
-          final currentArea = context.watch<AreaState>().currentArea.trim();
-          final bills = state.bills.where((bill) => bill.area.trim() == currentArea).toList();
+          final currentArea =
+          context.watch<AreaState>().currentArea.trim();
+          final bills = state.bills
+              .where((bill) => bill.area.trim() == currentArea)
+              .toList();
           if (bills.isEmpty) {
-            return const Center(child: Text('현재 지역에 해당하는 정산 데이터가 없습니다.'));
+            return const Center(
+              child: Text('현재 지역에 해당하는 정산 데이터가 없습니다.'),
+            );
           }
           return ListView.builder(
             itemCount: bills.length,
@@ -119,7 +126,7 @@ class _BillManagementState extends State<BillManagement> {
               final basicAmount = bill.basicAmount.toString();
               final addStandard = bill.addStandard.toString();
               final addAmount = bill.addAmount.toString();
-              final isSelected = state.selectedBill[id] ?? false;
+              final isSelected = state.selectedBillId == id;
 
               return Column(
                 children: [
@@ -134,7 +141,10 @@ class _BillManagementState extends State<BillManagement> {
                     },
                     isSelected: isSelected,
                   ),
-                  const Divider(height: 1.0, color: Colors.grey),
+                  const Divider(
+                    height: 1.0,
+                    color: Colors.grey,
+                  ),
                 ],
               );
             },

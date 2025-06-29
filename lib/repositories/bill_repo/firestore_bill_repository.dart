@@ -40,6 +40,7 @@ class FirestoreBillRepository implements BillRepository {
     }
   }
 
+  /// 정산 유형 삭제
   @override
   Future<void> deleteBill(List<String> ids) async {
     final batch = _firestore.batch();

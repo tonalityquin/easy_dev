@@ -61,12 +61,12 @@ class _UserManagementState extends State<UserManagement> {
     );
   }
 
-  List<IconData> getNavigationIcons(bool hasSelectedUsers) {
-    return hasSelectedUsers ? [Icons.schedule, Icons.delete] : [Icons.add, Icons.work];
+  List<IconData> getNavigationIcons(bool hasSelection) {
+    return hasSelection ? [Icons.schedule, Icons.delete] : [Icons.add, Icons.work];
   }
 
   void onIconTapped(BuildContext context, int index, UserState userState) async {
-    final selectedIds = userState.selectedUsers.keys.where((id) => userState.selectedUsers[id] == true).toList();
+    final selectedId = userState.selectedUserId;
 
     if (index == 0) {
       // 계정 추가
@@ -85,7 +85,6 @@ class _UserManagementState extends State<UserManagement> {
             String selectedArea,
             ) async {
           try {
-            // Firestore에서 englishName 조회
             final englishName = await context.read<UserRepository>()
                 .getEnglishNameByArea(selectedArea, division);
 
@@ -117,10 +116,15 @@ class _UserManagementState extends State<UserManagement> {
           }
         },
       );
-    } else if (index == 1 && selectedIds.isNotEmpty) {
+    } else if (index == 1) {
       // 삭제
+      if (selectedId == null) {
+        showFailedSnackbar(context, '삭제할 항목을 선택하세요.');
+        return;
+      }
+
       userState.deleteUserCard(
-        selectedIds,
+        [selectedId],
         onError: (errorMessage) {
           showFailedSnackbar(context, errorMessage);
         },
@@ -136,7 +140,8 @@ class _UserManagementState extends State<UserManagement> {
     final currentDivision = areaState.currentDivision;
 
     final filteredUsers = userState.users.where((user) {
-      return user.areas.contains(currentArea) && user.divisions.contains(currentDivision);
+      return user.areas.contains(currentArea) &&
+          user.divisions.contains(currentDivision);
     }).toList();
 
     return Scaffold(
@@ -177,7 +182,7 @@ class _UserManagementState extends State<UserManagement> {
         itemCount: filteredUsers.length,
         itemBuilder: (context, index) {
           final user = filteredUsers[index];
-          final isSelected = userState.selectedUsers[user.id] ?? false;
+          final isSelected = userState.selectedUserId == user.id;
 
           return UserContainer(
             topLeftText: user.name,
@@ -187,12 +192,13 @@ class _UserManagementState extends State<UserManagement> {
             midRightText: user.areas.firstOrNull ?? '-',
             onTap: () => userState.toggleUserCard(user.id),
             isSelected: isSelected,
-            backgroundColor: isSelected ? Colors.green[100]! : Colors.white,
+            backgroundColor:
+            isSelected ? Colors.green[100]! : Colors.white,
           );
         },
       ),
       bottomNavigationBar: SecondaryMiniNavigation(
-        icons: getNavigationIcons(userState.selectedUsers.containsValue(true)),
+        icons: getNavigationIcons(userState.selectedUserId != null),
         onIconTapped: (index) => onIconTapped(context, index, userState),
       ),
     );

@@ -11,6 +11,7 @@ class BillState extends ChangeNotifier {
   final AreaState _areaState;
 
   BillState(this._repository, this._areaState) {
+    debugPrint('✅ BillState 생성됨');
     // ✅ 앱 시작 시 캐시 우선 호출
     loadFromBillCache();
 
@@ -25,12 +26,14 @@ class BillState extends ChangeNotifier {
   }
 
   List<BillModel> _bills = [];
-  Map<String, bool> _selectedBill = {};
+  String? _selectedBillId;
   bool _isLoading = true;
   String _previousArea = '';
 
   List<BillModel> get bills => _bills;
-  Map<String, bool> get selectedBill => _selectedBill;
+
+  String? get selectedBillId => _selectedBillId;
+
   bool get isLoading => _isLoading;
 
   BillModel get emptyModel => BillModel(
@@ -55,7 +58,7 @@ class BillState extends ChangeNotifier {
         _bills = decoded
             .map((e) => BillModel.fromCacheMap(Map<String, dynamic>.from(e)))
             .toList();
-        _selectedBill = {for (var bill in _bills) bill.id: false};
+        _selectedBillId = null;
         _previousArea = currentArea;
         _isLoading = false;
         notifyListeners();
@@ -66,7 +69,7 @@ class BillState extends ChangeNotifier {
     } else {
       debugPrint('⚠️ 캐시에 정산 데이터 없음 → Firestore 호출 없음');
       _bills = [];
-      _selectedBill = {};
+      _selectedBillId = null;
       _isLoading = false;
       notifyListeners();
     }
@@ -86,16 +89,18 @@ class BillState extends ChangeNotifier {
       final currentIds = _bills.map((e) => e.id).toSet();
       final newIds = data.map((e) => e.id).toSet();
 
-      final isIdentical = currentIds.length == newIds.length && currentIds.containsAll(newIds);
+      final isIdentical =
+          currentIds.length == newIds.length && currentIds.containsAll(newIds);
 
       if (isIdentical) {
         debugPrint('✅ Firestore 데이터가 캐시와 동일 → 갱신 없음');
       } else {
         _bills = data;
-        _selectedBill = {for (var b in data) b.id: false};
+        _selectedBillId = null;
 
         final prefs = await SharedPreferences.getInstance();
-        final jsonData = json.encode(data.map((e) => e.toCacheMap()).toList());
+        final jsonData =
+        json.encode(data.map((e) => e.toCacheMap()).toList());
         await prefs.setString('cached_bills_$currentArea', jsonData);
 
         debugPrint('✅ Firestore 정산 데이터 캐시에 갱신됨 (area: $currentArea)');
@@ -151,9 +156,13 @@ class BillState extends ChangeNotifier {
     }
   }
 
-  /// ✅ 선택 상태 토글
+  /// ✅ 단일 선택 상태 토글
   void toggleBillSelection(String id) {
-    _selectedBill[id] = !(_selectedBill[id] ?? false);
+    if (_selectedBillId == id) {
+      _selectedBillId = null; // 같은 거 누르면 해제
+    } else {
+      _selectedBillId = id;   // 새로 선택
+    }
     notifyListeners();
   }
 }

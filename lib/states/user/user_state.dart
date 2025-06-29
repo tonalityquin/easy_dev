@@ -12,20 +12,20 @@ class UserState extends ChangeNotifier {
   final AreaState _areaState;
 
   UserState(this._repository, this._areaState) {
-    _areaState.addListener(_fetchUsersByAreaWithCache); // 캐싱 호출
+    _areaState.addListener(_fetchUsersByAreaWithCache);
   }
 
   UserModel? _user;
   List<UserModel> _users = [];
-  Map<String, bool> _selectedUsers = {};
+  String? _selectedUserId;
   bool _isLoading = true;
 
-  StreamSubscription<List<UserModel>>? _subscription; // ⚠️ 현재 미사용
+  StreamSubscription<List<UserModel>>? _subscription;
   String _previousSelectedArea = '';
 
   UserModel? get user => _user;
   List<UserModel> get users => _users;
-  Map<String, bool> get selectedUsers => _selectedUsers;
+  String? get selectedUserId => _selectedUserId;
 
   bool get isLoggedIn => _user != null;
   bool get isWorking => _user?.isWorking ?? false;
@@ -40,7 +40,6 @@ class UserState extends ChangeNotifier {
   String get division => _user?.divisions.firstOrNull ?? '';
   String get currentArea => _user?.currentArea ?? area;
 
-  /// 🕰 캐시에 있는 사용자들 반환
   Future<void> _fetchUsersByAreaWithCache() async {
     final selectedArea = _areaState.currentArea.trim();
     if (selectedArea.isEmpty || _previousSelectedArea == selectedArea) return;
@@ -52,7 +51,7 @@ class UserState extends ChangeNotifier {
     try {
       final data = await _repository.getUsersBySelectedAreaOnceWithCache(selectedArea);
       _users = data;
-      _selectedUsers = {for (var user in data) user.id: user.isSelected};
+      _selectedUserId = null;
     } catch (e) {
       debugPrint('🔥 Error fetching cached users: $e');
     } finally {
@@ -61,7 +60,6 @@ class UserState extends ChangeNotifier {
     }
   }
 
-  /// 🔄 Firestore 호출 + 캐시 갱신 트리거
   Future<void> refreshUsersBySelectedAreaAndCache() async {
     final selectedArea = _areaState.currentArea.trim();
     _isLoading = true;
@@ -70,7 +68,7 @@ class UserState extends ChangeNotifier {
     try {
       final data = await _repository.refreshUsersBySelectedArea(selectedArea);
       _users = data;
-      _selectedUsers = {for (var user in data) user.id: user.isSelected};
+      _selectedUserId = null;
     } catch (e) {
       debugPrint('🔥 Error refreshing users: $e');
     } finally {
@@ -137,16 +135,12 @@ class UserState extends ChangeNotifier {
   }
 
   Future<void> toggleUserCard(String id) async {
-    if (!_selectedUsers.containsKey(id)) return;
-
-    try {
-      final newSelectionState = !_selectedUsers[id]!;
-      await _repository.toggleUserSelection(id, newSelectionState);
-      _selectedUsers[id] = newSelectionState;
-      notifyListeners();
-    } catch (e) {
-      debugPrint('사용자 선택 오류: $e');
+    if (_selectedUserId == id) {
+      _selectedUserId = null; // 해제
+    } else {
+      _selectedUserId = id;   // 선택
     }
+    notifyListeners();
   }
 
   Future<void> saveCardToUserPhone(UserModel user) async {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../../utils/snackbar_helper.dart';
 import '../../../widgets/navigation/secondary_mini_navigation.dart';
 import 'location_management_pages/location_setting.dart';
@@ -19,10 +20,7 @@ class _LocationManagementState extends State<LocationManagement> {
   String _filter = 'all'; // all, single, composite
 
   void handleIconTapped(int index, LocationState locationState, BuildContext context) {
-    final selectedIds = locationState.selectedLocations.entries
-        .where((entry) => entry.value)
-        .map((entry) => entry.key)
-        .toList();
+    final selectedId = locationState.selectedLocationId;
 
     if (locationState.navigationIcons[index] == Icons.add) {
       showDialog(
@@ -44,7 +42,6 @@ class _LocationManagementState extends State<LocationManagement> {
                   ).then((_) {
                     showSuccessSnackbar(context, '✅ 주차 구역이 추가되었습니다. 앱을 재실행하세요.');
                   });
-
                 } else if (type == 'composite') {
                   final parent = location['parent']?.toString() ?? '';
                   final rawSubs = location['subs'];
@@ -76,9 +73,14 @@ class _LocationManagementState extends State<LocationManagement> {
           );
         },
       );
-    } else if (locationState.navigationIcons[index] == Icons.delete && selectedIds.isNotEmpty) {
+    } else if (locationState.navigationIcons[index] == Icons.delete) {
+      if (selectedId == null) {
+        showFailedSnackbar(context, '⚠️ 삭제할 항목을 선택하세요.');
+        return;
+      }
+
       locationState.deleteLocations(
-        selectedIds,
+        [selectedId],
         onError: (error) => showFailedSnackbar(context, '🚨 주차 구역 삭제 실패: $error'),
       );
     } else {
@@ -86,13 +88,13 @@ class _LocationManagementState extends State<LocationManagement> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     final locationState = context.watch<LocationState>();
     final currentArea = context.watch<AreaState>().currentArea;
 
-    final allLocations = locationState.locations.where((location) => location.area == currentArea).toList();
+    final allLocations =
+    locationState.locations.where((location) => location.area == currentArea).toList();
 
     final singles = allLocations.where((loc) => loc.type == 'single').toList();
     final composites = allLocations.where((loc) => loc.type == 'composite').toList();
@@ -116,60 +118,60 @@ class _LocationManagementState extends State<LocationManagement> {
       body: locationState.isLoading
           ? const Center(child: CircularProgressIndicator())
           : allLocations.isEmpty
-              ? const Center(child: Text('No locations in this area.'))
-              : Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8.0),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          ChoiceChip(
-                            label: const Text('전체'),
-                            selected: _filter == 'all',
-                            onSelected: (_) => setState(() => _filter = 'all'),
-                          ),
-                          const SizedBox(width: 8),
-                          ChoiceChip(
-                            label: const Text('단일'),
-                            selected: _filter == 'single',
-                            onSelected: (_) => setState(() => _filter = 'single'),
-                          ),
-                          const SizedBox(width: 8),
-                          ChoiceChip(
-                            label: const Text('복합'),
-                            selected: _filter == 'composite',
-                            onSelected: (_) => setState(() => _filter = 'composite'),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Divider(height: 1),
-                    Expanded(
-                      child: _filter == 'single'
-                          ? _buildList(singles, locationState)
-                          : _filter == 'composite'
-                              ? _buildGroupedList(grouped, locationState)
-                              : Column(
-                                  children: [
-                                    if (singles.isNotEmpty)
-                                      const Padding(
-                                        padding: EdgeInsets.all(8.0),
-                                        child: Text('단일 주차 구역'),
-                                      ),
-                                    _buildList(singles, locationState),
-                                    const Divider(),
-                                    if (grouped.isNotEmpty)
-                                      const Padding(
-                                        padding: EdgeInsets.all(8.0),
-                                        child: Text('복합 주차 구역'),
-                                      ),
-                                    Expanded(child: _buildGroupedList(grouped, locationState)),
-                                  ],
-                                ),
-                    ),
-                  ],
+          ? const Center(child: Text('No locations in this area.'))
+          : Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ChoiceChip(
+                  label: const Text('전체'),
+                  selected: _filter == 'all',
+                  onSelected: (_) => setState(() => _filter = 'all'),
                 ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: const Text('단일'),
+                  selected: _filter == 'single',
+                  onSelected: (_) => setState(() => _filter = 'single'),
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: const Text('복합'),
+                  selected: _filter == 'composite',
+                  onSelected: (_) => setState(() => _filter = 'composite'),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: _filter == 'single'
+                ? _buildList(singles, locationState)
+                : _filter == 'composite'
+                ? _buildGroupedList(grouped, locationState)
+                : Column(
+              children: [
+                if (singles.isNotEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: Text('단일 주차 구역'),
+                  ),
+                _buildList(singles, locationState),
+                const Divider(),
+                if (grouped.isNotEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: Text('복합 주차 구역'),
+                  ),
+                Expanded(child: _buildGroupedList(grouped, locationState)),
+              ],
+            ),
+          ),
+        ],
+      ),
       bottomNavigationBar: SecondaryMiniNavigation(
         icons: locationState.navigationIcons,
         onIconTapped: (index) => handleIconTapped(index, locationState, context),
@@ -183,7 +185,7 @@ class _LocationManagementState extends State<LocationManagement> {
       itemCount: locations.length,
       itemBuilder: (context, index) {
         final location = locations[index];
-        final isSelected = state.selectedLocations[location.id] ?? false;
+        final isSelected = state.selectedLocationId == location.id;
         final subtitle = location.capacity > 0 ? '(공간 ${location.capacity}대)' : null;
 
         return LocationContainer(
@@ -206,7 +208,7 @@ class _LocationManagementState extends State<LocationManagement> {
         return ExpansionTile(
           title: Text('상위 구역: ${entry.key} (공간 $totalCapacity대)'),
           children: entry.value.map((location) {
-            final isSelected = state.selectedLocations[location.id] ?? false;
+            final isSelected = state.selectedLocationId == location.id;
             final subtitle = location.capacity > 0 ? '(공간 ${location.capacity}대)' : null;
 
             return LocationContainer(
