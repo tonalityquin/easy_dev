@@ -30,7 +30,7 @@ class BillState extends ChangeNotifier {
   String _previousArea = '';
 
   List<BillModel> get bills => _bills;
-  Map<String, bool> get selecteBill => _selectedBill;
+  Map<String, bool> get selectedBill => _selectedBill;
   bool get isLoading => _isLoading;
 
   BillModel get emptyModel => BillModel(

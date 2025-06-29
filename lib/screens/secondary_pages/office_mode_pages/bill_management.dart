@@ -27,7 +27,7 @@ class _BillManagementState extends State<BillManagement> {
   }
 
   List<String> _getSelectedIds(BillState state) {
-    return state.selecteBill.entries.where((entry) => entry.value).map((entry) => entry.key).toList();
+    return state.selectedBill.entries.where((entry) => entry.value).map((entry) => entry.key).toList();
   }
 
   void _showBillSettingDialog(BuildContext context) {
@@ -119,7 +119,7 @@ class _BillManagementState extends State<BillManagement> {
               final basicAmount = bill.basicAmount.toString();
               final addStandard = bill.addStandard.toString();
               final addAmount = bill.addAmount.toString();
-              final isSelected = state.selecteBill[id] ?? false;
+              final isSelected = state.selectedBill[id] ?? false;
 
               return Column(
                 children: [

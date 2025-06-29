@@ -6,7 +6,6 @@ import 'bill_repository.dart';
 class FirestoreBillRepository implements BillRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  /// ✅ 단발성 Firestore 조회 (.get())
   @override
   Future<List<BillModel>> getBillOnce(String area) async {
     try {
@@ -22,7 +21,6 @@ class FirestoreBillRepository implements BillRepository {
     }
   }
 
-  /// ➕ 조정 데이터 추가
   @override
   Future<void> addBill(BillModel bill) async {
     final docRef = _firestore.collection('bill').doc(bill.id);
@@ -42,7 +40,6 @@ class FirestoreBillRepository implements BillRepository {
     }
   }
 
-  /// ❌ 여러 조정 데이터 삭제
   @override
   Future<void> deleteBill(List<String> ids) async {
     final batch = _firestore.batch();
