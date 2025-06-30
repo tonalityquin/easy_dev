@@ -7,7 +7,7 @@ import '../../../states/user/user_state.dart';
 import '../../utils/snackbar_helper.dart';
 import 'widgets/report_dialog.dart';
 import 'clock_in_controller.dart';
-import 'widgets/plate_count_widget.dart';
+import 'widgets/fetch_plate_count_widget.dart';
 import 'widgets/work_button_widget.dart';
 import 'widgets/user_info_card.dart';
 
@@ -83,7 +83,7 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
                           ),
                           const SizedBox(height: 16),
                           const UserInfoCard(),
-                          const PlateCountWidget(),
+                          const FetchPlateCountWidget(),
                           const SizedBox(height: 32),
 
                           // ✅ 같은 줄에 보고 작성, 출근하기 버튼

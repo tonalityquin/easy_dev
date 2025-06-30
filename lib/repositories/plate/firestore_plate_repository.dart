@@ -25,21 +25,6 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
-  Future<int> getPlateCountByTypeAndArea(
-    PlateType type,
-    String area,
-  ) async {
-    final aggregateQuerySnapshot = await _firestore
-        .collection('plates')
-        .where('type', isEqualTo: type.firestoreValue)
-        .where('area', isEqualTo: area)
-        .count()
-        .get();
-
-    return aggregateQuerySnapshot.count ?? 0;
-  }
-
-  @override
   Future<List<PlateModel>> getPlatesByFourDigit({
     required String plateFourDigit,
     required String area,
@@ -254,7 +239,22 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
-  Future<int> getPlateCountByType(
+  Future<int> getPlateCountForTypePage(
+    PlateType type,
+    String area,
+  ) async {
+    final aggregateQuerySnapshot = await _firestore
+        .collection('plates')
+        .where('type', isEqualTo: type.firestoreValue)
+        .where('area', isEqualTo: area)
+        .count()
+        .get();
+
+    return aggregateQuerySnapshot.count ?? 0;
+  }
+
+  @override
+  Future<int> getPlateCountForClockInPage(
     PlateType type, {
     DateTime? selectedDate,
     required String area,
@@ -272,7 +272,6 @@ class FirestorePlateRepository implements PlateRepository {
       final result = await query.count().get();
       return result.count ?? 0;
     } catch (e) {
-      dev.log("🔥 문서 count 실패: $e", name: "Firestore");
       return 0;
     }
   }

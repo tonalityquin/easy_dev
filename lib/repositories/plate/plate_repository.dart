@@ -8,7 +8,7 @@ abstract class PlateRepository {
     bool descending = true,
   });
 
-  Future<int> getPlateCountByTypeAndArea(
+  Future<int> getPlateCountForTypePage(
     PlateType type,
     String area,
   );
@@ -56,7 +56,7 @@ abstract class PlateRepository {
     String? customStatus,
   });
 
-  Future<int> getPlateCountByType(
+  Future<int> getPlateCountForClockInPage(
     PlateType type, {
     DateTime? selectedDate,
     required String area,

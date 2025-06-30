@@ -175,7 +175,7 @@ class InputPlateController {
     }
   }
 
-  Future<void> handleAction(BuildContext context, bool mounted, VoidCallback refreshUI) async {
+  Future<void> submitPlateEntry(BuildContext context, bool mounted, VoidCallback refreshUI) async {
     final plateNumber = buildPlateNumber();
     final areaState = context.read<AreaState>();
     final area = areaState.currentArea;
@@ -206,7 +206,7 @@ class InputPlateController {
         division,
       );
 
-      final wasSuccessful = await InputPlateService.saveInputPlateEntry(
+      final wasSuccessful = await InputPlateService.registerPlateEntry(
         context: context,
         plateNumber: plateNumber,
         location: locationController.text,

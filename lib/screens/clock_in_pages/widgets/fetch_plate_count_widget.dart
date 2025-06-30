@@ -5,8 +5,8 @@ import '../../../enums/plate_type.dart';
 import '../../../repositories/plate/plate_repository.dart';
 import '../../../states/user/user_state.dart';
 
-class PlateCountWidget extends StatelessWidget {
-  const PlateCountWidget({super.key});
+class FetchPlateCountWidget extends StatelessWidget {
+  const FetchPlateCountWidget({super.key});
 
   Future<Map<PlateType, int>> _fetchCounts(BuildContext context) async {
     final repo = context.read<PlateRepository>();
@@ -18,7 +18,7 @@ class PlateCountWidget extends StatelessWidget {
 
     final Map<PlateType, int> result = {};
     for (var type in PlateType.values) {
-      final count = await repo.getPlateCountByType(
+      final count = await repo.getPlateCountForClockInPage(
         type,
         selectedDate: type == PlateType.departureCompleted ? today : null,
         area: area,

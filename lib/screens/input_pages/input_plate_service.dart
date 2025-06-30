@@ -77,7 +77,7 @@ class InputPlateService {
     return uploadedUrls;
   }
 
-  static Future<bool> saveInputPlateEntry({
+  static Future<bool> registerPlateEntry({
     required BuildContext context,
     required String plateNumber,
     required String location,
@@ -96,7 +96,7 @@ class InputPlateService {
     final areaState = context.read<AreaState>();
     final userState = context.read<UserState>();
 
-    return await inputState.inputPlateEntry(
+    return await inputState.registerPlateEntry(
       context: context,
       plateNumber: plateNumber,
       location: location,

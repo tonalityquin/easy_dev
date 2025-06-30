@@ -20,7 +20,7 @@ class InputPlate with ChangeNotifier {
     );
   }
 
-  Future<bool> inputPlateEntry({
+  Future<bool> registerPlateEntry({
     required BuildContext context,
     required String plateNumber,
     required String location,

@@ -2,7 +2,6 @@ import 'package:easydev/screens/secondary_page.dart';
 import 'package:easydev/states/page/hq_state.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../utils/snackbar_helper.dart';
 import '../states/page/page_info.dart'; // hqPage, HqPageInfo 등 포함
 
 class HeadquarterPage extends StatelessWidget {

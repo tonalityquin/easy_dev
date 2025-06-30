@@ -317,7 +317,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
             InputAnimatedActionButton(
               isLoading: controller.isLoading,
               isLocationSelected: controller.isLocationSelected,
-              onPressed: () => controller.handleAction(context, mounted, () => setState(() {})),
+              onPressed: () => controller.submitPlateEntry(context, mounted, () => setState(() {})),
             ),
           ],
         ),

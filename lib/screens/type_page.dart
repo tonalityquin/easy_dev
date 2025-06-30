@@ -207,7 +207,7 @@ class PageBottomNavigation extends StatelessWidget {
 
               return BottomNavigationBarItem(
                 icon: FutureBuilder<int>(
-                  future: plateRepository.getPlateCountByTypeAndArea(
+                  future: plateRepository.getPlateCountForTypePage(
                     pageInfo.collectionKey,
                     currentArea,
                   ),
