@@ -128,7 +128,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
         onError: (_) {},
       );
 
-      await movementPlate.setDepartureCompletedWithPlate(
+      await movementPlate.setDepartureCompleted(
         selectedPlate,
         plateState,
       );

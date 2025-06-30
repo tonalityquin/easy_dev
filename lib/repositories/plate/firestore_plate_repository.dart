@@ -9,7 +9,7 @@ class FirestorePlateRepository implements PlateRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   @override
-  Stream<List<PlateModel>> getPlatesByTypeAndArea(
+  Stream<List<PlateModel>> forCurrentArea(
     PlateType type,
     String area, {
     bool descending = true,
@@ -26,33 +26,37 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
-  Future<List<PlateModel>> getPlatesByFourDigit({
-    required String plateFourDigit,
-    required String area,
-  }) async {
-    final querySnapshot = await _firestore
-        .collection('plates')
-        .where('plate_four_digit', isEqualTo: plateFourDigit)
-        .where('area', isEqualTo: area)
-        .get();
-
-    return querySnapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList();
-  }
-
-  @override
-  Future<List<PlateModel>> getPlatesByLocation({
-    required PlateType type,
-    required String area,
-    required String location,
-  }) async {
-    final querySnapshot = await _firestore
+  Stream<List<PlateModel>> forSortedIcon(
+    PlateType type,
+    String area, {
+    bool descending = true,
+  }) {
+    Query<Map<String, dynamic>> query = _firestore
         .collection('plates')
         .where('type', isEqualTo: type.firestoreValue)
         .where('area', isEqualTo: area)
-        .where('location', isEqualTo: location)
-        .get();
+        .orderBy('request_time', descending: descending);
 
-    return querySnapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList();
+    return query.snapshots().map(
+          (snapshot) => snapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList(),
+        );
+  }
+
+  @override
+  Stream<List<PlateModel>> forFetchPlateData(
+    PlateType type,
+    String area, {
+    bool descending = true,
+  }) {
+    Query<Map<String, dynamic>> query = _firestore
+        .collection('plates')
+        .where('type', isEqualTo: type.firestoreValue)
+        .where('area', isEqualTo: area)
+        .orderBy('request_time', descending: descending);
+
+    return query.snapshots().map(
+          (snapshot) => snapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList(),
+        );
   }
 
   @override
@@ -97,6 +101,30 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
+  Future<PlateModel?> getPlate(String documentId) async {
+    final doc = await _firestore.collection('plates').doc(documentId).get();
+    if (!doc.exists) return null;
+    return PlateModel.fromDocument(doc);
+  }
+
+  ///
+  @override
+  Future<List<PlateModel>> getPlatesByLocation({
+    required PlateType type,
+    required String area,
+    required String location,
+  }) async {
+    final querySnapshot = await _firestore
+        .collection('plates')
+        .where('type', isEqualTo: type.firestoreValue)
+        .where('area', isEqualTo: area)
+        .where('location', isEqualTo: location)
+        .get();
+
+    return querySnapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList();
+  }
+
+  @override
   Future<void> deletePlate(String documentId) async {
     final docRef = _firestore.collection('plates').doc(documentId);
     final docSnapshot = await docRef.get();
@@ -104,15 +132,22 @@ class FirestorePlateRepository implements PlateRepository {
     if (docSnapshot.exists) {
       await docRef.delete();
     } else {
-      dev.log("DB에 존재하지 않는 문서 (deletePlate): $documentId", name: "Firestore");
+      debugPrint("DB에 존재하지 않는 문서 (deletePlate): $documentId");
     }
   }
 
   @override
-  Future<PlateModel?> getPlate(String documentId) async {
-    final doc = await _firestore.collection('plates').doc(documentId).get();
-    if (!doc.exists) return null;
-    return PlateModel.fromDocument(doc);
+  Future<List<PlateModel>> fourDigitUseSearchQuery({
+    required String plateFourDigit,
+    required String area,
+  }) async {
+    final querySnapshot = await _firestore
+        .collection('plates')
+        .where('plate_four_digit', isEqualTo: plateFourDigit)
+        .where('area', isEqualTo: area)
+        .get();
+
+    return querySnapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList();
   }
 
   @override

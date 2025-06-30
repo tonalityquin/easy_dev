@@ -180,7 +180,7 @@ void handleEntryParkingCompleted(BuildContext context, String plateNumber, Strin
   final movementPlate = context.read<MovementPlate>();
   final plateState = context.read<PlateState>();
 
-  movementPlate.moveDepartureToParkingCompleted(
+  movementPlate.goBackToParkingCompleted(
     plateNumber,
     area,
     plateState,

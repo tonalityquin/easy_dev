@@ -206,7 +206,7 @@ class PlateState extends ChangeNotifier {
     for (final collection in PlateType.values) {
       final descending = _isSortedMap[collection] ?? true;
 
-      final stream = _repository.getPlatesByTypeAndArea(
+      final stream = _repository.forFetchPlateData(
         collection,
         currentArea,
         descending: descending,
@@ -267,7 +267,7 @@ class PlateState extends ChangeNotifier {
 
     _subscriptions[type]?.cancel();
 
-    final stream = _repository.getPlatesByTypeAndArea(
+    final stream = _repository.forSortedIcon(
       type,
       area,
     );

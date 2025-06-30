@@ -39,7 +39,7 @@ class FilterPlate extends ChangeNotifier {
     for (final plateType in PlateType.values) {
       _subscriptions[plateType]?.cancel();
 
-      final stream = _repository.getPlatesByTypeAndArea(plateType, currentArea);
+      final stream = _repository.forCurrentArea(plateType, currentArea);
 
       _subscriptions[plateType] = stream.listen((data) {
         _data[plateType] = data;
@@ -74,7 +74,7 @@ class FilterPlate extends ChangeNotifier {
 
   Future<List<PlateModel>> fetchPlatesCountsBySearchQuery() async {
     if (_searchQuery != null && _searchQuery!.length == 4) {
-      return await _repository.getPlatesByFourDigit(
+      return await _repository.fourDigitUseSearchQuery(
         plateFourDigit: _searchQuery!,
         area: currentArea,
       );

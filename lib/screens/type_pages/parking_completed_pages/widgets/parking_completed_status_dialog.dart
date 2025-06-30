@@ -222,7 +222,7 @@ void handleEntryDepartureCompleted(BuildContext context, PlateModel plate) async
   }
 
   try {
-    await movementPlate.doubleParkingCompletedToDepartureCompletedWithPlate(
+    await movementPlate.jumpingDepartureCompleted(
       updatedPlate,
       plateState,
     );

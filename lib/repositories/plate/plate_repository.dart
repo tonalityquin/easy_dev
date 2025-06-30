@@ -2,18 +2,29 @@ import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
 
 abstract class PlateRepository {
-  Stream<List<PlateModel>> getPlatesByTypeAndArea(
+  Stream<List<PlateModel>> forCurrentArea(
+      PlateType type,
+      String area, {
+        bool descending = true,
+      });
+  Stream<List<PlateModel>> forSortedIcon(
     PlateType type,
     String area, {
     bool descending = true,
   });
+
+  Stream<List<PlateModel>> forFetchPlateData(
+      PlateType type,
+      String area, {
+        bool descending = true,
+      });
 
   Future<int> getPlateCountForTypePage(
     PlateType type,
     String area,
   );
 
-  Future<List<PlateModel>> getPlatesByFourDigit({
+  Future<List<PlateModel>> fourDigitUseSearchQuery({
     required String plateFourDigit,
     required String area,
   });

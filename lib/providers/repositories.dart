@@ -67,7 +67,15 @@ class DummyPlateRepository implements PlateRepository {
   Future<void> logPlateAction(PlateModel plate, String action) => throw UnimplementedError();
 
   @override
-  Stream<List<PlateModel>> getPlatesByTypeAndArea(
+  Stream<List<PlateModel>> forCurrentArea(
+      PlateType type,
+      String area, {
+        bool descending = true,
+        int? limit,
+      }) =>
+      throw UnimplementedError();
+  @override
+  Stream<List<PlateModel>> forSortedIcon(
     PlateType type,
     String area, {
     bool descending = true,
@@ -76,12 +84,21 @@ class DummyPlateRepository implements PlateRepository {
       throw UnimplementedError();
 
   @override
+  Stream<List<PlateModel>> forFetchPlateData(
+      PlateType type,
+      String area, {
+        bool descending = true,
+        int? limit,
+      }) =>
+      throw UnimplementedError();
+
+  @override
   Future<int> getPlateCountForTypePage(PlateType type, String area) {
     throw UnimplementedError();
   }
 
   @override
-  Future<List<PlateModel>> getPlatesByFourDigit({
+  Future<List<PlateModel>> fourDigitUseSearchQuery({
     required String plateFourDigit,
     required String area,
   }) =>

@@ -20,12 +20,12 @@ class MovementPlate {
   // 🔹 3. Public 메서드
 
   Future<void> setParkingCompleted(
-      String plateNumber,
-      String area,
-      PlateState plateState,
-      String location, {
-        String performedBy = '시스템',
-      }) async {
+    String plateNumber,
+    String area,
+    PlateState plateState,
+    String location, {
+    String performedBy = '시스템',
+  }) async {
     final success = await _transferData(
       fromType: PlateType.parkingRequests,
       toType: PlateType.parkingCompleted,
@@ -38,12 +38,12 @@ class MovementPlate {
   }
 
   Future<void> setDepartureRequested(
-      String plateNumber,
-      String area,
-      PlateState plateState,
-      String location, {
-        String performedBy = '시스템',
-      }) async {
+    String plateNumber,
+    String area,
+    PlateState plateState,
+    String location, {
+    String performedBy = '시스템',
+  }) async {
     final success = await _transferData(
       fromType: PlateType.parkingCompleted,
       toType: PlateType.departureRequests,
@@ -55,10 +55,10 @@ class MovementPlate {
     if (success) await plateState.fetchPlateData();
   }
 
-  Future<void> setDepartureCompletedWithPlate(
-      PlateModel plate,
-      PlateState plateState,
-      ) async {
+  Future<void> setDepartureCompleted(
+    PlateModel plate,
+    PlateState plateState,
+  ) async {
     final documentId = '${plate.plateNumber}_${plate.area}';
 
     try {
@@ -71,10 +71,8 @@ class MovementPlate {
         'updatedAt': Timestamp.now(),
         'end_time': DateTime.now(),
         if (plate.isLockedFee == true) 'isLockedFee': true,
-        if (plate.lockedAtTimeInSeconds != null)
-          'lockedAtTimeInSeconds': plate.lockedAtTimeInSeconds,
-        if (plate.lockedFeeAmount != null)
-          'lockedFeeAmount': plate.lockedFeeAmount,
+        if (plate.lockedAtTimeInSeconds != null) 'lockedAtTimeInSeconds': plate.lockedAtTimeInSeconds,
+        if (plate.lockedFeeAmount != null) 'lockedFeeAmount': plate.lockedFeeAmount,
       };
 
       await _repository.updatePlate(documentId, updateData);
@@ -93,12 +91,10 @@ class MovementPlate {
 
       final logMap = log.toMap()..removeWhere((k, v) => v == null);
 
-      await _uploader.uploadForPlateLogTypeJson(
-          logMap, plate.plateNumber, _areaState.currentDivision, plate.area);
+      await _uploader.uploadForPlateLogTypeJson(logMap, plate.plateNumber, _areaState.currentDivision, plate.area);
 
       if (plate.isLockedFee == true) {
-        await _uploader.mergeAndSummarizeLogs(
-            plate.plateNumber, _areaState.currentDivision, plate.area);
+        await _uploader.mergeAndSummarizeLogs(plate.plateNumber, _areaState.currentDivision, plate.area);
       }
     } catch (e) {
       debugPrint('🚨 출차 완료 이동 실패: $e');
@@ -106,27 +102,25 @@ class MovementPlate {
     }
   }
 
-  Future<void> doubleParkingCompletedToDepartureCompletedWithPlate(
-      PlateModel plate,
-      PlateState plateState,
-      ) async {
+  Future<void> jumpingDepartureCompleted(
+    PlateModel plate,
+    PlateState plateState,
+  ) async {
     final documentId = '${plate.plateNumber}_${plate.area}';
 
     try {
-      await _repository.deletePlate(documentId);
+      // 기존 문서 상태만 업데이트
+      await _repository.updatePlate(documentId, {
+        'type': PlateType.departureCompleted.firestoreValue,
+        'isSelected': false,
+        'selectedBy': null,
+        'endTime': DateTime.now(),
+      });
 
-      final updatedPlate = plate.copyWith(
-        type: PlateType.departureCompleted.firestoreValue,
-        location: plate.location,
-        userName: plate.userName,
-        isSelected: false,
-        selectedBy: null,
-        endTime: DateTime.now(),
-      );
-
-      await _repository.addOrUpdatePlate(documentId, updatedPlate);
+      // 상태 새로고침
       await plateState.fetchPlateData();
 
+      // 로그 생성
       final log = PlateLogModel(
         plateNumber: plate.plateNumber,
         division: _areaState.currentDivision,
@@ -140,26 +134,37 @@ class MovementPlate {
 
       final logMap = log.toMap()..removeWhere((k, v) => v == null);
 
+      // 로그 업로드
       await _uploader.uploadForPlateLogTypeJson(
-          logMap, plate.plateNumber, _areaState.currentDivision, plate.area);
+        logMap,
+        plate.plateNumber,
+        _areaState.currentDivision,
+        plate.area,
+      );
 
+      // 요금 잠금 상태라면 로그 종합 업로드
       if (plate.isLockedFee == true) {
         await _uploader.mergeAndSummarizeLogs(
-            plate.plateNumber, _areaState.currentDivision, plate.area);
+          plate.plateNumber,
+          _areaState.currentDivision,
+          plate.area,
+        );
       }
+
+      debugPrint("✅ 출차 완료 상태로 업데이트 완료: $documentId");
     } catch (e) {
-      debugPrint('🚨 출차 완료 이동 실패: $e');
+      debugPrint('🚨 출차 완료 업데이트 실패: $e');
       rethrow;
     }
   }
 
-  Future<void> moveDepartureToParkingCompleted(
-      String plateNumber,
-      String area,
-      PlateState plateState,
-      String location, {
-        String performedBy = '시스템',
-      }) async {
+  Future<void> goBackToParkingCompleted(
+    String plateNumber,
+    String area,
+    PlateState plateState,
+    String location, {
+    String performedBy = '시스템',
+  }) async {
     final success = await _transferData(
       fromType: PlateType.departureRequests,
       toType: PlateType.parkingCompleted,
@@ -186,24 +191,18 @@ class MovementPlate {
     final documentId = '${plateNumber}_$area';
 
     try {
-      final document = await _repository.getPlate(documentId);
-      if (document == null) {
-        debugPrint("🚫 문서를 찾을 수 없음: $documentId");
-        return;
-      }
+      // 필요한 필드만 업데이트 시도
+      await _repository.updatePlate(documentId, {
+        'type': PlateType.parkingRequests.firestoreValue,
+        'location': newLocation,
+        'isSelected': false,
+        'selectedBy': null,
+      });
 
-      await _repository.deletePlate(documentId);
-
-      final updatedPlate = document.copyWith(
-        location: newLocation,
-        type: PlateType.parkingRequests.firestoreValue,
-        isSelected: false,
-        selectedBy: null,
-      );
-
-      await _repository.addOrUpdatePlate(documentId, updatedPlate);
+      // 상태 갱신
       await plateState.fetchPlateData();
 
+      // 로그 기록
       final log = PlateLogModel(
         plateNumber: plateNumber,
         division: _areaState.currentDivision,
@@ -218,9 +217,20 @@ class MovementPlate {
       final logMap = log.toMap()..removeWhere((k, v) => v == null);
 
       await _uploader.uploadForPlateLogTypeJson(
-          logMap, plateNumber, _areaState.currentDivision, area);
+        logMap,
+        plateNumber,
+        _areaState.currentDivision,
+        area,
+      );
+
+      debugPrint("✅ 상태 복원 완료: $documentId");
     } catch (e) {
-      debugPrint("🚨 복원 오류: $e");
+      // 문서 없으면 안내
+      if (e is FirebaseException && e.code == 'not-found') {
+        debugPrint("🚫 문서를 찾을 수 없음: $documentId");
+      } else {
+        debugPrint("🚨 복원 오류: $e");
+      }
     }
   }
 
@@ -272,8 +282,7 @@ class MovementPlate {
 
       final logMap = log.toMap()..removeWhere((k, v) => v == null);
 
-      await _uploader.uploadForPlateLogTypeJson(
-          logMap, plateNumber, _areaState.currentDivision, area);
+      await _uploader.uploadForPlateLogTypeJson(logMap, plateNumber, _areaState.currentDivision, area);
 
       return true;
     } catch (e) {
