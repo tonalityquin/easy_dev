@@ -4,8 +4,6 @@ import 'package:provider/provider.dart';
 import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
 
-import '../../repositories/plate/plate_repository.dart';
-
 import '../../states/plate/filter_plate.dart';
 import '../../states/plate/plate_state.dart';
 import '../../states/plate/movement_plate.dart';
@@ -39,9 +37,9 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
     });
 
     context.read<PlateState>().updateSortOrder(
-          PlateType.parkingRequests,
-          _isSorted,
-        );
+      PlateType.parkingRequests,
+      _isSorted,
+    );
   }
 
   void _showSearchDialog(BuildContext context) {
@@ -76,19 +74,18 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
   void _handlePlateTap(BuildContext context, String plateNumber, String area) {
     final userName = context.read<UserState>().name;
     context.read<PlateState>().togglePlateIsSelected(
-          collection: PlateType.parkingRequests,
-          plateNumber: plateNumber,
-          userName: userName,
-          onError: (errorMessage) {
-            showFailedSnackbar(context, errorMessage);
-          },
-        );
+      collection: PlateType.parkingRequests,
+      plateNumber: plateNumber,
+      userName: userName,
+      onError: (errorMessage) {
+        showFailedSnackbar(context, errorMessage);
+      },
+    );
   }
 
   Future<void> _handleParkingCompleted(BuildContext context) async {
     final plateState = context.read<PlateState>();
     final movementPlate = context.read<MovementPlate>();
-    final plateRepository = context.read<PlateRepository>();
     final userName = context.read<UserState>().name;
 
     final selectedPlate = plateState.getSelectedPlate(
@@ -110,72 +107,48 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
         );
 
         if (selectedLocation == null) {
-          // 유저가 닫았을 경우 종료
           break;
         } else if (selectedLocation == 'refresh') {
-          // 갱신 요청 → 루프 계속
           continue;
         } else if (selectedLocation.isNotEmpty) {
-          // 선택된 경우 처리 후 종료
-          _completeParking(
+          await _completeParking(
             movementPlate: movementPlate,
             plateState: plateState,
-            plateRepository: plateRepository,
-            userName: userName,
             plateNumber: selectedPlate.plateNumber,
             area: selectedPlate.area,
             location: selectedLocation,
-            region: selectedPlate.region ?? '전국',
           );
           break;
         } else {
           showFailedSnackbar(context, '주차 구역을 입력해주세요.');
-          // 루프를 계속 돌려 다시 다이얼로그 띄우기
         }
       }
     }
   }
 
-  void _completeParking({
+  Future<void> _completeParking({
     required MovementPlate movementPlate,
     required PlateState plateState,
-    required PlateRepository plateRepository,
-    required String userName,
     required String plateNumber,
     required String area,
     required String location,
-    required String region,
-  }) {
+  }) async {
     try {
-      plateRepository.addRequestOrCompleted(
-        plateNumber: plateNumber,
-        location: location,
-        area: area,
-        userName: userName,
-        plateType: PlateType.parkingCompleted,
-        billingType: null,
-        statusList: [],
-        basicStandard: 0,
-        basicAmount: 0,
-        addStandard: 0,
-        addAmount: 0,
-        region: region,
-      );
-
-      movementPlate.setParkingCompleted(
+      await movementPlate.setParkingCompleted(
         plateNumber,
         area,
         plateState,
         location,
       );
 
-      // ✅ showSuccessSnackbar 호출
-      showSuccessSnackbar(context, "입차 완료: $plateNumber ($location)");
+      if (mounted) {
+        showSuccessSnackbar(context, "입차 완료: $plateNumber ($location)");
+      }
     } catch (e) {
       debugPrint('입차 완료 처리 실패: $e');
-
-      // ✅ showFailedSnackbar 호출
-      showFailedSnackbar(context, "입차 완료 처리 중 오류 발생: $e");
+      if (mounted) {
+        showFailedSnackbar(context, "입차 완료 처리 중 오류 발생: $e");
+      }
     }
   }
 
@@ -191,7 +164,6 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
           userName,
         );
 
-        // 조건에 따라 선택 해제 또는 리포트 닫기
         if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
           await plateState.togglePlateIsSelected(
             collection: PlateType.parkingRequests,
@@ -244,7 +216,6 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                 } else {
                   final plates = [...plateState.getPlatesByCollection(PlateType.parkingRequests)];
 
-                  // ✅ 정렬 적용
                   plates.sort((a, b) {
                     final aTime = a.requestTime;
                     final bTime = b.requestTime;

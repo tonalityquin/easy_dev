@@ -134,7 +134,7 @@ class PlateState extends ChangeNotifier {
       final newIsSelected = !plate.isSelected;
       final newSelectedBy = newIsSelected ? userName : null;
 
-      await _repository.updatePlateSelection(
+      await _repository.recordWhoPlateClick(
         plateId,
         newIsSelected,
         selectedBy: newSelectedBy,

@@ -52,7 +52,7 @@ class InputPlate with ChangeNotifier {
     }
 
     try {
-      await _plateRepository.addRequestOrCompleted(
+      await _plateRepository.addPlate(
         plateNumber: plateNumber,
         location: correctedLocation,
         area: areaState.currentArea,

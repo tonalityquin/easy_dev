@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
 import 'plate_repository.dart';
@@ -115,7 +116,7 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
-  Future<void> addRequestOrCompleted({
+  Future<void> addPlate({
     required String plateNumber,
     required String location,
     required String area,
@@ -216,24 +217,27 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
-  Future<void> updatePlateSelection(String id, bool isSelected, {String? selectedBy}) async {
+  Future<void> recordWhoPlateClick(
+    String id,
+    bool isSelected, {
+    String? selectedBy,
+  }) async {
     final docRef = _firestore.collection('plates').doc(id);
 
     try {
-      await _firestore.runTransaction((transaction) async {
-        final docSnapshot = await transaction.get(docRef);
-        if (!docSnapshot.exists) {
-          dev.log("번호판을 찾을 수 없음: $id", name: "Firestore");
-          return;
-        }
-
-        transaction.update(docRef, {
-          'isSelected': isSelected,
-          'selectedBy': isSelected ? selectedBy : null,
-        });
+      await docRef.update({
+        'isSelected': isSelected,
+        'selectedBy': isSelected ? selectedBy : null,
       });
+    } on FirebaseException catch (e) {
+      if (e.code == 'not-found') {
+        debugPrint("번호판 문서를 찾을 수 없습니다: $id");
+        return;
+      }
+      debugPrint("DB 에러 (updatePlateSelection): $e");
+      throw Exception("DB 업데이트 실패: $e");
     } catch (e) {
-      dev.log("DB 에러 (updatePlateSelection): $e", name: "Firestore");
+      debugPrint("DB 에러 (updatePlateSelection): $e");
       throw Exception("DB 업데이트 실패: $e");
     }
   }

@@ -32,9 +32,9 @@ abstract class PlateRepository {
 
   Future<PlateModel?> getPlate(String documentId);
 
-  Future<void> updatePlateSelection(String id, bool isSelected, {String? selectedBy});
+  Future<void> recordWhoPlateClick(String id, bool isSelected, {String? selectedBy});
 
-  Future<void> addRequestOrCompleted({
+  Future<void> addPlate({
     required String plateNumber,
     required String location,
     required String area,

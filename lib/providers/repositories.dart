@@ -26,7 +26,7 @@ class DummyPlateRepository implements PlateRepository {
   Future<void> updatePlate(String documentId, Map<String, dynamic> updatedFields) => throw UnimplementedError();
 
   @override
-  Future<void> addRequestOrCompleted({
+  Future<void> addPlate({
     required String plateNumber,
     required String area,
     required String region,
@@ -91,7 +91,7 @@ class DummyPlateRepository implements PlateRepository {
   Future<PlateModel?> getPlate(String documentId) => throw UnimplementedError();
 
   @override
-  Future<void> updatePlateSelection(String id, bool isSelected, {String? selectedBy}) => throw UnimplementedError();
+  Future<void> recordWhoPlateClick(String id, bool isSelected, {String? selectedBy}) => throw UnimplementedError();
 
   @override
   Future<int> getPlateCountForClockInPage(
