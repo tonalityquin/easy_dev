@@ -4,7 +4,7 @@ abstract class LocationRepository {
 
   Future<List<LocationModel>> getLocationsOnce(String area);
 
-  Future<void> addLocation(LocationModel location);
+  Future<void> addSingleLocation(LocationModel location);
 
   Future<void> deleteLocations(List<String> ids);
 

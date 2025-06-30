@@ -115,7 +115,7 @@ class DummyPlateRepository implements PlateRepository {
 
 class DummyLocationRepository implements LocationRepository {
   @override
-  Future<void> addLocation(LocationModel location) => throw UnimplementedError();
+  Future<void> addSingleLocation(LocationModel location) => throw UnimplementedError();
 
   @override
   Future<void> deleteLocations(List<String> ids) => throw UnimplementedError();

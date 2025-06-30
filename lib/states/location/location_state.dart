@@ -123,7 +123,7 @@ class LocationState extends ChangeNotifier {
         isSelected: false,
       );
 
-      await _repository.addLocation(location);
+      await _repository.addSingleLocation(location);
       await loadFromLocationCache();
     } catch (e) {
       onError?.call('🚨 주차 구역 추가 실패: $e');

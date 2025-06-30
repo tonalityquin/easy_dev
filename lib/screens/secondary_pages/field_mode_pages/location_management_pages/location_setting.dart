@@ -33,20 +33,26 @@ class _LocationSettingState extends State<LocationSetting> {
   }
 
   bool _validateInput() {
-    bool isValid = _locationController.text.isNotEmpty;
+    bool isValid = _locationController.text.trim().isNotEmpty;
 
     if (_isSingle) {
-      isValid = isValid && _capacityController.text.trim().isNotEmpty;
+      final capacityText = _capacityController.text.trim();
+      final parsed = int.tryParse(capacityText);
+      isValid = isValid &&
+          capacityText.isNotEmpty &&
+          parsed != null &&
+          parsed > 0;
     } else {
-      bool hasValidSub = _subControllers.any((map) => map['name']!.text.trim().isNotEmpty);
+      bool hasValidSub = _subControllers.any(
+              (map) => map['name']!.text.trim().isNotEmpty);
       isValid = isValid && hasValidSub;
     }
 
     setState(() {
       _errorMessage = !isValid
           ? (_isSingle
-          ? '주차 구역명과 수용 대수를 입력하세요.'
-          : '상위 구역과 하나 이상의 하위 구역이 필요합니다.')
+          ? '주차 구역명과 유효한 수용 대수를 입력하세요. (1 이상의 숫자)'
+          : '상위 구역명과 하나 이상의 하위 구역이 필요합니다.')
           : null;
     });
 
@@ -142,7 +148,8 @@ class _LocationSettingState extends State<LocationSetting> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('하위 구역 목록', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text('하위 구역 목록',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   ...List.generate(_subControllers.length, (index) {
                     return Padding(
@@ -172,7 +179,8 @@ class _LocationSettingState extends State<LocationSetting> {
                           ),
                           IconButton(
                             onPressed: () => _removeSubLocation(index),
-                            icon: const Icon(Icons.delete, color: Colors.red),
+                            icon: const Icon(Icons.delete,
+                                color: Colors.red),
                           ),
                         ],
                       ),
@@ -189,7 +197,8 @@ class _LocationSettingState extends State<LocationSetting> {
                   const SizedBox(height: 8),
                   Text(
                     '총 수용 가능 차량 수: ${_calculateTotalSubCapacity()}대',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    style:
+                    const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
                 ],
@@ -211,39 +220,50 @@ class _LocationSettingState extends State<LocationSetting> {
               children: [
                 ElevatedButton(
                   onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red),
                   child: const Text('취소'),
                 ),
                 ElevatedButton(
                   onPressed: () {
+                    FocusScope.of(context).unfocus();
                     if (_validateInput()) {
                       if (_isSingle) {
-                        final capacity = int.tryParse(_capacityController.text.trim()) ?? 0;
+                        final parsedCapacity = int.parse(
+                            _capacityController.text.trim());
                         widget.onSave({
                           'type': 'single',
                           'name': _locationController.text.trim(),
-                          'capacity': capacity,
+                          'capacity': parsedCapacity,
                         });
                       } else {
                         final subs = _subControllers
-                            .where((map) => map['name']!.text.trim().isNotEmpty)
-                            .map((map) => {
-                          'name': map['name']!.text.trim(),
-                          'capacity': int.tryParse(map['capacity']!.text.trim()) ?? 0,
-                        })
-                            .toList();
+                            .where((map) =>
+                        map['name']!.text.trim().isNotEmpty)
+                            .map((map) {
+                          final cap = int.tryParse(
+                              map['capacity']!.text.trim()) ??
+                              0;
+                          return {
+                            'name': map['name']!.text.trim(),
+                            'capacity': cap,
+                          };
+                        }).toList();
 
                         widget.onSave({
                           'type': 'composite',
-                          'parent': _locationController.text.trim(),
+                          'parent':
+                          _locationController.text.trim(),
                           'subs': subs,
-                          'totalCapacity': _calculateTotalSubCapacity(),
+                          'totalCapacity':
+                          _calculateTotalSubCapacity(),
                         });
                       }
                       Navigator.pop(context);
                     }
                   },
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green),
                   child: const Text('저장'),
                 ),
               ],

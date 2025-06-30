@@ -17,12 +17,6 @@ class FirestoreLocationRepository implements LocationRepository {
   }
 
   @override
-  Future<void> addLocation(LocationModel location) async {
-    final docRef = _firestore.collection('locations').doc(location.id);
-    await docRef.set(location.toFirestoreMap());
-  }
-
-  @override
   Future<void> deleteLocations(List<String> ids) async {
     final batch = _firestore.batch();
     for (final id in ids) {
@@ -30,6 +24,12 @@ class FirestoreLocationRepository implements LocationRepository {
       batch.delete(docRef);
     }
     await batch.commit();
+  }
+
+  @override
+  Future<void> addSingleLocation(LocationModel location) async {
+    final docRef = _firestore.collection('locations').doc(location.id);
+    await docRef.set(location.toFirestoreMap());
   }
 
   /// 🔁 복합 주차 구역 저장 시 용량(capacity)도 포함

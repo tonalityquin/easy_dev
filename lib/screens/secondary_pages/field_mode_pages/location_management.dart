@@ -19,7 +19,8 @@ class LocationManagement extends StatefulWidget {
 class _LocationManagementState extends State<LocationManagement> {
   String _filter = 'all'; // all, single, composite
 
-  void handleIconTapped(int index, LocationState locationState, BuildContext context) {
+  void handleIconTapped(
+      int index, LocationState locationState, BuildContext context) {
     final selectedId = locationState.selectedLocationId;
 
     if (locationState.navigationIcons[index] == Icons.add) {
@@ -35,12 +36,19 @@ class _LocationManagementState extends State<LocationManagement> {
 
                 if (type == 'single') {
                   final name = location['name']?.toString() ?? '';
-                  locationState.addSingleLocation(
+                  final capacity = (location['capacity'] as int?) ?? 0;
+
+                  locationState
+                      .addSingleLocation(
                     name,
                     currentArea,
-                    onError: (error) => showFailedSnackbar(context, '🚨 주차 구역 추가 실패: $error'),
-                  ).then((_) {
-                    showSuccessSnackbar(context, '✅ 주차 구역이 추가되었습니다. 앱을 재실행하세요.');
+                    capacity: capacity,
+                    onError: (error) =>
+                        showFailedSnackbar(context, '🚨 주차 구역 추가 실패: $error'),
+                  )
+                      .then((_) {
+                    showSuccessSnackbar(
+                        context, '✅ 주차 구역이 추가되었습니다. 앱을 재실행하세요.');
                   });
                 } else if (type == 'composite') {
                   final parent = location['parent']?.toString() ?? '';
@@ -55,13 +63,17 @@ class _LocationManagementState extends State<LocationManagement> {
                       .toList()
                       : <Map<String, dynamic>>[];
 
-                  locationState.addCompositeLocation(
+                  locationState
+                      .addCompositeLocation(
                     parent,
                     subs,
                     currentArea,
-                    onError: (error) => showFailedSnackbar(context, '🚨 복합 주차 구역 추가 실패: $error'),
-                  ).then((_) {
-                    showSuccessSnackbar(context, '✅ 복합 주차 구역이 추가되었습니다. 앱을 재실행하세요.');
+                    onError: (error) => showFailedSnackbar(
+                        context, '🚨 복합 주차 구역 추가 실패: $error'),
+                  )
+                      .then((_) {
+                    showSuccessSnackbar(
+                        context, '✅ 복합 주차 구역이 추가되었습니다. 앱을 재실행하세요.');
                   });
                 } else {
                   showFailedSnackbar(context, '❗ 알 수 없는 주차 구역 유형입니다.');
@@ -81,7 +93,8 @@ class _LocationManagementState extends State<LocationManagement> {
 
       locationState.deleteLocations(
         [selectedId],
-        onError: (error) => showFailedSnackbar(context, '🚨 주차 구역 삭제 실패: $error'),
+        onError: (error) =>
+            showFailedSnackbar(context, '🚨 주차 구역 삭제 실패: $error'),
       );
     } else {
       showFailedSnackbar(context, '⚠️ 지원되지 않는 동작입니다.');
@@ -166,7 +179,9 @@ class _LocationManagementState extends State<LocationManagement> {
                     padding: EdgeInsets.all(8.0),
                     child: Text('복합 주차 구역'),
                   ),
-                Expanded(child: _buildGroupedList(grouped, locationState)),
+                Expanded(
+                    child: _buildGroupedList(
+                        grouped, locationState)),
               ],
             ),
           ),
@@ -186,7 +201,8 @@ class _LocationManagementState extends State<LocationManagement> {
       itemBuilder: (context, index) {
         final location = locations[index];
         final isSelected = state.selectedLocationId == location.id;
-        final subtitle = location.capacity > 0 ? '(공간 ${location.capacity}대)' : null;
+        final subtitle =
+        location.capacity > 0 ? '(공간 ${location.capacity}대)' : null;
 
         return LocationContainer(
           location: location.locationName,
@@ -200,16 +216,19 @@ class _LocationManagementState extends State<LocationManagement> {
     );
   }
 
-  Widget _buildGroupedList(Map<String, List<LocationModel>> grouped, LocationState state) {
+  Widget _buildGroupedList(
+      Map<String, List<LocationModel>> grouped, LocationState state) {
     return ListView(
       children: grouped.entries.map((entry) {
-        final totalCapacity = entry.value.fold<int>(0, (sum, loc) => sum + loc.capacity);
+        final totalCapacity =
+        entry.value.fold<int>(0, (sum, loc) => sum + loc.capacity);
 
         return ExpansionTile(
           title: Text('상위 구역: ${entry.key} (공간 $totalCapacity대)'),
           children: entry.value.map((location) {
             final isSelected = state.selectedLocationId == location.id;
-            final subtitle = location.capacity > 0 ? '(공간 ${location.capacity}대)' : null;
+            final subtitle =
+            location.capacity > 0 ? '(공간 ${location.capacity}대)' : null;
 
             return LocationContainer(
               location: location.locationName,

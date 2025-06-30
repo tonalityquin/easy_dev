@@ -18,7 +18,7 @@ class LocationModel {
     required this.capacity,
     this.parent,
     this.type,
-  });
+  }) : assert(id.isNotEmpty, 'ID cannot be empty');
 
   /// ✅ 편의 생성자: ID 자동 생성 (locationName_area 형식)
   factory LocationModel.create({
@@ -48,7 +48,7 @@ class LocationModel {
       locationName: data['locationName'] ?? '',
       area: data['area'] ?? '',
       isSelected: data['isSelected'] ?? false,
-      capacity: (data['capacity'] ?? 0) as int,
+      capacity: (data['capacity'] as num?)?.toInt() ?? 0,
       parent: data['parent'],
       type: data['type'],
     );
@@ -56,11 +56,12 @@ class LocationModel {
 
   /// ✅ 모델 → Firestore Map
   Map<String, dynamic> toFirestoreMap() {
+    final resolvedType = type ?? 'single';
     return {
       'locationName': locationName,
       'area': area,
-      'parent': parent ?? area,
-      'type': type ?? 'single',
+      'parent': resolvedType == 'single' ? locationName : (parent ?? ''),
+      'type': resolvedType,
       'isSelected': isSelected,
       'capacity': capacity,
       'timestamp': FieldValue.serverTimestamp(),
@@ -87,7 +88,7 @@ class LocationModel {
       locationName: data['locationName'] ?? '',
       area: data['area'] ?? '',
       isSelected: data['isSelected'] ?? false,
-      capacity: (data['capacity'] ?? 0) as int,
+      capacity: (data['capacity'] as num?)?.toInt() ?? 0,
       parent: data['parent'],
       type: data['type'],
     );
