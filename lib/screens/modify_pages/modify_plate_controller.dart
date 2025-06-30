@@ -187,7 +187,7 @@ class ModifyPlateController {
 
     final billState = context.read<BillState>();
     final selected = billState.bills.firstWhere(
-      (a) => a.countType == billName,
+          (a) => a.countType == billName,
       orElse: () => billState.emptyModel,
     );
 
@@ -259,7 +259,10 @@ class ModifyPlateController {
     return '${controllerFrontdigit.text}${controllerMidDigit.text}${controllerBackDigit.text}';
   }
 
-  Future<void> handleAction(VoidCallback onSuccess) async {
+  Future<void> handleAction(
+      VoidCallback onSuccess,
+      List<String> selectedStatuses,
+      ) async {
     final billList = context.read<BillState>().bills;
 
     if (billList.isNotEmpty && (selectedBill == null || selectedBill!.isEmpty)) {
@@ -306,6 +309,7 @@ class ModifyPlateController {
       await FirebaseFirestore.instance.collection('plate_status').doc(statusDocId).set(
         {
           'customStatus': updatedCustomStatus,
+          'statusList': selectedStatuses,
           'updatedAt': FieldValue.serverTimestamp(),
           'expireAt': Timestamp.fromDate(DateTime.now().add(Duration(days: 1))),
           'createdBy': 'devAdmin020',
@@ -313,7 +317,10 @@ class ModifyPlateController {
         SetOptions(merge: true),
       );
 
-      await FirebaseFirestore.instance.collection('plates').doc(plate.id).update({'customStatus': updatedCustomStatus});
+      await FirebaseFirestore.instance.collection('plates').doc(plate.id).update({
+        'customStatus': updatedCustomStatus,
+        'statusList': selectedStatuses,
+      });
 
       final updatedPlate = plate.copyWith(
         billingType: newBillingType,
@@ -327,13 +334,11 @@ class ModifyPlateController {
         imageUrls: mergedImageUrls,
         customStatus: updatedCustomStatus,
         isSelected: false,
-        // isSelected를 false로 초기화
-        selectedBy: null, // selectedBy 또한 null로 초기화
+        selectedBy: null,
       );
 
       final plateState = context.read<PlateState>();
 
-      // Firestore 상태 false로 업데이트
       await plateState.toggleIsSelected(
         collection: collectionKey,
         plateNumber: plateNumber,
@@ -341,7 +346,6 @@ class ModifyPlateController {
         onError: (error) => debugPrint(error),
       );
 
-      // 상태 트리에서 isSelected false로 업데이트
       await plateState.updatePlateLocally(collectionKey, updatedPlate);
 
       onSuccess();

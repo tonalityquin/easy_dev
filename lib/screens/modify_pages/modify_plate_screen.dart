@@ -50,6 +50,9 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
 
   bool isLoading = true;
 
+  // 상태 선택 결과
+  List<String> selectedStatusNames = [];
+
   @override
   void initState() {
     super.initState();
@@ -112,7 +115,9 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
   }
 
   VoidCallback _buildLocationAction() {
-    return _controller.isLocationSelected ? () => setState(() => _controller.clearLocation()) : _selectParkingLocation;
+    return _controller.isLocationSelected
+        ? () => setState(() => _controller.clearLocation())
+        : _selectParkingLocation;
   }
 
   @override
@@ -130,7 +135,10 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 1,
-        title: const Text("번호판 수정", style: TextStyle(color: Colors.grey, fontSize: 16)),
+        title: const Text(
+          "번호판 수정",
+          style: TextStyle(color: Colors.grey, fontSize: 16),
+        ),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -154,7 +162,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
             ModifyPhotoSection(
               capturedImages: _controller.capturedImages,
               imageUrls: widget.plate.imageUrls ?? [],
-              plateNumber: widget.plate.plateNumber, // ← 이 부분 추가
+              plateNumber: widget.plate.plateNumber,
             ),
             const SizedBox(height: 32.0),
             ModifyBillSection(
@@ -162,20 +170,23 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
               onChanged: (value) {
                 setState(() {
                   _controller.selectedBill = value;
-                  _controller.applyBillDefaults(value); // ✅ 꼭 추가되어야 반영됨
+                  _controller.applyBillDefaults(value);
                 });
               },
             ),
             const SizedBox(height: 32.0),
             ModifyStatusOnTapSection(
-              statuses: _controller.statuses,
-              isSelected: _controller.isSelected,
-              onToggle: (index) {
-                setState(() => _controller.toggleStatus(index));
+              onSelectionChanged: (selected) {
+                setState(() {
+                  selectedStatusNames = selected;
+                });
               },
             ),
             const SizedBox(height: 32.0),
-            const Text('추가 상태 메모 (최대 10자)', style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text(
+              '추가 상태 메모 (최대 10자)',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 8),
             TextField(
               controller: _controller.customStatusController,
@@ -240,7 +251,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                     Navigator.pop(context);
                     showSuccessSnackbar(context, "수정이 완료되었습니다!");
                   }
-                });
+                }, selectedStatusNames);
                 if (mounted) setState(() => isLoading = false);
               },
             ),

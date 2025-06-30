@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../states/bill/bill_state.dart';
-import '../../states/status/status_state.dart';
 import '../../states/area/area_state.dart';
 
 import 'input_plate_controller.dart';
@@ -47,7 +46,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       if (text.length == 4 && controller.isInputValid()) {
         final plateNumber = controller.buildPlateNumber();
         final area = context.read<AreaState>().currentArea;
-        final customStatus = await showCustomStatusDialog(context, plateNumber, area);
+        final customStatus = await showInputCustomStatusDialog(context, plateNumber, area);
 
         if (customStatus != null && mounted) {
           setState(() {
@@ -59,22 +58,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final billState = context.read<BillState>();
-      final statusState = context.read<StatusState>();
-      final areaState = context.read<AreaState>();
-      final currentArea = areaState.currentArea;
-
-      // ✅ Firestore 호출 대신 캐시만 우선 읽기
       await billState.loadFromBillCache();
-      await statusState.loadFromStatusCache(); // 캐시 우선
-
-      final areaStatuses = statusState.statuses
-          .where((status) => status.area == currentArea && status.isActive)
-          .map((status) => status.name)
-          .toList();
-
       setState(() {
-        controller.statuses = areaStatuses;
-        controller.isSelected = List.generate(areaStatuses.length, (_) => false);
         controller.isLocationSelected = controller.locationController.text.isNotEmpty;
       });
     });
@@ -82,8 +67,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
   void _showCameraPreviewDialog() async {
     await _cameraHelper.initializeInputCamera();
-
     if (!mounted) return;
+
     await showDialog(
       context: context,
       builder: (context) => InputCameraPreviewDialog(
@@ -116,7 +101,9 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   }
 
   VoidCallback _buildLocationAction() {
-    return controller.isLocationSelected ? () => setState(() => controller.clearLocation()) : _selectParkingLocation;
+    return controller.isLocationSelected
+        ? () => setState(() => controller.clearLocation())
+        : _selectParkingLocation;
   }
 
   Widget _buildKeypad() {
@@ -150,8 +137,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       enableDigitModeSwitch: false,
       onReset: () {
         setState(() {
-          controller.clearInput(); // 전체 입력 초기화
-          controller.setActiveController(controller.controllerFrontDigit); // 앞자리부터 다시 시작
+          controller.clearInput();
+          controller.setActiveController(controller.controllerFrontDigit);
         });
       },
     );
@@ -229,16 +216,16 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
             ),
             const SizedBox(height: 32),
             InputStatusOnTapSection(
-              statuses: controller.statuses,
-              isSelected: controller.isSelected,
-              onToggle: (index) {
-                setState(() {
-                  controller.toggleStatus(index);
-                });
+              onSelectionChanged: (selected) {
+                // 선택된 상태를 controller에 반영
+                controller.selectedStatuses = selected;
               },
             ),
             const SizedBox(height: 32),
-            const Text('추가 상태 메모 (최대 10자)', style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text(
+              '추가 상태 메모 (최대 10자)',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 8),
             TextField(
               controller: controller.customStatusController,

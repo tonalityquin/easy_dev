@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
-Future<String?> showCustomStatusDialog(BuildContext context, String plateNumber, String area) async {
+Future<String?> showInputCustomStatusDialog(BuildContext context, String plateNumber, String area) async {
   final docId = '${plateNumber}_$area';
   final docSnapshot = await FirebaseFirestore.instance
       .collection('plate_status')

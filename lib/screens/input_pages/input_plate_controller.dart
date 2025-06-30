@@ -198,6 +198,18 @@ class InputPlateController {
             : fetchedCustomStatus ?? '',
       );
 
+      // ✅ 상태 메모와 선택 상태 Firestore에 저장
+      await FirebaseFirestore.instance.collection('plate_status').doc('${plateNumber}_$area').set(
+        {
+          'customStatus': customStatusController.text.trim(),
+          'statusList': selectedStatuses, // ✅ 토글 상태 저장
+          'updatedAt': FieldValue.serverTimestamp(),
+          'expireAt': Timestamp.fromDate(DateTime.now().add(Duration(days: 1))),
+          'createdBy': userName,
+        },
+        SetOptions(merge: true),
+      );
+
       if (mounted) {
         Navigator.of(context).pop();
         if (wasSuccessful) {
