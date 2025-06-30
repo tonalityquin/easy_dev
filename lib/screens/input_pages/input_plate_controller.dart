@@ -9,7 +9,6 @@ import 'input_plate_service.dart';
 import '../../states/bill/bill_state.dart';
 import '../../states/user/user_state.dart';
 import '../../states/area/area_state.dart';
-import '../../states/status/status_state.dart';
 
 class InputPlateController {
   final TextEditingController controllerFrontDigit = TextEditingController();
@@ -226,12 +225,5 @@ class InputPlateController {
       isLoading = false;
       if (mounted) refreshUI();
     }
-  }
-
-  /// ✅ 상태 캐싱된 데이터를 StatusState에서 불러오기
-  void loadStatusesFromCache(BuildContext context) {
-    final statusState = context.read<StatusState>();
-    statuses = statusState.statuses.map((s) => s.name).toList();
-    isSelected = List.generate(statuses.length, (_) => false);
   }
 }

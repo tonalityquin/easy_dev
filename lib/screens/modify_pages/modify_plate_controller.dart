@@ -8,7 +8,6 @@ import '../../enums/plate_type.dart';
 
 import '../../states/plate/plate_state.dart';
 import '../../states/bill/bill_state.dart';
-import '../../states/status/status_state.dart';
 import '../../states/area/area_state.dart';
 
 import '../../utils/snackbar_helper.dart';
@@ -31,10 +30,6 @@ class ModifyPlateController {
   CameraController? cameraController;
   bool isCameraInitialized = false;
   bool _isDisposing = false;
-
-  List<String> statuses = [];
-  List<String> selectedStatuses = [];
-  List<bool> isSelected = [];
 
   int selectedBasicStandard = 0;
   int selectedBasicAmount = 0;
@@ -156,30 +151,10 @@ class ModifyPlateController {
     selectedBasicAmount = plate.basicAmount ?? 0;
     selectedAddStandard = plate.addStandard ?? 0;
     selectedAddAmount = plate.addAmount ?? 0;
-    selectedStatuses = List<String>.from(plate.statusList);
     isLocationSelected = locationController.text.isNotEmpty;
 
     fetchedCustomStatus = plate.customStatus;
     customStatusController.text = plate.customStatus ?? '';
-  }
-
-  Future<void> initializeStatuses() async {
-    final statusState = context.read<StatusState>();
-    final areaState = context.read<AreaState>();
-    final currentArea = areaState.currentArea;
-
-    int retry = 0;
-    while (statusState.statuses.isEmpty && retry < 5) {
-      await Future.delayed(const Duration(milliseconds: 500));
-      retry++;
-    }
-
-    statuses = statusState.statuses
-        .where((status) => status.area == currentArea && status.isActive)
-        .map((status) => status.name)
-        .toList();
-
-    isSelected = statuses.map((s) => selectedStatuses.contains(s)).toList();
   }
 
   void applyBillDefaults(String? billName) {
@@ -231,16 +206,6 @@ class ModifyPlateController {
     } catch (e) {
       debugPrint('❌ customStatus 삭제 실패: $e');
       rethrow;
-    }
-  }
-
-  void toggleStatus(int index) {
-    isSelected[index] = !isSelected[index];
-    final status = statuses[index];
-    if (isSelected[index]) {
-      selectedStatuses.add(status);
-    } else {
-      selectedStatuses.remove(status);
     }
   }
 
@@ -311,7 +276,7 @@ class ModifyPlateController {
           'customStatus': updatedCustomStatus,
           'statusList': selectedStatuses,
           'updatedAt': FieldValue.serverTimestamp(),
-          'expireAt': Timestamp.fromDate(DateTime.now().add(Duration(days: 1))),
+          'expireAt': Timestamp.fromDate(DateTime.now().add(const Duration(days: 1))),
           'createdBy': 'devAdmin020',
         },
         SetOptions(merge: true),

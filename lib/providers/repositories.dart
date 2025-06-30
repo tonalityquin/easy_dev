@@ -6,19 +6,16 @@ import '../enums/plate_type.dart';
 import '../repositories/bill_repo/firestore_bill_repository.dart';
 import '../repositories/location/firestore_location_repository.dart';
 import '../repositories/plate/firestore_plate_repository.dart';
-import '../repositories/status/firestore_status_repository.dart';
 import '../repositories/user/firestore_user_repository.dart';
 
 import '../repositories/plate/plate_repository.dart';
 import '../repositories/location/location_repository.dart';
 import '../repositories/user/user_repository.dart';
 import '../repositories/bill_repo/bill_repository.dart';
-import '../repositories/status/status_repository.dart';
 import '../models/plate_model.dart';
 import '../models/location_model.dart';
 import '../models/user_model.dart';
 import '../models/bill_model.dart';
-import '../models/status_model.dart';
 
 /// ⚠️ fallback dummy 구현체들 (필수 메서드 구현 포함)
 class DummyPlateRepository implements PlateRepository {
@@ -186,23 +183,6 @@ class DummyBillRepository implements BillRepository {
   Future<List<BillModel>> getBillOnce(String area) => throw UnimplementedError();
 }
 
-class DummyStatusRepository implements StatusRepository {
-  @override
-  Future<void> addToggleItem(StatusModel status) => throw UnimplementedError();
-
-  @override
-  Future<void> deleteToggleItem(String id) => throw UnimplementedError();
-
-  @override
-  Future<void> updateToggleStatus(String id, bool status) => throw UnimplementedError();
-
-  @override
-  Future<List<StatusModel>> getStatusesOnce(String area) => throw UnimplementedError();
-
-  @override
-  Future<List<StatusModel>> getStatusesOnceWithCache(String area) => throw UnimplementedError();
-}
-
 final List<SingleChildWidget> repositoryProviders = [
   Provider<PlateRepository>(
     create: (_) {
@@ -241,16 +221,6 @@ final List<SingleChildWidget> repositoryProviders = [
       } catch (e, s) {
         dev.log("⚠️ AdjustmentRepository 초기화 실패", error: e, stackTrace: s);
         return DummyBillRepository();
-      }
-    },
-  ),
-  Provider<StatusRepository>(
-    create: (_) {
-      try {
-        return FirestoreStatusRepository();
-      } catch (e, s) {
-        dev.log("⚠️ StatusRepository 초기화 실패", error: e, stackTrace: s);
-        return DummyStatusRepository();
       }
     },
   ),

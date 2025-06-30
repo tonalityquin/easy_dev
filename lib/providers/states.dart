@@ -5,8 +5,6 @@ import 'package:provider/single_child_widget.dart';
 import '../repositories/bill_repo/bill_repository.dart';
 import '../repositories/location/firestore_location_repository.dart';
 import '../repositories/plate/plate_repository.dart';
-import '../repositories/status/firestore_status_repository.dart';
-import '../repositories/status/status_repository.dart';
 import '../repositories/user/user_repository.dart';
 
 // 📦 States
@@ -19,7 +17,6 @@ import '../states/plate/modify_plate.dart';
 import '../states/user/user_state.dart';
 import '../states/location/location_state.dart';
 import '../states/bill/bill_state.dart';
-import '../states/status/status_state.dart';
 import '../states/plate/input_plate.dart';
 import '../states/plate/plate_state.dart';
 import '../states/plate/filter_plate.dart';
@@ -123,15 +120,6 @@ final List<SingleChildWidget> stateProviders = [
       final repo = context.read<BillRepository>();
       final area = context.read<AreaState>();
       return BillState(repo, area);
-    },
-  ),
-
-  // 📊 사용자 정의 상태 관리
-  ChangeNotifierProvider(
-    create: (context) {
-      final repo = context.read<StatusRepository?>() ?? FirestoreStatusRepository();
-      final area = context.read<AreaState>();
-      return StatusState(repo, area);
     },
   ),
 

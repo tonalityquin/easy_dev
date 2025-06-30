@@ -48,9 +48,9 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
   final List<XFile> _capturedImages = [];
   final List<String> _existingImageUrls = [];
 
-  bool isLoading = true;
+  bool isLoading = false;
 
-  // 상태 선택 결과
+  /// 상태 선택 결과
   List<String> selectedStatusNames = [];
 
   @override
@@ -74,9 +74,6 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
 
     _controller.initializePlate();
     _controller.initializeFieldValues();
-    _controller.initializeStatuses().then((_) {
-      if (mounted) setState(() => isLoading = false);
-    });
   }
 
   void _showCameraPreviewDialog() async {
@@ -234,7 +231,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                 Expanded(
                   child: ModifyAnimatedParkingButton(
                     isLocationSelected: _controller.isLocationSelected,
-                    onPressed: _buildLocationAction(),
+                    onPressed: _buildLocationAction,
                   ),
                 ),
               ],
