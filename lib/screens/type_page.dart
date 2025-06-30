@@ -38,7 +38,7 @@ class TypePage extends StatelessWidget {
               plateState.getSelectedPlate(collection, userName);
 
               if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
-                await plateState.toggleIsSelected(
+                await plateState.togglePlateIsSelected(
                   collection: collection,
                   plateNumber: selectedPlate.plateNumber,
                   userName: userName,

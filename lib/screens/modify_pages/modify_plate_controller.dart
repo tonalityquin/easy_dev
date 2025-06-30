@@ -311,7 +311,7 @@ class ModifyPlateController {
 
       final plateState = context.read<PlateState>();
 
-      await plateState.toggleIsSelected(
+      await plateState.togglePlateIsSelected(
         collection: collectionKey,
         plateNumber: plateNumber,
         userName: plate.userName,

@@ -121,7 +121,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
 
     // ✅ 정산 상태와 관계없이 그대로 출차 완료
     try {
-      plateState.toggleIsSelected(
+      plateState.togglePlateIsSelected(
         collection: PlateType.departureRequests,
         plateNumber: selectedPlate.plateNumber,
         userName: userName,
@@ -156,7 +156,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
         );
 
         if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
-          await plateState.toggleIsSelected(
+          await plateState.togglePlateIsSelected(
             collection: PlateType.departureRequests,
             plateNumber: selectedPlate.plateNumber,
             userName: userName,
@@ -208,7 +208,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                         filterCondition: (request) =>
                         request.type == PlateType.departureRequests.firestoreValue,
                         onPlateTap: (plateNumber, area) {
-                          plateState.toggleIsSelected(
+                          plateState.togglePlateIsSelected(
                             collection: PlateType.departureRequests,
                             plateNumber: plateNumber,
                             userName: userName,
@@ -255,7 +255,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                         filterCondition: (request) =>
                         request.type == PlateType.departureRequests.firestoreValue,
                         onPlateTap: (plateNumber, area) {
-                          plateState.toggleIsSelected(
+                          plateState.togglePlateIsSelected(
                             collection: PlateType.departureRequests,
                             plateNumber: plateNumber,
                             userName: userName,
@@ -291,7 +291,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                   filterCondition: (request) =>
                   request.type == PlateType.departureRequests.firestoreValue,
                   onPlateTap: (plateNumber, area) {
-                    plateState.toggleIsSelected(
+                    plateState.togglePlateIsSelected(
                       collection: PlateType.departureRequests,
                       plateNumber: plateNumber,
                       userName: userName,

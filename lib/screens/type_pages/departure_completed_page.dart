@@ -99,7 +99,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
         );
 
         if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
-          await plateState.toggleIsSelected(
+          await plateState.togglePlateIsSelected(
             collection: PlateType.departureCompleted,
             plateNumber: selectedPlate.plateNumber,
             userName: userName,
@@ -128,7 +128,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
                   collection: PlateType.departureCompleted,
                   filterCondition: (_) => true,
                   onPlateTap: (plateNumber, area) {
-                    plateState.toggleIsSelected(
+                    plateState.togglePlateIsSelected(
                       collection: PlateType.departureCompleted,
                       plateNumber: plateNumber,
                       userName: userName,

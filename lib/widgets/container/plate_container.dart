@@ -124,7 +124,7 @@ class PlateContainer extends StatelessWidget {
                   return;
                 }
 
-                plateState.toggleIsSelected(
+                plateState.togglePlateIsSelected(
                   collection: collection,
                   plateNumber: item.plateNumber,
                   userName: userName,

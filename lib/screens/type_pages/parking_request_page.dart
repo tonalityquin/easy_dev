@@ -75,7 +75,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
 
   void _handlePlateTap(BuildContext context, String plateNumber, String area) {
     final userName = context.read<UserState>().name;
-    context.read<PlateState>().toggleIsSelected(
+    context.read<PlateState>().togglePlateIsSelected(
           collection: PlateType.parkingRequests,
           plateNumber: plateNumber,
           userName: userName,
@@ -193,7 +193,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
 
         // 조건에 따라 선택 해제 또는 리포트 닫기
         if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
-          await plateState.toggleIsSelected(
+          await plateState.togglePlateIsSelected(
             collection: PlateType.parkingRequests,
             plateNumber: selectedPlate.plateNumber,
             userName: userName,

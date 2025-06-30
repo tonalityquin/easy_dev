@@ -125,7 +125,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
           userName,
         );
         if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
-          await plateState.toggleIsSelected(
+          await plateState.togglePlateIsSelected(
             collection: PlateType.parkingCompleted,
             plateNumber: selectedPlate.plateNumber,
             userName: userName,
@@ -204,7 +204,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
           collection: PlateType.parkingCompleted,
           filterCondition: (request) => request.type == PlateType.parkingCompleted.firestoreValue,
           onPlateTap: (plateNumber, area) {
-            context.read<PlateState>().toggleIsSelected(
+            context.read<PlateState>().togglePlateIsSelected(
                   collection: PlateType.parkingCompleted,
                   plateNumber: plateNumber,
                   userName: userName,

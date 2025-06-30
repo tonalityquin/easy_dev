@@ -72,7 +72,7 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  Future<void> toggleIsSelected({
+  Future<void> togglePlateIsSelected({
     required PlateType collection,
     required String plateNumber,
     required String userName,
