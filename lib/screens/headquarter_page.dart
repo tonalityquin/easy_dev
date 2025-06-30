@@ -56,7 +56,6 @@ class RefreshableBody extends StatelessWidget {
     if (velocity < 0) {
       Navigator.of(context).push(_slidePage(const SecondaryPage(), fromLeft: false));
     } else {
-      showFailedSnackbar(context, '드래그 동작이 감지되지 않았습니다.');
     }
   }
 

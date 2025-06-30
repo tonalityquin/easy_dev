@@ -59,7 +59,7 @@ class TypePage extends StatelessWidget {
                     Icon(Icons.arrow_back_ios, size: 16, color: Colors.grey),
                     SizedBox(width: 4),
                     Text(
-                      " version : Beta 0.8 ",
+                      " 페이지 가이드 라인 예정",
                       style: TextStyle(color: Colors.grey, fontSize: 16),
                     ),
                     SizedBox(width: 4),
