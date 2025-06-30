@@ -141,10 +141,15 @@ class FirestorePlateRepository implements PlateRepository {
 
     final existingPlate = await getPlate(documentId);
     if (existingPlate != null) {
-      if (existingPlate.type == PlateType.departureCompleted.firestoreValue) {
-        dev.log("⚠️ departure_completed 중복 등록 허용: $plateNumber");
+      final existingType = PlateType.values.firstWhere(
+        (type) => type.firestoreValue == existingPlate.type,
+        orElse: () => PlateType.parkingRequests,
+      );
+
+      if (_isAllowedDuplicate(existingType)) {
+        debugPrint("⚠️ ${existingType.name} 상태 중복 등록 허용: $plateNumber");
       } else {
-        dev.log("🚨 중복된 번호판 등록 시도: $plateNumber");
+        debugPrint("🚨 중복된 번호판 등록 시도: $plateNumber (${existingType.name})");
         throw Exception("이미 등록된 번호판입니다: $plateNumber");
       }
     }
@@ -155,7 +160,7 @@ class FirestorePlateRepository implements PlateRepository {
 
         if (billDoc.exists) {
           final billData = billDoc.data()!;
-          dev.log('🔥 Firestore에서 가져온 정산 데이터: $billData');
+          debugPrint('🔥 Firestore에서 가져온 정산 데이터: $billData');
           basicStandard = billData['basicStandard'] as int? ?? 0;
           basicAmount = billData['basicAmount'] as int? ?? 0;
           addStandard = billData['addStandard'] as int? ?? 0;
@@ -164,7 +169,7 @@ class FirestorePlateRepository implements PlateRepository {
           throw Exception('🚨 Firestore에서 정산 데이터를 찾을 수 없음');
         }
       } catch (e) {
-        dev.log("🔥 Firestore 에러 (addRequestOrCompleted): $e");
+        debugPrint("🔥 Firestore 에러 (addPlate): $e");
         throw Exception("Firestore 데이터 로드 실패: $e");
       }
     }
@@ -200,7 +205,7 @@ class FirestorePlateRepository implements PlateRepository {
       customStatus: customStatus,
     );
 
-    dev.log('🔥 저장할 PlateModel: ${plate.toMap()}');
+    debugPrint('🔥 저장할 PlateModel: ${plate.toMap()}');
     await addOrUpdatePlate(documentId, plate);
 
     if (customStatus != null && customStatus.trim().isNotEmpty) {
@@ -214,6 +219,10 @@ class FirestorePlateRepository implements PlateRepository {
         'expireAt': expireAt,
       });
     }
+  }
+
+  bool _isAllowedDuplicate(PlateType type) {
+    return type == PlateType.departureCompleted;
   }
 
   @override
