@@ -17,7 +17,7 @@ class BreakButtonWidget extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           gradient: const LinearGradient(
-            colors: [Color(0xFF90CAF9), Color(0xFF42A5F5)],
+            colors: [Color(0xFF81C784), Color(0xFF43A047)], // 연한 초록 -> 진한 초록
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),

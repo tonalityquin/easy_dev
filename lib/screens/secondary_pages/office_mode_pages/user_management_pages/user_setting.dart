@@ -135,9 +135,18 @@ class _UserAccountsState extends State<UserSetting> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('계정 생성')),
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text(
+          '계정 생성',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black87,
+        elevation: 1,
+      ),
       body: ListView(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16),
         children: [
           TextField(
             controller: _nameController,
@@ -146,7 +155,13 @@ class _UserAccountsState extends State<UserSetting> {
             onSubmitted: (_) => FocusScope.of(context).requestFocus(_phoneFocus),
             decoration: InputDecoration(
               labelText: '이름',
-              border: const OutlineInputBorder(),
+              focusedBorder: OutlineInputBorder(
+                borderSide: const BorderSide(color: Colors.green),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
               errorText: _errorMessage == '이름을 다시 입력하세요' ? _errorMessage : null,
             ),
           ),
@@ -160,7 +175,13 @@ class _UserAccountsState extends State<UserSetting> {
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             decoration: InputDecoration(
               labelText: '전화번호',
-              border: const OutlineInputBorder(),
+              focusedBorder: OutlineInputBorder(
+                borderSide: const BorderSide(color: Colors.green),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
               errorText: _errorMessage == '전화번호를 다시 입력하세요' ? _errorMessage : null,
             ),
           ),
@@ -175,7 +196,13 @@ class _UserAccountsState extends State<UserSetting> {
                   keyboardType: TextInputType.text,
                   decoration: InputDecoration(
                     labelText: '이메일(구글)',
-                    border: const OutlineInputBorder(),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: const BorderSide(color: Colors.green),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                     errorText: _errorMessage == '이메일을 입력하세요' ? _errorMessage : null,
                   ),
                 ),
@@ -186,7 +213,10 @@ class _UserAccountsState extends State<UserSetting> {
                 child: SizedBox(
                   height: 56,
                   child: Center(
-                    child: Text('@gmail.com'),
+                    child: Text(
+                      '@gmail.com',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ),
               ),
@@ -195,14 +225,27 @@ class _UserAccountsState extends State<UserSetting> {
           const SizedBox(height: 16),
           DropdownButtonFormField<RoleType>(
             value: _selectedRole,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: '직책',
-              border: OutlineInputBorder(),
+              focusedBorder: OutlineInputBorder(
+                borderSide: const BorderSide(color: Colors.green),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
+            dropdownColor: Colors.white,
+            iconEnabledColor: Colors.green,
             items: RoleType.values
                 .map((role) => DropdownMenuItem<RoleType>(
                       value: role,
-                      child: Text(role.label),
+                      child: Text(
+                        role.label,
+                        style: TextStyle(
+                          color: role == _selectedRole ? Colors.green : Colors.purple,
+                        ),
+                      ),
                     ))
                 .toList(),
             onChanged: (value) {
@@ -217,9 +260,15 @@ class _UserAccountsState extends State<UserSetting> {
           TextField(
             controller: _passwordController,
             readOnly: true,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: '비밀번호',
-              border: OutlineInputBorder(),
+              focusedBorder: OutlineInputBorder(
+                borderSide: const BorderSide(color: Colors.green),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -229,42 +278,60 @@ class _UserAccountsState extends State<UserSetting> {
           ),
           if (_errorMessage != null)
             Padding(
-              padding: const EdgeInsets.only(top: 16.0),
+              padding: const EdgeInsets.only(top: 16),
               child: Text(
                 _errorMessage!,
                 style: const TextStyle(color: Colors.red),
               ),
             ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.white),
-                child: const Text('취소'),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.purple.withOpacity(0.2),
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text('취소'),
+                ),
               ),
-              ElevatedButton(
-                onPressed: () {
-                  if (_validateInputs()) {
-                    final fullEmail = '${_emailController.text}@gmail.com';
-                    widget.onSave(
-                      _nameController.text,
-                      _phoneController.text,
-                      fullEmail,
-                      _selectedRole.name,
-                      _passwordController.text,
-                      widget.areaValue,
-                      widget.division,
-                      false,
-                      false,
-                      widget.areaValue,
-                    );
-                    Navigator.pop(context);
-                  }
-                },
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.white),
-                child: const Text('생성'),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () {
+                    if (_validateInputs()) {
+                      final fullEmail = '${_emailController.text}@gmail.com';
+                      widget.onSave(
+                        _nameController.text,
+                        _phoneController.text,
+                        fullEmail,
+                        _selectedRole.name,
+                        _passwordController.text,
+                        widget.areaValue,
+                        widget.division,
+                        false,
+                        false,
+                        widget.areaValue,
+                      );
+                      Navigator.pop(context);
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text('생성'),
+                ),
               ),
             ],
           ),
