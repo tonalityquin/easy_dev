@@ -51,7 +51,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
   bool isLoading = false;
 
   /// 상태 선택 결과
-  List<String> selectedStatusNames = [];
+  late List<String> selectedStatusNames;
 
   @override
   void initState() {
@@ -74,6 +74,9 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
 
     _controller.initializePlate();
     _controller.initializeFieldValues();
+
+    // 초기 상태 리스트
+    selectedStatusNames = List<String>.from(widget.plate.statusList);
   }
 
   void _showCameraPreviewDialog() async {
@@ -173,6 +176,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
             ),
             const SizedBox(height: 32.0),
             ModifyStatusOnTapSection(
+              initialSelectedStatuses: selectedStatusNames,
               onSelectionChanged: (selected) {
                 setState(() {
                   selectedStatusNames = selected;
@@ -203,6 +207,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                     setState(() {
                       _controller.fetchedCustomStatus = null;
                       _controller.customStatusController.clear();
+                      selectedStatusNames = [];
                     });
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('자동 메모가 삭제되었습니다')),

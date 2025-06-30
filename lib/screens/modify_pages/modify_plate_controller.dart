@@ -40,7 +40,11 @@ class ModifyPlateController {
 
   bool isLocationSelected = false;
 
+  /// Firestore에서 가져온 추가 상태 메모
   String? fetchedCustomStatus;
+
+  /// Firestore에서 가져온 초기 상태 리스트
+  List<String> initialSelectedStatuses = [];
 
   final List<String> _regions = [
     '전국',
@@ -155,6 +159,9 @@ class ModifyPlateController {
 
     fetchedCustomStatus = plate.customStatus;
     customStatusController.text = plate.customStatus ?? '';
+
+    /// 차량 상태 리스트 초기화
+    initialSelectedStatuses = List<String>.from(plate.statusList);
   }
 
   void applyBillDefaults(String? billName) {

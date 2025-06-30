@@ -4,16 +4,25 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../utils/status_mapping_helper.dart';
 
 class InputStatusOnTapSection extends StatefulWidget {
-  /// 부모에 현재 선택된 상태 리스트를 알려주고 싶으면 이 콜백 사용
+  /// 부모에게 선택된 상태 목록을 전달하는 콜백
   final ValueChanged<List<String>>? onSelectionChanged;
+
+  /// 초기 선택된 상태 이름들
+  final List<String>? initialSelectedStatuses;
+
+  /// 초기 업종
+  final String? initialCategory;
 
   const InputStatusOnTapSection({
     super.key,
     this.onSelectionChanged,
+    this.initialSelectedStatuses,
+    this.initialCategory,
   });
 
   @override
-  State<InputStatusOnTapSection> createState() => _InputStatusOnTapSectionState();
+  State<InputStatusOnTapSection> createState() =>
+      _InputStatusOnTapSectionState();
 }
 
 class _InputStatusOnTapSectionState extends State<InputStatusOnTapSection> {
@@ -28,12 +37,38 @@ class _InputStatusOnTapSectionState extends State<InputStatusOnTapSection> {
 
   Future<void> _loadSavedCategory() async {
     final prefs = await SharedPreferences.getInstance();
+
     final saved = prefs.getString('selected_category');
-    if (saved != null && saved.isNotEmpty) {
-      setState(() {
-        selectedCategory = saved;
-      });
+
+    // SharedPreferences > initialCategory 우선순위
+    setState(() {
+      selectedCategory = saved?.isNotEmpty == true
+          ? saved
+          : widget.initialCategory;
+    });
+
+    _restoreInitialStatuses();
+  }
+
+  void _restoreInitialStatuses() {
+    if (selectedCategory == null || widget.initialSelectedStatuses == null) return;
+
+    final currentStatuses = StatusMappingHelper.getStatuses(selectedCategory);
+    final restoredIndexes = <int>{};
+
+    for (int i = 0; i < currentStatuses.length; i++) {
+      if (widget.initialSelectedStatuses!.contains(currentStatuses[i])) {
+        restoredIndexes.add(i);
+      }
     }
+
+    setState(() {
+      selectedIndexes = restoredIndexes;
+    });
+
+    widget.onSelectionChanged?.call(
+      selectedIndexes.map((i) => currentStatuses[i]).toList(),
+    );
   }
 
   Future<void> _saveCategory(String? category) async {
@@ -48,9 +83,7 @@ class _InputStatusOnTapSectionState extends State<InputStatusOnTapSection> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
-    final List<String> currentStatuses =
-    StatusMappingHelper.getStatuses(selectedCategory);
+    final currentStatuses = StatusMappingHelper.getStatuses(selectedCategory);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -74,8 +107,9 @@ class _InputStatusOnTapSectionState extends State<InputStatusOnTapSection> {
               selectedIndexes.clear();
             });
             _saveCategory(value);
-            // 업종 바뀌면 선택 리스트 초기화
-            widget.onSelectionChanged?.call([]);
+
+            // 업종 바뀌면 초기 선택 복원 시도
+            _restoreInitialStatuses();
           },
         ),
         const SizedBox(height: 16),
@@ -112,11 +146,8 @@ class _InputStatusOnTapSectionState extends State<InputStatusOnTapSection> {
                 label: Text(
                   currentStatuses[index],
                   style: TextStyle(
-                    fontWeight:
-                    selected ? FontWeight.bold : FontWeight.normal,
-                    color: selected
-                        ? theme.primaryColor
-                        : Colors.black87,
+                    fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                    color: selected ? theme.primaryColor : Colors.black87,
                   ),
                 ),
                 selected: selected,
@@ -128,7 +159,6 @@ class _InputStatusOnTapSectionState extends State<InputStatusOnTapSection> {
                       selectedIndexes.add(index);
                     }
                   });
-                  // 상태가 바뀔 때마다 선택된 상태 목록 부모에 전달
                   widget.onSelectionChanged?.call(
                     selectedIndexes.map((i) => currentStatuses[i]).toList(),
                   );

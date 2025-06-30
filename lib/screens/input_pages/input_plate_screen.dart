@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../states/bill/bill_state.dart';
 import '../../states/area/area_state.dart';
@@ -19,8 +20,8 @@ import 'utils/buttons/input_animated_action_button.dart';
 
 import 'widgets/input_location_dialog.dart';
 import 'widgets/input_camera_preview_dialog.dart';
-import 'widgets/input_custom_status_dialog.dart';
 import 'widgets/input_bottom_navigation.dart';
+import 'widgets/input_custom_status_dialog.dart';
 import 'keypad/num_keypad.dart';
 import 'keypad/kor_keypad.dart';
 
@@ -35,6 +36,12 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   final controller = InputPlateController();
   late InputCameraHelper _cameraHelper;
 
+  /// 선택된 상태들
+  List<String> selectedStatusNames = [];
+
+  /// 상태 선택 섹션 Key (토글 상태를 새로 그리기 위해)
+  Key statusSectionKey = UniqueKey();
+
   @override
   void initState() {
     super.initState();
@@ -46,12 +53,26 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       if (text.length == 4 && controller.isInputValid()) {
         final plateNumber = controller.buildPlateNumber();
         final area = context.read<AreaState>().currentArea;
-        final customStatus = await showInputCustomStatusDialog(context, plateNumber, area);
 
-        if (customStatus != null && mounted) {
+        // Firestore에서 상태와 메모 불러오기
+        final data = await _fetchPlateStatus(plateNumber, area);
+
+        if (mounted && data != null) {
+          final fetchedStatus = data['customStatus'] as String?;
+          final fetchedList = (data['statusList'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+              [];
+
           setState(() {
-            controller.fetchedCustomStatus = customStatus;
+            controller.fetchedCustomStatus = fetchedStatus;
+            controller.customStatusController.text = fetchedStatus ?? '';
+            selectedStatusNames = fetchedList;
+            statusSectionKey = UniqueKey(); // ✅ 강제 리빌드
           });
+
+          // 다이얼로그 띄우기
+          await showInputCustomStatusDialog(context, plateNumber, area);
         }
       }
     });
@@ -63,6 +84,15 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         controller.isLocationSelected = controller.locationController.text.isNotEmpty;
       });
     });
+  }
+
+  Future<Map<String, dynamic>?> _fetchPlateStatus(String plateNumber, String area) async {
+    final docId = '${plateNumber}_$area';
+    final doc = await FirebaseFirestore.instance.collection('plate_status').doc(docId).get();
+    if (doc.exists) {
+      return doc.data();
+    }
+    return null;
   }
 
   void _showCameraPreviewDialog() async {
@@ -216,8 +246,9 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
             ),
             const SizedBox(height: 32),
             InputStatusOnTapSection(
+              key: statusSectionKey, // ✅ 강제 리빌드를 위해 Key 부여
+              initialSelectedStatuses: selectedStatusNames,
               onSelectionChanged: (selected) {
-                // 선택된 상태를 controller에 반영
                 controller.selectedStatuses = selected;
               },
             ),
@@ -242,7 +273,12 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                 onDelete: () async {
                   try {
                     await controller.deleteCustomStatusFromFirestore(context);
-                    setState(() {});
+                    setState(() {
+                      controller.fetchedCustomStatus = null;
+                      controller.customStatusController.clear();
+                      selectedStatusNames = [];
+                      statusSectionKey = UniqueKey();
+                    });
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('자동 메모가 삭제되었습니다')),
                     );

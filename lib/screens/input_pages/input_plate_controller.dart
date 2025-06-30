@@ -35,6 +35,9 @@ class InputPlateController {
   List<bool> isSelected = [];
   List<String> selectedStatuses = [];
 
+  /// 불러온 상태 (불러오면 InputStatusOnTapSection에 반영)
+  List<String> fetchedStatusList = [];
+
   final List<String> regions = [
     '전국', '강원', '경기', '경남', '경북', '광주', '대구', '대전',
     '부산', '서울', '울산', '인천', '전남', '전북', '제주',
@@ -102,6 +105,7 @@ class InputPlateController {
     selectedAddAmount = 0;
     customStatusController.clear();
     fetchedCustomStatus = null;
+    fetchedStatusList = [];
     isSelected = List.generate(statuses.length, (_) => false);
     isThreeDigit = true;
   }
@@ -142,9 +146,32 @@ class InputPlateController {
     try {
       await FirebaseFirestore.instance.collection('plate_status').doc(docId).delete();
       fetchedCustomStatus = null;
+      fetchedStatusList = [];
     } catch (e) {
       debugPrint('❌ customStatus 삭제 실패: $e');
       rethrow;
+    }
+  }
+
+  /// ✅ Firestore에서 statusList와 customStatus 불러오기
+  Future<void> fetchStatusAndMemo(String plateNumber, String area) async {
+    final docId = '${plateNumber}_$area';
+    final docSnapshot = await FirebaseFirestore.instance
+        .collection('plate_status')
+        .doc(docId)
+        .get();
+
+    if (docSnapshot.exists) {
+      final data = docSnapshot.data();
+      fetchedCustomStatus = data?['customStatus'];
+
+      final List<dynamic>? savedList = data?['statusList'];
+      if (savedList != null) {
+        fetchedStatusList = savedList.map((e) => e.toString()).toList();
+      }
+    } else {
+      fetchedCustomStatus = null;
+      fetchedStatusList = [];
     }
   }
 
@@ -197,13 +224,13 @@ class InputPlateController {
             : fetchedCustomStatus ?? '',
       );
 
-      // ✅ 상태 메모와 선택 상태 Firestore에 저장
+      /// ✅ 상태 메모 + 상태 리스트 Firestore에 저장
       await FirebaseFirestore.instance.collection('plate_status').doc('${plateNumber}_$area').set(
         {
           'customStatus': customStatusController.text.trim(),
-          'statusList': selectedStatuses, // ✅ 토글 상태 저장
+          'statusList': selectedStatuses,
           'updatedAt': FieldValue.serverTimestamp(),
-          'expireAt': Timestamp.fromDate(DateTime.now().add(Duration(days: 1))),
+          'expireAt': Timestamp.fromDate(DateTime.now().add(const Duration(days: 1))),
           'createdBy': userName,
         },
         SetOptions(merge: true),

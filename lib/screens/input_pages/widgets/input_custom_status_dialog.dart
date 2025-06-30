@@ -2,7 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
-Future<String?> showInputCustomStatusDialog(BuildContext context, String plateNumber, String area) async {
+/// 기존에는 String?만 반환했지만,
+/// 이제 Map<String, dynamic>? 형태로 반환하여
+/// customStatus와 statusList를 함께 반환합니다.
+Future<Map<String, dynamic>?> showInputCustomStatusDialog(
+    BuildContext context,
+    String plateNumber,
+    String area,
+    ) async {
   final docId = '${plateNumber}_$area';
   final docSnapshot = await FirebaseFirestore.instance
       .collection('plate_status')
@@ -13,7 +20,13 @@ Future<String?> showInputCustomStatusDialog(BuildContext context, String plateNu
     final data = docSnapshot.data();
     final customStatus = data?['customStatus'];
     final Timestamp? updatedAt = data?['updatedAt'];
+    final List<dynamic>? statusListRaw = data?['statusList'];
 
+    final statusList = statusListRaw
+        ?.map((e) => e.toString())
+        .toList();
+
+    // 상태 메모가 있으면 다이얼로그 표시
     if (customStatus != null && customStatus.toString().trim().isNotEmpty) {
       final formattedTime = updatedAt != null
           ? DateFormat('yyyy-MM-dd HH:mm:ss').format(updatedAt.toDate())
@@ -53,6 +66,26 @@ Future<String?> showInputCustomStatusDialog(BuildContext context, String plateNu
                   ),
                 ],
               ),
+              if (statusList != null && statusList.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                const Text(
+                  '저장된 상태:',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 6,
+                  children: statusList.map((status) {
+                    return Chip(
+                      label: Text(status),
+                      backgroundColor: Colors.orange.withOpacity(0.1),
+                    );
+                  }).toList(),
+                ),
+              ],
             ],
           ),
           actions: [
@@ -65,9 +98,12 @@ Future<String?> showInputCustomStatusDialog(BuildContext context, String plateNu
         ),
       );
 
-      return customStatus; // ✅ 다이얼로그 띄운 후 상태값 반환
+      return {
+        'customStatus': customStatus,
+        'statusList': statusList ?? [],
+      };
     }
   }
 
-  return null; // 🔁 문서가 없거나 customStatus가 비어있다면 null 반환
+  return null; // 문서가 없거나 customStatus가 없으면 null
 }

@@ -4,16 +4,25 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../utils/status_mapping_helper.dart';
 
 class ModifyStatusOnTapSection extends StatefulWidget {
-  /// 선택된 상태 이름들을 외부에 전달하려면 이 콜백을 사용하세요.
+  /// 초기 선택된 상태 이름들
+  final List<String>? initialSelectedStatuses;
+
+  /// 초기 업종
+  final String? initialCategory;
+
+  /// 상태 선택 콜백
   final ValueChanged<List<String>>? onSelectionChanged;
 
   const ModifyStatusOnTapSection({
     super.key,
+    this.initialSelectedStatuses,
+    this.initialCategory,
     this.onSelectionChanged,
   });
 
   @override
-  State<ModifyStatusOnTapSection> createState() => _ModifyStatusOnTapSectionState();
+  State<ModifyStatusOnTapSection> createState() =>
+      _ModifyStatusOnTapSectionState();
 }
 
 class _ModifyStatusOnTapSectionState extends State<ModifyStatusOnTapSection> {
@@ -23,54 +32,59 @@ class _ModifyStatusOnTapSectionState extends State<ModifyStatusOnTapSection> {
   @override
   void initState() {
     super.initState();
-    _loadSavedSelections();
+    _loadInitialCategoryAndStatuses();
   }
 
-  Future<void> _loadSavedSelections() async {
+  /// SharedPreferences에서 업종 불러오기
+  Future<void> _loadInitialCategoryAndStatuses() async {
     final prefs = await SharedPreferences.getInstance();
     final savedCategory = prefs.getString('selected_category');
-    final savedIndexes = prefs.getStringList('selected_indexes');
-    if (mounted) {
-      setState(() {
-        selectedCategory = savedCategory;
-        if (savedIndexes != null) {
-          selectedIndexes = savedIndexes.map((e) => int.parse(e)).toSet();
-        }
-      });
-      // 선택 복원 시 콜백도 호출
-      if (selectedCategory != null) {
-        final currentStatuses = StatusMappingHelper.getStatuses(selectedCategory);
-        final selectedNames = selectedIndexes
-            .where((i) => i < currentStatuses.length)
-            .map((i) => currentStatuses[i])
-            .toList();
-        widget.onSelectionChanged?.call(selectedNames);
-      }
+
+    setState(() {
+      selectedCategory = savedCategory?.isNotEmpty == true
+          ? savedCategory
+          : widget.initialCategory;
+    });
+
+    // 상태 복원
+    if (selectedCategory != null && widget.initialSelectedStatuses != null) {
+      final currentStatuses =
+      StatusMappingHelper.getStatuses(selectedCategory!);
+      selectedIndexes = widget.initialSelectedStatuses!
+          .map((name) => currentStatuses.indexOf(name))
+          .where((i) => i != -1)
+          .toSet();
     }
+
+    _notifySelection();
   }
 
-  Future<void> _saveCategory(String? category) async {
+  /// SharedPreferences에 업종 저장
+  Future<void> _saveSelectedCategory(String? category) async {
     final prefs = await SharedPreferences.getInstance();
-    if (category != null) {
+    if (category != null && category.isNotEmpty) {
       await prefs.setString('selected_category', category);
     } else {
       await prefs.remove('selected_category');
     }
   }
 
-  Future<void> _saveSelectedIndexes() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(
-      'selected_indexes',
-      selectedIndexes.map((e) => e.toString()).toList(),
-    );
+  void _notifySelection() {
+    if (selectedCategory == null || widget.onSelectionChanged == null) return;
+
+    final currentStatuses =
+    StatusMappingHelper.getStatuses(selectedCategory!);
+    final selectedNames = selectedIndexes
+        .where((i) => i < currentStatuses.length)
+        .map((i) => currentStatuses[i])
+        .toList();
+    widget.onSelectionChanged!(selectedNames);
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final List<String> currentStatuses =
-    StatusMappingHelper.getStatuses(selectedCategory);
+    final currentStatuses = StatusMappingHelper.getStatuses(selectedCategory);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -88,13 +102,12 @@ class _ModifyStatusOnTapSectionState extends State<ModifyStatusOnTapSection> {
               child: Text(category),
             );
           }).toList(),
-          onChanged: (value) {
+          onChanged: (value) async {
             setState(() {
               selectedCategory = value;
               selectedIndexes.clear();
             });
-            _saveCategory(value);
-            _saveSelectedIndexes();
+            await _saveSelectedCategory(value);
             widget.onSelectionChanged?.call([]);
           },
         ),
@@ -132,7 +145,8 @@ class _ModifyStatusOnTapSectionState extends State<ModifyStatusOnTapSection> {
                 label: Text(
                   currentStatuses[index],
                   style: TextStyle(
-                    fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                    fontWeight:
+                    selected ? FontWeight.bold : FontWeight.normal,
                     color: selected ? theme.primaryColor : Colors.black87,
                   ),
                 ),
@@ -145,18 +159,16 @@ class _ModifyStatusOnTapSectionState extends State<ModifyStatusOnTapSection> {
                       selectedIndexes.add(index);
                     }
                   });
-                  _saveSelectedIndexes();
-                  final selectedNames = selectedIndexes
-                      .map((i) => currentStatuses[i])
-                      .toList();
-                  widget.onSelectionChanged?.call(selectedNames);
+                  _notifySelection();
                 },
                 selectedColor: theme.primaryColor.withOpacity(0.2),
                 backgroundColor: Colors.grey.shade100,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                   side: BorderSide(
-                    color: selected ? theme.primaryColor : Colors.grey.shade300,
+                    color: selected
+                        ? theme.primaryColor
+                        : Colors.grey.shade300,
                   ),
                 ),
                 padding: const EdgeInsets.symmetric(
@@ -173,7 +185,8 @@ class _ModifyStatusOnTapSectionState extends State<ModifyStatusOnTapSection> {
             children: [
               const Text(
                 '선택된 상태:',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 4),
               Wrap(
@@ -182,7 +195,8 @@ class _ModifyStatusOnTapSectionState extends State<ModifyStatusOnTapSection> {
                     .map(
                       (i) => Chip(
                     label: Text(currentStatuses[i]),
-                    backgroundColor: theme.primaryColor.withOpacity(0.1),
+                    backgroundColor:
+                    theme.primaryColor.withOpacity(0.1),
                   ),
                 )
                     .toList(),
