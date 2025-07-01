@@ -84,7 +84,7 @@ class DummyPlateRepository implements PlateRepository {
       throw UnimplementedError();
 
   @override
-  Stream<List<PlateModel>> forFetchPlateData(
+  Stream<List<PlateModel>> forSubscribePlateData(
       PlateType type,
       String area, {
         bool descending = true,

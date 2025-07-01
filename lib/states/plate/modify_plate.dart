@@ -86,7 +86,7 @@ class ModifyPlate with ChangeNotifier {
 
       if (!context.mounted) return false;
       final plateState = context.read<PlateState>();
-      await plateState.fetchPlateData();
+      await plateState.subscribePlateData();
 
       notifyListeners();
       return true;

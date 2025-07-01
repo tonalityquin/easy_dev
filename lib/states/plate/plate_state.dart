@@ -31,7 +31,9 @@ class PlateState extends ChangeNotifier {
 
   // 🔹 3. 게터
   String get searchQuery => _searchQuery ?? "";
+
   String get currentArea => _areaState.currentArea;
+
   bool get isLoading => _isLoading;
 
   // 🔹 4. Public 메서드
@@ -105,18 +107,19 @@ class PlateState extends ChangeNotifier {
 
       final alreadySelected = _data.entries.expand((entry) => entry.value).firstWhere(
             (p) => p.isSelected && p.selectedBy == userName && p.id != plateId,
-        orElse: () => PlateModel(
-          id: '',
-          plateNumber: '',
-          plateFourDigit: '',
-          type: '',
-          requestTime: DateTime.now(),
-          location: '',
-          area: '',
-          userName: '',
-          isSelected: false,
-          statusList: [],
-        ),
+        orElse: () =>
+            PlateModel(
+              id: '',
+              plateNumber: '',
+              plateFourDigit: '',
+              type: '',
+              requestTime: DateTime.now(),
+              location: '',
+              area: '',
+              userName: '',
+              isSelected: false,
+              statusList: [],
+            ),
       );
 
       if (alreadySelected.id.isNotEmpty && !plate.isSelected) {
@@ -152,7 +155,7 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  Future<void> fetchPlateData() async {
+  Future<void> subscribePlateData() async {
     _initializeSubscriptions();
   }
 
@@ -172,6 +175,11 @@ class PlateState extends ChangeNotifier {
   void syncWithAreaState() {
     debugPrint("🔄 syncWithAreaState : 지역 변경 감지 및 상태 갱신 호출됨");
     _previousArea = '';
+    _initializeSubscriptions();
+  }
+
+  void _onAreaChanged() {
+    debugPrint("🔄 지역 변경 감지됨: ${_areaState.currentArea}");
     _initializeSubscriptions();
   }
 
@@ -206,7 +214,7 @@ class PlateState extends ChangeNotifier {
     for (final collection in PlateType.values) {
       final descending = _isSortedMap[collection] ?? true;
 
-      final stream = _repository.forFetchPlateData(
+      final stream = _repository.forSubscribePlateData(
         collection,
         currentArea,
         descending: descending,
@@ -257,10 +265,6 @@ class PlateState extends ChangeNotifier {
     _subscriptions.clear();
   }
 
-  void _onAreaChanged() {
-    debugPrint("🔄 지역 변경 감지됨: ${_areaState.currentArea}");
-    _initializeSubscriptions();
-  }
 
   void _resubscribeForSort(PlateType type) async {
     final area = _areaState.currentArea;

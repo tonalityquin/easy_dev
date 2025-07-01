@@ -34,7 +34,7 @@ class MovementPlate {
       location: location,
       performedBy: performedBy,
     );
-    if (success) await plateState.fetchPlateData();
+    if (success) await plateState.subscribePlateData();
   }
 
   Future<void> setDepartureRequested(
@@ -52,7 +52,7 @@ class MovementPlate {
       location: location,
       performedBy: performedBy,
     );
-    if (success) await plateState.fetchPlateData();
+    if (success) await plateState.subscribePlateData();
   }
 
   Future<void> setDepartureCompleted(
@@ -76,7 +76,7 @@ class MovementPlate {
       };
 
       await _repository.updatePlate(documentId, updateData);
-      await plateState.fetchPlateData();
+      await plateState.subscribePlateData();
 
       final log = PlateLogModel(
         plateNumber: plate.plateNumber,
@@ -118,7 +118,7 @@ class MovementPlate {
       });
 
       // 상태 새로고침
-      await plateState.fetchPlateData();
+      await plateState.subscribePlateData();
 
       // 로그 생성
       final log = PlateLogModel(
@@ -174,7 +174,7 @@ class MovementPlate {
       performedBy: performedBy,
     );
     if (success) {
-      await plateState.fetchPlateData();
+      await plateState.subscribePlateData();
     } else {
       debugPrint("🚫 출차 요청 → 입차 완료 이동 실패");
     }
@@ -200,7 +200,7 @@ class MovementPlate {
       });
 
       // 상태 갱신
-      await plateState.fetchPlateData();
+      await plateState.subscribePlateData();
 
       // 로그 기록
       final log = PlateLogModel(
