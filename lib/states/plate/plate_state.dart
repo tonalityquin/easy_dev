@@ -155,10 +155,6 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  Future<void> subscribePlateData() async {
-    _initializeSubscriptions();
-  }
-
   PlateModel? getSelectedPlate(PlateType collection, String userName) {
     final plates = _data[collection];
     if (plates == null || plates.isEmpty) return null;
