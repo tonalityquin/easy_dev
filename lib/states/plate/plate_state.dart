@@ -60,7 +60,7 @@ class PlateState extends ChangeNotifier {
 
   void updateSortOrder(PlateType type, bool descending) {
     _isSortedMap[type] = descending;
-    _resubscribeForSort(type);
+    notifyListeners(); // ✅ 데이터는 그대로, UI만 다시 그리게 함
   }
 
   Future<void> updatePlateLocally(PlateType collection, PlateModel updatedPlate) async {
@@ -107,8 +107,7 @@ class PlateState extends ChangeNotifier {
 
       final alreadySelected = _data.entries.expand((entry) => entry.value).firstWhere(
             (p) => p.isSelected && p.selectedBy == userName && p.id != plateId,
-        orElse: () =>
-            PlateModel(
+            orElse: () => PlateModel(
               id: '',
               plateNumber: '',
               plateFourDigit: '',
@@ -120,16 +119,16 @@ class PlateState extends ChangeNotifier {
               isSelected: false,
               statusList: [],
             ),
-      );
+          );
 
       if (alreadySelected.id.isNotEmpty && !plate.isSelected) {
         final collectionLabel = _getCollectionLabelForType(alreadySelected.type);
         debugPrint('⚠️ 이미 다른 번호판을 선택한 상태임: ${alreadySelected.plateNumber}');
         onError(
           '⚠️ 이미 다른 번호판을 선택한 상태입니다.\n'
-              '• 선택된 번호판: ${alreadySelected.plateNumber}\n'
-              '• 위치: $collectionLabel\n'
-              '선택을 해제한 후 다시 시도해 주세요.',
+          '• 선택된 번호판: ${alreadySelected.plateNumber}\n'
+          '• 위치: $collectionLabel\n'
+          '선택을 해제한 후 다시 시도해 주세요.',
         );
         return;
       }
@@ -161,7 +160,7 @@ class PlateState extends ChangeNotifier {
 
     try {
       return plates.firstWhere(
-            (plate) => plate.isSelected && plate.selectedBy == userName,
+        (plate) => plate.isSelected && plate.selectedBy == userName,
       );
     } catch (_) {
       return null;
@@ -210,7 +209,7 @@ class PlateState extends ChangeNotifier {
     for (final collection in PlateType.values) {
       final descending = _isSortedMap[collection] ?? true;
 
-      final stream = _repository.forSubscribePlateData(
+      final stream = _repository.forCurrentArea(
         collection,
         currentArea,
         descending: descending,
@@ -259,25 +258,6 @@ class PlateState extends ChangeNotifier {
       sub.cancel();
     }
     _subscriptions.clear();
-  }
-
-
-  void _resubscribeForSort(PlateType type) async {
-    final area = _areaState.currentArea;
-
-    _subscriptions[type]?.cancel();
-
-    final stream = _repository.forSortedIcon(
-      type,
-      area,
-    );
-
-    final subscription = stream.listen((filteredData) {
-      _data[type] = filteredData;
-      notifyListeners();
-    });
-
-    _subscriptions[type] = subscription;
   }
 
   String _getCollectionLabelForType(String type) {

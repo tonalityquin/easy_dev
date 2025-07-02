@@ -68,14 +68,6 @@ class DummyPlateRepository implements PlateRepository {
 
   @override
   Stream<List<PlateModel>> forCurrentArea(
-      PlateType type,
-      String area, {
-        bool descending = true,
-        int? limit,
-      }) =>
-      throw UnimplementedError();
-  @override
-  Stream<List<PlateModel>> forSortedIcon(
     PlateType type,
     String area, {
     bool descending = true,
@@ -83,14 +75,6 @@ class DummyPlateRepository implements PlateRepository {
   }) =>
       throw UnimplementedError();
 
-  @override
-  Stream<List<PlateModel>> forSubscribePlateData(
-      PlateType type,
-      String area, {
-        bool descending = true,
-        int? limit,
-      }) =>
-      throw UnimplementedError();
 
   @override
   Future<int> getPlateCountForTypePage(PlateType type, String area) {

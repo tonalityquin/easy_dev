@@ -3,21 +3,11 @@ import '../../models/plate_model.dart';
 
 abstract class PlateRepository {
   Stream<List<PlateModel>> forCurrentArea(
-      PlateType type,
-      String area, {
-        bool descending = true,
-      });
-  Stream<List<PlateModel>> forSortedIcon(
     PlateType type,
     String area, {
     bool descending = true,
   });
 
-  Stream<List<PlateModel>> forSubscribePlateData(
-      PlateType type,
-      String area, {
-        bool descending = true,
-      });
 
   Future<int> getPlateCountForTypePage(
     PlateType type,

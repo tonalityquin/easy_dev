@@ -13,46 +13,22 @@ class FirestorePlateRepository implements PlateRepository {
     PlateType type,
     String area, {
     bool descending = true,
+    String? location,
   }) {
-    Query<Map<String, dynamic>> query = _firestore
-        .collection('plates')
-        .where('type', isEqualTo: type.firestoreValue)
-        .where('area', isEqualTo: area)
-        .orderBy('request_time', descending: descending);
+    Query<Map<String, dynamic>> query =
+        _firestore.collection('plates').where('type', isEqualTo: type.firestoreValue).where('area', isEqualTo: area);
 
-    return query.snapshots().map(
-          (snapshot) => snapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList(),
-        );
-  }
+    // 출차 완료일 경우 잠금 필터
+    if (type == PlateType.departureCompleted) {
+      query = query.where('isLockedFee', isEqualTo: false);
+    }
 
-  @override
-  Stream<List<PlateModel>> forSortedIcon(
-    PlateType type,
-    String area, {
-    bool descending = true,
-  }) {
-    Query<Map<String, dynamic>> query = _firestore
-        .collection('plates')
-        .where('type', isEqualTo: type.firestoreValue)
-        .where('area', isEqualTo: area)
-        .orderBy('request_time', descending: descending);
+    // 입차 완료일 경우에만 location 필터
+    if (location != null && location.isNotEmpty && type == PlateType.parkingCompleted) {
+      query = query.where('location', isEqualTo: location);
+    }
 
-    return query.snapshots().map(
-          (snapshot) => snapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList(),
-        );
-  }
-
-  @override
-  Stream<List<PlateModel>> forSubscribePlateData(
-    PlateType type,
-    String area, {
-    bool descending = true,
-  }) {
-    Query<Map<String, dynamic>> query = _firestore
-        .collection('plates')
-        .where('type', isEqualTo: type.firestoreValue)
-        .where('area', isEqualTo: area)
-        .orderBy('request_time', descending: descending);
+    query = query.orderBy('request_time', descending: descending);
 
     return query.snapshots().map(
           (snapshot) => snapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList(),
