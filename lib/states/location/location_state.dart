@@ -17,7 +17,16 @@ class LocationState extends ChangeNotifier {
   String _previousArea = '';
   bool _isLoading = true;
 
-  // 🔹 2. 생성자
+  // 🔹 2. 게터
+  List<LocationModel> get locations => _locations;
+
+  List<IconData> get navigationIcons => _navigationIcons;
+
+  String? get selectedLocationId => _selectedLocationId;
+
+  bool get isLoading => _isLoading;
+
+  // 🔹 3. 생성자
   LocationState(this._repository, this._areaState) {
     loadFromLocationCache();
 
@@ -30,15 +39,6 @@ class LocationState extends ChangeNotifier {
     });
   }
 
-  // 🔹 3. 게터
-  List<LocationModel> get locations => _locations;
-
-  List<IconData> get navigationIcons => _navigationIcons;
-
-  String? get selectedLocationId => _selectedLocationId;
-
-  bool get isLoading => _isLoading;
-
   // 🔹 4. Public 메서드
 
   /// ✅ SharedPreferences 캐시 우선 조회
@@ -50,9 +50,7 @@ class LocationState extends ChangeNotifier {
     if (cachedJson != null) {
       try {
         final decoded = json.decode(cachedJson) as List;
-        _locations = decoded
-            .map((e) => LocationModel.fromCacheMap(Map<String, dynamic>.from(e)))
-            .toList();
+        _locations = decoded.map((e) => LocationModel.fromCacheMap(Map<String, dynamic>.from(e))).toList();
         _selectedLocationId = null;
         _previousArea = currentArea;
         _isLoading = false;
@@ -107,11 +105,11 @@ class LocationState extends ChangeNotifier {
 
   /// ➕ 단일 주차 구역 추가
   Future<void> addSingleLocation(
-      String locationName,
-      String area, {
-        int capacity = 0,
-        void Function(String)? onError,
-      }) async {
+    String locationName,
+    String area, {
+    int capacity = 0,
+    void Function(String)? onError,
+  }) async {
     try {
       final location = LocationModel(
         id: '${locationName}_$area',
@@ -132,11 +130,11 @@ class LocationState extends ChangeNotifier {
 
   /// ➕ 복합 주차 구역 추가
   Future<void> addCompositeLocation(
-      String parent,
-      List<Map<String, dynamic>> subs,
-      String area, {
-        void Function(String)? onError,
-      }) async {
+    String parent,
+    List<Map<String, dynamic>> subs,
+    String area, {
+    void Function(String)? onError,
+  }) async {
     try {
       final safeParent = '${parent}_$area';
       final safeSubs = subs.map((sub) {
@@ -153,9 +151,9 @@ class LocationState extends ChangeNotifier {
 
   /// ❌ 주차 구역 삭제
   Future<void> deleteLocations(
-      List<String> ids, {
-        void Function(String)? onError,
-      }) async {
+    List<String> ids, {
+    void Function(String)? onError,
+  }) async {
     try {
       await _repository.deleteLocations(ids);
       await loadFromLocationCache();

@@ -16,20 +16,7 @@ class BillState extends ChangeNotifier {
   bool _isLoading = true;
   String _previousArea = '';
 
-  // 🔹 2. 생성자
-  BillState(this._repository, this._areaState) {
-    loadFromBillCache();
-
-    _areaState.addListener(() async {
-      final currentArea = _areaState.currentArea.trim();
-      if (currentArea != _previousArea) {
-        _previousArea = currentArea;
-        await loadFromBillCache();
-      }
-    });
-  }
-
-  // 🔹 3. 게터
+  // 🔹 2. 게터
   List<BillModel> get bills => _bills;
 
   String? get selectedBillId => _selectedBillId;
@@ -45,6 +32,19 @@ class BillState extends ChangeNotifier {
         addStandard: 0,
         addAmount: 0,
       );
+
+  // 🔹 3. 생성자
+  BillState(this._repository, this._areaState) {
+    loadFromBillCache();
+
+    _areaState.addListener(() async {
+      final currentArea = _areaState.currentArea.trim();
+      if (currentArea != _previousArea) {
+        _previousArea = currentArea;
+        await loadFromBillCache();
+      }
+    });
+  }
 
   // 🔹 4. Public 메서드
 

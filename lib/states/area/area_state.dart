@@ -22,10 +22,7 @@ class AreaState with ChangeNotifier {
 
   bool _isLocked = false;
 
-  // 🔹 2. 생성자
-  AreaState();
-
-  // 🔹 3. 게터
+  // 🔹 2. 게터
   String get currentArea => _currentArea;
 
   String get currentDivision => _currentDivision;
@@ -40,15 +37,15 @@ class AreaState with ChangeNotifier {
 
   Map<String, List<String>> get divisionAreaMap => _divisionAreaMap;
 
+  // 🔹 3. 생성자
+  AreaState();
+
   // 🔹 4. Public 메서드
 
   /// 모든 division-area 구조 로딩 (관리자용)
   Future<void> loadAreasForDivision(String userDivision) async {
     try {
-      final snapshot = await _firestore
-          .collection('areas')
-          .where('division', isEqualTo: userDivision)
-          .get();
+      final snapshot = await _firestore.collection('areas').where('division', isEqualTo: userDivision).get();
 
       _divisionAreaMap.clear();
 
@@ -68,7 +65,6 @@ class AreaState with ChangeNotifier {
       debugPrint('❌ divisionAreaMap 로딩 실패: $e');
     }
   }
-
 
   /// ✅ currentArea 초기화
   Future<void> initializeArea(String userArea) async {

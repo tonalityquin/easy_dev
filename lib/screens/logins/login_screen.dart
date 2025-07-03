@@ -10,17 +10,17 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
-  late final LoginController _controller;
-  late final AnimationController _animationController;
+  late final LoginController _loginController;
+  late final AnimationController _loginAnimationController;
   late final Animation<Offset> _offsetAnimation;
   late final Animation<double> _opacityAnimation;
 
   @override
   void initState() {
     super.initState();
-    _controller = LoginController(context);
+    _loginController = LoginController(context);
 
-    _animationController = AnimationController(
+    _loginAnimationController = AnimationController(
       duration: const Duration(milliseconds: 700),
       vsync: this,
     );
@@ -29,22 +29,15 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       begin: const Offset(0, 0.2),
       end: Offset.zero,
     ).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
+      CurvedAnimation(parent: _loginAnimationController, curve: Curves.easeOut),
     );
 
     _opacityAnimation = CurvedAnimation(
-      parent: _animationController,
+      parent: _loginAnimationController,
       curve: Curves.easeIn,
     );
 
-    _animationController.forward();
-  }
-
-  @override
-  void dispose() {
-    _animationController.dispose();
-    _controller.dispose();
-    super.dispose();
+    _loginAnimationController.forward();
   }
 
   @override
@@ -58,12 +51,19 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
               opacity: _opacityAnimation,
               child: SlideTransition(
                 position: _offsetAnimation,
-                child: LoginForm(controller: _controller),
+                child: LoginForm(controller: _loginController),
               ),
             ),
           ),
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _loginAnimationController.dispose();
+    _loginController.dispose();
+    super.dispose();
   }
 }

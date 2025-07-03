@@ -20,28 +20,39 @@ class UserState extends ChangeNotifier {
   StreamSubscription<List<UserModel>>? _subscription;
   String _previousSelectedArea = '';
 
-  // 🔹 2. 생성자
-  UserState(this._repository, this._areaState) {
-    _areaState.addListener(_fetchUsersByAreaWithCache);
-  }
-
-  // 🔹 3. 게터
+  // 🔹 2. 게터
   UserModel? get user => _user;
+
   List<UserModel> get users => _users;
+
   String? get selectedUserId => _selectedUserId;
 
   bool get isLoggedIn => _user != null;
+
   bool get isWorking => _user?.isWorking ?? false;
+
   bool get isSaved => _user?.isSaved ?? false;
+
   bool get isLoading => _isLoading;
 
   String get role => _user?.role ?? '';
+
   String get name => _user?.name ?? '';
+
   String get phone => _user?.phone ?? '';
+
   String get password => _user?.password ?? '';
+
   String get area => _user?.areas.firstOrNull ?? '';
+
   String get division => _user?.divisions.firstOrNull ?? '';
+
   String get currentArea => _user?.currentArea ?? area;
+
+  // 🔹 3. 생성자
+  UserState(this._repository, this._areaState) {
+    _areaState.addListener(_fetchUsersByAreaWithCache);
+  }
 
   // 🔹 4. Public 메서드
 

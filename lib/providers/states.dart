@@ -9,7 +9,6 @@ import '../repositories/user/user_repository.dart';
 
 // 📦 States
 import '../states/area/area_state.dart';
-import '../states/calendar/selected_date_store.dart';
 import '../states/page/page_info.dart';
 import '../states/page/page_state.dart';
 import '../states/plate/input_log_plate.dart';
@@ -78,7 +77,7 @@ final List<SingleChildWidget> stateProviders = [
     ),
     update: (context, areaState, previous) => FilterPlate(
       context.read<PlateRepository>(),
-      areaState.currentArea, // ✅ 최신 currentArea 반영
+      areaState.currentArea,
     ),
   ),
 
@@ -94,7 +93,7 @@ final List<SingleChildWidget> stateProviders = [
   Provider(
     create: (context) => MovementPlate(
       context.read<PlateRepository>(),
-      context.read<AreaState>(), // ✅ areaState 추가
+      context.read<AreaState>(),
     ),
   ),
 
@@ -102,7 +101,7 @@ final List<SingleChildWidget> stateProviders = [
   ChangeNotifierProvider(
     create: (context) => UserState(
       context.read<UserRepository>(),
-      context.read<AreaState>(), // ✅ 추가
+      context.read<AreaState>(),
     ),
   ),
 
@@ -128,8 +127,4 @@ final List<SingleChildWidget> stateProviders = [
     create: (_) => FieldSelectedDateState(),
   ),
 
-  // 📊 통계 달력에서 사용하는 선택된 날짜 상태
-  ChangeNotifierProvider(
-    create: (_) => SelectedDateStore(),
-  ),
 ];

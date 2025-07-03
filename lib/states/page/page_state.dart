@@ -7,13 +7,15 @@ import '../../states/plate/plate_state.dart';
 import '../../enums/plate_type.dart';
 
 class PageState with ChangeNotifier {
-  int _selectedIndex;
   final List<PageInfo> pages;
-  bool _isLoading = false;
 
   int get selectedIndex => _selectedIndex;
+  int _selectedIndex;
 
   bool get isLoading => _isLoading;
+  bool _isLoading = false;
+
+  String get selectedPageTitle => pages[_selectedIndex].title;
 
   set isLoading(bool value) {
     if (_isLoading == value) return;
@@ -21,17 +23,14 @@ class PageState with ChangeNotifier {
     notifyListeners();
   }
 
-  PageState({required this.pages})
-      : _selectedIndex = pages.isNotEmpty ? 1 : throw Exception("🚨 페이지 리스트가 비어 있습니다.");
-
-  String get selectedPageTitle => pages[_selectedIndex].title;
+  PageState({required this.pages}) : _selectedIndex = pages.isNotEmpty ? 1 : throw Exception("🚨 페이지 리스트가 비어 있습니다.");
 
   /// 탭 이벤트
   void onItemTapped(
-      BuildContext context,
-      int index, {
-        void Function(String)? onError,
-      }) {
+    BuildContext context,
+    int index, {
+    void Function(String)? onError,
+  }) {
     if (index < 0 || index >= pages.length) {
       final error = '🚨 Invalid index: $index';
       debugPrint(error);

@@ -38,15 +38,6 @@ class LoginController {
     });
   }
 
-  void dispose() {
-    nameController.dispose();
-    phoneController.dispose();
-    passwordController.dispose();
-    nameFocus.dispose();
-    phoneFocus.dispose();
-    passwordFocus.dispose();
-  }
-
   void togglePassword() {
     obscurePassword = !obscurePassword;
   }
@@ -163,5 +154,14 @@ class LoginController {
     } finally {
       setState(() => isLoading = false);
     }
+  }
+
+  void dispose() {
+    nameController.dispose();
+    phoneController.dispose();
+    passwordController.dispose();
+    nameFocus.dispose();
+    phoneFocus.dispose();
+    passwordFocus.dispose();
   }
 }
