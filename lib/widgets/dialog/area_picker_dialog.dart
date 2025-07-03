@@ -73,7 +73,7 @@ void showAreaPickerDialog({
                   child: GestureDetector(
                     onTap: () async {
                       Navigator.of(context).pop();
-                      areaState.updateArea(tempSelected);
+                      areaState.updateAreaPicker(tempSelected);
 
                       await userState.areaPickerCurrentArea(tempSelected);
                       plateState.syncWithAreaState();

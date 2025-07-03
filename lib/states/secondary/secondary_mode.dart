@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'secondary_info.dart';
 
 enum ModeStatus {
   field,
@@ -40,19 +39,6 @@ class SecondaryMode with ChangeNotifier {
 
   List<String> get availableStatus => ModeStatus.values.map((e) => e.label).toList();
 
-  List<SecondaryInfo> get pages {
-    switch (_currentStatus) {
-      case ModeStatus.office:
-        return officeModePages;
-      case ModeStatus.document:
-        return documentPages;
-      case ModeStatus.field:
-        return fieldModePages;
-      case ModeStatus.dev:
-        return devPages;
-    }
-  }
-
   void updateManage(String newStatus) {
     final selectedStatus = ModeStatusExtension.fromLabel(newStatus);
     if (selectedStatus == null) {
@@ -63,16 +49,5 @@ class SecondaryMode with ChangeNotifier {
     _currentStatus = selectedStatus;
     notifyListeners();
     debugPrint('✅ 모드 변경됨: ${_currentStatus.label}');
-  }
-
-  void updateArea(String? newArea) {
-    if (newArea == null || newArea.trim().isEmpty) {
-      debugPrint('🚨 잘못된 지역 선택: $newArea');
-      return;
-    }
-    if (_currentArea == newArea) return;
-    _currentArea = newArea;
-    notifyListeners();
-    debugPrint('✅ 지역 변경됨: $_currentArea');
   }
 }

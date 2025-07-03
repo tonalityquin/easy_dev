@@ -20,6 +20,10 @@ class _LoginFormState extends State<LoginForm> {
     _controller.initState();
   }
 
+  void _handleLogin() {
+    _controller.login(setState);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -113,8 +117,6 @@ class _LoginFormState extends State<LoginForm> {
       ],
     );
   }
-
-  void _handleLogin() {
-    _controller.login(setState);
-  }
 }
+
+

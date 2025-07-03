@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import '../../../states/area/area_state.dart';
+import '../../../states/user/user_state.dart';
 import 'statistics_chart_page.dart';
 
 class Statistics extends StatefulWidget {
@@ -23,7 +24,8 @@ class _StatisticsState extends State<Statistics> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<AreaState>().loadAllDivisionsAndAreas();
+      final userDivision = context.read<UserState>().user?.divisions.first ?? '';
+      context.read<AreaState>().loadAreasForDivision(userDivision);
     });
   }
 
@@ -78,13 +80,13 @@ class _StatisticsState extends State<Statistics> {
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.grey[300]),
                     onPressed: _savedReports.isNotEmpty
                         ? () {
-                      setState(() {
-                        _savedReports.clear();
-                      });
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("🗑️ 보관된 통계가 초기화되었습니다.")),
-                      );
-                    }
+                            setState(() {
+                              _savedReports.clear();
+                            });
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text("🗑️ 보관된 통계가 초기화되었습니다.")),
+                            );
+                          }
                         : null,
                   ),
                   const SizedBox(width: 8),
@@ -128,7 +130,7 @@ class _StatisticsState extends State<Statistics> {
               else if (_reportData != null)
                 _buildReportCard(_reportData!)
               else if (_selectedDate != null)
-                  const Text('📭 해당 날짜의 보고 내역이 없습니다.', style: TextStyle(color: Colors.grey)),
+                const Text('📭 해당 날짜의 보고 내역이 없습니다.', style: TextStyle(color: Colors.grey)),
             ],
           ),
         ),
