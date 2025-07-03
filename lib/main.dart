@@ -10,11 +10,13 @@ import 'theme.dart';
 import 'utils/init/dev_initializer.dart';
 import 'utils/foreground_task_handler.dart';
 
+/// 🔹 포그라운드 태스크 콜백
 @pragma('vm:entry-point')
 void myForegroundCallback() {
   FlutterForegroundTask.setTaskHandler(MyTaskHandler());
 }
 
+/// 🔹 앱 진입점
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -41,6 +43,7 @@ void main() {
   runApp(const AppBootstrapper());
 }
 
+/// 🔹 앱 초기화 위젯
 class AppBootstrapper extends StatelessWidget {
   const AppBootstrapper({super.key});
 
@@ -64,6 +67,7 @@ class AppBootstrapper extends StatelessWidget {
     );
   }
 
+  /// 초기화 로직
   Future<void> _initializeApp() async {
     await Firebase.initializeApp();
     await registerDevResources();
@@ -85,7 +89,7 @@ class AppBootstrapper extends StatelessWidget {
   }
 }
 
-// 나머지는 동일
+/// 🔹 메인 앱 위젯
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -107,6 +111,7 @@ class MyApp extends StatelessWidget {
   }
 }
 
+/// 🔹 에러 화면
 class ErrorApp extends StatelessWidget {
   final String message;
 
@@ -130,6 +135,7 @@ class ErrorApp extends StatelessWidget {
   }
 }
 
+/// 🔹 404 페이지
 class NotFoundPage extends StatelessWidget {
   const NotFoundPage({super.key});
 
