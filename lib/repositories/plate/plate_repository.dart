@@ -2,7 +2,7 @@ import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
 
 abstract class PlateRepository {
-  Stream<List<PlateModel>> forCurrentArea(
+  Stream<List<PlateModel>> streamToCurrentArea(
     PlateType type,
     String area, {
     bool descending = true,

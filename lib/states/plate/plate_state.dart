@@ -53,7 +53,7 @@ class PlateState extends ChangeNotifier {
     for (final collection in PlateType.values) {
       final descending = _isSortedMap[collection] ?? true;
 
-      final stream = _repository.forCurrentArea(
+      final stream = _repository.streamToCurrentArea(
         collection,
         currentArea,
         descending: descending,

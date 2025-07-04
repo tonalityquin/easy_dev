@@ -9,7 +9,7 @@ class FirestorePlateRepository implements PlateRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   @override
-  Stream<List<PlateModel>> forCurrentArea(
+  Stream<List<PlateModel>> streamToCurrentArea(
     PlateType type,
     String area, {
     bool descending = true,
