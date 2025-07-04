@@ -114,7 +114,7 @@ class UserState extends ChangeNotifier {
   Future<void> addUserCard(UserModel user, {void Function(String)? onError}) async {
     try {
       final correctedUser = user.copyWith();
-      await _repository.addUser(correctedUser);
+      await _repository.addUserCard(correctedUser);
       await _fetchUsersByAreaWithCache();
     } catch (e) {
       onError?.call('사용자 추가 실패: $e');
@@ -152,7 +152,7 @@ class UserState extends ChangeNotifier {
   Future<void> updateUserCard(UserModel updatedUser) async {
     _user = updatedUser;
     notifyListeners();
-    await _repository.addUser(updatedUser);
+    await _repository.updateUser(updatedUser);
     await saveCardToUserPhone(updatedUser);
     await _fetchUsersByAreaWithCache();
   }

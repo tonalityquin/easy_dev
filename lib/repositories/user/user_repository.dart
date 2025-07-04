@@ -44,7 +44,8 @@ abstract class UserRepository {
   });
 
   /// ➕ 사용자 추가
-  Future<void> addUser(UserModel user);
+  Future<void> addUserCard(UserModel user);
+  Future<void> updateUser(UserModel user);
 
   /// ❌ 사용자 삭제
   Future<void> deleteUsers(List<String> ids);

@@ -18,6 +18,43 @@ class FirestoreUserRepository implements UserRepository {
   }
 
   @override
+  Future<UserModel?> getUserById(String userId) async {
+    debugPrint("getUserById, 호출됨 → 요청 ID: $userId");
+
+    final doc = await _getCollectionRef().doc(userId).get();
+    if (!doc.exists) {
+      debugPrint("getUserById, DB 문서 없음 → userId=$userId");
+      return null;
+    }
+
+    final data = doc.data()!;
+    debugPrint("getUserById, DB에서 문서 조회 성공 → userId=$userId / 데이터: $data");
+
+    return UserModel.fromMap(doc.id, data);
+  }
+
+  @override
+  Future<void> updateLoadCurrentArea(String phone, String area, String currentArea) async {
+    final userId = '$phone-$area';
+    await _getCollectionRef().doc(userId).update({'currentArea': currentArea});
+  }
+
+  @override
+  Future<void> updateLoadUserStatus(
+    String phone,
+    String area, {
+    bool? isWorking,
+    bool? isSaved,
+  }) async {
+    final userId = '$phone-$area';
+    final updates = <String, dynamic>{};
+    if (isWorking != null) updates['isWorking'] = isWorking;
+    if (isSaved != null) updates['isSaved'] = isSaved;
+
+    await _getCollectionRef().doc(userId).update(updates);
+  }
+
+  @override
   Future<UserModel?> getUserByPhone(String phone) async {
     debugPrint("getUserByPhone, 사용자 조회 시작 - phone: $phone");
 
@@ -39,43 +76,6 @@ class FirestoreUserRepository implements UserRepository {
     }
 
     return null;
-  }
-
-  @override
-  Future<UserModel?> getUserById(String userId) async {
-    debugPrint("getUserById, 호출됨 → 요청 ID: $userId");
-
-    final doc = await _getCollectionRef().doc(userId).get();
-    if (!doc.exists) {
-      debugPrint("getUserById, DB 문서 없음 → userId=$userId");
-      return null;
-    }
-
-    final data = doc.data()!;
-    debugPrint("getUserById, DB에서 문서 조회 성공 → userId=$userId / 데이터: $data");
-
-    return UserModel.fromMap(doc.id, data);
-  }
-
-  @override
-  Future<void> updateLoadUserStatus(
-    String phone,
-    String area, {
-    bool? isWorking,
-    bool? isSaved,
-  }) async {
-    final userId = '$phone-$area';
-    final updates = <String, dynamic>{};
-    if (isWorking != null) updates['isWorking'] = isWorking;
-    if (isSaved != null) updates['isSaved'] = isSaved;
-
-    await _getCollectionRef().doc(userId).update(updates);
-  }
-
-  @override
-  Future<void> updateLoadCurrentArea(String phone, String area, String currentArea) async {
-    final userId = '$phone-$area';
-    await _getCollectionRef().doc(userId).update({'currentArea': currentArea});
   }
 
   @override
@@ -115,7 +115,12 @@ class FirestoreUserRepository implements UserRepository {
   }
 
   @override
-  Future<void> addUser(UserModel user) async {
+  Future<void> addUserCard(UserModel user) async {
+    await _getCollectionRef().doc(user.id).set(user.toMap());
+  }
+
+  @override
+  Future<void> updateUser(UserModel user) async {
     await _getCollectionRef().doc(user.id).set(user.toMap());
   }
 
