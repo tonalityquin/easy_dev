@@ -7,7 +7,6 @@ import '../../models/plate_model.dart';
 import '../../states/plate/filter_plate.dart';
 import '../../states/plate/plate_state.dart'; // 번호판 상태 관리
 import '../../states/plate/movement_plate.dart';
-import '../../states/area/area_state.dart'; // 지역 상태 관리
 import '../../states/user/user_state.dart';
 
 import '../../utils/snackbar_helper.dart';
@@ -82,16 +81,12 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
         _selectedParkingArea = selectedLocation;
       });
 
-      final area = context.read<AreaState>().currentArea;
-      context
-          .read<FilterPlate>()
-          .filterByParkingLocation(
-        PlateType.departureRequests,
-        _selectedParkingArea!,
-      );
+      context.read<FilterPlate>().filterByParkingLocation(
+            PlateType.departureRequests,
+            _selectedParkingArea!,
+          );
     }
   }
-
 
   void _resetParkingAreaFilter(BuildContext context) {
     debugPrint("🔄 주차 구역 초기화 실행됨");
@@ -182,7 +177,8 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
 
             // 1) 검색 모드
             if (_isSearchMode) {
-              departureRequests = filterState.getPlates(PlateType.departureRequests)
+              departureRequests = filterState
+                  .getPlates(PlateType.departureRequests)
                   .where((plate) => plate.plateNumber.contains(filterState.searchQuery))
                   .toList();
 
@@ -223,8 +219,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
                 PlateContainer(
                   data: departureRequests,
                   collection: PlateType.departureRequests,
-                  filterCondition: (request) =>
-                  request.type == PlateType.departureRequests.firestoreValue,
+                  filterCondition: (request) => request.type == PlateType.departureRequests.firestoreValue,
                   onPlateTap: (plateNumber, area) {
                     plateState.togglePlateIsSelected(
                       collection: PlateType.departureRequests,
