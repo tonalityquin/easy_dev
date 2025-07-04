@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../enums/plate_type.dart';
 
+import '../../models/plate_model.dart';
 import '../../states/plate/filter_plate.dart';
 import '../../states/plate/plate_state.dart';
 import '../../states/area/area_state.dart';
@@ -63,17 +64,22 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
     final plateState = context.read<PlateState>();
     final userName = context.read<UserState>().name;
     final areaState = context.watch<AreaState>();
+    final filterState = context.watch<FilterPlate>();
 
     final division = areaState.currentDivision;
     final area = areaState.currentArea.trim();
     final selectedDateRaw = context.watch<FieldSelectedDateState>().selectedDate ?? DateTime.now();
     final selectedDate = DateTime(selectedDateRaw.year, selectedDateRaw.month, selectedDateRaw.day);
 
+    /// ✅ 기본 데이터 가져오기
     final rawPlates = context
         .watch<PlateState>()
-        .getPlatesByCollection(PlateType.departureCompleted, selectedDate: selectedDate)
+        .getPlatesByCollection(
+      PlateType.departureCompleted,
+      selectedDate: selectedDate,
+    )
         .where((p) {
-      final isSearching = context.read<FilterPlate>().searchQuery.length == 4;
+      final isSearching = filterState.searchQuery.isNotEmpty && filterState.searchQuery.length == 4;
       if (isSearching) {
         return p.area.trim() == area; // 검색 중엔 잠금 무시
       } else {
@@ -81,8 +87,15 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
       }
     }).toList();
 
-    final firestorePlates = context.watch<FilterPlate>().filterPlateCountByQuery(rawPlates);
+    /// ✅ 검색어로 추가 필터링
+    List<PlateModel> firestorePlates = rawPlates;
+    if (filterState.searchQuery.isNotEmpty && filterState.searchQuery.length == 4) {
+      firestorePlates = firestorePlates
+          .where((p) => p.plateFourDigit == filterState.searchQuery)
+          .toList();
+    }
 
+    /// ✅ 정렬
     firestorePlates.sort((a, b) =>
     _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime));
 
@@ -147,7 +160,11 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
               child: Container(
                 color: Colors.white,
                 child: FutureBuilder<List<Map<String, dynamic>>>(
-                  future: GcsJsonUploader().showMergedLogsToDepartureCompletedMergeLog(division, area, filterDate: selectedDate),
+                  future: GcsJsonUploader().showMergedLogsToDepartureCompletedMergeLog(
+                    division,
+                    area,
+                    filterDate: selectedDate,
+                  ),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator());

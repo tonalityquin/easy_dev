@@ -69,15 +69,10 @@ final List<SingleChildWidget> stateProviders = [
     },
   ),
 
-  // 🔍 차량 검색 필터 상태 - 앱 첫 실행 시 create :, currentArea로 지역 변경 시 update
-  ChangeNotifierProxyProvider<AreaState, FilterPlate>(
+  // 🔍 차량 검색 필터 상태 - 이제 PlateState만 의존 (Firestore 구독 X)
+  ChangeNotifierProvider(
     create: (context) => FilterPlate(
-      context.read<PlateRepository>(),
-      context.read<AreaState>().currentArea,
-    ),
-    update: (context, areaState, previous) => FilterPlate(
-      context.read<PlateRepository>(),
-      areaState.currentArea,
+      context.read<PlateState>(),
     ),
   ),
 
@@ -126,5 +121,4 @@ final List<SingleChildWidget> stateProviders = [
   ChangeNotifierProvider(
     create: (_) => FieldSelectedDateState(),
   ),
-
 ];

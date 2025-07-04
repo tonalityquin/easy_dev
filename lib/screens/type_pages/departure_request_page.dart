@@ -87,7 +87,6 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
           .read<FilterPlate>()
           .filterByParkingLocation(
         PlateType.departureRequests,
-        area,
         _selectedParkingArea!,
       );
     }
@@ -175,108 +174,44 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
           foregroundColor: Colors.black,
           elevation: 0,
         ),
-        body: Consumer2<PlateState, AreaState>(
-          builder: (context, plateState, areaState, child) {
-            final filterState = context.read<FilterPlate>();
+        body: Consumer2<PlateState, FilterPlate>(
+          builder: (context, plateState, filterState, child) {
             final userName = context.read<UserState>().name;
 
+            List<PlateModel> departureRequests;
+
+            // 1) 검색 모드
             if (_isSearchMode) {
-              return FutureBuilder<List<PlateModel>>(
-                future: filterState.fetchPlatesCountsBySearchQuery(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState != ConnectionState.done) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
+              departureRequests = filterState.getPlates(PlateType.departureRequests)
+                  .where((plate) => plate.plateNumber.contains(filterState.searchQuery))
+                  .toList();
 
-                  final departureRequests = snapshot.data ?? [];
-                  if (departureRequests.isEmpty) {
-                    return const Center(child: Text('검색 결과가 없습니다.'));
-                  }
-
-                  departureRequests.sort((a, b) {
-                    final aTime = a.requestTime;
-                    final bTime = b.requestTime;
-                    return _isSorted ? bTime.compareTo(aTime) : aTime.compareTo(bTime);
-                  });
-
-                  return ListView(
-                    padding: const EdgeInsets.all(8.0),
-                    children: [
-                      PlateContainer(
-                        data: departureRequests,
-                        collection: PlateType.departureRequests,
-                        filterCondition: (request) =>
-                        request.type == PlateType.departureRequests.firestoreValue,
-                        onPlateTap: (plateNumber, area) {
-                          plateState.togglePlateIsSelected(
-                            collection: PlateType.departureRequests,
-                            plateNumber: plateNumber,
-                            userName: userName,
-                            onError: (errorMessage) {
-                              showFailedSnackbar(context, errorMessage);
-                            },
-                          );
-                        },
-                      ),
-                    ],
-                  );
-                },
+              if (departureRequests.isEmpty) {
+                return const Center(child: Text('검색 결과가 없습니다.'));
+              }
+            }
+            // 2) 주차 구역 모드
+            else if (_isParkingAreaMode && _selectedParkingArea != null) {
+              departureRequests = filterState.filterByParkingLocation(
+                PlateType.departureRequests,
+                _selectedParkingArea!,
               );
+
+              if (departureRequests.isEmpty) {
+                return const Center(child: Text('해당 구역의 출차 요청 차량이 없습니다.'));
+              }
+            }
+            // 3) 기본 모드
+            else {
+              departureRequests = plateState.getPlatesByCollection(PlateType.departureRequests);
+
+              if (departureRequests.isEmpty) {
+                return const Center(child: Text('출차 요청 차량이 없습니다.'));
+              }
             }
 
-            if (_isParkingAreaMode && _selectedParkingArea != null) {
-              return FutureBuilder<List<PlateModel>>(
-                future: filterState.fetchPlatesByParkingLocationWithCache(
-                  type: PlateType.departureRequests,
-                  location: _selectedParkingArea!,
-                ),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState != ConnectionState.done) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-
-                  final departureRequests = snapshot.data ?? [];
-                  if (departureRequests.isEmpty) {
-                    return const Center(child: Text('해당 구역의 출차 요청 차량이 없습니다.'));
-                  }
-
-                  departureRequests.sort((a, b) {
-                    final aTime = a.requestTime;
-                    final bTime = b.requestTime;
-                    return _isSorted ? bTime.compareTo(aTime) : aTime.compareTo(bTime);
-                  });
-
-                  return ListView(
-                    padding: const EdgeInsets.all(8.0),
-                    children: [
-                      PlateContainer(
-                        data: departureRequests,
-                        collection: PlateType.departureRequests,
-                        filterCondition: (request) =>
-                        request.type == PlateType.departureRequests.firestoreValue,
-                        onPlateTap: (plateNumber, area) {
-                          plateState.togglePlateIsSelected(
-                            collection: PlateType.departureRequests,
-                            plateNumber: plateNumber,
-                            userName: userName,
-                            onError: (errorMessage) {
-                              showFailedSnackbar(context, errorMessage);
-                            },
-                          );
-                        },
-                      ),
-                    ],
-                  );
-                },
-              );
-            }
-
-            final plates = [...plateState.getPlatesByCollection(PlateType.departureRequests)];
-            if (plates.isEmpty) {
-              return const Center(child: Text('출차 요청 차량이 없습니다.'));
-            }
-
-            plates.sort((a, b) {
+            // 정렬
+            departureRequests.sort((a, b) {
               final aTime = a.requestTime;
               final bTime = b.requestTime;
               return _isSorted ? bTime.compareTo(aTime) : aTime.compareTo(bTime);
@@ -286,7 +221,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
               padding: const EdgeInsets.all(8.0),
               children: [
                 PlateContainer(
-                  data: plates,
+                  data: departureRequests,
                   collection: PlateType.departureRequests,
                   filterCondition: (request) =>
                   request.type == PlateType.departureRequests.firestoreValue,

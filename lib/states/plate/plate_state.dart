@@ -7,7 +7,6 @@ import '../../utils/gcs_json_uploader.dart';
 import '../area/area_state.dart';
 
 class PlateState extends ChangeNotifier {
-  // 🔹 1. 필드
   final PlateRepository _repository;
   final AreaState _areaState;
   final Map<String, bool> previousIsLockedFee = {};
@@ -23,20 +22,80 @@ class PlateState extends ChangeNotifier {
   String _previousArea = '';
   bool _isLoading = true;
 
-  // 🔹 2. 생성자
   PlateState(this._repository, this._areaState) {
     _initializeSubscriptions();
     _areaState.addListener(_onAreaChanged);
   }
 
-  // 🔹 3. 게터
   String get searchQuery => _searchQuery ?? "";
 
   String get currentArea => _areaState.currentArea;
 
   bool get isLoading => _isLoading;
 
-  // 🔹 4. Public 메서드
+  List<PlateModel> dataOfType(PlateType type) {
+    return _data[type] ?? [];
+  }
+
+  void _initializeSubscriptions() async {
+    final area = _areaState.currentArea;
+    if (area.isEmpty || _previousArea == area) return;
+
+    _previousArea = area;
+    _cancelAllSubscriptions();
+
+    _isLoading = true;
+    plateCountsForDebugPrint();
+
+    int receivedCount = 0;
+    final totalCollections = PlateType.values.length;
+
+    for (final collection in PlateType.values) {
+      final descending = _isSortedMap[collection] ?? true;
+
+      final stream = _repository.forCurrentArea(
+        collection,
+        currentArea,
+        descending: descending,
+      );
+
+      bool firstDataReceived = false;
+
+      final subscription = stream.listen((filteredData) async {
+        if (collection == PlateType.departureCompleted) {
+          for (final plate in filteredData) {
+            final previous = previousIsLockedFee[plate.id];
+            if (previous == false && plate.isLockedFee == true) {
+              final uploader = GcsJsonUploader();
+              await uploader.mergeAndSummarizeLogs(
+                plate.plateNumber,
+                _areaState.currentDivision,
+                plate.area,
+              );
+            }
+            previousIsLockedFee[plate.id] = plate.isLockedFee;
+          }
+        }
+
+        _data[collection] = filteredData;
+        notifyListeners();
+
+        if (!firstDataReceived) {
+          firstDataReceived = true;
+          receivedCount++;
+        }
+
+        if (receivedCount == totalCollections) {
+          _isLoading = false;
+          plateCountsForDebugPrint();
+        }
+      }, onError: (error) {
+        debugPrint('🔥 Plate stream error: $error');
+      });
+
+      _subscriptions[collection] = subscription;
+    }
+  }
 
   List<PlateModel> getPlatesByCollection(PlateType collection, {DateTime? selectedDate}) {
     List<PlateModel> plates = _data[collection] ?? [];
@@ -60,7 +119,7 @@ class PlateState extends ChangeNotifier {
 
   void updateSortOrder(PlateType type, bool descending) {
     _isSortedMap[type] = descending;
-    notifyListeners(); // ✅ 데이터는 그대로, UI만 다시 그리게 함
+    notifyListeners();
   }
 
   Future<void> updatePlateLocally(PlateType collection, PlateModel updatedPlate) async {
@@ -191,68 +250,6 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  // 🔹 5. Private 메서드
-
-  void _initializeSubscriptions() async {
-    final area = _areaState.currentArea;
-    if (area.isEmpty || _previousArea == area) return;
-
-    _previousArea = area;
-    _cancelAllSubscriptions();
-
-    _isLoading = true;
-    plateCountsForDebugPrint();
-
-    int receivedCount = 0;
-    final totalCollections = PlateType.values.length;
-
-    for (final collection in PlateType.values) {
-      final descending = _isSortedMap[collection] ?? true;
-
-      final stream = _repository.forCurrentArea(
-        collection,
-        currentArea,
-        descending: descending,
-      );
-
-      bool firstDataReceived = false;
-
-      final subscription = stream.listen((filteredData) async {
-        if (collection == PlateType.departureCompleted) {
-          for (final plate in filteredData) {
-            final previous = previousIsLockedFee[plate.id];
-            if (previous == false && plate.isLockedFee == true) {
-              final uploader = GcsJsonUploader();
-              await uploader.mergeAndSummarizeLogs(
-                plate.plateNumber,
-                _areaState.currentDivision,
-                plate.area,
-              );
-            }
-            previousIsLockedFee[plate.id] = plate.isLockedFee;
-          }
-        }
-
-        _data[collection] = filteredData;
-        notifyListeners();
-
-        if (!firstDataReceived) {
-          firstDataReceived = true;
-          receivedCount++;
-        }
-
-        if (receivedCount == totalCollections) {
-          _isLoading = false;
-          plateCountsForDebugPrint();
-        }
-      }, onError: (error) {
-        debugPrint('🔥 Plate stream error: $error');
-      });
-
-      _subscriptions[collection] = subscription;
-    }
-  }
-
   void _cancelAllSubscriptions() {
     for (var sub in _subscriptions.values) {
       sub.cancel();
@@ -275,8 +272,6 @@ class PlateState extends ChangeNotifier {
         return '알 수 없음';
     }
   }
-
-  // 🔹 6. Override
 
   @override
   void dispose() {

@@ -2,12 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../enums/plate_type.dart';
-import '../../models/plate_model.dart';
 
 import '../../states/plate/filter_plate.dart';
 import '../../states/plate/plate_state.dart';
 import '../../states/plate/movement_plate.dart';
-import '../../states/area/area_state.dart';
 import '../../states/user/user_state.dart';
 
 import '../../utils/snackbar_helper.dart';
@@ -37,9 +35,9 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
     });
 
     context.read<PlateState>().updateSortOrder(
-      PlateType.parkingRequests,
-      _isSorted,
-    );
+          PlateType.parkingRequests,
+          _isSorted,
+        );
   }
 
   void _showSearchDialog(BuildContext context) {
@@ -74,13 +72,13 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
   void _handlePlateTap(BuildContext context, String plateNumber, String area) {
     final userName = context.read<UserState>().name;
     context.read<PlateState>().togglePlateIsSelected(
-      collection: PlateType.parkingRequests,
-      plateNumber: plateNumber,
-      userName: userName,
-      onError: (errorMessage) {
-        showFailedSnackbar(context, errorMessage);
-      },
-    );
+          collection: PlateType.parkingRequests,
+          plateNumber: plateNumber,
+          userName: userName,
+          onError: (errorMessage) {
+            showFailedSnackbar(context, errorMessage);
+          },
+        );
   }
 
   Future<void> _handleParkingCompleted(BuildContext context) async {
@@ -191,27 +189,25 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
         ),
         body: Stack(
           children: [
-            Consumer2<PlateState, AreaState>(
-              builder: (context, plateState, areaState, child) {
+            Consumer2<PlateState, FilterPlate>(
+              builder: (context, plateState, filterPlate, child) {
                 if (_isSearchMode) {
-                  return FutureBuilder<List<PlateModel>>(
-                    future: context.read<FilterPlate>().fetchPlatesCountsBySearchQuery(),
-                    builder: (context, snapshot) {
-                      final searchResults = snapshot.data ?? [];
-                      return ListView(
-                        padding: const EdgeInsets.all(8.0),
-                        children: [
-                          PlateContainer(
-                            data: searchResults,
-                            collection: PlateType.parkingRequests,
-                            filterCondition: (request) => request.type == PlateType.parkingRequests.firestoreValue,
-                            onPlateTap: (plateNumber, area) {
-                              _handlePlateTap(context, plateNumber, area);
-                            },
-                          ),
-                        ],
-                      );
-                    },
+                  final searchResults = filterPlate.filterPlatesByFourDigit(
+                    filterPlate.searchQuery,
+                  );
+
+                  return ListView(
+                    padding: const EdgeInsets.all(8.0),
+                    children: [
+                      PlateContainer(
+                        data: searchResults,
+                        collection: PlateType.parkingRequests,
+                        filterCondition: (request) => request.type == PlateType.parkingRequests.firestoreValue,
+                        onPlateTap: (plateNumber, area) {
+                          _handlePlateTap(context, plateNumber, area);
+                        },
+                      ),
+                    ],
                   );
                 } else {
                   final plates = [...plateState.getPlatesByCollection(PlateType.parkingRequests)];
