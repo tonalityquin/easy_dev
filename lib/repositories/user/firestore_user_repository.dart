@@ -131,14 +131,9 @@ class FirestoreUserRepository implements UserRepository {
     }
   }
 
-  @override
-  Future<void> toggleUserSelection(String id, bool isSelected) async {
-    await _getCollectionRef().doc(id).update({'isSelected': isSelected});
-  }
-
   /// ✅ 캐시에서만 읽기 (Firestore 호출 없음)
   @override
-  Future<List<UserModel>> getUsersBySelectedAreaOnceWithCache(String selectedArea) async {
+  Future<List<UserModel>> getUsersByAreaOnceWithCache(String selectedArea) async {
     final cacheKey = 'users_$selectedArea';
     final prefs = await SharedPreferences.getInstance();
     final cachedJson = prefs.getString(cacheKey);
@@ -153,8 +148,6 @@ class FirestoreUserRepository implements UserRepository {
         await clearUserCache(selectedArea);
       }
     }
-
-    debugPrint('⚠️ 캐시에 없음 → Firestore 호출 없음. 호출 위해 refreshUsersBySelectedArea() 호출 필요');
     return [];
   }
 
@@ -173,8 +166,8 @@ class FirestoreUserRepository implements UserRepository {
   /// 🧹 캐시 수동 초기화
   Future<void> clearUserCache(String selectedArea) async {
     final cacheKey = 'users_$selectedArea';
-    final cacheTsKey = 'users_${selectedArea}_ts';
     final prefs = await SharedPreferences.getInstance();
+    final cacheTsKey = 'users_${selectedArea}_ts';
 
     await prefs.remove(cacheKey);
     await prefs.remove(cacheTsKey);

@@ -45,16 +45,14 @@ abstract class UserRepository {
 
   /// ➕ 사용자 추가
   Future<void> addUserCard(UserModel user);
+
   Future<void> updateUser(UserModel user);
 
   /// ❌ 사용자 삭제
   Future<void> deleteUsers(List<String> ids);
 
-  /// ✅ 선택 상태 토글
-  Future<void> toggleUserSelection(String id, bool isSelected);
-
   /// 📂 캐시에 우선 조회
-  Future<List<UserModel>> getUsersBySelectedAreaOnceWithCache(String selectedArea);
+  Future<List<UserModel>> getUsersByAreaOnceWithCache(String selectedArea);
 
   /// 🔄 Firestore 호출 + 캐시 갱신
   Future<List<UserModel>> refreshUsersBySelectedArea(String selectedArea);

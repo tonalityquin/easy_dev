@@ -25,60 +25,6 @@ class LoginController {
 
   LoginController(this.context);
 
-  void initState() {
-    Provider.of<UserState>(context, listen: false).loadUserToLogIn().then((_) {
-      if (Provider.of<UserState>(context, listen: false).isLoggedIn && context.mounted) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          Navigator.pushReplacementNamed(context, '/home');
-        });
-      }
-    });
-  }
-
-  void togglePassword() {
-    obscurePassword = !obscurePassword;
-  }
-
-  /// ✅ 전화번호 자동 하이픈 포맷팅
-  void formatPhoneNumber(String value, StateSetter setState) {
-    final numbersOnly = value.replaceAll(RegExp(r'\D'), '');
-    String formatted = numbersOnly;
-
-    if (numbersOnly.length >= 11) {
-      formatted = '${numbersOnly.substring(0, 3)}-${numbersOnly.substring(3, 7)}-${numbersOnly.substring(7, 11)}';
-    } else if (numbersOnly.length >= 10) {
-      formatted = '${numbersOnly.substring(0, 3)}-${numbersOnly.substring(3, 6)}-${numbersOnly.substring(6, 10)}';
-    }
-
-    setState(() {
-      phoneController.value = TextEditingValue(
-        text: formatted,
-        selection: TextSelection.collapsed(offset: formatted.length),
-      );
-    });
-  }
-
-  InputDecoration inputDecoration({
-    required String label,
-    IconData? icon,
-    Widget? suffixIcon,
-  }) {
-    return InputDecoration(
-      labelText: label,
-      hintText: label,
-      prefixIcon: icon != null ? Icon(icon) : null,
-      suffixIcon: suffixIcon,
-      contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
-      filled: true,
-      fillColor: Colors.grey.shade100,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: Colors.indigo, width: 2),
-      ),
-    );
-  }
-
   Future<void> login(StateSetter setState) async {
     final name = nameController.text.trim();
     final phone = phoneController.text.trim().replaceAll(RegExp(r'\D'), '');
@@ -129,7 +75,7 @@ class LoginController {
         final areaState = context.read<AreaState>();
 
         final updatedUser = user.copyWith(isSaved: true);
-        userState.updateUserCard(updatedUser);
+        userState.updateLoginUser(updatedUser);
         final prefs = await SharedPreferences.getInstance();
         debugPrint("login, 로그인 직후 저장된 phone=${prefs.getString('phone')} / area=${prefs.getString('area')}");
         areaState.updateArea(updatedUser.areas.firstOrNull ?? '');
@@ -153,6 +99,63 @@ class LoginController {
     }
   }
 
+  void initState() {
+    Provider.of<UserState>(context, listen: false).loadUserToLogIn().then((_) {
+      if (Provider.of<UserState>(context, listen: false).isLoggedIn && context.mounted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          Navigator.pushReplacementNamed(context, '/home');
+        });
+      }
+    });
+  }
+
+  /// 비밀번호 보이기&숨기기
+  void togglePassword() {
+    obscurePassword = !obscurePassword;
+  }
+
+  /// ✅ 전화번호 자동 하이픈 포맷팅
+  void formatPhoneNumber(String value, StateSetter setState) {
+    final numbersOnly = value.replaceAll(RegExp(r'\D'), '');
+    String formatted = numbersOnly;
+
+    if (numbersOnly.length >= 11) {
+      formatted = '${numbersOnly.substring(0, 3)}-${numbersOnly.substring(3, 7)}-${numbersOnly.substring(7, 11)}';
+    } else if (numbersOnly.length >= 10) {
+      formatted = '${numbersOnly.substring(0, 3)}-${numbersOnly.substring(3, 6)}-${numbersOnly.substring(6, 10)}';
+    }
+
+    setState(() {
+      phoneController.value = TextEditingValue(
+        text: formatted,
+        selection: TextSelection.collapsed(offset: formatted.length),
+      );
+    });
+  }
+
+  /// 로그인 페이지 텍스트 필드 데코레이션
+  InputDecoration inputDecoration({
+    required String label,
+    IconData? icon,
+    Widget? suffixIcon,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: label,
+      prefixIcon: icon != null ? Icon(icon) : null,
+      suffixIcon: suffixIcon,
+      contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
+      filled: true,
+      fillColor: Colors.grey.shade100,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: Colors.indigo, width: 2),
+      ),
+    );
+  }
+
+  /// 화면 종료 시
   void dispose() {
     nameController.dispose();
     phoneController.dispose();

@@ -87,11 +87,11 @@ class UserState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> loadUsersOnly() async {
-    _isLoading = true;
-    _previousSelectedArea = '';
+  Future<void> updateLoginUser(UserModel updatedUser) async {
+    _user = updatedUser;
     notifyListeners();
-
+    await _repository.updateUser(updatedUser);
+    await saveCardToUserPhone(updatedUser);
     await _fetchUsersByAreaWithCache();
   }
 
@@ -109,6 +109,14 @@ class UserState extends ChangeNotifier {
     await prefs.clear();
     _user = null;
     notifyListeners();
+  }
+
+  Future<void> loadUsersOnly() async {
+    _isLoading = true;
+    _previousSelectedArea = '';
+    notifyListeners();
+
+    await _fetchUsersByAreaWithCache();
   }
 
   Future<void> addUserCard(UserModel user, {void Function(String)? onError}) async {
@@ -147,14 +155,6 @@ class UserState extends ChangeNotifier {
     debugPrint(
       "📌 SharedPreferences 저장 완료: phone=${user.phone}, selectedArea=${user.selectedArea}",
     );
-  }
-
-  Future<void> updateUserCard(UserModel updatedUser) async {
-    _user = updatedUser;
-    notifyListeners();
-    await _repository.updateUser(updatedUser);
-    await saveCardToUserPhone(updatedUser);
-    await _fetchUsersByAreaWithCache();
   }
 
   Future<void> loadUserToLogIn() async {
@@ -226,7 +226,7 @@ class UserState extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final data = await _repository.getUsersBySelectedAreaOnceWithCache(selectedArea);
+      final data = await _repository.getUsersByAreaOnceWithCache(selectedArea);
       _users = data;
       _selectedUserId = null;
     } catch (e) {
