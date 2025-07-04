@@ -8,14 +8,35 @@ abstract class UserRepository {
   Future<UserModel?> getUserById(String userId);
 
   /// 📝 사용자의 currentArea를 업데이트
-  Future<void> updateCurrentArea(
+
+  Future<void> updateLoadUserStatus(
+    String phone,
+    String area, {
+    bool? isWorking,
+    bool? isSaved,
+  });
+
+  Future<void> updateLoadCurrentArea(
+    String phone,
+    String area,
+    String currentArea,
+  );
+
+  Future<void> areaPickerCurrentArea(
     String phone,
     String area,
     String currentArea,
   );
 
   /// 🔄 사용자 상태 업데이트 (근무 여부, 저장 여부 등)
-  Future<void> updateUserStatus(
+  Future<void> updateLogOutUserStatus(
+    String phone,
+    String area, {
+    bool? isWorking,
+    bool? isSaved,
+  });
+
+  Future<void> updateWorkingUserStatus(
     String phone,
     String area, {
     bool? isWorking,

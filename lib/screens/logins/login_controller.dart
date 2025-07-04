@@ -14,15 +14,12 @@ import '../../utils/login_network_service.dart';
 
 class LoginController {
   final BuildContext context;
-
   final TextEditingController nameController = TextEditingController();
   final TextEditingController phoneController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
-
   final FocusNode nameFocus = FocusNode();
   final FocusNode phoneFocus = FocusNode();
   final FocusNode passwordFocus = FocusNode();
-
   bool isLoading = false;
   bool obscurePassword = true;
 

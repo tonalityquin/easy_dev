@@ -77,7 +77,7 @@ class UserState extends ChangeNotifier {
     if (_user == null) return;
 
     final newStatus = !_user!.isWorking;
-    await _repository.updateUserStatus(
+    await _repository.updateWorkingUserStatus(
       _user!.phone,
       _user!.areas.firstOrNull ?? '',
       isWorking: newStatus,
@@ -98,7 +98,7 @@ class UserState extends ChangeNotifier {
   Future<void> clearUserToPhone() async {
     if (_user == null) return;
 
-    await _repository.updateUserStatus(
+    await _repository.updateLogOutUserStatus(
       _user!.phone,
       _user!.areas.firstOrNull ?? '',
       isWorking: false,
@@ -178,10 +178,10 @@ class UserState extends ChangeNotifier {
       final trimmedPhone = userData.phone.trim();
       final trimmedArea = selectedArea.trim();
 
-      await _repository.updateCurrentArea(trimmedPhone, trimmedArea, trimmedArea);
+      await _repository.updateLoadCurrentArea(trimmedPhone, trimmedArea, trimmedArea);
       userData = userData.copyWith(currentArea: trimmedArea);
 
-      await _repository.updateUserStatus(phone, trimmedArea, isSaved: true);
+      await _repository.updateLoadUserStatus(phone, trimmedArea, isSaved: true);
       _user = userData.copyWith(isSaved: true);
       notifyListeners();
 
@@ -200,7 +200,7 @@ class UserState extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _repository.updateCurrentArea(
+      await _repository.areaPickerCurrentArea(
         _user!.phone.trim(),
         _user!.areas.firstOrNull ?? '',
         newArea.trim(),

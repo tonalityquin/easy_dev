@@ -58,13 +58,49 @@ class FirestoreUserRepository implements UserRepository {
   }
 
   @override
-  Future<void> updateCurrentArea(String phone, String area, String currentArea) async {
+  Future<void> updateLoadUserStatus(
+    String phone,
+    String area, {
+    bool? isWorking,
+    bool? isSaved,
+  }) async {
+    final userId = '$phone-$area';
+    final updates = <String, dynamic>{};
+    if (isWorking != null) updates['isWorking'] = isWorking;
+    if (isSaved != null) updates['isSaved'] = isSaved;
+
+    await _getCollectionRef().doc(userId).update(updates);
+  }
+
+  @override
+  Future<void> updateLoadCurrentArea(String phone, String area, String currentArea) async {
     final userId = '$phone-$area';
     await _getCollectionRef().doc(userId).update({'currentArea': currentArea});
   }
 
   @override
-  Future<void> updateUserStatus(
+  Future<void> updateLogOutUserStatus(
+    String phone,
+    String area, {
+    bool? isWorking,
+    bool? isSaved,
+  }) async {
+    final userId = '$phone-$area';
+    final updates = <String, dynamic>{};
+    if (isWorking != null) updates['isWorking'] = isWorking;
+    if (isSaved != null) updates['isSaved'] = isSaved;
+
+    await _getCollectionRef().doc(userId).update(updates);
+  }
+
+  @override
+  Future<void> areaPickerCurrentArea(String phone, String area, String currentArea) async {
+    final userId = '$phone-$area';
+    await _getCollectionRef().doc(userId).update({'currentArea': currentArea});
+  }
+
+  @override
+  Future<void> updateWorkingUserStatus(
     String phone,
     String area, {
     bool? isWorking,
