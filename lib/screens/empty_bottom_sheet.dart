@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../utils/firestore_logger.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:flutter/services.dart'; // ✅ 클립보드에 복사 위해 추가
+import '../../utils/firestore_logger.dart';
 
 class EmptyBottomSheet extends StatefulWidget {
   const EmptyBottomSheet({super.key});
@@ -63,13 +65,30 @@ class _EmptyBottomSheetState extends State<EmptyBottomSheet> {
     }
   }
 
-  Future<void> _deleteBeforeNow() async {
-    final cutoff = DateTime.now();
-    await FirestoreLogger().deleteLogsBefore(cutoff);
-    await _loadLog();
+  Future<void> _exportLogFile() async {
+    final file = FirestoreLogger().getLogFile();
+    if (file == null || !await file.exists()) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('내보낼 로그 파일이 없습니다.')),
+        );
+      }
+      return;
+    }
+
+    await Share.shareXFiles(
+      [XFile(file.path)],
+      text: 'Firestore 로그 파일',
+      subject: 'Firestore 로그',
+    );
+  }
+
+  Future<void> _copyLogsToClipboard() async {
+    final allLogs = _filteredLines.reversed.join('\n');
+    await Clipboard.setData(ClipboardData(text: allLogs));
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${_timestampFormat.format(cutoff)} 이전 로그가 삭제되었습니다.')),
+        const SnackBar(content: Text('로그가 클립보드에 복사되었습니다.')),
       );
     }
   }
@@ -80,24 +99,19 @@ class _EmptyBottomSheetState extends State<EmptyBottomSheet> {
       child: SafeArea(
         child: Column(
           children: [
-            // 상단 헤더 (그대로 유지)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  const Text(
-                    'Firestore 로그',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                ],
+            // 상단 헤더
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Text(
+                'Firestore 로그',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ),
-            // 검색창 + 아이콘 버튼들 한 줄에
+            // 검색창 + 아이콘 버튼들
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: Row(
                 children: [
-                  // 검색창
                   Expanded(
                     child: TextField(
                       decoration: const InputDecoration(
@@ -111,9 +125,14 @@ class _EmptyBottomSheetState extends State<EmptyBottomSheet> {
                   ),
                   const SizedBox(width: 8),
                   IconButton(
-                    onPressed: _deleteBeforeNow,
-                    icon: const Icon(Icons.cut, color: Colors.orange),
-                    tooltip: '지금 이전 로그 삭제',
+                    onPressed: _exportLogFile,
+                    icon: const Icon(Icons.upload_file, color: Colors.blueGrey),
+                    tooltip: '로그 파일 내보내기',
+                  ),
+                  IconButton(
+                    onPressed: _copyLogsToClipboard,
+                    icon: const Icon(Icons.copy, color: Colors.teal),
+                    tooltip: '로그 복사',
                   ),
                   IconButton(
                     onPressed: _clearLog,

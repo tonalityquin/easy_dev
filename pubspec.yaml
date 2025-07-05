@@ -52,7 +52,8 @@ dependencies:
 
   url_launcher: ^6.3.1
 
-  
+  # File Export
+  share_plus: ^11.0.0
 
 
 dev_dependencies:

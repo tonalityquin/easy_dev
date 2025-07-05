@@ -26,15 +26,12 @@ class FirestoreLogger {
     }
   }
 
+  /// 로그 파일 반환
+  File? getLogFile() => _logFile;
+
   /// 로그 메시지를 파일에 Append
-  ///
-  /// [level]은 다음 중 하나를 권장:
-  ///   - success
-  ///   - error
-  ///   - called
-  ///   - info (기본값)
   Future<void> log(
-      Object? message, { // 🔹 null 허용
+      Object? message, {
         String level = 'info',
       }) async {
     if (_logFile == null) {
@@ -45,7 +42,6 @@ class FirestoreLogger {
     final timestamp = DateTime.now().toIso8601String();
     final upperLevel = level.toUpperCase();
 
-    // null 안전 변환 + JSON stringify
     String safeMessage;
     try {
       if (message == null) {
@@ -67,6 +63,10 @@ class FirestoreLogger {
         mode: FileMode.append,
         encoding: utf8,
       );
+
+      // ✅ 용량 확인 후 자동 Trim
+      await trimLogIfTooLarge();
+
     } catch (e) {
       debugPrint('❌ 로그 기록 실패: $e');
     }
@@ -148,6 +148,38 @@ class FirestoreLogger {
       );
     } catch (e) {
       debugPrint('❌ 로그 삭제 실패: $e');
+    }
+  }
+
+  /// ✅ 용량이 큰 경우 오래된 로그 삭제 (5MB 초과 시 최근 5000줄만 유지)
+  Future<void> trimLogIfTooLarge() async {
+    if (_logFile == null) {
+      debugPrint('⚠️ FirestoreLogger not initialized.');
+      return;
+    }
+    if (!await _logFile!.exists()) {
+      debugPrint('⚠️ 로그 파일이 존재하지 않습니다.');
+      return;
+    }
+
+    final size = await _logFile!.length();
+    if (size > 5 * 1024 * 1024) {
+      debugPrint('⚠️ 로그 파일이 5MB를 초과합니다. 오래된 로그를 삭제합니다.');
+
+      final allLines = await _logFile!
+          .openRead()
+          .transform(const Utf8Decoder(allowMalformed: true))
+          .transform(const LineSplitter())
+          .toList();
+
+      final retainedLines = allLines.skip(allLines.length - 5000).toList();
+
+      await _logFile!.writeAsString(
+        retainedLines.join('\n') + '\n',
+        encoding: utf8,
+      );
+
+      await log('로그 파일 용량 초과로 최근 5000줄만 유지함', level: 'info');
     }
   }
 }

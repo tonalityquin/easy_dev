@@ -42,7 +42,7 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
           .get();
 
       await logger.log(
-        '✅ plates count 쿼리 완료 - count=${snapshot.count} (${stopwatch.elapsedMilliseconds}ms)',
+        '✅ plates count 쿼리 완료 - location="$locationName", area="$area", count=${snapshot.count} (${stopwatch.elapsedMilliseconds}ms)',
         level: 'success',
       );
 
