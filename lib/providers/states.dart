@@ -69,7 +69,6 @@ final List<SingleChildWidget> stateProviders = [
     },
   ),
 
-  // 🔍 차량 검색 필터 상태 - 이제 PlateState만 의존 (Firestore 구독 X)
   ChangeNotifierProvider(
     create: (context) => FilterPlate(
       context.read<PlateState>(),

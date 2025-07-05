@@ -20,12 +20,13 @@ class FilterPlate extends ChangeNotifier {
 
   // 🔹 4. Public 메서드
 
-  /// ✅ 검색어 설정
+  /// 삭제 예정
   void setPlateSearchQuery(String query) {
     _searchQuery = query;
     notifyListeners();
   }
 
+  /// 삭제 예정
   void clearPlateSearchQuery() {
     _searchQuery = null;
     notifyListeners();
