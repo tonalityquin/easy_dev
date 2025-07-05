@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
-import 'keypad/num_keypad_for_plate_search.dart'; // NumKeypad 경로에 맞게 수정
+import 'keypad/animated_keypad.dart';
+import 'widgets/plate_number_display.dart';
+import 'widgets/plate_search_header.dart';
+import 'widgets/plate_search_results.dart';
+import 'widgets/search_button.dart';
 
 class PlateSearchBottomSheet extends StatefulWidget {
   final void Function(String) onSearch;
@@ -102,9 +106,6 @@ class _PlateSearchBottomSheetState extends State<PlateSearchBottomSheet> with Si
 
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
-    final onPrimary = Theme.of(context).colorScheme.onPrimary;
-
     return SafeArea(
       child: Scaffold(
         backgroundColor: Colors.transparent,
@@ -135,82 +136,20 @@ class _PlateSearchBottomSheetState extends State<PlateSearchBottomSheet> with Si
                       ),
                     ),
                     const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Icon(Icons.directions_car, color: primary),
-                        const SizedBox(width: 8),
-                        const Text(
-                          '번호판 검색',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
+                    const PlateSearchHeader(),
+                    const SizedBox(height: 24),
+                    PlateNumberDisplay(
+                      controller: _controller,
+                      isValidPlate: isValidPlate,
                     ),
                     const SizedBox(height: 24),
-                    ValueListenableBuilder<TextEditingValue>(
-                      valueListenable: _controller,
-                      builder: (context, value, child) {
-                        final valid = isValidPlate(value.text);
-                        return AnimatedOpacity(
-                          opacity: value.text.isEmpty ? 0.4 : 1,
-                          duration: const Duration(milliseconds: 300),
-                          child: Text(
-                            value.text.isEmpty ? '번호 입력 대기 중' : value.text,
-                            style: TextStyle(
-                              fontSize: 26,
-                              fontWeight: FontWeight.w500,
-                              color: valid ? Colors.black : Colors.red,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    ValueListenableBuilder<TextEditingValue>(
-                      valueListenable: _controller,
-                      builder: (context, value, child) {
-                        final valid = isValidPlate(value.text);
-                        if (value.text.isEmpty) {
-                          return const SizedBox.shrink();
-                        }
-                        return Text(
-                          valid ? '유효한 번호입니다.' : '숫자 4자리를 입력해주세요.',
-                          style: TextStyle(
-                            color: valid ? Colors.green : Colors.red,
-                            fontSize: 14,
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 24),
-                    if (_hasSearched) ...[
-                      const Text(
-                        '검색 결과',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      ListView.separated(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: _dummyResults.length,
-                        separatorBuilder: (_, __) => const Divider(),
-                        itemBuilder: (context, index) {
-                          return ListTile(
-                            leading: const Icon(Icons.directions_car),
-                            title: Text(_dummyResults[index]),
-                            onTap: () {
-                              Navigator.pop(context);
-                            },
-                          );
+                    if (_hasSearched)
+                      PlateSearchResults(
+                        results: _dummyResults,
+                        onSelect: (selected) {
+                          Navigator.pop(context);
                         },
                       ),
-                      const SizedBox(height: 8),
-                    ],
                     Center(
                       child: TextButton(
                         onPressed: () => Navigator.pop(context),
@@ -222,45 +161,20 @@ class _PlateSearchBottomSheetState extends State<PlateSearchBottomSheet> with Si
                       valueListenable: _controller,
                       builder: (context, value, child) {
                         final valid = isValidPlate(value.text);
-                        return SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: valid && !_isLoading
-                                ? () async {
-                              setState(() {
-                                _isLoading = true;
-                              });
-                              await Future.delayed(const Duration(milliseconds: 300));
-                              widget.onSearch(value.text);
-                              setState(() {
-                                _hasSearched = true;
-                                _isLoading = false;
-                              });
-                            }
-                                : null,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: valid ? primary : Colors.grey.shade300,
-                              foregroundColor: valid ? onPrimary : Colors.black45,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              elevation: 0,
-                            ),
-                            child: _isLoading
-                                ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                              ),
-                            )
-                                : const Text(
-                              '검색',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                            ),
-                          ),
+                        return SearchButton(
+                          isValid: valid,
+                          isLoading: _isLoading,
+                          onPressed: () async {
+                            setState(() {
+                              _isLoading = true;
+                            });
+                            await Future.delayed(const Duration(milliseconds: 300));
+                            widget.onSearch(value.text);
+                            setState(() {
+                              _hasSearched = true;
+                              _isLoading = false;
+                            });
+                          },
                         );
                       },
                     ),
@@ -273,27 +187,9 @@ class _PlateSearchBottomSheetState extends State<PlateSearchBottomSheet> with Si
         ),
         bottomNavigationBar: _hasSearched
             ? const SizedBox.shrink()
-            : FadeTransition(
-          opacity: _fadeAnimation,
-          child: SlideTransition(
-            position: _slideAnimation,
-            child: Container(
-              padding: const EdgeInsets.only(bottom: 8),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black12,
-                    blurRadius: 6,
-                    offset: Offset(0, -2),
-                  ),
-                ],
-              ),
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.45,
-              ),
-              child: NumKeypadForPlateSearch(
+            : AnimatedKeypad(
+                slideAnimation: _slideAnimation,
+                fadeAnimation: _fadeAnimation,
                 controller: _controller,
                 maxLength: 4,
                 enableDigitModeSwitch: false,
@@ -307,9 +203,6 @@ class _PlateSearchBottomSheetState extends State<PlateSearchBottomSheet> with Si
                   });
                 },
               ),
-            ),
-          ),
-        ),
       ),
     );
   }
