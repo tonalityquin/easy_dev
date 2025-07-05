@@ -13,7 +13,7 @@ import '../../utils/snackbar_helper.dart';
 
 import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바
 import '../../widgets/dialog/parking_location_dialog.dart';
-import '../../widgets/dialog/plate_search_dialog/plate_search_dialog.dart'; // ✅ PlateSearchDialog 추가
+import '../../widgets/dialog/plate_search_bottom_sheet/plate_search_bottom_sheet.dart'; // ✅ PlateSearchDialog 추가
 import 'departure_request_pages/widgets/departure_request_status_dialog.dart';
 import '../../widgets/container/plate_container.dart'; // 번호판 컨테이너 위젯
 
@@ -48,7 +48,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
     showDialog(
       context: context,
       builder: (context) {
-        return PlateSearchDialog(
+        return PlateSearchBottomSheet(
           onSearch: (query) {
             _filterPlatesByNumber(context, query);
           },

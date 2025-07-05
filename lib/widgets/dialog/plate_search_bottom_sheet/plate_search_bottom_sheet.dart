@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
-import 'keypad/num_keypad.dart'; // NumKeypad 경로에 맞게 수정
+import 'keypad/num_keypad_for_plate_search.dart'; // NumKeypad 경로에 맞게 수정
 
-class PlateSearchDialog extends StatefulWidget {
+class PlateSearchBottomSheet extends StatefulWidget {
   final void Function(String) onSearch;
 
-  const PlateSearchDialog({
+  const PlateSearchBottomSheet({
     super.key,
     required this.onSearch,
   });
 
   @override
-  State<PlateSearchDialog> createState() => _PlateSearchDialogState();
+  State<PlateSearchBottomSheet> createState() => _PlateSearchBottomSheetState();
 
   /// 커스텀 애니메이션으로 표시
   static Future<void> show(BuildContext context, void Function(String) onSearch) async {
@@ -23,7 +23,7 @@ class PlateSearchDialog extends StatefulWidget {
       pageBuilder: (_, __, ___) {
         return Align(
           alignment: Alignment.bottomCenter,
-          child: PlateSearchDialog(onSearch: onSearch),
+          child: PlateSearchBottomSheet(onSearch: onSearch),
         );
       },
       transitionBuilder: (_, animation, secondaryAnimation, child) {
@@ -46,7 +46,7 @@ class PlateSearchDialog extends StatefulWidget {
   }
 }
 
-class _PlateSearchDialogState extends State<PlateSearchDialog> with SingleTickerProviderStateMixin {
+class _PlateSearchBottomSheetState extends State<PlateSearchBottomSheet> with SingleTickerProviderStateMixin {
   final TextEditingController _controller = TextEditingController();
   bool _isLoading = false;
   bool _hasSearched = false;
@@ -293,7 +293,7 @@ class _PlateSearchDialogState extends State<PlateSearchDialog> with SingleTicker
               constraints: BoxConstraints(
                 maxHeight: MediaQuery.of(context).size.height * 0.45,
               ),
-              child: NumKeypad(
+              child: NumKeypadForPlateSearch(
                 controller: _controller,
                 maxLength: 4,
                 enableDigitModeSwitch: false,
