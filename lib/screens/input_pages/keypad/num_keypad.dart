@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // HapticFeedback을 위해 필요
 
-class NumKeypad extends StatelessWidget {
+class NumKeypad extends StatefulWidget {
   final TextEditingController controller;
   final int maxLength;
   final VoidCallback? onComplete;
@@ -23,10 +24,35 @@ class NumKeypad extends StatelessWidget {
   });
 
   @override
+  State<NumKeypad> createState() => _NumKeypadState();
+}
+
+class _NumKeypadState extends State<NumKeypad> with TickerProviderStateMixin {
+  final Map<String, AnimationController> _controllers = {};
+  final Map<String, bool> _isPressed = {};
+
+  @override
+  void dispose() {
+    for (final controller in _controllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Container(
-      color: backgroundColor ?? const Color(0xFFFef7FF),
-      padding: const EdgeInsets.symmetric(vertical: 10.0),
+      decoration: BoxDecoration(
+        color: widget.backgroundColor ?? Colors.white,
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 6,
+            offset: Offset(0, -2),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 12),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -40,9 +66,9 @@ class NumKeypad extends StatelessWidget {
   }
 
   List<String> _lastRowKeys() {
-    if (enableDigitModeSwitch) {
+    if (widget.enableDigitModeSwitch) {
       return ['두자리', '0', '세자리'];
-    } else if (onReset != null) {
+    } else if (widget.onReset != null) {
       return ['처음', '0', '처음'];
     } else {
       return ['', '0', ''];
@@ -57,27 +83,64 @@ class NumKeypad extends StatelessWidget {
   }
 
   Widget _buildKeyButton(String key) {
+    if (key.isEmpty) {
+      return const Expanded(child: SizedBox());
+    }
+
+    _controllers.putIfAbsent(
+      key,
+          () => AnimationController(
+        duration: const Duration(milliseconds: 80), // 더 빠르게 축소
+        vsync: this,
+        lowerBound: 0.0,
+        upperBound: 0.1,
+      ),
+    );
+    _isPressed.putIfAbsent(key, () => false);
+
+    final controller = _controllers[key]!;
+    final animation = Tween(begin: 1.0, end: 0.85).animate( // 더 크게 축소
+      CurvedAnimation(parent: controller, curve: Curves.easeOut),
+    );
+
     return Expanded(
       child: Padding(
         padding: const EdgeInsets.all(4.0),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: key.isNotEmpty ? () => _handleKeyTap(key) : null,
-            borderRadius: BorderRadius.circular(8.0),
-            splashColor: Colors.purple.withAlpha(50),
+        child: GestureDetector(
+          onTapDown: (_) {
+            HapticFeedback.selectionClick(); // ✅ 진동
+            setState(() => _isPressed[key] = true);
+            controller.forward();
+          },
+          onTapUp: (_) {
+            setState(() => _isPressed[key] = false);
+            Future.delayed(const Duration(milliseconds: 100), () {
+              if (mounted) controller.reverse();
+            });
+            _handleKeyTap(key);
+          },
+          onTapCancel: () {
+            setState(() => _isPressed[key] = false);
+            controller.reverse();
+          },
+          child: ScaleTransition(
+            scale: animation,
             child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 16.0),
+              constraints: const BoxConstraints(minHeight: 48),
+              padding: const EdgeInsets.symmetric(vertical: 12.0),
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8.0),
-                border: Border.all(color: Colors.grey),
+                color: _isPressed[key]! ? Colors.lightBlue[100] : Colors.grey[50],
+                borderRadius: BorderRadius.zero,
+                border: Border.all(color: Colors.grey[300]!),
               ),
               child: Center(
                 child: Text(
                   key,
-                  style: (textStyle ?? const TextStyle(fontSize: 20, fontWeight: FontWeight.bold))
-                      .copyWith(color: Colors.black),
+                  style: (widget.textStyle ??
+                      const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w500,
+                      )).copyWith(color: Colors.black87),
                 ),
               ),
             ),
@@ -88,26 +151,22 @@ class NumKeypad extends StatelessWidget {
   }
 
   void _handleKeyTap(String key) {
-    debugPrint('키 입력: $key, 현재 텍스트: ${controller.text}');
-
     if (key == '두자리') {
-      onChangeFrontDigitMode?.call(false);
+      widget.onChangeFrontDigitMode?.call(false);
       return;
     } else if (key == '세자리') {
-      onChangeFrontDigitMode?.call(true);
+      widget.onChangeFrontDigitMode?.call(true);
       return;
     } else if (key == '처음') {
-      onReset?.call();
+      widget.onReset?.call();
       return;
     }
 
-    if (controller.text.length < maxLength) {
-      controller.text += key;
-      debugPrint('숫자 추가 후 텍스트: ${controller.text}');
-      if (controller.text.length == maxLength) {
+    if (widget.controller.text.length < widget.maxLength) {
+      widget.controller.text += key;
+      if (widget.controller.text.length == widget.maxLength) {
         Future.microtask(() {
-          debugPrint('onComplete 호출 - 입력 완료 상태: ${controller.text}');
-          onComplete?.call();
+          widget.onComplete?.call();
         });
       }
     }

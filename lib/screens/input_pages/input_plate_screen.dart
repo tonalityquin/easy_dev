@@ -59,10 +59,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
         if (mounted && data != null) {
           final fetchedStatus = data['customStatus'] as String?;
-          final fetchedList = (data['statusList'] as List<dynamic>?)
-              ?.map((e) => e.toString())
-              .toList() ??
-              [];
+          final fetchedList = (data['statusList'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
 
           setState(() {
             controller.fetchedCustomStatus = fetchedStatus;
@@ -131,9 +128,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   }
 
   VoidCallback _buildLocationAction() {
-    return controller.isLocationSelected
-        ? () => setState(() => controller.clearLocation())
-        : _selectParkingLocation;
+    return controller.isLocationSelected ? () => setState(() => controller.clearLocation()) : _selectParkingLocation;
   }
 
   Widget _buildKeypad() {
@@ -141,6 +136,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
     if (active == controller.controllerFrontDigit) {
       return NumKeypad(
+        key: const ValueKey('frontKeypad'),
         controller: controller.controllerFrontDigit,
         maxLength: controller.isThreeDigit ? 3 : 2,
         onComplete: () => setState(() => controller.setActiveController(controller.controllerMidDigit)),
@@ -155,12 +151,14 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
     if (active == controller.controllerMidDigit) {
       return KorKeypad(
+        key: const ValueKey('midKeypad'),
         controller: controller.controllerMidDigit,
         onComplete: () => setState(() => controller.setActiveController(controller.controllerBackDigit)),
       );
     }
 
     return NumKeypad(
+      key: const ValueKey('backKeypad'),
       controller: controller.controllerBackDigit,
       maxLength: 4,
       onComplete: () => setState(() => controller.showKeypad = false),

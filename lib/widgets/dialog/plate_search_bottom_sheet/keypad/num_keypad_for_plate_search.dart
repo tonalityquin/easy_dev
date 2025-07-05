@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // 진동
 
 class NumKeypadForPlateSearch extends StatefulWidget {
   final TextEditingController controller;
@@ -89,18 +90,17 @@ class _NumKeypadForPlateSearchState extends State<NumKeypadForPlateSearch> with 
 
     _controllers.putIfAbsent(
       key,
-      () => AnimationController(
-        duration: const Duration(milliseconds: 150), // ✅ 더 부드럽게
+          () => AnimationController(
+        duration: const Duration(milliseconds: 80), // 더 빠르게 축소
         vsync: this,
         lowerBound: 0.0,
         upperBound: 0.1,
       ),
     );
-
     _isPressed.putIfAbsent(key, () => false);
 
     final controller = _controllers[key]!;
-    final animation = Tween(begin: 1.0, end: 0.9).animate(
+    final animation = Tween(begin: 1.0, end: 0.85).animate( // 더 크게 축소
       CurvedAnimation(parent: controller, curve: Curves.easeOut),
     );
 
@@ -109,12 +109,15 @@ class _NumKeypadForPlateSearchState extends State<NumKeypadForPlateSearch> with 
         padding: const EdgeInsets.all(4.0),
         child: GestureDetector(
           onTapDown: (_) {
+            HapticFeedback.selectionClick(); // ✅ 진동 발생
             setState(() => _isPressed[key] = true);
             controller.forward();
           },
           onTapUp: (_) {
             setState(() => _isPressed[key] = false);
-            controller.reverse();
+            Future.delayed(const Duration(milliseconds: 100), () {
+              if (mounted) controller.reverse();
+            });
             _handleKeyTap(key);
           },
           onTapCancel: () {
@@ -125,11 +128,11 @@ class _NumKeypadForPlateSearchState extends State<NumKeypadForPlateSearch> with 
             scale: animation,
             child: Container(
               constraints: const BoxConstraints(
-                minHeight: 48, // ✅ 버튼 최소 높이
+                minHeight: 48,
               ),
               padding: const EdgeInsets.symmetric(vertical: 12.0),
               decoration: BoxDecoration(
-                color: _isPressed[key]! ? Colors.lightBlue[100] : Colors.grey[50], // ✅ 하늘색으로 변경
+                color: _isPressed[key]! ? Colors.lightBlue[100] : Colors.grey[50],
                 borderRadius: BorderRadius.zero,
                 border: Border.all(color: Colors.grey[300]!),
               ),
@@ -137,10 +140,10 @@ class _NumKeypadForPlateSearchState extends State<NumKeypadForPlateSearch> with 
                 child: Text(
                   key,
                   style: (widget.textStyle ??
-                          const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w500,
-                          ))
+                      const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w500,
+                      ))
                       .copyWith(color: Colors.black87),
                 ),
               ),

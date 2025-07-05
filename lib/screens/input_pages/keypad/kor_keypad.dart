@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // HapticFeedback
+
 import 'kor_keypad/kor_0.dart';
 import 'kor_keypad/kor_1.dart';
 import 'kor_keypad/kor_2.dart';
@@ -26,7 +28,7 @@ class KorKeypad extends StatefulWidget {
   State<KorKeypad> createState() => _KorKeypadState();
 }
 
-class _KorKeypadState extends State<KorKeypad> {
+class _KorKeypadState extends State<KorKeypad> with TickerProviderStateMixin {
   String? activeSubLayout;
 
   final Map<String, String> keyToSubLayout = {
@@ -42,24 +44,46 @@ class _KorKeypadState extends State<KorKeypad> {
     'ㅎ': 'kor0',
   };
 
+  final Map<String, AnimationController> _controllers = {};
+  final Map<String, bool> _isPressed = {};
+
+  @override
+  void dispose() {
+    for (final controller in _controllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFFFef7FF),
-      padding: const EdgeInsets.symmetric(vertical: 10.0),
-      child: activeSubLayout == null ? _buildMainLayout() : _buildActiveSubLayout(),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 6,
+            offset: Offset(0, -2),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 12),
+      child: activeSubLayout == null
+          ? _buildMainLayout()
+          : _buildActiveSubLayout(),
     );
   }
 
   Widget _buildMainLayout() {
-    return buildSubLayout(
-      [
-        ['ㄱ', 'ㄴ', 'ㄷ'],
-        ['ㄹ', 'ㅁ', 'ㅂ'],
-        ['ㅅ', 'ㅇ', 'ㅈ'],
-        ['공란', 'ㅎ', '공란'],
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildRow(['ㄱ', 'ㄴ', 'ㄷ']),
+        _buildRow(['ㄹ', 'ㅁ', 'ㅂ']),
+        _buildRow(['ㅅ', 'ㅇ', 'ㅈ']),
+        _buildRow(['공란', 'ㅎ', '공란']),
       ],
-      _handleMainKeyTap,
     );
   }
 
@@ -90,88 +114,107 @@ class _KorKeypadState extends State<KorKeypad> {
     }
   }
 
-  void _handleMainKeyTap(String key) {
-    setState(() {
-      if (keyToSubLayout.containsKey(key)) {
-        activeSubLayout = keyToSubLayout[key];
-      } else if (key == '공란') {
-        if (widget.onComplete != null) {
-          Future.microtask(() {
-            widget.onComplete!();
-          });
-        }
-      } else {
-        _processKeyInput(key);
-      }
-    });
+  Widget _buildRow(List<String> keys) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: keys.map((key) => _buildKeyButton(key)).toList(),
+    );
   }
 
-  void _handleSubKeyTap(String key) {
-    setState(() {
-      if (key == 'back') {
-        activeSubLayout = null;
-      } else {
-        _processKeyInput(key);
-      }
-    });
-  }
+  Widget _buildKeyButton(String key) {
+    if (key.isEmpty) {
+      return const Expanded(child: SizedBox());
+    }
 
-  void _processKeyInput(String key) {
-    setState(() {
-      widget.controller.text += key;
-      if (widget.controller.text.isNotEmpty && widget.onComplete != null) {
-        Future.microtask(() {
-          widget.onComplete!();
-        });
-      }
-    });
-  }
-}
+    _controllers.putIfAbsent(
+      key,
+          () => AnimationController(
+        duration: const Duration(milliseconds: 80), // 빠르게 축소
+        vsync: this,
+        lowerBound: 0.0,
+        upperBound: 0.1,
+      ),
+    );
+    _isPressed.putIfAbsent(key, () => false);
 
-Widget buildSubLayout(List<List<String>> keyRows, Function(String) onKeyTap) {
-  return Column(
-    mainAxisSize: MainAxisSize.min,
-    children: keyRows.map((row) {
-      return Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: row.map((key) {
-          return buildKeyButton(key, key.isNotEmpty ? () => onKeyTap(key) : null);
-        }).toList(),
-      );
-    }).toList(),
-  );
-}
+    final controller = _controllers[key]!;
+    final animation = Tween(begin: 1.0, end: 0.85).animate( // 더 크게 축소
+      CurvedAnimation(parent: controller, curve: Curves.easeOut),
+    );
 
-Widget buildKeyButton(String key, VoidCallback? onTap) {
-  return Expanded(
-    child: Padding(
-      padding: const EdgeInsets.all(4.0),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(8.0),
-          splashColor: Colors.purple.withAlpha(50),
-          child: Container(
-            padding: const EdgeInsets.all(16.0),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8.0),
-              border: Border.all(color: Colors.grey),
-            ),
-            child: Center(
-              child: Text(
-                key,
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black, // 단일 색상 처리
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.all(4.0),
+        child: GestureDetector(
+          onTapDown: (_) {
+            HapticFeedback.selectionClick(); // 진동
+            setState(() => _isPressed[key] = true);
+            controller.forward();
+          },
+          onTapUp: (_) {
+            setState(() => _isPressed[key] = false);
+            Future.delayed(const Duration(milliseconds: 100), () {
+              if (mounted) controller.reverse();
+            });
+            _handleMainKeyTap(key);
+          },
+          onTapCancel: () {
+            setState(() => _isPressed[key] = false);
+            controller.reverse();
+          },
+          child: ScaleTransition(
+            scale: animation,
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 48),
+              padding: const EdgeInsets.symmetric(vertical: 12.0),
+              decoration: BoxDecoration(
+                color: _isPressed[key]! ? Colors.lightBlue[100] : Colors.grey[50],
+                borderRadius: BorderRadius.zero,
+                border: Border.all(color: Colors.grey[300]!),
+              ),
+              child: Center(
+                child: Text(
+                  key,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.black87,
+                  ),
                 ),
               ),
             ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
+
+  void _handleMainKeyTap(String key) {
+    if (keyToSubLayout.containsKey(key)) {
+      setState(() {
+        activeSubLayout = keyToSubLayout[key];
+      });
+    } else if (key == '공란') {
+      widget.onComplete?.call();
+    } else {
+      _processKeyInput(key);
+    }
+  }
+
+  void _handleSubKeyTap(String key) {
+    if (key == 'back') {
+      setState(() {
+        activeSubLayout = null;
+      });
+    } else {
+      _processKeyInput(key);
+    }
+  }
+
+  void _processKeyInput(String key) {
+    setState(() {
+      widget.controller.text += key;
+      widget.onComplete?.call();
+    });
+  }
 }
