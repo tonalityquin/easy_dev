@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
 import '../../screens/type_pages/parking_request_page.dart';
 import '../../screens/type_pages/parking_completed_page.dart';
 import '../../screens/type_pages/departure_request_page.dart';
@@ -8,44 +10,50 @@ import '../../screens/hq_pages/human_resource.dart';
 import '../../screens/hq_pages/head_quarter.dart';
 import '../../enums/plate_type.dart';
 
-/// ✅ ParkingCompletedPage에 연결할 GlobalKey
-final GlobalKey parkingCompletedKey = GlobalKey();
+import 'page_state.dart';
 
+/// ✅ PageInfo를 builder 패턴으로 변경
 class PageInfo {
   final String title;
-  final Widget page;
   final PlateType collectionKey;
+  final Widget Function(BuildContext) builder;
 
   const PageInfo({
     required this.title,
-    required this.page,
     required this.collectionKey,
+    required this.builder,
   });
 }
 
+/// ✅ defaultPages에서 Builder로 생성
 final List<PageInfo> defaultPages = [
   PageInfo(
     title: '입차 요청',
-    page: ParkingRequestPage(),
     collectionKey: PlateType.parkingRequests,
+    builder: (_) => ParkingRequestPage(),
   ),
   PageInfo(
     title: '입차 완료',
-    page: ParkingCompletedPage(key: parkingCompletedKey),
     collectionKey: PlateType.parkingCompleted,
+    builder: (context) {
+      // PageState에서 GlobalKey를 가져옵니다
+      final pageState = context.read<PageState>();
+      return ParkingCompletedPage(key: pageState.parkingCompletedKey);
+    },
   ),
   PageInfo(
     title: '출차 요청',
-    page: DepartureRequestPage(),
     collectionKey: PlateType.departureRequests,
+    builder: (_) => DepartureRequestPage(),
   ),
   PageInfo(
     title: '출차 완료',
-    page: DepartureCompletedPage(),
     collectionKey: PlateType.departureCompleted,
+    builder: (_) => DepartureCompletedPage(),
   ),
 ];
 
+/// ✅ HQ용 페이지 정보 (기존 그대로 유지)
 class HqPageInfo {
   final String title;
   final Widget page;

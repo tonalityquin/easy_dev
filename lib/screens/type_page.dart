@@ -136,7 +136,7 @@ class _RefreshableBodyState extends State<RefreshableBody> {
         builder: (context, state, child) {
           return Stack(
             children: [
-              _buildCurrentPage(state.selectedIndex),
+              _buildCurrentPage(context, state.selectedIndex),
               if (state.isLoading)
                 Container(
                   color: Colors.black.withAlpha(51),
@@ -151,17 +151,17 @@ class _RefreshableBodyState extends State<RefreshableBody> {
     );
   }
 
-  Widget _buildCurrentPage(int index) {
+  Widget _buildCurrentPage(BuildContext context, int index) {
     if (index == 0) {
       // ✅ 입차 요청 페이지는 캐싱 안 함
-      return defaultPages[0].page;
+      return defaultPages[0].builder(context);
     } else {
-      // ✅ 나머지는 IndexedStack으로 유지
+      // ✅ 나머지 페이지들은 IndexedStack으로 유지
       return IndexedStack(
         index: index - 1,
         children: defaultPages
             .sublist(1)
-            .map((pageInfo) => pageInfo.page)
+            .map((pageInfo) => pageInfo.builder(context))
             .toList(),
       );
     }

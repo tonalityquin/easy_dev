@@ -9,6 +9,9 @@ import '../../enums/plate_type.dart';
 class PageState with ChangeNotifier {
   final List<PageInfo> pages;
 
+  /// ✅ ParkingCompletedPage 전용 GlobalKey
+  final GlobalKey parkingCompletedKey = GlobalKey();
+
   int get selectedIndex => _selectedIndex;
   int _selectedIndex;
 
@@ -23,14 +26,17 @@ class PageState with ChangeNotifier {
     notifyListeners();
   }
 
-  PageState({required this.pages}) : _selectedIndex = pages.isNotEmpty ? 1 : throw Exception("🚨 페이지 리스트가 비어 있습니다.");
+  PageState({required this.pages})
+      : _selectedIndex = pages.isNotEmpty
+      ? 1
+      : throw Exception("🚨 페이지 리스트가 비어 있습니다.");
 
   /// 탭 이벤트
   void onItemTapped(
-    BuildContext context,
-    int index, {
-    void Function(String)? onError,
-  }) {
+      BuildContext context,
+      int index, {
+        void Function(String)? onError,
+      }) {
     if (index < 0 || index >= pages.length) {
       final error = '🚨 Invalid index: $index';
       debugPrint(error);
@@ -41,7 +47,8 @@ class PageState with ChangeNotifier {
 
     // ✅ index 0 (입차 요청) 데이터 유무 검사
     if (index == 0) {
-      final plates = plateState.getPlatesByCollection(PlateType.parkingRequests);
+      final plates =
+      plateState.getPlatesByCollection(PlateType.parkingRequests);
       if (plates.isEmpty) {
         debugPrint("🚫 입차 요청 데이터가 없습니다.");
         return; // 탭 차단
@@ -50,7 +57,8 @@ class PageState with ChangeNotifier {
 
     // ✅ index 2 (출차 요청) 데이터 유무 검사
     if (index == 2) {
-      final plates = plateState.getPlatesByCollection(PlateType.departureRequests);
+      final plates =
+      plateState.getPlatesByCollection(PlateType.departureRequests);
       if (plates.isEmpty) {
         debugPrint("🚫 출차 요청 데이터가 없습니다.");
         return; // 탭 차단
