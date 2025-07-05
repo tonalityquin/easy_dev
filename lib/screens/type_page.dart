@@ -13,9 +13,37 @@ import '../utils/app_colors.dart';
 
 import '../screens/input_pages/input_plate_screen.dart';
 import 'secondary_page.dart';
+import 'empty_bottom_sheet.dart'; // ✅ 추가
 
-class TypePage extends StatelessWidget {
+class TypePage extends StatefulWidget {
   const TypePage({super.key});
+
+  @override
+  State<TypePage> createState() => _TypePageState();
+}
+
+class _TypePageState extends State<TypePage> {
+  int _tapCount = 0;
+
+  void _handleTitleTap() {
+    setState(() {
+      _tapCount++;
+      if (_tapCount >= 2) {
+        _tapCount = 0;
+        _showBottomSheet();
+      }
+    });
+  }
+
+  void _showBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return const EmptyBottomSheet();
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -34,8 +62,7 @@ class TypePage extends StatelessWidget {
 
               final currentPage = pageState.pages[pageState.selectedIndex];
               final collection = currentPage.collectionKey;
-              final selectedPlate =
-              plateState.getSelectedPlate(collection, userName);
+              final selectedPlate = plateState.getSelectedPlate(collection, userName);
 
               if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
                 await plateState.togglePlateIsSelected(
@@ -52,19 +79,22 @@ class TypePage extends StatelessWidget {
                 foregroundColor: Colors.black,
                 elevation: 1,
                 centerTitle: true,
-                title: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.arrow_back_ios, size: 16, color: Colors.grey),
-                    SizedBox(width: 4),
-                    Text(
-                      " 페이지 가이드 라인 예정",
-                      style: TextStyle(color: Colors.grey, fontSize: 16),
-                    ),
-                    SizedBox(width: 4),
-                    Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-                  ],
+                title: GestureDetector(
+                  onTap: _handleTitleTap,
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.arrow_back_ios, size: 16, color: Colors.grey),
+                      SizedBox(width: 4),
+                      Text(
+                        " 페이지 가이드 라인 예정",
+                        style: TextStyle(color: Colors.grey, fontSize: 16),
+                      ),
+                      SizedBox(width: 4),
+                      Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                    ],
+                  ),
                 ),
               ),
               body: const RefreshableBody(),
@@ -153,10 +183,8 @@ class _RefreshableBodyState extends State<RefreshableBody> {
 
   Widget _buildCurrentPage(BuildContext context, int index) {
     if (index == 0) {
-      // ✅ 입차 요청 페이지는 캐싱 안 함
       return defaultPages[0].builder(context);
     } else {
-      // ✅ 나머지 페이지들은 IndexedStack으로 유지
       return IndexedStack(
         index: index - 1,
         children: defaultPages

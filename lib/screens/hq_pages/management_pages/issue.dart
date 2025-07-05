@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../../../states/user/user_state.dart';
+import '../../../utils/firestore_logger.dart';
 
 class Issue extends StatefulWidget {
   const Issue({super.key});
@@ -28,10 +29,7 @@ class _IssueState extends State<Issue> {
 
       final division = user.divisions.first;
 
-      final snapshot = await firestore
-          .collection('tasks')
-          .where('division', isEqualTo: division)
-          .get();
+      final snapshot = await firestore.collection('tasks').where('division', isEqualTo: division).get();
 
       final filtered = snapshot.docs.where((doc) => doc.data().containsKey('answer'));
 
@@ -71,6 +69,11 @@ class _IssueState extends State<Issue> {
       final user = context.read<UserState>().user;
       final firestore = FirebaseFirestore.instance;
 
+      await FirestoreLogger().log(
+        '✏️ 이슈 제출 시작: "$content"',
+        level: 'called',
+      );
+
       await firestore.collection('tasks').add({
         'issue': {
           'id': DateTime.now().microsecondsSinceEpoch,
@@ -85,7 +88,11 @@ class _IssueState extends State<Issue> {
         },
       });
 
-      debugPrint('📨 이슈 저장 완료: $content');
+      await FirestoreLogger().log(
+        '✅ 이슈 제출 완료: "$content"',
+        level: 'success',
+      );
+
       _issueController.clear();
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -94,7 +101,11 @@ class _IssueState extends State<Issue> {
 
       _fetchAnswers();
     } catch (e) {
-      debugPrint('❌ 이슈 저장 실패: $e');
+      await FirestoreLogger().log(
+        '❌ 이슈 제출 실패: $e',
+        level: 'error',
+      );
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('저장 중 오류 발생: $e')),
       );
@@ -129,11 +140,13 @@ class _IssueState extends State<Issue> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('본사 이슈 입력'),
+      appBar: AppBar(
+        title: const Text('본사 이슈 입력'),
         centerTitle: true,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
-        elevation: 0,),
+        elevation: 0,
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -185,15 +198,15 @@ class _IssueState extends State<Issue> {
               child: _answers.isEmpty
                   ? const Text('응답이 없습니다.')
                   : ListView.builder(
-                itemCount: _answers.length,
-                itemBuilder: (context, index) {
-                  final answer = _answers[index];
-                  return ListTile(
-                    title: Text(answer['answer']),
-                    subtitle: Text(answer['createdAt'].toString().split('T').first),
-                  );
-                },
-              ),
+                      itemCount: _answers.length,
+                      itemBuilder: (context, index) {
+                        final answer = _answers[index];
+                        return ListTile(
+                          title: Text(answer['answer']),
+                          subtitle: Text(answer['createdAt'].toString().split('T').first),
+                        );
+                      },
+                    ),
             ),
           ],
         ),

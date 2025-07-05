@@ -3,6 +3,7 @@ import 'package:camera/camera.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../utils/firestore_logger.dart';
 import '../../utils/snackbar_helper.dart';
 import 'input_plate_service.dart';
 
@@ -39,10 +40,31 @@ class InputPlateController {
   List<String> fetchedStatusList = [];
 
   final List<String> regions = [
-    '전국', '강원', '경기', '경남', '경북', '광주', '대구', '대전',
-    '부산', '서울', '울산', '인천', '전남', '전북', '제주',
-    '충남', '충북', '국기', '대표', '영사', '외교', '임시',
-    '준영', '준외', '협정',
+    '전국',
+    '강원',
+    '경기',
+    '경남',
+    '경북',
+    '광주',
+    '대구',
+    '대전',
+    '부산',
+    '서울',
+    '울산',
+    '인천',
+    '전남',
+    '전북',
+    '제주',
+    '충남',
+    '충북',
+    '국기',
+    '대표',
+    '영사',
+    '외교',
+    '임시',
+    '준영',
+    '준외',
+    '협정',
   ];
 
   late TextEditingController activeController;
@@ -144,11 +166,16 @@ class InputPlateController {
     final docId = '${plateNumber}_$area';
 
     try {
+      await FirestoreLogger().log('🗑️ 상태 메모 삭제 시도: $docId', level: 'called');
+
       await FirebaseFirestore.instance.collection('plate_status').doc(docId).delete();
+
       fetchedCustomStatus = null;
       fetchedStatusList = [];
+
+      await FirestoreLogger().log('✅ 상태 메모 삭제 성공: $docId', level: 'success');
     } catch (e) {
-      debugPrint('❌ customStatus 삭제 실패: $e');
+      await FirestoreLogger().log('❌ 상태 메모 삭제 실패: $e', level: 'error');
       rethrow;
     }
   }
@@ -156,12 +183,14 @@ class InputPlateController {
   /// ✅ Firestore에서 statusList와 customStatus 불러오기
   Future<void> fetchStatusAndMemo(String plateNumber, String area) async {
     final docId = '${plateNumber}_$area';
-    final docSnapshot = await FirebaseFirestore.instance
-        .collection('plate_status')
-        .doc(docId)
-        .get();
+
+    await FirestoreLogger().log('🔍 상태/메모 조회 시도: $docId', level: 'called');
+
+    final docSnapshot = await FirebaseFirestore.instance.collection('plate_status').doc(docId).get();
 
     if (docSnapshot.exists) {
+      await FirestoreLogger().log('✅ 상태/메모 조회 성공: $docId', level: 'success');
+
       final data = docSnapshot.data();
       fetchedCustomStatus = data?['customStatus'];
 
@@ -170,6 +199,7 @@ class InputPlateController {
         fetchedStatusList = savedList.map((e) => e.toString()).toList();
       }
     } else {
+      await FirestoreLogger().log('📭 상태/메모 없음: $docId', level: 'info');
       fetchedCustomStatus = null;
       fetchedStatusList = [];
     }
@@ -198,12 +228,22 @@ class InputPlateController {
     );
 
     try {
+      await FirestoreLogger().log(
+        '🚀 submitPlateEntry 시작\nplateNumber: $plateNumber\narea: $area\ndivision: $division\nuser: $userName',
+        level: 'called',
+      );
+
       final uploadedUrls = await InputPlateService.uploadCapturedImages(
         capturedImages,
         plateNumber,
         area,
         userName,
         division,
+      );
+
+      await FirestoreLogger().log(
+        '✅ 이미지 업로드 완료: ${uploadedUrls.length}건',
+        level: 'success',
       );
 
       final wasSuccessful = await InputPlateService.registerPlateEntry(
@@ -219,12 +259,15 @@ class InputPlateController {
         addStandard: selectedAddStandard,
         addAmount: selectedAddAmount,
         region: dropdownValue,
-        customStatus: customStatusController.text.trim().isNotEmpty
-            ? customStatusController.text
-            : fetchedCustomStatus ?? '',
+        customStatus:
+            customStatusController.text.trim().isNotEmpty ? customStatusController.text : fetchedCustomStatus ?? '',
       );
 
-      /// ✅ 상태 메모 + 상태 리스트 Firestore에 저장
+      await FirestoreLogger().log(
+        '📤 plate_status 저장 시도: ${plateNumber}_$area',
+        level: 'called',
+      );
+
       await FirebaseFirestore.instance.collection('plate_status').doc('${plateNumber}_$area').set(
         {
           'customStatus': customStatusController.text.trim(),
@@ -236,11 +279,20 @@ class InputPlateController {
         SetOptions(merge: true),
       );
 
+      await FirestoreLogger().log(
+        '✅ plate_status 저장 성공: ${plateNumber}_$area',
+        level: 'success',
+      );
+
       if (mounted) {
         Navigator.of(context).pop();
         if (wasSuccessful) {
           showSuccessSnackbar(context, '차량 정보 등록 완료');
           resetForm();
+          await FirestoreLogger().log(
+            '🎉 plate 등록 프로세스 완료: $plateNumber',
+            level: 'success',
+          );
         }
       }
     } catch (e) {
@@ -248,6 +300,10 @@ class InputPlateController {
         Navigator.of(context).pop();
         showFailedSnackbar(context, '등록 실패: ${e.toString()}');
       }
+      await FirestoreLogger().log(
+        '❌ plate 등록 실패: $e',
+        level: 'error',
+      );
     } finally {
       isLoading = false;
       if (mounted) refreshUI();

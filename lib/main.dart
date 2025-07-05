@@ -9,6 +9,7 @@ import 'providers/providers.dart';
 import 'theme.dart';
 import 'utils/init/dev_initializer.dart';
 import 'utils/foreground_task_handler.dart';
+import 'utils/firestore_logger.dart'; // ✅ FirestoreLogger import
 
 /// 🔹 포그라운드 태스크 콜백
 @pragma('vm:entry-point')
@@ -69,7 +70,13 @@ class AppBootstrapper extends StatelessWidget {
 
   /// 초기화 로직
   Future<void> _initializeApp() async {
+    // ✅ Firebase 초기화
     await Firebase.initializeApp();
+
+    // ✅ FirestoreLogger 초기화
+    await FirestoreLogger().init();
+
+    // ✅ 개발용 리소스 초기화
     await registerDevResources();
 
     // 📍 런타임 퍼미션 요청

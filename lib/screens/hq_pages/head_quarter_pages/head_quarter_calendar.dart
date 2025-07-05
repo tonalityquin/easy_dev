@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 
 import '../../../states/user/user_state.dart';
+import '../../../utils/firestore_logger.dart';
 
 class HeadQuarterCalendar extends StatefulWidget {
   const HeadQuarterCalendar({super.key});
@@ -71,56 +72,100 @@ class _HeadQuarterCalendarState extends State<HeadQuarterCalendar> {
   }
 
   Future<void> _loadTasksFromPrefs() async {
+    await FirestoreLogger().log(
+      '_loadTasksFromPrefs() called',
+      level: 'called',
+    );
+
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_taskKey);
+
     if (raw != null) {
       final List decoded = jsonDecode(raw);
       final tasks = decoded.map((e) => Task.fromJson(e)).toList();
       _groupTasks(tasks);
+
+      await FirestoreLogger().log(
+        '_loadTasksFromPrefs() success: ${tasks.length} tasks loaded',
+        level: 'success',
+      );
+    } else {
+      await FirestoreLogger().log(
+        '_loadTasksFromPrefs() no data found',
+        level: 'info',
+      );
     }
   }
 
+
+
   Future<void> _loadSharedTasks() async {
+    await FirestoreLogger().log(
+      '_loadSharedTasks() called',
+      level: 'called',
+    );
+
     try {
       final user = context.read<UserState>().user;
-      if (user == null || user.divisions.isEmpty) return;
+      if (user == null || user.divisions.isEmpty) {
+        await FirestoreLogger().log(
+          '_loadSharedTasks() no user or division',
+          level: 'info',
+        );
+        return;
+      }
 
       final division = user.divisions.first;
       final firestore = FirebaseFirestore.instance;
 
       final snapshot = await firestore.collection('tasks').where('division', isEqualTo: division).get();
 
+      await FirestoreLogger().log(
+        '_loadSharedTasks() Firestore query success: ${snapshot.docs.length} docs',
+        level: 'success',
+      );
+
       final sharedTasks = snapshot.docs
           .map((doc) {
-            final data = doc.data();
-            final taskData = data['task'] as Map<String, dynamic>?;
+        final data = doc.data();
+        final taskData = data['task'] as Map<String, dynamic>?;
 
-            if (taskData == null) return null;
+        if (taskData == null) return null;
 
-            final dueDate = DateTime.parse(taskData['dueDate']);
-            final startDate = taskData['startDate'] != null ? DateTime.parse(taskData['startDate']) : dueDate;
+        final dueDate = DateTime.parse(taskData['dueDate']);
+        final startDate = taskData['startDate'] != null ? DateTime.parse(taskData['startDate']) : dueDate;
 
-            return Task(
-              id: taskData['id'],
-              title: taskData['title'],
-              description: taskData['description'],
-              isCompleted: taskData['isCompleted'],
-              startDate: startDate,
-              dueDate: dueDate,
-              isShared: true,
-            );
-          })
+        return Task(
+          id: taskData['id'],
+          title: taskData['title'],
+          description: taskData['description'],
+          isCompleted: taskData['isCompleted'],
+          startDate: startDate,
+          dueDate: dueDate,
+          isShared: true,
+        );
+      })
           .whereType<Task>()
           .toList();
 
       _groupTasks(sharedTasks);
+
+      await FirestoreLogger().log(
+        '_loadSharedTasks() tasks grouped and added',
+        level: 'success',
+      );
     } catch (e) {
+      await FirestoreLogger().log(
+        '_loadSharedTasks() error: $e',
+        level: 'error',
+      );
       debugPrint('❌ 공유된 캘린더 작업 로드 실패: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('공유된 캘린더 작업 로드 중 오류 발생')),
       );
     }
   }
+
 
   void _groupTasks(List<Task> tasks) {
     final Map<DateTime, List<Task>> grouped = {};

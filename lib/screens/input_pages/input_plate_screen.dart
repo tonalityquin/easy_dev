@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../states/bill/bill_state.dart';
 import '../../states/area/area_state.dart';
 
+import '../../utils/firestore_logger.dart';
 import 'input_plate_controller.dart';
 import 'sections/input_bill_section.dart';
 import 'sections/input_location_section.dart';
@@ -85,12 +86,29 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
   Future<Map<String, dynamic>?> _fetchPlateStatus(String plateNumber, String area) async {
     final docId = '${plateNumber}_$area';
+
+    await FirestoreLogger().log(
+      '🔍 번호판 상태 조회 시도: $docId',
+      level: 'called',
+    );
+
     final doc = await FirebaseFirestore.instance.collection('plate_status').doc(docId).get();
+
     if (doc.exists) {
+      await FirestoreLogger().log(
+        '✅ 상태 조회 성공: $docId',
+        level: 'success',
+      );
       return doc.data();
     }
+
+    await FirestoreLogger().log(
+      '📭 상태 데이터 없음: $docId',
+      level: 'info',
+    );
     return null;
   }
+
 
   void _showCameraPreviewDialog() async {
     await _cameraHelper.initializeInputCamera();
@@ -270,17 +288,34 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                 customStatus: controller.fetchedCustomStatus!,
                 onDelete: () async {
                   try {
+                    await FirestoreLogger().log(
+                      '🗑️ 상태 메모 삭제 시도: ${controller.buildPlateNumber()}',
+                      level: 'called',
+                    );
+
                     await controller.deleteCustomStatusFromFirestore(context);
+
+                    await FirestoreLogger().log(
+                      '✅ 상태 메모 삭제 완료',
+                      level: 'success',
+                    );
+
                     setState(() {
                       controller.fetchedCustomStatus = null;
                       controller.customStatusController.clear();
                       selectedStatusNames = [];
                       statusSectionKey = UniqueKey();
                     });
+
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('자동 메모가 삭제되었습니다')),
                     );
-                  } catch (_) {
+                  } catch (e) {
+                    await FirestoreLogger().log(
+                      '❌ 상태 메모 삭제 실패: $e',
+                      level: 'error',
+                    );
+
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('삭제 실패. 다시 시도해주세요')),
                     );

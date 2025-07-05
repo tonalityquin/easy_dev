@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../../states/area/area_state.dart';
 import '../../../../models/location_model.dart';
 import '../../../../states/location/location_state.dart';
+import '../../../../utils/firestore_logger.dart';
 
 class ParkingCompletedLocationDialog extends StatefulWidget {
   final TextEditingController locationController;
@@ -55,14 +56,36 @@ class _ParkingCompletedLocationDialogState extends State<ParkingCompletedLocatio
   }
 
   Future<int> _getPlateCount(String locationName, String area) async {
-    final snapshot = await FirebaseFirestore.instance
-        .collection('plates')
-        .where('location', isEqualTo: locationName)
-        .where('area', isEqualTo: area)
-        .where('type', isEqualTo: 'parking_completed')
-        .count()
-        .get();
-    return snapshot.count ?? 0;
+    final logger = FirestoreLogger();
+    final stopwatch = Stopwatch()..start();
+
+    try {
+      await logger.log(
+        '🟢 plates count 쿼리 시작 - location: $locationName, area: $area',
+        level: 'called',
+      );
+
+      final snapshot = await FirebaseFirestore.instance
+          .collection('plates')
+          .where('location', isEqualTo: locationName)
+          .where('area', isEqualTo: area)
+          .where('type', isEqualTo: 'parking_completed')
+          .count()
+          .get();
+
+      await logger.log(
+        '✅ plates count 쿼리 완료 - count: ${snapshot.count} (${stopwatch.elapsedMilliseconds}ms)',
+        level: 'success',
+      );
+
+      return snapshot.count ?? 0;
+    } catch (e) {
+      await logger.log(
+        '❌ plates count 쿼리 실패 - $e',
+        level: 'error',
+      );
+      rethrow;
+    }
   }
 
   Widget _buildLocationTile({

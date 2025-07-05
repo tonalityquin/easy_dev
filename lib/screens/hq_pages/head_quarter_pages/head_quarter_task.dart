@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../../../states/user/user_state.dart';
+import '../../../utils/firestore_logger.dart';
 
 class HeadQuarterTask extends StatefulWidget {
   const HeadQuarterTask({super.key});
@@ -69,36 +70,46 @@ class _HeadQuarterTaskState extends State<HeadQuarterTask> {
   }
 
   Future<void> _loadSharedTasks() async {
+    await FirestoreLogger().log('_loadSharedTasks() called', level: 'called');
+
     try {
       final user = context.read<UserState>().user;
-      if (user == null || user.divisions.isEmpty) return;
+      if (user == null || user.divisions.isEmpty) {
+        await FirestoreLogger().log('_loadSharedTasks() no user or division', level: 'info');
+        return;
+      }
 
       final division = user.divisions.first;
       final firestore = FirebaseFirestore.instance;
 
       final snapshot = await firestore.collection('tasks').where('division', isEqualTo: division).get();
 
+      await FirestoreLogger().log(
+        '_loadSharedTasks() Firestore query success: ${snapshot.docs.length} docs',
+        level: 'success',
+      );
+
       if (!mounted) return;
 
       final sharedTasks = snapshot.docs
           .map((doc) {
-            final data = doc.data();
-            final taskData = data['task'] as Map<String, dynamic>?;
-            if (taskData == null) return null;
+        final data = doc.data();
+        final taskData = data['task'] as Map<String, dynamic>?;
+        if (taskData == null) return null;
 
-            return Task(
-              id: taskData['id'],
-              title: taskData['title'],
-              description: taskData['description'],
-              isCompleted: taskData['isCompleted'],
-              startDate: taskData['startDate'] != null
-                  ? DateTime.parse(taskData['startDate'])
-                  : DateTime.parse(taskData['dueDate']),
-              dueDate: DateTime.parse(taskData['dueDate']),
-              isShared: true,
-              firestoreId: doc.id,
-            );
-          })
+        return Task(
+          id: taskData['id'],
+          title: taskData['title'],
+          description: taskData['description'],
+          isCompleted: taskData['isCompleted'],
+          startDate: taskData['startDate'] != null
+              ? DateTime.parse(taskData['startDate'])
+              : DateTime.parse(taskData['dueDate']),
+          dueDate: DateTime.parse(taskData['dueDate']),
+          isShared: true,
+          firestoreId: doc.id,
+        );
+      })
           .whereType<Task>()
           .toList();
 
@@ -113,9 +124,12 @@ class _HeadQuarterTaskState extends State<HeadQuarterTask> {
         }
       });
 
+      await FirestoreLogger().log('_loadSharedTasks() tasks added to local list', level: 'success');
+
       if (!mounted) return;
       _saveTasksToPrefs();
     } catch (e) {
+      await FirestoreLogger().log('_loadSharedTasks() error: $e', level: 'error');
       debugPrint('🔥 공유된 작업 로드 실패: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -123,6 +137,7 @@ class _HeadQuarterTaskState extends State<HeadQuarterTask> {
       );
     }
   }
+
 
   Future<void> _loadTasksFromPrefs() async {
     final prefs = await SharedPreferences.getInstance();
@@ -146,10 +161,13 @@ class _HeadQuarterTaskState extends State<HeadQuarterTask> {
   }
 
   Future<void> _shareTask(Task task) async {
+    await FirestoreLogger().log('_shareTask() called', level: 'called');
+
     try {
       final user = context.read<UserState>().user;
 
       if (user == null) {
+        await FirestoreLogger().log('_shareTask() no user found', level: 'error');
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('사용자 정보가 없습니다. 로그인 상태를 확인하세요.')),
@@ -172,6 +190,8 @@ class _HeadQuarterTaskState extends State<HeadQuarterTask> {
         }
       });
 
+      await FirestoreLogger().log('_shareTask() Firestore add success: ${doc.id}', level: 'success');
+
       if (!mounted) return;
       setState(() {
         task.isShared = true;
@@ -186,6 +206,7 @@ class _HeadQuarterTaskState extends State<HeadQuarterTask> {
         const SnackBar(content: Text('공유되었습니다')),
       );
     } catch (e) {
+      await FirestoreLogger().log('_shareTask() error: $e', level: 'error');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('공유 실패: $e')),
@@ -193,12 +214,17 @@ class _HeadQuarterTaskState extends State<HeadQuarterTask> {
     }
   }
 
+
   Future<void> _unshareTask(Task task) async {
     if (task.firestoreId == null) return;
+
+    await FirestoreLogger().log('_unshareTask() called', level: 'called');
 
     try {
       final firestore = FirebaseFirestore.instance;
       await firestore.collection('tasks').doc(task.firestoreId).delete();
+
+      await FirestoreLogger().log('_unshareTask() Firestore delete success: ${task.firestoreId}', level: 'success');
 
       if (!mounted) return;
       setState(() {
@@ -214,12 +240,14 @@ class _HeadQuarterTaskState extends State<HeadQuarterTask> {
         const SnackBar(content: Text('공유 해제되었습니다')),
       );
     } catch (e) {
+      await FirestoreLogger().log('_unshareTask() error: $e', level: 'error');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('공유 해제 실패: $e')),
       );
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -391,13 +419,31 @@ class _HeadQuarterTaskState extends State<HeadQuarterTask> {
                             // Firestore에 공유된 작업이면 문서도 삭제
                             if (task.firestoreId != null) {
                               try {
+                                await FirestoreLogger().log(
+                                  '_deleteTaskButton() Firestore delete called: ${task.firestoreId}',
+                                  level: 'called',
+                                );
+
                                 await FirebaseFirestore.instance.collection('tasks').doc(task.firestoreId).delete();
+
+                                await FirestoreLogger().log(
+                                  '_deleteTaskButton() Firestore delete success: ${task.firestoreId}',
+                                  level: 'success',
+                                );
+
                                 debugPrint('✅ Firestore 문서 삭제 완료: ${task.firestoreId}');
                               } catch (e) {
-                                debugPrint('❌ Firestore 삭제 실패: $e');
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Firestore 삭제 실패: $e')),
+                                await FirestoreLogger().log(
+                                  '_deleteTaskButton() Firestore delete error: $e',
+                                  level: 'error',
                                 );
+
+                                debugPrint('❌ Firestore 삭제 실패: $e');
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Firestore 삭제 실패: $e')),
+                                  );
+                                }
                               }
                             }
 

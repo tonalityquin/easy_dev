@@ -8,6 +8,7 @@ import 'package:googleapis/storage/v1.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../../states/user/user_state.dart';
+import '../../../utils/firestore_logger.dart';
 
 const String kBucketName = 'easydev-image';
 const String kServiceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
@@ -52,37 +53,58 @@ class _ParkingReportContentState extends State<ParkingReportContent> {
     final date = DateTime.now();
     final dateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
 
-    final snapshot = await firestore
-        .collection('plates')
-        .where('type', isEqualTo: 'departure_completed')
-        .where('area', isEqualTo: area)
-        .where('isLockedFee', isEqualTo: true)
-        .get();
+    // ✅ FirestoreLogger 호출 로그
+    await FirestoreLogger().log(
+      'updateLockedFeeSummary() called for area=$area',
+      level: 'called',
+    );
 
-    int total = 0;
-    int count = 0;
+    try {
+      final snapshot = await firestore
+          .collection('plates')
+          .where('type', isEqualTo: 'departure_completed')
+          .where('area', isEqualTo: area)
+          .where('isLockedFee', isEqualTo: true)
+          .get();
 
-    for (final doc in snapshot.docs) {
-      final data = doc.data();
-      final fee = data['lockedFeeAmount'];
-      if (fee is int) {
-        total += fee;
-        count++;
-      } else if (fee is double) {
-        total += fee.round();
-        count++;
+      int total = 0;
+      int count = 0;
+
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final fee = data['lockedFeeAmount'];
+        if (fee is int) {
+          total += fee;
+          count++;
+        } else if (fee is double) {
+          total += fee.round();
+          count++;
+        }
       }
-    }
 
-    final summaryRef = firestore.collection('fee_summaries').doc('${division}_$area\_$dateStr');
-    await summaryRef.set({
-      'division': division,
-      'area': area,
-      'date': dateStr,
-      'totalLockedFee': total,
-      'vehicleCount': count,
-      'lastUpdated': DateTime.now().toIso8601String(),
-    });
+      final summaryRef = firestore.collection('fee_summaries').doc('${division}_$area\_$dateStr');
+      await summaryRef.set({
+        'division': division,
+        'area': area,
+        'date': dateStr,
+        'totalLockedFee': total,
+        'vehicleCount': count,
+        'lastUpdated': DateTime.now().toIso8601String(),
+      });
+
+      // ✅ 성공 로그
+      await FirestoreLogger().log(
+        'updateLockedFeeSummary() success: total=$total, count=$count',
+        level: 'success',
+      );
+    } catch (e) {
+      // ✅ 오류 로그
+      await FirestoreLogger().log(
+        'updateLockedFeeSummary() error: $e',
+        level: 'error',
+      );
+      rethrow;
+    }
   }
 
   Future<int> fetchCachedLockedFeeTotal(String division, String area) async {
@@ -90,21 +112,54 @@ class _ParkingReportContentState extends State<ParkingReportContent> {
     final dateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
     final docId = "${division}_$area\_$dateStr";
 
-    final doc = await FirebaseFirestore.instance.collection('fee_summaries').doc(docId).get();
+    await FirestoreLogger().log(
+      'fetchCachedLockedFeeTotal() called: docId=$docId',
+      level: 'called',
+    );
 
-    if (doc.exists) {
-      return doc['totalLockedFee'] ?? 0;
-    } else {
-      return 0;
+    try {
+      final doc = await FirebaseFirestore.instance.collection('fee_summaries').doc(docId).get();
+
+      if (doc.exists) {
+        final total = doc['totalLockedFee'] ?? 0;
+        await FirestoreLogger().log(
+          'fetchCachedLockedFeeTotal() success: total=$total',
+          level: 'success',
+        );
+        return total;
+      } else {
+        await FirestoreLogger().log(
+          'fetchCachedLockedFeeTotal() success: doc not found',
+          level: 'success',
+        );
+        return 0;
+      }
+    } catch (e) {
+      await FirestoreLogger().log(
+        'fetchCachedLockedFeeTotal() error: $e',
+        level: 'error',
+      );
+      rethrow;
     }
   }
 
   Future<void> _fetchIssues() async {
+    await FirestoreLogger().log(
+      '_fetchIssues() called',
+      level: 'called',
+    );
+
     try {
       final firestore = FirebaseFirestore.instance;
       final user = Provider.of<UserState>(context, listen: false).user;
 
-      if (user == null || user.divisions.isEmpty) return;
+      if (user == null || user.divisions.isEmpty) {
+        await FirestoreLogger().log(
+          '_fetchIssues() no user or division',
+          level: 'info',
+        );
+        return;
+      }
 
       final division = user.divisions.first;
 
@@ -135,7 +190,16 @@ class _ParkingReportContentState extends State<ParkingReportContent> {
       setState(() {
         _issues = fetched;
       });
+
+      await FirestoreLogger().log(
+        '_fetchIssues() success: ${fetched.length} issues loaded',
+        level: 'success',
+      );
     } catch (e) {
+      await FirestoreLogger().log(
+        '_fetchIssues() error: $e',
+        level: 'error',
+      );
       debugPrint('❌ 이슈 불러오기 실패: $e');
     }
   }
@@ -461,16 +525,40 @@ Future<String?> uploadEndWorkReportJson({
 }
 
 Future<void> deleteLockedDepartureDocs(String area) async {
-  final firestore = FirebaseFirestore.instance;
-  final snapshot = await firestore
-      .collection('plates')
-      .where('type', isEqualTo: 'departure_completed')
-      .where('area', isEqualTo: area)
-      .where('isLockedFee', isEqualTo: true)
-      .get();
+  await FirestoreLogger().log(
+    'deleteLockedDepartureDocs() called: area=$area',
+    level: 'called',
+  );
 
-  for (final doc in snapshot.docs) {
-    await doc.reference.delete();
-    debugPrint("🔥 Firestore 삭제 완료: ${doc.id}");
+  try {
+    final firestore = FirebaseFirestore.instance;
+    final snapshot = await firestore
+        .collection('plates')
+        .where('type', isEqualTo: 'departure_completed')
+        .where('area', isEqualTo: area)
+        .where('isLockedFee', isEqualTo: true)
+        .get();
+
+    int deletedCount = 0;
+
+    for (final doc in snapshot.docs) {
+      await doc.reference.delete();
+      deletedCount++;
+      await FirestoreLogger().log(
+        'deleteLockedDepartureDocs() deleted docId=${doc.id}',
+        level: 'info',
+      );
+    }
+
+    await FirestoreLogger().log(
+      'deleteLockedDepartureDocs() success: deletedCount=$deletedCount',
+      level: 'success',
+    );
+  } catch (e) {
+    await FirestoreLogger().log(
+      'deleteLockedDepartureDocs() error: $e',
+      level: 'error',
+    );
+    debugPrint("❌ Firestore 삭제 실패: $e");
   }
 }

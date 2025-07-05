@@ -10,6 +10,7 @@ import '../../states/plate/plate_state.dart';
 import '../../states/bill/bill_state.dart';
 import '../../states/area/area_state.dart';
 
+import '../../utils/firestore_logger.dart';
 import '../../utils/snackbar_helper.dart';
 import 'modify_plate_service.dart';
 
@@ -169,7 +170,7 @@ class ModifyPlateController {
 
     final billState = context.read<BillState>();
     final selected = billState.bills.firstWhere(
-          (a) => a.countType == billName,
+      (a) => a.countType == billName,
       orElse: () => billState.emptyModel,
     );
 
@@ -232,9 +233,9 @@ class ModifyPlateController {
   }
 
   Future<void> handleAction(
-      VoidCallback onSuccess,
-      List<String> selectedStatuses,
-      ) async {
+    VoidCallback onSuccess,
+    List<String> selectedStatuses,
+  ) async {
     final billList = context.read<BillState>().bills;
 
     if (billList.isNotEmpty && (selectedBill == null || selectedBill!.isEmpty)) {
@@ -266,7 +267,16 @@ class ModifyPlateController {
     final newBillingType = selectedBill;
     final updatedCustomStatus = customStatusController.text.trim();
 
+    await FirestoreLogger().log(
+      '🛠️ Modify 시작: $plateNumber',
+      level: 'called',
+    );
+
     final mergedImageUrls = await service.uploadAndMergeImages(plateNumber);
+    await FirestoreLogger().log(
+      '✅ 이미지 병합 완료 (${mergedImageUrls.length})',
+      level: 'success',
+    );
 
     final success = await service.updatePlateInfo(
       plateNumber: plateNumber,
@@ -278,6 +288,12 @@ class ModifyPlateController {
     if (success) {
       final area = context.read<AreaState>().currentArea;
       final statusDocId = '${plateNumber}_$area';
+
+      await FirestoreLogger().log(
+        '📤 상태 정보 Firestore 업데이트 시도 ($statusDocId)',
+        level: 'called',
+      );
+
       await FirebaseFirestore.instance.collection('plate_status').doc(statusDocId).set(
         {
           'customStatus': updatedCustomStatus,
@@ -289,10 +305,20 @@ class ModifyPlateController {
         SetOptions(merge: true),
       );
 
+      await FirestoreLogger().log(
+        '✅ 상태 정보 업데이트 완료',
+        level: 'success',
+      );
+
       await FirebaseFirestore.instance.collection('plates').doc(plate.id).update({
         'customStatus': updatedCustomStatus,
         'statusList': selectedStatuses,
       });
+
+      await FirestoreLogger().log(
+        '✅ plates 문서 업데이트 완료',
+        level: 'success',
+      );
 
       final updatedPlate = plate.copyWith(
         billingType: newBillingType,
@@ -315,12 +341,27 @@ class ModifyPlateController {
         collection: collectionKey,
         plateNumber: plateNumber,
         userName: plate.userName,
-        onError: (error) => debugPrint(error),
+        onError: (error) async {
+          await FirestoreLogger().log(
+            '⚠️ togglePlateIsSelected 에러: $error',
+            level: 'error',
+          );
+        },
       );
 
       await plateState.updatePlateLocally(collectionKey, updatedPlate);
 
+      await FirestoreLogger().log(
+        '🎉 Plate 수정 완료',
+        level: 'success',
+      );
+
       onSuccess();
+    } else {
+      await FirestoreLogger().log(
+        '❌ Plate 수정 실패',
+        level: 'error',
+      );
     }
   }
 

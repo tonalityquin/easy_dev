@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../../../models/user_model.dart';
 import '../../../../states/area/area_state.dart';
+import '../../../../utils/firestore_logger.dart';
 import '../../../../utils/snackbar_helper.dart';
 import '../attendance_cell.dart';
 
@@ -53,9 +54,7 @@ class _AttendanceUiState extends State<AttendanceUi> {
         .where('selectedArea', isEqualTo: area) // ✅ selectedArea 기준
         .snapshots()
         .listen((snapshot) {
-      final updatedUsers = snapshot.docs
-          .map((doc) => UserModel.fromMap(doc.id, doc.data()))
-          .toList();
+      final updatedUsers = snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
       setState(() {
         users = updatedUsers;
       });
@@ -75,26 +74,29 @@ class _AttendanceUiState extends State<AttendanceUi> {
         .where('selectedArea', isEqualTo: area) // ✅ selectedArea 기준
         .get();
 
-    return snapshot.docs
-        .map((doc) => UserModel.fromMap(doc.id, doc.data()))
-        .toList();
+    return snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
   }
 
   Future<void> _reloadUsers(String area) async {
     try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('user_accounts')
-          .where('selectedArea', isEqualTo: area) // ✅ selectedArea 기준
-          .get();
+      await FirestoreLogger().log(
+        '_reloadUsers() Firestore 쿼리 시작 (area: $area)',
+        level: 'called',
+      );
 
-      final updatedUsers = snapshot.docs
-          .map((doc) => UserModel.fromMap(doc.id, doc.data()))
-          .toList();
+      final snapshot =
+          await FirebaseFirestore.instance.collection('user_accounts').where('selectedArea', isEqualTo: area).get();
+
+      final updatedUsers = snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
+
+      await FirestoreLogger().log(
+        '_reloadUsers() 쿼리 결과: ${updatedUsers.length}명',
+        level: 'success',
+      );
 
       final currentIds = users.map((u) => u.id).toSet();
       final newIds = updatedUsers.map((u) => u.id).toSet();
-      final hasChanged =
-          currentIds.length != newIds.length || !currentIds.containsAll(newIds);
+      final hasChanged = currentIds.length != newIds.length || !currentIds.containsAll(newIds);
 
       if (hasChanged) {
         setState(() {
@@ -114,6 +116,11 @@ class _AttendanceUiState extends State<AttendanceUi> {
         });
       }
     } catch (e) {
+      await FirestoreLogger().log(
+        '_reloadUsers() Firestore 쿼리 오류: $e',
+        level: 'error',
+      );
+
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (context.mounted) {
           showFailedSnackbar(context, '사용자 목록을 불러오지 못했습니다');
@@ -178,6 +185,11 @@ class _AttendanceUiState extends State<AttendanceUi> {
   }
 
   Future<void> _mergeJsonData(Map<String, Map<int, String>> newData) async {
+    await FirestoreLogger().log(
+      '_mergeJsonData() 머지 시작 (레코드 수: ${newData.length})',
+      level: 'called',
+    );
+
     setState(() {
       for (final entry in newData.entries) {
         cellData[entry.key] ??= {};
@@ -186,6 +198,11 @@ class _AttendanceUiState extends State<AttendanceUi> {
         });
       }
     });
+
+    await FirestoreLogger().log(
+      '_mergeJsonData() 머지 완료',
+      level: 'success',
+    );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (context.mounted) {

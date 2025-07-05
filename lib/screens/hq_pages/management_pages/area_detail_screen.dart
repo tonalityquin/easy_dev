@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import '../../../utils/firestore_logger.dart';
+
 class AreaDetailScreen extends StatelessWidget {
   final String areaName;
 
@@ -16,30 +18,49 @@ class AreaDetailScreen extends StatelessWidget {
     if (_cachedUsers.containsKey(area)) {
       final lastTime = _lastFetchedTime[area];
       if (lastTime != null && now.difference(lastTime) < const Duration(minutes: 5)) {
-        debugPrint('📦 캐시 사용: $area');
+        await FirestoreLogger().log(
+          '📦 $area 캐시 데이터 사용',
+          level: 'info',
+        );
         return _cachedUsers[area]!;
       }
     }
 
-    // ✅ 2. Firestore 전체 문서에서 필요한 필드만 추출 (Flutter SDK는 select 미지원)
-    final snapshot = await FirebaseFirestore.instance
-        .collection('user_accounts')
-        .where('currentArea', isEqualTo: area)
-        .get(); // ← select() 제거됨
-
-    final result = snapshot.docs.map((doc) {
-      final data = doc.data();
-      return UserStatus(
-        name: data['name'] ?? '이름 없음',
-        isWorking: data['isWorking'] == true,
+    try {
+      await FirestoreLogger().log(
+        '🔍 Firestore 쿼리 시작: currentArea=$area',
+        level: 'called',
       );
-    }).toList();
 
-    // ✅ 3. 캐시 저장
-    _cachedUsers[area] = result;
-    _lastFetchedTime[area] = now;
+      // ✅ 2. Firestore 쿼리
+      final snapshot =
+          await FirebaseFirestore.instance.collection('user_accounts').where('currentArea', isEqualTo: area).get();
 
-    return result;
+      final result = snapshot.docs.map((doc) {
+        final data = doc.data();
+        return UserStatus(
+          name: data['name'] ?? '이름 없음',
+          isWorking: data['isWorking'] == true,
+        );
+      }).toList();
+
+      await FirestoreLogger().log(
+        '✅ Firestore 쿼리 완료: $area - ${result.length}명',
+        level: 'success',
+      );
+
+      // ✅ 3. 캐시 저장
+      _cachedUsers[area] = result;
+      _lastFetchedTime[area] = now;
+
+      return result;
+    } catch (e) {
+      await FirestoreLogger().log(
+        '❌ Firestore 쿼리 실패: $e',
+        level: 'error',
+      );
+      rethrow;
+    }
   }
 
   @override

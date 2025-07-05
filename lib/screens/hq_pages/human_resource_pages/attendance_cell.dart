@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../../../models/user_model.dart';
 import '../../../states/area/area_state.dart';
 import '../../../states/user/user_state.dart';
+import '../../../utils/firestore_logger.dart';
 import '../../clock_in_pages/clock_in_log_uploader.dart';
 import '../../clock_in_pages/clock_in_log_downloader.dart';
 import '../../secondary_pages/field_mode_pages/dash_board/clock_out_log_downloader.dart';
@@ -70,14 +71,28 @@ class _AttendanceCellState extends State<AttendanceCell> {
     final userAreas = userState.user?.areas ?? [];
 
     if (userAreas.isEmpty) {
-      debugPrint('⚠️ 사용자 소속 지역 없음');
+      await FirestoreLogger().log(
+        '⚠️ 사용자 소속 지역 없음',
+        level: 'error',
+      );
     }
 
+    await FirestoreLogger().log(
+      'Firestore areas 쿼리 시작',
+      level: 'called',
+    );
+
     final snapshot = await FirebaseFirestore.instance.collection('areas').get();
+
     final allAreas = snapshot.docs.map((doc) => doc['name'] as String).toList();
     final filtered = allAreas.where((area) => userAreas.contains(area)).toList();
 
-    if (!mounted) return; // ✅ 이 한 줄 추가
+    await FirestoreLogger().log(
+      'Firestore areas 쿼리 완료 (필터링 ${filtered.length}개)',
+      level: 'success',
+    );
+
+    if (!mounted) return;
     setState(() {
       _areaList = filtered;
       if (filtered.isNotEmpty) {
@@ -86,6 +101,7 @@ class _AttendanceCellState extends State<AttendanceCell> {
       }
     });
   }
+
 
 
   Future<void> _reloadUsersForArea(String area) async {
@@ -223,72 +239,82 @@ class _AttendanceCellState extends State<AttendanceCell> {
                       final areaState = context.read<AreaState>();
                       final division = areaState.currentDivision;
 
+                      await FirestoreLogger().log(
+                        '출퇴근 JSON 다운로드 시작 (users=${_localUsers.length})',
+                        level: 'called',
+                      );
+
                       final mergedData = <String, Map<int, String>>{};
 
                       for (final user in _localUsers) {
                         final userId = user.id;
                         final englishArea = user.englishSelectedAreaName ?? '';
-                        debugPrint('🌍 현재 유저 영어 소속: $englishArea');
 
-                        // ✅ 출근 URL 생성 및 다운로드
                         final clockInUrl = ClockInLogUploader.getDownloadPath(
                           division: division,
-                          area: englishArea, // ✅ 수정
+                          area: englishArea,
                           userId: userId,
                         );
-                        debugPrint('🌐 출근 URL: $clockInUrl');
-
                         final clockInData = await downloadAttendanceJsonFromGcs(
                           publicUrl: clockInUrl,
                           selectedYear: widget.selectedYear,
                           selectedMonth: widget.selectedMonth,
                         );
-
                         if (clockInData != null && clockInData.isNotEmpty) {
-                          debugPrint('✅ ${userId} 출근 데이터 병합');
                           mergedData.addAll(clockInData);
+                          await FirestoreLogger().log(
+                            '출근 JSON 다운로드 완료 - userId:$userId (${clockInData.length}개)',
+                            level: 'success',
+                          );
                         }
 
-                        // ✅ 퇴근 URL 생성 및 다운로드
                         final clockOutUrl = ClockOutLogUploader.getDownloadPath(
                           division: division,
-                          area: englishArea, // ✅ 수정
+                          area: englishArea,
                           userId: userId,
                         );
-                        debugPrint('🌐 퇴근 URL: $clockOutUrl');
-
                         final clockOutData = await downloadLeaveJsonFromGcs(
                           publicUrl: clockOutUrl,
                           selectedYear: widget.selectedYear,
                           selectedMonth: widget.selectedMonth,
                         );
-
                         if (clockOutData != null && clockOutData.isNotEmpty) {
-                          debugPrint('✅ ${userId} 퇴근 데이터 병합');
                           mergedData.addAll(clockOutData);
+                          await FirestoreLogger().log(
+                            '퇴근 JSON 다운로드 완료 - userId:$userId (${clockOutData.length}개)',
+                            level: 'success',
+                          );
                         }
                       }
 
                       if (mergedData.isNotEmpty) {
                         await widget.onLoadJson(mergedData);
+                        await FirestoreLogger().log(
+                          '출퇴근 JSON 병합 완료 (총 ${mergedData.length} entries)',
+                          level: 'success',
+                        );
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('✅ 출근/퇴근 데이터 불러오기 성공')),
                         );
                       } else {
-                        debugPrint('❌ 병합된 JSON 데이터 없음');
+                        await FirestoreLogger().log(
+                          '병합된 출퇴근 데이터 없음',
+                          level: 'info',
+                        );
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('❌ 불러올 데이터가 없습니다')),
                         );
                       }
                     } catch (e) {
-                      debugPrint('❌ JSON 로딩 중 예외: $e');
+                      await FirestoreLogger().log(
+                        '출퇴근 JSON 로딩 오류: $e',
+                        level: 'error',
+                      );
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text('❌ 오류 발생: ${e.toString()}')),
                       );
                     }
                   },
-                  backgroundColor: Colors.orange,
-                  child: const Icon(Icons.cloud_download),
                 ),
                 const SizedBox(width: 12),
                 FloatingActionButton(

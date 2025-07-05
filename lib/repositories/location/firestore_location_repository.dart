@@ -1,50 +1,87 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/location_model.dart';
 import 'location_repository.dart';
+import '../../utils/firestore_logger.dart'; // ✅ FirestoreLogger import
 
 class FirestoreLocationRepository implements LocationRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   @override
   Future<List<LocationModel>> getLocationsOnce(String area) async {
+    await FirestoreLogger().log('getLocationsOnce called (area=$area)');
     try {
-      final snapshot = await _firestore.collection('locations').where('area', isEqualTo: area).get();
+      final snapshot = await _firestore
+          .collection('locations')
+          .where('area', isEqualTo: area)
+          .get();
 
-      return snapshot.docs.map((doc) => LocationModel.fromMap(doc.id, doc.data())).toList();
+      final result = snapshot.docs
+          .map((doc) => LocationModel.fromMap(doc.id, doc.data()))
+          .toList();
+
+      await FirestoreLogger().log(
+          'getLocationsOnce success: ${result.length} items loaded');
+      return result;
     } catch (e) {
+      await FirestoreLogger().log('getLocationsOnce error: $e');
       rethrow;
     }
   }
 
   @override
   Future<void> deleteLocations(List<String> ids) async {
+    if (ids.isEmpty) return;
+
+    await FirestoreLogger()
+        .log('deleteLocations called (ids=${ids.join(",")})');
+
     final batch = _firestore.batch();
     for (final id in ids) {
       final docRef = _firestore.collection('locations').doc(id);
       batch.delete(docRef);
     }
-    await batch.commit();
+
+    try {
+      await batch.commit();
+      await FirestoreLogger().log('deleteLocations success');
+    } catch (e) {
+      await FirestoreLogger().log('deleteLocations error: $e');
+      rethrow;
+    }
   }
 
   @override
   Future<void> addSingleLocation(LocationModel location) async {
     final docRef = _firestore.collection('locations').doc(location.id);
-    await docRef.set(location.toFirestoreMap());
+    final data = location.toFirestoreMap();
+
+    await FirestoreLogger()
+        .log('addSingleLocation called (id=${location.id}, data=$data)');
+
+    try {
+      await docRef.set(data);
+      await FirestoreLogger().log('addSingleLocation success: ${location.id}');
+    } catch (e) {
+      await FirestoreLogger().log('addSingleLocation error: $e');
+      rethrow;
+    }
   }
 
   /// 🔁 복합 주차 구역 저장 시 용량(capacity)도 포함
   @override
   Future<void> addCompositeLocation(
-    String parent,
-    List<Map<String, dynamic>> subs, // {name, capacity}
-    String area,
-  ) async {
+      String parent,
+      List<Map<String, dynamic>> subs,
+      String area,
+      ) async {
+    await FirestoreLogger().log(
+        'addCompositeLocation called (parent=$parent, subs=${subs.length}, area=$area)');
+
     final batch = _firestore.batch();
 
     for (final sub in subs) {
       final rawName = sub['name'] ?? '';
 
-      // 🔹 지역명이 포함되어 있다면 제거: 예) B-3_Beta → B-3
       final cleanName = rawName.replaceAll('_$area', '');
       final cleanParent = parent.replaceAll('_$area', '');
 
@@ -52,16 +89,23 @@ class FirestoreLocationRepository implements LocationRepository {
       final subRef = _firestore.collection('locations').doc(subId);
 
       batch.set(subRef, {
-        'locationName': cleanName, // ✅ 지역명 없이
+        'locationName': cleanName,
         'area': area,
-        'parent': cleanParent, // ✅ 지역명 없이
-        'type': 'composite', // 또는 'single' 등 정책에 맞게 조정
+        'parent': cleanParent,
+        'type': 'composite',
         'isSelected': false,
         'capacity': sub['capacity'] ?? 0,
         'timestamp': FieldValue.serverTimestamp(),
       });
     }
 
-    await batch.commit();
+    try {
+      await batch.commit();
+      await FirestoreLogger().log(
+          'addCompositeLocation success: ${subs.length} subs saved');
+    } catch (e) {
+      await FirestoreLogger().log('addCompositeLocation error: $e');
+      rethrow;
+    }
   }
 }

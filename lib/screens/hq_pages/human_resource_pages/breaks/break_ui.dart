@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../../../models/user_model.dart';
 import '../../../../states/area/area_state.dart';
+import '../../../../utils/firestore_logger.dart';
 import '../../../../utils/snackbar_helper.dart';
 import '../break_cell.dart';
 import '../../../secondary_pages/field_mode_pages/dash_board/break_log_uploader.dart';
@@ -81,7 +82,18 @@ class _BreakUiState extends State<BreakUi> {
 
   Future<void> _reloadUsers(String area) async {
     try {
+      await FirestoreLogger().log(
+        '_reloadUsers() Firestore 쿼리 시작 (area: $area)',
+        level: 'called',
+      );
+
       final updatedUsers = await getUsersByArea(area);
+
+      await FirestoreLogger().log(
+        '_reloadUsers() Firestore 쿼리 결과: ${updatedUsers.length}명',
+        level: 'success',
+      );
+
       final currentIds = users.map((u) => u.id).toSet();
       final newIds = updatedUsers.map((u) => u.id).toSet();
       final hasChanged = currentIds.length != newIds.length || !currentIds.containsAll(newIds);
@@ -97,6 +109,10 @@ class _BreakUiState extends State<BreakUi> {
         showSuccessSnackbar(context, '변경 사항 없음');
       }
     } catch (e) {
+      await FirestoreLogger().log(
+        '_reloadUsers() Firestore 쿼리 오류: $e',
+        level: 'error',
+      );
       if (mounted) showFailedSnackbar(context, '사용자 목록을 불러오지 못했습니다');
     }
   }
@@ -170,6 +186,11 @@ class _BreakUiState extends State<BreakUi> {
       final areaState = context.read<AreaState>();
       final division = areaState.currentDivision;
 
+      await FirestoreLogger().log(
+        '_onLoadJson() GCS 다운로드 시작 (division: $division)',
+        level: 'called',
+      );
+
       final Map<String, Map<int, String>> merged = {};
 
       for (final user in users) {
@@ -177,8 +198,13 @@ class _BreakUiState extends State<BreakUi> {
 
         final url = BreakLogUploader.getDownloadPath(
           division: division,
-          area: user.englishSelectedAreaName ?? '', // ✅ 영어 이름 참조
+          area: user.englishSelectedAreaName ?? '',
           userId: userId,
+        );
+
+        await FirestoreLogger().log(
+          '_onLoadJson() GCS 다운로드 URL: $url',
+          level: 'info',
         );
 
         final jsonData = await downloadBreakJsonFromGcs(
@@ -193,14 +219,26 @@ class _BreakUiState extends State<BreakUi> {
       }
 
       if (merged.isEmpty) {
+        await FirestoreLogger().log(
+          '_onLoadJson() 데이터 없음',
+          level: 'error',
+        );
         showFailedSnackbar(context, '❌ 휴게시간 데이터 없음');
       } else {
         setState(() {
           cellData = merged;
         });
+        await FirestoreLogger().log(
+          '_onLoadJson() 데이터 로딩 성공 (레코드 ${merged.length})',
+          level: 'success',
+        );
         showSuccessSnackbar(context, '✅ 휴게시간 데이터 불러오기 완료');
       }
     } catch (e) {
+      await FirestoreLogger().log(
+        '_onLoadJson() 오류: $e',
+        level: 'error',
+      );
       showFailedSnackbar(context, '❌ 휴게시간 데이터 로딩 중 오류: $e');
     }
   }

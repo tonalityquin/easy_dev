@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../models/plate_model.dart';
 import '../../repositories/plate/plate_repository.dart';
+import '../../utils/firestore_logger.dart';
 import '../../utils/gcs_json_uploader.dart';
 import 'plate_state.dart';
 import '../../enums/plate_type.dart';
@@ -20,12 +21,12 @@ class MovementPlate {
   // 🔹 3. Public 메서드
 
   Future<void> setParkingCompleted(
-      String plateNumber,
-      String area,
-      PlateState plateState,
-      String location, {
-        String performedBy = '시스템',
-      }) async {
+    String plateNumber,
+    String area,
+    PlateState plateState,
+    String location, {
+    String performedBy = '시스템',
+  }) async {
     await _transferData(
       fromType: PlateType.parkingRequests,
       toType: PlateType.parkingCompleted,
@@ -37,12 +38,12 @@ class MovementPlate {
   }
 
   Future<void> setDepartureRequested(
-      String plateNumber,
-      String area,
-      PlateState plateState,
-      String location, {
-        String performedBy = '시스템',
-      }) async {
+    String plateNumber,
+    String area,
+    PlateState plateState,
+    String location, {
+    String performedBy = '시스템',
+  }) async {
     await _transferData(
       fromType: PlateType.parkingCompleted,
       toType: PlateType.departureRequests,
@@ -54,10 +55,13 @@ class MovementPlate {
   }
 
   Future<void> setDepartureCompleted(
-      PlateModel plate,
-      PlateState plateState,
-      ) async {
+    PlateModel plate,
+    PlateState plateState,
+  ) async {
     final documentId = '${plate.plateNumber}_${plate.area}';
+    final _logger = FirestoreLogger();
+
+    await _logger.log('[MovementPlate] setDepartureCompleted 시작: $documentId', level: 'called');
 
     try {
       final updateData = {
@@ -74,6 +78,7 @@ class MovementPlate {
       };
 
       await _repository.updatePlate(documentId, updateData);
+      await _logger.log('✅ 출차 완료 업데이트 Firestore 완료: $documentId', level: 'success');
 
       final log = PlateLogModel(
         plateNumber: plate.plateNumber,
@@ -103,16 +108,20 @@ class MovementPlate {
         );
       }
     } catch (e) {
+      await _logger.log('🚨 출차 완료 이동 실패: $e', level: 'error');
       debugPrint('🚨 출차 완료 이동 실패: $e');
       rethrow;
     }
   }
 
   Future<void> jumpingDepartureCompleted(
-      PlateModel plate,
-      PlateState plateState,
-      ) async {
+    PlateModel plate,
+    PlateState plateState,
+  ) async {
     final documentId = '${plate.plateNumber}_${plate.area}';
+    final _logger = FirestoreLogger();
+
+    await _logger.log('[MovementPlate] jumpingDepartureCompleted 시작: $documentId', level: 'called');
 
     try {
       await _repository.updatePlate(documentId, {
@@ -121,6 +130,8 @@ class MovementPlate {
         'selectedBy': null,
         'endTime': DateTime.now(),
       });
+
+      await _logger.log('✅ 입차 완료 → 출차 완료 업데이트 완료: $documentId', level: 'success');
 
       final log = PlateLogModel(
         plateNumber: plate.plateNumber,
@@ -152,18 +163,19 @@ class MovementPlate {
 
       debugPrint("✅ 출차 완료 상태로 업데이트 완료: $documentId");
     } catch (e) {
+      await _logger.log('🚨 출차 완료 업데이트 실패: $e', level: 'error');
       debugPrint('🚨 출차 완료 업데이트 실패: $e');
       rethrow;
     }
   }
 
   Future<void> goBackToParkingCompleted(
-      String plateNumber,
-      String area,
-      PlateState plateState,
-      String location, {
-        String performedBy = '시스템',
-      }) async {
+    String plateNumber,
+    String area,
+    PlateState plateState,
+    String location, {
+    String performedBy = '시스템',
+  }) async {
     final success = await _transferData(
       fromType: PlateType.departureRequests,
       toType: PlateType.parkingCompleted,
@@ -187,6 +199,9 @@ class MovementPlate {
     String performedBy = '시스템',
   }) async {
     final documentId = '${plateNumber}_$area';
+    final _logger = FirestoreLogger();
+
+    await _logger.log('[MovementPlate] goBackToParkingRequest 시작: $documentId', level: 'called');
 
     try {
       await _repository.updatePlate(documentId, {
@@ -195,6 +210,8 @@ class MovementPlate {
         'isSelected': false,
         'selectedBy': null,
       });
+
+      await _logger.log('✅ 상태 복원 완료 (Firestore): $documentId', level: 'success');
 
       final log = PlateLogModel(
         plateNumber: plateNumber,
@@ -218,6 +235,8 @@ class MovementPlate {
 
       debugPrint("✅ 상태 복원 완료: $documentId");
     } catch (e) {
+      await _logger.log('🚨 상태 복원 실패: $e', level: 'error');
+
       if (e is FirebaseException && e.code == 'not-found') {
         debugPrint("🚫 문서를 찾을 수 없음: $documentId");
       } else {
@@ -237,11 +256,15 @@ class MovementPlate {
     String performedBy = '시스템',
   }) async {
     final documentId = '${plateNumber}_$area';
+    final _logger = FirestoreLogger();
+
+    await _logger.log('[MovementPlate] _transferData 시작: $fromType → $toType | 문서ID: $documentId', level: 'called');
 
     try {
       final document = await _repository.getPlate(documentId);
       if (document == null) {
         debugPrint("🚫 [${fromType.name}] 문서를 찾을 수 없음: $documentId");
+        await _logger.log('🚫 문서를 찾을 수 없음: $documentId', level: 'warn');
         return false;
       }
 
@@ -260,6 +283,7 @@ class MovementPlate {
 
       await _repository.updatePlate(documentId, updateData);
       debugPrint("✅ 문서 상태 이동 완료: ${fromType.name} → ${toType.name} ($plateNumber)");
+      await _logger.log('✅ 문서 상태 이동 완료: $fromType → $toType ($plateNumber)', level: 'success');
 
       final log = PlateLogModel(
         plateNumber: plateNumber,
@@ -284,6 +308,7 @@ class MovementPlate {
       return true;
     } catch (e) {
       debugPrint('🚨 문서 상태 이동 오류: $e');
+      await _logger.log('🚨 상태 이동 오류: $e', level: 'error');
       return false;
     }
   }

@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../../../models/user_model.dart';
 import '../../../states/area/area_state.dart';
 import '../../../states/user/user_state.dart';
+import '../../../utils/firestore_logger.dart';
 import '../../secondary_pages/field_mode_pages/dash_board/break_log_downloader.dart';
 import '../../secondary_pages/field_mode_pages/dash_board/break_log_uploader.dart';
 import 'breaks/break_table_row.dart';
@@ -70,12 +71,26 @@ class _BreakCellState extends State<BreakCell> {
     final userAreas = userState.user?.areas ?? [];
 
     if (userAreas.isEmpty) {
-      debugPrint('⚠️ 사용자 소속 지역 없음');
+      await FirestoreLogger().log(
+        '사용자 소속 지역 없음',
+        level: 'error',
+      );
     }
 
+    await FirestoreLogger().log(
+      'Firestore areas 컬렉션 쿼리 시작',
+      level: 'called',
+    );
+
     final snapshot = await FirebaseFirestore.instance.collection('areas').get();
+
     final allAreas = snapshot.docs.map((doc) => doc['name'] as String).toList();
     final filteredAreas = allAreas.where((area) => userAreas.contains(area)).toList();
+
+    await FirestoreLogger().log(
+      'Firestore areas 쿼리 완료: ${filteredAreas.length}개 필터링',
+      level: 'success',
+    );
 
     setState(() {
       _areaList = filteredAreas;
@@ -85,6 +100,7 @@ class _BreakCellState extends State<BreakCell> {
       }
     });
   }
+
 
   Future<void> _reloadUsersForArea(String area) async {
     final users = await widget.getUsersByArea(area);
@@ -236,14 +252,16 @@ class _BreakCellState extends State<BreakCell> {
 
                     final Map<String, Map<int, String>> merged = {};
 
-                    for (final user in _users) {
-                      final userId = user.id;
+                    await FirestoreLogger().log(
+                      '휴게시간 JSON 다운로드 시작 (users=${_users.length})',
+                      level: 'called',
+                    );
 
-                      // ✅ 업로드 경로와 동일하게 englishSelectedAreaName 사용
+                    for (final user in _users) {
                       final url = BreakLogUploader.getDownloadPath(
                         division: division,
                         area: user.englishSelectedAreaName ?? '',
-                        userId: userId,
+                        userId: user.id,
                         dateTime: DateTime(widget.selectedYear, widget.selectedMonth),
                       );
 
@@ -255,17 +273,29 @@ class _BreakCellState extends State<BreakCell> {
 
                       if (data != null && data.isNotEmpty) {
                         merged.addAll(data);
+                        await FirestoreLogger().log(
+                          '데이터 다운로드 완료 - userId: ${user.id}, entries: ${data.length}',
+                          level: 'success',
+                        );
                       }
                     }
 
                     if (merged.isNotEmpty) {
-                      await widget.onLoadJson(merged); // ✅ 실제 병합 데이터 전달
+                      await widget.onLoadJson(merged);
+                      await FirestoreLogger().log(
+                        '휴게시간 데이터 머지 완료 (총 ${merged.length} entries)',
+                        level: 'success',
+                      );
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('✅ 휴게시간 데이터 불러오기 완료')),
                         );
                       }
                     } else {
+                      await FirestoreLogger().log(
+                        '휴게시간 데이터 없음',
+                        level: 'info',
+                      );
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('📭 불러올 휴게시간 데이터가 없습니다')),

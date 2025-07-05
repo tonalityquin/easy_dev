@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/user_model.dart';
 import 'user_repository.dart';
+import '../../utils/firestore_logger.dart'; // ✅ FirestoreLogger import
 
 class FirestoreUserRepository implements UserRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -19,60 +20,72 @@ class FirestoreUserRepository implements UserRepository {
 
   @override
   Future<UserModel?> getUserById(String userId) async {
-    debugPrint("getUserById, 호출됨 → 요청 ID: $userId");
+    debugPrint("getUserById 호출 → ID: $userId");
+    await FirestoreLogger().log('getUserById called: $userId');
 
     final doc = await _getCollectionRef().doc(userId).get();
     if (!doc.exists) {
-      debugPrint("getUserById, DB 문서 없음 → userId=$userId");
+      debugPrint("DB 문서 없음 → userId=$userId");
+      await FirestoreLogger().log('getUserById not found: $userId');
       return null;
     }
 
     final data = doc.data()!;
-    debugPrint("getUserById, DB에서 문서 조회 성공 → userId=$userId / 데이터: $data");
-
+    debugPrint("DB 문서 조회 성공 → userId=$userId / 데이터: $data");
+    await FirestoreLogger().log('getUserById success: $userId');
     return UserModel.fromMap(doc.id, data);
   }
 
   @override
   Future<void> updateLoadCurrentArea(String phone, String area, String currentArea) async {
     final userId = '$phone-$area';
+    await FirestoreLogger().log('updateLoadCurrentArea called: $userId → $currentArea');
+
     await _getCollectionRef().doc(userId).update({'currentArea': currentArea});
+    await FirestoreLogger().log('updateLoadCurrentArea success: $userId');
   }
 
   @override
   Future<void> updateLoadUserStatus(
-    String phone,
-    String area, {
-    bool? isWorking,
-    bool? isSaved,
-  }) async {
+      String phone,
+      String area, {
+        bool? isWorking,
+        bool? isSaved,
+      }) async {
     final userId = '$phone-$area';
     final updates = <String, dynamic>{};
     if (isWorking != null) updates['isWorking'] = isWorking;
     if (isSaved != null) updates['isSaved'] = isSaved;
 
+    await FirestoreLogger().log('updateLoadUserStatus called: $userId → $updates');
     await _getCollectionRef().doc(userId).update(updates);
+    await FirestoreLogger().log('updateLoadUserStatus success: $userId');
   }
 
   @override
   Future<UserModel?> getUserByPhone(String phone) async {
-    debugPrint("getUserByPhone, 사용자 조회 시작 - phone: $phone");
+    debugPrint("getUserByPhone, 조회 시작 - phone: $phone");
+    await FirestoreLogger().log('getUserByPhone called: $phone');
 
     try {
-      final querySnapshot = await _getCollectionRef().where('phone', isEqualTo: phone).get();
+      final querySnapshot = await _getCollectionRef()
+          .where('phone', isEqualTo: phone)
+          .get();
 
-      debugPrint("getUserByPhone, 조회 완료 - 결과 개수: ${querySnapshot.docs.length}");
+      debugPrint("조회 완료 - 결과 개수: ${querySnapshot.docs.length}");
 
       if (querySnapshot.docs.isNotEmpty) {
         final doc = querySnapshot.docs.first;
-        debugPrint("getUserByPhone, 사용자 찾음 - ID: ${doc.id}, 데이터: ${doc.data()}");
-
+        debugPrint("사용자 찾음 - ID: ${doc.id}");
+        await FirestoreLogger().log('getUserByPhone success: ${doc.id}');
         return UserModel.fromMap(doc.id, doc.data());
       } else {
-        debugPrint("getUserByPhone, DB에서 해당 전화번호 사용자를 찾을 수 없음");
+        debugPrint("DB에 사용자 없음");
+        await FirestoreLogger().log('getUserByPhone not found: $phone');
       }
     } catch (e) {
-      debugPrint("getUserByPhone, DB에서 사용자 조회 중 예외 발생: $e");
+      debugPrint("DB 조회 중 예외 발생: $e");
+      await FirestoreLogger().log('getUserByPhone error: $e');
     }
 
     return null;
@@ -80,54 +93,67 @@ class FirestoreUserRepository implements UserRepository {
 
   @override
   Future<void> updateLogOutUserStatus(
-    String phone,
-    String area, {
-    bool? isWorking,
-    bool? isSaved,
-  }) async {
+      String phone,
+      String area, {
+        bool? isWorking,
+        bool? isSaved,
+      }) async {
     final userId = '$phone-$area';
     final updates = <String, dynamic>{};
     if (isWorking != null) updates['isWorking'] = isWorking;
     if (isSaved != null) updates['isSaved'] = isSaved;
 
+    await FirestoreLogger().log('updateLogOutUserStatus called: $userId → $updates');
     await _getCollectionRef().doc(userId).update(updates);
+    await FirestoreLogger().log('updateLogOutUserStatus success: $userId');
   }
 
   @override
   Future<void> areaPickerCurrentArea(String phone, String area, String currentArea) async {
     final userId = '$phone-$area';
+    await FirestoreLogger().log('areaPickerCurrentArea called: $userId → $currentArea');
+
     await _getCollectionRef().doc(userId).update({'currentArea': currentArea});
+    await FirestoreLogger().log('areaPickerCurrentArea success: $userId');
   }
 
   @override
   Future<void> updateWorkingUserStatus(
-    String phone,
-    String area, {
-    bool? isWorking,
-    bool? isSaved,
-  }) async {
+      String phone,
+      String area, {
+        bool? isWorking,
+        bool? isSaved,
+      }) async {
     final userId = '$phone-$area';
     final updates = <String, dynamic>{};
     if (isWorking != null) updates['isWorking'] = isWorking;
     if (isSaved != null) updates['isSaved'] = isSaved;
 
+    await FirestoreLogger().log('updateWorkingUserStatus called: $userId → $updates');
     await _getCollectionRef().doc(userId).update(updates);
+    await FirestoreLogger().log('updateWorkingUserStatus success: $userId');
   }
 
   @override
   Future<void> addUserCard(UserModel user) async {
+    await FirestoreLogger().log('addUserCard called: ${user.id}');
     await _getCollectionRef().doc(user.id).set(user.toMap());
+    await FirestoreLogger().log('addUserCard success: ${user.id}');
   }
 
   @override
   Future<void> updateUser(UserModel user) async {
+    await FirestoreLogger().log('updateUser called: ${user.id}');
     await _getCollectionRef().doc(user.id).set(user.toMap());
+    await FirestoreLogger().log('updateUser success: ${user.id}');
   }
 
   @override
   Future<void> deleteUsers(List<String> ids) async {
     for (final id in ids) {
+      await FirestoreLogger().log('deleteUser called: $id');
       await _getCollectionRef().doc(id).delete();
+      await FirestoreLogger().log('deleteUser success: $id');
     }
   }
 
@@ -155,11 +181,18 @@ class FirestoreUserRepository implements UserRepository {
   @override
   Future<List<UserModel>> refreshUsersBySelectedArea(String selectedArea) async {
     debugPrint('🔥 Firestore 호출 시작 → $selectedArea');
+    await FirestoreLogger().log('refreshUsersBySelectedArea called: $selectedArea');
 
-    final querySnapshot = await _getCollectionRef().where('areas', arrayContains: selectedArea).get();
+    final querySnapshot = await _getCollectionRef()
+        .where('areas', arrayContains: selectedArea)
+        .get();
 
-    final users = querySnapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
+    final users = querySnapshot.docs
+        .map((doc) => UserModel.fromMap(doc.id, doc.data()))
+        .toList();
+
     await _updateCacheWithUsers(selectedArea, users);
+    await FirestoreLogger().log('refreshUsersBySelectedArea success: ${users.length} users loaded');
     return users;
   }
 
@@ -182,21 +215,25 @@ class FirestoreUserRepository implements UserRepository {
 
     final jsonData = json.encode(users.map((user) => user.toMapWithId()).toList());
     await prefs.setString(cacheKey, jsonData);
-    await prefs.setInt(
-      cacheTsKey,
-      DateTime.now().millisecondsSinceEpoch,
-    );
+    await prefs.setInt(cacheTsKey, DateTime.now().millisecondsSinceEpoch);
 
     debugPrint('✅ 캐시 갱신 완료 → $selectedArea (${users.length}명)');
   }
 
   @override
   Future<String?> getEnglishNameByArea(String area, String division) async {
+    await FirestoreLogger().log('getEnglishNameByArea called: $division-$area');
+
     try {
       final doc = await _getAreasCollectionRef().doc('$division-$area').get();
-      if (doc.exists) return doc.data()?['englishName'] as String?;
+      if (doc.exists) {
+        final name = doc.data()?['englishName'] as String?;
+        await FirestoreLogger().log('getEnglishNameByArea success: $name');
+        return name;
+      }
     } catch (e) {
       debugPrint("[DEBUG] getEnglishNameByArea 실패: $e");
+      await FirestoreLogger().log('getEnglishNameByArea error: $e');
     }
     return null;
   }
