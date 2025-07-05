@@ -19,11 +19,9 @@ class PlateState extends ChangeNotifier {
   };
 
   String? _searchQuery;
-  String _previousArea = '';
-  bool _isLoading = true;
+  bool _isLoading = false;
 
   PlateState(this._repository, this._areaState) {
-    _initializeSubscriptions();
     _areaState.addListener(_onAreaChanged);
   }
 
@@ -37,100 +35,106 @@ class PlateState extends ChangeNotifier {
     return _data[type] ?? [];
   }
 
-  void _initializeSubscriptions() async {
-    final area = _areaState.currentArea;
-    if (area.isEmpty || _previousArea == area) return;
+  void subscribeType(PlateType type) {
+    if (_subscriptions.containsKey(type)) {
+      debugPrint('✅ 이미 구독 중: $type');
+      return;
+    }
 
-    _previousArea = area;
-    _cancelAllSubscriptions();
+    final descending = _isSortedMap[type] ?? true;
 
+    debugPrint('🔔 [${_getTypeLabel(type)}] 구독 시작');
     _isLoading = true;
-    plateCountsForDebugPrint();
-
-    int receivedCount = 0;
-    final totalCollections = PlateType.values.length;
-
-    for (final collection in PlateType.values) {
-      final descending = _isSortedMap[collection] ?? true;
-
-      final stream = _repository.streamToCurrentArea(
-        collection,
-        currentArea,
-        descending: descending,
-      );
-
-      bool firstDataReceived = false;
-
-      final subscription = stream.listen((filteredData) async {
-        if (collection == PlateType.departureCompleted) {
-          for (final plate in filteredData) {
-            final previous = previousIsLockedFee[plate.id];
-            if (previous == false && plate.isLockedFee == true) {
-              final uploader = GcsJsonUploader();
-              await uploader.mergeAndSummarizeLogs(
-                plate.plateNumber,
-                _areaState.currentDivision,
-                plate.area,
-              );
-            }
-            previousIsLockedFee[plate.id] = plate.isLockedFee;
-          }
-        }
-
-        _data[collection] = filteredData;
-        notifyListeners();
-
-        if (!firstDataReceived) {
-          firstDataReceived = true;
-          receivedCount++;
-        }
-
-        if (receivedCount == totalCollections) {
-          _isLoading = false;
-          plateCountsForDebugPrint();
-        }
-      }, onError: (error) {
-        debugPrint('🔥 Plate stream error: $error');
-      });
-
-      _subscriptions[collection] = subscription;
-    }
-  }
-
-  List<PlateModel> getPlatesByCollection(PlateType collection, {DateTime? selectedDate}) {
-    List<PlateModel> plates = _data[collection] ?? [];
-
-    if (collection == PlateType.departureCompleted && selectedDate != null) {
-      final selectedDateOnly = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
-      plates = plates.where((plate) {
-        final end = plate.endTime;
-        if (end == null) return false;
-        final endDate = DateTime(end.year, end.month, end.day);
-        return endDate == selectedDateOnly;
-      }).toList();
-    }
-
-    if (_searchQuery != null && _searchQuery!.length == 4) {
-      plates = plates.where((plate) => plate.plateFourDigit == _searchQuery).toList();
-    }
-
-    return plates;
-  }
-
-  void updateSortOrder(PlateType type, bool descending) {
-    _isSortedMap[type] = descending;
     notifyListeners();
+
+    final stream = _repository.streamToCurrentArea(
+      type,
+      currentArea,
+      descending: descending,
+    );
+
+    bool firstDataReceived = false;
+
+    final subscription = stream.listen((filteredData) async {
+      if (type == PlateType.departureCompleted) {
+        for (final plate in filteredData) {
+          final previous = previousIsLockedFee[plate.id];
+          if (previous == false && plate.isLockedFee == true) {
+            final uploader = GcsJsonUploader();
+            await uploader.mergeAndSummarizeLogs(
+              plate.plateNumber,
+              _areaState.currentDivision,
+              plate.area,
+            );
+          }
+          previousIsLockedFee[plate.id] = plate.isLockedFee;
+        }
+      }
+
+      _data[type] = filteredData;
+      notifyListeners();
+
+      if (!firstDataReceived) {
+        firstDataReceived = true;
+        debugPrint('✅ [${_getTypeLabel(type)}] 초기 데이터 수신: ${filteredData.length}개');
+      } else {
+        debugPrint('📥 [${_getTypeLabel(type)}] 데이터 업데이트: ${filteredData.length}개');
+      }
+
+      _isLoading = false;
+    }, onError: (error) {
+      debugPrint('🔥 [${_getTypeLabel(type)}] Plate stream error: $error');
+      _isLoading = false;
+      notifyListeners();
+    });
+
+    _subscriptions[type] = subscription;
   }
 
-  Future<void> updatePlateLocally(PlateType collection, PlateModel updatedPlate) async {
-    final list = _data[collection];
-    if (list == null) return;
-
-    final index = list.indexWhere((p) => p.id == updatedPlate.id);
-    if (index != -1) {
-      _data[collection]![index] = updatedPlate;
+  void unsubscribeType(PlateType type) {
+    final sub = _subscriptions[type];
+    if (sub != null) {
+      sub.cancel();
+      _subscriptions.remove(type);
+      _data[type] = [];
       notifyListeners();
+      debugPrint('🛑 [${_getTypeLabel(type)}] 구독 해제');
+    } else {
+      debugPrint('⚠️ [${_getTypeLabel(type)}] 구독 중이 아님');
     }
+  }
+
+  PlateModel? getSelectedPlate(PlateType collection, String userName) {
+    final plates = _data[collection];
+    if (plates == null || plates.isEmpty) return null;
+
+    try {
+      return plates.firstWhere(
+        (plate) => plate.isSelected && plate.selectedBy == userName,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _getCollectionLabelForType(String type) {
+    switch (type) {
+      case '입차 요청':
+      case '입차 중':
+        return '입차 요청';
+      case '입차 완료':
+        return '입차 완료';
+      case '출차 요청':
+        return '출차 요청';
+      case '출차 완료':
+        return '출차 완료';
+      default:
+        return '알 수 없음';
+    }
+  }
+
+  bool isSubscribed(PlateType type) {
+    return _subscriptions.containsKey(type);
   }
 
   Future<void> togglePlateIsSelected({
@@ -213,41 +217,50 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  PlateModel? getSelectedPlate(PlateType collection, String userName) {
-    final plates = _data[collection];
-    if (plates == null || plates.isEmpty) return null;
+  List<PlateModel> getPlatesByCollection(PlateType collection, {DateTime? selectedDate}) {
+    List<PlateModel> plates = _data[collection] ?? [];
 
-    try {
-      return plates.firstWhere(
-        (plate) => plate.isSelected && plate.selectedBy == userName,
-      );
-    } catch (_) {
-      return null;
+    if (collection == PlateType.departureCompleted && selectedDate != null) {
+      final selectedDateOnly = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+      plates = plates.where((plate) {
+        final end = plate.endTime;
+        if (end == null) return false;
+        final endDate = DateTime(end.year, end.month, end.day);
+        return endDate == selectedDateOnly;
+      }).toList();
+    }
+
+    if (_searchQuery != null && _searchQuery!.length == 4) {
+      plates = plates.where((plate) => plate.plateFourDigit == _searchQuery).toList();
+    }
+
+    return plates;
+  }
+
+  void updateSortOrder(PlateType type, bool descending) {
+    _isSortedMap[type] = descending;
+    notifyListeners();
+  }
+
+  Future<void> updatePlateLocally(PlateType collection, PlateModel updatedPlate) async {
+    final list = _data[collection];
+    if (list == null) return;
+
+    final index = list.indexWhere((p) => p.id == updatedPlate.id);
+    if (index != -1) {
+      _data[collection]![index] = updatedPlate;
+      notifyListeners();
     }
   }
 
   void syncWithAreaState() {
     debugPrint("🔄 syncWithAreaState : 지역 변경 감지 및 상태 갱신 호출됨");
-    _previousArea = '';
-    _initializeSubscriptions();
+    _cancelAllSubscriptions();
   }
 
   void _onAreaChanged() {
     debugPrint("🔄 지역 변경 감지됨: ${_areaState.currentArea}");
-    _initializeSubscriptions();
-  }
-
-  void plateCountsForDebugPrint() {
-    if (_isLoading) {
-      debugPrint('🕐 지역 Plate 상태 수신 대기 중...');
-    } else {
-      debugPrint('✅ 지역 Plate 상태 수신 완료');
-      debugPrint('📌 Selected Area: $currentArea');
-      debugPrint('🅿️ Parking Requests: ${_data[PlateType.parkingRequests]?.length ?? 0}');
-      debugPrint('✅ Parking Completed: ${_data[PlateType.parkingCompleted]?.length ?? 0}');
-      debugPrint('🚗 Departure Requests: ${_data[PlateType.departureRequests]?.length ?? 0}');
-      debugPrint('🏁 Departure Completed: ${_data[PlateType.departureCompleted]?.length ?? 0}');
-    }
+    _cancelAllSubscriptions();
   }
 
   void _cancelAllSubscriptions() {
@@ -257,19 +270,16 @@ class PlateState extends ChangeNotifier {
     _subscriptions.clear();
   }
 
-  String _getCollectionLabelForType(String type) {
+  String _getTypeLabel(PlateType type) {
     switch (type) {
-      case '입차 요청':
-      case '입차 중':
+      case PlateType.parkingRequests:
         return '입차 요청';
-      case '입차 완료':
+      case PlateType.parkingCompleted:
         return '입차 완료';
-      case '출차 요청':
+      case PlateType.departureRequests:
         return '출차 요청';
-      case '출차 완료':
+      case PlateType.departureCompleted:
         return '출차 완료';
-      default:
-        return '알 수 없음';
     }
   }
 

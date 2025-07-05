@@ -30,14 +30,14 @@ class Block {
   }
 }
 
-class WorkerAttendanceDocument extends StatefulWidget {
-  const WorkerAttendanceDocument({super.key});
+class EasterEgg extends StatefulWidget {
+  const EasterEgg({super.key});
 
   @override
-  State<WorkerAttendanceDocument> createState() => _WorkerAttendanceDocumentState();
+  State<EasterEgg> createState() => _EasterEggState();
 }
 
-class _WorkerAttendanceDocumentState extends State<WorkerAttendanceDocument> {
+class _EasterEggState extends State<EasterEgg> {
   static const int rowCount = 20;
   static const int colCount = 10;
 

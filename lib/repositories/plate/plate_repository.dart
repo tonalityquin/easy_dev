@@ -8,7 +8,6 @@ abstract class PlateRepository {
     bool descending = true,
   });
 
-
   Future<int> getPlateCountForTypePage(
     PlateType type,
     String area,

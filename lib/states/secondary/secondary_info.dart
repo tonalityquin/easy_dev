@@ -10,8 +10,8 @@ import '../../screens/secondary_pages/field_mode_pages/location_management.dart'
 import '../../screens/secondary_pages/office_mode_pages/user_management.dart';
 
 // Document Mode Pages
-import '../../screens/secondary_pages/document_mode_pages/attendance_pages/worker_attendance_document.dart';
-import '../../screens/secondary_pages/document_mode_pages/break_pages/worker_break_document.dart';
+import '../../screens/secondary_pages/document_mode_pages/attendance_pages/easter_egg.dart';
+import '../../screens/secondary_pages/document_mode_pages/break_pages/back_end_controller.dart';
 
 // Dev Mode Pages
 import '../../screens/secondary_pages/dev_mode_pages/area_management.dart';
@@ -38,8 +38,8 @@ final List<SecondaryInfo> officeModePages = [
 
 /// 🔹 Document Mode Pages
 final List<SecondaryInfo> documentPages = [
-  SecondaryInfo('출퇴근 문서', WorkerAttendanceDocument(), Icon(Icons.badge)),
-  SecondaryInfo('휴게시간 문서', WorkerBreakDocument(), Icon(Icons.free_breakfast )),
+  SecondaryInfo('이스터 에그', EasterEgg(), Icon(Icons.badge)),
+  SecondaryInfo('백엔드 컨트롤러', BackEndController(), Icon(Icons.free_breakfast )),
 ];
 
 /// 🔹 Dev Mode Pages
