@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
 
+import '../../states/area/area_state.dart';
 import '../../states/plate/filter_plate.dart';
 import '../../states/plate/plate_state.dart'; // 번호판 상태 관리
 import '../../states/plate/movement_plate.dart';
@@ -45,17 +46,17 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
   }
 
   void _showSearchDialog(BuildContext context) {
+    final currentArea = context.read<AreaState>().currentArea;
+
     showDialog(
       context: context,
-      builder: (context) {
-        return PlateSearchBottomSheet(
-          onSearch: (query) {
-            _filterPlatesByNumber(context, query);
-          },
-        );
-      },
+      builder: (context) => PlateSearchBottomSheet(
+        onSearch: (query) => _filterPlatesByNumber(context, query),
+        area: currentArea, // ✅ area 전달
+      ),
     );
   }
+
 
   void _filterPlatesByNumber(BuildContext context, String query) {
     if (query.length == 4) {

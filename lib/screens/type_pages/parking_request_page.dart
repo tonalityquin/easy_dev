@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../enums/plate_type.dart';
 
+import '../../states/area/area_state.dart';
 import '../../states/plate/filter_plate.dart';
 import '../../states/plate/plate_state.dart';
 import '../../states/plate/movement_plate.dart';
@@ -41,6 +42,8 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
   }
 
   void _showSearchDialog(BuildContext context) {
+    final currentArea = context.read<AreaState>().currentArea;
+
     showDialog(
       context: context,
       builder: (context) {
@@ -48,6 +51,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
           onSearch: (query) {
             _filterPlatesByNumber(context, query);
           },
+          area: currentArea,
         );
       },
     );

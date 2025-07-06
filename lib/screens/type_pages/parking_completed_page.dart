@@ -54,6 +54,8 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
   }
 
   void _showSearchDialog(BuildContext context) {
+    final currentArea = context.read<AreaState>().currentArea;
+
     showDialog(
       context: context,
       builder: (context) {
@@ -66,6 +68,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
               });
             }
           },
+          area: currentArea, // ✅ 반드시 area 전달
         );
       },
     );

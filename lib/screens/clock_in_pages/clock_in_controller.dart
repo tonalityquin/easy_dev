@@ -7,7 +7,7 @@ import '../../../states/user/user_state.dart';
 import '../../../states/area/area_state.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../utils/firestore_logger.dart'; // ✅ FirestoreLogger import
-import 'clock_in_log_uploader.dart';
+import 'utils/clock_in_log_uploader.dart';
 
 class ClockInController {
   void initialize(BuildContext context) {

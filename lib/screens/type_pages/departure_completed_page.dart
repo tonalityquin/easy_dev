@@ -35,13 +35,17 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
   bool _showMergedLog = false;
 
   void _showSearchDialog(BuildContext context) {
+    final currentArea = context.read<AreaState>().currentArea;
+
     showDialog(
       context: context,
       builder: (context) => PlateSearchBottomSheet(
         onSearch: (query) => _filterPlatesByNumber(context, query),
+        area: currentArea, // ✅ area 전달
       ),
     );
   }
+
 
   void _filterPlatesByNumber(BuildContext context, String query) {
     if (query.length == 4) {
