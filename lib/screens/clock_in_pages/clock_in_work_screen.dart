@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:android_intent_plus/android_intent.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../states/user/user_state.dart';
@@ -11,8 +10,10 @@ import '../../../states/area/area_state.dart';
 import 'debugs/clock_in_debug_bottom_sheet.dart';
 import 'clock_in_controller.dart';
 import 'sections/fetch_plate_count_widget.dart';
+import 'sections/report_button_widget.dart';
 import 'sections/work_button_widget.dart';
 import 'sections/user_info_card.dart';
+import 'sections/header_widget.dart'; // ✅ HeaderWidget import
 
 class ClockInWorkScreen extends StatefulWidget {
   const ClockInWorkScreen({super.key});
@@ -32,13 +33,11 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
     super.initState();
     controller.initialize(context);
 
-    // ✅ 화면이 렌더된 뒤 상태를 읽도록 처리
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _tryLoadKakaoUrl();
     });
   }
 
-  /// UserState 데이터가 로딩될 때까지 기다린 뒤 Firestore 로드
   Future<void> _tryLoadKakaoUrl() async {
     final userState = context.read<UserState>();
     final areaState = context.read<AreaState>();
@@ -53,11 +52,10 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
     _loadKakaoUrlWithCache(userState, areaState);
   }
 
-  /// Firestore + SharedPreferences 캐싱
   Future<void> _loadKakaoUrlWithCache(
-      UserState userState,
-      AreaState areaState,
-      ) async {
+    UserState userState,
+    AreaState areaState,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
 
     final division = userState.division.trim();
@@ -161,66 +159,16 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const SizedBox(height: 96),
-                          SizedBox(
-                            height: 120,
-                            child: Image.asset('assets/images/belivus_logo.PNG'),
-                          ),
-                          const SizedBox(height: 48),
-                          Center(
-                            child: Text(
-                              '출근 전 사용자 정보 확인',
-                              style: Theme.of(context).textTheme.titleLarge,
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
+                          const HeaderWidget(),
                           const UserInfoCard(),
                           const FetchPlateCountWidget(),
                           const SizedBox(height: 32),
                           Row(
                             children: [
                               Expanded(
-                                child: ElevatedButton.icon(
-                                  icon: const Icon(Icons.assignment),
-                                  label: loadingUrl ? const Text('로딩 중...') : const Text('보고 작성'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.white,
-                                    foregroundColor: Colors.black,
-                                    padding: const EdgeInsets.symmetric(vertical: 14),
-                                    side: const BorderSide(color: Colors.grey),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                  ),
-                                  onPressed: loadingUrl
-                                      ? null
-                                      : () async {
-                                    if (kakaoUrl == null || kakaoUrl!.isEmpty) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(
-                                          content: Text('카카오톡 URL이 없습니다.'),
-                                        ),
-                                      );
-                                      return;
-                                    }
-                                    final intent = AndroidIntent(
-                                      action: 'action_view',
-                                      data: kakaoUrl!,
-                                      package: 'com.android.chrome',
-                                    );
-                                    try {
-                                      await intent.launch();
-                                    } catch (e) {
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: Text('크롬으로 열 수 없습니다: $e'),
-                                          ),
-                                        );
-                                      }
-                                    }
-                                  },
+                                child: ReportButtonWidget(
+                                  loadingUrl: loadingUrl,
+                                  kakaoUrl: kakaoUrl,
                                 ),
                               ),
                               const SizedBox(width: 12),

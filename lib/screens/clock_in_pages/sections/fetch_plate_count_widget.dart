@@ -43,9 +43,18 @@ class _FetchPlateCountWidgetState extends State<FetchPlateCountWidget> {
         padding: const EdgeInsets.symmetric(vertical: 24),
         child: SizedBox(
           width: double.infinity,
-          child: OutlinedButton.icon(
+          child: ElevatedButton.icon(
             icon: const Icon(Icons.refresh),
             label: const Text('현황 불러오기'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              side: const BorderSide(color: Colors.grey),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
             onPressed: () {
               setState(() {
                 _futureCounts = _fetchCounts();

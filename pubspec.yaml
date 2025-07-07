@@ -68,5 +68,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/belivus_logo.PNG
+    - assets/images/easyvalet_logo.png
     - assets/icons/icon_belivussnc.PNG
+    - assets/icons/icon_easyvalet.PNG
     - assets/keys/easydev-97fb6-e31d7e6b30f9.json
