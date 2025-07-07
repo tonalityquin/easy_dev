@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'debugs/login_debug_firestore_logger.dart';
-import 'widgets/login_form.dart';
+import 'utils/login_form.dart';
 import 'login_controller.dart';
 
 class LoginScreen extends StatefulWidget {

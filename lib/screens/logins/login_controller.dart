@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'widgets/login_validate.dart';
+import 'utils/login_validate.dart';
 
 import '../../repositories/user/user_repository.dart';
 
@@ -12,7 +12,7 @@ import '../../states/area/area_state.dart';
 import '../../utils/snackbar_helper.dart';
 import '../../utils/login_network_service.dart';
 
-import 'debugs/login_debug_firestore_logger.dart'; // ✅ 디버그 로거 import
+import 'debugs/login_debug_firestore_logger.dart';
 
 class LoginController {
   final BuildContext context;

@@ -5,10 +5,17 @@ import '../../../enums/plate_type.dart';
 import '../../../repositories/plate/plate_repository.dart';
 import '../../../states/user/user_state.dart';
 
-class FetchPlateCountWidget extends StatelessWidget {
+class FetchPlateCountWidget extends StatefulWidget {
   const FetchPlateCountWidget({super.key});
 
-  Future<Map<PlateType, int>> _fetchCounts(BuildContext context) async {
+  @override
+  State<FetchPlateCountWidget> createState() => _FetchPlateCountWidgetState();
+}
+
+class _FetchPlateCountWidgetState extends State<FetchPlateCountWidget> {
+  Future<Map<PlateType, int>>? _futureCounts;
+
+  Future<Map<PlateType, int>> _fetchCounts() async {
     final repo = context.read<PlateRepository>();
     final userState = context.read<UserState>();
     final area = userState.area;
@@ -30,14 +37,48 @@ class FetchPlateCountWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 초기 상태: 아직 버튼만 보임
+    if (_futureCounts == null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        child: SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            icon: const Icon(Icons.refresh),
+            label: const Text('현황 불러오기'),
+            onPressed: () {
+              setState(() {
+                _futureCounts = _fetchCounts();
+              });
+            },
+          ),
+        ),
+      );
+    }
+
+    // 버튼을 누르면 FutureBuilder가 실행됨
     return FutureBuilder<Map<PlateType, int>>(
-      future: _fetchCounts(context),
+      future: _futureCounts,
       builder: (context, snapshot) {
-        if (!snapshot.hasData) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const Padding(
             padding: EdgeInsets.symmetric(vertical: 24),
             child: Center(child: CircularProgressIndicator()),
           );
+        }
+        if (snapshot.hasError) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Center(
+              child: Text(
+                '데이터 로드 실패: ${snapshot.error}',
+                style: const TextStyle(color: Colors.red),
+              ),
+            ),
+          );
+        }
+        if (!snapshot.hasData) {
+          return const SizedBox();
         }
 
         final counts = snapshot.data!;
