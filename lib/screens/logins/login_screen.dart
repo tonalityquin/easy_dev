@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'debugs/login_debug_firestore_logger.dart';
 import 'widgets/login_form.dart';
 import 'login_controller.dart';
 
@@ -18,7 +19,20 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   @override
   void initState() {
     super.initState();
+
+    // 🌟 로그인 화면 로딩 로그
+    LoginDebugFirestoreLogger().log(
+      '🔵 LoginScreen initState() - 로그인 화면 로딩 시작',
+      level: 'info',
+    );
+
     _loginController = LoginController(context);
+
+    // 🌟 로그인 컨트롤러 생성 로그
+    LoginDebugFirestoreLogger().log(
+      '✅ LoginScreen - LoginController 생성 완료',
+      level: 'success',
+    );
 
     _loginAnimationController = AnimationController(
       duration: const Duration(milliseconds: 700),
@@ -38,6 +52,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     );
 
     _loginAnimationController.forward();
+
+    // 🌟 애니메이션 시작 로그
+    LoginDebugFirestoreLogger().log(
+      '✅ 로그인 화면 애니메이션 시작',
+      level: 'success',
+    );
   }
 
   @override

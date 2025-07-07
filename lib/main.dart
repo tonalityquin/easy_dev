@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import 'routes.dart';
 import 'providers/providers.dart';
+import 'screens/logins/debugs/login_debug_firestore_logger.dart';
 import 'theme.dart';
 import 'utils/init/dev_initializer.dart';
 import 'utils/foreground_task_handler.dart';
@@ -18,7 +19,7 @@ void myForegroundCallback() {
 }
 
 /// 🔹 앱 진입점
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   FlutterForegroundTask.init(
@@ -75,6 +76,9 @@ class AppBootstrapper extends StatelessWidget {
 
     // ✅ FirestoreLogger 초기화
     await FirestoreLogger().init();
+
+    // ✅ LoginDebugFirestoreLogger 초기화
+    await LoginDebugFirestoreLogger().init();
 
     // ✅ 개발용 리소스 초기화
     await registerDevResources();

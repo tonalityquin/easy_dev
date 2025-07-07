@@ -187,10 +187,7 @@ class _RefreshableBodyState extends State<RefreshableBody> {
     } else {
       return IndexedStack(
         index: index - 1,
-        children: defaultPages
-            .sublist(1)
-            .map((pageInfo) => pageInfo.builder(context))
-            .toList(),
+        children: defaultPages.sublist(1).map((pageInfo) => pageInfo.builder(context)).toList(),
       );
     }
   }
@@ -229,7 +226,7 @@ class PageBottomNavigation extends StatelessWidget {
           backgroundColor: Colors.white,
           items: List.generate(
             pageState.pages.length,
-                (index) {
+            (index) {
               final pageInfo = pageState.pages[index];
               final isSelected = pageState.selectedIndex == index;
 
@@ -260,12 +257,12 @@ class PageBottomNavigation extends StatelessWidget {
   }
 
   Widget _buildCountIcon(
-      int count,
-      bool isSelected,
-      Color selectedColor,
-      Color unselectedColor,
-      String label,
-      ) {
+    int count,
+    bool isSelected,
+    Color selectedColor,
+    Color unselectedColor,
+    String label,
+  ) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -274,8 +271,7 @@ class PageBottomNavigation extends StatelessWidget {
         children: [
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 300),
-            transitionBuilder: (child, animation) =>
-                ScaleTransition(scale: animation, child: child),
+            transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
             child: TweenAnimationBuilder<Color?>(
               key: ValueKey(count),
               duration: const Duration(milliseconds: 300),
