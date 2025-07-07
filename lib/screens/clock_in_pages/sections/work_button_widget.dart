@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../../states/user/user_state.dart';
 import '../clock_in_controller.dart';
+import '../debugs/clock_in_debug_firestore_logger.dart'; // ✅ 로그 로거 추가
 
 class WorkButtonWidget extends StatefulWidget {
   final ClockInController controller;
@@ -15,10 +16,15 @@ class WorkButtonWidget extends StatefulWidget {
 
 class _WorkButtonWidgetState extends State<WorkButtonWidget> {
   bool _isLoading = false;
+  final logger = ClockInDebugFirestoreLogger(); // ✅ 싱글톤 로거 사용
 
   void _toggleLoading() {
     setState(() {
       _isLoading = !_isLoading;
+      logger.log(
+        _isLoading ? '🔄 출근 버튼: 로딩 시작됨' : '✅ 출근 버튼: 로딩 종료됨',
+        level: 'info',
+      );
     });
   }
 
@@ -35,8 +41,17 @@ class _WorkButtonWidgetState extends State<WorkButtonWidget> {
 
     return InkWell(
       onTap: _isLoading || isWorking
-          ? null
-          : () => widget.controller.handleWorkStatus(context, userState, _toggleLoading),
+          ? () {
+        if (_isLoading) {
+          logger.log('⚠️ 출근 버튼 클릭 무시: 로딩 중', level: 'warn');
+        } else {
+          logger.log('🚫 출근 버튼 클릭 무시: 이미 출근 상태', level: 'warn');
+        }
+      }
+          : () {
+        logger.log('🟢 출근 버튼 클릭됨 (출근 시도)', level: 'called');
+        widget.controller.handleWorkStatus(context, userState, _toggleLoading);
+      },
       borderRadius: BorderRadius.circular(16),
       child: Container(
         height: 55,

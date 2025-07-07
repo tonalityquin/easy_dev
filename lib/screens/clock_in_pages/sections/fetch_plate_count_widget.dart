@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../enums/plate_type.dart';
 import '../../../repositories/plate/plate_repository.dart';
 import '../../../states/user/user_state.dart';
+import '../debugs/clock_in_debug_firestore_logger.dart'; // ✅ 로그 기록 추가
 
 class FetchPlateCountWidget extends StatefulWidget {
   const FetchPlateCountWidget({super.key});
@@ -15,29 +16,43 @@ class FetchPlateCountWidget extends StatefulWidget {
 class _FetchPlateCountWidgetState extends State<FetchPlateCountWidget> {
   Future<Map<PlateType, int>>? _futureCounts;
 
+  final _logger = ClockInDebugFirestoreLogger(); // ✅ 로거 인스턴스 준비
+
   Future<Map<PlateType, int>> _fetchCounts() async {
+    _logger.log('🚀 현황 데이터 로드 시작', level: 'info');
+
     final repo = context.read<PlateRepository>();
     final userState = context.read<UserState>();
     final area = userState.area;
-
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
     final Map<PlateType, int> result = {};
+
     for (var type in PlateType.values) {
-      final count = await repo.getPlateCountForClockInPage(
-        type,
-        selectedDate: type == PlateType.departureCompleted ? today : null,
-        area: area,
-      );
-      result[type] = count;
+      try {
+        _logger.log('📦 ${type.label} 데이터 조회 요청 시작', level: 'info');
+
+        final count = await repo.getPlateCountForClockInPage(
+          type,
+          selectedDate: type == PlateType.departureCompleted ? today : null,
+          area: area,
+        );
+
+        result[type] = count;
+        _logger.log('✅ ${type.label} 조회 완료: $count건', level: 'success');
+      } catch (e) {
+        _logger.log('🔥 ${type.label} 조회 실패: $e', level: 'error');
+        result[type] = 0;
+      }
     }
+
+    _logger.log('✅ 현황 데이터 로드 완료', level: 'success');
     return result;
   }
 
   @override
   Widget build(BuildContext context) {
-    // 초기 상태: 아직 버튼만 보임
     if (_futureCounts == null) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 24),
@@ -56,6 +71,8 @@ class _FetchPlateCountWidgetState extends State<FetchPlateCountWidget> {
               ),
             ),
             onPressed: () {
+              _logger.log('🧲 [UI] 현황 불러오기 버튼 클릭됨', level: 'called');
+
               setState(() {
                 _futureCounts = _fetchCounts();
               });
@@ -65,7 +82,6 @@ class _FetchPlateCountWidgetState extends State<FetchPlateCountWidget> {
       );
     }
 
-    // 버튼을 누르면 FutureBuilder가 실행됨
     return FutureBuilder<Map<PlateType, int>>(
       future: _futureCounts,
       builder: (context, snapshot) {
@@ -76,6 +92,7 @@ class _FetchPlateCountWidgetState extends State<FetchPlateCountWidget> {
           );
         }
         if (snapshot.hasError) {
+          _logger.log('🔥 FutureBuilder 에러: ${snapshot.error}', level: 'error');
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 24),
             child: Center(
@@ -87,10 +104,13 @@ class _FetchPlateCountWidgetState extends State<FetchPlateCountWidget> {
           );
         }
         if (!snapshot.hasData) {
+          _logger.log('⚠️ FutureBuilder 데이터 없음 (null)', level: 'info');
           return const SizedBox();
         }
 
         final counts = snapshot.data!;
+        _logger.log('📊 UI에 현황 데이터 렌더링 시작', level: 'called');
+
         return Padding(
           padding: const EdgeInsets.only(top: 24.0),
           child: Column(

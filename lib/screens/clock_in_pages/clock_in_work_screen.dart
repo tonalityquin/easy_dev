@@ -8,12 +8,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../states/user/user_state.dart';
 import '../../../states/area/area_state.dart';
 import 'debugs/clock_in_debug_bottom_sheet.dart';
+import 'debugs/clock_in_debug_firestore_logger.dart'; // ✅ 로컬 디버깅 로거 추가
 import 'clock_in_controller.dart';
 import 'sections/fetch_plate_count_widget.dart';
 import 'sections/report_button_widget.dart';
 import 'sections/work_button_widget.dart';
 import 'sections/user_info_card.dart';
-import 'sections/header_widget.dart'; // ✅ HeaderWidget import
+import 'sections/header_widget.dart';
 
 class ClockInWorkScreen extends StatefulWidget {
   const ClockInWorkScreen({super.key});
@@ -24,6 +25,7 @@ class ClockInWorkScreen extends StatefulWidget {
 
 class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
   final controller = ClockInController();
+  final logger = ClockInDebugFirestoreLogger(); // ✅
 
   String? kakaoUrl;
   bool loadingUrl = true;
@@ -31,6 +33,8 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
   @override
   void initState() {
     super.initState();
+
+    logger.log('ClockInWorkScreen.initState() 호출됨', level: 'called');
     controller.initialize(context);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -40,31 +44,29 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
 
   Future<void> _tryLoadKakaoUrl() async {
     final userState = context.read<UserState>();
-    final areaState = context.read<AreaState>();
 
     if (userState.isLoading || userState.division.isEmpty) {
-      debugPrint('⏳ UserState 로딩 중... 잠시 대기');
+      logger.log('UserState 로딩 중... 재시도 예약', level: 'info');
       await Future.delayed(const Duration(milliseconds: 300));
       _tryLoadKakaoUrl();
       return;
     }
 
-    _loadKakaoUrlWithCache(userState, areaState);
+    _loadKakaoUrlWithCache(userState, context.read<AreaState>());
   }
 
   Future<void> _loadKakaoUrlWithCache(
-    UserState userState,
-    AreaState areaState,
-  ) async {
+      UserState userState,
+      AreaState areaState,
+      ) async {
     final prefs = await SharedPreferences.getInstance();
-
     final division = userState.division.trim();
     final currentArea = userState.user?.selectedArea?.trim() ?? '';
 
-    debugPrint('🚀 _loadKakaoUrlWithCache 시작 - division=$division, currentArea=$currentArea');
+    logger.log('_loadKakaoUrlWithCache 호출 - division=$division, area=$currentArea', level: 'called');
 
     if (division.isEmpty || currentArea.isEmpty) {
-      debugPrint('❌ division이나 currentArea 정보가 없습니다.');
+      logger.log('❌ division 또는 area 값 없음', level: 'error');
       setState(() {
         kakaoUrl = null;
         loadingUrl = false;
@@ -76,6 +78,7 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
     final cached = prefs.getString(cacheKey);
 
     if (cached != null && cached.isNotEmpty) {
+      logger.log('✅ 캐시된 URL 사용됨: $cached', level: 'info');
       setState(() {
         kakaoUrl = cached;
         loadingUrl = false;
@@ -92,28 +95,30 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
           .get();
 
       if (query.docs.isNotEmpty) {
-        final doc = query.docs.first;
-        final url = doc.data()['url'] as String?;
+        final url = query.docs.first.data()['url'] as String?;
         if (url != null && url.isNotEmpty) {
+          logger.log('✅ Firestore에서 URL 로드 성공: $url', level: 'success');
           await prefs.setString(cacheKey, url);
           setState(() {
             kakaoUrl = url;
             loadingUrl = false;
           });
         } else {
+          logger.log('⚠️ URL 필드 비어있음', level: 'warn');
           setState(() {
             kakaoUrl = null;
             loadingUrl = false;
           });
         }
       } else {
+        logger.log('⚠️ Firestore에 export_link 문서 없음', level: 'warn');
         setState(() {
           kakaoUrl = null;
           loadingUrl = false;
         });
       }
     } catch (e) {
-      debugPrint('❌ Firestore URL 로드 실패: $e');
+      logger.log('❌ Firestore URL 로드 실패: $e', level: 'error');
       if (kakaoUrl == null) {
         setState(() {
           kakaoUrl = null;
@@ -125,13 +130,16 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
 
   Future<void> _handleLogout(BuildContext context) async {
     try {
+      logger.log('로그아웃 시도 중...', level: 'called');
       final userState = Provider.of<UserState>(context, listen: false);
 
       await FlutterForegroundTask.stopService();
       await userState.clearUserToPhone();
       await Future.delayed(const Duration(milliseconds: 500));
+      logger.log('✅ 로그아웃 성공', level: 'success');
       SystemChannels.platform.invokeMethod('SystemNavigator.pop');
     } catch (e) {
+      logger.log('❌ 로그아웃 실패: $e', level: 'error');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('로그아웃 실패: $e')),

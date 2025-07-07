@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import 'routes.dart';
 import 'providers/providers.dart';
+import 'screens/clock_in_pages/debugs/clock_in_debug_firestore_logger.dart';
 import 'screens/logins/debugs/login_debug_firestore_logger.dart';
 import 'theme.dart';
 import 'utils/init/dev_initializer.dart';
@@ -80,6 +81,7 @@ class AppBootstrapper extends StatelessWidget {
     // ✅ LoginDebugFirestoreLogger 초기화
     await LoginDebugFirestoreLogger().init();
 
+    await ClockInDebugFirestoreLogger().init();
     // ✅ 개발용 리소스 초기화
     await registerDevResources();
 

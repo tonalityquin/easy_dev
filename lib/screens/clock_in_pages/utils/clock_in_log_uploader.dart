@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 
 import '../../../states/area/area_state.dart';
 import '../../../states/user/user_state.dart';
+import '../debugs/clock_in_debug_firestore_logger.dart'; // ✅ 로컬 로거 추가
 
 class ClockInLogUploader {
   static const _bucketName = 'easydev-image';
@@ -18,7 +19,11 @@ class ClockInLogUploader {
     required BuildContext context,
     required String recordedTime,
   }) async {
+    final logger = ClockInDebugFirestoreLogger(); // ✅ 로컬 로거 인스턴스
+
     try {
+      logger.log('uploadAttendanceJson() 시작', level: 'called');
+
       final areaState = context.read<AreaState>();
       final userState = context.read<UserState>();
 
@@ -28,7 +33,10 @@ class ClockInLogUploader {
       final userName = userState.name;
       final userId = userState.user?.id ?? '';
 
-      if (area.isEmpty || userId.isEmpty) return false;
+      if (area.isEmpty || userId.isEmpty) {
+        logger.log('❌ 유효하지 않은 area 또는 userId', level: 'error');
+        return false;
+      }
 
       final now = DateTime.now();
       final year = now.year.toString().padLeft(4, '0');
@@ -74,19 +82,22 @@ class ClockInLogUploader {
           logList = [Map<String, dynamic>.from(decoded)];
         }
 
+        logger.log('✅ 기존 로그 불러오기 성공: ${logList.length}개', level: 'info');
+
         client.close();
       } catch (e) {
-        debugPrint('ℹ️ 기존 파일 없음 또는 JSON 파싱 실패: $e');
+        logger.log('ℹ️ 기존 파일 없음 또는 파싱 실패: $e', level: 'warn');
         logList = [];
       }
 
       final alreadyExistsToday = logList.any((e) => e['recordedDate'] == dateStr);
       if (alreadyExistsToday) {
-        debugPrint('⚠️ 오늘 출근 기록 이미 존재함: $dateStr');
+        logger.log('⚠️ 이미 오늘 출근 기록이 존재함: $dateStr', level: 'warn');
         return false;
       }
 
       logList.add(newRecord);
+      logger.log('📝 출근 기록 추가됨: $newRecord', level: 'info');
 
       final jsonContent = jsonEncode(logList);
       final tempDir = Directory.systemTemp;
@@ -112,10 +123,11 @@ class ClockInLogUploader {
       );
 
       client.close();
-      debugPrint('✅ 출근 기록 append & 업로드 성공: $gcsPath');
+
+      logger.log('✅ 출근 기록 업로드 완료: $gcsPath', level: 'success');
       return true;
     } catch (e) {
-      debugPrint('❌ 출근 기록 업로드 실패: $e');
+      logger.log('❌ 출근 기록 업로드 실패: $e', level: 'error');
       return false;
     }
   }
