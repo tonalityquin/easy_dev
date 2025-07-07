@@ -201,8 +201,8 @@ class PageBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer3<PageState, PlateState, FieldSelectedDateState>(
-      builder: (context, pageState, plateState, selectedDateState, child) {
+    return Consumer2<PageState, FieldSelectedDateState>(
+      builder: (context, pageState, selectedDateState, child) {
         final selectedColor = AppColors.selectedItemColor;
         final unselectedColor = Colors.grey;
 
