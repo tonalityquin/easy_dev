@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import '../../screens/secondary_pages/office_mode_pages/user_management_pages/user_setting.dart';
 import '../../states/secondary/secondary_mode.dart';
 import '../../states/user/user_state.dart';
-import '../dialog/secondary_picker_dialog.dart';
+import '../dialog/secondary_picker_bottom_sheet.dart';
 
 class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWidget {
   final double height;
@@ -35,7 +35,7 @@ class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWi
       centerTitle: true,
       title: GestureDetector(
         onTap: isSelectable
-            ? () => secondaryPickerDialog(
+            ? () => secondaryPickerBottomSheet(
           context: context,
           manageState: manageState,
           currentStatus: selectedModeLabel,

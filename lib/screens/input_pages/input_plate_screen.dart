@@ -20,7 +20,7 @@ import 'utils/buttons/input_animated_parking_button.dart';
 import 'utils/buttons/input_animated_photo_button.dart';
 import 'utils/buttons/input_animated_action_button.dart';
 
-import 'widgets/input_location_dialog.dart';
+import 'widgets/input_location_bottom_sheet.dart';
 import 'widgets/input_camera_preview_dialog.dart';
 import 'widgets/input_custom_status_dialog.dart';
 import 'keypad/num_keypad.dart';
@@ -114,7 +114,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   void _selectParkingLocation() {
     showDialog(
       context: context,
-      builder: (_) => InputLocationDialog(
+      builder: (_) => InputLocationBottomSheet(
         locationController: controller.locationController,
         onLocationSelected: (location) {
           setState(() {

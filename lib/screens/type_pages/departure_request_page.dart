@@ -13,7 +13,7 @@ import '../../states/user/user_state.dart';
 import '../../utils/snackbar_helper.dart';
 
 import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바
-import '../../widgets/dialog/parking_location_dialog.dart';
+import '../../widgets/dialog/parking_location_bottom_sheet.dart';
 import '../../widgets/dialog/plate_search_bottom_sheet/plate_search_bottom_sheet.dart'; // ✅ PlateSearchDialog 추가
 import 'departure_request_pages/widgets/departure_request_status_dialog.dart';
 import '../../widgets/container/plate_container.dart'; // 번호판 컨테이너 위젯
@@ -70,7 +70,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
   Future<void> _showParkingAreaDialog(BuildContext context) async {
     final selectedLocation = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => ParkingLocationDialog(
+      builder: (dialogContext) => ParkingLocationBottomSheet(
         locationController: _locationController,
       ),
     );

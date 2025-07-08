@@ -8,7 +8,7 @@ import '../../../states/plate/plate_state.dart';
 import '../../../states/user/user_state.dart';
 import '../../../states/calendar/field_selected_date_state.dart';
 import '../../../utils/snackbar_helper.dart';
-import '../../../widgets/dialog/on_tap_billing_type_dialog.dart';
+import '../../../widgets/dialog/on_tap_billing_type_bottom_sheet.dart';
 import 'widgets/departure_completed_status_dialog.dart';
 
 class DepartureCompletedControlButtons extends StatelessWidget {
@@ -102,7 +102,7 @@ class DepartureCompletedControlButtons extends StatelessWidget {
             final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
             final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
 
-            final result = await showOnTapBillingTypeDialog(
+            final result = await showOnTapBillingTypeBottomSheet(
               context: context,
               entryTimeInSeconds: entryTime,
               currentTimeInSeconds: currentTime,

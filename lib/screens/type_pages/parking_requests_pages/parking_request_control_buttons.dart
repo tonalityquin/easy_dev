@@ -9,7 +9,7 @@ import '../../../states/plate/delete_plate.dart';
 import '../../../states/plate/plate_state.dart';
 import '../../../states/user/user_state.dart';
 import '../../../utils/snackbar_helper.dart';
-import '../../../widgets/dialog/on_tap_billing_type_dialog.dart';
+import '../../../widgets/dialog/on_tap_billing_type_bottom_sheet.dart';
 import '../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 import 'widgets/parking_request_status_dialog.dart';
 
@@ -177,7 +177,7 @@ class ParkingRequestControlButtons extends StatelessWidget {
       await uploader.uploadForPlateLogTypeJson(cancelLog, selectedPlate.plateNumber, division, area);
       showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
     } else {
-      final result = await showOnTapBillingTypeDialog(
+      final result = await showOnTapBillingTypeBottomSheet(
         context: context,
         entryTimeInSeconds: entryTime,
         currentTimeInSeconds: currentTime,

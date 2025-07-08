@@ -13,7 +13,7 @@ import '../../utils/snackbar_helper.dart';
 
 import '../../widgets/navigation/top_navigation.dart';
 import '../../widgets/dialog/plate_search_bottom_sheet/plate_search_bottom_sheet.dart';
-import '../../widgets/dialog/parking_location_dialog.dart';
+import '../../widgets/dialog/parking_location_bottom_sheet.dart';
 import '../../widgets/container/plate_container.dart';
 
 import 'parking_requests_pages/parking_request_control_buttons.dart';
@@ -102,7 +102,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
         final selectedLocation = await showDialog<String>(
           context: context,
           builder: (dialogContext) {
-            return ParkingLocationDialog(
+            return ParkingLocationBottomSheet(
               locationController: locationController,
             );
           },

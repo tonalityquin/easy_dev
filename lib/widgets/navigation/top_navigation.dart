@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../states/area/area_state.dart';
 import '../../states/plate/plate_state.dart';
-import '../../widgets/dialog/area_picker_dialog.dart';
+import '../../widgets/dialog/area_picker_bottom_sheet.dart';
 
 /// ✅ 지역 선택 위젯 (AppBar의 title로 삽입)
 class TopNavigation extends StatelessWidget {
@@ -22,7 +22,7 @@ class TopNavigation extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         // AppBar 전체 영역을 터치 가능하게
-        onTap: () => showAreaPickerDialog(
+        onTap: () => areaPickerBottomSheet(
           context: context,
           areaState: areaState,
           plateState: plateState,

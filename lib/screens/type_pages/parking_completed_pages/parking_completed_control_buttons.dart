@@ -13,7 +13,7 @@ import '../../../states/user/user_state.dart';
 
 import '../../../utils/snackbar_helper.dart';
 
-import '../../../widgets/dialog/on_tap_billing_type_dialog.dart';
+import '../../../widgets/dialog/on_tap_billing_type_bottom_sheet.dart';
 import '../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 import 'widgets/set_departure_request_dialog.dart';
 import 'widgets/parking_completed_status_dialog.dart';
@@ -52,52 +52,44 @@ class ParkingCompletedControlButtons extends StatelessWidget {
         final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
 
         return BottomNavigationBar(
-          backgroundColor: Colors.white, // ✅ 흰색 배경 적용
-          elevation: 0,
-          type: BottomNavigationBarType.fixed,
-          selectedItemColor: Theme.of(context).primaryColor,
-          unselectedItemColor: Colors.grey[700],
           items: [
             BottomNavigationBarItem(
-              icon: Tooltip(
-                message: isPlateSelected ? '정산 관리' : (isSearchMode ? '검색 초기화' : '번호판 검색'),
-                child: Icon(
-                  isPlateSelected
-                      ? (selectedPlate.isLockedFee ? Icons.lock_open : Icons.lock)
-                      : (isSearchMode ? Icons.cancel : Icons.search),
-                  color: isPlateSelected
-                      ? Colors.grey[700]
-                      : (isSearchMode ? Colors.orange : Colors.grey[700]),
-                ),
+              icon: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+                child: isPlateSelected
+                    ? (selectedPlate.isLockedFee
+                        ? const Icon(Icons.lock_open, key: ValueKey('unlock'), color: Colors.grey)
+                        : const Icon(Icons.lock, key: ValueKey('lock'), color: Colors.grey))
+                    : Icon(
+                        isSearchMode ? Icons.cancel : Icons.search,
+                        key: ValueKey(isSearchMode),
+                        color: isSearchMode ? Colors.orange : Colors.grey,
+                      ),
               ),
-              label: isPlateSelected ? '정산 관리' : (isSearchMode ? '검색 초기화' : '검색'),
+              label: isPlateSelected
+                  ? (selectedPlate.isLockedFee ? '정산 취소' : '사전 정산')
+                  : (isSearchMode ? '검색 초기화' : '번호판 검색'),
             ),
             BottomNavigationBarItem(
-              icon: Tooltip(
-                message: isPlateSelected ? '출차 요청' : '주차 구역 초기화',
-                child: Icon(
-                  isPlateSelected ? Icons.check_circle : Icons.refresh,
-                  color: isPlateSelected ? Colors.green[600] : Colors.grey[700],
-                ),
+              icon: Icon(
+                isPlateSelected ? Icons.check_circle : Icons.refresh, // 주차 구역 초기화
+                color: isPlateSelected ? Colors.green : Colors.grey,
               ),
-              label: isPlateSelected ? '출차' : '초기화',
+              label: isPlateSelected ? '출차 요청' : '구역 초기화',
             ),
             BottomNavigationBarItem(
-              icon: Tooltip(
-                message: isPlateSelected ? '상태 수정' : '정렬 변경',
-                child: AnimatedRotation(
-                  turns: isSorted ? 0.5 : 0.0,
-                  duration: const Duration(milliseconds: 300),
-                  child: Transform.scale(
-                    scaleX: isSorted ? -1 : 1,
-                    child: Icon(
-                      isPlateSelected ? Icons.settings : Icons.sort,
-                      color: Colors.grey[700],
-                    ),
+              icon: AnimatedRotation(
+                turns: isSorted ? 0.5 : 0.0,
+                duration: const Duration(milliseconds: 300),
+                child: Transform.scale(
+                  scaleX: isSorted ? -1 : 1,
+                  child: Icon(
+                    isPlateSelected ? Icons.settings : Icons.sort,
                   ),
                 ),
               ),
-              label: isPlateSelected ? '상태 수정' : (isSorted ? '최신순' : '오래된순'),
+              label: isPlateSelected ? '상태 수정' : (isSorted ? '최신순' : '오래된 순'),
             ),
           ],
           onTap: (index) async {
@@ -161,7 +153,7 @@ class ParkingCompletedControlButtons extends StatelessWidget {
 
                 showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
               } else {
-                final result = await showOnTapBillingTypeDialog(
+                final result = await showOnTapBillingTypeBottomSheet(
                   context: context,
                   entryTimeInSeconds: entryTime,
                   currentTimeInSeconds: currentTime,
