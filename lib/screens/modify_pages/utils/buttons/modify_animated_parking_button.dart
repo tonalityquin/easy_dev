@@ -16,8 +16,7 @@ class ModifyAnimatedParkingButton extends StatefulWidget {
   State<ModifyAnimatedParkingButton> createState() => _ModifyAnimatedParkingButtonState();
 }
 
-class _ModifyAnimatedParkingButtonState extends State<ModifyAnimatedParkingButton>
-    with SingleTickerProviderStateMixin {
+class _ModifyAnimatedParkingButtonState extends State<ModifyAnimatedParkingButton> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
 
@@ -53,8 +52,7 @@ class _ModifyAnimatedParkingButtonState extends State<ModifyAnimatedParkingButto
   Widget build(BuildContext context) {
     final isSelected = widget.isLocationSelected;
 
-    final label = widget.buttonLabel ??
-        (isSelected ? '구역 초기화' : '주차 구역 선택');
+    final label = widget.buttonLabel ?? (isSelected ? '구역 수정' : '주차 구역 선택');
 
     return ScaleTransition(
       scale: _scaleAnimation,

@@ -116,7 +116,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
   }
 
   VoidCallback _buildLocationAction() {
-    return _controller.isLocationSelected ? () => setState(() => _controller.clearLocation()) : _selectParkingLocation;
+    return _selectParkingLocation;
   }
 
   @override
@@ -238,7 +238,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                     Expanded(
                       child: ModifyAnimatedParkingButton(
                         isLocationSelected: _controller.isLocationSelected,
-                        onPressed: _buildLocationAction,
+                        onPressed: _buildLocationAction(),
                       ),
                     ),
                   ],
