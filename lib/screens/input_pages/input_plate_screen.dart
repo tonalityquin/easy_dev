@@ -22,7 +22,7 @@ import 'utils/buttons/input_animated_action_button.dart';
 
 import 'widgets/input_location_bottom_sheet.dart';
 import 'widgets/input_camera_preview_dialog.dart';
-import 'widgets/input_custom_status_dialog.dart';
+import 'widgets/input_custom_status_bottom_sheet.dart';
 import 'keypad/num_keypad.dart';
 import 'keypad/kor_keypad.dart';
 import 'input_bottom_navigation.dart';
@@ -65,7 +65,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
             statusSectionKey = UniqueKey();
           });
 
-          await showInputCustomStatusDialog(context, plateNumber, area);
+          await inputCustomStatusBottomSheet(context, plateNumber, area);
         }
       }
     });
