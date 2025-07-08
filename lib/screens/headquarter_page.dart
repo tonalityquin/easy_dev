@@ -19,26 +19,6 @@ class HeadquarterPage extends StatelessWidget {
           return PopScope(
             canPop: true,
             child: Scaffold(
-              appBar: AppBar(
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.black,
-                elevation: 1,
-                centerTitle: true,
-                title: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.arrow_back_ios, size: 16, color: Colors.grey),
-                    SizedBox(width: 4),
-                    Text(
-                      " 본사 페이지 ",
-                      style: TextStyle(color: Colors.grey, fontSize: 16),
-                    ),
-                    SizedBox(width: 4),
-                    Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-                  ],
-                ),
-              ),
               body: const RefreshableBody(),
               bottomNavigationBar: const Column(
                 mainAxisSize: MainAxisSize.min,

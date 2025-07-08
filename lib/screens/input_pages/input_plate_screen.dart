@@ -38,10 +38,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   final controller = InputPlateController();
   late InputCameraHelper _cameraHelper;
 
-  /// 선택된 상태들
   List<String> selectedStatusNames = [];
-
-  /// 상태 선택 섹션 Key (토글 상태를 새로 그리기 위해)
   Key statusSectionKey = UniqueKey();
 
   @override
@@ -55,8 +52,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       if (text.length == 4 && controller.isInputValid()) {
         final plateNumber = controller.buildPlateNumber();
         final area = context.read<AreaState>().currentArea;
-
-        // Firestore에서 상태와 메모 불러오기
         final data = await _fetchPlateStatus(plateNumber, area);
 
         if (mounted && data != null) {
@@ -67,10 +62,9 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
             controller.fetchedCustomStatus = fetchedStatus;
             controller.customStatusController.text = fetchedStatus ?? '';
             selectedStatusNames = fetchedList;
-            statusSectionKey = UniqueKey(); // ✅ 강제 리빌드
+            statusSectionKey = UniqueKey();
           });
 
-          // 다이얼로그 띄우기
           await showInputCustomStatusDialog(context, plateNumber, area);
         }
       }
@@ -87,26 +81,13 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
   Future<Map<String, dynamic>?> _fetchPlateStatus(String plateNumber, String area) async {
     final docId = '${plateNumber}_$area';
-
-    await FirestoreLogger().log(
-      '🔍 번호판 상태 조회 시도: $docId',
-      level: 'called',
-    );
-
+    await FirestoreLogger().log('🔍 번호판 상태 조회 시도: $docId', level: 'called');
     final doc = await FirebaseFirestore.instance.collection('plate_status').doc(docId).get();
-
     if (doc.exists) {
-      await FirestoreLogger().log(
-        '✅ 상태 조회 성공: $docId',
-        level: 'success',
-      );
+      await FirestoreLogger().log('✅ 상태 조회 성공: $docId', level: 'success');
       return doc.data();
     }
-
-    await FirestoreLogger().log(
-      '📭 상태 데이터 없음: $docId',
-      level: 'info',
-    );
+    await FirestoreLogger().log('📭 상태 데이터 없음: $docId', level: 'info');
     return null;
   }
 
@@ -201,33 +182,24 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         centerTitle: true,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 1,
+        title: Align(
+          alignment: Alignment.centerRight,
+          child: Text(
+            controller.isThreeDigit ? '현재 앞자리: 세자리' : '현재 앞자리: 두자리',
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black),
+          ),
+        ),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    controller.isThreeDigit ? '현재 앞자리: 세자리' : '현재 앞자리: 두자리',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
             InputPlateSection(
               dropdownValue: controller.dropdownValue,
               regions: controller.regions,
@@ -262,17 +234,14 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
             ),
             const SizedBox(height: 32),
             InputStatusOnTapSection(
-              key: statusSectionKey, // ✅ 강제 리빌드를 위해 Key 부여
+              key: statusSectionKey,
               initialSelectedStatuses: selectedStatusNames,
               onSelectionChanged: (selected) {
                 controller.selectedStatuses = selected;
               },
             ),
             const SizedBox(height: 32),
-            const Text(
-              '추가 상태 메모 (최대 10자)',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
+            const Text('추가 상태 메모 (최대 10자)', style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             TextField(
               controller: controller.customStatusController,
@@ -288,37 +257,19 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                 customStatus: controller.fetchedCustomStatus!,
                 onDelete: () async {
                   try {
-                    await FirestoreLogger().log(
-                      '🗑️ 상태 메모 삭제 시도: ${controller.buildPlateNumber()}',
-                      level: 'called',
-                    );
-
+                    await FirestoreLogger().log('🗑️ 상태 메모 삭제 시도: ${controller.buildPlateNumber()}', level: 'called');
                     await controller.deleteCustomStatusFromFirestore(context);
-
-                    await FirestoreLogger().log(
-                      '✅ 상태 메모 삭제 완료',
-                      level: 'success',
-                    );
-
+                    await FirestoreLogger().log('✅ 상태 메모 삭제 완료', level: 'success');
                     setState(() {
                       controller.fetchedCustomStatus = null;
                       controller.customStatusController.clear();
                       selectedStatusNames = [];
                       statusSectionKey = UniqueKey();
                     });
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('자동 메모가 삭제되었습니다')),
-                    );
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('자동 메모가 삭제되었습니다')));
                   } catch (e) {
-                    await FirestoreLogger().log(
-                      '❌ 상태 메모 삭제 실패: $e',
-                      level: 'error',
-                    );
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('삭제 실패. 다시 시도해주세요')),
-                    );
+                    await FirestoreLogger().log('❌ 상태 메모 삭제 실패: $e', level: 'error');
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('삭제 실패. 다시 시도해주세요')));
                   }
                 },
               ),
@@ -337,9 +288,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
               children: [
                 Row(
                   children: [
-                    Expanded(
-                      child: InputAnimatedPhotoButton(onPressed: _showCameraPreviewDialog),
-                    ),
+                    Expanded(child: InputAnimatedPhotoButton(onPressed: _showCameraPreviewDialog)),
                     const SizedBox(width: 10),
                     Expanded(
                       child: InputAnimatedParkingButton(
@@ -358,7 +307,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
               ],
             ),
           ),
-          const InputDebugTriggerBar(), // ✅ 여기서 포함시킴
+          const InputDebugTriggerBar(),
         ],
       ),
     );

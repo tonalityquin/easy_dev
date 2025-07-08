@@ -13,8 +13,7 @@ import '../utils/app_colors.dart';
 
 import '../screens/input_pages/input_plate_screen.dart';
 import 'secondary_page.dart';
-import 'empty_bottom_sheet.dart'; // ✅ 바텀시트
-// DebugTriggerBar는 여기 파일 안에 직접 정의합니다.
+import 'empty_bottom_sheet.dart';
 
 class TypePage extends StatefulWidget {
   const TypePage({super.key});
@@ -24,28 +23,6 @@ class TypePage extends StatefulWidget {
 }
 
 class _TypePageState extends State<TypePage> {
-  int _tapCount = 0;
-
-  void _handleTitleTap() {
-    setState(() {
-      _tapCount++;
-      if (_tapCount >= 1) {
-        _tapCount = 0;
-        _showBottomSheet();
-      }
-    });
-  }
-
-  void _showBottomSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) {
-        return const EmptyBottomSheet();
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
@@ -75,29 +52,6 @@ class _TypePageState extends State<TypePage> {
               }
             },
             child: Scaffold(
-              appBar: AppBar(
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.black,
-                elevation: 1,
-                centerTitle: true,
-                title: GestureDetector(
-                  onTap: _handleTitleTap,
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.arrow_back_ios, size: 16, color: Colors.grey),
-                      SizedBox(width: 4),
-                      Text(
-                        " 페이지 가이드 라인 예정",
-                        style: TextStyle(color: Colors.grey, fontSize: 16),
-                      ),
-                      SizedBox(width: 4),
-                      Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
-                    ],
-                  ),
-                ),
-              ),
               body: const RefreshableBody(),
               bottomNavigationBar: const Column(
                 mainAxisSize: MainAxisSize.min,
