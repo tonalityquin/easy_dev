@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../../../enums/plate_type.dart';
 import '../../../../states/plate/plate_state.dart';
-
+import '../../../../utils/snackbar_helper.dart'; // ✅ 커스텀 스낵바 사용을 위한 import
 
 class BackEndController extends StatelessWidget {
   const BackEndController({super.key});
@@ -36,11 +37,11 @@ class BackEndController extends StatelessWidget {
                   if (value) {
                     plateState.subscribeType(type);
                     debugPrint('🔔 [${_getTypeLabel(type)}] 구독 시작');
-                    _showSnackBar(context, '✅ [${_getTypeLabel(type)}] 구독 시작됨');
+                    showSuccessSnackbar(context, '✅ [${_getTypeLabel(type)}] 구독 시작됨');
                   } else {
                     plateState.unsubscribeType(type);
                     debugPrint('🛑 [${_getTypeLabel(type)}] 구독 해제');
-                    _showSnackBar(context, '🛑 [${_getTypeLabel(type)}] 구독 해제됨');
+                    showFailedSnackbar(context, '🛑 [${_getTypeLabel(type)}] 구독 해제됨');
                   }
                 },
               ),
@@ -62,14 +63,5 @@ class BackEndController extends StatelessWidget {
       case PlateType.departureCompleted:
         return '출차 완료';
     }
-  }
-
-  void _showSnackBar(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        duration: const Duration(seconds: 2),
-      ),
-    );
   }
 }

@@ -55,46 +55,49 @@ class DepartureRequestControlButtons extends StatelessWidget {
         final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
 
         return BottomNavigationBar(
+          backgroundColor: Colors.white,
+          // ✅ 흰 배경 적용
+          elevation: 0,
+          type: BottomNavigationBarType.fixed,
+          selectedItemColor: Theme.of(context).primaryColor,
+          unselectedItemColor: Colors.grey[700],
           items: [
             BottomNavigationBarItem(
-              icon: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
-                transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
-                child: isPlateSelected
-                    ? (selectedPlate.isLockedFee
-                        ? const Icon(Icons.lock_open, key: ValueKey('unlock'), color: Colors.grey)
-                        : const Icon(Icons.lock, key: ValueKey('lock'), color: Colors.grey))
-                    : Icon(
-                        isSearchMode ? Icons.cancel : Icons.search,
-                        key: ValueKey(isSearchMode),
-                        color: isSearchMode ? Colors.orange : Colors.grey,
-                      ),
+              icon: Tooltip(
+                message: isPlateSelected ? '정산 관리' : (isSearchMode ? '검색 초기화' : '번호판 검색'),
+                child: Icon(
+                  isPlateSelected
+                      ? (selectedPlate.isLockedFee ? Icons.lock_open : Icons.lock)
+                      : (isSearchMode ? Icons.cancel : Icons.search),
+                  color: isPlateSelected ? Colors.grey[700] : (isSearchMode ? Colors.orange[600] : Colors.grey[700]),
+                ),
               ),
-              label: isPlateSelected
-                  ? (selectedPlate.isLockedFee ? '정산 취소' : '사전 정산')
-                  : (isSearchMode ? '검색 초기화' : '번호판 검색'),
+              label: isPlateSelected ? '정산 관리' : (isSearchMode ? '검색 초기화' : '검색'),
             ),
             BottomNavigationBarItem(
-              icon: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
-                transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
-                child: isPlateSelected
-                    ? const Icon(Icons.check_circle, key: ValueKey('selected'), color: Colors.green)
-                    : Icon(
-                        isParkingAreaMode ? Icons.clear : Icons.local_parking,
-                        key: ValueKey(isParkingAreaMode),
-                        color: isParkingAreaMode ? Colors.orange : Colors.grey,
-                      ),
+              icon: Tooltip(
+                message: isPlateSelected ? '출차 완료 처리' : (isParkingAreaMode ? '구역 초기화' : '주차 구역 선택'),
+                child: Icon(
+                  isPlateSelected ? Icons.check_circle : (isParkingAreaMode ? Icons.clear : Icons.local_parking),
+                  color:
+                      isPlateSelected ? Colors.green[600] : (isParkingAreaMode ? Colors.orange[600] : Colors.grey[700]),
+                ),
               ),
-              label: isPlateSelected ? '출차 완료' : (isParkingAreaMode ? '구역 초기화' : '주차 구역'),
+              label: isPlateSelected ? '출차' : (isParkingAreaMode ? '초기화' : '구역 선택'),
             ),
             BottomNavigationBarItem(
-              icon: AnimatedRotation(
-                turns: isSorted ? 0.5 : 0.0,
-                duration: const Duration(milliseconds: 300),
-                child: Transform.scale(
-                  scaleX: isSorted ? -1 : 1,
-                  child: Icon(isPlateSelected ? Icons.settings : Icons.sort),
+              icon: Tooltip(
+                message: isPlateSelected ? '상태 수정' : '정렬 변경',
+                child: AnimatedRotation(
+                  turns: isSorted ? 0.5 : 0.0,
+                  duration: const Duration(milliseconds: 300),
+                  child: Transform.scale(
+                    scaleX: isSorted ? -1 : 1,
+                    child: Icon(
+                      isPlateSelected ? Icons.settings : Icons.sort,
+                      color: Colors.grey[700],
+                    ),
+                  ),
                 ),
               ),
               label: isPlateSelected ? '상태 수정' : (isSorted ? '최신순' : '오래된순'),

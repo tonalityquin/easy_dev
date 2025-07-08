@@ -18,7 +18,7 @@ class ReportButtonWidget extends StatelessWidget {
 
     return ElevatedButton.icon(
       icon: const Icon(Icons.assignment),
-      label: loadingUrl ? const Text('로딩 중...') : const Text('보고 작성'),
+      label: loadingUrl ? const Text('로딩 중...') : const Text('출근 보고-'),
       style: ElevatedButton.styleFrom(
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,

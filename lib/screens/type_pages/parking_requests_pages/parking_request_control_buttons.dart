@@ -38,46 +38,47 @@ class ParkingRequestControlButtons extends StatelessWidget {
         final userName = context.read<UserState>().name;
         final selectedPlate = plateState.getSelectedPlate(PlateType.parkingRequests, userName);
         final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
+        final iconColor = Colors.grey[700];
 
         return BottomNavigationBar(
+          backgroundColor: Colors.white,
           items: [
             BottomNavigationBarItem(
-              icon: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
-                transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
-                child: isPlateSelected
-                    ? (selectedPlate.isLockedFee
-                    ? const Icon(Icons.lock_open, key: ValueKey('unlock'), color: Colors.grey)
-                    : const Icon(Icons.lock, key: ValueKey('lock'), color: Colors.grey))
-                    : Icon(
-                  isSearchMode ? Icons.cancel : Icons.search,
-                  key: ValueKey(isSearchMode),
-                  color: isSearchMode ? Colors.orange : Colors.grey,
+              icon: Tooltip(
+                message: isPlateSelected ? '정산 관리' : (isSearchMode ? '검색 초기화' : '번호판 검색'),
+                child: Icon(
+                  isPlateSelected ? Icons.lock : (isSearchMode ? Icons.cancel : Icons.search),
+                  color: isPlateSelected ? iconColor : (isSearchMode ? Colors.orange : iconColor),
                 ),
               ),
-              label: isPlateSelected
-                  ? (selectedPlate.isLockedFee ? '정산 취소' : '사전 정산')
-                  : (isSearchMode ? '검색 초기화' : '번호판 검색'),
+              label: isPlateSelected ? '정산 관리' : (isSearchMode ? '검색 초기화' : '번호판 검색'),
             ),
             BottomNavigationBarItem(
-              icon: isPlateSelected
-                  ? const Icon(Icons.check_circle, color: Colors.green)
-                  : Image.asset(
-                'assets/icons/icon_belivussnc.PNG',
-                width: 24.0,
-                height: 24.0,
-                fit: BoxFit.contain,
+              icon: Tooltip(
+                message: isPlateSelected ? '입차 완료' : '보고서 열기',
+                child: isPlateSelected
+                    ? Icon(Icons.check_circle, color: Colors.green[600])
+                    : Image.asset(
+                        'assets/icons/icon_belivussnc.PNG',
+                        width: 24.0,
+                        height: 24.0,
+                        fit: BoxFit.contain,
+                      ),
               ),
-              label: isPlateSelected ? '입차 완료' : 'Belivus S&C',
+              label: isPlateSelected ? '입차' : 'Belivus',
             ),
             BottomNavigationBarItem(
-              icon: AnimatedRotation(
-                turns: isSorted ? 0.5 : 0.0,
-                duration: const Duration(milliseconds: 300),
-                child: Transform.scale(
-                  scaleX: isSorted ? -1 : 1,
-                  child: Icon(
-                    isPlateSelected ? Icons.settings : Icons.sort,
+              icon: Tooltip(
+                message: isPlateSelected ? '상태 수정' : '정렬 변경',
+                child: AnimatedRotation(
+                  turns: isSorted ? 0.5 : 0.0,
+                  duration: const Duration(milliseconds: 300),
+                  child: Transform.scale(
+                    scaleX: isSorted ? -1 : 1,
+                    child: Icon(
+                      isPlateSelected ? Icons.settings : Icons.sort,
+                      color: iconColor,
+                    ),
                   ),
                 ),
               ),
@@ -92,87 +93,8 @@ class ParkingRequestControlButtons extends StatelessWidget {
 
             if (index == 0) {
               if (isPlateSelected) {
-                final billingType = selectedPlate.billingType;
-
-                if (billingType == null || billingType.trim().isEmpty) {
-                  showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
-                  return;
-                }
-
-                final now = DateTime.now();
-                final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
-                final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
-
-                if (selectedPlate.isLockedFee) {
-                  final confirm = await showDialog<bool>(
-                    context: context,
-                    builder: (_) => const ConfirmCancelFeeDialog(),
-                  );
-
-                  if (confirm != true) return;
-
-                  final updatedPlate = selectedPlate.copyWith(
-                    isLockedFee: false,
-                    lockedAtTimeInSeconds: null,
-                    lockedFeeAmount: null,
-                    paymentMethod: null,
-                  );
-
-                  await repo.addOrUpdatePlate(selectedPlate.id, updatedPlate);
-                  await plateState.updatePlateLocally(PlateType.parkingRequests, updatedPlate);
-
-                  final cancelLog = {
-                    'plateNumber': selectedPlate.plateNumber,
-                    'action': '사전 정산 취소',
-                    'performedBy': userName,
-                    'timestamp': DateTime.now().toIso8601String(),
-                  };
-
-                  if (billingType.isNotEmpty) {
-                    cancelLog['billingType'] = billingType;
-                  }
-
-                  await uploader.uploadForPlateLogTypeJson(cancelLog, selectedPlate.plateNumber, division, area);
-                  showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
-                } else {
-                  final result = await showOnTapBillingTypeDialog(
-                    context: context,
-                    entryTimeInSeconds: entryTime,
-                    currentTimeInSeconds: currentTime,
-                    basicStandard: selectedPlate.basicStandard ?? 0,
-                    basicAmount: selectedPlate.basicAmount ?? 0,
-                    addStandard: selectedPlate.addStandard ?? 0,
-                    addAmount: selectedPlate.addAmount ?? 0,
-                  );
-
-                  if (result == null) return;
-
-                  final updatedPlate = selectedPlate.copyWith(
-                    isLockedFee: true,
-                    lockedAtTimeInSeconds: currentTime,
-                    lockedFeeAmount: result.lockedFee,
-                    paymentMethod: result.paymentMethod,
-                  );
-
-                  await repo.addOrUpdatePlate(selectedPlate.id, updatedPlate);
-                  await plateState.updatePlateLocally(PlateType.parkingRequests, updatedPlate);
-
-                  final log = {
-                    'plateNumber': selectedPlate.plateNumber,
-                    'action': '사전 정산',
-                    'performedBy': userName,
-                    'timestamp': DateTime.now().toIso8601String(),
-                    'lockedFee': result.lockedFee,
-                    'paymentMethod': result.paymentMethod,
-                  };
-
-                  if (billingType.isNotEmpty) {
-                    log['billingType'] = billingType;
-                  }
-
-                  await uploader.uploadForPlateLogTypeJson(log, selectedPlate.plateNumber, division, area);
-                  showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
-                }
+                await _handleBillingAction(
+                    context, selectedPlate, userName, repo, uploader, division, area, plateState);
               } else {
                 onSearchToggle();
               }
@@ -188,9 +110,9 @@ class ParkingRequestControlButtons extends StatelessWidget {
                     area: selectedPlate.area,
                     onCancelEntryRequest: () {
                       context.read<DeletePlate>().deleteFromParkingRequest(
-                        selectedPlate.plateNumber,
-                        selectedPlate.area,
-                      );
+                            selectedPlate.plateNumber,
+                            selectedPlate.area,
+                          );
                       showSuccessSnackbar(context, "입차 요청이 취소되었습니다: ${selectedPlate.plateNumber}");
                     },
                     onDelete: () {},
@@ -204,5 +126,90 @@ class ParkingRequestControlButtons extends StatelessWidget {
         );
       },
     );
+  }
+
+  Future<void> _handleBillingAction(
+    BuildContext context,
+    dynamic selectedPlate,
+    String userName,
+    PlateRepository repo,
+    GcsJsonUploader uploader,
+    String division,
+    String area,
+    PlateState plateState,
+  ) async {
+    final billingType = selectedPlate.billingType;
+
+    if (billingType == null || billingType.trim().isEmpty) {
+      showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
+      return;
+    }
+
+    final now = DateTime.now();
+    final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
+    final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
+
+    if (selectedPlate.isLockedFee) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (_) => const ConfirmCancelFeeDialog(),
+      );
+      if (confirm != true) return;
+
+      final updatedPlate = selectedPlate.copyWith(
+        isLockedFee: false,
+        lockedAtTimeInSeconds: null,
+        lockedFeeAmount: null,
+        paymentMethod: null,
+      );
+
+      await repo.addOrUpdatePlate(selectedPlate.id, updatedPlate);
+      await plateState.updatePlateLocally(PlateType.parkingRequests, updatedPlate);
+
+      final cancelLog = {
+        'plateNumber': selectedPlate.plateNumber,
+        'action': '사전 정산 취소',
+        'performedBy': userName,
+        'timestamp': now.toIso8601String(),
+        if (billingType.isNotEmpty) 'billingType': billingType,
+      };
+
+      await uploader.uploadForPlateLogTypeJson(cancelLog, selectedPlate.plateNumber, division, area);
+      showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
+    } else {
+      final result = await showOnTapBillingTypeDialog(
+        context: context,
+        entryTimeInSeconds: entryTime,
+        currentTimeInSeconds: currentTime,
+        basicStandard: selectedPlate.basicStandard ?? 0,
+        basicAmount: selectedPlate.basicAmount ?? 0,
+        addStandard: selectedPlate.addStandard ?? 0,
+        addAmount: selectedPlate.addAmount ?? 0,
+      );
+      if (result == null) return;
+
+      final updatedPlate = selectedPlate.copyWith(
+        isLockedFee: true,
+        lockedAtTimeInSeconds: currentTime,
+        lockedFeeAmount: result.lockedFee,
+        paymentMethod: result.paymentMethod,
+      );
+
+      await repo.addOrUpdatePlate(selectedPlate.id, updatedPlate);
+      await plateState.updatePlateLocally(PlateType.parkingRequests, updatedPlate);
+
+      final log = {
+        'plateNumber': selectedPlate.plateNumber,
+        'action': '사전 정산',
+        'performedBy': userName,
+        'timestamp': now.toIso8601String(),
+        'lockedFee': result.lockedFee,
+        'paymentMethod': result.paymentMethod,
+        if (billingType.isNotEmpty) 'billingType': billingType,
+      };
+
+      await uploader.uploadForPlateLogTypeJson(log, selectedPlate.plateNumber, division, area);
+      showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
+    }
   }
 }

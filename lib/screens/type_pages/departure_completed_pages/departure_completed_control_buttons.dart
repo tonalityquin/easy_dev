@@ -41,47 +41,45 @@ class DepartureCompletedControlButtons extends StatelessWidget {
     final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
 
     final selectedDate = context.watch<FieldSelectedDateState>().selectedDate ?? DateTime.now();
-    final formattedDate = '${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}';
+    final formattedDate =
+        '${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}';
 
     return BottomNavigationBar(
+      backgroundColor: Colors.white,
+      // ✅ 배경 흰색
+      elevation: 0,
+      type: BottomNavigationBarType.fixed,
+      selectedItemColor: Theme.of(context).primaryColor,
+      unselectedItemColor: Colors.grey[700],
       items: [
         BottomNavigationBarItem(
-          icon: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
-            child: isPlateSelected
-                ? (selectedPlate.isLockedFee
-                ? const Icon(Icons.lock_open, key: ValueKey('unlock'), color: Colors.grey)
-                : const Icon(Icons.lock, key: ValueKey('lock'), color: Colors.grey))
-                : Icon(
-              isSearchMode ? Icons.cancel : Icons.search,
-              key: ValueKey(isSearchMode),
-              color: isSearchMode ? Colors.orange : Colors.grey,
+          icon: Tooltip(
+            message: isPlateSelected ? '정산 관리' : (isSearchMode ? '검색 초기화' : '번호판 검색'),
+            child: Icon(
+              isPlateSelected
+                  ? (selectedPlate.isLockedFee ? Icons.lock_open : Icons.lock)
+                  : (isSearchMode ? Icons.cancel : Icons.search),
+              color: isPlateSelected ? Colors.grey[700] : (isSearchMode ? Colors.orange[600] : Colors.grey[700]),
             ),
           ),
-          label: isPlateSelected
-              ? (selectedPlate.isLockedFee ? '정산 취소' : '사전 정산')
-              : (isSearchMode ? '검색 초기화' : '번호판 검색'),
+          label: isPlateSelected ? '정산 관리' : (isSearchMode ? '검색 초기화' : '검색'),
         ),
         BottomNavigationBarItem(
-          icon: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+          icon: Tooltip(
+            message: showMergedLog ? '병합 로그 감추기' : '병합 로그 보기',
             child: Icon(
               showMergedLog ? Icons.expand_more : Icons.list_alt,
-              key: ValueKey(showMergedLog),
-              color: Colors.grey,
+              color: Colors.grey[700],
             ),
           ),
           label: showMergedLog ? '감추기' : '병합 로그',
         ),
         BottomNavigationBarItem(
-          icon: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+          icon: Tooltip(
+            message: isPlateSelected ? '상태 수정' : '날짜 선택',
             child: isPlateSelected
-                ? const Icon(Icons.settings, key: ValueKey('setting'))
-                : const Icon(Icons.calendar_today, key: ValueKey('calendar'), color: Colors.grey),
+                ? Icon(Icons.settings, color: Colors.grey[700])
+                : Icon(Icons.calendar_today, color: Colors.grey[700]),
           ),
           label: isPlateSelected ? '상태 수정' : formattedDate,
         ),
