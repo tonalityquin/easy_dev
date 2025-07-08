@@ -14,7 +14,7 @@ import '../../utils/snackbar_helper.dart';
 
 import '../../widgets/navigation/top_navigation.dart';
 import '../../widgets/dialog/plate_search_bottom_sheet/plate_search_bottom_sheet.dart';
-import 'parking_completed_pages/widgets/parking_completed_status_dialog.dart';
+import 'parking_completed_pages/widgets/parking_completed_status_bottom_sheet.dart';
 import '../../widgets/container/plate_container.dart';
 
 import 'parking_completed_pages/parking_completed_control_buttons.dart';

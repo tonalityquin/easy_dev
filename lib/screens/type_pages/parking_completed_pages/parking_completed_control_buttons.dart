@@ -12,8 +12,8 @@ import '../../../utils/snackbar_helper.dart';
 
 import '../../../widgets/dialog/on_tap_billing_type_bottom_sheet.dart';
 import '../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
+import 'widgets/parking_completed_status_bottom_sheet.dart';
 import 'widgets/set_departure_request_dialog.dart';
-import 'widgets/parking_completed_status_dialog.dart';
 import '../../../widgets/dialog/plate_remove_dialog.dart';
 
 class ParkingCompletedControlButtons extends StatelessWidget {
@@ -200,32 +200,28 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                 ),
               );
             } else if (index == 2) {
-              showDialog(
+              await showParkingCompletedStatusBottomSheet(
                 context: context,
-                builder: (_) => ParkingCompletedStatusDialog(
-                  plate: selectedPlate,
-                  plateNumber: selectedPlate.plateNumber,
-                  area: selectedPlate.area,
-                  onRequestEntry: () => handleEntryParkingRequest(
-                    context,
-                    selectedPlate.plateNumber,
-                    selectedPlate.area,
-                  ),
-                  onDelete: () {
-                    showDialog(
-                      context: context,
-                      builder: (_) => PlateRemoveDialog(
-                        onConfirm: () {
-                          context.read<DeletePlate>().deleteFromParkingCompleted(
-                            selectedPlate.plateNumber,
-                            selectedPlate.area,
-                          );
-                          showSuccessSnackbar(context, "삭제 완료: ${selectedPlate.plateNumber}");
-                        },
-                      ),
-                    );
-                  },
+                plate: selectedPlate,
+                onRequestEntry: () => handleEntryParkingRequest(
+                  context,
+                  selectedPlate.plateNumber,
+                  selectedPlate.area,
                 ),
+                onDelete: () {
+                  showDialog(
+                    context: context,
+                    builder: (_) => PlateRemoveDialog(
+                      onConfirm: () {
+                        context.read<DeletePlate>().deleteFromParkingCompleted(
+                          selectedPlate.plateNumber,
+                          selectedPlate.area,
+                        );
+                        showSuccessSnackbar(context, "삭제 완료: ${selectedPlate.plateNumber}");
+                      },
+                    ),
+                  );
+                },
               );
             }
           },

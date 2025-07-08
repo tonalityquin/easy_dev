@@ -11,7 +11,7 @@ import '../../../states/user/user_state.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../widgets/dialog/on_tap_billing_type_bottom_sheet.dart';
 import '../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
-import 'widgets/parking_request_status_dialog.dart';
+import 'widgets/parking_request_status_bottom_sheet.dart';
 
 class ParkingRequestControlButtons extends StatelessWidget {
   final bool isSorted;
@@ -102,21 +102,17 @@ class ParkingRequestControlButtons extends StatelessWidget {
               isPlateSelected ? onParkingCompleted() : onToggleReportDialog();
             } else if (index == 2) {
               if (isPlateSelected) {
-                showDialog(
+                await showParkingRequestStatusBottomSheet(
                   context: context,
-                  builder: (_) => ParkingRequestStatusDialog(
-                    plate: selectedPlate,
-                    plateNumber: selectedPlate.plateNumber,
-                    area: selectedPlate.area,
-                    onCancelEntryRequest: () {
-                      context.read<DeletePlate>().deleteFromParkingRequest(
-                            selectedPlate.plateNumber,
-                            selectedPlate.area,
-                          );
-                      showSuccessSnackbar(context, "입차 요청이 취소되었습니다: ${selectedPlate.plateNumber}");
-                    },
-                    onDelete: () {},
-                  ),
+                  plate: selectedPlate,
+                  onCancelEntryRequest: () {
+                    context.read<DeletePlate>().deleteFromParkingRequest(
+                          selectedPlate.plateNumber,
+                          selectedPlate.area,
+                        );
+                    showSuccessSnackbar(context, "입차 요청이 취소되었습니다: ${selectedPlate.plateNumber}");
+                  },
+                  onDelete: () {},
                 );
               } else {
                 onSortToggle();

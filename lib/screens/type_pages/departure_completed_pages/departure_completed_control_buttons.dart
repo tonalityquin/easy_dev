@@ -1,6 +1,7 @@
 import 'package:easydev/utils/gcs_json_uploader.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../../enums/plate_type.dart';
 import '../../../repositories/plate/plate_repository.dart';
 import '../../../states/area/area_state.dart';
@@ -46,7 +47,6 @@ class DepartureCompletedControlButtons extends StatelessWidget {
 
     return BottomNavigationBar(
       backgroundColor: Colors.white,
-      // ✅ 배경 흰색
       elevation: 0,
       type: BottomNavigationBarType.fixed,
       selectedItemColor: Theme.of(context).primaryColor,
@@ -148,14 +148,9 @@ class DepartureCompletedControlButtons extends StatelessWidget {
           onToggleMergedLog();
         } else if (index == 2) {
           if (isPlateSelected) {
-            showDialog(
+            await showDepartureCompletedStatusBottomSheet(
               context: context,
-              builder: (context) => DepartureCompletedStatusDialog(
-                plate: selectedPlate,
-                plateNumber: selectedPlate.plateNumber,
-                area: selectedPlate.area,
-                onDelete: () {},
-              ),
+              plate: selectedPlate,
             );
           } else {
             onToggleCalendar();

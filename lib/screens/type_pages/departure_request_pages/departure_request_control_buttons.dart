@@ -12,8 +12,8 @@ import '../../../states/user/user_state.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../widgets/dialog/on_tap_billing_type_bottom_sheet.dart';
 import '../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
+import 'widgets/departure_request_status_bottom_sheet.dart';
 import 'widgets/set_departure_completed_dialog.dart';
-import 'widgets/departure_request_status_dialog.dart';
 import '../../../widgets/dialog/plate_remove_dialog.dart';
 
 class DepartureRequestControlButtons extends StatelessWidget {
@@ -56,7 +56,6 @@ class DepartureRequestControlButtons extends StatelessWidget {
 
         return BottomNavigationBar(
           backgroundColor: Colors.white,
-          // ✅ 흰 배경 적용
           elevation: 0,
           type: BottomNavigationBarType.fixed,
           selectedItemColor: Theme.of(context).primaryColor,
@@ -80,7 +79,7 @@ class DepartureRequestControlButtons extends StatelessWidget {
                 child: Icon(
                   isPlateSelected ? Icons.check_circle : (isParkingAreaMode ? Icons.clear : Icons.local_parking),
                   color:
-                      isPlateSelected ? Colors.green[600] : (isParkingAreaMode ? Colors.orange[600] : Colors.grey[700]),
+                  isPlateSelected ? Colors.green[600] : (isParkingAreaMode ? Colors.orange[600] : Colors.grey[700]),
                 ),
               ),
               label: isPlateSelected ? '출차' : (isParkingAreaMode ? '초기화' : '구역 선택'),
@@ -147,7 +146,7 @@ class DepartureRequestControlButtons extends StatelessWidget {
                 await uploader.uploadForPlateLogTypeJson({
                   'plateNumber': selectedPlate.plateNumber,
                   'action': '사전 정산 취소',
-                  'performedBy': context.read<UserState>().name,
+                  'performedBy': userName,
                   'timestamp': now.toIso8601String(),
                   'billingType': billingType,
                 }, selectedPlate.plateNumber, division, area);
@@ -178,7 +177,7 @@ class DepartureRequestControlButtons extends StatelessWidget {
                 await uploader.uploadForPlateLogTypeJson({
                   'plateNumber': selectedPlate.plateNumber,
                   'action': '사전 정산',
-                  'performedBy': context.read<UserState>().name,
+                  'performedBy': userName,
                   'timestamp': now.toIso8601String(),
                   'lockedFee': result.lockedFee,
                   'paymentMethod': result.paymentMethod,
@@ -195,38 +194,34 @@ class DepartureRequestControlButtons extends StatelessWidget {
                 ),
               );
             } else if (index == 2) {
-              showDialog(
+              await showDepartureRequestStatusBottomSheet(
                 context: context,
-                builder: (_) => DepartureRequestStatusDialog(
-                  plate: selectedPlate,
-                  plateNumber: selectedPlate.plateNumber,
-                  area: selectedPlate.area,
-                  onRequestEntry: () => handleEntryParkingRequest(
-                    context,
-                    selectedPlate.plateNumber,
-                    selectedPlate.area,
-                  ),
-                  onCompleteEntry: () => handleEntryParkingCompleted(
-                    context,
-                    selectedPlate.plateNumber,
-                    selectedPlate.area,
-                    selectedPlate.location,
-                  ),
-                  onDelete: () {
-                    showDialog(
-                      context: context,
-                      builder: (_) => PlateRemoveDialog(
-                        onConfirm: () {
-                          context.read<DeletePlate>().deleteFromDepartureRequest(
-                                selectedPlate.plateNumber,
-                                selectedPlate.area,
-                              );
-                          showSuccessSnackbar(context, "삭제 완료: ${selectedPlate.plateNumber}");
-                        },
-                      ),
-                    );
-                  },
+                plate: selectedPlate,
+                onRequestEntry: () => handleEntryParkingRequest(
+                  context,
+                  selectedPlate.plateNumber,
+                  selectedPlate.area,
                 ),
+                onCompleteEntry: () => handleEntryParkingCompleted(
+                  context,
+                  selectedPlate.plateNumber,
+                  selectedPlate.area,
+                  selectedPlate.location,
+                ),
+                onDelete: () {
+                  showDialog(
+                    context: context,
+                    builder: (_) => PlateRemoveDialog(
+                      onConfirm: () {
+                        context.read<DeletePlate>().deleteFromDepartureRequest(
+                          selectedPlate.plateNumber,
+                          selectedPlate.area,
+                        );
+                        showSuccessSnackbar(context, "삭제 완료: ${selectedPlate.plateNumber}");
+                      },
+                    ),
+                  );
+                },
               );
             }
           },
