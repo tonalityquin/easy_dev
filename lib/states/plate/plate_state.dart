@@ -18,6 +18,8 @@ class PlateState extends ChangeNotifier {
     for (var c in PlateType.values) c: true,
   };
 
+  final Map<PlateType, String> _subscribedAreas = {}; // ✅ 구독된 지역 저장
+
   String? _searchQuery;
   bool _isLoading = false;
 
@@ -26,14 +28,14 @@ class PlateState extends ChangeNotifier {
   }
 
   String get searchQuery => _searchQuery ?? "";
-
   String get currentArea => _areaState.currentArea;
-
   bool get isLoading => _isLoading;
 
-  List<PlateModel> dataOfType(PlateType type) {
-    return _data[type] ?? [];
-  }
+  List<PlateModel> dataOfType(PlateType type) => _data[type] ?? [];
+
+  bool isSubscribed(PlateType type) => _subscriptions.containsKey(type);
+
+  String? getSubscribedArea(PlateType type) => _subscribedAreas[type]; // ✅ 추가
 
   void subscribeType(PlateType type) {
     if (_subscriptions.containsKey(type)) {
@@ -42,14 +44,15 @@ class PlateState extends ChangeNotifier {
     }
 
     final descending = _isSortedMap[type] ?? true;
+    final area = currentArea;
 
-    debugPrint('🔔 [${_getTypeLabel(type)}] 구독 시작');
+    debugPrint('🔔 [${_getTypeLabel(type)}] 구독 시작 (지역: $area)');
     _isLoading = true;
     notifyListeners();
 
     final stream = _repository.streamToCurrentArea(
       type,
-      currentArea,
+      area,
       descending: descending,
     );
 
@@ -89,16 +92,20 @@ class PlateState extends ChangeNotifier {
     });
 
     _subscriptions[type] = subscription;
+    _subscribedAreas[type] = area; // ✅ 구독 지역 저장
   }
 
   void unsubscribeType(PlateType type) {
     final sub = _subscriptions[type];
+    final area = _subscribedAreas[type];
+
     if (sub != null) {
       sub.cancel();
       _subscriptions.remove(type);
+      _subscribedAreas.remove(type); // ✅ 제거
       _data[type] = [];
       notifyListeners();
-      debugPrint('🛑 [${_getTypeLabel(type)}] 구독 해제');
+      debugPrint('🛑 [${_getTypeLabel(type)}] 구독 해제됨 (지역: $area)');
     } else {
       debugPrint('⚠️ [${_getTypeLabel(type)}] 구독 중이 아님');
     }
@@ -110,7 +117,7 @@ class PlateState extends ChangeNotifier {
 
     try {
       return plates.firstWhere(
-        (plate) => plate.isSelected && plate.selectedBy == userName,
+            (plate) => plate.isSelected && plate.selectedBy == userName,
       );
     } catch (_) {
       return null;
@@ -133,10 +140,6 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  bool isSubscribed(PlateType type) {
-    return _subscriptions.containsKey(type);
-  }
-
   Future<void> togglePlateIsSelected({
     required PlateType collection,
     required String plateNumber,
@@ -148,14 +151,12 @@ class PlateState extends ChangeNotifier {
     try {
       final plateList = _data[collection];
       if (plateList == null) {
-        debugPrint('⚠️ Collection not found: $collection');
         onError('🚨 선택할 수 있는 번호판 리스트가 없습니다.');
         return;
       }
 
       final index = plateList.indexWhere((p) => p.id == plateId);
       if (index == -1) {
-        debugPrint('⚠️ Plate not found in collection $collection: $plateId');
         onError('🚨 선택할 수 있는 번호판이 없습니다.');
         return;
       }
@@ -163,35 +164,33 @@ class PlateState extends ChangeNotifier {
       final plate = plateList[index];
 
       if (plate.isSelected && plate.selectedBy != userName) {
-        debugPrint('⚠️ 이미 다른 사용자에 의해 선택됨: ${plate.plateNumber}');
         onError('⚠️ 이미 다른 사용자(${plate.selectedBy})가 선택한 번호판입니다.');
         return;
       }
 
       final alreadySelected = _data.entries.expand((entry) => entry.value).firstWhere(
             (p) => p.isSelected && p.selectedBy == userName && p.id != plateId,
-            orElse: () => PlateModel(
-              id: '',
-              plateNumber: '',
-              plateFourDigit: '',
-              type: '',
-              requestTime: DateTime.now(),
-              location: '',
-              area: '',
-              userName: '',
-              isSelected: false,
-              statusList: [],
-            ),
-          );
+        orElse: () => PlateModel(
+          id: '',
+          plateNumber: '',
+          plateFourDigit: '',
+          type: '',
+          requestTime: DateTime.now(),
+          location: '',
+          area: '',
+          userName: '',
+          isSelected: false,
+          statusList: [],
+        ),
+      );
 
       if (alreadySelected.id.isNotEmpty && !plate.isSelected) {
         final collectionLabel = _getCollectionLabelForType(alreadySelected.type);
-        debugPrint('⚠️ 이미 다른 번호판을 선택한 상태임: ${alreadySelected.plateNumber}');
         onError(
           '⚠️ 이미 다른 번호판을 선택한 상태입니다.\n'
-          '• 선택된 번호판: ${alreadySelected.plateNumber}\n'
-          '• 위치: $collectionLabel\n'
-          '선택을 해제한 후 다시 시도해 주세요.',
+              '• 선택된 번호판: ${alreadySelected.plateNumber}\n'
+              '• 위치: $collectionLabel\n'
+              '선택을 해제한 후 다시 시도해 주세요.',
         );
         return;
       }
@@ -212,7 +211,6 @@ class PlateState extends ChangeNotifier {
 
       notifyListeners();
     } catch (e) {
-      debugPrint('❌ Error toggling isSelected: $e');
       onError('🚨 번호판 선택 상태 변경 실패:\n$e');
     }
   }
@@ -268,6 +266,7 @@ class PlateState extends ChangeNotifier {
       sub.cancel();
     }
     _subscriptions.clear();
+    _subscribedAreas.clear(); // ✅ 함께 초기화
   }
 
   String _getTypeLabel(PlateType type) {

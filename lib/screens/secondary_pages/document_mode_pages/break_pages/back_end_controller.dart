@@ -24,6 +24,8 @@ class BackEndController extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         children: PlateType.values.map((type) {
           final isOn = plateState.isSubscribed(type);
+          final subscribedArea = plateState.getSubscribedArea(type);
+
           return Card(
             margin: const EdgeInsets.symmetric(vertical: 8),
             child: ListTile(
@@ -31,17 +33,32 @@ class BackEndController extends StatelessWidget {
                 _getTypeLabel(type),
                 style: const TextStyle(fontSize: 18),
               ),
+              subtitle: subscribedArea != null
+                  ? Text('지역: $subscribedArea', style: const TextStyle(fontSize: 14, color: Colors.grey))
+                  : null,
               trailing: Switch(
                 value: isOn,
                 onChanged: (value) {
+                  final typeLabel = _getTypeLabel(type);
+
                   if (value) {
                     plateState.subscribeType(type);
-                    debugPrint('🔔 [${_getTypeLabel(type)}] 구독 시작');
-                    showSuccessSnackbar(context, '✅ [${_getTypeLabel(type)}] 구독 시작됨');
+                    final currentArea = plateState.currentArea;
+
+                    debugPrint('🔔 [$typeLabel] 구독 시작 (지역: $currentArea)');
+                    showSuccessSnackbar(
+                      context,
+                      '✅ [$typeLabel] 구독 시작됨\n지역: $currentArea',
+                    );
                   } else {
+                    final unsubscribedArea = subscribedArea ?? '알 수 없음';
+
                     plateState.unsubscribeType(type);
-                    debugPrint('🛑 [${_getTypeLabel(type)}] 구독 해제');
-                    showFailedSnackbar(context, '🛑 [${_getTypeLabel(type)}] 구독 해제됨');
+                    debugPrint('🛑 [$typeLabel] 구독 해제 (지역: $unsubscribedArea)');
+                    showFailedSnackbar(
+                      context,
+                      '🛑 [$typeLabel] 구독 해제됨\n지역: $unsubscribedArea',
+                    );
                   }
                 },
               ),
