@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:android_intent_plus/android_intent.dart'; // ✅ 추가
+import 'package:android_intent_plus/android_intent.dart';
 
 import '../../../../states/user/user_state.dart';
 import 'dash_board_controller.dart';
@@ -8,6 +8,7 @@ import 'widgets/user_info_card.dart';
 import 'widgets/break_button_widget.dart';
 import 'widgets/work_button_widget.dart';
 import 'widgets/show_report_dialog.dart';
+import './clock_out_fetch_plate_count_widget.dart'; // ✅ 추가
 
 class DashBoardScreen extends StatelessWidget {
   const DashBoardScreen({super.key});
@@ -59,16 +60,13 @@ class DashBoardScreen extends StatelessWidget {
                 child: Column(
                   children: [
                     const SizedBox(height: 32),
-                    Text(
-                      '사용자 정보',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
+                    const ClockOutFetchPlateCountWidget(),
                     const SizedBox(height: 16),
                     UserInfoCard(),
                     const SizedBox(height: 32),
                     BreakButtonWidget(controller: controller),
                     const SizedBox(height: 16),
-                    // ✅ 보고 작성, 퇴근하기 버튼
+
                     Row(
                       children: [
                         Expanded(
@@ -99,7 +97,8 @@ class DashBoardScreen extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    // ✅ Gmail 앱 열기 버튼 (안정적인 방식)
+
+                    // ✅ Gmail 앱 열기 버튼
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
@@ -123,7 +122,6 @@ class DashBoardScreen extends StatelessWidget {
                             );
                             await intent.launch();
                           } catch (e) {
-                            // Gmail 앱 실패 시 웹 메일 fallback
                             try {
                               final fallbackIntent = AndroidIntent(
                                 action: 'android.intent.action.VIEW',

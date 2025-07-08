@@ -5,8 +5,8 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../../../../states/user/user_state.dart';
 import '../../../../utils/snackbar_helper.dart';
-import 'clock_out_log_uploader.dart';
-import 'break_log_uploader.dart';
+import 'utils/clock_out_log_uploader.dart';
+import 'utils/break_log_uploader.dart';
 
 class DashBoardController {
   /// 출근 상태일 경우 퇴근 기록 및 종료

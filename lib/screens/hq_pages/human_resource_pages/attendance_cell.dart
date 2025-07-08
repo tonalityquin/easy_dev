@@ -9,8 +9,8 @@ import '../../../states/user/user_state.dart';
 import '../../../utils/firestore_logger.dart';
 import '../../clock_in_pages/utils/clock_in_log_uploader.dart';
 import '../../clock_in_pages/utils/clock_in_log_downloader.dart';
-import '../../secondary_pages/field_mode_pages/dash_board/clock_out_log_downloader.dart';
-import '../../secondary_pages/field_mode_pages/dash_board/clock_out_log_uploader.dart';
+import '../../secondary_pages/field_mode_pages/dash_board/utils/clock_out_log_downloader.dart';
+import '../../secondary_pages/field_mode_pages/dash_board/utils/clock_out_log_uploader.dart';
 import 'attendances/attendance_table_row.dart';
 
 class AttendanceCell extends StatefulWidget {
