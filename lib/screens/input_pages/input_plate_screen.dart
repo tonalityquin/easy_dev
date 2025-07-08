@@ -6,6 +6,7 @@ import '../../states/bill/bill_state.dart';
 import '../../states/area/area_state.dart';
 
 import '../../utils/firestore_logger.dart';
+import 'debugs/input_debug_bottom_sheet.dart';
 import 'input_plate_controller.dart';
 import 'sections/input_bill_section.dart';
 import 'sections/input_location_section.dart';
@@ -21,10 +22,10 @@ import 'utils/buttons/input_animated_action_button.dart';
 
 import 'widgets/input_location_dialog.dart';
 import 'widgets/input_camera_preview_dialog.dart';
-import 'widgets/input_bottom_navigation.dart';
 import 'widgets/input_custom_status_dialog.dart';
 import 'keypad/num_keypad.dart';
 import 'keypad/kor_keypad.dart';
+import 'input_bottom_navigation.dart';
 
 class InputPlateScreen extends StatefulWidget {
   const InputPlateScreen({super.key});
@@ -108,7 +109,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     );
     return null;
   }
-
 
   void _showCameraPreviewDialog() async {
     await _cameraHelper.initializeInputCamera();
@@ -326,33 +326,66 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: InputBottomNavigation(
-        showKeypad: controller.showKeypad,
-        keypad: _buildKeypad(),
-        actionButton: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          InputBottomNavigation(
+            showKeypad: controller.showKeypad,
+            keypad: _buildKeypad(),
+            actionButton: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Expanded(
-                  child: InputAnimatedPhotoButton(onPressed: _showCameraPreviewDialog),
+                Row(
+                  children: [
+                    Expanded(
+                      child: InputAnimatedPhotoButton(onPressed: _showCameraPreviewDialog),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: InputAnimatedParkingButton(
+                        isLocationSelected: controller.isLocationSelected,
+                        onPressed: _buildLocationAction(),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: InputAnimatedParkingButton(
-                    isLocationSelected: controller.isLocationSelected,
-                    onPressed: _buildLocationAction(),
-                  ),
+                const SizedBox(height: 15),
+                InputAnimatedActionButton(
+                  isLoading: controller.isLoading,
+                  isLocationSelected: controller.isLocationSelected,
+                  onPressed: () => controller.submitPlateEntry(context, mounted, () => setState(() {})),
                 ),
               ],
             ),
-            const SizedBox(height: 15),
-            InputAnimatedActionButton(
-              isLoading: controller.isLoading,
-              isLocationSelected: controller.isLocationSelected,
-              onPressed: () => controller.submitPlateEntry(context, mounted, () => setState(() {})),
-            ),
-          ],
+          ),
+          const InputDebugTriggerBar(), // ✅ 여기서 포함시킴
+        ],
+      ),
+    );
+  }
+}
+
+class InputDebugTriggerBar extends StatelessWidget {
+  const InputDebugTriggerBar({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          builder: (_) => const InputDebugBottomSheet(),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        alignment: Alignment.center,
+        color: Colors.transparent,
+        child: const Icon(
+          Icons.bug_report,
+          size: 20,
+          color: Colors.grey,
         ),
       ),
     );

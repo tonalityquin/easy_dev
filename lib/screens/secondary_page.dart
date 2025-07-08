@@ -5,6 +5,7 @@ import '../states/secondary/secondary_mode.dart';
 import '../states/user/user_state.dart';
 import '../states/secondary/secondary_info.dart';
 import '../widgets/navigation/secondary_role_navigation.dart';
+import 'secondary_pages/debugs/secondary_debug_bottom_sheet.dart';
 
 class SecondaryPage extends StatelessWidget {
   const SecondaryPage({super.key});
@@ -63,10 +64,11 @@ class SecondaryPage extends StatelessWidget {
           ),
         ),
         body: const RefreshableBody(),
-        bottomNavigationBar: Column(
+        bottomNavigationBar: const Column(
           mainAxisSize: MainAxisSize.min,
-          children: const [
+          children: [
             PageBottomNavigation(),
+            DebugTriggerBar(), // ✅ 디버그 트리거 영역 추가
           ],
         ),
       ),
@@ -122,6 +124,33 @@ class PageBottomNavigation extends StatelessWidget {
           backgroundColor: Colors.white,
         );
       },
+    );
+  }
+}
+
+class DebugTriggerBar extends StatelessWidget {
+  const DebugTriggerBar({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          builder: (_) => const SecondaryDebugBottomSheet(),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        alignment: Alignment.center,
+        color: Colors.transparent,
+        child: const Icon(
+          Icons.bug_report,
+          size: 20,
+          color: Colors.grey,
+        ),
+      ),
     );
   }
 }

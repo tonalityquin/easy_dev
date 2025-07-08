@@ -13,7 +13,8 @@ import '../utils/app_colors.dart';
 
 import '../screens/input_pages/input_plate_screen.dart';
 import 'secondary_page.dart';
-import 'empty_bottom_sheet.dart'; // ✅ 추가
+import 'empty_bottom_sheet.dart'; // ✅ 바텀시트
+// DebugTriggerBar는 여기 파일 안에 직접 정의합니다.
 
 class TypePage extends StatefulWidget {
   const TypePage({super.key});
@@ -28,7 +29,7 @@ class _TypePageState extends State<TypePage> {
   void _handleTitleTap() {
     setState(() {
       _tapCount++;
-      if (_tapCount >= 2) {
+      if (_tapCount >= 1) {
         _tapCount = 0;
         _showBottomSheet();
       }
@@ -98,7 +99,13 @@ class _TypePageState extends State<TypePage> {
                 ),
               ),
               body: const RefreshableBody(),
-              bottomNavigationBar: const PageBottomNavigation(),
+              bottomNavigationBar: const Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  PageBottomNavigation(),
+                  DebugTriggerBar(), // ✅ 추가된 디버그 트리거
+                ],
+              ),
             ),
           );
         },
@@ -302,6 +309,33 @@ class PageBottomNavigation extends StatelessWidget {
             child: Text(label),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class DebugTriggerBar extends StatelessWidget {
+  const DebugTriggerBar({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          builder: (_) => const EmptyBottomSheet(), // 또는 SecondaryDebugBottomSheet()
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        alignment: Alignment.center,
+        color: Colors.transparent,
+        child: const Icon(
+          Icons.bug_report,
+          size: 20,
+          color: Colors.grey,
+        ),
       ),
     );
   }

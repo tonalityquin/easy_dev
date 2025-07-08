@@ -4,6 +4,7 @@ import 'package:camera/camera.dart';
 import '../../models/plate_model.dart';
 import '../../enums/plate_type.dart';
 
+import 'debugs/modify_debug_bottom_sheet.dart';
 import 'modify_plate_controller.dart';
 import 'sections/modify_bill_section.dart';
 import 'sections/modify_location_section.dart';
@@ -115,9 +116,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
   }
 
   VoidCallback _buildLocationAction() {
-    return _controller.isLocationSelected
-        ? () => setState(() => _controller.clearLocation())
-        : _selectParkingLocation;
+    return _controller.isLocationSelected ? () => setState(() => _controller.clearLocation()) : _selectParkingLocation;
   }
 
   @override
@@ -223,41 +222,74 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: ModifyBottomNavigation(
-        actionButton: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ModifyBottomNavigation(
+            actionButton: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Expanded(
-                  child: ModifyAnimatedPhotoButton(onPressed: _showCameraPreviewDialog),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ModifyAnimatedPhotoButton(onPressed: _showCameraPreviewDialog),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ModifyAnimatedParkingButton(
+                        isLocationSelected: _controller.isLocationSelected,
+                        onPressed: _buildLocationAction,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: ModifyAnimatedParkingButton(
-                    isLocationSelected: _controller.isLocationSelected,
-                    onPressed: _buildLocationAction,
-                  ),
+                const SizedBox(height: 15),
+                ModifyAnimatedActionButton(
+                  isLoading: isLoading,
+                  isLocationSelected: _controller.isLocationSelected,
+                  buttonLabel: '수정 완료',
+                  onPressed: () async {
+                    setState(() => isLoading = true);
+                    await _controller.handleAction(() {
+                      if (mounted) {
+                        Navigator.pop(context);
+                        showSuccessSnackbar(context, "수정이 완료되었습니다!");
+                      }
+                    }, selectedStatusNames);
+                    if (mounted) setState(() => isLoading = false);
+                  },
                 ),
               ],
             ),
-            const SizedBox(height: 15),
-            ModifyAnimatedActionButton(
-              isLoading: isLoading,
-              isLocationSelected: _controller.isLocationSelected,
-              buttonLabel: '수정 완료',
-              onPressed: () async {
-                setState(() => isLoading = true);
-                await _controller.handleAction(() {
-                  if (mounted) {
-                    Navigator.pop(context);
-                    showSuccessSnackbar(context, "수정이 완료되었습니다!");
-                  }
-                }, selectedStatusNames);
-                if (mounted) setState(() => isLoading = false);
-              },
-            ),
-          ],
+          ),
+          const ModifyDebugTriggerBar(), // ✅ 추가된 디버그 트리거
+        ],
+      ),
+    );
+  }
+}
+
+class ModifyDebugTriggerBar extends StatelessWidget {
+  const ModifyDebugTriggerBar({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          builder: (_) => const ModifyDebugBottomSheet(),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        alignment: Alignment.center,
+        color: Colors.transparent,
+        child: const Icon(
+          Icons.bug_report,
+          size: 20,
+          color: Colors.grey,
         ),
       ),
     );

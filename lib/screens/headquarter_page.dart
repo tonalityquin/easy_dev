@@ -2,7 +2,8 @@ import 'package:easydev/screens/secondary_page.dart';
 import 'package:easydev/states/page/hq_state.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../states/page/page_info.dart'; // hqPage, HqPageInfo 등 포함
+import '../states/page/page_info.dart';
+import 'hq_pages/debugs/hq_debug_bottom_sheet.dart'; // hqPage, HqPageInfo 등 포함
 
 class HeadquarterPage extends StatelessWidget {
   const HeadquarterPage({super.key});
@@ -39,7 +40,13 @@ class HeadquarterPage extends StatelessWidget {
                 ),
               ),
               body: const RefreshableBody(),
-              bottomNavigationBar: const PageBottomNavigation(),
+              bottomNavigationBar: const Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  PageBottomNavigation(),
+                  DebugTriggerBar(), // ✅ 추가된 디버그 트리거 바
+                ],
+              ),
             ),
           );
         },
@@ -54,7 +61,6 @@ class RefreshableBody extends StatelessWidget {
   void _handleDrag(BuildContext context, double velocity) {
     if (velocity < 0) {
       Navigator.of(context).push(_slidePage(const SecondaryPage(), fromLeft: false));
-    } else {
     }
   }
 
@@ -121,6 +127,34 @@ class PageBottomNavigation extends StatelessWidget {
           backgroundColor: Colors.white,
         );
       },
+    );
+  }
+}
+
+// ✅ DebugTriggerBar 위젯 정의
+class DebugTriggerBar extends StatelessWidget {
+  const DebugTriggerBar({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          builder: (_) => const HqDebugBottomSheet(), // ✅ 본사 전용 바텀시트
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        alignment: Alignment.center,
+        color: Colors.transparent,
+        child: const Icon(
+          Icons.bug_report,
+          size: 20,
+          color: Colors.grey,
+        ),
+      ),
     );
   }
 }
