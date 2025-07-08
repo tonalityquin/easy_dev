@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../utils/modify_plate_field.dart';
-import '../widgets/region_picker_dialog.dart';
+import '../widgets/modify_region_picker_bottom_sheet.dart';
 
 class ModifyPlateSection extends StatelessWidget {
   final String dropdownValue;
@@ -37,7 +37,7 @@ class ModifyPlateSection extends StatelessWidget {
           children: [
             GestureDetector(
               onTap: () {
-                showRegionPickerDialog(
+                modifyRegionPickerBottomSheet(
                   context: context,
                   selectedRegion: dropdownValue,
                   regions: regions,

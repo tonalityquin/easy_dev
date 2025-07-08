@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 
 /// ✅ 로컬 XFile용 전체 화면 이미지 뷰어
-void inputshowFullScreenImageViewer(BuildContext context, List<XFile> images, int initialIndex) {
+void inputShowFullScreenImageViewer(BuildContext context, List<XFile> images, int initialIndex) {
   showDialog(
     context: context,
     useSafeArea: true,

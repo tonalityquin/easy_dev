@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../states/bill/bill_state.dart';
-import '../utils/buttons/modify_custom_bill_dropdown.dart';
 
 class ModifyBillSection extends StatelessWidget {
   final String? selectedBill;
@@ -44,10 +43,82 @@ class ModifyBillSection extends StatelessWidget {
             ),
           )
         else
-          ModifyCustomBillDropdown(
-            items: billList.map((bill) => bill.countType).toList(),
-            selectedValue: selectedBill,
-            onChanged: onChanged,
+          OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+              side: const BorderSide(color: Colors.black),
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (_) {
+                  return DraggableScrollableSheet(
+                    initialChildSize: 0.4,
+                    minChildSize: 0.3,
+                    maxChildSize: 0.9,
+                    builder: (context, scrollController) {
+                      return Container(
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                        ),
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 4,
+                              margin: const EdgeInsets.only(bottom: 16),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade300,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                            const Text(
+                              '정산 유형 선택',
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 16),
+                            Expanded(
+                              child: ListView.builder(
+                                controller: scrollController,
+                                itemCount: billList.length,
+                                itemBuilder: (context, index) {
+                                  final type = billList[index].countType;
+                                  return ListTile(
+                                    title: Text(type),
+                                    trailing: type == selectedBill
+                                        ? const Icon(Icons.check, color: Colors.green)
+                                        : null,
+                                    onTap: () {
+                                      Navigator.pop(context);
+                                      onChanged(type);
+                                    },
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                },
+              );
+            },
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(selectedBill ?? '정산 유형 선택'),
+                const Icon(Icons.arrow_drop_down),
+              ],
+            ),
           ),
       ],
     );

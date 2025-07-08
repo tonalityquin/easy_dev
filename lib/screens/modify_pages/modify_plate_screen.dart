@@ -17,9 +17,9 @@ import 'utils/buttons/modify_animated_action_button.dart';
 import 'utils/buttons/modify_animated_parking_button.dart';
 import 'utils/buttons/modify_animated_photo_button.dart';
 
-import 'widgets/modify_bottom_navigation.dart';
+import 'modify_bottom_navigation.dart';
 import 'widgets/modify_camera_preview_dialog.dart';
-import 'widgets/modify_location_dialog.dart';
+import 'widgets/modify_location_bottom_sheet.dart';
 import '../../utils/snackbar_helper.dart';
 import 'utils/modify_camera_helper.dart';
 
@@ -103,7 +103,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
   void _selectParkingLocation() {
     showDialog(
       context: context,
-      builder: (_) => ModifyLocationDialog(
+      builder: (_) => ModifyLocationBottomSheet(
         locationController: _controller.locationController,
         onLocationSelected: (location) {
           setState(() {

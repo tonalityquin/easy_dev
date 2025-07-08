@@ -3,14 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../enums/plate_type.dart';
-
 import '../../../repositories/plate/plate_repository.dart';
-
 import '../../../states/area/area_state.dart';
 import '../../../states/plate/delete_plate.dart';
 import '../../../states/plate/plate_state.dart';
 import '../../../states/user/user_state.dart';
-
 import '../../../utils/snackbar_helper.dart';
 
 import '../../../widgets/dialog/on_tap_billing_type_bottom_sheet.dart';
@@ -21,7 +18,7 @@ import '../../../widgets/dialog/plate_remove_dialog.dart';
 
 class ParkingCompletedControlButtons extends StatelessWidget {
   final bool isSearchMode;
-  final bool isParkingAreaMode; // 항상 true지만 유지
+  final bool isParkingAreaMode;
   final bool isSorted;
   final VoidCallback showSearchDialog;
   final VoidCallback resetSearch;
@@ -52,6 +49,11 @@ class ParkingCompletedControlButtons extends StatelessWidget {
         final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
 
         return BottomNavigationBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          type: BottomNavigationBarType.fixed,
+          selectedItemColor: Theme.of(context).primaryColor,
+          unselectedItemColor: Colors.grey[700],
           items: [
             BottomNavigationBarItem(
               icon: AnimatedSwitcher(
@@ -59,13 +61,13 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                 transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
                 child: isPlateSelected
                     ? (selectedPlate.isLockedFee
-                        ? const Icon(Icons.lock_open, key: ValueKey('unlock'), color: Colors.grey)
-                        : const Icon(Icons.lock, key: ValueKey('lock'), color: Colors.grey))
+                    ? const Icon(Icons.lock_open, key: ValueKey('unlock'), color: Colors.grey)
+                    : const Icon(Icons.lock, key: ValueKey('lock'), color: Colors.grey))
                     : Icon(
-                        isSearchMode ? Icons.cancel : Icons.search,
-                        key: ValueKey(isSearchMode),
-                        color: isSearchMode ? Colors.orange : Colors.grey,
-                      ),
+                  isSearchMode ? Icons.cancel : Icons.search,
+                  key: ValueKey(isSearchMode),
+                  color: isSearchMode ? Colors.orange[600] : Colors.grey[700],
+                ),
               ),
               label: isPlateSelected
                   ? (selectedPlate.isLockedFee ? '정산 취소' : '사전 정산')
@@ -73,8 +75,8 @@ class ParkingCompletedControlButtons extends StatelessWidget {
             ),
             BottomNavigationBarItem(
               icon: Icon(
-                isPlateSelected ? Icons.check_circle : Icons.refresh, // 주차 구역 초기화
-                color: isPlateSelected ? Colors.green : Colors.grey,
+                isPlateSelected ? Icons.check_circle : Icons.refresh,
+                color: isPlateSelected ? Colors.green[600] : Colors.grey[700],
               ),
               label: isPlateSelected ? '출차 요청' : '구역 초기화',
             ),
@@ -86,6 +88,7 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                   scaleX: isSorted ? -1 : 1,
                   child: Icon(
                     isPlateSelected ? Icons.settings : Icons.sort,
+                    color: Colors.grey[700],
                   ),
                 ),
               ),
@@ -104,7 +107,6 @@ class ParkingCompletedControlButtons extends StatelessWidget {
               return;
             }
 
-            // 👉 Plate 선택 시 기능
             final repo = context.read<PlateRepository>();
             final division = context.read<AreaState>().currentDivision;
             final area = context.read<AreaState>().currentArea.trim();
@@ -115,7 +117,6 @@ class ParkingCompletedControlButtons extends StatelessWidget {
             final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
 
             if (index == 0) {
-              // 🔐 사전 정산 or 취소
               if ((billingType ?? '').trim().isEmpty) {
                 showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
                 return;
@@ -192,7 +193,6 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                 showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
               }
             } else if (index == 1) {
-              // 🚗 출차 요청
               showDialog(
                 context: context,
                 builder: (context) => SetDepartureRequestDialog(
@@ -200,7 +200,6 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                 ),
               );
             } else if (index == 2) {
-              // 🛠 상태 수정
               showDialog(
                 context: context,
                 builder: (_) => ParkingCompletedStatusDialog(
@@ -218,9 +217,9 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                       builder: (_) => PlateRemoveDialog(
                         onConfirm: () {
                           context.read<DeletePlate>().deleteFromParkingCompleted(
-                                selectedPlate.plateNumber,
-                                selectedPlate.area,
-                              );
+                            selectedPlate.plateNumber,
+                            selectedPlate.area,
+                          );
                           showSuccessSnackbar(context, "삭제 완료: ${selectedPlate.plateNumber}");
                         },
                       ),
