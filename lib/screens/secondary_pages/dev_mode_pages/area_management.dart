@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'area_managements/add_area_tab.dart';
 import 'area_managements/division_management_tab.dart';
 import 'area_managements/user_account_tab.dart';
-import 'area_managements/plate_limit_management_tab.dart';
+import 'area_managements/status_mapping_helper.dart';
 
 class AreaManagement extends StatefulWidget {
   const AreaManagement({super.key});
@@ -152,7 +152,7 @@ class _AreaManagementState extends State<AreaManagement> with SingleTickerProvid
               },
               onAreaChanged: (val) => setState(() => _accountSelectedArea = val),
             ),
-            const PlateLimitManagementTab(), // ✅ 탭 뷰에 새 위젯 추가
+            const StatusMappingHelper(), // ✅ 탭 뷰에 새 위젯 추가
           ],
         ),
       ),

@@ -37,14 +37,15 @@ class _InputStatusOnTapSectionState extends State<InputStatusOnTapSection> {
 
   Future<void> _loadSavedCategory() async {
     final prefs = await SharedPreferences.getInstance();
-
     final saved = prefs.getString('selected_category');
 
-    // SharedPreferences > initialCategory 우선순위
+    // SharedPreferences > initialCategory > 기본값 '공통'
     setState(() {
       selectedCategory = saved?.isNotEmpty == true
           ? saved
-          : widget.initialCategory;
+          : (widget.initialCategory?.isNotEmpty == true
+          ? widget.initialCategory
+          : '공통');
     });
 
     _restoreInitialStatuses();
@@ -108,7 +109,6 @@ class _InputStatusOnTapSectionState extends State<InputStatusOnTapSection> {
             });
             _saveCategory(value);
 
-            // 업종 바뀌면 초기 선택 복원 시도
             _restoreInitialStatuses();
           },
         ),

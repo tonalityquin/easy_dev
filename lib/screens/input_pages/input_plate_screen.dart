@@ -13,15 +13,11 @@ import 'sections/input_location_section.dart';
 import 'sections/input_photo_section.dart';
 import 'sections/input_plate_section.dart';
 import 'sections/input_status_on_tap_section.dart';
-import 'sections/input_status_custom_section.dart';
+import 'sections/input_bottom_action_section.dart';
+import 'sections/input_custom_status_section.dart'; // ✅ 추가
 
 import 'utils/input_camera_helper.dart';
-import 'utils/buttons/input_animated_parking_button.dart';
-import 'utils/buttons/input_animated_photo_button.dart';
-import 'utils/buttons/input_animated_action_button.dart';
 
-import 'widgets/input_location_bottom_sheet.dart';
-import 'widgets/input_camera_preview_dialog.dart';
 import 'widgets/input_custom_status_bottom_sheet.dart';
 import 'keypad/num_keypad.dart';
 import 'keypad/kor_keypad.dart';
@@ -89,45 +85,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     }
     await FirestoreLogger().log('📭 상태 데이터 없음: $docId', level: 'info');
     return null;
-  }
-
-  void _showCameraPreviewDialog() async {
-    await _cameraHelper.initializeInputCamera();
-    if (!mounted) return;
-
-    await showDialog(
-      context: context,
-      builder: (context) => InputCameraPreviewDialog(
-        onImageCaptured: (image) {
-          setState(() {
-            controller.capturedImages.add(image);
-          });
-        },
-      ),
-    );
-
-    await _cameraHelper.dispose();
-    await Future.delayed(const Duration(milliseconds: 200));
-    if (mounted) setState(() {});
-  }
-
-  void _selectParkingLocation() {
-    showDialog(
-      context: context,
-      builder: (_) => InputLocationBottomSheet(
-        locationController: controller.locationController,
-        onLocationSelected: (location) {
-          setState(() {
-            controller.locationController.text = location;
-            controller.isLocationSelected = true;
-          });
-        },
-      ),
-    );
-  }
-
-  VoidCallback _buildLocationAction() {
-    return controller.isLocationSelected ? () => setState(() => controller.clearLocation()) : _selectParkingLocation;
   }
 
   Widget _buildKeypad() {
@@ -241,38 +198,24 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
               },
             ),
             const SizedBox(height: 32),
-            const Text('추가 상태 메모 (최대 10자)', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            TextField(
-              controller: controller.customStatusController,
-              maxLength: 20,
-              decoration: InputDecoration(
-                hintText: '예: 뒷범퍼 손상',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              ),
+            InputCustomStatusSection(
+              controller: controller,
+              fetchedCustomStatus: controller.fetchedCustomStatus,
+              selectedStatusNames: selectedStatusNames,
+              statusSectionKey: statusSectionKey,
+              onDeleted: () {
+                setState(() {
+                  controller.fetchedCustomStatus = null;
+                  controller.customStatusController.clear();
+                });
+              },
+              onStatusCleared: () {
+                setState(() {
+                  selectedStatusNames = [];
+                  statusSectionKey = UniqueKey();
+                });
+              },
             ),
-            if (controller.fetchedCustomStatus != null)
-              InputStatusCustomSection(
-                customStatus: controller.fetchedCustomStatus!,
-                onDelete: () async {
-                  try {
-                    await FirestoreLogger().log('🗑️ 상태 메모 삭제 시도: ${controller.buildPlateNumber()}', level: 'called');
-                    await controller.deleteCustomStatusFromFirestore(context);
-                    await FirestoreLogger().log('✅ 상태 메모 삭제 완료', level: 'success');
-                    setState(() {
-                      controller.fetchedCustomStatus = null;
-                      controller.customStatusController.clear();
-                      selectedStatusNames = [];
-                      statusSectionKey = UniqueKey();
-                    });
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('자동 메모가 삭제되었습니다')));
-                  } catch (e) {
-                    await FirestoreLogger().log('❌ 상태 메모 삭제 실패: $e', level: 'error');
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('삭제 실패. 다시 시도해주세요')));
-                  }
-                },
-              ),
             const SizedBox(height: 32),
           ],
         ),
@@ -283,28 +226,10 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
           InputBottomNavigation(
             showKeypad: controller.showKeypad,
             keypad: _buildKeypad(),
-            actionButton: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  children: [
-                    Expanded(child: InputAnimatedPhotoButton(onPressed: _showCameraPreviewDialog)),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: InputAnimatedParkingButton(
-                        isLocationSelected: controller.isLocationSelected,
-                        onPressed: _buildLocationAction(),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 15),
-                InputAnimatedActionButton(
-                  isLoading: controller.isLoading,
-                  isLocationSelected: controller.isLocationSelected,
-                  onPressed: () => controller.submitPlateEntry(context, mounted, () => setState(() {})),
-                ),
-              ],
+            actionButton: InputBottomActionSection(
+              controller: controller,
+              mountedContext: mounted,
+              onStateRefresh: () => setState(() {}),
             ),
           ),
           const InputDebugTriggerBar(),

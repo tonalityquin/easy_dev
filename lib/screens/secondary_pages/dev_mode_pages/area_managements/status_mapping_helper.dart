@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-class PlateLimitManagementTab extends StatelessWidget {
-  const PlateLimitManagementTab({super.key});
+class StatusMappingHelper extends StatelessWidget {
+  const StatusMappingHelper({super.key});
 
   @override
   Widget build(BuildContext context) {

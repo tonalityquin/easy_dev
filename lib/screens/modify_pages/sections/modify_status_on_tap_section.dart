@@ -35,7 +35,7 @@ class _ModifyStatusOnTapSectionState extends State<ModifyStatusOnTapSection> {
     _loadInitialCategoryAndStatuses();
   }
 
-  /// SharedPreferences에서 업종 불러오기
+  /// 업종 로드: SharedPreferences > initialCategory > '공통'
   Future<void> _loadInitialCategoryAndStatuses() async {
     final prefs = await SharedPreferences.getInstance();
     final savedCategory = prefs.getString('selected_category');
@@ -43,7 +43,9 @@ class _ModifyStatusOnTapSectionState extends State<ModifyStatusOnTapSection> {
     setState(() {
       selectedCategory = savedCategory?.isNotEmpty == true
           ? savedCategory
-          : widget.initialCategory;
+          : (widget.initialCategory?.isNotEmpty == true
+          ? widget.initialCategory
+          : '공통');
     });
 
     // 상태 복원
@@ -59,7 +61,7 @@ class _ModifyStatusOnTapSectionState extends State<ModifyStatusOnTapSection> {
     _notifySelection();
   }
 
-  /// SharedPreferences에 업종 저장
+  /// 업종 저장
   Future<void> _saveSelectedCategory(String? category) async {
     final prefs = await SharedPreferences.getInstance();
     if (category != null && category.isNotEmpty) {
@@ -185,8 +187,7 @@ class _ModifyStatusOnTapSectionState extends State<ModifyStatusOnTapSection> {
             children: [
               const Text(
                 '선택된 상태:',
-                style: TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 4),
               Wrap(
