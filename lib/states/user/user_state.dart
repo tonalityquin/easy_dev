@@ -8,7 +8,6 @@ import '../../utils/plate_tts_listener_service.dart';
 import '../area/area_state.dart';
 
 class UserState extends ChangeNotifier {
-  // 🔹 1. 필드
   final UserRepository _repository;
   final AreaState _areaState;
 
@@ -20,7 +19,6 @@ class UserState extends ChangeNotifier {
   StreamSubscription<List<UserModel>>? _subscription;
   String _previousSelectedArea = '';
 
-  // 🔹 2. 게터
   UserModel? get user => _user;
 
   List<UserModel> get users => _users;
@@ -49,12 +47,9 @@ class UserState extends ChangeNotifier {
 
   String get currentArea => _user?.currentArea ?? area;
 
-  // 🔹 3. 생성자
   UserState(this._repository, this._areaState) {
     _areaState.addListener(_fetchUsersByAreaWithCache);
   }
-
-  // 🔹 4. Public 메서드
 
   Future<void> refreshUsersBySelectedAreaAndCache() async {
     final selectedArea = _areaState.currentArea.trim();
@@ -115,7 +110,6 @@ class UserState extends ChangeNotifier {
     _isLoading = true;
     _previousSelectedArea = '';
     notifyListeners();
-
     await _fetchUsersByAreaWithCache();
   }
 
@@ -139,12 +133,22 @@ class UserState extends ChangeNotifier {
   }
 
   Future<void> toggleUserCard(String id) async {
-    if (_selectedUserId == id) {
-      _selectedUserId = null;
-    } else {
-      _selectedUserId = id;
-    }
+    _selectedUserId = (_selectedUserId == id) ? null : id;
     notifyListeners();
+  }
+
+  Future<void> updateUserCard(UserModel updatedUser, {void Function(String)? onError}) async {
+    try {
+      await _repository.updateUser(updatedUser);
+
+      final index = _users.indexWhere((u) => u.id == updatedUser.id);
+      if (index != -1) {
+        _users[index] = updatedUser;
+        notifyListeners();
+      }
+    } catch (e) {
+      onError?.call('사용자 수정 실패: $e');
+    }
   }
 
   Future<void> saveCardToUserPhone(UserModel user) async {
@@ -152,9 +156,11 @@ class UserState extends ChangeNotifier {
     await prefs.setString('phone', user.phone);
     await prefs.setString('selectedArea', user.selectedArea ?? '');
     await prefs.setString('division', user.divisions.firstOrNull ?? '');
-    debugPrint(
-      "📌 SharedPreferences 저장 완료: phone=${user.phone}, selectedArea=${user.selectedArea}",
-    );
+    await prefs.setString('role', user.role);
+    await prefs.setString('startTime', _timeToString(user.startTime) ?? '');
+    await prefs.setString('endTime', _timeToString(user.endTime) ?? '');
+    await prefs.setStringList('fixedHolidays', user.fixedHolidays);
+    debugPrint("📌 SharedPreferences 저장 완료");
   }
 
   Future<void> loadUserToLogIn() async {
@@ -164,31 +170,38 @@ class UserState extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       final phone = prefs.getString('phone')?.trim();
       final selectedArea = prefs.getString('selectedArea')?.trim();
-
-      debugPrint("loadUserToLogIn, 자동 로그인 정보 → phone=$phone / selectedArea=$selectedArea");
+      final division = prefs.getString('division')?.trim();
+      final role = prefs.getString('role')?.trim();
+      final startTimeStr = prefs.getString('startTime');
+      final endTimeStr = prefs.getString('endTime');
+      final fixedHolidays = prefs.getStringList('fixedHolidays') ?? [];
 
       if (phone == null || selectedArea == null) return;
 
       final userId = "$phone-$selectedArea";
-      debugPrint("loadUserToLogIn, 시도할 userId: $userId");
-
       var userData = await _repository.getUserById(userId);
       if (userData == null) return;
 
-      final trimmedPhone = userData.phone.trim();
       final trimmedArea = selectedArea.trim();
+      await _repository.updateLoadCurrentArea(phone, trimmedArea, trimmedArea);
 
-      await _repository.updateLoadCurrentArea(trimmedPhone, trimmedArea, trimmedArea);
-      userData = userData.copyWith(currentArea: trimmedArea);
+      userData = userData.copyWith(
+        currentArea: trimmedArea,
+        role: role ?? userData.role,
+        startTime: _stringToTimeOfDay(startTimeStr),
+        endTime: _stringToTimeOfDay(endTimeStr),
+        fixedHolidays: fixedHolidays,
+        divisions: division != null ? [division] : userData.divisions,
+        // ✅ division 사용
+        isSaved: true,
+      );
 
-      await _repository.updateLoadUserStatus(phone, trimmedArea, isSaved: true);
-      _user = userData.copyWith(isSaved: true);
+      _user = userData;
       notifyListeners();
 
       Future.microtask(() => PlateTtsListenerService.start(currentArea));
-      debugPrint("loadUserToLogIn, TTS 감지 시작: $currentArea");
     } catch (e) {
-      debugPrint("loadUserToLogIn, 자동 로그인 오류: $e");
+      debugPrint("loadUserToLogIn, 오류: $e");
     }
   }
 
@@ -205,17 +218,12 @@ class UserState extends ChangeNotifier {
         _user!.areas.firstOrNull ?? '',
         newArea.trim(),
       );
-      debugPrint(
-        "areaPickerCurrentArea, currentArea 업데이트 완료 → ${_user!.phone.trim()}-${_user!.areas.firstOrNull} → $newArea",
-      );
     } catch (e) {
-      debugPrint("areaPickerCurrentArea, currentArea 업데이트 실패: $e");
+      debugPrint("areaPickerCurrentArea 실패: $e");
     }
 
     PlateTtsListenerService.start(newArea);
   }
-
-  // 🔹 5. Private 메서드
 
   Future<void> _fetchUsersByAreaWithCache() async {
     final selectedArea = _areaState.currentArea.trim();
@@ -230,14 +238,28 @@ class UserState extends ChangeNotifier {
       _users = data;
       _selectedUserId = null;
     } catch (e) {
-      debugPrint('_fetchUsersByAreaWithCache, Error fetching cached users: $e');
+      debugPrint('_fetchUsersByAreaWithCache 실패: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  // 🔹 6. Override
+  String? _timeToString(TimeOfDay? time) {
+    if (time == null) return null;
+    final hour = time.hour.toString().padLeft(2, '0');
+    final minute = time.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+
+  TimeOfDay? _stringToTimeOfDay(String? timeString) {
+    if (timeString == null || !timeString.contains(':')) return null;
+    final parts = timeString.split(':');
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+    return TimeOfDay(hour: hour, minute: minute);
+  }
 
   @override
   void dispose() {

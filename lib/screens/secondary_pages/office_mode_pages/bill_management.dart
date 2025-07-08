@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../../utils/snackbar_helper.dart';
 import '../../../states/bill/bill_state.dart';
-import '../../../states/area/area_state.dart'; // 🔥 지역 상태 추가
+import '../../../states/area/area_state.dart';
 import '../../../widgets/navigation/secondary_mini_navigation.dart';
-import '../../../widgets/container/bill_container.dart';
 import 'bill_pages/bill_setting.dart';
 
 class BillManagement extends StatefulWidget {
@@ -20,7 +20,6 @@ class _BillManagementState extends State<BillManagement> {
     super.didChangeDependencies();
     Future.delayed(Duration.zero, () {
       if (context.mounted) {
-        // ignore: use_build_context_synchronously
         context.read<BillState>().manualBillRefresh();
       }
     });
@@ -31,9 +30,7 @@ class _BillManagementState extends State<BillManagement> {
       context: context,
       builder: (BuildContext context) {
         return Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           child: BillSetting(
             onSave: (billData) async {
               try {
@@ -46,18 +43,11 @@ class _BillManagementState extends State<BillManagement> {
                   billData['addAmount'].toString(),
                 );
                 if (context.mounted) {
-                  showSuccessSnackbar(
-                    context,
-                    '✅ 정산 데이터가 성공적으로 추가되었습니다. 앱을 재실행하세요.',
-                  );
+                  showSuccessSnackbar(context, '✅ 정산 데이터가 성공적으로 추가되었습니다. 앱을 재실행하세요.');
                 }
               } catch (e) {
-                debugPrint("🔥 데이터 추가 중 예외 발생: $e");
                 if (context.mounted) {
-                  showFailedSnackbar(
-                    context,
-                    '🚨 데이터 추가 중 오류가 발생했습니다: $e',
-                  );
+                  showFailedSnackbar(context, '🚨 데이터 추가 중 오류가 발생했습니다: $e');
                 }
               }
             },
@@ -92,70 +82,55 @@ class _BillManagementState extends State<BillManagement> {
 
   @override
   Widget build(BuildContext context) {
+    final currentArea = context.watch<AreaState>().currentArea.trim();
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
         foregroundColor: Colors.black87,
-        title: const Text(
-          '정산유형',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+        title: const Text('정산유형', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         automaticallyImplyLeading: false,
       ),
       body: Consumer<BillState>(
         builder: (context, state, child) {
-          final currentArea =
-          context.watch<AreaState>().currentArea.trim();
-          final bills = state.bills
-              .where((bill) => bill.area.trim() == currentArea)
-              .toList();
+          final bills = state.bills.where((bill) => bill.area.trim() == currentArea).toList();
+
           if (bills.isEmpty) {
-            return const Center(
-              child: Text('현재 지역에 해당하는 정산 데이터가 없습니다.'),
-            );
+            return const Center(child: Text('현재 지역에 해당하는 정산 데이터가 없습니다.'));
           }
-          return ListView.builder(
+
+          return ListView.separated(
             itemCount: bills.length,
+            separatorBuilder: (_, __) => const Divider(height: 1.0, color: Colors.grey),
             itemBuilder: (context, index) {
               final bill = bills[index];
-              final id = bill.id;
-              final countType = bill.countType;
-              final basicStandard = bill.basicStandard.toString();
-              final basicAmount = bill.basicAmount.toString();
-              final addStandard = bill.addStandard.toString();
-              final addAmount = bill.addAmount.toString();
-              final isSelected = state.selectedBillId == id;
+              final isSelected = state.selectedBillId == bill.id;
 
-              return Column(
-                children: [
-                  BillContainer(
-                    leftText: countType,
-                    centerTopText: "기본 기준: $basicStandard",
-                    centerBottomText: "기본 금액: $basicAmount",
-                    rightTopText: "추가 기준: $addStandard",
-                    rightBottomText: "추가 금액: $addAmount",
-                    onTap: () {
-                      state.toggleBillSelection(id);
-                    },
-                    isSelected: isSelected,
-                  ),
-                  const Divider(
-                    height: 1.0,
-                    color: Colors.grey,
-                  ),
-                ],
+              return ListTile(
+                tileColor: isSelected ? Colors.green[50] : Colors.white,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                title: Text(
+                  bill.countType,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('기본 기준: ${bill.basicStandard}, 기본 금액: ${bill.basicAmount}'),
+                    Text('추가 기준: ${bill.addStandard}, 추가 금액: ${bill.addAmount}'),
+                  ],
+                ),
+                trailing: isSelected ? const Icon(Icons.check_circle, color: Colors.green) : null,
+                onTap: () => state.toggleBillSelection(bill.id),
               );
             },
           );
         },
       ),
       bottomNavigationBar: SecondaryMiniNavigation(
-        icons: [
-          Icons.add,
-          Icons.delete,
-        ],
+        icons: [Icons.add, Icons.delete],
         onIconTapped: (index) {
           if (index == 0) {
             _showBillSettingDialog(context);

@@ -1,40 +1,12 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
-enum RoleType {
-  dev,
-  officer,
-  fieldLeader,
-  fielder;
-
-  String get label {
-    switch (this) {
-      case RoleType.dev:
-        return '개발자';
-      case RoleType.officer:
-        return '내근직';
-      case RoleType.fieldLeader:
-        return '필드 팀장';
-      case RoleType.fielder:
-        return '외근직';
-    }
-  }
-
-  static RoleType fromName(String name) {
-    return RoleType.values.firstWhere(
-      (e) => e.name == name,
-      orElse: () => RoleType.fielder,
-    );
-  }
-
-  static RoleType fromLabel(String label) {
-    return RoleType.values.firstWhere(
-      (e) => e.label == label,
-      orElse: () => RoleType.fielder,
-    );
-  }
-}
+import '../../../../models/user_model.dart';
+import 'sections/password_display.dart';
+import 'sections/role_type.dart';
+import 'sections/user_input_section.dart';
+import 'sections/role_dropdown_section.dart';
+import 'sections/validation_helpers.dart';
 
 class UserSetting extends StatefulWidget {
   final Function(
@@ -48,23 +20,30 @@ class UserSetting extends StatefulWidget {
     bool isWorking,
     bool isSaved,
     String selectedArea,
+    String? startTime,
+    String? endTime,
+    List<String> fixedHolidays,
   ) onSave;
 
   final String areaValue;
   final String division;
+  final UserModel? initialUser; // ✅ 기존 사용자 데이터
+  final bool isEditMode;
 
   const UserSetting({
     super.key,
     required this.onSave,
     required this.areaValue,
     required this.division,
+    this.isEditMode = false,
+    this.initialUser,
   });
 
   @override
-  State<UserSetting> createState() => _UserAccountsState();
+  State<UserSetting> createState() => _UserSettingState();
 }
 
-class _UserAccountsState extends State<UserSetting> {
+class _UserSettingState extends State<UserSetting> {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
@@ -74,13 +53,32 @@ class _UserAccountsState extends State<UserSetting> {
   final _phoneFocus = FocusNode();
   final _emailFocus = FocusNode();
 
-  RoleType _selectedRole = RoleType.fielder;
+  RoleType _selectedRole = RoleType.lowField;
   String? _errorMessage;
+
+  TimeOfDay? _startTime;
+  TimeOfDay? _endTime;
+
+  final List<String> _days = ['월', '화', '수', '목', '금', '토', '일'];
+  final Set<String> _selectedHolidays = {};
 
   @override
   void initState() {
     super.initState();
-    _passwordController.text = _generateRandomPassword();
+    final user = widget.initialUser;
+
+    if (user != null) {
+      _nameController.text = user.name;
+      _phoneController.text = user.phone;
+      _emailController.text = user.email.split('@').first;
+      _passwordController.text = user.password;
+      _selectedRole = RoleType.values.firstWhere((r) => r.name == user.role, orElse: () => RoleType.lowField);
+      _startTime = user.startTime;
+      _endTime = user.endTime;
+      _selectedHolidays.addAll(user.fixedHolidays);
+    } else {
+      _passwordController.text = _generateRandomPassword();
+    }
   }
 
   @override
@@ -95,30 +93,14 @@ class _UserAccountsState extends State<UserSetting> {
     super.dispose();
   }
 
-  final Map<String, String Function(String)> _validationRules = {
-    '이름': (value) => value.isEmpty ? '이름을 다시 입력하세요' : '',
-    '전화번호': (value) => RegExp(r'^\d{9,}$').hasMatch(value) ? '' : '전화번호를 다시 입력하세요',
-    '이메일': (value) => value.isEmpty ? '이메일을 입력하세요' : '',
-  };
-
   bool _validateInputs() {
-    for (var entry in _validationRules.entries) {
-      final field = entry.key;
-      final validator = entry.value;
-      String inputValue = switch (field) {
-        '이름' => _nameController.text,
-        '전화번호' => _phoneController.text,
-        '이메일' => _emailController.text,
-        _ => '',
-      };
-      final errorMessage = validator(inputValue);
-      if (errorMessage.isNotEmpty) {
-        _setErrorMessage(errorMessage);
-        return false;
-      }
-    }
-    _setErrorMessage(null);
-    return true;
+    final error = validateInputs({
+      '이름': _nameController.text,
+      '전화번호': _phoneController.text,
+      '이메일': _emailController.text,
+    });
+    _setErrorMessage(error);
+    return error == null;
   }
 
   void _setErrorMessage(String? message) {
@@ -132,14 +114,43 @@ class _UserAccountsState extends State<UserSetting> {
     return (10000 + random.nextInt(90000)).toString();
   }
 
+  Future<void> _selectTime({required bool isStartTime}) async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+    );
+    if (picked != null) {
+      setState(() {
+        if (isStartTime) {
+          _startTime = picked;
+        } else {
+          _endTime = picked;
+        }
+      });
+    }
+  }
+
+  String _formatTimeOfDay(TimeOfDay? time) {
+    if (time == null) return '--:--';
+    final hour = time.hour.toString().padLeft(2, '0');
+    final minute = time.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+
+  String? _timeToString(TimeOfDay? time) {
+    return time != null ? '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}' : null;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isEditMode = widget.initialUser != null;
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text(
-          '계정 생성',
-          style: TextStyle(fontWeight: FontWeight.bold),
+        title: Text(
+          isEditMode ? '계정 수정' : '계정 생성',
+          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black87,
@@ -148,74 +159,58 @@ class _UserAccountsState extends State<UserSetting> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          TextField(
-            controller: _nameController,
-            focusNode: _nameFocus,
-            textInputAction: TextInputAction.next,
-            onSubmitted: (_) => FocusScope.of(context).requestFocus(_phoneFocus),
-            decoration: InputDecoration(
-              labelText: '이름',
-              focusedBorder: OutlineInputBorder(
-                borderSide: const BorderSide(color: Colors.green),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              errorText: _errorMessage == '이름을 다시 입력하세요' ? _errorMessage : null,
-            ),
+          UserInputSection(
+            nameController: _nameController,
+            phoneController: _phoneController,
+            emailController: _emailController,
+            nameFocus: _nameFocus,
+            phoneFocus: _phoneFocus,
+            emailFocus: _emailFocus,
+            errorMessage: _errorMessage,
           ),
           const SizedBox(height: 16),
-          TextField(
-            controller: _phoneController,
-            focusNode: _phoneFocus,
-            textInputAction: TextInputAction.next,
-            onSubmitted: (_) => FocusScope.of(context).requestFocus(_emailFocus),
-            keyboardType: TextInputType.phone,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            decoration: InputDecoration(
-              labelText: '전화번호',
-              focusedBorder: OutlineInputBorder(
-                borderSide: const BorderSide(color: Colors.green),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              errorText: _errorMessage == '전화번호를 다시 입력하세요' ? _errorMessage : null,
-            ),
+          RoleDropdownSection(
+            selectedRole: _selectedRole,
+            onChanged: (value) {
+              setState(() {
+                _selectedRole = value;
+              });
+            },
           ),
+          const SizedBox(height: 16),
+          PasswordDisplaySection(controller: _passwordController),
           const SizedBox(height: 16),
           Row(
             children: [
               Expanded(
-                flex: 3,
-                child: TextField(
-                  controller: _emailController,
-                  focusNode: _emailFocus,
-                  keyboardType: TextInputType.text,
-                  decoration: InputDecoration(
-                    labelText: '이메일(구글)',
-                    focusedBorder: OutlineInputBorder(
-                      borderSide: const BorderSide(color: Colors.green),
+                child: GestureDetector(
+                  onTap: () => _selectTime(isStartTime: true),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade400),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
+                    child: Text(
+                      '출근 시간: ${_formatTimeOfDay(_startTime)}',
+                      style: const TextStyle(fontSize: 16),
                     ),
-                    errorText: _errorMessage == '이메일을 입력하세요' ? _errorMessage : null,
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              const Expanded(
-                flex: 2,
-                child: SizedBox(
-                  height: 56,
-                  child: Center(
+              const SizedBox(width: 12),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => _selectTime(isStartTime: false),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade400),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                     child: Text(
-                      '@gmail.com',
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                      '퇴근 시간: ${_formatTimeOfDay(_endTime)}',
+                      style: const TextStyle(fontSize: 16),
                     ),
                   ),
                 ),
@@ -223,53 +218,29 @@ class _UserAccountsState extends State<UserSetting> {
             ],
           ),
           const SizedBox(height: 16),
-          DropdownButtonFormField<RoleType>(
-            value: _selectedRole,
-            decoration: InputDecoration(
-              labelText: '직책',
-              focusedBorder: OutlineInputBorder(
-                borderSide: const BorderSide(color: Colors.green),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            dropdownColor: Colors.white,
-            iconEnabledColor: Colors.green,
-            items: RoleType.values
-                .map((role) => DropdownMenuItem<RoleType>(
-                      value: role,
-                      child: Text(
-                        role.label,
-                        style: TextStyle(
-                          color: role == _selectedRole ? Colors.green : Colors.purple,
-                        ),
-                      ),
-                    ))
-                .toList(),
-            onChanged: (value) {
-              if (value != null) {
-                setState(() {
-                  _selectedRole = value;
-                });
-              }
-            },
+          Text(
+            '고정 휴일 선택 (선택사항)',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _passwordController,
-            readOnly: true,
-            decoration: InputDecoration(
-              labelText: '비밀번호',
-              focusedBorder: OutlineInputBorder(
-                borderSide: const BorderSide(color: Colors.green),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
+          Wrap(
+            spacing: 8,
+            children: _days.map((day) {
+              final isSelected = _selectedHolidays.contains(day);
+              return FilterChip(
+                label: Text(day),
+                selected: isSelected,
+                selectedColor: Colors.green.shade100,
+                onSelected: (selected) {
+                  setState(() {
+                    if (selected) {
+                      _selectedHolidays.add(day);
+                    } else {
+                      _selectedHolidays.remove(day);
+                    }
+                  });
+                },
+              );
+            }).toList(),
           ),
           const SizedBox(height: 16),
           Text(
@@ -307,6 +278,7 @@ class _UserAccountsState extends State<UserSetting> {
                   onPressed: () {
                     if (_validateInputs()) {
                       final fullEmail = '${_emailController.text}@gmail.com';
+
                       widget.onSave(
                         _nameController.text,
                         _phoneController.text,
@@ -318,6 +290,9 @@ class _UserAccountsState extends State<UserSetting> {
                         false,
                         false,
                         widget.areaValue,
+                        _timeToString(_startTime),
+                        _timeToString(_endTime),
+                        _selectedHolidays.toList(),
                       );
                       Navigator.pop(context);
                     }
@@ -330,7 +305,7 @@ class _UserAccountsState extends State<UserSetting> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  child: const Text('생성'),
+                  child: Text(isEditMode ? '수정' : '생성'),
                 ),
               ),
             ],

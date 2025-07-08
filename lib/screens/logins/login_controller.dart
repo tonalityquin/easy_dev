@@ -3,15 +3,11 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'utils/login_validate.dart';
-
 import '../../repositories/user/user_repository.dart';
-
 import '../../states/user/user_state.dart';
 import '../../states/area/area_state.dart';
-
 import '../../utils/snackbar_helper.dart';
 import '../../utils/login_network_service.dart';
-
 import 'debugs/login_debug_firestore_logger.dart';
 
 class LoginController {
@@ -50,10 +46,7 @@ class LoginController {
     final phone = phoneController.text.trim().replaceAll(RegExp(r'\D'), '');
     final password = passwordController.text.trim();
 
-    LoginDebugFirestoreLogger().log(
-      '📥 로그인 시도: name="$name", phone="$phone"',
-      level: 'called',
-    );
+    LoginDebugFirestoreLogger().log('📥 로그인 시도: name="$name", phone="$phone"', level: 'called');
 
     final phoneError = LoginValidate.validatePhone(phone);
     final passwordError = LoginValidate.validatePassword(password);
@@ -91,15 +84,9 @@ class LoginController {
       final user = await userRepository.getUserByPhone(phone);
 
       if (user != null) {
-        LoginDebugFirestoreLogger().log(
-          '✅ DB에서 사용자 조회 성공: ${user.name}',
-          level: 'success',
-        );
+        LoginDebugFirestoreLogger().log('✅ DB에서 사용자 조회 성공: ${user.name}', level: 'success');
       } else {
-        LoginDebugFirestoreLogger().log(
-          '⚠️ DB에서 사용자 조회 실패(null 반환)',
-          level: 'error',
-        );
+        LoginDebugFirestoreLogger().log('⚠️ DB에서 사용자 조회 실패(null 반환)', level: 'error');
       }
 
       if (context.mounted) {
@@ -115,12 +102,20 @@ class LoginController {
       if (user != null && user.name == name && user.password == password) {
         final userState = context.read<UserState>();
         final areaState = context.read<AreaState>();
-
         final updatedUser = user.copyWith(isSaved: true);
         userState.updateLoginUser(updatedUser);
-        final prefs = await SharedPreferences.getInstance();
 
-        debugPrint("login, 로그인 직후 저장된 phone=${prefs.getString('phone')} / area=${prefs.getString('area')}");
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('phone', updatedUser.phone);
+        await prefs.setString('selectedArea', updatedUser.selectedArea ?? '');
+        await prefs.setString('division', updatedUser.divisions.firstOrNull ?? '');
+        await prefs.setString('startTime', _timeToString(updatedUser.startTime));
+        await prefs.setString('endTime', _timeToString(updatedUser.endTime));
+        await prefs.setString('role', updatedUser.role);
+        await prefs.setStringList('fixedHolidays', updatedUser.fixedHolidays);
+
+        debugPrint("📌 SharedPreferences 저장 완료 → phone=${prefs.getString('phone')}");
+
         LoginDebugFirestoreLogger().log(
           '✅ 로그인 성공: user=${user.name}, area=${updatedUser.areas.firstOrNull ?? ''}',
           level: 'success',
@@ -137,10 +132,7 @@ class LoginController {
         if (context.mounted) {
           showFailedSnackbar(context, '이름 또는 비밀번호가 올바르지 않습니다.');
         }
-        LoginDebugFirestoreLogger().log(
-          '❌ 인증 실패: 이름 또는 비밀번호 불일치',
-          level: 'error',
-        );
+        LoginDebugFirestoreLogger().log('❌ 인증 실패: 이름 또는 비밀번호 불일치', level: 'error');
       }
     } catch (e) {
       if (context.mounted) {
@@ -153,7 +145,11 @@ class LoginController {
     }
   }
 
-  /// 비밀번호 보이기&숨기기
+  String _timeToString(TimeOfDay? time) {
+    if (time == null) return '';
+    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+  }
+
   void togglePassword() {
     obscurePassword = !obscurePassword;
     LoginDebugFirestoreLogger().log(
@@ -162,7 +158,6 @@ class LoginController {
     );
   }
 
-  /// 전화번호 자동 하이픈 포맷팅
   void formatPhoneNumber(String value, StateSetter setState) {
     final numbersOnly = value.replaceAll(RegExp(r'\D'), '');
     String formatted = numbersOnly;
@@ -179,13 +174,9 @@ class LoginController {
         selection: TextSelection.collapsed(offset: formatted.length),
       );
     });
-    LoginDebugFirestoreLogger().log(
-      '☎️ 전화번호 포맷팅: $formatted',
-      level: 'info',
-    );
+    LoginDebugFirestoreLogger().log('☎️ 전화번호 포맷팅: $formatted', level: 'info');
   }
 
-  /// 로그인 페이지 텍스트 필드 데코레이션
   InputDecoration inputDecoration({
     required String label,
     IconData? icon,
@@ -207,7 +198,6 @@ class LoginController {
     );
   }
 
-  /// 화면 종료 시
   void dispose() {
     nameController.dispose();
     phoneController.dispose();

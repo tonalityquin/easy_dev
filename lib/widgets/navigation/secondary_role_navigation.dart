@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../screens/secondary_pages/office_mode_pages/user_management_pages/user_setting.dart';
+import '../../screens/secondary_pages/office_mode_pages/user_management_pages/sections/role_type.dart';
 import '../../states/secondary/secondary_mode.dart';
 import '../../states/user/user_state.dart';
 import '../dialog/secondary_picker_bottom_sheet.dart';
@@ -23,12 +23,14 @@ class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWi
 
     final isSelectable = [
       RoleType.dev,
-      RoleType.officer,
-      RoleType.fieldLeader,
+      RoleType.admin,
+      RoleType.ceo,
+      RoleType.highManager,
+      RoleType.middleManager,
+      RoleType.lowManager,
     ].contains(userRole);
 
-    final selectedModeLabel =
-    userRole == RoleType.fielder ? '보조 페이지' : manageState.currentStatus.label;
+    final selectedModeLabel = userRole == RoleType.lowField ? '보조 페이지' : manageState.currentStatus.label;
 
     return AppBar(
       backgroundColor: Colors.white,
@@ -36,14 +38,13 @@ class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWi
       title: GestureDetector(
         onTap: isSelectable
             ? () => secondaryPickerBottomSheet(
-          context: context,
-          manageState: manageState,
-          currentStatus: selectedModeLabel,
-          availableStatus: _getFilteredAvailableStatus(
-            userRole,
-            manageState.availableStatus,
-          ),
-        )
+                  context: context,
+                  manageState: manageState,
+                  currentStatus: selectedModeLabel,
+                  availableStatus: getFilteredAvailableStatus(
+                    userRole,
+                  ),
+                )
             : null,
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -68,19 +69,26 @@ class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWi
     );
   }
 
-  List<String> _getFilteredAvailableStatus(RoleType userRole, List<String> availableStatus) {
-    if (userRole == RoleType.fielder) return ['보조 페이지'];
+  List<String> getFilteredAvailableStatus(RoleType role) {
+    if (role == RoleType.dev) {
+      // dev는 모든 페이지 접근 가능
+      return ModeStatus.values.map((e) => e.label).toList();
+    }
 
-    if (userRole == RoleType.fieldLeader) {
-      return availableStatus
-          .where((mode) => mode != 'Dev Mode' && mode != 'Statistics Mode')
+    if ([
+      RoleType.admin,
+      RoleType.ceo,
+      RoleType.highManager,
+      RoleType.middleManager,
+      RoleType.lowManager,
+    ].contains(role)) {
+      return ModeStatus.values
+          .where((mode) => mode != ModeStatus.dev && mode != ModeStatus.document)
+          .map((e) => e.label)
           .toList();
     }
 
-    if (userRole == RoleType.officer) {
-      return availableStatus.where((mode) => mode != 'Dev Mode').toList();
-    }
-
-    return availableStatus; // dev는 전부 허용
+    // 그 외 필드 계열(lowField, middleField, highField 등)은 보조 페이지만 가능
+    return [ModeStatus.field.label];
   }
 }

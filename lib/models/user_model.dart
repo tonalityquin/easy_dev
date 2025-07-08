@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 class UserModel {
   final String id;
   final String name;
@@ -6,16 +8,20 @@ class UserModel {
   final String role;
   final String password;
 
-  final List<String> areas; // ✅ 복수 지역
-  final List<String> divisions; // ✅ 복수 부서
+  final List<String> areas;
+  final List<String> divisions;
 
-  final String? currentArea; // ✅ 현재 근무 지역
-  final String? selectedArea; // ✅ 선택된 지역
-  final String? englishSelectedAreaName; // ✅ 선택된 지역의 영어 이름
+  final String? currentArea;
+  final String? selectedArea;
+  final String? englishSelectedAreaName;
 
   final bool isSelected;
   final bool isWorking;
   final bool isSaved;
+
+  final TimeOfDay? startTime; // ✅ 출근 시간
+  final TimeOfDay? endTime;   // ✅ 퇴근 시간
+  final List<String> fixedHolidays; // ✅ 고정 휴일
 
   const UserModel({
     required this.id,
@@ -32,6 +38,9 @@ class UserModel {
     required this.isSelected,
     required this.isWorking,
     required this.isSaved,
+    this.startTime,
+    this.endTime,
+    this.fixedHolidays = const [],
   });
 
   UserModel copyWith({
@@ -49,6 +58,9 @@ class UserModel {
     bool? isSelected,
     bool? isWorking,
     bool? isSaved,
+    TimeOfDay? startTime,
+    TimeOfDay? endTime,
+    List<String>? fixedHolidays,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -61,11 +73,13 @@ class UserModel {
       divisions: divisions ?? this.divisions,
       currentArea: currentArea ?? this.currentArea,
       selectedArea: selectedArea ?? this.selectedArea,
-      englishSelectedAreaName:
-      englishSelectedAreaName ?? this.englishSelectedAreaName,
+      englishSelectedAreaName: englishSelectedAreaName ?? this.englishSelectedAreaName,
       isSelected: isSelected ?? this.isSelected,
       isWorking: isWorking ?? this.isWorking,
       isSaved: isSaved ?? this.isSaved,
+      startTime: startTime ?? this.startTime,
+      endTime: endTime ?? this.endTime,
+      fixedHolidays: fixedHolidays ?? this.fixedHolidays,
     );
   }
 
@@ -85,6 +99,9 @@ class UserModel {
       isSelected: data['isSelected'] ?? false,
       isWorking: data['isWorking'] ?? false,
       isSaved: data['isSaved'] ?? false,
+      startTime: _parseTime(data['startTime']),
+      endTime: _parseTime(data['endTime']),
+      fixedHolidays: List<String>.from(data['fixedHolidays'] ?? []),
     );
   }
 
@@ -103,6 +120,9 @@ class UserModel {
       'isSelected': isSelected,
       'isWorking': isWorking,
       'isSaved': isSaved,
+      'startTime': _timeToMap(startTime),
+      'endTime': _timeToMap(endTime),
+      'fixedHolidays': fixedHolidays,
     };
   }
 
@@ -122,6 +142,9 @@ class UserModel {
       isSelected: json['isSelected'] ?? false,
       isWorking: json['isWorking'] ?? false,
       isSaved: json['isSaved'] ?? false,
+      startTime: _parseTime(json['startTime']),
+      endTime: _parseTime(json['endTime']),
+      fixedHolidays: List<String>.from(json['fixedHolidays'] ?? []),
     );
   }
 
@@ -141,11 +164,29 @@ class UserModel {
       'isSelected': isSelected,
       'isWorking': isWorking,
       'isSaved': isSaved,
+      'startTime': _timeToMap(startTime),
+      'endTime': _timeToMap(endTime),
+      'fixedHolidays': fixedHolidays,
     };
   }
 
-  /// ✅ 캐싱용 ID 포함 toJson 헬퍼
-  Map<String, dynamic> toMapWithId() {
-    return toJson(); // toJson() 자체가 id를 포함하므로 별도의 수정 없이 반환
+  Map<String, dynamic> toMapWithId() => toJson();
+
+  /// ⏱️ TimeOfDay → Map 변환
+  static Map<String, int>? _timeToMap(TimeOfDay? time) {
+    if (time == null) return null;
+    return {'hour': time.hour, 'minute': time.minute};
+  }
+
+  /// ⏱️ Map → TimeOfDay 변환
+  static TimeOfDay? _parseTime(dynamic timeData) {
+    if (timeData is Map<String, dynamic>) {
+      final hour = timeData['hour'];
+      final minute = timeData['minute'];
+      if (hour is int && minute is int) {
+        return TimeOfDay(hour: hour, minute: minute);
+      }
+    }
+    return null;
   }
 }
