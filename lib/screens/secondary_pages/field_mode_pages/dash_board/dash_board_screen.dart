@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:android_intent_plus/android_intent.dart'; // ✅ 추가
 
 import '../../../../states/user/user_state.dart';
 import 'dash_board_controller.dart';
@@ -63,11 +64,11 @@ class DashBoardScreen extends StatelessWidget {
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 16),
-                    UserInfoCard(userState: userState),
+                    UserInfoCard(),
                     const SizedBox(height: 32),
                     BreakButtonWidget(controller: controller),
                     const SizedBox(height: 16),
-                    // ✅ 순서 변경: 보고 작성이 왼쪽, 퇴근하기가 오른쪽
+                    // ✅ 보고 작성, 퇴근하기 버튼
                     Row(
                       children: [
                         Expanded(
@@ -96,6 +97,49 @@ class DashBoardScreen extends StatelessWidget {
                           ),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 16),
+                    // ✅ Gmail 앱 열기 버튼 (안정적인 방식)
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.email),
+                        label: const Text('Gmail 열기'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.black,
+                          side: const BorderSide(color: Colors.grey),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        onPressed: () async {
+                          try {
+                            final intent = AndroidIntent(
+                              action: 'android.intent.action.MAIN',
+                              package: 'com.google.android.gm',
+                              componentName: 'com.google.android.gm.ConversationListActivityGmail',
+                            );
+                            await intent.launch();
+                          } catch (e) {
+                            // Gmail 앱 실패 시 웹 메일 fallback
+                            try {
+                              final fallbackIntent = AndroidIntent(
+                                action: 'android.intent.action.VIEW',
+                                data: 'https://mail.google.com',
+                              );
+                              await fallbackIntent.launch();
+                            } catch (e2) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Gmail 실행 실패: $e2')),
+                                );
+                              }
+                            }
+                          }
+                        },
+                      ),
                     ),
                     const SizedBox(height: 32),
                   ],
