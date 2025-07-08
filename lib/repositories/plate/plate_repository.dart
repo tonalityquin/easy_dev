@@ -57,6 +57,11 @@ abstract class PlateRepository {
   });
 
   Future<int> getPlateCountForClockInPage(
+      PlateType type, {
+        DateTime? selectedDate,
+        required String area,
+      });
+  Future<int> getPlateCountForClockOutPage(
     PlateType type, {
     DateTime? selectedDate,
     required String area,

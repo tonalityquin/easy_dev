@@ -10,7 +10,7 @@ import '../../../states/area/area_state.dart';
 import 'debugs/clock_in_debug_bottom_sheet.dart';
 import 'debugs/clock_in_debug_firestore_logger.dart'; // ✅ 로컬 디버깅 로거 추가
 import 'clock_in_controller.dart';
-import 'sections/fetch_plate_count_widget.dart';
+import 'sections/clock_in_fetch_plate_count_widget.dart';
 import 'sections/report_button_widget.dart';
 import 'sections/work_button_widget.dart';
 import 'sections/user_info_card.dart';
@@ -168,8 +168,8 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           const HeaderWidget(),
+                          const ClockInFetchPlateCountWidget(),
                           const UserInfoCard(),
-                          const FetchPlateCountWidget(),
                           const SizedBox(height: 32),
                           Row(
                             children: [

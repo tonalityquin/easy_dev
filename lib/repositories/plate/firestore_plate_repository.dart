@@ -11,42 +11,35 @@ class FirestorePlateRepository implements PlateRepository {
 
   @override
   Stream<List<PlateModel>> streamToCurrentArea(
-      PlateType type,
-      String area, {
-        bool descending = true,
-        String? location,
-      }) {
-    FirestoreLogger().log(
-        'streamToCurrentArea called: type=${type.name}, area=$area, descending=$descending, location=$location');
+    PlateType type,
+    String area, {
+    bool descending = true,
+    String? location,
+  }) {
+    FirestoreLogger()
+        .log('streamToCurrentArea called: type=${type.name}, area=$area, descending=$descending, location=$location');
 
-    Query<Map<String, dynamic>> query = _firestore
-        .collection('plates')
-        .where('type', isEqualTo: type.firestoreValue)
-        .where('area', isEqualTo: area);
+    Query<Map<String, dynamic>> query =
+        _firestore.collection('plates').where('type', isEqualTo: type.firestoreValue).where('area', isEqualTo: area);
 
     if (type == PlateType.departureCompleted) {
       query = query.where('isLockedFee', isEqualTo: false);
     }
 
-    if (location != null &&
-        location.isNotEmpty &&
-        type == PlateType.parkingCompleted) {
+    if (location != null && location.isNotEmpty && type == PlateType.parkingCompleted) {
       query = query.where('location', isEqualTo: location);
     }
 
     query = query.orderBy('request_time', descending: descending);
 
     return query.snapshots().map(
-          (snapshot) => snapshot.docs
-          .map((doc) => PlateModel.fromDocument(doc))
-          .toList(),
-    );
+          (snapshot) => snapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList(),
+        );
   }
 
   @override
   Future<void> addOrUpdatePlate(String documentId, PlateModel plate) async {
-    await FirestoreLogger()
-        .log('addOrUpdatePlate called: $documentId, data=${plate.toMap()}');
+    await FirestoreLogger().log('addOrUpdatePlate called: $documentId, data=${plate.toMap()}');
 
     final docRef = _firestore.collection('plates').doc(documentId);
     final docSnapshot = await docRef.get();
@@ -78,8 +71,7 @@ class FirestorePlateRepository implements PlateRepository {
 
   @override
   Future<void> updatePlate(String documentId, Map<String, dynamic> updatedFields) async {
-    await FirestoreLogger()
-        .log('updatePlate called: $documentId, fields=$updatedFields');
+    await FirestoreLogger().log('updatePlate called: $documentId, fields=$updatedFields');
     final docRef = _firestore.collection('plates').doc(documentId);
 
     try {
@@ -108,8 +100,7 @@ class FirestorePlateRepository implements PlateRepository {
     required String area,
     required String location,
   }) async {
-    await FirestoreLogger().log(
-        'getPlatesByLocation called: type=${type.name}, area=$area, location=$location');
+    await FirestoreLogger().log('getPlatesByLocation called: type=${type.name}, area=$area, location=$location');
     final querySnapshot = await _firestore
         .collection('plates')
         .where('type', isEqualTo: type.firestoreValue)
@@ -117,12 +108,9 @@ class FirestorePlateRepository implements PlateRepository {
         .where('location', isEqualTo: location)
         .get();
 
-    final result = querySnapshot.docs
-        .map((doc) => PlateModel.fromDocument(doc))
-        .toList();
+    final result = querySnapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList();
 
-    await FirestoreLogger().log(
-        'getPlatesByLocation success: ${result.length} items loaded');
+    await FirestoreLogger().log('getPlatesByLocation success: ${result.length} items loaded');
     return result;
   }
 
@@ -137,8 +125,7 @@ class FirestorePlateRepository implements PlateRepository {
       await FirestoreLogger().log('deletePlate success: $documentId');
     } else {
       debugPrint("DB에 존재하지 않는 문서 (deletePlate): $documentId");
-      await FirestoreLogger()
-          .log('deletePlate skipped: document not found');
+      await FirestoreLogger().log('deletePlate skipped: document not found');
     }
   }
 
@@ -147,8 +134,7 @@ class FirestorePlateRepository implements PlateRepository {
     required String plateFourDigit,
     required String area,
   }) async {
-    await FirestoreLogger().log(
-        'fourDigitUseSearchQuery called: plateFourDigit=$plateFourDigit, area=$area');
+    await FirestoreLogger().log('fourDigitUseSearchQuery called: plateFourDigit=$plateFourDigit, area=$area');
 
     final querySnapshot = await _firestore
         .collection('plates')
@@ -156,12 +142,9 @@ class FirestorePlateRepository implements PlateRepository {
         .where('area', isEqualTo: area)
         .get();
 
-    final result = querySnapshot.docs
-        .map((doc) => PlateModel.fromDocument(doc))
-        .toList();
+    final result = querySnapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList();
 
-    await FirestoreLogger().log(
-        'fourDigitUseSearchQuery success: ${result.length} items loaded');
+    await FirestoreLogger().log('fourDigitUseSearchQuery success: ${result.length} items loaded');
     return result;
   }
 
@@ -188,34 +171,28 @@ class FirestorePlateRepository implements PlateRepository {
     String? customStatus,
   }) async {
     final documentId = '${plateNumber}_$area';
-    await FirestoreLogger()
-        .log('addPlate called: $documentId, plateNumber=$plateNumber');
+    await FirestoreLogger().log('addPlate called: $documentId, plateNumber=$plateNumber');
 
     final existingPlate = await getPlate(documentId);
     if (existingPlate != null) {
       final existingType = PlateType.values.firstWhere(
-            (type) => type.firestoreValue == existingPlate.type,
+        (type) => type.firestoreValue == existingPlate.type,
         orElse: () => PlateType.parkingRequests,
       );
 
       if (_isAllowedDuplicate(existingType)) {
         debugPrint("⚠️ ${existingType.name} 상태 중복 등록 허용: $plateNumber");
-        await FirestoreLogger().log(
-            'addPlate allowed duplicate: $plateNumber (${existingType.name})');
+        await FirestoreLogger().log('addPlate allowed duplicate: $plateNumber (${existingType.name})');
       } else {
         debugPrint("🚨 중복된 번호판 등록 시도: $plateNumber (${existingType.name})");
-        await FirestoreLogger()
-            .log('addPlate error: duplicate plate - $plateNumber');
+        await FirestoreLogger().log('addPlate error: duplicate plate - $plateNumber');
         throw Exception("이미 등록된 번호판입니다: $plateNumber");
       }
     }
 
     if (billingType != null) {
       try {
-        final billDoc = await _firestore
-            .collection('bill')
-            .doc('${billingType}_$area')
-            .get();
+        final billDoc = await _firestore.collection('bill').doc('${billingType}_$area').get();
 
         if (billDoc.exists) {
           final billData = billDoc.data()!;
@@ -225,8 +202,7 @@ class FirestorePlateRepository implements PlateRepository {
           addStandard = billData['addStandard'] as int? ?? 0;
           addAmount = billData['addAmount'] as int? ?? 0;
 
-          await FirestoreLogger().log(
-              'addPlate billing data loaded: $billingType');
+          await FirestoreLogger().log('addPlate billing data loaded: $billingType');
         } else {
           throw Exception('Firestore에서 정산 데이터를 찾을 수 없음');
         }
@@ -237,12 +213,9 @@ class FirestorePlateRepository implements PlateRepository {
       }
     }
 
-    final plateFourDigit = plateNumber.length >= 4
-        ? plateNumber.substring(plateNumber.length - 4)
-        : plateNumber;
+    final plateFourDigit = plateNumber.length >= 4 ? plateNumber.substring(plateNumber.length - 4) : plateNumber;
 
-    final bool effectiveIsLockedFee =
-        isLockedFee || (billingType == null || billingType.trim().isEmpty);
+    final bool effectiveIsLockedFee = isLockedFee || (billingType == null || billingType.trim().isEmpty);
 
     final plate = PlateModel(
       id: documentId,
@@ -275,10 +248,8 @@ class FirestorePlateRepository implements PlateRepository {
     await addOrUpdatePlate(documentId, plate);
 
     if (customStatus != null && customStatus.trim().isNotEmpty) {
-      final statusDocRef =
-      _firestore.collection('plate_status').doc(documentId);
-      final expireAt =
-      Timestamp.fromDate(DateTime.now().add(const Duration(days: 1)));
+      final statusDocRef = _firestore.collection('plate_status').doc(documentId);
+      final expireAt = Timestamp.fromDate(DateTime.now().add(const Duration(days: 1)));
 
       await statusDocRef.set({
         'customStatus': customStatus,
@@ -287,8 +258,7 @@ class FirestorePlateRepository implements PlateRepository {
         'expireAt': expireAt,
       });
 
-      await FirestoreLogger()
-          .log('addPlate customStatus saved: $customStatus');
+      await FirestoreLogger().log('addPlate customStatus saved: $customStatus');
     }
 
     await FirestoreLogger().log('addPlate success: $documentId');
@@ -300,12 +270,11 @@ class FirestorePlateRepository implements PlateRepository {
 
   @override
   Future<void> recordWhoPlateClick(
-      String id,
-      bool isSelected, {
-        String? selectedBy,
-      }) async {
-    await FirestoreLogger().log(
-        'recordWhoPlateClick called: $id, isSelected=$isSelected, selectedBy=$selectedBy');
+    String id,
+    bool isSelected, {
+    String? selectedBy,
+  }) async {
+    await FirestoreLogger().log('recordWhoPlateClick called: $id, isSelected=$isSelected, selectedBy=$selectedBy');
     final docRef = _firestore.collection('plates').doc(id);
 
     try {
@@ -317,8 +286,7 @@ class FirestorePlateRepository implements PlateRepository {
     } on FirebaseException catch (e) {
       if (e.code == 'not-found') {
         debugPrint("번호판 문서를 찾을 수 없습니다: $id");
-        await FirestoreLogger().log(
-            'recordWhoPlateClick skipped (not found): $id');
+        await FirestoreLogger().log('recordWhoPlateClick skipped (not found): $id');
         return;
       }
       debugPrint("DB 에러 (recordWhoPlateClick): $e");
@@ -333,11 +301,10 @@ class FirestorePlateRepository implements PlateRepository {
 
   @override
   Future<int> getPlateCountForTypePage(
-      PlateType type,
-      String area,
-      ) async {
-    await FirestoreLogger()
-        .log('getPlateCountForTypePage called: type=${type.name}, area=$area');
+    PlateType type,
+    String area,
+  ) async {
+    await FirestoreLogger().log('getPlateCountForTypePage called: type=${type.name}, area=$area');
     final aggregateQuerySnapshot = await _firestore
         .collection('plates')
         .where('type', isEqualTo: type.firestoreValue)
@@ -346,42 +313,66 @@ class FirestorePlateRepository implements PlateRepository {
         .get();
 
     final count = aggregateQuerySnapshot.count ?? 0;
-    await FirestoreLogger()
-        .log('getPlateCountForTypePage success: $count');
+    await FirestoreLogger().log('getPlateCountForTypePage success: $count');
     return count;
   }
 
   @override
   Future<int> getPlateCountForClockInPage(
-      PlateType type, {
-        DateTime? selectedDate,
-        required String area,
-      }) async {
-    await FirestoreLogger().log(
-        'getPlateCountForClockInPage called: type=${type.name}, area=$area, selectedDate=$selectedDate');
+    PlateType type, {
+    DateTime? selectedDate,
+    required String area,
+  }) async {
+    // 필터링: 요청 타입만 허용
+    if (type != PlateType.parkingRequests && type != PlateType.departureRequests) {
+      return 0; // 무시할 타입
+    }
+
+    await FirestoreLogger()
+        .log('getPlateCountForClockInPage called: type=${type.name}, area=$area, selectedDate=$selectedDate');
     try {
-      Query<Map<String, dynamic>> query = _firestore
-          .collection('plates')
-          .where('type', isEqualTo: type.firestoreValue)
-          .where('area', isEqualTo: area);
+      Query<Map<String, dynamic>> query =
+          _firestore.collection('plates').where('type', isEqualTo: type.firestoreValue).where('area', isEqualTo: area);
+
+      final result = await query.count().get();
+      final count = result.count ?? 0;
+      await FirestoreLogger().log('getPlateCountForClockInPage success: $count');
+      return count;
+    } catch (e) {
+      await FirestoreLogger().log('getPlateCountForClockInPage error: $e');
+      return 0;
+    }
+  }
+
+  @override
+  Future<int> getPlateCountForClockOutPage(
+    PlateType type, {
+    DateTime? selectedDate,
+    required String area,
+  }) async {
+    // 필터링: 완료 타입만 허용
+    if (type != PlateType.parkingCompleted && type != PlateType.departureCompleted) {
+      return 0; // 무시할 타입
+    }
+
+    await FirestoreLogger()
+        .log('getPlateCountForClockOutPage called: type=${type.name}, area=$area, selectedDate=$selectedDate');
+    try {
+      Query<Map<String, dynamic>> query =
+          _firestore.collection('plates').where('type', isEqualTo: type.firestoreValue).where('area', isEqualTo: area);
 
       if (selectedDate != null && type == PlateType.departureCompleted) {
-        final start = DateTime(
-            selectedDate.year, selectedDate.month, selectedDate.day);
+        final start = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
         final end = start.add(const Duration(days: 1));
-        query = query
-            .where('request_time', isGreaterThanOrEqualTo: start)
-            .where('request_time', isLessThan: end);
+        query = query.where('request_time', isGreaterThanOrEqualTo: start).where('request_time', isLessThan: end);
       }
 
       final result = await query.count().get();
       final count = result.count ?? 0;
-      await FirestoreLogger()
-          .log('getPlateCountForClockInPage success: $count');
+      await FirestoreLogger().log('getPlateCountForClockOutPage success: $count');
       return count;
     } catch (e) {
-      await FirestoreLogger()
-          .log('getPlateCountForClockInPage error: $e');
+      await FirestoreLogger().log('getPlateCountForClockOutPage error: $e');
       return 0;
     }
   }
@@ -391,23 +382,21 @@ class FirestorePlateRepository implements PlateRepository {
     required String plateNumber,
     required String area,
   }) async {
-    await FirestoreLogger().log(
-        'checkDuplicatePlate called: plateNumber=$plateNumber, area=$area');
+    await FirestoreLogger().log('checkDuplicatePlate called: plateNumber=$plateNumber, area=$area');
     final querySnapshot = await _firestore
         .collection('plates')
         .where('plate_number', isEqualTo: plateNumber)
         .where('area', isEqualTo: area)
         .where('type', whereIn: [
-      PlateType.parkingRequests.firestoreValue,
-      PlateType.parkingCompleted.firestoreValue,
-      PlateType.departureRequests.firestoreValue,
-    ])
+          PlateType.parkingRequests.firestoreValue,
+          PlateType.parkingCompleted.firestoreValue,
+          PlateType.departureRequests.firestoreValue,
+        ])
         .limit(1)
         .get();
 
     final isDuplicate = querySnapshot.docs.isNotEmpty;
-    await FirestoreLogger()
-        .log('checkDuplicatePlate result: $isDuplicate');
+    await FirestoreLogger().log('checkDuplicatePlate result: $isDuplicate');
     return isDuplicate;
   }
 }

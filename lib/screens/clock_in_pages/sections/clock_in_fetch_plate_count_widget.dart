@@ -4,38 +4,42 @@ import 'package:provider/provider.dart';
 import '../../../enums/plate_type.dart';
 import '../../../repositories/plate/plate_repository.dart';
 import '../../../states/user/user_state.dart';
-import '../debugs/clock_in_debug_firestore_logger.dart'; // ✅ 로그 기록 추가
+import '../debugs/clock_in_debug_firestore_logger.dart';
 
-class FetchPlateCountWidget extends StatefulWidget {
-  const FetchPlateCountWidget({super.key});
+class ClockInFetchPlateCountWidget extends StatefulWidget {
+  const ClockInFetchPlateCountWidget({super.key});
 
   @override
-  State<FetchPlateCountWidget> createState() => _FetchPlateCountWidgetState();
+  State<ClockInFetchPlateCountWidget> createState() => _ClockInFetchPlateCountWidgetState();
 }
 
-class _FetchPlateCountWidgetState extends State<FetchPlateCountWidget> {
+class _ClockInFetchPlateCountWidgetState extends State<ClockInFetchPlateCountWidget> {
   Future<Map<PlateType, int>>? _futureCounts;
 
-  final _logger = ClockInDebugFirestoreLogger(); // ✅ 로거 인스턴스 준비
+  final _logger = ClockInDebugFirestoreLogger();
 
-  Future<Map<PlateType, int>> _fetchCounts() async {
+  // 👇 한 곳에서 재사용 가능하도록 상수로 선언
+  static const List<PlateType> _relevantTypes = [
+    PlateType.parkingRequests,
+    PlateType.departureRequests,
+  ];
+
+  Future<Map<PlateType, int>> _clockInFetchCounts() async {
     _logger.log('🚀 현황 데이터 로드 시작', level: 'info');
 
     final repo = context.read<PlateRepository>();
     final userState = context.read<UserState>();
     final area = userState.area;
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
 
     final Map<PlateType, int> result = {};
 
-    for (var type in PlateType.values) {
+    for (var type in _relevantTypes) {
       try {
         _logger.log('📦 ${type.label} 데이터 조회 요청 시작', level: 'info');
 
         final count = await repo.getPlateCountForClockInPage(
           type,
-          selectedDate: type == PlateType.departureCompleted ? today : null,
+          selectedDate: null,
           area: area,
         );
 
@@ -72,9 +76,8 @@ class _FetchPlateCountWidgetState extends State<FetchPlateCountWidget> {
             ),
             onPressed: () {
               _logger.log('🧲 [UI] 현황 불러오기 버튼 클릭됨', level: 'called');
-
               setState(() {
-                _futureCounts = _fetchCounts();
+                _futureCounts = _clockInFetchCounts();
               });
             },
           ),
@@ -118,7 +121,7 @@ class _FetchPlateCountWidgetState extends State<FetchPlateCountWidget> {
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: PlateType.values.map((type) {
+                children: _relevantTypes.map((type) {
                   return Column(
                     children: [
                       Text(

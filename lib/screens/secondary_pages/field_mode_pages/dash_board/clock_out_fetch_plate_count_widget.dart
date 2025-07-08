@@ -15,18 +15,23 @@ class ClockOutFetchPlateCountWidget extends StatefulWidget {
 class _ClockOutFetchPlateCountWidgetState extends State<ClockOutFetchPlateCountWidget> {
   Future<Map<PlateType, int>>? _futureCounts;
 
-  Future<Map<PlateType, int>> _fetchCounts() async {
+  // 🔑 한 곳에서 필터링된 타입 관리
+  static const List<PlateType> _relevantTypes = [
+    PlateType.parkingCompleted,
+    PlateType.departureCompleted,
+  ];
+
+  Future<Map<PlateType, int>> _clockOutFetchCounts() async {
     final repo = context.read<PlateRepository>();
     final userState = context.read<UserState>();
     final area = userState.area;
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+    final today = DateTime.now();
 
     final Map<PlateType, int> result = {};
 
-    for (var type in PlateType.values) {
+    for (var type in _relevantTypes) {
       try {
-        final count = await repo.getPlateCountForClockInPage(
+        final count = await repo.getPlateCountForClockOutPage(
           type,
           selectedDate: type == PlateType.departureCompleted ? today : null,
           area: area,
@@ -62,7 +67,7 @@ class _ClockOutFetchPlateCountWidgetState extends State<ClockOutFetchPlateCountW
             ),
             onPressed: () {
               setState(() {
-                _futureCounts = _fetchCounts();
+                _futureCounts = _clockOutFetchCounts();
               });
             },
           ),
@@ -103,7 +108,7 @@ class _ClockOutFetchPlateCountWidgetState extends State<ClockOutFetchPlateCountW
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: PlateType.values.map((type) {
+                children: _relevantTypes.map((type) {
                   return Column(
                     children: [
                       Text(
