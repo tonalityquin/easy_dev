@@ -61,24 +61,22 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                 transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
                 child: isPlateSelected
                     ? (selectedPlate.isLockedFee
-                    ? const Icon(Icons.lock_open, key: ValueKey('unlock'), color: Colors.grey)
-                    : const Icon(Icons.lock, key: ValueKey('lock'), color: Colors.grey))
+                        ? const Icon(Icons.lock_open, key: ValueKey('unlock'), color: Colors.grey)
+                        : const Icon(Icons.lock, key: ValueKey('lock'), color: Colors.grey))
                     : Icon(
-                  isSearchMode ? Icons.cancel : Icons.search,
-                  key: ValueKey(isSearchMode),
-                  color: isSearchMode ? Colors.orange[600] : Colors.grey[700],
-                ),
+                        Icons.refresh,
+                        key: const ValueKey('refresh'),
+                        color: Colors.grey[700],
+                      ),
               ),
-              label: isPlateSelected
-                  ? (selectedPlate.isLockedFee ? '정산 취소' : '사전 정산')
-                  : (isSearchMode ? '검색 초기화' : '번호판 검색'),
+              label: isPlateSelected ? (selectedPlate.isLockedFee ? '정산 취소' : '사전 정산') : '구역 초기화',
             ),
             BottomNavigationBarItem(
               icon: Icon(
-                isPlateSelected ? Icons.check_circle : Icons.refresh,
-                color: isPlateSelected ? Colors.green[600] : Colors.grey[700],
+                isPlateSelected ? Icons.check_circle : (isSearchMode ? Icons.cancel : Icons.search),
+                color: isPlateSelected ? Colors.green[600] : (isSearchMode ? Colors.orange[600] : Colors.grey[700]),
               ),
-              label: isPlateSelected ? '출차 요청' : '구역 초기화',
+              label: isPlateSelected ? '출차 요청' : (isSearchMode ? '검색 초기화' : '번호판 검색'),
             ),
             BottomNavigationBarItem(
               icon: AnimatedRotation(
@@ -98,9 +96,9 @@ class ParkingCompletedControlButtons extends StatelessWidget {
           onTap: (index) async {
             if (!isPlateSelected) {
               if (index == 0) {
-                isSearchMode ? resetSearch() : showSearchDialog();
-              } else if (index == 1) {
                 resetParkingAreaFilter();
+              } else if (index == 1) {
+                isSearchMode ? resetSearch() : showSearchDialog();
               } else if (index == 2) {
                 toggleSortIcon();
               }
@@ -214,9 +212,9 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                     builder: (_) => PlateRemoveDialog(
                       onConfirm: () {
                         context.read<DeletePlate>().deleteFromParkingCompleted(
-                          selectedPlate.plateNumber,
-                          selectedPlate.area,
-                        );
+                              selectedPlate.plateNumber,
+                              selectedPlate.area,
+                            );
                         showSuccessSnackbar(context, "삭제 완료: ${selectedPlate.plateNumber}");
                       },
                     ),

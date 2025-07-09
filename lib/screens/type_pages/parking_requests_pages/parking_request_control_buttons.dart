@@ -43,30 +43,35 @@ class ParkingRequestControlButtons extends StatelessWidget {
         return BottomNavigationBar(
           backgroundColor: Colors.white,
           items: [
+            // index 0
             BottomNavigationBarItem(
               icon: Tooltip(
-                message: isPlateSelected ? '정산 관리' : (isSearchMode ? '검색 초기화' : '번호판 검색'),
-                child: Icon(
-                  isPlateSelected ? Icons.lock : (isSearchMode ? Icons.cancel : Icons.search),
-                  color: isPlateSelected ? iconColor : (isSearchMode ? Colors.orange : iconColor),
+                message: isPlateSelected ? '정산 관리' : '번호판 검색',
+                child: isPlateSelected
+                    ? Icon(Icons.lock, color: iconColor)
+                    : Icon(
+                  isSearchMode ? Icons.cancel : Icons.search,
+                  color: isSearchMode ? Colors.orange : iconColor,
                 ),
               ),
               label: isPlateSelected ? '정산 관리' : (isSearchMode ? '검색 초기화' : '번호판 검색'),
             ),
+            // index 1
             BottomNavigationBarItem(
               icon: Tooltip(
                 message: isPlateSelected ? '입차 완료' : '보고서 열기',
                 child: isPlateSelected
                     ? Icon(Icons.check_circle, color: Colors.green[600])
                     : Image.asset(
-                        'assets/icons/icon_belivussnc.PNG',
-                        width: 24.0,
-                        height: 24.0,
-                        fit: BoxFit.contain,
-                      ),
+                  'assets/icons/icon_belivussnc.PNG',
+                  width: 24.0,
+                  height: 24.0,
+                  fit: BoxFit.contain,
+                ),
               ),
               label: isPlateSelected ? '입차' : 'Belivus',
             ),
+            // index 2
             BottomNavigationBarItem(
               icon: Tooltip(
                 message: isPlateSelected ? '상태 수정' : '정렬 변경',
@@ -94,7 +99,15 @@ class ParkingRequestControlButtons extends StatelessWidget {
             if (index == 0) {
               if (isPlateSelected) {
                 await _handleBillingAction(
-                    context, selectedPlate, userName, repo, uploader, division, area, plateState);
+                  context,
+                  selectedPlate,
+                  userName,
+                  repo,
+                  uploader,
+                  division,
+                  area,
+                  plateState,
+                );
               } else {
                 onSearchToggle();
               }
@@ -107,9 +120,9 @@ class ParkingRequestControlButtons extends StatelessWidget {
                   plate: selectedPlate,
                   onCancelEntryRequest: () {
                     context.read<DeletePlate>().deleteFromParkingRequest(
-                          selectedPlate.plateNumber,
-                          selectedPlate.area,
-                        );
+                      selectedPlate.plateNumber,
+                      selectedPlate.area,
+                    );
                     showSuccessSnackbar(context, "입차 요청이 취소되었습니다: ${selectedPlate.plateNumber}");
                   },
                   onDelete: () {},
@@ -125,15 +138,15 @@ class ParkingRequestControlButtons extends StatelessWidget {
   }
 
   Future<void> _handleBillingAction(
-    BuildContext context,
-    dynamic selectedPlate,
-    String userName,
-    PlateRepository repo,
-    GcsJsonUploader uploader,
-    String division,
-    String area,
-    PlateState plateState,
-  ) async {
+      BuildContext context,
+      dynamic selectedPlate,
+      String userName,
+      PlateRepository repo,
+      GcsJsonUploader uploader,
+      String division,
+      String area,
+      PlateState plateState,
+      ) async {
     final billingType = selectedPlate.billingType;
 
     if (billingType == null || billingType.trim().isEmpty) {

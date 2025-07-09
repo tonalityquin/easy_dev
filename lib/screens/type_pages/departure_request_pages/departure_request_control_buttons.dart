@@ -63,26 +63,39 @@ class DepartureRequestControlButtons extends StatelessWidget {
           items: [
             BottomNavigationBarItem(
               icon: Tooltip(
-                message: isPlateSelected ? '정산 관리' : (isSearchMode ? '검색 초기화' : '번호판 검색'),
+                message: isPlateSelected
+                    ? '정산 관리'
+                    : (isParkingAreaMode ? '구역 초기화' : '주차 구역 선택'),
                 child: Icon(
                   isPlateSelected
                       ? (selectedPlate.isLockedFee ? Icons.lock_open : Icons.lock)
-                      : (isSearchMode ? Icons.cancel : Icons.search),
-                  color: isPlateSelected ? Colors.grey[700] : (isSearchMode ? Colors.orange[600] : Colors.grey[700]),
+                      : (isParkingAreaMode ? Icons.clear : Icons.local_parking),
+                  color: isPlateSelected
+                      ? Colors.grey[700]
+                      : (isParkingAreaMode ? Colors.orange[600] : Colors.grey[700]),
                 ),
               ),
-              label: isPlateSelected ? '정산 관리' : (isSearchMode ? '검색 초기화' : '검색'),
+              label: isPlateSelected
+                  ? '정산 관리'
+                  : (isParkingAreaMode ? '초기화' : '구역 선택'),
             ),
             BottomNavigationBarItem(
               icon: Tooltip(
-                message: isPlateSelected ? '출차 완료 처리' : (isParkingAreaMode ? '구역 초기화' : '주차 구역 선택'),
+                message: isPlateSelected
+                    ? '출차 완료 처리'
+                    : (isSearchMode ? '검색 초기화' : '번호판 검색'),
                 child: Icon(
-                  isPlateSelected ? Icons.check_circle : (isParkingAreaMode ? Icons.clear : Icons.local_parking),
-                  color:
-                  isPlateSelected ? Colors.green[600] : (isParkingAreaMode ? Colors.orange[600] : Colors.grey[700]),
+                  isPlateSelected
+                      ? Icons.check_circle
+                      : (isSearchMode ? Icons.cancel : Icons.search),
+                  color: isPlateSelected
+                      ? Colors.green[600]
+                      : (isSearchMode ? Colors.orange[600] : Colors.grey[700]),
                 ),
               ),
-              label: isPlateSelected ? '출차' : (isParkingAreaMode ? '초기화' : '구역 선택'),
+              label: isPlateSelected
+                  ? '출차'
+                  : (isSearchMode ? '검색 초기화' : '검색'),
             ),
             BottomNavigationBarItem(
               icon: Tooltip(
@@ -109,9 +122,13 @@ class DepartureRequestControlButtons extends StatelessWidget {
             final uploader = GcsJsonUploader();
 
             if (!isPlateSelected) {
-              if (index == 0) isSearchMode ? resetSearch() : showSearchDialog();
-              if (index == 1) isParkingAreaMode ? resetParkingAreaFilter() : showParkingAreaDialog();
-              if (index == 2) toggleSortIcon();
+              if (index == 0) {
+                isParkingAreaMode ? resetParkingAreaFilter() : showParkingAreaDialog();
+              } else if (index == 1) {
+                isSearchMode ? resetSearch() : showSearchDialog();
+              } else if (index == 2) {
+                toggleSortIcon();
+              }
               return;
             }
 

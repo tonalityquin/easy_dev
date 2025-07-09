@@ -51,42 +51,50 @@ class DepartureCompletedControlButtons extends StatelessWidget {
       type: BottomNavigationBarType.fixed,
       selectedItemColor: Theme.of(context).primaryColor,
       unselectedItemColor: Colors.grey[700],
-      items: [
-        BottomNavigationBarItem(
-          icon: Tooltip(
-            message: isPlateSelected ? '정산 관리' : (isSearchMode ? '검색 초기화' : '번호판 검색'),
-            child: Icon(
-              isPlateSelected
-                  ? (selectedPlate.isLockedFee ? Icons.lock_open : Icons.lock)
-                  : (isSearchMode ? Icons.cancel : Icons.search),
-              color: isPlateSelected ? Colors.grey[700] : (isSearchMode ? Colors.orange[600] : Colors.grey[700]),
-            ),
-          ),
-          label: isPlateSelected ? '정산 관리' : (isSearchMode ? '검색 초기화' : '검색'),
-        ),
-        BottomNavigationBarItem(
-          icon: Tooltip(
-            message: showMergedLog ? '병합 로그 감추기' : '병합 로그 보기',
-            child: Icon(
-              showMergedLog ? Icons.expand_more : Icons.list_alt,
-              color: Colors.grey[700],
-            ),
-          ),
-          label: showMergedLog ? '감추기' : '병합 로그',
-        ),
-        BottomNavigationBarItem(
-          icon: Tooltip(
-            message: isPlateSelected ? '상태 수정' : '날짜 선택',
-            child: isPlateSelected
-                ? Icon(Icons.settings, color: Colors.grey[700])
-                : Icon(Icons.calendar_today, color: Colors.grey[700]),
-          ),
-          label: isPlateSelected ? '상태 수정' : formattedDate,
-        ),
-      ],
+      items: isPlateSelected
+          ? [
+              // 선택 O: 정산 관리 + 상태 수정
+              BottomNavigationBarItem(
+                icon: Tooltip(
+                  message: '정산 관리',
+                  child: Icon(
+                    selectedPlate.isLockedFee ? Icons.lock_open : Icons.lock,
+                    color: Colors.grey[700],
+                  ),
+                ),
+                label: '정산 관리',
+              ),
+              BottomNavigationBarItem(
+                icon: Tooltip(
+                  message: '상태 수정',
+                  child: Icon(Icons.settings, color: Colors.grey[700]),
+                ),
+                label: '상태 수정',
+              ),
+            ]
+          : [
+              // 선택 X: 검색 / 검색 초기화 + 날짜 선택
+              BottomNavigationBarItem(
+                icon: Tooltip(
+                  message: isSearchMode ? '검색 초기화' : '번호판 검색',
+                  child: Icon(
+                    isSearchMode ? Icons.cancel : Icons.search,
+                    color: isSearchMode ? Colors.orange[600] : Colors.grey[700],
+                  ),
+                ),
+                label: isSearchMode ? '검색 초기화' : '검색',
+              ),
+              BottomNavigationBarItem(
+                icon: Tooltip(
+                  message: '날짜 선택',
+                  child: Icon(Icons.calendar_today, color: Colors.grey[700]),
+                ),
+                label: formattedDate,
+              ),
+            ],
       onTap: (index) async {
-        if (index == 0) {
-          if (isPlateSelected) {
+        if (isPlateSelected) {
+          if (index == 0) {
             final billType = selectedPlate.billingType;
             if (billType == null || billType.trim().isEmpty) {
               showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
@@ -141,18 +149,16 @@ class DepartureCompletedControlButtons extends StatelessWidget {
 
             await uploader.uploadForPlateLogTypeJson(log, selectedPlate.plateNumber, division, area);
             showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
-          } else {
-            isSearchMode ? onResetSearch() : onShowSearchDialog();
-          }
-        } else if (index == 1) {
-          onToggleMergedLog();
-        } else if (index == 2) {
-          if (isPlateSelected) {
+          } else if (index == 1) {
             await showDepartureCompletedStatusBottomSheet(
               context: context,
               plate: selectedPlate,
             );
-          } else {
+          }
+        } else {
+          if (index == 0) {
+            isSearchMode ? onResetSearch() : onShowSearchDialog();
+          } else if (index == 1) {
             onToggleCalendar();
           }
         }

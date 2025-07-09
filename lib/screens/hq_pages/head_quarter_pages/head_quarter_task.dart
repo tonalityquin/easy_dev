@@ -93,23 +93,23 @@ class _HeadQuarterTaskState extends State<HeadQuarterTask> {
 
       final sharedTasks = snapshot.docs
           .map((doc) {
-        final data = doc.data();
-        final taskData = data['task'] as Map<String, dynamic>?;
-        if (taskData == null) return null;
+            final data = doc.data();
+            final taskData = data['task'] as Map<String, dynamic>?;
+            if (taskData == null) return null;
 
-        return Task(
-          id: taskData['id'],
-          title: taskData['title'],
-          description: taskData['description'],
-          isCompleted: taskData['isCompleted'],
-          startDate: taskData['startDate'] != null
-              ? DateTime.parse(taskData['startDate'])
-              : DateTime.parse(taskData['dueDate']),
-          dueDate: DateTime.parse(taskData['dueDate']),
-          isShared: true,
-          firestoreId: doc.id,
-        );
-      })
+            return Task(
+              id: taskData['id'],
+              title: taskData['title'],
+              description: taskData['description'],
+              isCompleted: taskData['isCompleted'],
+              startDate: taskData['startDate'] != null
+                  ? DateTime.parse(taskData['startDate'])
+                  : DateTime.parse(taskData['dueDate']),
+              dueDate: DateTime.parse(taskData['dueDate']),
+              isShared: true,
+              firestoreId: doc.id,
+            );
+          })
           .whereType<Task>()
           .toList();
 
@@ -137,7 +137,6 @@ class _HeadQuarterTaskState extends State<HeadQuarterTask> {
       );
     }
   }
-
 
   Future<void> _loadTasksFromPrefs() async {
     final prefs = await SharedPreferences.getInstance();
@@ -214,7 +213,6 @@ class _HeadQuarterTaskState extends State<HeadQuarterTask> {
     }
   }
 
-
   Future<void> _unshareTask(Task task) async {
     if (task.firestoreId == null) return;
 
@@ -247,7 +245,6 @@ class _HeadQuarterTaskState extends State<HeadQuarterTask> {
       );
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -295,9 +292,7 @@ class _HeadQuarterTaskState extends State<HeadQuarterTask> {
                       fontWeight: FontWeight.bold,
                       height: 1.6,
                     ),
-                    children: [
-
-                    ],
+                    children: [],
                   ),
                 ),
               ),
