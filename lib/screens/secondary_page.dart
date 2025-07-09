@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../states/secondary/secondary_state.dart';
 import '../states/secondary/secondary_mode.dart';
 import '../states/user/user_state.dart';
@@ -10,20 +11,29 @@ import 'secondary_pages/debugs/secondary_debug_bottom_sheet.dart';
 class SecondaryPage extends StatelessWidget {
   const SecondaryPage({super.key});
 
-  List<SecondaryInfo> _getUpdatedPages(String userRole, SecondaryMode roleState) {
-    if (userRole == 'User') {
-      return fieldModePages;
-    } else {
-      switch (roleState.currentStatus) {
-        case ModeStatus.field:
-          return fieldModePages;
-        case ModeStatus.office:
-          return officeModePages;
-        case ModeStatus.document:
-          return documentPages;
-        case ModeStatus.dev:
-          return devPages;
-      }
+  /// ✅ 역할에 따른 페이지 구성 함수 (바텀시트에서도 접근 가능하게 static 처리)
+  static List<SecondaryInfo> getUpdatedPages(String userRole, SecondaryMode roleState) {
+    final mode = roleState.currentStatus;
+
+    switch (mode) {
+      case ModeStatus.managerField:
+        return managerFieldModePages;
+      case ModeStatus.lowMiddleManage:
+        return lowMiddleManagePages;
+      case ModeStatus.highManage:
+        return highManagePages;
+      case ModeStatus.document:
+        return documentPages;
+      case ModeStatus.dev:
+        return devPages;
+      case ModeStatus.lowField:
+        return lowUserModePages;
+      case ModeStatus.middleField:
+        return middleUserModePages;
+      case ModeStatus.highField:
+        return highUserModePages;
+      case ModeStatus.admin:
+        return adminPages;
     }
   }
 
@@ -36,9 +46,9 @@ class SecondaryPage extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => SecondaryMode()),
         ChangeNotifierProxyProvider<SecondaryMode, SecondaryState>(
-          create: (_) => SecondaryState(pages: fieldModePages),
+          create: (_) => SecondaryState(pages: lowUserModePages),
           update: (_, roleState, secondaryState) {
-            final newPages = _getUpdatedPages(userRole, roleState);
+            final newPages = getUpdatedPages(userRole, roleState);
             return secondaryState!..updatePages(newPages);
           },
         ),
@@ -55,9 +65,20 @@ class SecondaryPage extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
-              children: const [
+              children: [
                 Flexible(
-                  child: SecondaryRoleNavigation(),
+                  child: SecondaryRoleNavigation(
+                    onModeChanged: (selectedLabel) {
+                      final manageState = Provider.of<SecondaryMode>(context, listen: false);
+                      final userRole = Provider.of<UserState>(context, listen: false).role;
+                      final newMode = ModeStatusExtension.fromLabel(selectedLabel);
+                      if (newMode != null) {
+                        manageState.changeStatus(newMode);
+                        final newPages = getUpdatedPages(userRole, manageState);
+                        Provider.of<SecondaryState>(context, listen: false).updatePages(newPages);
+                      }
+                    },
+                  ),
                 ),
               ],
             ),
@@ -68,7 +89,7 @@ class SecondaryPage extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             PageBottomNavigation(),
-            DebugTriggerBar(), // ✅ 디버그 트리거 영역 추가
+            DebugTriggerBar(),
           ],
         ),
       ),

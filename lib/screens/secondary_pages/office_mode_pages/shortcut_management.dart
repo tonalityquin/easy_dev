@@ -5,14 +5,14 @@ import 'package:provider/provider.dart';
 
 import '../../../states/area/area_state.dart';
 
-class ChatManagement extends StatefulWidget {
-  const ChatManagement({super.key});
+class ShortcutManagement extends StatefulWidget {
+  const ShortcutManagement({super.key});
 
   @override
-  State<ChatManagement> createState() => _ChatManagementState();
+  State<ShortcutManagement> createState() => _ShortcutManagementState();
 }
 
-class _ChatManagementState extends State<ChatManagement> {
+class _ShortcutManagementState extends State<ShortcutManagement> {
   final _firestore = FirebaseFirestore.instance;
   final List<_ChatItem> _chatItems = [];
   bool _loading = true;
@@ -68,7 +68,7 @@ class _ChatManagementState extends State<ChatManagement> {
         final currentArea = areaState.currentArea;
 
         return AlertDialog(
-          title: const Text('새 채팅방 추가'),
+          title: const Text('새 쇼트컷 추가'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -164,14 +164,14 @@ class _ChatManagementState extends State<ChatManagement> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('채팅방 정보 수정'),
+          title: const Text('쇼트컷 정보 수정'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: nameController,
                 decoration: const InputDecoration(
-                  labelText: '채팅방 이름',
+                  labelText: '쇼트컷 이름',
                 ),
               ),
               const SizedBox(height: 12),
@@ -239,7 +239,7 @@ class _ChatManagementState extends State<ChatManagement> {
         elevation: 0,
         foregroundColor: Colors.black87,
         title: const Text(
-          '채팅',
+          '쇼트컷',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
@@ -266,7 +266,7 @@ class _ChatManagementState extends State<ChatManagement> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _chatItems.isEmpty
-          ? const Center(child: Text('추가된 채팅방이 없습니다.'))
+          ? const Center(child: Text('추가된 쇼트컷이 없습니다.'))
           : ListView.separated(
         padding: const EdgeInsets.all(16),
         itemCount: _chatItems.length,
@@ -340,6 +340,7 @@ class _ChatManagementState extends State<ChatManagement> {
         },
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: null,
         onPressed: _addNewItem,
         child: const Icon(Icons.add),
       ),

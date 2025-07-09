@@ -1,15 +1,22 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../screens/secondary_page.dart';
 import '../../screens/secondary_pages/office_mode_pages/user_management_pages/sections/role_type.dart';
 import '../../states/secondary/secondary_mode.dart';
 import '../../states/user/user_state.dart';
-import '../dialog/secondary_picker_bottom_sheet.dart';
+import '../../states/secondary/secondary_state.dart'; // ✅ 추가
+import '../../widgets/dialog/secondary_picker_bottom_sheet.dart';
 
 class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWidget {
   final double height;
+  final void Function(String selectedLabel)? onModeChanged; // ✅ 추가
 
-  const SecondaryRoleNavigation({super.key, this.height = kToolbarHeight});
+  const SecondaryRoleNavigation({
+    super.key,
+    this.height = kToolbarHeight,
+    this.onModeChanged, // ✅ 생성자에 포함
+  });
 
   @override
   Size get preferredSize => Size.fromHeight(height);
@@ -20,17 +27,10 @@ class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWi
     final userState = context.watch<UserState>();
 
     final RoleType userRole = RoleType.fromName(userState.role);
+    final selectedModeLabel = manageState.currentStatus.label;
 
-    final isSelectable = [
-      RoleType.dev,
-      RoleType.admin,
-      RoleType.ceo,
-      RoleType.highManager,
-      RoleType.middleManager,
-      RoleType.lowManager,
-    ].contains(userRole);
-
-    final selectedModeLabel = userRole == RoleType.lowField ? '보조 페이지' : manageState.currentStatus.label;
+    // 역할에 따라 드롭다운 가능 여부 결정
+    final isSelectable = _isRoleSelectable(userRole);
 
     return AppBar(
       backgroundColor: Colors.white,
@@ -41,9 +41,16 @@ class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWi
                   context: context,
                   manageState: manageState,
                   currentStatus: selectedModeLabel,
-                  availableStatus: getFilteredAvailableStatus(
-                    userRole,
-                  ),
+                  availableStatus: getFilteredAvailableStatus(userRole),
+                  onConfirm: (newLabel) {
+                    final newMode = ModeStatusExtension.fromLabel(newLabel);
+                    if (newMode != null) {
+                      manageState.changeStatus(newMode); // ✅ 새로 추가된 메서드 사용
+                      final userState = context.read<UserState>();
+                      final pages = SecondaryPage.getUpdatedPages(userState.role, manageState);
+                      Provider.of<SecondaryState>(context, listen: false).updatePages(pages);
+                    }
+                  },
                 )
             : null,
         child: Row(
@@ -69,26 +76,37 @@ class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWi
     );
   }
 
+  bool _isRoleSelectable(RoleType role) {
+    switch (role) {
+      case RoleType.lowManager:
+      case RoleType.middleManager:
+      case RoleType.highManager:
+      case RoleType.ceo:
+      case RoleType.dev:
+        return true;
+      default:
+        return false;
+    }
+  }
+
   List<String> getFilteredAvailableStatus(RoleType role) {
-    if (role == RoleType.dev) {
-      // dev는 모든 페이지 접근 가능
-      return ModeStatus.values.map((e) => e.label).toList();
+    switch (role) {
+      case RoleType.dev:
+        return ModeStatus.values.map((e) => e.label).toList();
+      case RoleType.highManager:
+      case RoleType.ceo:
+        return [
+          ModeStatus.managerField.label,
+          ModeStatus.highManage.label,
+        ];
+      case RoleType.middleManager:
+      case RoleType.lowManager:
+        return [
+          ModeStatus.managerField.label,
+          ModeStatus.lowMiddleManage.label,
+        ];
+      default:
+        return [];
     }
-
-    if ([
-      RoleType.admin,
-      RoleType.ceo,
-      RoleType.highManager,
-      RoleType.middleManager,
-      RoleType.lowManager,
-    ].contains(role)) {
-      return ModeStatus.values
-          .where((mode) => mode != ModeStatus.dev && mode != ModeStatus.document)
-          .map((e) => e.label)
-          .toList();
-    }
-
-    // 그 외 필드 계열(lowField, middleField, highField 등)은 보조 페이지만 가능
-    return [ModeStatus.field.label];
   }
 }

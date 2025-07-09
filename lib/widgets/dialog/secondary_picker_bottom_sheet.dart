@@ -1,5 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+
+/// ✅ 추가: 콜백 받도록 수정
 import '../../states/secondary/secondary_mode.dart';
 
 void secondaryPickerBottomSheet({
@@ -7,6 +9,7 @@ void secondaryPickerBottomSheet({
   required SecondaryMode manageState,
   required String currentStatus,
   required List<String> availableStatus,
+  required void Function(String selectedLabel) onConfirm, // ✅ 추가
 }) {
   String tempSelected = currentStatus;
   int outsideTapCount = 0;
@@ -23,8 +26,8 @@ void secondaryPickerBottomSheet({
             onTap: () {
               outsideTapCount++;
               if (outsideTapCount >= 10) {
-                tempSelected = "Dev Mode";
-                manageState.updateManage(tempSelected);
+                tempSelected = "개발자 페이지"; // label
+                onConfirm(tempSelected); // ✅ 콜백으로 처리
                 Navigator.of(context).pop();
               }
             },
@@ -82,7 +85,7 @@ void secondaryPickerBottomSheet({
                       const SizedBox(height: 16),
                       GestureDetector(
                         onTap: () {
-                          manageState.updateManage(tempSelected);
+                          onConfirm(tempSelected); // ✅ 여기서 페이지 갱신도 트리거됨
                           Navigator.of(context).pop();
                         },
                         onTapDown: (_) {
