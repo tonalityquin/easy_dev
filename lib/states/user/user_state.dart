@@ -35,6 +35,8 @@ class UserState extends ChangeNotifier {
 
   String get role => _user?.role ?? '';
 
+  String get position => _user?.position ?? '';
+
   String get name => _user?.name ?? '';
 
   String get phone => _user?.phone ?? '';
@@ -160,6 +162,7 @@ class UserState extends ChangeNotifier {
     await prefs.setString('startTime', _timeToString(user.startTime) ?? '');
     await prefs.setString('endTime', _timeToString(user.endTime) ?? '');
     await prefs.setStringList('fixedHolidays', user.fixedHolidays);
+    await prefs.setString('position', user.position ?? ''); // ✅ 추가된 부분
     debugPrint("📌 SharedPreferences 저장 완료");
   }
 
@@ -175,6 +178,7 @@ class UserState extends ChangeNotifier {
       final startTimeStr = prefs.getString('startTime');
       final endTimeStr = prefs.getString('endTime');
       final fixedHolidays = prefs.getStringList('fixedHolidays') ?? [];
+      final position = prefs.getString('position'); // ✅ 직책 불러오기
 
       if (phone == null || selectedArea == null) return;
 
@@ -188,6 +192,8 @@ class UserState extends ChangeNotifier {
       userData = userData.copyWith(
         currentArea: trimmedArea,
         role: role ?? userData.role,
+        position: position ?? userData.position,
+        // ✅ 반영
         startTime: _stringToTimeOfDay(startTimeStr),
         endTime: _stringToTimeOfDay(endTimeStr),
         fixedHolidays: fixedHolidays,

@@ -69,7 +69,7 @@ class UserInfoCard extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          userState.role,
+                          userState.position,
                           style: TextStyle(
                             fontSize: 13,
                             color: Colors.grey[700],

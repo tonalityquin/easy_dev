@@ -10,24 +10,25 @@ import 'sections/validation_helpers.dart';
 
 class UserSetting extends StatefulWidget {
   final Function(
-    String name,
-    String phone,
-    String email,
-    String role,
-    String password,
-    String area,
-    String division,
-    bool isWorking,
-    bool isSaved,
-    String selectedArea,
-    String? startTime,
-    String? endTime,
-    List<String> fixedHolidays,
-  ) onSave;
+      String name,
+      String phone,
+      String email,
+      String role,
+      String password,
+      String area,
+      String division,
+      bool isWorking,
+      bool isSaved,
+      String selectedArea,
+      String? startTime,
+      String? endTime,
+      List<String> fixedHolidays,
+      String position, // ✅ 추가된 항목
+      ) onSave;
 
   final String areaValue;
   final String division;
-  final UserModel? initialUser; // ✅ 기존 사용자 데이터
+  final UserModel? initialUser;
   final bool isEditMode;
 
   const UserSetting({
@@ -48,6 +49,7 @@ class _UserSettingState extends State<UserSetting> {
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _positionController = TextEditingController(); // ✅ 직책 컨트롤러
 
   final _nameFocus = FocusNode();
   final _phoneFocus = FocusNode();
@@ -72,7 +74,11 @@ class _UserSettingState extends State<UserSetting> {
       _phoneController.text = user.phone;
       _emailController.text = user.email.split('@').first;
       _passwordController.text = user.password;
-      _selectedRole = RoleType.values.firstWhere((r) => r.name == user.role, orElse: () => RoleType.lowField);
+      _positionController.text = user.position ?? ''; // ✅ 직책 초기화
+      _selectedRole = RoleType.values.firstWhere(
+            (r) => r.name == user.role,
+        orElse: () => RoleType.lowField,
+      );
       _startTime = user.startTime;
       _endTime = user.endTime;
       _selectedHolidays.addAll(user.fixedHolidays);
@@ -87,6 +93,7 @@ class _UserSettingState extends State<UserSetting> {
     _phoneController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _positionController.dispose(); // ✅ 컨트롤러 해제
     _nameFocus.dispose();
     _phoneFocus.dispose();
     _emailFocus.dispose();
@@ -176,6 +183,16 @@ class _UserSettingState extends State<UserSetting> {
                 _selectedRole = value;
               });
             },
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _positionController,
+            decoration: InputDecoration(
+              labelText: '직책',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
           ),
           const SizedBox(height: 16),
           PasswordDisplaySection(controller: _passwordController),
@@ -293,6 +310,7 @@ class _UserSettingState extends State<UserSetting> {
                         _timeToString(_startTime),
                         _timeToString(_endTime),
                         _selectedHolidays.toList(),
+                        _positionController.text, // ✅ 직책 전달
                       );
                       Navigator.pop(context);
                     }

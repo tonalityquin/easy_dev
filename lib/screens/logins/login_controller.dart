@@ -112,6 +112,7 @@ class LoginController {
         await prefs.setString('startTime', _timeToString(updatedUser.startTime));
         await prefs.setString('endTime', _timeToString(updatedUser.endTime));
         await prefs.setString('role', updatedUser.role);
+        await prefs.setString('position', updatedUser.position ?? ''); // ✅ position 저장
         await prefs.setStringList('fixedHolidays', updatedUser.fixedHolidays);
 
         debugPrint("📌 SharedPreferences 저장 완료 → phone=${prefs.getString('phone')}");

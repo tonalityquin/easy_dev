@@ -48,20 +48,21 @@ class _UserManagementState extends State<UserManagement> {
   void buildUserDialog({
     required BuildContext context,
     required void Function(
-      String name,
-      String phone,
-      String email,
-      String role,
-      String password,
-      String area,
-      String division,
-      bool isWorking,
-      bool isSaved,
-      String selectedArea,
-      String? startTime,
-      String? endTime,
-      List<String> fixedHolidays,
-    ) onSave,
+        String name,
+        String phone,
+        String email,
+        String role,
+        String password,
+        String area,
+        String division,
+        bool isWorking,
+        bool isSaved,
+        String selectedArea,
+        String? startTime,
+        String? endTime,
+        List<String> fixedHolidays,
+        String position, // ✅ 직책 추가
+        ) onSave,
     UserModel? initialUser,
   }) {
     final areaState = context.read<AreaState>();
@@ -92,20 +93,21 @@ class _UserManagementState extends State<UserManagement> {
       buildUserDialog(
         context: context,
         onSave: (
-          name,
-          phone,
-          email,
-          role,
-          password,
-          area,
-          division,
-          isWorking,
-          isSaved,
-          selectedArea,
-          startTime,
-          endTime,
-          fixedHolidays,
-        ) async {
+            name,
+            phone,
+            email,
+            role,
+            password,
+            area,
+            division,
+            isWorking,
+            isSaved,
+            selectedArea,
+            startTime,
+            endTime,
+            fixedHolidays,
+            position, // ✅ 전달받은 직책
+            ) async {
           try {
             final englishName = await context.read<UserRepository>().getEnglishNameByArea(selectedArea, division);
             final newUser = UserModel(
@@ -115,6 +117,7 @@ class _UserManagementState extends State<UserManagement> {
               email: email,
               role: role,
               password: password,
+              position: position, // ✅ 반영
               areas: [area],
               divisions: [division],
               currentArea: area,
@@ -142,20 +145,21 @@ class _UserManagementState extends State<UserManagement> {
         context: context,
         initialUser: selectedUser,
         onSave: (
-          name,
-          phone,
-          email,
-          role,
-          password,
-          area,
-          division,
-          isWorking,
-          isSaved,
-          selectedArea,
-          startTime,
-          endTime,
-          fixedHolidays,
-        ) async {
+            name,
+            phone,
+            email,
+            role,
+            password,
+            area,
+            division,
+            isWorking,
+            isSaved,
+            selectedArea,
+            startTime,
+            endTime,
+            fixedHolidays,
+            position, // ✅ 전달받은 직책
+            ) async {
           try {
             final englishName = await context.read<UserRepository>().getEnglishNameByArea(selectedArea, division);
             final updatedUser = selectedUser.copyWith(
@@ -164,6 +168,7 @@ class _UserManagementState extends State<UserManagement> {
               email: email,
               role: role,
               password: password,
+              position: position, // ✅ 반영
               areas: [area],
               divisions: [division],
               currentArea: area,
@@ -230,32 +235,35 @@ class _UserManagementState extends State<UserManagement> {
       body: userState.isLoading
           ? const Center(child: CircularProgressIndicator())
           : filteredUsers.isEmpty
-              ? Center(
-                  child:
-                      userState.users.isEmpty ? const Text('전체 계정 데이터가 없습니다') : const Text('현재 지역/사업소에 해당하는 계정이 없습니다'),
-                )
-              : ListView.builder(
-                  itemCount: filteredUsers.length,
-                  itemBuilder: (context, index) {
-                    final user = filteredUsers[index];
-                    final isSelected = userState.selectedUserId == user.id;
+          ? Center(
+        child: userState.users.isEmpty
+            ? const Text('전체 계정 데이터가 없습니다')
+            : const Text('현재 지역/사업소에 해당하는 계정이 없습니다'),
+      )
+          : ListView.builder(
+        itemCount: filteredUsers.length,
+        itemBuilder: (context, index) {
+          final user = filteredUsers[index];
+          final isSelected = userState.selectedUserId == user.id;
 
-                    return ListTile(
-                      title: Text(user.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('이메일: ${user.email}'),
-                          Text('출근: ${formatTime(user.startTime)} / 퇴근: ${formatTime(user.endTime)}'),
-                          Text('역할: ${user.role}'),
-                        ],
-                      ),
-                      trailing: isSelected ? const Icon(Icons.check_circle, color: Colors.green) : null,
-                      selected: isSelected,
-                      onTap: () => userState.toggleUserCard(user.id),
-                    );
-                  },
-                ),
+          return ListTile(
+            title: Text(user.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('이메일: ${user.email}'),
+                Text('출근: ${formatTime(user.startTime)} / 퇴근: ${formatTime(user.endTime)}'),
+                Text('역할: ${user.role}'),
+                if (user.position != null && user.position!.isNotEmpty)
+                  Text('직책: ${user.position!}'), // ✅ 직책 표시
+              ],
+            ),
+            trailing: isSelected ? const Icon(Icons.check_circle, color: Colors.green) : null,
+            selected: isSelected,
+            onTap: () => userState.toggleUserCard(user.id),
+          );
+        },
+      ),
       bottomNavigationBar: SecondaryMiniNavigation(
         icons: getNavigationIcons(userState.selectedUserId != null),
         onIconTapped: (index) => onIconTapped(context, index, userState),

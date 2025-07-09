@@ -7,6 +7,7 @@ class UserModel {
   final String email;
   final String role;
   final String password;
+  final String? position; // ✅ 직책 추가
 
   final List<String> areas;
   final List<String> divisions;
@@ -19,9 +20,9 @@ class UserModel {
   final bool isWorking;
   final bool isSaved;
 
-  final TimeOfDay? startTime; // ✅ 출근 시간
-  final TimeOfDay? endTime;   // ✅ 퇴근 시간
-  final List<String> fixedHolidays; // ✅ 고정 휴일
+  final TimeOfDay? startTime;
+  final TimeOfDay? endTime;
+  final List<String> fixedHolidays;
 
   const UserModel({
     required this.id,
@@ -30,6 +31,7 @@ class UserModel {
     required this.email,
     required this.role,
     required this.password,
+    this.position, // ✅ 추가
     required this.areas,
     required this.divisions,
     this.currentArea,
@@ -50,6 +52,7 @@ class UserModel {
     String? email,
     String? role,
     String? password,
+    String? position, // ✅ 추가
     List<String>? areas,
     List<String>? divisions,
     String? currentArea,
@@ -69,6 +72,7 @@ class UserModel {
       email: email ?? this.email,
       role: role ?? this.role,
       password: password ?? this.password,
+      position: position ?? this.position, // ✅ 반영
       areas: areas ?? this.areas,
       divisions: divisions ?? this.divisions,
       currentArea: currentArea ?? this.currentArea,
@@ -91,6 +95,7 @@ class UserModel {
       email: data['email'] ?? '',
       role: data['role'] ?? '',
       password: data['password'] ?? '',
+      position: data['position'], // ✅ 추가
       areas: List<String>.from(data['areas'] ?? []),
       divisions: List<String>.from(data['divisions'] ?? []),
       currentArea: data['currentArea'],
@@ -112,6 +117,7 @@ class UserModel {
       'email': email,
       'role': role,
       'password': password,
+      'position': position, // ✅ 추가
       'areas': areas,
       'divisions': divisions,
       'currentArea': currentArea,
@@ -134,6 +140,7 @@ class UserModel {
       email: json['email'] ?? '',
       role: json['role'] ?? '',
       password: json['password'] ?? '',
+      position: json['position'], // ✅ 추가
       areas: List<String>.from(json['areas'] ?? []),
       divisions: List<String>.from(json['divisions'] ?? []),
       currentArea: json['currentArea'],
@@ -156,6 +163,7 @@ class UserModel {
       'email': email,
       'role': role,
       'password': password,
+      'position': position, // ✅ 추가
       'areas': areas,
       'divisions': divisions,
       'currentArea': currentArea,
@@ -172,13 +180,11 @@ class UserModel {
 
   Map<String, dynamic> toMapWithId() => toJson();
 
-  /// ⏱️ TimeOfDay → Map 변환
   static Map<String, int>? _timeToMap(TimeOfDay? time) {
     if (time == null) return null;
     return {'hour': time.hour, 'minute': time.minute};
   }
 
-  /// ⏱️ Map → TimeOfDay 변환
   static TimeOfDay? _parseTime(dynamic timeData) {
     if (timeData is Map<String, dynamic>) {
       final hour = timeData['hour'];

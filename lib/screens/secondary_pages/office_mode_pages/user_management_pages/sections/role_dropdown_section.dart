@@ -16,7 +16,7 @@ class RoleDropdownSection extends StatelessWidget {
     return DropdownButtonFormField<RoleType>(
       value: selectedRole,
       decoration: InputDecoration(
-        labelText: '직책',
+        labelText: '권한',
         focusedBorder: OutlineInputBorder(
           borderSide: const BorderSide(color: Colors.green),
           borderRadius: BorderRadius.circular(8),
