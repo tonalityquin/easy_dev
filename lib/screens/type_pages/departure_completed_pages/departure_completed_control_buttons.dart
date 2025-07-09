@@ -82,7 +82,7 @@ class DepartureCompletedControlButtons extends StatelessWidget {
                     color: isSearchMode ? Colors.orange[600] : Colors.grey[700],
                   ),
                 ),
-                label: isSearchMode ? '검색 초기화' : '검색',
+                label: isSearchMode ? '검색 초기화' : '번호판 검색',
               ),
               BottomNavigationBarItem(
                 icon: Tooltip(

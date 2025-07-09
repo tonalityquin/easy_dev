@@ -43,35 +43,32 @@ class ParkingRequestControlButtons extends StatelessWidget {
         return BottomNavigationBar(
           backgroundColor: Colors.white,
           items: [
-            // index 0
             BottomNavigationBarItem(
               icon: Tooltip(
-                message: isPlateSelected ? '정산 관리' : '번호판 검색',
+                message: isPlateSelected ? '정산 관리' : '보고서 열기',
                 child: isPlateSelected
                     ? Icon(Icons.lock, color: iconColor)
-                    : Icon(
-                  isSearchMode ? Icons.cancel : Icons.search,
-                  color: isSearchMode ? Colors.orange : iconColor,
-                ),
+                    : Image.asset(
+                        'assets/icons/icon_belivussnc.PNG',
+                        width: 24.0,
+                        height: 24.0,
+                        fit: BoxFit.contain,
+                      ),
               ),
-              label: isPlateSelected ? '정산 관리' : (isSearchMode ? '검색 초기화' : '번호판 검색'),
+              label: isPlateSelected ? '정산 관리' : 'Belivus',
             ),
-            // index 1
             BottomNavigationBarItem(
               icon: Tooltip(
-                message: isPlateSelected ? '입차 완료' : '보고서 열기',
+                message: isPlateSelected ? '입차 완료' : (isSearchMode ? '검색 초기화' : '번호판 검색'),
                 child: isPlateSelected
                     ? Icon(Icons.check_circle, color: Colors.green[600])
-                    : Image.asset(
-                  'assets/icons/icon_belivussnc.PNG',
-                  width: 24.0,
-                  height: 24.0,
-                  fit: BoxFit.contain,
-                ),
+                    : Icon(
+                        isSearchMode ? Icons.cancel : Icons.search,
+                        color: isSearchMode ? Colors.orange : iconColor,
+                      ),
               ),
-              label: isPlateSelected ? '입차' : 'Belivus',
+              label: isPlateSelected ? '입차' : (isSearchMode ? '검색 초기화' : '번호판 검색'),
             ),
-            // index 2
             BottomNavigationBarItem(
               icon: Tooltip(
                 message: isPlateSelected ? '상태 수정' : '정렬 변경',
@@ -97,22 +94,12 @@ class ParkingRequestControlButtons extends StatelessWidget {
             final area = context.read<AreaState>().currentArea.trim();
 
             if (index == 0) {
-              if (isPlateSelected) {
-                await _handleBillingAction(
-                  context,
-                  selectedPlate,
-                  userName,
-                  repo,
-                  uploader,
-                  division,
-                  area,
-                  plateState,
-                );
-              } else {
-                onSearchToggle();
-              }
+              isPlateSelected
+                  ? await _handleBillingAction(
+                      context, selectedPlate, userName, repo, uploader, division, area, plateState)
+                  : onToggleReportDialog();
             } else if (index == 1) {
-              isPlateSelected ? onParkingCompleted() : onToggleReportDialog();
+              isPlateSelected ? onParkingCompleted() : onSearchToggle();
             } else if (index == 2) {
               if (isPlateSelected) {
                 await showParkingRequestStatusBottomSheet(
@@ -120,9 +107,9 @@ class ParkingRequestControlButtons extends StatelessWidget {
                   plate: selectedPlate,
                   onCancelEntryRequest: () {
                     context.read<DeletePlate>().deleteFromParkingRequest(
-                      selectedPlate.plateNumber,
-                      selectedPlate.area,
-                    );
+                          selectedPlate.plateNumber,
+                          selectedPlate.area,
+                        );
                     showSuccessSnackbar(context, "입차 요청이 취소되었습니다: ${selectedPlate.plateNumber}");
                   },
                   onDelete: () {},
@@ -138,15 +125,15 @@ class ParkingRequestControlButtons extends StatelessWidget {
   }
 
   Future<void> _handleBillingAction(
-      BuildContext context,
-      dynamic selectedPlate,
-      String userName,
-      PlateRepository repo,
-      GcsJsonUploader uploader,
-      String division,
-      String area,
-      PlateState plateState,
-      ) async {
+    BuildContext context,
+    dynamic selectedPlate,
+    String userName,
+    PlateRepository repo,
+    GcsJsonUploader uploader,
+    String division,
+    String area,
+    PlateState plateState,
+  ) async {
     final billingType = selectedPlate.billingType;
 
     if (billingType == null || billingType.trim().isEmpty) {
