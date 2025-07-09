@@ -17,11 +17,9 @@ import 'widgets/set_departure_request_dialog.dart';
 import '../../../widgets/dialog/plate_remove_dialog.dart';
 
 class ParkingCompletedControlButtons extends StatelessWidget {
-  final bool isSearchMode;
   final bool isParkingAreaMode;
   final bool isSorted;
   final VoidCallback showSearchDialog;
-  final VoidCallback resetSearch;
   final VoidCallback resetParkingAreaFilter;
   final VoidCallback toggleSortIcon;
   final Function(BuildContext context, String plateNumber, String area) handleEntryParkingRequest;
@@ -29,11 +27,9 @@ class ParkingCompletedControlButtons extends StatelessWidget {
 
   const ParkingCompletedControlButtons({
     super.key,
-    required this.isSearchMode,
     required this.isParkingAreaMode,
     required this.isSorted,
     required this.showSearchDialog,
-    required this.resetSearch,
     required this.resetParkingAreaFilter,
     required this.toggleSortIcon,
     required this.handleEntryParkingRequest,
@@ -61,22 +57,18 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                 transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
                 child: isPlateSelected
                     ? (selectedPlate.isLockedFee
-                        ? const Icon(Icons.lock_open, key: ValueKey('unlock'), color: Colors.grey)
-                        : const Icon(Icons.lock, key: ValueKey('lock'), color: Colors.grey))
-                    : Icon(
-                        Icons.refresh,
-                        key: const ValueKey('refresh'),
-                        color: Colors.grey[700],
-                      ),
+                    ? const Icon(Icons.lock_open, key: ValueKey('unlock'), color: Colors.grey)
+                    : const Icon(Icons.lock, key: ValueKey('lock'), color: Colors.grey))
+                    : Icon(Icons.refresh, key: const ValueKey('refresh'), color: Colors.grey[700]),
               ),
               label: isPlateSelected ? (selectedPlate.isLockedFee ? '정산 취소' : '사전 정산') : '구역 초기화',
             ),
             BottomNavigationBarItem(
               icon: Icon(
-                isPlateSelected ? Icons.check_circle : (isSearchMode ? Icons.cancel : Icons.search),
-                color: isPlateSelected ? Colors.green[600] : (isSearchMode ? Colors.orange[600] : Colors.grey[700]),
+                isPlateSelected ? Icons.check_circle : Icons.search,
+                color: isPlateSelected ? Colors.green[600] : Colors.grey[700],
               ),
-              label: isPlateSelected ? '출차 요청' : (isSearchMode ? '검색 초기화' : '번호판 검색'),
+              label: isPlateSelected ? '출차 요청' : '번호판 검색',
             ),
             BottomNavigationBarItem(
               icon: AnimatedRotation(
@@ -98,7 +90,7 @@ class ParkingCompletedControlButtons extends StatelessWidget {
               if (index == 0) {
                 resetParkingAreaFilter();
               } else if (index == 1) {
-                isSearchMode ? resetSearch() : showSearchDialog();
+                showSearchDialog();
               } else if (index == 2) {
                 toggleSortIcon();
               }
@@ -212,9 +204,9 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                     builder: (_) => PlateRemoveDialog(
                       onConfirm: () {
                         context.read<DeletePlate>().deleteFromParkingCompleted(
-                              selectedPlate.plateNumber,
-                              selectedPlate.area,
-                            );
+                          selectedPlate.plateNumber,
+                          selectedPlate.area,
+                        );
                         showSuccessSnackbar(context, "삭제 완료: ${selectedPlate.plateNumber}");
                       },
                     ),

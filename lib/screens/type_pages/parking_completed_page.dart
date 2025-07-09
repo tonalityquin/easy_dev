@@ -33,16 +33,13 @@ class ParkingCompletedPage extends StatefulWidget {
 
 class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
   bool _isSorted = true;
-  bool _isSearchMode = false;
   bool _isParkingAreaMode = true;
   String? _selectedParkingArea;
 
-  /// ⭐ 상태 초기화 함수
   void _resetInternalState() {
     setState(() {
       _selectedParkingArea = null;
       _isParkingAreaMode = true;
-      _isSearchMode = false;
       _isSorted = true;
     });
   }
@@ -63,22 +60,13 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
           onSearch: (query) {
             if (query.length == 4) {
               context.read<FilterPlate>().setPlateSearchQuery(query);
-              setState(() {
-                _isSearchMode = true;
-              });
+              // ✅ 렌더링 상태 변경 없음
             }
           },
-          area: currentArea, // ✅ 반드시 area 전달
+          area: currentArea,
         );
       },
     );
-  }
-
-  void _resetSearch(BuildContext context) {
-    context.read<FilterPlate>().clearPlateSearchQuery();
-    setState(() {
-      _isSearchMode = false;
-    });
   }
 
   void _resetParkingAreaFilter(BuildContext context) {
@@ -149,15 +137,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
         body: Consumer2<PlateState, AreaState>(
           builder: (context, plateState, areaState, child) {
             final userName = context.read<UserState>().name;
-            final filterState = context.watch<FilterPlate>();
-
             List<PlateModel> plates = plateState.getPlatesByCollection(PlateType.parkingCompleted);
-
-            // 검색 모드
-            if (_isSearchMode) {
-              final query = filterState.searchQuery;
-              plates = plates.where((p) => p.plateNumber.endsWith(query)).toList();
-            }
 
             // 구역 필터 모드
             if (_isParkingAreaMode && _selectedParkingArea != null) {
@@ -166,11 +146,11 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
 
             // 정렬
             plates.sort(
-              (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime),
+                  (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime),
             );
 
             // 구역 선택 화면
-            if (_isParkingAreaMode && _selectedParkingArea == null && !_isSearchMode) {
+            if (_isParkingAreaMode && _selectedParkingArea == null) {
               return ParkingCompletedLocationPicker(
                 onLocationSelected: (selectedLocation) {
                   setState(() {
@@ -184,11 +164,9 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
           },
         ),
         bottomNavigationBar: ParkingCompletedControlButtons(
-          isSearchMode: _isSearchMode,
           isParkingAreaMode: _isParkingAreaMode,
           isSorted: _isSorted,
           showSearchDialog: () => _showSearchDialog(context),
-          resetSearch: () => _resetSearch(context),
           resetParkingAreaFilter: () => _resetParkingAreaFilter(context),
           toggleSortIcon: _toggleSortIcon,
           handleEntryParkingRequest: handleEntryParkingRequest,
@@ -208,13 +186,13 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
           filterCondition: (request) => request.type == PlateType.parkingCompleted.firestoreValue,
           onPlateTap: (plateNumber, area) {
             context.read<PlateState>().togglePlateIsSelected(
-                  collection: PlateType.parkingCompleted,
-                  plateNumber: plateNumber,
-                  userName: userName,
-                  onError: (errorMessage) {
-                    showFailedSnackbar(context, errorMessage);
-                  },
-                );
+              collection: PlateType.parkingCompleted,
+              plateNumber: plateNumber,
+              userName: userName,
+              onError: (errorMessage) {
+                showFailedSnackbar(context, errorMessage);
+              },
+            );
           },
         ),
       ],

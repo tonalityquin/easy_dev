@@ -10,6 +10,7 @@ import '../../../states/plate/delete_plate.dart';
 import '../../../states/plate/plate_state.dart';
 import '../../../states/user/user_state.dart';
 import '../../../utils/snackbar_helper.dart';
+
 import '../../../widgets/dialog/on_tap_billing_type_bottom_sheet.dart';
 import '../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 import 'widgets/departure_request_status_bottom_sheet.dart';
@@ -17,12 +18,10 @@ import 'widgets/set_departure_completed_dialog.dart';
 import '../../../widgets/dialog/plate_remove_dialog.dart';
 
 class DepartureRequestControlButtons extends StatelessWidget {
-  final bool isSearchMode;
   final bool isParkingAreaMode;
   final bool isSorted;
 
   final VoidCallback showSearchDialog;
-  final VoidCallback resetSearch;
   final VoidCallback showParkingAreaDialog;
   final VoidCallback resetParkingAreaFilter;
   final VoidCallback toggleSortIcon;
@@ -33,11 +32,9 @@ class DepartureRequestControlButtons extends StatelessWidget {
 
   const DepartureRequestControlButtons({
     super.key,
-    required this.isSearchMode,
     required this.isParkingAreaMode,
     required this.isSorted,
     required this.showSearchDialog,
-    required this.resetSearch,
     required this.showParkingAreaDialog,
     required this.resetParkingAreaFilter,
     required this.toggleSortIcon,
@@ -75,27 +72,17 @@ class DepartureRequestControlButtons extends StatelessWidget {
                       : (isParkingAreaMode ? Colors.orange[600] : Colors.grey[700]),
                 ),
               ),
-              label: isPlateSelected
-                  ? '정산 관리'
-                  : (isParkingAreaMode ? '초기화' : '구역 선택'),
+              label: isPlateSelected ? '정산 관리' : (isParkingAreaMode ? '초기화' : '구역 선택'),
             ),
             BottomNavigationBarItem(
               icon: Tooltip(
-                message: isPlateSelected
-                    ? '출차 완료 처리'
-                    : (isSearchMode ? '검색 초기화' : '번호판 검색'),
+                message: isPlateSelected ? '출차 완료 처리' : '번호판 검색',
                 child: Icon(
-                  isPlateSelected
-                      ? Icons.check_circle
-                      : (isSearchMode ? Icons.cancel : Icons.search),
-                  color: isPlateSelected
-                      ? Colors.green[600]
-                      : (isSearchMode ? Colors.orange[600] : Colors.grey[700]),
+                  isPlateSelected ? Icons.check_circle : Icons.search,
+                  color: isPlateSelected ? Colors.green[600] : Colors.grey[700],
                 ),
               ),
-              label: isPlateSelected
-                  ? '출차'
-                  : (isSearchMode ? '검색 초기화' : '검색'),
+              label: isPlateSelected ? '출차' : '검색',
             ),
             BottomNavigationBarItem(
               icon: Tooltip(
@@ -125,7 +112,7 @@ class DepartureRequestControlButtons extends StatelessWidget {
               if (index == 0) {
                 isParkingAreaMode ? resetParkingAreaFilter() : showParkingAreaDialog();
               } else if (index == 1) {
-                isSearchMode ? resetSearch() : showSearchDialog();
+                showSearchDialog();
               } else if (index == 2) {
                 toggleSortIcon();
               }

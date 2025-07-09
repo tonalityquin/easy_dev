@@ -5,18 +5,17 @@ import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
 
 import '../../states/area/area_state.dart';
-import '../../states/plate/filter_plate.dart';
-import '../../states/plate/plate_state.dart'; // 번호판 상태 관리
+import '../../states/plate/plate_state.dart';
 import '../../states/plate/movement_plate.dart';
 import '../../states/user/user_state.dart';
 
 import '../../utils/snackbar_helper.dart';
 
-import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바
+import '../../widgets/navigation/top_navigation.dart';
 import '../../widgets/dialog/parking_location_bottom_sheet.dart';
 import '../../widgets/dialog/common_plate_search_bottom_sheet/common_plate_search_bottom_sheet.dart';
 import 'departure_request_pages/widgets/departure_request_status_bottom_sheet.dart';
-import '../../widgets/container/plate_container.dart'; // 번호판 컨테이너 위젯
+import '../../widgets/container/plate_container.dart';
 
 import 'departure_request_pages/departure_request_control_buttons.dart';
 
@@ -29,7 +28,6 @@ class DepartureRequestPage extends StatefulWidget {
 
 class _DepartureRequestPageState extends State<DepartureRequestPage> {
   bool _isSorted = true;
-  bool _isSearchMode = false;
   bool _isParkingAreaMode = false;
   String? _selectedParkingArea;
   final TextEditingController _locationController = TextEditingController();
@@ -40,9 +38,9 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
     });
 
     context.read<PlateState>().updateSortOrder(
-          PlateType.departureRequests,
-          _isSorted,
-        );
+      PlateType.departureRequests,
+      _isSorted,
+    );
   }
 
   void _showSearchDialog(BuildContext context) {
@@ -51,19 +49,12 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
     showDialog(
       context: context,
       builder: (context) => CommonPlateSearchBottomSheet(
-        onSearch: (query) => _filterPlatesByNumber(context, query),
-        area: currentArea, // ✅ area 전달
+        onSearch: (query) {
+          // 🔍 검색 결과는 단순 조회 용도, 상태 변경 없음
+        },
+        area: currentArea,
       ),
     );
-  }
-
-  void _filterPlatesByNumber(BuildContext context, String query) {
-    if (query.length == 4) {
-      context.read<FilterPlate>().setPlateSearchQuery(query);
-      setState(() {
-        _isSearchMode = true;
-      });
-    }
   }
 
   Future<void> _showParkingAreaDialog(BuildContext context) async {
@@ -80,11 +71,6 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
         _isParkingAreaMode = true;
         _selectedParkingArea = selectedLocation;
       });
-
-      context.read<FilterPlate>().filterByParkingLocation(
-            PlateType.departureRequests,
-            _selectedParkingArea!,
-          );
     }
   }
 
@@ -93,14 +79,6 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
     setState(() {
       _isParkingAreaMode = false;
       _selectedParkingArea = null;
-    });
-    context.read<FilterPlate>().clearLocationSearchQuery();
-  }
-
-  void _resetSearch(BuildContext context) {
-    context.read<FilterPlate>().clearPlateSearchQuery();
-    setState(() {
-      _isSearchMode = false;
     });
   }
 
@@ -113,7 +91,6 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
 
     if (selectedPlate == null) return;
 
-    // ✅ 정산 상태와 관계없이 그대로 출차 완료
     try {
       plateState.togglePlateIsSelected(
         collection: PlateType.departureRequests,
@@ -156,10 +133,10 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
             userName: userName,
             onError: (msg) => debugPrint(msg),
           );
-          return false; // 선택 해제 후 뒤로가기 차단
+          return false;
         }
 
-        return true; // 선택된 plate 없을 경우 뒤로가기 허용
+        return true;
       },
       child: Scaffold(
         appBar: AppBar(
@@ -169,40 +146,17 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
           foregroundColor: Colors.black,
           elevation: 0,
         ),
-        body: Consumer2<PlateState, FilterPlate>(
-          builder: (context, plateState, filterState, child) {
-            final userName = context.read<UserState>().name;
+        body: Consumer<PlateState>(
+          builder: (context, plateState, child) {
+            List<PlateModel> departureRequests = plateState.getPlatesByCollection(PlateType.departureRequests);
 
-            List<PlateModel> departureRequests;
-
-            // 1) 검색 모드
-            if (_isSearchMode) {
-              departureRequests = filterState
-                  .getPlates(PlateType.departureRequests)
-                  .where((plate) => plate.plateNumber.contains(filterState.searchQuery))
+            if (_isParkingAreaMode && _selectedParkingArea != null) {
+              departureRequests = departureRequests
+                  .where((plate) => plate.location == _selectedParkingArea)
                   .toList();
 
               if (departureRequests.isEmpty) {
-                return const Center(child: Text('검색 결과가 없습니다.'));
-              }
-            }
-            // 2) 주차 구역 모드
-            else if (_isParkingAreaMode && _selectedParkingArea != null) {
-              departureRequests = filterState.filterByParkingLocation(
-                PlateType.departureRequests,
-                _selectedParkingArea!,
-              );
-
-              if (departureRequests.isEmpty) {
                 return const Center(child: Text('해당 구역의 출차 요청 차량이 없습니다.'));
-              }
-            }
-            // 3) 기본 모드
-            else {
-              departureRequests = plateState.getPlatesByCollection(PlateType.departureRequests);
-
-              if (departureRequests.isEmpty) {
-                return const Center(child: Text('출차 요청 차량이 없습니다.'));
               }
             }
 
@@ -236,11 +190,9 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
           },
         ),
         bottomNavigationBar: DepartureRequestControlButtons(
-          isSearchMode: _isSearchMode,
           isParkingAreaMode: _isParkingAreaMode,
           isSorted: _isSorted,
           showSearchDialog: () => _showSearchDialog(context),
-          resetSearch: () => _resetSearch(context),
           showParkingAreaDialog: () => _showParkingAreaDialog(context),
           resetParkingAreaFilter: () => _resetParkingAreaFilter(context),
           toggleSortIcon: _toggleSortIcon,

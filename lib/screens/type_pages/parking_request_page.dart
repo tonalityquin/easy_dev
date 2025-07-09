@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../../enums/plate_type.dart';
 
 import '../../states/area/area_state.dart';
-import '../../states/plate/filter_plate.dart';
 import '../../states/plate/plate_state.dart';
 import '../../states/plate/movement_plate.dart';
 import '../../states/user/user_state.dart';
@@ -27,7 +26,6 @@ class ParkingRequestPage extends StatefulWidget {
 
 class _ParkingRequestPageState extends State<ParkingRequestPage> {
   bool _isSorted = true;
-  bool _isSearchMode = false;
   bool _showReportDialog = false;
 
   void _toggleSortIcon() {
@@ -36,9 +34,9 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
     });
 
     context.read<PlateState>().updateSortOrder(
-          PlateType.parkingRequests,
-          _isSorted,
-        );
+      PlateType.parkingRequests,
+      _isSorted,
+    );
   }
 
   void _showSearchDialog(BuildContext context) {
@@ -49,7 +47,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
       builder: (context) {
         return CommonPlateSearchBottomSheet(
           onSearch: (query) {
-            _filterPlatesByNumber(context, query);
+            // ✅ 단순 조회용으로만 사용. 상태 업데이트 없음.
           },
           area: currentArea,
         );
@@ -57,32 +55,16 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
     );
   }
 
-  void _filterPlatesByNumber(BuildContext context, String query) {
-    if (query.length == 4) {
-      context.read<FilterPlate>().setPlateSearchQuery(query);
-      setState(() {
-        _isSearchMode = true;
-      });
-    }
-  }
-
-  void _resetSearch(BuildContext context) {
-    context.read<FilterPlate>().clearPlateSearchQuery();
-    setState(() {
-      _isSearchMode = false;
-    });
-  }
-
   void _handlePlateTap(BuildContext context, String plateNumber, String area) {
     final userName = context.read<UserState>().name;
     context.read<PlateState>().togglePlateIsSelected(
-          collection: PlateType.parkingRequests,
-          plateNumber: plateNumber,
-          userName: userName,
-          onError: (errorMessage) {
-            showFailedSnackbar(context, errorMessage);
-          },
-        );
+      collection: PlateType.parkingRequests,
+      plateNumber: plateNumber,
+      userName: userName,
+      onError: (errorMessage) {
+        showFailedSnackbar(context, errorMessage);
+      },
+    );
   }
 
   Future<void> _handleParkingCompleted(BuildContext context) async {
@@ -191,61 +173,34 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
           foregroundColor: Colors.black,
           elevation: 0,
         ),
-        body: Stack(
-          children: [
-            Consumer2<PlateState, FilterPlate>(
-              builder: (context, plateState, filterPlate, child) {
-                if (_isSearchMode) {
-                  final searchResults = filterPlate.filterPlatesByFourDigit(
-                    filterPlate.searchQuery,
-                  );
+        body: Consumer<PlateState>(
+          builder: (context, plateState, child) {
+            final plates = [...plateState.getPlatesByCollection(PlateType.parkingRequests)];
 
-                  return ListView(
-                    padding: const EdgeInsets.all(8.0),
-                    children: [
-                      PlateContainer(
-                        data: searchResults,
-                        collection: PlateType.parkingRequests,
-                        filterCondition: (request) => request.type == PlateType.parkingRequests.firestoreValue,
-                        onPlateTap: (plateNumber, area) {
-                          _handlePlateTap(context, plateNumber, area);
-                        },
-                      ),
-                    ],
-                  );
-                } else {
-                  final plates = [...plateState.getPlatesByCollection(PlateType.parkingRequests)];
+            plates.sort((a, b) {
+              final aTime = a.requestTime;
+              final bTime = b.requestTime;
+              return _isSorted ? bTime.compareTo(aTime) : aTime.compareTo(bTime);
+            });
 
-                  plates.sort((a, b) {
-                    final aTime = a.requestTime;
-                    final bTime = b.requestTime;
-                    return _isSorted ? bTime.compareTo(aTime) : aTime.compareTo(bTime);
-                  });
-
-                  return ListView(
-                    padding: const EdgeInsets.all(8.0),
-                    children: [
-                      PlateContainer(
-                        data: plates,
-                        collection: PlateType.parkingRequests,
-                        filterCondition: (request) => request.type == PlateType.parkingRequests.firestoreValue,
-                        onPlateTap: (plateNumber, area) {
-                          _handlePlateTap(context, plateNumber, area);
-                        },
-                      ),
-                    ],
-                  );
-                }
-              },
-            ),
-          ],
+            return ListView(
+              padding: const EdgeInsets.all(8.0),
+              children: [
+                PlateContainer(
+                  data: plates,
+                  collection: PlateType.parkingRequests,
+                  filterCondition: (request) => request.type == PlateType.parkingRequests.firestoreValue,
+                  onPlateTap: (plateNumber, area) {
+                    _handlePlateTap(context, plateNumber, area);
+                  },
+                ),
+              ],
+            );
+          },
         ),
         bottomNavigationBar: ParkingRequestControlButtons(
           isSorted: _isSorted,
-          isSearchMode: _isSearchMode,
-          onSearchToggle: () {
-            _isSearchMode ? _resetSearch(context) : _showSearchDialog(context);
-          },
+          onSearchPressed: () => _showSearchDialog(context),
           onSortToggle: _toggleSortIcon,
           onParkingCompleted: () => _handleParkingCompleted(context),
           onToggleReportDialog: () {
