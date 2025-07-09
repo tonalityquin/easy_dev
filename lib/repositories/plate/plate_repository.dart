@@ -12,6 +12,10 @@ abstract class PlateRepository {
     PlateType type,
     String area,
   );
+  Future<int> getPlateCountToCurrentArea(
+      String area,
+      );
+
 
   Future<List<PlateModel>> fourDigitCommonQuery({
     required String plateFourDigit,

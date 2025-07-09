@@ -8,6 +8,8 @@ import '../../utils/firestore_logger.dart'; // ✅ FirestoreLogger import
 
 class FirestorePlateRepository implements PlateRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  int? _cachedPlateCount;
+  DateTime? _lastFetchTime;
 
   @override
   Stream<List<PlateModel>> streamToCurrentArea(
@@ -340,6 +342,45 @@ class FirestorePlateRepository implements PlateRepository {
     final count = aggregateQuerySnapshot.count ?? 0;
     await FirestoreLogger().log('getPlateCountForTypePage success: $count');
     return count;
+  }
+
+  @override
+  Future<int> getPlateCountToCurrentArea(String area) async {
+    final now = DateTime.now();
+
+    // 🔹 캐시 조건 확인
+    final isCacheValid = _cachedPlateCount != null &&
+        _lastFetchTime != null &&
+        now.difference(_lastFetchTime!) < const Duration(minutes: 3);
+
+    if (isCacheValid) {
+      debugPrint('📦 캐시된 plate count 반환: $_cachedPlateCount (area=$area)');
+      await FirestoreLogger().log('getPlateCountToCurrentArea: returned from cache → count=$_cachedPlateCount');
+      return _cachedPlateCount!;
+    }
+
+    // 🔹 캐시 무효 → Firestore 호출
+    debugPrint('📡 Firestore에서 plate count 쿼리 수행 (area=$area)');
+    await FirestoreLogger().log('getPlateCountToCurrentArea: querying Firestore (area=$area)');
+
+    try {
+      final snapshot = await _firestore.collection('plates').where('area', isEqualTo: area).count().get();
+
+      final count = snapshot.count ?? 0;
+
+      // 🔹 캐시 갱신
+      _cachedPlateCount = count;
+      _lastFetchTime = now;
+
+      debugPrint('✅ Firestore에서 plate count 수신: $count (area=$area)');
+      await FirestoreLogger().log('getPlateCountToCurrentArea success: count=$count');
+
+      return count;
+    } catch (e) {
+      debugPrint('❌ Firestore plate count 실패: $e');
+      await FirestoreLogger().log('getPlateCountToCurrentArea failed: $e');
+      return 0;
+    }
   }
 
   @override

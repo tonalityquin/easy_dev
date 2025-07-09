@@ -38,13 +38,13 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
         ),
         icon: _isRefreshing
             ? const SizedBox(
-          width: 20,
-          height: 20,
-          child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-            strokeWidth: 2,
-          ),
-        )
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  strokeWidth: 2,
+                ),
+              )
             : const Icon(Icons.refresh),
         label: const Text(
           "수동 새로고침",
@@ -53,13 +53,13 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
         onPressed: _isRefreshing
             ? null
             : () async {
-          setState(() => _isRefreshing = true);
+                setState(() => _isRefreshing = true);
 
-          await locationState.manualLocationRefresh();
-          await context.read<BillState>().manualBillRefresh();
+                await locationState.manualLocationRefresh();
+                await context.read<BillState>().manualBillRefresh();
 
-          setState(() => _isRefreshing = false);
-        },
+                setState(() => _isRefreshing = false);
+              },
       ),
     );
   }
@@ -336,7 +336,9 @@ class _ParkingCompositeTileState extends State<ParkingCompositeTile> {
           .count()
           .get();
 
-      await logger.log('쿼리 완료: location=$displayName, count=${snapshot.count}, duration=${stopwatch.elapsedMilliseconds}ms', level: 'success');
+      await logger.log(
+          '쿼리 완료: location=$displayName, count=${snapshot.count}, duration=${stopwatch.elapsedMilliseconds}ms',
+          level: 'success');
       print('✅ [$displayName] count=${snapshot.count}');
       return snapshot.count ?? 0;
     }));
@@ -349,9 +351,8 @@ class _ParkingCompositeTileState extends State<ParkingCompositeTile> {
       future: _futureCounts,
       builder: (context, snap) {
         final totalCount = snap.hasData ? snap.data!.fold(0, (a, b) => a + b) : null;
-        final subtitle = totalCount != null
-            ? '총 입차 $totalCount / 총 공간 ${widget.totalCapacity}'
-            : '총 공간 ${widget.totalCapacity}';
+        final subtitle =
+            totalCount != null ? '총 입차 $totalCount / 총 공간 ${widget.totalCapacity}' : '총 공간 ${widget.totalCapacity}';
         return ListTile(
           leading: Icon(Icons.layers, color: Colors.teal),
           title: Text(widget.parent),

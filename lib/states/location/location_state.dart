@@ -56,6 +56,10 @@ class LocationState extends ChangeNotifier {
         _isLoading = false;
         notifyListeners();
         debugPrint('✅ 캐시에서 주차 구역 ${_locations.length}건 로드 (area: $currentArea)');
+
+        // 🔸 총합 capacity 불러오기 (선택적 사용)
+        final totalCapacity = prefs.getInt('total_capacity_$currentArea') ?? 0;
+        debugPrint('📦 총 capacity 캐시값: $totalCapacity');
       } catch (e) {
         debugPrint('⚠️ 주차 구역 캐시 디코딩 실패: $e');
       }
@@ -90,10 +94,17 @@ class LocationState extends ChangeNotifier {
         _selectedLocationId = null;
 
         final prefs = await SharedPreferences.getInstance();
+
+        // 🔸 위치 정보 캐시 저장
         final jsonData = json.encode(data.map((e) => e.toCacheMap()).toList());
         await prefs.setString('cached_locations_$currentArea', jsonData);
 
+        // 🔸 capacity 총합 계산 및 저장
+        final totalCapacity = data.fold<int>(0, (sum, loc) => sum + loc.capacity);
+        await prefs.setInt('total_capacity_$currentArea', totalCapacity);
+
         debugPrint('✅ Firestore 데이터 캐시에 갱신됨 (area: $currentArea)');
+        debugPrint('📦 총 capacity 저장됨: $totalCapacity');
       }
     } catch (e) {
       debugPrint('🔥 Firestore 주차 구역 조회 실패: $e');

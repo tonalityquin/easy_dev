@@ -1,6 +1,7 @@
 import 'package:easydev/utils/gcs_json_uploader.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../enums/plate_type.dart';
 import '../../../repositories/plate/plate_repository.dart';
@@ -12,13 +13,14 @@ import '../../../utils/snackbar_helper.dart';
 import '../../../widgets/dialog/on_tap_billing_type_bottom_sheet.dart';
 import '../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 import 'widgets/parking_request_status_bottom_sheet.dart';
+import 'widgets/parking_status_bottom_sheet.dart';
 
 class ParkingRequestControlButtons extends StatelessWidget {
   final bool isSorted;
   final VoidCallback onSearchPressed;
   final VoidCallback onSortToggle;
   final VoidCallback onParkingCompleted;
-  final VoidCallback onToggleReportDialog;
+  final VoidCallback onToggleReportDialog; // 사용 안 함
 
   const ParkingRequestControlButtons({
     super.key,
@@ -44,16 +46,12 @@ class ParkingRequestControlButtons extends StatelessWidget {
             BottomNavigationBarItem(
               icon: Tooltip(
                 message: isPlateSelected ? '정산 관리' : '보고서 열기',
-                child: isPlateSelected
-                    ? Icon(Icons.lock, color: iconColor)
-                    : Image.asset(
-                  'assets/icons/icon_belivussnc.PNG',
-                  width: 24.0,
-                  height: 24.0,
-                  fit: BoxFit.contain,
+                child: Icon(
+                  isPlateSelected ? Icons.lock : Icons.bar_chart,
+                  color: iconColor,
                 ),
               ),
-              label: isPlateSelected ? '정산 관리' : 'Belivus',
+              label: isPlateSelected ? '정산 관리' : '현황 보기',
             ),
             BottomNavigationBarItem(
               icon: Tooltip(
@@ -89,10 +87,36 @@ class ParkingRequestControlButtons extends StatelessWidget {
             final area = context.read<AreaState>().currentArea.trim();
 
             if (index == 0) {
-              isPlateSelected
-                  ? await _handleBillingAction(
-                  context, selectedPlate, userName, repo, uploader, division, area, plateState)
-                  : onToggleReportDialog();
+              if (isPlateSelected) {
+                await _handleBillingAction(
+                  context,
+                  selectedPlate,
+                  userName,
+                  repo,
+                  uploader,
+                  division,
+                  area,
+                  plateState,
+                );
+              } else {
+                // ✅ Belivus 버튼 → 주차 현황 BottomSheet 표시
+                final prefs = await SharedPreferences.getInstance();
+                final totalCapacity = prefs.getInt('total_capacity_$area') ?? 0;
+                final occupiedCount = await repo.getPlateCountToCurrentArea(area);
+
+                if (!context.mounted) return;
+
+                showModalBottomSheet(
+                  context: context,
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                  ),
+                  builder: (_) => ParkingStatusBottomSheet(
+                    totalCapacity: totalCapacity,
+                    occupiedCount: occupiedCount,
+                  ),
+                );
+              }
             } else if (index == 1) {
               isPlateSelected ? onParkingCompleted() : onSearchPressed();
             } else if (index == 2) {
@@ -102,9 +126,9 @@ class ParkingRequestControlButtons extends StatelessWidget {
                   plate: selectedPlate,
                   onCancelEntryRequest: () {
                     context.read<DeletePlate>().deleteFromParkingRequest(
-                      selectedPlate.plateNumber,
-                      selectedPlate.area,
-                    );
+                          selectedPlate.plateNumber,
+                          selectedPlate.area,
+                        );
                     showSuccessSnackbar(context, "입차 요청이 취소되었습니다: ${selectedPlate.plateNumber}");
                   },
                   onDelete: () {},
@@ -120,15 +144,15 @@ class ParkingRequestControlButtons extends StatelessWidget {
   }
 
   Future<void> _handleBillingAction(
-      BuildContext context,
-      dynamic selectedPlate,
-      String userName,
-      PlateRepository repo,
-      GcsJsonUploader uploader,
-      String division,
-      String area,
-      PlateState plateState,
-      ) async {
+    BuildContext context,
+    dynamic selectedPlate,
+    String userName,
+    PlateRepository repo,
+    GcsJsonUploader uploader,
+    String division,
+    String area,
+    PlateState plateState,
+  ) async {
     final billingType = selectedPlate.billingType;
 
     if (billingType == null || billingType.trim().isEmpty) {
