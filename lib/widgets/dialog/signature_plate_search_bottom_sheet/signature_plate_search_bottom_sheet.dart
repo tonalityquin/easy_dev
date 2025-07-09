@@ -5,8 +5,6 @@ import 'widgets/plate_number_display.dart';
 import 'widgets/plate_search_header.dart';
 import 'widgets/plate_search_results.dart';
 import 'widgets/search_button.dart';
-
-// FirestorePlateRepository import
 import '../../../repositories/plate/firestore_plate_repository.dart';
 
 class SignaturePlateSearchBottomSheet extends StatefulWidget {
@@ -23,10 +21,10 @@ class SignaturePlateSearchBottomSheet extends StatefulWidget {
   State<SignaturePlateSearchBottomSheet> createState() => _SignaturePlateSearchBottomSheetState();
 
   static Future<void> show(
-    BuildContext context,
-    void Function(String) onSearch,
-    String area,
-  ) async {
+      BuildContext context,
+      void Function(String) onSearch,
+      String area,
+      ) async {
     await showGeneralDialog(
       context: context,
       barrierDismissible: true,
@@ -76,27 +74,21 @@ class _SignaturePlateSearchBottomSheetState extends State<SignaturePlateSearchBo
   @override
   void initState() {
     super.initState();
-
     _keypadController = AnimationController(
       duration: const Duration(milliseconds: 500),
       vsync: this,
     );
-
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 0.2),
       end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _keypadController,
-        curve: Curves.easeOut,
-      ),
-    );
-
+    ).animate(CurvedAnimation(
+      parent: _keypadController,
+      curve: Curves.easeOut,
+    ));
     _fadeAnimation = CurvedAnimation(
       parent: _keypadController,
       curve: Curves.easeIn,
     );
-
     _keypadController.forward();
   }
 
@@ -153,23 +145,24 @@ class _SignaturePlateSearchBottomSheetState extends State<SignaturePlateSearchBo
                     if (_hasSearched)
                       _results.isEmpty
                           ? Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 24),
-                              child: Center(
-                                child: Text(
-                                  '유효하지 않은 번호입니다.',
-                                  style: TextStyle(
-                                    color: Colors.redAccent,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                              ),
-                            )
-                          : PlateSearchResults(
-                              results: _results.map((e) => '${e.area} ${e.plateFourDigit}').toList(),
-                              onSelect: (selected) {
-                                Navigator.pop(context);
-                              },
+                        padding: const EdgeInsets.symmetric(vertical: 24),
+                        child: Center(
+                          child: Text(
+                            '유효하지 않은 번호입니다.',
+                            style: TextStyle(
+                              color: Colors.redAccent,
+                              fontSize: 16,
                             ),
+                          ),
+                        ),
+                      )
+                          : PlateSearchResults(
+                        results: _results,
+                        onSelect: (selected) {
+                          // ✅ 여기서 BottomSheet 닫지 않음
+                          debugPrint('선택된 차량: ${selected.plateNumber}');
+                        },
+                      ),
                     Center(
                       child: TextButton(
                         onPressed: () => Navigator.pop(context),
@@ -186,36 +179,35 @@ class _SignaturePlateSearchBottomSheetState extends State<SignaturePlateSearchBo
                           isLoading: _isLoading,
                           onPressed: valid
                               ? () async {
-                                  setState(() {
-                                    _isLoading = true;
-                                  });
+                            setState(() {
+                              _isLoading = true;
+                            });
 
-                                  try {
-                                    final repository = FirestorePlateRepository();
+                            try {
+                              final repository = FirestorePlateRepository();
+                              final results = await repository.fourDigitSignatureQuery(
+                                plateFourDigit: value.text,
+                                area: widget.area,
+                              );
 
-                                    final results = await repository.fourDigitSignatureQuery(
-                                      plateFourDigit: value.text,
-                                      area: widget.area, // 하드코딩 제거
-                                    );
+                              setState(() {
+                                _results = results;
+                                _hasSearched = true;
+                                _isLoading = false;
+                              });
 
-                                    setState(() {
-                                      _results = results;
-                                      _hasSearched = true;
-                                      _isLoading = false;
-                                    });
-
-                                    widget.onSearch(value.text);
-                                  } catch (e) {
-                                    setState(() {
-                                      _isLoading = false;
-                                    });
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('검색 중 오류가 발생했습니다: $e'),
-                                      ),
-                                    );
-                                  }
-                                }
+                              widget.onSearch(value.text);
+                            } catch (e) {
+                              setState(() {
+                                _isLoading = false;
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('검색 중 오류가 발생했습니다: $e'),
+                                ),
+                              );
+                            }
+                          }
                               : null,
                         );
                       },
@@ -230,22 +222,22 @@ class _SignaturePlateSearchBottomSheetState extends State<SignaturePlateSearchBo
         bottomNavigationBar: _hasSearched
             ? const SizedBox.shrink()
             : AnimatedKeypad(
-                slideAnimation: _slideAnimation,
-                fadeAnimation: _fadeAnimation,
-                controller: _controller,
-                maxLength: 4,
-                enableDigitModeSwitch: false,
-                onComplete: () {
-                  setState(() {});
-                },
-                onReset: () {
-                  setState(() {
-                    _controller.clear();
-                    _hasSearched = false;
-                    _results.clear();
-                  });
-                },
-              ),
+          slideAnimation: _slideAnimation,
+          fadeAnimation: _fadeAnimation,
+          controller: _controller,
+          maxLength: 4,
+          enableDigitModeSwitch: false,
+          onComplete: () {
+            setState(() {});
+          },
+          onReset: () {
+            setState(() {
+              _controller.clear();
+              _hasSearched = false;
+              _results.clear();
+            });
+          },
+        ),
       ),
     );
   }

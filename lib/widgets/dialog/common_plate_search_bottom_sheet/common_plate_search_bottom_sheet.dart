@@ -62,7 +62,8 @@ class CommonPlateSearchBottomSheet extends StatefulWidget {
   }
 }
 
-class _CommonPlateSearchBottomSheetState extends State<CommonPlateSearchBottomSheet> with SingleTickerProviderStateMixin {
+class _CommonPlateSearchBottomSheetState extends State<CommonPlateSearchBottomSheet>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _controller = TextEditingController();
   bool _isLoading = false;
   bool _hasSearched = false;
@@ -164,7 +165,7 @@ class _CommonPlateSearchBottomSheetState extends State<CommonPlateSearchBottomSh
                               ),
                             )
                           : PlateSearchResults(
-                              results: _results.map((e) => '${e.area} ${e.plateFourDigit}').toList(),
+                              results: _results, // ✅ 그대로 넘기기
                               onSelect: (selected) {
                                 Navigator.pop(context);
                               },

@@ -8,7 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../states/user/user_state.dart';
 import '../../../states/area/area_state.dart';
 import 'debugs/clock_in_debug_bottom_sheet.dart';
-import 'debugs/clock_in_debug_firestore_logger.dart'; // ✅ 로컬 디버깅 로거 추가
+import 'debugs/clock_in_debug_firestore_logger.dart';
 import 'clock_in_controller.dart';
 import 'sections/clock_in_fetch_plate_count_widget.dart';
 import 'sections/report_button_widget.dart';
@@ -25,7 +25,7 @@ class ClockInWorkScreen extends StatefulWidget {
 
 class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
   final controller = ClockInController();
-  final logger = ClockInDebugFirestoreLogger(); // ✅
+  final logger = ClockInDebugFirestoreLogger();
 
   String? kakaoUrl;
   bool loadingUrl = true;
@@ -48,7 +48,9 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
     if (userState.isLoading || userState.division.isEmpty) {
       logger.log('UserState 로딩 중... 재시도 예약', level: 'info');
       await Future.delayed(const Duration(milliseconds: 300));
-      _tryLoadKakaoUrl();
+      if (mounted) {
+        _tryLoadKakaoUrl();
+      }
       return;
     }
 
@@ -67,6 +69,7 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
 
     if (division.isEmpty || currentArea.isEmpty) {
       logger.log('❌ division 또는 area 값 없음', level: 'error');
+      if (!mounted) return;
       setState(() {
         kakaoUrl = null;
         loadingUrl = false;
@@ -79,6 +82,7 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
 
     if (cached != null && cached.isNotEmpty) {
       logger.log('✅ 캐시된 URL 사용됨: $cached', level: 'info');
+      if (!mounted) return;
       setState(() {
         kakaoUrl = cached;
         loadingUrl = false;
@@ -99,12 +103,14 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
         if (url != null && url.isNotEmpty) {
           logger.log('✅ Firestore에서 URL 로드 성공: $url', level: 'success');
           await prefs.setString(cacheKey, url);
+          if (!mounted) return;
           setState(() {
             kakaoUrl = url;
             loadingUrl = false;
           });
         } else {
           logger.log('⚠️ URL 필드 비어있음', level: 'warn');
+          if (!mounted) return;
           setState(() {
             kakaoUrl = null;
             loadingUrl = false;
@@ -112,6 +118,7 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
         }
       } else {
         logger.log('⚠️ Firestore에 export_link 문서 없음', level: 'warn');
+        if (!mounted) return;
         setState(() {
           kakaoUrl = null;
           loadingUrl = false;
@@ -119,7 +126,7 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
       }
     } catch (e) {
       logger.log('❌ Firestore URL 로드 실패: $e', level: 'error');
-      if (kakaoUrl == null) {
+      if (kakaoUrl == null && mounted) {
         setState(() {
           kakaoUrl = null;
           loadingUrl = false;
