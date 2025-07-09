@@ -10,7 +10,7 @@ import '../../../states/user/user_state.dart';
 import '../../../states/calendar/field_selected_date_state.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../widgets/dialog/on_tap_billing_type_bottom_sheet.dart';
-import 'widgets/departure_completed_status_dialog.dart';
+import 'widgets/departure_completed_status_bottom_sheet.dart';
 
 class DepartureCompletedControlButtons extends StatelessWidget {
   final bool isSearchMode;

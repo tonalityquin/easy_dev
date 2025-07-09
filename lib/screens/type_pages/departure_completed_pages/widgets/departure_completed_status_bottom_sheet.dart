@@ -29,31 +29,31 @@ Future<void> showDepartureCompletedStatusBottomSheet({
           return Container(
             decoration: const BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
             child: ListView(
               controller: scrollController,
               children: [
-                // Drag handle
-                Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 20),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade400,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
                   ),
                 ),
 
-                // Title
                 const Row(
                   children: [
                     Icon(Icons.settings, color: Colors.blueAccent),
                     SizedBox(width: 8),
                     Text(
                       '출차 완료 상태 처리',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
@@ -76,12 +76,19 @@ Future<void> showDepartureCompletedStatusBottomSheet({
                     );
                   },
                   style: ElevatedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 48),
+                    minimumSize: const Size(double.infinity, 52),
+                    backgroundColor: Colors.grey.shade100,
+                    foregroundColor: Colors.black87,
+                    elevation: 0,
+                    side: const BorderSide(color: Colors.black12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
 
-                // 로그 확인 버튼 (기능 복원됨)
+                // 로그 확인 버튼
                 ElevatedButton.icon(
                   icon: const Icon(Icons.history),
                   label: const Text("로그 확인"),
@@ -100,7 +107,14 @@ Future<void> showDepartureCompletedStatusBottomSheet({
                     );
                   },
                   style: ElevatedButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 48),
+                    minimumSize: const Size(double.infinity, 52),
+                    backgroundColor: Colors.grey.shade100,
+                    foregroundColor: Colors.black87,
+                    elevation: 0,
+                    side: const BorderSide(color: Colors.black12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
               ],

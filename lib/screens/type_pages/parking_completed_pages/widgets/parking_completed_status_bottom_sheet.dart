@@ -11,6 +11,8 @@ import '../../../../states/user/user_state.dart';
 import '../../../../utils/fee_calculator.dart';
 import '../../../../enums/plate_type.dart';
 
+// 중복 import 생략
+
 Future<void> showParkingCompletedStatusBottomSheet({
   required BuildContext context,
   required PlateModel plate,
@@ -34,30 +36,34 @@ Future<void> showParkingCompletedStatusBottomSheet({
           return Container(
             decoration: const BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
             child: ListView(
               controller: scrollController,
               children: [
-                Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 20),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade400,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
                   ),
                 ),
                 const Row(
                   children: [
                     Icon(Icons.settings, color: Colors.blueAccent),
                     SizedBox(width: 8),
-                    Text('입차 완료 상태 처리', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                    Text(
+                      '입차 완료 상태 처리',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 24),
-
                 ElevatedButton.icon(
                   icon: const Icon(Icons.history),
                   label: const Text("로그 확인"),
@@ -75,10 +81,18 @@ Future<void> showParkingCompletedStatusBottomSheet({
                       ),
                     );
                   },
-                  style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 52),
+                    backgroundColor: Colors.grey.shade100,
+                    foregroundColor: Colors.black87,
+                    elevation: 0,
+                    side: const BorderSide(color: Colors.black12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 12),
-
                 ElevatedButton.icon(
                   icon: const Icon(Icons.edit_note_outlined),
                   label: const Text("정보 수정"),
@@ -94,10 +108,18 @@ Future<void> showParkingCompletedStatusBottomSheet({
                       ),
                     );
                   },
-                  style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 52),
+                    backgroundColor: Colors.grey.shade100,
+                    foregroundColor: Colors.black87,
+                    elevation: 0,
+                    side: const BorderSide(color: Colors.black12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 12),
-
                 ElevatedButton.icon(
                   icon: const Icon(Icons.assignment_return),
                   label: const Text("입차 요청으로 되돌리기"),
@@ -105,10 +127,16 @@ Future<void> showParkingCompletedStatusBottomSheet({
                     Navigator.pop(context);
                     onRequestEntry();
                   },
-                  style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 52),
+                    backgroundColor: Colors.orange.shade400,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 12),
-
                 ElevatedButton.icon(
                   icon: const Icon(Icons.exit_to_app),
                   label: const Text("출차 완료 처리"),
@@ -119,10 +147,16 @@ Future<void> showParkingCompletedStatusBottomSheet({
                       await handleEntryDepartureCompleted(context, plate);
                     }
                   },
-                  style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 52),
+                    backgroundColor: Colors.green.shade600,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 12),
-
                 TextButton.icon(
                   icon: const Icon(Icons.delete_forever, color: Colors.red),
                   label: const Text("삭제", style: TextStyle(color: Colors.red)),
