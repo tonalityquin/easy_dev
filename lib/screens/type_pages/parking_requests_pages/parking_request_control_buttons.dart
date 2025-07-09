@@ -108,13 +108,23 @@ class ParkingRequestControlButtons extends StatelessWidget {
 
                 showModalBottomSheet(
                   context: context,
-                  shape: const RoundedRectangleBorder(
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                  ),
-                  builder: (_) => ParkingStatusBottomSheet(
-                    totalCapacity: totalCapacity,
-                    occupiedCount: occupiedCount,
-                  ),
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) {
+                    return DraggableScrollableSheet(
+                      initialChildSize: 0.35,
+                      minChildSize: 0.2,
+                      maxChildSize: 0.85,
+                      expand: false,
+                      builder: (context, scrollController) {
+                        return ParkingStatusBottomSheet(
+                          totalCapacity: totalCapacity,
+                          occupiedCount: occupiedCount,
+                          scrollController: scrollController,
+                        );
+                      },
+                    );
+                  },
                 );
               }
             } else if (index == 1) {

@@ -3,35 +3,40 @@ import 'package:flutter/material.dart';
 class ParkingStatusBottomSheet extends StatelessWidget {
   final int totalCapacity;
   final int occupiedCount;
+  final ScrollController scrollController;
 
   const ParkingStatusBottomSheet({
     super.key,
     required this.totalCapacity,
     required this.occupiedCount,
+    required this.scrollController,
   });
 
   @override
   Widget build(BuildContext context) {
-    final double usageRatio = totalCapacity == 0 ? 0 : occupiedCount / totalCapacity;
+    final double usageRatio =
+    totalCapacity == 0 ? 0 : occupiedCount / totalCapacity;
     final String usagePercent = (usageRatio * 100).toStringAsFixed(1);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      child: ListView(
+        controller: scrollController,
         children: [
           // 🟪 Drag handle
-          Container(
-            width: 40,
-            height: 4,
-            margin: const EdgeInsets.only(bottom: 16),
-            decoration: BoxDecoration(
-              color: Colors.grey[400],
-              borderRadius: BorderRadius.circular(2),
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: Colors.grey[400],
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
           ),
 
@@ -39,6 +44,7 @@ class ParkingStatusBottomSheet extends StatelessWidget {
           const Text(
             '📊 현재 주차 현황',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            textAlign: TextAlign.center,
           ),
           const SizedBox(height: 12),
 
@@ -46,6 +52,7 @@ class ParkingStatusBottomSheet extends StatelessWidget {
           Text(
             '총 $totalCapacity대 중 $occupiedCount대 주차됨',
             style: const TextStyle(fontSize: 16),
+            textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
 
@@ -68,6 +75,7 @@ class ParkingStatusBottomSheet extends StatelessWidget {
               fontWeight: FontWeight.w600,
               color: Colors.black87,
             ),
+            textAlign: TextAlign.center,
           ),
         ],
       ),
