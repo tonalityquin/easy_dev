@@ -13,7 +13,12 @@ abstract class PlateRepository {
     String area,
   );
 
-  Future<List<PlateModel>> fourDigitUseSearchQuery({
+  Future<List<PlateModel>> fourDigitCommonQuery({
+    required String plateFourDigit,
+    required String area,
+  });
+
+  Future<List<PlateModel>> fourDigitSignatureQuery({
     required String plateFourDigit,
     required String area,
   });

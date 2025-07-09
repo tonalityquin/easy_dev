@@ -15,7 +15,7 @@ import '../../utils/snackbar_helper.dart';
 
 import '../../widgets/navigation/top_navigation.dart';
 import '../../widgets/container/plate_container.dart';
-import '../../widgets/dialog/plate_search_bottom_sheet/plate_search_bottom_sheet.dart';
+import '../../widgets/dialog/common_plate_search_bottom_sheet/common_plate_search_bottom_sheet.dart';
 import 'departure_completed_pages/field_calendar.dart';
 
 import 'departure_completed_pages/widgets/departure_completed_page_merge_log.dart';
@@ -39,7 +39,7 @@ class _DepartureCompletedPageState extends State<DepartureCompletedPage> {
 
     showDialog(
       context: context,
-      builder: (context) => PlateSearchBottomSheet(
+      builder: (context) => CommonPlateSearchBottomSheet(
         onSearch: (query) => _filterPlatesByNumber(context, query),
         area: currentArea, // ✅ area 전달
       ),

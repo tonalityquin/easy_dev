@@ -12,8 +12,8 @@ import '../../states/user/user_state.dart';
 
 import '../../utils/snackbar_helper.dart';
 
+import '../../widgets/dialog/signature_plate_search_bottom_sheet/signature_plate_search_bottom_sheet.dart';
 import '../../widgets/navigation/top_navigation.dart';
-import '../../widgets/dialog/plate_search_bottom_sheet/plate_search_bottom_sheet.dart';
 import 'parking_completed_pages/widgets/parking_completed_status_bottom_sheet.dart';
 import '../../widgets/container/plate_container.dart';
 
@@ -59,7 +59,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
     showDialog(
       context: context,
       builder: (context) {
-        return PlateSearchBottomSheet(
+        return SignaturePlateSearchBottomSheet(
           onSearch: (query) {
             if (query.length == 4) {
               context.read<FilterPlate>().setPlateSearchQuery(query);

@@ -11,10 +11,10 @@ import '../../states/user/user_state.dart';
 
 import '../../utils/snackbar_helper.dart';
 
-import '../../widgets/navigation/top_navigation.dart';
-import '../../widgets/dialog/plate_search_bottom_sheet/plate_search_bottom_sheet.dart';
-import '../../widgets/dialog/parking_location_bottom_sheet.dart';
 import '../../widgets/container/plate_container.dart';
+import '../../widgets/dialog/common_plate_search_bottom_sheet/common_plate_search_bottom_sheet.dart';
+import '../../widgets/dialog/parking_location_bottom_sheet.dart';
+import '../../widgets/navigation/top_navigation.dart';
 
 import 'parking_requests_pages/parking_request_control_buttons.dart';
 
@@ -47,7 +47,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
     showDialog(
       context: context,
       builder: (context) {
-        return PlateSearchBottomSheet(
+        return CommonPlateSearchBottomSheet(
           onSearch: (query) {
             _filterPlatesByNumber(context, query);
           },

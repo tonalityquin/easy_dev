@@ -130,11 +130,11 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
-  Future<List<PlateModel>> fourDigitUseSearchQuery({
+  Future<List<PlateModel>> fourDigitCommonQuery({
     required String plateFourDigit,
     required String area,
   }) async {
-    await FirestoreLogger().log('fourDigitUseSearchQuery called: plateFourDigit=$plateFourDigit, area=$area');
+    await FirestoreLogger().log('fourDigitCommonQuery called: plateFourDigit=$plateFourDigit, area=$area');
 
     final querySnapshot = await _firestore
         .collection('plates')
@@ -144,7 +144,32 @@ class FirestorePlateRepository implements PlateRepository {
 
     final result = querySnapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList();
 
-    await FirestoreLogger().log('fourDigitUseSearchQuery success: ${result.length} items loaded');
+    await FirestoreLogger().log('fourDigitCommonQuery success: ${result.length} items loaded');
+    return result;
+  }
+
+  @override
+  Future<List<PlateModel>> fourDigitSignatureQuery({
+    required String plateFourDigit,
+    required String area,
+  }) async {
+    await FirestoreLogger().log(
+      'fourDigitSignatureQuery called: plateFourDigit=$plateFourDigit, area=$area',
+    );
+
+    final querySnapshot = await _firestore
+        .collection('plates')
+        .where('plate_four_digit', isEqualTo: plateFourDigit)
+        .where('area', isEqualTo: area)
+        .where('type', isEqualTo: PlateType.parkingCompleted.firestoreValue) // ✅ type 조건 추가
+        .get();
+
+    final result = querySnapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList();
+
+    await FirestoreLogger().log(
+      'fourDigitSignatureQuery success: ${result.length} items loaded',
+    );
+
     return result;
   }
 

@@ -9,25 +9,24 @@ import 'widgets/search_button.dart';
 // FirestorePlateRepository import
 import '../../../repositories/plate/firestore_plate_repository.dart';
 
-class PlateSearchBottomSheet extends StatefulWidget {
+class CommonPlateSearchBottomSheet extends StatefulWidget {
   final void Function(String) onSearch;
-  final String area; // 지역 값
+  final String area;
 
-  const PlateSearchBottomSheet({
+  const CommonPlateSearchBottomSheet({
     super.key,
     required this.onSearch,
     required this.area,
   });
 
   @override
-  State<PlateSearchBottomSheet> createState() => _PlateSearchBottomSheetState();
+  State<CommonPlateSearchBottomSheet> createState() => _CommonPlateSearchBottomSheetState();
 
-  /// 커스텀 애니메이션으로 표시
   static Future<void> show(
-      BuildContext context,
-      void Function(String) onSearch,
-      String area,
-      ) async {
+    BuildContext context,
+    void Function(String) onSearch,
+    String area,
+  ) async {
     await showGeneralDialog(
       context: context,
       barrierDismissible: true,
@@ -37,7 +36,7 @@ class PlateSearchBottomSheet extends StatefulWidget {
       pageBuilder: (_, __, ___) {
         return Align(
           alignment: Alignment.bottomCenter,
-          child: PlateSearchBottomSheet(
+          child: CommonPlateSearchBottomSheet(
             onSearch: onSearch,
             area: area,
           ),
@@ -63,8 +62,7 @@ class PlateSearchBottomSheet extends StatefulWidget {
   }
 }
 
-class _PlateSearchBottomSheetState extends State<PlateSearchBottomSheet>
-    with SingleTickerProviderStateMixin {
+class _CommonPlateSearchBottomSheetState extends State<CommonPlateSearchBottomSheet> with SingleTickerProviderStateMixin {
   final TextEditingController _controller = TextEditingController();
   bool _isLoading = false;
   bool _hasSearched = false;
@@ -127,13 +125,11 @@ class _PlateSearchBottomSheetState extends State<PlateSearchBottomSheet>
               return Container(
                 decoration: const BoxDecoration(
                   color: Colors.white,
-                  borderRadius:
-                  BorderRadius.vertical(top: Radius.circular(16)),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
                 ),
                 child: ListView(
                   controller: scrollController,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 24, vertical: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                   children: [
                     Center(
                       child: Container(
@@ -156,27 +152,23 @@ class _PlateSearchBottomSheetState extends State<PlateSearchBottomSheet>
                     if (_hasSearched)
                       _results.isEmpty
                           ? Padding(
-                        padding:
-                        const EdgeInsets.symmetric(vertical: 24),
-                        child: Center(
-                          child: Text(
-                            '유효하지 않은 번호입니다.',
-                            style: TextStyle(
-                              color: Colors.redAccent,
-                              fontSize: 16,
-                            ),
-                          ),
-                        ),
-                      )
+                              padding: const EdgeInsets.symmetric(vertical: 24),
+                              child: Center(
+                                child: Text(
+                                  '유효하지 않은 번호입니다.',
+                                  style: TextStyle(
+                                    color: Colors.redAccent,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ),
+                            )
                           : PlateSearchResults(
-                        results: _results
-                            .map((e) =>
-                        '${e.area} ${e.plateFourDigit}')
-                            .toList(),
-                        onSelect: (selected) {
-                          Navigator.pop(context);
-                        },
-                      ),
+                              results: _results.map((e) => '${e.area} ${e.plateFourDigit}').toList(),
+                              onSelect: (selected) {
+                                Navigator.pop(context);
+                              },
+                            ),
                     Center(
                       child: TextButton(
                         onPressed: () => Navigator.pop(context),
@@ -193,42 +185,36 @@ class _PlateSearchBottomSheetState extends State<PlateSearchBottomSheet>
                           isLoading: _isLoading,
                           onPressed: valid
                               ? () async {
-                            setState(() {
-                              _isLoading = true;
-                            });
+                                  setState(() {
+                                    _isLoading = true;
+                                  });
 
-                            try {
-                              // FirestorePlateRepository 인스턴스 생성
-                              final repository =
-                              FirestorePlateRepository();
+                                  try {
+                                    final repository = FirestorePlateRepository();
 
-                              // Firestore 검색
-                              final results = await repository
-                                  .fourDigitUseSearchQuery(
-                                plateFourDigit: value.text,
-                                area: widget.area, // 하드코딩 제거
-                              );
+                                    final results = await repository.fourDigitCommonQuery(
+                                      plateFourDigit: value.text,
+                                      area: widget.area, // 하드코딩 제거
+                                    );
 
-                              setState(() {
-                                _results = results;
-                                _hasSearched = true;
-                                _isLoading = false;
-                              });
+                                    setState(() {
+                                      _results = results;
+                                      _hasSearched = true;
+                                      _isLoading = false;
+                                    });
 
-                              widget.onSearch(value.text);
-                            } catch (e) {
-                              setState(() {
-                                _isLoading = false;
-                              });
-                              ScaffoldMessenger.of(context)
-                                  .showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                      '검색 중 오류가 발생했습니다: $e'),
-                                ),
-                              );
-                            }
-                          }
+                                    widget.onSearch(value.text);
+                                  } catch (e) {
+                                    setState(() {
+                                      _isLoading = false;
+                                    });
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('검색 중 오류가 발생했습니다: $e'),
+                                      ),
+                                    );
+                                  }
+                                }
                               : null,
                         );
                       },
@@ -243,22 +229,22 @@ class _PlateSearchBottomSheetState extends State<PlateSearchBottomSheet>
         bottomNavigationBar: _hasSearched
             ? const SizedBox.shrink()
             : AnimatedKeypad(
-          slideAnimation: _slideAnimation,
-          fadeAnimation: _fadeAnimation,
-          controller: _controller,
-          maxLength: 4,
-          enableDigitModeSwitch: false,
-          onComplete: () {
-            setState(() {});
-          },
-          onReset: () {
-            setState(() {
-              _controller.clear();
-              _hasSearched = false;
-              _results.clear();
-            });
-          },
-        ),
+                slideAnimation: _slideAnimation,
+                fadeAnimation: _fadeAnimation,
+                controller: _controller,
+                maxLength: 4,
+                enableDigitModeSwitch: false,
+                onComplete: () {
+                  setState(() {});
+                },
+                onReset: () {
+                  setState(() {
+                    _controller.clear();
+                    _hasSearched = false;
+                    _results.clear();
+                  });
+                },
+              ),
       ),
     );
   }

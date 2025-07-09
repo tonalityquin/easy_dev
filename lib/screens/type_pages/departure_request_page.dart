@@ -14,7 +14,7 @@ import '../../utils/snackbar_helper.dart';
 
 import '../../widgets/navigation/top_navigation.dart'; // 상단 내비게이션 바
 import '../../widgets/dialog/parking_location_bottom_sheet.dart';
-import '../../widgets/dialog/plate_search_bottom_sheet/plate_search_bottom_sheet.dart'; // ✅ PlateSearchDialog 추가
+import '../../widgets/dialog/common_plate_search_bottom_sheet/common_plate_search_bottom_sheet.dart';
 import 'departure_request_pages/widgets/departure_request_status_bottom_sheet.dart';
 import '../../widgets/container/plate_container.dart'; // 번호판 컨테이너 위젯
 
@@ -50,13 +50,12 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
 
     showDialog(
       context: context,
-      builder: (context) => PlateSearchBottomSheet(
+      builder: (context) => CommonPlateSearchBottomSheet(
         onSearch: (query) => _filterPlatesByNumber(context, query),
         area: currentArea, // ✅ area 전달
       ),
     );
   }
-
 
   void _filterPlatesByNumber(BuildContext context, String query) {
     if (query.length == 4) {

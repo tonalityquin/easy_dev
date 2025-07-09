@@ -28,7 +28,6 @@ final List<SecondaryInfo> adminPages = [
   SecondaryInfo('필드 대시보드', FielderDashBoardScreen(), Icon(Icons.dashboard)),
   SecondaryInfo('공통 대시보드', DashBoardScreen(), Icon(Icons.dashboard)),
   SecondaryInfo('구역 관리', LocationManagement(), Icon(Icons.location_on)),
-
   SecondaryInfo('정산 관리', BillManagement(), Icon(Icons.adjust)),
   SecondaryInfo('쇼트컷 관리', ShortcutManagement(), Icon(Icons.adjust)),
   SecondaryInfo('이스터 에그', EasterEgg(), Icon(Icons.badge)),
@@ -67,6 +66,8 @@ final List<SecondaryInfo> highManagePages = [
   SecondaryInfo('유저 관리', UserManagement(), Icon(Icons.people)),
   SecondaryInfo('정산 관리', BillManagement(), Icon(Icons.adjust)),
   SecondaryInfo('쇼트컷 관리', ShortcutManagement(), Icon(Icons.adjust)),
+  SecondaryInfo('이스터 에그', EasterEgg(), Icon(Icons.badge)),
+  SecondaryInfo('백엔드 컨트롤러', BackEndController(), Icon(Icons.free_breakfast)),
 ];
 
 /// 🔹 Document Mode Pages
