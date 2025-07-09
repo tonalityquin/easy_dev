@@ -63,7 +63,7 @@ class PlateSearchResults extends StatelessWidget {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              '${plate.area} ${plate.plateFourDigit}',
+                              plate.plateNumber,
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,

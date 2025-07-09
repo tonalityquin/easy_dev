@@ -364,7 +364,19 @@ class FirestorePlateRepository implements PlateRepository {
     await FirestoreLogger().log('getPlateCountToCurrentArea: querying Firestore (area=$area)');
 
     try {
-      final snapshot = await _firestore.collection('plates').where('area', isEqualTo: area).count().get();
+      // 🔹 필터링할 타입들
+      final allowedTypes = [
+        PlateType.parkingRequests.firestoreValue,
+        PlateType.parkingCompleted.firestoreValue,
+        PlateType.departureRequests.firestoreValue,
+      ];
+
+      final snapshot = await _firestore
+          .collection('plates')
+          .where('area', isEqualTo: area)
+          .where('type', whereIn: allowedTypes)
+          .count()
+          .get();
 
       final count = snapshot.count ?? 0;
 
