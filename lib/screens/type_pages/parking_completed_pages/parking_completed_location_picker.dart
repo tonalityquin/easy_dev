@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../states/area/area_state.dart';
-import '../../../states/bill/bill_state.dart';
 import '../../../states/location/location_state.dart';
 import '../../../repositories/location/location_repository.dart';
 
@@ -21,15 +20,27 @@ class ParkingCompletedLocationPicker extends StatefulWidget {
 class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocationPicker> {
   String? selectedParent;
   bool _isRefreshing = false;
+  DateTime? _lastRefreshedAt;
+  final Duration _cooldown = const Duration(minutes: 1);
 
   Future<void> _onRefreshPressed(
     LocationState locationState,
     LocationRepository repo,
     String area,
   ) async {
+    final now = DateTime.now();
+    if (_lastRefreshedAt != null && now.difference(_lastRefreshedAt!) < _cooldown) {
+      final remaining = _cooldown - now.difference(_lastRefreshedAt!);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${remaining.inSeconds}초 후 다시 시도해주세요')),
+      );
+      return;
+    }
+
     setState(() => _isRefreshing = true);
     try {
       await locationState.updatePlateCountsFromRepository(repo);
+      _lastRefreshedAt = DateTime.now();
     } catch (e) {
       debugPrint('🚨 새로고침 중 오류: $e');
       if (mounted) {
