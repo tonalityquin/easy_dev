@@ -185,7 +185,7 @@ class ParkingCompletedControlButtons extends StatelessWidget {
             } else if (index == 1) {
               showDialog(
                 context: context,
-                builder: (context) => SetDepartureRequestDialog(
+                builder: (context) => SetDepartureRequestBottomSheet(
                   onConfirm: () => handleDepartureRequested(context),
                 ),
               );

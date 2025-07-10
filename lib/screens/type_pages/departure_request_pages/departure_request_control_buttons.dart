@@ -193,7 +193,7 @@ class DepartureRequestControlButtons extends StatelessWidget {
             } else if (index == 1) {
               showDialog(
                 context: context,
-                builder: (_) => SetDepartureCompletedDialog(
+                builder: (_) => SetDepartureCompletedBottomSheet(
                   onConfirm: () => handleDepartureCompleted(context),
                 ),
               );
