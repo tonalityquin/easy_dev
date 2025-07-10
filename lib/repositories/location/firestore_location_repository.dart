@@ -19,8 +19,8 @@ class FirestoreLocationRepository implements LocationRepository {
           .map((doc) => LocationModel.fromMap(doc.id, doc.data()))
           .toList();
 
-      await FirestoreLogger().log(
-          'getLocationsOnce success: ${result.length} items loaded');
+      await FirestoreLogger()
+          .log('getLocationsOnce success: ${result.length} items loaded');
       return result;
     } catch (e) {
       await FirestoreLogger().log('getLocationsOnce error: $e');
@@ -101,11 +101,60 @@ class FirestoreLocationRepository implements LocationRepository {
 
     try {
       await batch.commit();
-      await FirestoreLogger().log(
-          'addCompositeLocation success: ${subs.length} subs saved');
+      await FirestoreLogger()
+          .log('addCompositeLocation success: ${subs.length} subs saved');
     } catch (e) {
       await FirestoreLogger().log('addCompositeLocation error: $e');
       rethrow;
     }
+  }
+
+  /// ✅ 단일 위치의 입차 수 조회
+  @override
+  Future<int> getPlateCount({
+    required String locationName,
+    required String area,
+    String type = 'parking_completed',
+  }) async {
+    await FirestoreLogger().log(
+        'getPlateCount called (location=$locationName, area=$area, type=$type)');
+
+    final snapshot = await _firestore
+        .collection('plates')
+        .where('location', isEqualTo: locationName)
+        .where('area', isEqualTo: area)
+        .where('type', isEqualTo: type)
+        .count()
+        .get();
+
+    await FirestoreLogger().log(
+        'getPlateCount success: count=${snapshot.count}, location=$locationName');
+    return snapshot.count ?? 0;
+  }
+
+  /// ✅ 복수 위치의 입차 수 일괄 조회
+  @override
+  Future<Map<String, int>> getPlateCountsForLocations({
+    required List<String> locationNames,
+    required String area,
+    String type = 'parking_completed',
+  }) async {
+    await FirestoreLogger().log(
+        'getPlateCountsForLocations called (${locationNames.length} locations, area=$area, type=$type)');
+
+    final results = <String, int>{};
+
+    for (final name in locationNames) {
+      final count = await getPlateCount(
+        locationName: name,
+        area: area,
+        type: type,
+      );
+      results[name] = count;
+    }
+
+    await FirestoreLogger().log(
+        'getPlateCountsForLocations success: total=${results.length}');
+    return results;
   }
 }

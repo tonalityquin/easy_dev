@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../states/area/area_state.dart';
 import '../../../states/bill/bill_state.dart';
 import '../../../states/location/location_state.dart';
-import '../../type_pages/debugs/firestore_logger.dart';
+import '../../../repositories/location/location_repository.dart'; // ✅ 추가
 
 class ParkingCompletedLocationPicker extends StatefulWidget {
   final Function(String locationName) onLocationSelected;
@@ -38,13 +37,13 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
         ),
         icon: _isRefreshing
             ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  strokeWidth: 2,
-                ),
-              )
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+            strokeWidth: 2,
+          ),
+        )
             : const Icon(Icons.refresh),
         label: const Text(
           "수동 새로고침",
@@ -53,13 +52,11 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
         onPressed: _isRefreshing
             ? null
             : () async {
-                setState(() => _isRefreshing = true);
-
-                await locationState.manualLocationRefresh();
-                await context.read<BillState>().manualBillRefresh();
-
-                setState(() => _isRefreshing = false);
-              },
+          setState(() => _isRefreshing = true);
+          await locationState.manualLocationRefresh();
+          await context.read<BillState>().manualBillRefresh();
+          setState(() => _isRefreshing = false);
+        },
       ),
     );
   }
@@ -128,7 +125,7 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                       const Divider(),
                       ...children.map((loc) {
                         final displayName = '${loc.parent} - ${loc.locationName}';
-                        return ParkingCountTile(
+                        return ParkingSingleCountTile(
                           locationName: displayName,
                           area: area,
                           title: displayName,
@@ -178,7 +175,7 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
               ),
               const SizedBox(height: 8),
               ...singles.map((loc) {
-                return ParkingCountTile(
+                return ParkingSingleCountTile(
                   locationName: loc.locationName,
                   area: area,
                   title: loc.locationName,
@@ -215,7 +212,7 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
 }
 
 // 단일 구역 Tile
-class ParkingCountTile extends StatefulWidget {
+class ParkingSingleCountTile extends StatefulWidget {
   final String locationName;
   final String area;
   final String title;
@@ -223,7 +220,7 @@ class ParkingCountTile extends StatefulWidget {
   final IconData icon;
   final void Function(String locationName) onTap;
 
-  const ParkingCountTile({
+  const ParkingSingleCountTile({
     super.key,
     required this.locationName,
     required this.area,
@@ -234,43 +231,24 @@ class ParkingCountTile extends StatefulWidget {
   });
 
   @override
-  State<ParkingCountTile> createState() => _ParkingCountTileState();
+  State<ParkingSingleCountTile> createState() => _ParkingSingleCountTileState();
 }
 
-class _ParkingCountTileState extends State<ParkingCountTile> {
+class _ParkingSingleCountTileState extends State<ParkingSingleCountTile> {
   late Future<int> _futureCount;
 
   @override
   void initState() {
     super.initState();
-    print('🟢 ParkingCountTile initState() - ${widget.locationName}');
-    _futureCount = _fetchCount();
-  }
-
-  Future<int> _fetchCount() async {
-    final logger = FirestoreLogger();
-    final stopwatch = Stopwatch()..start();
-
-    print('🔍 [${widget.locationName}] _fetchCount() 호출');
-
-    await logger.log('쿼리 시작: location=${widget.locationName}, area=${widget.area}', level: 'called');
-
-    final snapshot = await FirebaseFirestore.instance
-        .collection('plates')
-        .where('location', isEqualTo: widget.locationName)
-        .where('area', isEqualTo: widget.area)
-        .where('type', isEqualTo: 'parking_completed')
-        .count()
-        .get();
-
-    await logger.log('쿼리 완료: count=${snapshot.count}, duration=${stopwatch.elapsedMilliseconds}ms', level: 'success');
-    print('✅ [${widget.locationName}] count=${snapshot.count}');
-    return snapshot.count ?? 0;
+    final repo = context.read<LocationRepository>();
+    _futureCount = repo.getPlateCount(
+      locationName: widget.locationName,
+      area: widget.area,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    print('🟢 ParkingCountTile build() - ${widget.locationName}');
     return FutureBuilder<int>(
       future: _futureCount,
       builder: (context, snapshot) {
@@ -314,45 +292,25 @@ class _ParkingCompositeTileState extends State<ParkingCompositeTile> {
   @override
   void initState() {
     super.initState();
-    print('🟢 ParkingCompositeTile initState() - ${widget.parent}');
-    _futureCounts = _fetchCounts();
-  }
+    final repo = context.read<LocationRepository>();
+    final locationNames = widget.children
+        .map<String>((loc) => '${loc.parent} - ${loc.locationName}')
+        .toList();
 
-  Future<List<int>> _fetchCounts() async {
-    final logger = FirestoreLogger();
-    print('🔍 [${widget.parent}] _fetchCounts() 호출');
-
-    return Future.wait(widget.children.map((loc) async {
-      final displayName = '${loc.parent} - ${loc.locationName}';
-      final stopwatch = Stopwatch()..start();
-
-      await logger.log('쿼리 시작: location=$displayName, area=${widget.area}', level: 'called');
-
-      final snapshot = await FirebaseFirestore.instance
-          .collection('plates')
-          .where('location', isEqualTo: displayName)
-          .where('area', isEqualTo: widget.area)
-          .where('type', isEqualTo: 'parking_completed')
-          .count()
-          .get();
-
-      await logger.log(
-          '쿼리 완료: location=$displayName, count=${snapshot.count}, duration=${stopwatch.elapsedMilliseconds}ms',
-          level: 'success');
-      print('✅ [$displayName] count=${snapshot.count}');
-      return snapshot.count ?? 0;
-    }));
+    _futureCounts = repo
+        .getPlateCountsForLocations(locationNames: locationNames, area: widget.area)
+        .then((map) => locationNames.map((name) => map[name] ?? 0).toList());
   }
 
   @override
   Widget build(BuildContext context) {
-    print('🟢 ParkingCompositeTile build() - ${widget.parent}');
     return FutureBuilder<List<int>>(
       future: _futureCounts,
       builder: (context, snap) {
         final totalCount = snap.hasData ? snap.data!.fold(0, (a, b) => a + b) : null;
-        final subtitle =
-            totalCount != null ? '총 입차 $totalCount / 총 공간 ${widget.totalCapacity}' : '총 공간 ${widget.totalCapacity}';
+        final subtitle = totalCount != null
+            ? '총 입차 $totalCount / 총 공간 ${widget.totalCapacity}'
+            : '총 공간 ${widget.totalCapacity}';
         return ListTile(
           leading: Icon(Icons.layers, color: Colors.teal),
           title: Text(widget.parent),
