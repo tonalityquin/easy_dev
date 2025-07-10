@@ -24,10 +24,10 @@ int calculateFee({
   } else {
     final extraTime = parkedSeconds - basicSec;
     final extraUnits = (extraTime / addSec).ceil();
-    baseFee = basicAmount + extraUnits * addAmount;
+    baseFee = basicAmount + (extraUnits * addAmount);
   }
 
-  // 2. 전략 분기 처리
+  // 2. 모드에 따른 요금 조정
   switch (mode) {
     case FeeMode.normal:
       return baseFee;
@@ -36,7 +36,7 @@ int calculateFee({
       return baseFee + userAdjustment;
 
     case FeeMode.minus:
-      final result = baseFee - userAdjustment;
-      return result < 0 ? 0 : result;
+      final discounted = baseFee - userAdjustment;
+      return discounted < 0 ? 0 : discounted;
   }
 }

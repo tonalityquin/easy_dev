@@ -1,15 +1,24 @@
 import 'package:flutter/material.dart';
-import 'fee_calculator.dart'; // enum FeeMode, calculateFee 정의된 파일
+import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
+import 'fee_calculator.dart';
 
-/// 요금 정산 결과 모델
 class BillResult {
   final String paymentMethod;
   final int lockedFee;
+  final FeeMode feeMode;
+  final int adjustment;
+  final String? reason;
 
-  BillResult(this.paymentMethod, this.lockedFee);
+  BillResult({
+    required this.paymentMethod,
+    required this.lockedFee,
+    required this.feeMode,
+    required this.adjustment,
+    this.reason,
+  });
 }
 
-/// 바텀시트 호출 함수
 Future<BillResult?> showOnTapBillingBottomSheet({
   required BuildContext context,
   required int entryTimeInSeconds,
@@ -18,10 +27,8 @@ Future<BillResult?> showOnTapBillingBottomSheet({
   required int basicAmount,
   required int addStandard,
   required int addAmount,
-  FeeMode feeMode = FeeMode.normal,
-  int userAdjustment = 0,
-}) async {
-  return await showModalBottomSheet<BillResult>(
+}) {
+  return showModalBottomSheet<BillResult>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
@@ -32,8 +39,6 @@ Future<BillResult?> showOnTapBillingBottomSheet({
       basicAmount: basicAmount,
       addStandard: addStandard,
       addAmount: addAmount,
-      feeMode: feeMode,
-      userAdjustment: userAdjustment,
     ),
   );
 }
@@ -45,8 +50,6 @@ class BillingBottomSheet extends StatefulWidget {
   final int basicAmount;
   final int addStandard;
   final int addAmount;
-  final FeeMode feeMode;
-  final int userAdjustment;
 
   const BillingBottomSheet({
     super.key,
@@ -56,8 +59,6 @@ class BillingBottomSheet extends StatefulWidget {
     required this.basicAmount,
     required this.addStandard,
     required this.addAmount,
-    this.feeMode = FeeMode.normal,
-    this.userAdjustment = 0,
   });
 
   @override
@@ -66,9 +67,33 @@ class BillingBottomSheet extends StatefulWidget {
 
 class _BillingBottomSheetState extends State<BillingBottomSheet> {
   final List<String> paymentOptions = ['계좌', '카드', '현금'];
-  int _selectedIndex = 0;
+  final List<String> modeLabels = ['일반', '할증', '할인'];
 
-  String get _selectedPayment => paymentOptions[_selectedIndex];
+  int _selectedPaymentIndex = 0;
+  FeeMode _feeMode = FeeMode.normal;
+  int _userAdjustment = 0;
+  String? _inputReason;
+
+  final TextEditingController _amountController = TextEditingController();
+  final TextEditingController _reasonController = TextEditingController();
+
+  final formatCurrency = NumberFormat("#,###", "ko_KR");
+  final formatDate = DateFormat("yyyy-MM-dd HH시 mm분");
+
+  String get _selectedPayment => paymentOptions[_selectedPaymentIndex];
+
+  int _calculateBaseFee() {
+    return calculateFee(
+      entryTimeInSeconds: widget.entryTimeInSeconds,
+      currentTimeInSeconds: widget.currentTimeInSeconds,
+      basicStandard: widget.basicStandard,
+      basicAmount: widget.basicAmount,
+      addStandard: widget.addStandard,
+      addAmount: widget.addAmount,
+      userAdjustment: 0,
+      mode: FeeMode.normal,
+    );
+  }
 
   int _getLockedFee() {
     return calculateFee(
@@ -78,22 +103,44 @@ class _BillingBottomSheetState extends State<BillingBottomSheet> {
       basicAmount: widget.basicAmount,
       addStandard: widget.addStandard,
       addAmount: widget.addAmount,
-      userAdjustment: widget.userAdjustment,
-      mode: widget.feeMode,
+      userAdjustment: _userAdjustment,
+      mode: _feeMode,
     );
+  }
+
+  String _formatMinutesToHourMinute(int totalMinutes) {
+    final hours = totalMinutes ~/ 60;
+    final minutes = totalMinutes % 60;
+    return '${hours}시 ${minutes}분';
+  }
+
+  String _getFormattedParkedTime() {
+    final totalMinutes = ((widget.currentTimeInSeconds - widget.entryTimeInSeconds) / 60).ceil();
+    return _formatMinutesToHourMinute(totalMinutes);
+  }
+
+  String _getFormattedEntryTime() {
+    final entry = DateTime.fromMillisecondsSinceEpoch(widget.entryTimeInSeconds * 1000);
+    return formatDate.format(entry);
+  }
+
+  bool get _isSubmitEnabled {
+    if (_feeMode == FeeMode.normal) return true;
+    return _amountController.text.isNotEmpty && _reasonController.text.trim().isNotEmpty;
   }
 
   @override
   Widget build(BuildContext context) {
+    final baseFee = _calculateBaseFee();
     final lockedFee = _getLockedFee();
 
     return SafeArea(
       child: Material(
         color: Colors.transparent,
         child: DraggableScrollableSheet(
-          initialChildSize: 0.5,
-          minChildSize: 0.4,
-          maxChildSize: 0.85,
+          initialChildSize: 0.85,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
           builder: (_, scrollController) {
             return Container(
               padding: const EdgeInsets.all(24),
@@ -104,39 +151,53 @@ class _BillingBottomSheetState extends State<BillingBottomSheet> {
               child: ListView(
                 controller: scrollController,
                 children: [
-                  Container(
-                    width: 40,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(2),
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
                   ),
-                  Row(
-                    children: const [
-                      Icon(Icons.attach_money_rounded, color: Colors.green),
+                  const Row(
+                    children: [
+                      Icon(Icons.receipt_long, color: Colors.green),
                       SizedBox(width: 8),
-                      Text(
-                        '정산 정보 확인',
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                      ),
+                      Text('정산 정보 확인', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                     ],
                   ),
                   const SizedBox(height: 16),
-                  const Divider(),
-                  const SizedBox(height: 12),
-                  const Text("지불 방법을 선택하세요", style: TextStyle(fontSize: 16)),
-                  const SizedBox(height: 12),
-
-                  /// ✅ ToggleButtons 지불방식 선택 UI
+                  Card(
+                    elevation: 1,
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('요금 기준', style: TextStyle(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 8),
+                          _buildInfoRow('입차 시간', _getFormattedEntryTime()),
+                          _buildInfoRow('기본 시간', _formatMinutesToHourMinute(widget.basicStandard)),
+                          _buildInfoRow('기본 금액', '₩${formatCurrency.format(widget.basicAmount)}'),
+                          _buildInfoRow('추가 시간', _formatMinutesToHourMinute(widget.addStandard)),
+                          _buildInfoRow('추가 금액', '₩${formatCurrency.format(widget.addAmount)}'),
+                          _buildInfoRow('주차 시간', _getFormattedParkedTime()),
+                          _buildInfoRow('요금 모드 적용 전 금액', '₩${formatCurrency.format(baseFee)}'),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text("지불 방법", style: TextStyle(fontSize: 16)),
+                  const SizedBox(height: 8),
                   ToggleButtons(
-                    isSelected: List.generate(
-                        paymentOptions.length, (index) => index == _selectedIndex),
+                    isSelected: List.generate(paymentOptions.length,
+                            (index) => index == _selectedPaymentIndex),
                     onPressed: (index) {
-                      setState(() {
-                        _selectedIndex = index;
-                      });
+                      setState(() => _selectedPaymentIndex = index);
                     },
                     borderRadius: BorderRadius.circular(8),
                     selectedColor: Colors.white,
@@ -149,26 +210,86 @@ class _BillingBottomSheetState extends State<BillingBottomSheet> {
                       );
                     }).toList(),
                   ),
-
+                  const SizedBox(height: 24),
+                  const Text("요금 모드", style: TextStyle(fontSize: 16)),
+                  const SizedBox(height: 8),
+                  ToggleButtons(
+                    isSelected: FeeMode.values.map((e) => e == _feeMode).toList(),
+                    onPressed: (index) {
+                      setState(() {
+                        _feeMode = FeeMode.values[index];
+                        _userAdjustment = 0;
+                        _inputReason = null;
+                        _amountController.clear();
+                        _reasonController.clear();
+                      });
+                    },
+                    borderRadius: BorderRadius.circular(8),
+                    selectedColor: Colors.white,
+                    fillColor: Colors.green,
+                    textStyle: const TextStyle(fontSize: 16),
+                    children: modeLabels.map((text) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(text),
+                      );
+                    }).toList(),
+                  ),
+                  if (_feeMode != FeeMode.normal) ...[
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _amountController,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: InputDecoration(
+                        labelText: _feeMode == FeeMode.plus ? '할증 금액 입력' : '할인 금액 입력',
+                        border: const OutlineInputBorder(),
+                        suffixText: '₩',
+                      ),
+                      onChanged: (value) {
+                        setState(() {
+                          _userAdjustment = int.tryParse(value) ?? 0;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _reasonController,
+                      decoration: const InputDecoration(
+                        labelText: '사유를 입력하세요',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.edit_note),
+                      ),
+                      onChanged: (value) {
+                        setState(() {
+                          _inputReason = value.trim();
+                        });
+                      },
+                    ),
+                  ],
                   const SizedBox(height: 24),
                   Text(
-                    '예상 정산 금액: ₩$lockedFee',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
+                    '예상 정산 금액: ₩${formatCurrency.format(lockedFee)}',
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 32),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       FilledButton(
-                        onPressed: () {
+                        onPressed: _isSubmitEnabled
+                            ? () {
                           Navigator.of(context).pop(
-                            BillResult(_selectedPayment, lockedFee),
+                            BillResult(
+                              paymentMethod: _selectedPayment,
+                              lockedFee: lockedFee,
+                              feeMode: _feeMode,
+                              adjustment: _userAdjustment,
+                              reason: _feeMode == FeeMode.normal ? null : _inputReason,
+                            ),
                           );
-                        },
+                        }
+                            : null,
                         style: FilledButton.styleFrom(
                           backgroundColor: Colors.green,
                           padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
@@ -183,12 +304,25 @@ class _BillingBottomSheetState extends State<BillingBottomSheet> {
                         child: const Text('취소', style: TextStyle(fontSize: 16)),
                       ),
                     ],
-                  )
+                  ),
                 ],
               ),
             );
           },
         ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 14, color: Colors.black54)),
+          Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+        ],
       ),
     );
   }
