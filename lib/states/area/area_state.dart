@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../../utils/firestore_logger.dart'; // FirestoreLogger import
+import '../../screens/type_pages/debugs/firestore_logger.dart'; // FirestoreLogger import
 
 enum AreaType {
   dev;

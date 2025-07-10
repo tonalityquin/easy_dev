@@ -3,7 +3,7 @@ import 'package:camera/camera.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../../utils/firestore_logger.dart';
+import '../type_pages/debugs/firestore_logger.dart';
 import '../../utils/snackbar_helper.dart';
 import 'input_plate_service.dart';
 

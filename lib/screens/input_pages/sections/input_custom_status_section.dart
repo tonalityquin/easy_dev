@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../utils/firestore_logger.dart';
+import '../../type_pages/debugs/firestore_logger.dart';
 import '../input_plate_controller.dart';
 
 class InputCustomStatusSection extends StatelessWidget {

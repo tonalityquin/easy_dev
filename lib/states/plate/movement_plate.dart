@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../models/plate_model.dart';
 import '../../repositories/plate/plate_repository.dart';
-import '../../utils/firestore_logger.dart';
+import '../../screens/type_pages/debugs/firestore_logger.dart';
 import '../../utils/gcs_json_uploader.dart';
 import 'plate_state.dart';
 import '../../enums/plate_type.dart';

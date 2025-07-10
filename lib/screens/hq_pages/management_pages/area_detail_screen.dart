@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
-import '../../../utils/firestore_logger.dart';
+import '../../type_pages/debugs/firestore_logger.dart';
 
 class AreaDetailScreen extends StatelessWidget {
   final String areaName;

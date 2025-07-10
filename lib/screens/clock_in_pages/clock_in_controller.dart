@@ -6,7 +6,7 @@ import '../../../routes.dart';
 import '../../../states/user/user_state.dart';
 import '../../../states/area/area_state.dart';
 import '../../../utils/snackbar_helper.dart';
-import '../../utils/firestore_logger.dart';
+import '../type_pages/debugs/firestore_logger.dart';
 import 'utils/clock_in_log_uploader.dart';
 import 'debugs/clock_in_debug_firestore_logger.dart'; // ✅ 로컬 로거 추가
 

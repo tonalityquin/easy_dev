@@ -13,7 +13,7 @@ import '../utils/app_colors.dart';
 
 import '../screens/input_pages/input_plate_screen.dart';
 import 'secondary_page.dart';
-import 'empty_bottom_sheet.dart';
+import 'type_pages/debugs/type_page_debug_bottom_sheet.dart';
 
 class TypePage extends StatefulWidget {
   const TypePage({super.key});
@@ -278,7 +278,7 @@ class DebugTriggerBar extends StatelessWidget {
         showModalBottomSheet(
           context: context,
           isScrollControlled: true,
-          builder: (_) => const EmptyBottomSheet(), // 또는 SecondaryDebugBottomSheet()
+          builder: (_) => const TypePageDebugBottomSheet(), // 또는 SecondaryDebugBottomSheet()
         );
       },
       child: Container(

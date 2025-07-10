@@ -5,7 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 
 import '../../../states/user/user_state.dart';
-import '../../../utils/firestore_logger.dart';
+import '../../type_pages/debugs/firestore_logger.dart';
 
 class HeadQuarterCalendar extends StatefulWidget {
   const HeadQuarterCalendar({super.key});

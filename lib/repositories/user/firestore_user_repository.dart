@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/user_model.dart';
 import 'user_repository.dart';
-import '../../utils/firestore_logger.dart'; // ✅ FirestoreLogger import
+import '../../screens/type_pages/debugs/firestore_logger.dart'; // ✅ FirestoreLogger import
 
 class FirestoreUserRepository implements UserRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;

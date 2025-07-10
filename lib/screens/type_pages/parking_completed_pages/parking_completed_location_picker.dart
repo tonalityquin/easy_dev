@@ -5,7 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../states/area/area_state.dart';
 import '../../../states/bill/bill_state.dart';
 import '../../../states/location/location_state.dart';
-import '../../../utils/firestore_logger.dart';
+import '../../type_pages/debugs/firestore_logger.dart';
 
 class ParkingCompletedLocationPicker extends StatefulWidget {
   final Function(String locationName) onLocationSelected;

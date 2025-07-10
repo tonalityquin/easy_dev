@@ -4,7 +4,7 @@ import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
 import 'plate_repository.dart';
 import 'dart:developer' as dev;
-import '../../utils/firestore_logger.dart'; // ✅ FirestoreLogger import
+import '../../screens/type_pages/debugs/firestore_logger.dart'; // ✅ FirestoreLogger import
 
 class FirestorePlateRepository implements PlateRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;

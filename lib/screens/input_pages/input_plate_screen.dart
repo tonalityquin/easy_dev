@@ -5,7 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../states/bill/bill_state.dart';
 import '../../states/area/area_state.dart';
 
-import '../../utils/firestore_logger.dart';
+import '../type_pages/debugs/firestore_logger.dart';
 import 'debugs/input_debug_bottom_sheet.dart';
 import 'input_plate_controller.dart';
 import 'sections/input_bill_section.dart';

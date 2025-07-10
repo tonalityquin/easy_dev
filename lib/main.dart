@@ -11,7 +11,7 @@ import 'screens/logins/debugs/login_debug_firestore_logger.dart';
 import 'theme.dart';
 import 'utils/init/dev_initializer.dart';
 import 'utils/foreground_task_handler.dart';
-import 'utils/firestore_logger.dart'; // ✅ FirestoreLogger import
+import 'screens/type_pages/debugs/firestore_logger.dart'; // ✅ FirestoreLogger import
 
 /// 🔹 포그라운드 태스크 콜백
 @pragma('vm:entry-point')

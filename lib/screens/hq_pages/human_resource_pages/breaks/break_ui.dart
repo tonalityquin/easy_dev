@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../../../models/user_model.dart';
 import '../../../../states/area/area_state.dart';
-import '../../../../utils/firestore_logger.dart';
+import '../../../type_pages/debugs/firestore_logger.dart';
 import '../../../../utils/snackbar_helper.dart';
 import '../break_cell.dart';
 import '../../../secondary_pages/field_leader_pages/dash_board/utils/break_log_uploader.dart';

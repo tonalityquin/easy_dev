@@ -2,16 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter/services.dart'; // ✅ 클립보드에 복사 위해 추가
-import '../../utils/firestore_logger.dart';
+import 'firestore_logger.dart';
 
-class EmptyBottomSheet extends StatefulWidget {
-  const EmptyBottomSheet({super.key});
+class TypePageDebugBottomSheet extends StatefulWidget {
+  const TypePageDebugBottomSheet({super.key});
 
   @override
-  State<EmptyBottomSheet> createState() => _EmptyBottomSheetState();
+  State<TypePageDebugBottomSheet> createState() => _TypePageDebugBottomSheetState();
 }
 
-class _EmptyBottomSheetState extends State<EmptyBottomSheet> {
+class _TypePageDebugBottomSheetState extends State<TypePageDebugBottomSheet> {
   List<String> _logLines = [];
   List<String> _filteredLines = [];
   bool _isLoading = true;

@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/location_model.dart';
 import 'location_repository.dart';
-import '../../utils/firestore_logger.dart'; // ✅ FirestoreLogger import
+import '../../screens/type_pages/debugs/firestore_logger.dart'; // ✅ FirestoreLogger import
 
 class FirestoreLocationRepository implements LocationRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;

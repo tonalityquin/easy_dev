@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../models/bill_model.dart';
 import 'bill_repository.dart';
-import '../../utils/firestore_logger.dart'; // ✅ FirestoreLogger import
+import '../../screens/type_pages/debugs/firestore_logger.dart'; // ✅ FirestoreLogger import
 
 class FirestoreBillRepository implements BillRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;

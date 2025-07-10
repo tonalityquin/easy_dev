@@ -10,7 +10,7 @@ import '../../states/plate/plate_state.dart';
 import '../../states/bill/bill_state.dart';
 import '../../states/area/area_state.dart';
 
-import '../../utils/firestore_logger.dart';
+import '../type_pages/debugs/firestore_logger.dart';
 import '../../utils/snackbar_helper.dart';
 import 'modify_plate_service.dart';
 
