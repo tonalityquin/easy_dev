@@ -31,8 +31,8 @@ final List<SecondaryInfo> adminPages = [
   SecondaryInfo('정산 관리', BillManagement(), Icon(Icons.adjust)),
   SecondaryInfo('쇼트컷 관리', ShortcutManagement(), Icon(Icons.adjust)),
   SecondaryInfo('이스터 에그', EasterEgg(), Icon(Icons.badge)),
-  SecondaryInfo('백엔드 컨트롤러', BackEndController(), Icon(Icons.free_breakfast)),
   SecondaryInfo('지역 추가', AreaManagement(), Icon(Icons.tab)),
+  SecondaryInfo('백엔드 컨트롤러', BackEndController(), Icon(Icons.free_breakfast)),
 ];
 
 final List<SecondaryInfo> lowUserModePages = [
@@ -55,6 +55,8 @@ final List<SecondaryInfo> managerFieldModePages = [
   SecondaryInfo('대시보드', DashBoardScreen(), Icon(Icons.dashboard)),
   SecondaryInfo('구역 관리', LocationManagement(), Icon(Icons.location_on)),
   SecondaryInfo('로컬 데이터 관리', LocalData(), Icon(Icons.tab)),
+  /// 매니저 테스트 후 삭제
+  SecondaryInfo('백엔드 컨트롤러', BackEndController(), Icon(Icons.free_breakfast)),
 ];
 
 final List<SecondaryInfo> lowMiddleManagePages = [

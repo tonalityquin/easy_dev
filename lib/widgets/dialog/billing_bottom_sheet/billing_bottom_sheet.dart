@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'fee_calculator.dart'; // enum FeeMode, calculateFee 정의된 파일
 
-/// 결과를 담는 모델
+/// 요금 정산 결과 모델
 class BillResult {
   final String paymentMethod;
   final int lockedFee;
@@ -8,8 +9,8 @@ class BillResult {
   BillResult(this.paymentMethod, this.lockedFee);
 }
 
-/// 호출 함수
-Future<BillResult?> showOnTapBillingTypeBottomSheet({
+/// 바텀시트 호출 함수
+Future<BillResult?> showOnTapBillingBottomSheet({
   required BuildContext context,
   required int entryTimeInSeconds,
   required int currentTimeInSeconds,
@@ -17,31 +18,37 @@ Future<BillResult?> showOnTapBillingTypeBottomSheet({
   required int basicAmount,
   required int addStandard,
   required int addAmount,
+  FeeMode feeMode = FeeMode.normal,
+  int userAdjustment = 0,
 }) async {
   return await showModalBottomSheet<BillResult>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => OnTapBillingTypeBottomSheet(
+    builder: (_) => BillingBottomSheet(
       entryTimeInSeconds: entryTimeInSeconds,
       currentTimeInSeconds: currentTimeInSeconds,
       basicStandard: basicStandard,
       basicAmount: basicAmount,
       addStandard: addStandard,
       addAmount: addAmount,
+      feeMode: feeMode,
+      userAdjustment: userAdjustment,
     ),
   );
 }
 
-class OnTapBillingTypeBottomSheet extends StatefulWidget {
+class BillingBottomSheet extends StatefulWidget {
   final int entryTimeInSeconds;
   final int currentTimeInSeconds;
   final int basicStandard;
   final int basicAmount;
   final int addStandard;
   final int addAmount;
+  final FeeMode feeMode;
+  final int userAdjustment;
 
-  const OnTapBillingTypeBottomSheet({
+  const BillingBottomSheet({
     super.key,
     required this.entryTimeInSeconds,
     required this.currentTimeInSeconds,
@@ -49,32 +56,36 @@ class OnTapBillingTypeBottomSheet extends StatefulWidget {
     required this.basicAmount,
     required this.addStandard,
     required this.addAmount,
+    this.feeMode = FeeMode.normal,
+    this.userAdjustment = 0,
   });
 
   @override
-  State<OnTapBillingTypeBottomSheet> createState() => _OnTapBillingTypeBottomSheetState();
+  State<BillingBottomSheet> createState() => _BillingBottomSheetState();
 }
 
-class _OnTapBillingTypeBottomSheetState extends State<OnTapBillingTypeBottomSheet> {
-  String _selected = '계좌';
+class _BillingBottomSheetState extends State<BillingBottomSheet> {
+  final List<String> paymentOptions = ['계좌', '카드', '현금'];
+  int _selectedIndex = 0;
 
-  int calculateFee() {
-    final parkedSeconds = widget.currentTimeInSeconds - widget.entryTimeInSeconds;
-    final basicSec = widget.basicStandard * 60;
-    final addSec = widget.addStandard * 60;
+  String get _selectedPayment => paymentOptions[_selectedIndex];
 
-    if (parkedSeconds <= basicSec) {
-      return widget.basicAmount;
-    } else {
-      final extraTime = parkedSeconds - basicSec;
-      final extraUnits = (extraTime / addSec).ceil();
-      return widget.basicAmount + extraUnits * widget.addAmount;
-    }
+  int _getLockedFee() {
+    return calculateFee(
+      entryTimeInSeconds: widget.entryTimeInSeconds,
+      currentTimeInSeconds: widget.currentTimeInSeconds,
+      basicStandard: widget.basicStandard,
+      basicAmount: widget.basicAmount,
+      addStandard: widget.addStandard,
+      addAmount: widget.addAmount,
+      userAdjustment: widget.userAdjustment,
+      mode: widget.feeMode,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final lockedFee = calculateFee();
+    final lockedFee = _getLockedFee();
 
     return SafeArea(
       child: Material(
@@ -116,25 +127,30 @@ class _OnTapBillingTypeBottomSheetState extends State<OnTapBillingTypeBottomShee
                   const Divider(),
                   const SizedBox(height: 12),
                   const Text("지불 방법을 선택하세요", style: TextStyle(fontSize: 16)),
-                  const SizedBox(height: 8),
-                  DropdownButton<String>(
-                    value: _selected,
-                    isExpanded: true,
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() {
-                          _selected = value;
-                        });
-                      }
+                  const SizedBox(height: 12),
+
+                  /// ✅ ToggleButtons 지불방식 선택 UI
+                  ToggleButtons(
+                    isSelected: List.generate(
+                        paymentOptions.length, (index) => index == _selectedIndex),
+                    onPressed: (index) {
+                      setState(() {
+                        _selectedIndex = index;
+                      });
                     },
-                    items: ['계좌', '카드', '현금'].map((type) {
-                      return DropdownMenuItem(
-                        value: type,
-                        child: Text(type),
+                    borderRadius: BorderRadius.circular(8),
+                    selectedColor: Colors.white,
+                    fillColor: Colors.green,
+                    textStyle: const TextStyle(fontSize: 16),
+                    children: paymentOptions.map((text) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(text),
                       );
                     }).toList(),
                   ),
-                  const SizedBox(height: 20),
+
+                  const SizedBox(height: 24),
                   Text(
                     '예상 정산 금액: ₩$lockedFee',
                     style: const TextStyle(
@@ -149,7 +165,9 @@ class _OnTapBillingTypeBottomSheetState extends State<OnTapBillingTypeBottomShee
                     children: [
                       FilledButton(
                         onPressed: () {
-                          Navigator.of(context).pop(BillResult(_selected, lockedFee));
+                          Navigator.of(context).pop(
+                            BillResult(_selectedPayment, lockedFee),
+                          );
                         },
                         style: FilledButton.styleFrom(
                           backgroundColor: Colors.green,

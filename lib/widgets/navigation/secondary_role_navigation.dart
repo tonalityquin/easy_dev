@@ -92,7 +92,16 @@ class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWi
   List<String> getFilteredAvailableStatus(RoleType role) {
     switch (role) {
       case RoleType.dev:
-        return ModeStatus.values.map((e) => e.label).toList();
+        return [
+          ModeStatus.lowField.label,
+          ModeStatus.managerField.label,
+          ModeStatus.highManage.label,
+          ModeStatus.dev.label,
+        ];
+      case RoleType.admin:
+        return [
+          ModeStatus.admin.label,
+        ];
       case RoleType.highManager:
       case RoleType.ceo:
         return [

@@ -11,7 +11,7 @@ import '../../../states/plate/plate_state.dart';
 import '../../../states/user/user_state.dart';
 import '../../../utils/snackbar_helper.dart';
 
-import '../../../widgets/dialog/on_tap_billing_type_bottom_sheet.dart';
+import '../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
 import '../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 import 'widgets/departure_request_status_bottom_sheet.dart';
 import 'widgets/set_departure_completed_dialog.dart';
@@ -157,7 +157,7 @@ class DepartureRequestControlButtons extends StatelessWidget {
 
                 showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
               } else {
-                final result = await showOnTapBillingTypeBottomSheet(
+                final result = await showOnTapBillingBottomSheet(
                   context: context,
                   entryTimeInSeconds: entryTime,
                   currentTimeInSeconds: currentTime,
