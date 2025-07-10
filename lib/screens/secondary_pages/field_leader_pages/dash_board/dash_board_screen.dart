@@ -3,6 +3,9 @@ import 'package:provider/provider.dart';
 import 'package:android_intent_plus/android_intent.dart';
 
 import '../../../../states/user/user_state.dart';
+import '../../../../states/location/location_state.dart'; // ✅ 추가
+import '../../../../states/bill/bill_state.dart'; // ✅ 추가
+
 import 'dash_board_controller.dart';
 import 'widgets/user_info_card.dart';
 import 'widgets/break_button_widget.dart';
@@ -139,6 +142,55 @@ class DashBoardScreen extends StatelessWidget {
                         },
                       ),
                     ),
+
+                    const SizedBox(height: 16),
+
+                    // ✅ ParkingCompletedLocationPicker 새로고침 버튼 로직 추가
+                    Consumer<LocationState>(
+                      builder: (context, locationState, _) {
+                        bool isRefreshing = false;
+
+                        return StatefulBuilder(
+                          builder: (context, setState) => SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.teal,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                elevation: 0,
+                              ),
+                              icon: isRefreshing
+                                  ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  strokeWidth: 2,
+                                ),
+                              )
+                                  : const Icon(Icons.refresh),
+                              label: const Text(
+                                "주차 구역 수동 새로고침",
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                              ),
+                              onPressed: isRefreshing
+                                  ? null
+                                  : () async {
+                                setState(() => isRefreshing = true);
+                                await locationState.manualLocationRefresh();
+                                await context.read<BillState>().manualBillRefresh();
+                                setState(() => isRefreshing = false);
+                              },
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+
                     const SizedBox(height: 32),
                   ],
                 ),

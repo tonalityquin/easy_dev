@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../states/area/area_state.dart';
 import '../../../states/bill/bill_state.dart';
 import '../../../states/location/location_state.dart';
-import '../../../repositories/location/location_repository.dart'; // ✅ 추가
+import '../../../repositories/location/location_repository.dart';
 
 class ParkingCompletedLocationPicker extends StatefulWidget {
   final Function(String locationName) onLocationSelected;
@@ -22,7 +22,31 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
   String? selectedParent;
   bool _isRefreshing = false;
 
-  Widget _buildRefreshButton(LocationState locationState) {
+  Future<void> _onRefreshPressed(
+    LocationState locationState,
+    LocationRepository repo,
+    String area,
+  ) async {
+    setState(() => _isRefreshing = true);
+    try {
+      await locationState.updatePlateCountsFromRepository(repo);
+    } catch (e) {
+      debugPrint('🚨 새로고침 중 오류: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("새로고침 중 오류가 발생했습니다")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isRefreshing = false);
+    }
+  }
+
+  Widget _buildRefreshButton(
+    LocationState locationState,
+    LocationRepository repo,
+    String area,
+  ) {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
@@ -37,26 +61,19 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
         ),
         icon: _isRefreshing
             ? const SizedBox(
-          width: 20,
-          height: 20,
-          child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-            strokeWidth: 2,
-          ),
-        )
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  strokeWidth: 2,
+                ),
+              )
             : const Icon(Icons.refresh),
         label: const Text(
           "수동 새로고침",
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
-        onPressed: _isRefreshing
-            ? null
-            : () async {
-          setState(() => _isRefreshing = true);
-          await locationState.manualLocationRefresh();
-          await context.read<BillState>().manualBillRefresh();
-          setState(() => _isRefreshing = false);
-        },
+        onPressed: _isRefreshing ? null : () => _onRefreshPressed(locationState, repo, area),
       ),
     );
   }
@@ -64,6 +81,7 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
   @override
   Widget build(BuildContext context) {
     final area = context.read<AreaState>().currentArea;
+    final locationRepo = context.read<LocationRepository>();
 
     return Material(
       color: Colors.white,
@@ -77,12 +95,7 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
           if (locations.isEmpty) {
             return Center(
               child: GestureDetector(
-                onTap: () async {
-                  setState(() => _isRefreshing = true);
-                  await locationState.manualLocationRefresh();
-                  await context.read<BillState>().manualBillRefresh();
-                  setState(() => _isRefreshing = false);
-                },
+                onTap: () => _onRefreshPressed(locationState, locationRepo, area),
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 32),
                   decoration: BoxDecoration(
@@ -125,13 +138,12 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                       const Divider(),
                       ...children.map((loc) {
                         final displayName = '${loc.parent} - ${loc.locationName}';
-                        return ParkingSingleCountTile(
-                          locationName: displayName,
-                          area: area,
-                          title: displayName,
-                          capacity: loc.capacity,
-                          icon: Icons.subdirectory_arrow_right,
-                          onTap: widget.onLocationSelected,
+                        return ListTile(
+                          leading: const Icon(Icons.subdirectory_arrow_right, color: Colors.teal),
+                          title: Text(displayName),
+                          subtitle: Text('입차 ${loc.plateCount} / 공간 ${loc.capacity}'),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => widget.onLocationSelected(displayName),
                         );
                       }),
                     ],
@@ -167,38 +179,30 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              _buildRefreshButton(locationState),
+              _buildRefreshButton(locationState, locationRepo, area),
               const SizedBox(height: 24),
-              const Text(
-                '단일 주차 구역',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
+              const Text('단일 주차 구역', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               const SizedBox(height: 8),
-              ...singles.map((loc) {
-                return ParkingSingleCountTile(
-                  locationName: loc.locationName,
-                  area: area,
-                  title: loc.locationName,
-                  capacity: loc.capacity,
-                  icon: Icons.place,
-                  onTap: widget.onLocationSelected,
-                );
-              }),
+              ...singles.map((loc) => ListTile(
+                    leading: const Icon(Icons.place, color: Colors.teal),
+                    title: Text(loc.locationName),
+                    subtitle: Text('입차 ${loc.plateCount} / 공간 ${loc.capacity}'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => widget.onLocationSelected(loc.locationName),
+                  )),
               const Divider(),
-              const Text(
-                '복합 주차 구역',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
+              const Text('복합 주차 구역', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               const SizedBox(height: 8),
               ...parentGroups.map((parent) {
                 final children = composites.where((l) => l.parent == parent).toList();
                 final totalCapacity = children.fold(0, (sum, l) => sum + l.capacity);
+                final totalCount = children.fold(0, (sum, l) => sum + l.plateCount);
 
-                return ParkingCompositeTile(
-                  parent: parent,
-                  area: area,
-                  children: children,
-                  totalCapacity: totalCapacity,
+                return ListTile(
+                  leading: const Icon(Icons.layers, color: Colors.teal),
+                  title: Text(parent),
+                  subtitle: Text('총 입차 $totalCount / 총 공간 $totalCapacity'),
+                  trailing: const Icon(Icons.chevron_right),
                   onTap: () => setState(() => selectedParent = parent),
                 );
               }),
@@ -207,118 +211,6 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
           );
         },
       ),
-    );
-  }
-}
-
-// 단일 구역 Tile
-class ParkingSingleCountTile extends StatefulWidget {
-  final String locationName;
-  final String area;
-  final String title;
-  final int capacity;
-  final IconData icon;
-  final void Function(String locationName) onTap;
-
-  const ParkingSingleCountTile({
-    super.key,
-    required this.locationName,
-    required this.area,
-    required this.title,
-    required this.capacity,
-    required this.icon,
-    required this.onTap,
-  });
-
-  @override
-  State<ParkingSingleCountTile> createState() => _ParkingSingleCountTileState();
-}
-
-class _ParkingSingleCountTileState extends State<ParkingSingleCountTile> {
-  late Future<int> _futureCount;
-
-  @override
-  void initState() {
-    super.initState();
-    final repo = context.read<LocationRepository>();
-    _futureCount = repo.getPlateCount(
-      locationName: widget.locationName,
-      area: widget.area,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<int>(
-      future: _futureCount,
-      builder: (context, snapshot) {
-        final subtitle = snapshot.hasData ? '입차 ${snapshot.data} / 공간 ${widget.capacity}' : null;
-        return ListTile(
-          leading: Icon(widget.icon, color: Colors.teal),
-          title: Text(widget.title),
-          subtitle: subtitle != null ? Text(subtitle) : null,
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => widget.onTap(widget.locationName),
-        );
-      },
-    );
-  }
-}
-
-// 복합 구역 상위 Tile
-class ParkingCompositeTile extends StatefulWidget {
-  final String parent;
-  final String area;
-  final List<dynamic> children;
-  final int totalCapacity;
-  final VoidCallback onTap;
-
-  const ParkingCompositeTile({
-    super.key,
-    required this.parent,
-    required this.area,
-    required this.children,
-    required this.totalCapacity,
-    required this.onTap,
-  });
-
-  @override
-  State<ParkingCompositeTile> createState() => _ParkingCompositeTileState();
-}
-
-class _ParkingCompositeTileState extends State<ParkingCompositeTile> {
-  late Future<List<int>> _futureCounts;
-
-  @override
-  void initState() {
-    super.initState();
-    final repo = context.read<LocationRepository>();
-    final locationNames = widget.children
-        .map<String>((loc) => '${loc.parent} - ${loc.locationName}')
-        .toList();
-
-    _futureCounts = repo
-        .getPlateCountsForLocations(locationNames: locationNames, area: widget.area)
-        .then((map) => locationNames.map((name) => map[name] ?? 0).toList());
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<List<int>>(
-      future: _futureCounts,
-      builder: (context, snap) {
-        final totalCount = snap.hasData ? snap.data!.fold(0, (a, b) => a + b) : null;
-        final subtitle = totalCount != null
-            ? '총 입차 $totalCount / 총 공간 ${widget.totalCapacity}'
-            : '총 공간 ${widget.totalCapacity}';
-        return ListTile(
-          leading: Icon(Icons.layers, color: Colors.teal),
-          title: Text(widget.parent),
-          subtitle: Text(subtitle),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: widget.onTap,
-        );
-      },
     );
   }
 }

@@ -10,6 +10,9 @@ class LocationModel {
   final String? parent; // 상위 구역 이름 (복합일 경우)
   final String? type;   // 'single' | 'composite'
 
+  /// ✅ 입차 수 필드 추가
+  final int plateCount;
+
   LocationModel({
     required this.id,
     required this.locationName,
@@ -18,6 +21,7 @@ class LocationModel {
     required this.capacity,
     this.parent,
     this.type,
+    this.plateCount = 0, // 기본값
   }) : assert(id.isNotEmpty, 'ID cannot be empty');
 
   /// ✅ 편의 생성자: ID 자동 생성 (locationName_area 형식)
@@ -51,6 +55,7 @@ class LocationModel {
       capacity: (data['capacity'] as num?)?.toInt() ?? 0,
       parent: data['parent'],
       type: data['type'],
+      plateCount: (data['plateCount'] as num?)?.toInt() ?? 0, // ✅
     );
   }
 
@@ -65,6 +70,7 @@ class LocationModel {
       'isSelected': isSelected,
       'capacity': capacity,
       'timestamp': FieldValue.serverTimestamp(),
+      // plateCount는 Firestore에는 저장하지 않음
     };
   }
 
@@ -78,6 +84,7 @@ class LocationModel {
       'type': type,
       'isSelected': isSelected,
       'capacity': capacity,
+      'plateCount': plateCount, // ✅
     };
   }
 
@@ -91,6 +98,7 @@ class LocationModel {
       capacity: (data['capacity'] as num?)?.toInt() ?? 0,
       parent: data['parent'],
       type: data['type'],
+      plateCount: (data['plateCount'] as num?)?.toInt() ?? 0, // ✅
     );
   }
 
@@ -103,6 +111,7 @@ class LocationModel {
     String? parent,
     String? type,
     int? capacity,
+    int? plateCount, // ✅
   }) {
     return LocationModel(
       id: id ?? this.id,
@@ -112,6 +121,7 @@ class LocationModel {
       parent: parent ?? this.parent,
       type: type ?? this.type,
       capacity: capacity ?? this.capacity,
+      plateCount: plateCount ?? this.plateCount,
     );
   }
 }

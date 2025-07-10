@@ -114,6 +114,32 @@ class LocationState extends ChangeNotifier {
     }
   }
 
+  /// ✅ plateCount 상태 업데이트
+  void updatePlateCounts(Map<String, int> counts) {
+    _locations = _locations.map((loc) {
+      final fullName = loc.type == 'composite' ? '${loc.parent} - ${loc.locationName}' : loc.locationName;
+
+      final count = counts[fullName] ?? 0;
+      return loc.copyWith(plateCount: count);
+    }).toList();
+
+    notifyListeners();
+    debugPrint('📊 plateCount 업데이트 완료 (${counts.length}건)');
+  }
+
+  Future<void> updatePlateCountsFromRepository(LocationRepository repo) async {
+    final names = _locations.map((loc) {
+      return loc.type == 'composite' ? '${loc.parent} - ${loc.locationName}' : loc.locationName;
+    }).toList();
+
+    final counts = await repo.getPlateCountsForLocations(
+      locationNames: names,
+      area: _areaState.currentArea,
+    );
+
+    updatePlateCounts(counts);
+  }
+
   /// ➕ 단일 주차 구역 추가
   Future<void> addSingleLocation(
     String locationName,

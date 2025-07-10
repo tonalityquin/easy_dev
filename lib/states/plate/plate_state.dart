@@ -28,7 +28,9 @@ class PlateState extends ChangeNotifier {
   }
 
   String get searchQuery => _searchQuery ?? "";
+
   String get currentArea => _areaState.currentArea;
+
   bool get isLoading => _isLoading;
 
   List<PlateModel> dataOfType(PlateType type) => _data[type] ?? [];
@@ -117,26 +119,24 @@ class PlateState extends ChangeNotifier {
 
     try {
       return plates.firstWhere(
-            (plate) => plate.isSelected && plate.selectedBy == userName,
+        (plate) => plate.isSelected && plate.selectedBy == userName,
       );
     } catch (_) {
       return null;
     }
   }
 
-  String _getCollectionLabelForType(String type) {
+  // ✅ 수정: PlateType을 파라미터로 받도록 변경
+  String _getCollectionLabelForType(PlateType type) {
     switch (type) {
-      case '입차 요청':
-      case '입차 중':
+      case PlateType.parkingRequests:
         return '입차 요청';
-      case '입차 완료':
+      case PlateType.parkingCompleted:
         return '입차 완료';
-      case '출차 요청':
+      case PlateType.departureRequests:
         return '출차 요청';
-      case '출차 완료':
+      case PlateType.departureCompleted:
         return '출차 완료';
-      default:
-        return '알 수 없음';
     }
   }
 
@@ -170,27 +170,36 @@ class PlateState extends ChangeNotifier {
 
       final alreadySelected = _data.entries.expand((entry) => entry.value).firstWhere(
             (p) => p.isSelected && p.selectedBy == userName && p.id != plateId,
-        orElse: () => PlateModel(
-          id: '',
-          plateNumber: '',
-          plateFourDigit: '',
-          type: '',
-          requestTime: DateTime.now(),
-          location: '',
-          area: '',
-          userName: '',
-          isSelected: false,
-          statusList: [],
-        ),
-      );
+            orElse: () => PlateModel(
+              id: '',
+              plateNumber: '',
+              plateFourDigit: '',
+              type: '',
+              requestTime: DateTime.now(),
+              location: '',
+              area: '',
+              userName: '',
+              isSelected: false,
+              statusList: [],
+            ),
+          );
 
       if (alreadySelected.id.isNotEmpty && !plate.isSelected) {
-        final collectionLabel = _getCollectionLabelForType(alreadySelected.type);
+        String collectionLabel = '알 수 없음';
+
+        try {
+          final typeEnum = PlateType.values.firstWhere(
+            (e) => e.name == alreadySelected.type,
+          );
+          collectionLabel = _getCollectionLabelForType(typeEnum);
+        } catch (_) {
+          // enum 변환 실패 시 '알 수 없음' 유지
+        }
+
         onError(
           '⚠️ 이미 다른 번호판을 선택한 상태입니다.\n'
-              '• 선택된 번호판: ${alreadySelected.plateNumber}\n'
-              '• 위치: $collectionLabel\n'
-              '선택을 해제한 후 다시 시도해 주세요.',
+          '• 선택된 번호판: ${alreadySelected.plateNumber}\n'
+          '선택을 해제한 후 다시 시도해 주세요.',
         );
         return;
       }
