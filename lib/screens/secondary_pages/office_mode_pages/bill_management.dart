@@ -5,7 +5,7 @@ import '../../../utils/snackbar_helper.dart';
 import '../../../states/bill/bill_state.dart';
 import '../../../states/area/area_state.dart';
 import '../../../widgets/navigation/secondary_mini_navigation.dart';
-import 'bill_pages/bill_setting.dart';
+import 'bill_pages/bill_bottom_sheet.dart';
 
 class BillManagement extends StatefulWidget {
   const BillManagement({super.key});
