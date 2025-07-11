@@ -37,9 +37,7 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
       _addAmountController.text.trim(),
     ];
 
-    if (fields.any((e) => e.isEmpty) ||
-        _basicStandardValue == null ||
-        _addStandardValue == null) {
+    if (fields.any((e) => e.isEmpty) || _basicStandardValue == null || _addStandardValue == null) {
       setState(() {
         _errorMessage = '모든 항목을 입력해야 합니다.';
       });
@@ -110,22 +108,18 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 16),
-
                   TextField(
                     controller: _billController,
                     decoration: _inputDecoration('요금 종류', hint: '예: 기본 요금'),
                   ),
                   const SizedBox(height: 16),
-
                   Row(
                     children: [
                       Expanded(
                         child: DropdownButtonFormField<String>(
                           value: _basicStandardValue,
                           decoration: _inputDecoration('기본 시간'),
-                          items: _basicStandardOptions
-                              .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                              .toList(),
+                          items: _basicStandardOptions.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
                           onChanged: (val) => setState(() => _basicStandardValue = val),
                         ),
                       ),
@@ -140,16 +134,13 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
                     ],
                   ),
                   const SizedBox(height: 16),
-
                   Row(
                     children: [
                       Expanded(
                         child: DropdownButtonFormField<String>(
                           value: _addStandardValue,
                           decoration: _inputDecoration('추가 시간'),
-                          items: _addStandardOptions
-                              .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                              .toList(),
+                          items: _addStandardOptions.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
                           onChanged: (val) => setState(() => _addStandardValue = val),
                         ),
                       ),
@@ -163,12 +154,10 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
                       ),
                     ],
                   ),
-
                   if (_errorMessage != null) ...[
                     const SizedBox(height: 16),
                     Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
                   ],
-
                   const SizedBox(height: 24),
                   Row(
                     children: [

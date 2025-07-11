@@ -45,7 +45,7 @@ class _UserManagementState extends State<UserManagement> {
     return '$hour:$minute';
   }
 
-  void buildUserDialog({
+  void buildUserBottomSheet({
     required BuildContext context,
     required void Function(
         String name,
@@ -61,7 +61,7 @@ class _UserManagementState extends State<UserManagement> {
         String? startTime,
         String? endTime,
         List<String> fixedHolidays,
-        String position, // ✅ 직책 추가
+        String position,
         ) onSave,
     UserModel? initialUser,
   }) {
@@ -69,14 +69,22 @@ class _UserManagementState extends State<UserManagement> {
     final currentArea = areaState.currentArea;
     final currentDivision = areaState.currentDivision;
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => UserSetting(
-        onSave: onSave,
-        areaValue: currentArea,
-        division: currentDivision,
-        isEditMode: initialUser != null,
-        initialUser: initialUser,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => Padding(
+        padding: MediaQuery.of(context).viewInsets,
+        child: UserSettingBottomSheet(
+          onSave: onSave,
+          areaValue: currentArea,
+          division: currentDivision,
+          isEditMode: initialUser != null,
+          initialUser: initialUser,
+        ),
       ),
     );
   }
@@ -89,8 +97,7 @@ class _UserManagementState extends State<UserManagement> {
     final selectedId = userState.selectedUserId;
 
     if (index == 0 && selectedId == null) {
-      // 새 계정 추가
-      buildUserDialog(
+      buildUserBottomSheet(
         context: context,
         onSave: (
             name,
@@ -106,7 +113,7 @@ class _UserManagementState extends State<UserManagement> {
             startTime,
             endTime,
             fixedHolidays,
-            position, // ✅ 전달받은 직책
+            position,
             ) async {
           try {
             final englishName = await context.read<UserRepository>().getEnglishNameByArea(selectedArea, division);
@@ -117,7 +124,7 @@ class _UserManagementState extends State<UserManagement> {
               email: email,
               role: role,
               password: password,
-              position: position, // ✅ 반영
+              position: position,
               areas: [area],
               divisions: [division],
               currentArea: area,
@@ -138,10 +145,9 @@ class _UserManagementState extends State<UserManagement> {
         },
       );
     } else if (index == 0 && selectedId != null) {
-      // 선택된 계정 수정
       final selectedUser = userState.users.firstWhere((u) => u.id == selectedId);
 
-      buildUserDialog(
+      buildUserBottomSheet(
         context: context,
         initialUser: selectedUser,
         onSave: (
@@ -158,7 +164,7 @@ class _UserManagementState extends State<UserManagement> {
             startTime,
             endTime,
             fixedHolidays,
-            position, // ✅ 전달받은 직책
+            position,
             ) async {
           try {
             final englishName = await context.read<UserRepository>().getEnglishNameByArea(selectedArea, division);
@@ -168,7 +174,7 @@ class _UserManagementState extends State<UserManagement> {
               email: email,
               role: role,
               password: password,
-              position: position, // ✅ 반영
+              position: position,
               areas: [area],
               divisions: [division],
               currentArea: area,
@@ -188,7 +194,6 @@ class _UserManagementState extends State<UserManagement> {
         },
       );
     } else if (index == 1 && selectedId != null) {
-      // 계정 삭제
       userState.deleteUserCard(
         [selectedId],
         onError: (msg) => showFailedSnackbar(context, msg),
@@ -254,8 +259,7 @@ class _UserManagementState extends State<UserManagement> {
                 Text('이메일: ${user.email}'),
                 Text('출근: ${formatTime(user.startTime)} / 퇴근: ${formatTime(user.endTime)}'),
                 Text('역할: ${user.role}'),
-                if (user.position != null && user.position!.isNotEmpty)
-                  Text('직책: ${user.position!}'), // ✅ 직책 표시
+                if (user.position?.isNotEmpty == true) Text('직책: ${user.position!}'),
               ],
             ),
             trailing: isSelected ? const Icon(Icons.check_circle, color: Colors.green) : null,
