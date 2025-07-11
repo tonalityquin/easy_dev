@@ -25,33 +25,32 @@ class _BillManagementState extends State<BillManagement> {
     });
   }
 
-  void _showBillSettingDialog(BuildContext context) {
-    showDialog(
+  void _showBillSettingBottomSheet(BuildContext context) {
+    showModalBottomSheet(
       context: context,
-      builder: (BuildContext context) {
-        return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          child: BillSetting(
-            onSave: (billData) async {
-              try {
-                await context.read<BillState>().addBill(
-                  billData['CountType'],
-                  billData['area'],
-                  billData['basicStandard'].toString(),
-                  billData['basicAmount'].toString(),
-                  billData['addStandard'].toString(),
-                  billData['addAmount'].toString(),
-                );
-                if (context.mounted) {
-                  showSuccessSnackbar(context, '✅ 정산 데이터가 성공적으로 추가되었습니다. 앱을 재실행하세요.');
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  showFailedSnackbar(context, '🚨 데이터 추가 중 오류가 발생했습니다: $e');
-                }
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) {
+        return BillSettingBottomSheet(
+          onSave: (billData) async {
+            try {
+              await context.read<BillState>().addBill(
+                    billData['CountType'],
+                    billData['area'],
+                    billData['basicStandard'].toString(),
+                    billData['basicAmount'].toString(),
+                    billData['addStandard'].toString(),
+                    billData['addAmount'].toString(),
+                  );
+              if (context.mounted) {
+                showSuccessSnackbar(context, '✅ 정산 데이터가 성공적으로 추가되었습니다. 앱을 재실행하세요.');
               }
-            },
-          ),
+            } catch (e) {
+              if (context.mounted) {
+                showFailedSnackbar(context, '🚨 데이터 추가 중 오류가 발생했습니다: $e');
+              }
+            }
+          },
         );
       },
     );
@@ -133,7 +132,7 @@ class _BillManagementState extends State<BillManagement> {
         icons: [Icons.add, Icons.delete],
         onIconTapped: (index) {
           if (index == 0) {
-            _showBillSettingDialog(context);
+            _showBillSettingBottomSheet(context);
           } else if (index == 1) {
             _deleteSelectedBill(context);
           }

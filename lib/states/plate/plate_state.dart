@@ -126,20 +126,6 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  // ✅ 수정: PlateType을 파라미터로 받도록 변경
-  String _getCollectionLabelForType(PlateType type) {
-    switch (type) {
-      case PlateType.parkingRequests:
-        return '입차 요청';
-      case PlateType.parkingCompleted:
-        return '입차 완료';
-      case PlateType.departureRequests:
-        return '출차 요청';
-      case PlateType.departureCompleted:
-        return '출차 완료';
-    }
-  }
-
   Future<void> togglePlateIsSelected({
     required PlateType collection,
     required String plateNumber,
@@ -185,17 +171,6 @@ class PlateState extends ChangeNotifier {
           );
 
       if (alreadySelected.id.isNotEmpty && !plate.isSelected) {
-        String collectionLabel = '알 수 없음';
-
-        try {
-          final typeEnum = PlateType.values.firstWhere(
-            (e) => e.name == alreadySelected.type,
-          );
-          collectionLabel = _getCollectionLabelForType(typeEnum);
-        } catch (_) {
-          // enum 변환 실패 시 '알 수 없음' 유지
-        }
-
         onError(
           '⚠️ 이미 다른 번호판을 선택한 상태입니다.\n'
           '• 선택된 번호판: ${alreadySelected.plateNumber}\n'

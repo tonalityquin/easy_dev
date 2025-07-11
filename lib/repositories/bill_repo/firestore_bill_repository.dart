@@ -11,14 +11,9 @@ class FirestoreBillRepository implements BillRepository {
   Future<List<BillModel>> getBillOnce(String area) async {
     await FirestoreLogger().log('getBillOnce called (area=$area)');
     try {
-      final snapshot = await _firestore
-          .collection('bill')
-          .where('area', isEqualTo: area)
-          .get();
+      final snapshot = await _firestore.collection('bill').where('area', isEqualTo: area).get();
 
-      final result = snapshot.docs
-          .map((doc) => BillModel.fromMap(doc.id, doc.data()))
-          .toList();
+      final result = snapshot.docs.map((doc) => BillModel.fromMap(doc.id, doc.data())).toList();
 
       debugPrint('✅ Firestore 조정 데이터 ${result.length}건 로딩 완료');
       await FirestoreLogger().log('getBillOnce success: ${result.length} items loaded');
