@@ -20,33 +20,20 @@ class UserState extends ChangeNotifier {
   String _previousSelectedArea = '';
 
   UserModel? get user => _user;
-
   List<UserModel> get users => _users;
-
   String? get selectedUserId => _selectedUserId;
-
   bool get isLoggedIn => _user != null;
-
   bool get isWorking => _user?.isWorking ?? false;
-
   bool get isSaved => _user?.isSaved ?? false;
-
   bool get isLoading => _isLoading;
 
   String get role => _user?.role ?? '';
-
   String get position => _user?.position ?? '';
-
   String get name => _user?.name ?? '';
-
   String get phone => _user?.phone ?? '';
-
   String get password => _user?.password ?? '';
-
   String get area => _user?.areas.firstOrNull ?? '';
-
   String get division => _user?.divisions.firstOrNull ?? '';
-
   String get currentArea => _user?.currentArea ?? area;
 
   UserState(this._repository, this._areaState) {
@@ -162,7 +149,7 @@ class UserState extends ChangeNotifier {
     await prefs.setString('startTime', _timeToString(user.startTime) ?? '');
     await prefs.setString('endTime', _timeToString(user.endTime) ?? '');
     await prefs.setStringList('fixedHolidays', user.fixedHolidays);
-    await prefs.setString('position', user.position ?? ''); // ✅ 추가된 부분
+    await prefs.setString('position', user.position ?? '');
     debugPrint("📌 SharedPreferences 저장 완료");
   }
 
@@ -178,7 +165,7 @@ class UserState extends ChangeNotifier {
       final startTimeStr = prefs.getString('startTime');
       final endTimeStr = prefs.getString('endTime');
       final fixedHolidays = prefs.getStringList('fixedHolidays') ?? [];
-      final position = prefs.getString('position'); // ✅ 직책 불러오기
+      final position = prefs.getString('position');
 
       if (phone == null || selectedArea == null) return;
 
@@ -193,12 +180,10 @@ class UserState extends ChangeNotifier {
         currentArea: trimmedArea,
         role: role ?? userData.role,
         position: position ?? userData.position,
-        // ✅ 반영
         startTime: _stringToTimeOfDay(startTimeStr),
         endTime: _stringToTimeOfDay(endTimeStr),
         fixedHolidays: fixedHolidays,
         divisions: division != null ? [division] : userData.divisions,
-        // ✅ division 사용
         isSaved: true,
       );
 

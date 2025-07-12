@@ -12,26 +12,26 @@ class PageState with ChangeNotifier {
   /// ✅ ParkingCompletedPage 전용 GlobalKey
   final GlobalKey parkingCompletedKey = GlobalKey();
 
-  int get selectedIndex => _selectedIndex;
   int _selectedIndex;
-
-  bool get isLoading => _isLoading;
   bool _isLoading = false;
-
-  String get selectedPageTitle => pages[_selectedIndex].title;
-
-  set isLoading(bool value) {
-    if (_isLoading == value) return;
-    _isLoading = value;
-    notifyListeners();
-  }
 
   PageState({required this.pages})
       : _selectedIndex = pages.isNotEmpty
       ? 1
       : throw Exception("🚨 페이지 리스트가 비어 있습니다.");
 
-  /// 탭 이벤트
+  int get selectedIndex => _selectedIndex;
+  bool get isLoading => _isLoading;
+  String get selectedPageTitle => pages[_selectedIndex].title;
+
+  set isLoading(bool value) {
+    if (_isLoading != value) {
+      _isLoading = value;
+      notifyListeners();
+    }
+  }
+
+  /// ✅ 탭 전환 처리
   void onItemTapped(
       BuildContext context,
       int index, {
@@ -45,27 +45,27 @@ class PageState with ChangeNotifier {
 
     final plateState = context.read<PlateState>();
 
-    // ✅ index 0 (입차 요청) 데이터 유무 검사
+    // ✅ 입차 요청 탭일 때 데이터 유무 확인
     if (index == 0) {
       final plates =
       plateState.getPlatesByCollection(PlateType.parkingRequests);
       if (plates.isEmpty) {
         debugPrint("🚫 입차 요청 데이터가 없습니다.");
-        return; // 탭 차단
+        return;
       }
     }
 
-    // ✅ index 2 (출차 요청) 데이터 유무 검사
+    // ✅ 출차 요청 탭일 때 데이터 유무 확인
     if (index == 2) {
       final plates =
       plateState.getPlatesByCollection(PlateType.departureRequests);
       if (plates.isEmpty) {
         debugPrint("🚫 출차 요청 데이터가 없습니다.");
-        return; // 탭 차단
+        return;
       }
     }
 
-    // ✅ index 1 (입차 완료) 상태 초기화
+    // ✅ 입차 완료 탭일 경우 ParkingCompletedPage 상태 초기화
     if (index == 1) {
       ParkingCompletedPage.reset(parkingCompletedKey);
     }

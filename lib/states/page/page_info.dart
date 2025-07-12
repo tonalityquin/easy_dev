@@ -5,18 +5,19 @@ import '../../screens/type_pages/parking_request_page.dart';
 import '../../screens/type_pages/parking_completed_page.dart';
 import '../../screens/type_pages/departure_request_page.dart';
 import '../../screens/type_pages/departure_completed_page.dart';
+
 import '../../screens/hq_pages/management.dart';
 import '../../screens/hq_pages/human_resource.dart';
 import '../../screens/hq_pages/head_quarter.dart';
-import '../../enums/plate_type.dart';
 
+import '../../enums/plate_type.dart';
 import 'page_state.dart';
 
 /// ✅ PageInfo를 builder 패턴으로 변경
 class PageInfo {
   final String title;
   final PlateType collectionKey;
-  final Widget Function(BuildContext) builder;
+  final Widget Function(BuildContext context) builder;
 
   const PageInfo({
     required this.title,
@@ -25,18 +26,17 @@ class PageInfo {
   });
 }
 
-/// ✅ defaultPages에서 Builder로 생성
+/// ✅ defaultPages에서 builder로 구성
 final List<PageInfo> defaultPages = [
   PageInfo(
     title: '입차 요청',
     collectionKey: PlateType.parkingRequests,
-    builder: (_) => ParkingRequestPage(),
+    builder: (_) => const ParkingRequestPage(),
   ),
   PageInfo(
     title: '입차 완료',
     collectionKey: PlateType.parkingCompleted,
     builder: (context) {
-      // PageState에서 GlobalKey를 가져옵니다
       final pageState = context.read<PageState>();
       return ParkingCompletedPage(key: pageState.parkingCompletedKey);
     },
@@ -44,16 +44,16 @@ final List<PageInfo> defaultPages = [
   PageInfo(
     title: '출차 요청',
     collectionKey: PlateType.departureRequests,
-    builder: (_) => DepartureRequestPage(),
+    builder: (_) => const DepartureRequestPage(),
   ),
   PageInfo(
     title: '출차 완료',
     collectionKey: PlateType.departureCompleted,
-    builder: (_) => DepartureCompletedPage(),
+    builder: (_) => const DepartureCompletedPage(),
   ),
 ];
 
-/// ✅ HQ용 페이지 정보 (기존 그대로 유지)
+/// ✅ 본사(HQ) 전용 페이지 정보
 class HqPageInfo {
   final String title;
   final Widget page;
@@ -63,7 +63,7 @@ class HqPageInfo {
 }
 
 final List<HqPageInfo> hqPage = [
-  HqPageInfo('HR', HumanResource(), Icon(Icons.people)),
-  HqPageInfo('HQ', HeadQuarter(), Icon(Icons.apartment)),
-  HqPageInfo('MGMT', Management(), Icon(Icons.manage_accounts)),
+  const HqPageInfo('HR', HumanResource(), Icon(Icons.people)),
+  const HqPageInfo('HQ', HeadQuarter(), Icon(Icons.apartment)),
+  const HqPageInfo('MGMT', Management(), Icon(Icons.manage_accounts)),
 ];

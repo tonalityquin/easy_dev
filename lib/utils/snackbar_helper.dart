@@ -1,74 +1,87 @@
 import 'package:flutter/material.dart';
 
+void showCustomSnackbar({
+  required BuildContext context,
+  required String message,
+  required Color backgroundColor,
+  required IconData icon,
+  Color iconColor = Colors.white,
+  Duration duration = const Duration(seconds: 2),
+  VoidCallback? onTap,
+}) {
+  final overlay = Overlay.of(context, rootOverlay: true);
+
+  late final OverlayEntry overlayEntry;
+
+  overlayEntry = OverlayEntry(
+    builder: (context) => Positioned(
+      top: MediaQuery.of(context).padding.top + 20,
+      left: 20,
+      right: 20,
+      child: GestureDetector(
+        onTap: () {
+          overlayEntry.remove();
+          onTap?.call();
+        },
+        child: _SnackbarContainer(
+          color: backgroundColor,
+          icon: icon,
+          iconColor: iconColor,
+          message: message,
+        ),
+      ),
+    ),
+  );
+
+  overlay.insert(overlayEntry);
+
+  Future.delayed(duration, () {
+    if (overlayEntry.mounted) overlayEntry.remove();
+  });
+}
+
+// ✅ 성공 snackbar
 void showSuccessSnackbar(BuildContext context, String message) {
-  final overlay = Overlay.of(context, rootOverlay: true);
-
-  final overlayEntry = OverlayEntry(
-    builder: (context) => Positioned(
-      top: MediaQuery.of(context).padding.top + 20,
-      left: 20,
-      right: 20,
-      child: _SnackbarContainer(
-        color: Colors.green,
-        icon: Icons.check_circle_outline,
-        message: message,
-      ),
-    ),
+  showCustomSnackbar(
+    context: context,
+    message: message,
+    backgroundColor: Colors.green,
+    icon: Icons.check_circle_outline,
   );
-
-  overlay.insert(overlayEntry);
-  Future.delayed(const Duration(seconds: 2), () => overlayEntry.remove());
 }
 
+// ✅ 실패 snackbar
 void showFailedSnackbar(BuildContext context, String message) {
-  final overlay = Overlay.of(context, rootOverlay: true);
-
-  final overlayEntry = OverlayEntry(
-    builder: (context) => Positioned(
-      top: MediaQuery.of(context).padding.top + 20,
-      left: 20,
-      right: 20,
-      child: _SnackbarContainer(
-        color: Colors.redAccent,
-        icon: Icons.error_outline,
-        message: message,
-      ),
-    ),
+  showCustomSnackbar(
+    context: context,
+    message: message,
+    backgroundColor: Colors.redAccent,
+    icon: Icons.error_outline,
   );
-
-  overlay.insert(overlayEntry);
-  Future.delayed(const Duration(seconds: 2), () => overlayEntry.remove());
 }
 
+// ✅ 경고 snackbar
 void showSelectedSnackbar(BuildContext context, String message) {
-  final overlay = Overlay.of(context, rootOverlay: true);
-
-  final overlayEntry = OverlayEntry(
-    builder: (context) => Positioned(
-      top: MediaQuery.of(context).padding.top + 20,
-      left: 20,
-      right: 20,
-      child: _SnackbarContainer(
-        color: Colors.yellow[800]!,
-        icon: Icons.warning_amber_rounded,
-        message: message,
-      ),
-    ),
+  showCustomSnackbar(
+    context: context,
+    message: message,
+    backgroundColor: Colors.yellow[800]!,
+    icon: Icons.warning_amber_rounded,
+    iconColor: Colors.black,
   );
-
-  overlay.insert(overlayEntry);
-  Future.delayed(const Duration(seconds: 2), () => overlayEntry.remove());
 }
 
 class _SnackbarContainer extends StatelessWidget {
   final Color color;
   final IconData icon;
   final String message;
+  final Color iconColor;
 
   const _SnackbarContainer({
     required this.color,
     required this.icon,
     required this.message,
+    this.iconColor = Colors.white,
   });
 
   @override
@@ -90,12 +103,15 @@ class _SnackbarContainer extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(icon, color: Colors.white),
+            Icon(icon, color: iconColor),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 message,
-                style: const TextStyle(color: Colors.white, fontSize: 15),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                ),
               ),
             ),
           ],

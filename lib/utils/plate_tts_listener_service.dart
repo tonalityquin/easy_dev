@@ -4,6 +4,8 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'dart:async';
 import 'package:url_launcher/url_launcher.dart' as launcher;
 
+import '../../enums/plate_type.dart';
+
 class PlateTtsListenerService {
   static StreamSubscription? _subscription;
   static final Map<String, String?> _lastTypes = {};
@@ -20,7 +22,17 @@ class PlateTtsListenerService {
 
     debugPrint('[TTS] 감지 시작: $currentArea @ $_startTime');
 
-    _subscription = FirebaseFirestore.instance.collection('plates').snapshots().listen((snapshot) {
+    final typesToMonitor = [
+      PlateType.parkingRequests.firestoreValue,
+      PlateType.departureRequests.firestoreValue,
+    ];
+
+    _subscription = FirebaseFirestore.instance
+        .collection('plates')
+        .where('area', isEqualTo: currentArea)
+        .where('type', whereIn: typesToMonitor)
+        .snapshots()
+        .listen((snapshot) {
       for (var change in snapshot.docChanges) {
         final doc = change.doc;
         final data = doc.data();
@@ -28,46 +40,53 @@ class PlateTtsListenerService {
 
         final docId = doc.id;
         final newType = data['type'];
-        final area = data['area'];
         final location = data['location'];
         final plateNumber = data['plate_number'] ?? '';
         final Timestamp? requestTime = data['request_time'];
         final prevType = _lastTypes[docId];
 
-        if (area != currentArea) continue;
         _lastTypes[docId] = newType;
 
         final tailPlate = plateNumber.length >= 4 ? plateNumber.substring(plateNumber.length - 4) : plateNumber;
         final spokenTail = _convertToKoreanDigits(tailPlate);
 
+        debugPrint('[TTS] DEBUG ▶ changeType: ${change.type}, newType: $newType, prevType: $prevType');
+
         if (change.type == DocumentChangeType.added) {
-          if (requestTime == null || requestTime.toDate().isBefore(_startTime)) {
-            debugPrint('[TTS] 무시됨 (추가) ▶ $docId (요청 시각: ${requestTime?.toDate()})');
+          final isDeparture = newType == PlateType.departureRequests.firestoreValue;
+
+          if (requestTime == null) {
+            debugPrint('[TTS] 무시됨 (추가 - 시간 없음) ▶ $docId');
             continue;
           }
 
-          if (newType == 'parking_requests') {
+          final isNew = requestTime.toDate().isAfter(_startTime);
+
+          if (!isNew && !isDeparture) {
+            debugPrint('[TTS] 무시됨 (과거 추가) ▶ $docId (요청 시각: ${requestTime.toDate()})');
+            continue;
+          }
+
+          if (newType == PlateType.parkingRequests.firestoreValue) {
             debugPrint('[TTS] (추가) 입차 ▶ $docId');
             TtsHelper.speak("입차 요청");
-          } else if (newType == 'departure_requests') {
+          } else if (isDeparture) {
             debugPrint('[TTS] (추가) 출차 요청 ▶ $docId, 번호판: $tailPlate, 위치: $location');
             TtsHelper.speak("출차 요청 $spokenTail, $location");
           }
         }
 
         if (change.type == DocumentChangeType.modified && prevType != null && prevType != newType) {
-          if (newType == 'parking_requests') {
+          if (newType == PlateType.parkingRequests.firestoreValue) {
             debugPrint('[TTS] (수정) 입차 요청 ▶ $docId (이전: $prevType)');
             TtsHelper.speak("입차 요청");
-          } else if (newType == 'departure_requests') {
-            if (prevType == 'parking_completed') {
+          } else if (newType == PlateType.departureRequests.firestoreValue) {
+            if (prevType == PlateType.parkingCompleted.firestoreValue) {
               debugPrint('[TTS] (수정) 출차 요청 ▶ $docId (이전: $prevType), 번호판: $tailPlate, 위치: $location');
               TtsHelper.speak("출차 요청 $spokenTail, $location");
             } else {
               debugPrint('[TTS] (수정) 출차 요청이지만 이전 상태가 $prevType ▶ 무시');
             }
-          } else {
-            debugPrint('[TTS] (수정) type 변경 감지됨 ▶ $docId (이전: $prevType → 현재: $newType) ▶ 무시');
           }
         }
       }
@@ -99,9 +118,16 @@ class PlateTtsListenerService {
 
 class TtsHelper {
   static final FlutterTts _flutterTts = FlutterTts();
+  static bool _isInitialized = false;
+  static bool _isInitializing = false;
 
   static Future<void> speak(String text) async {
-    await _ensureGoogleTtsEngine();
+    if (!_isInitialized && !_isInitializing) {
+      _isInitializing = true;
+      await _ensureGoogleTtsEngine();
+      _isInitialized = true;
+      _isInitializing = false;
+    }
 
     await _flutterTts.setLanguage("ko-KR");
     await _flutterTts.setSpeechRate(0.5);

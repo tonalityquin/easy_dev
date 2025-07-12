@@ -43,6 +43,20 @@ class PlateContainer extends StatelessWidget {
     }).toList();
   }
 
+  String formatElapsed(Duration duration) {
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60);
+    final seconds = duration.inSeconds.remainder(60);
+
+    if (hours > 0) {
+      return '${hours}시간 ${minutes}분';
+    } else if (minutes > 0) {
+      return '${minutes}분 ${seconds}초';
+    } else {
+      return '${seconds}초';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final filterPlate = context.watch<FilterPlate>();
@@ -82,20 +96,16 @@ class PlateContainer extends StatelessWidget {
         ).toInt();
 
         final duration = DateTime.now().difference(item.requestTime);
-        final elapsedText = "${duration.inMinutes}분 ${duration.inSeconds % 60}초";
+        final elapsedText = formatElapsed(duration);
 
-        // ✅ 배경색 조건 처리
-        Color? backgroundColor;
-        if (item.billingType == null || item.billingType!.trim().isEmpty) {
-          backgroundColor = Colors.white;
-        } else {
-          backgroundColor = item.isLockedFee ? Colors.orange[50] : Colors.white;
-        }
+        final backgroundColor = ((item.billingType?.trim().isNotEmpty ?? false) && item.isLockedFee)
+            ? Colors.orange[50]
+            : Colors.white;
 
         return Column(
           children: [
             PlateCustomBox(
-              key: ValueKey(item.id), // ✅ 애니메이션 동작을 위한 고유 Key
+              key: ValueKey(item.id),
               topLeftText: '${item.region ?? '전국'} ${item.plateNumber}',
               topRightUpText: item.billingType ?? '없음',
               topRightDownText: "$currentFee원",
@@ -110,16 +120,17 @@ class PlateContainer extends StatelessWidget {
               onTap: () {
                 final plateState = Provider.of<PlateState>(context, listen: false);
 
-                if (item.isSelected && item.selectedBy != userName) {
+                final isOtherUserSelected = item.isSelected && item.selectedBy != userName;
+                final isAnotherPlateSelected = data.any(
+                      (p) => p.isSelected && p.selectedBy == userName && p.id != item.id,
+                );
+
+                if (isOtherUserSelected) {
                   showFailedSnackbar(context, "⚠️ 이미 다른 사용자가 선택한 번호판입니다.");
                   return;
                 }
 
-                final alreadySelected = data.any(
-                      (p) => p.isSelected && p.selectedBy == userName && p.id != item.id,
-                );
-
-                if (alreadySelected && !item.isSelected) {
+                if (isAnotherPlateSelected && !item.isSelected) {
                   showFailedSnackbar(context, "⚠️ 이미 다른 번호판을 선택한 상태입니다.");
                   return;
                 }
