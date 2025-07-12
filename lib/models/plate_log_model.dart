@@ -8,7 +8,7 @@ class PlateLogModel {
   final String performedBy;
   final DateTime timestamp;
   final String? billingType;
-  final Map<String, dynamic>? updatedFields; // ✅ 추가
+  final Map<String, dynamic>? updatedFields;
 
   PlateLogModel({
     required this.plateNumber,
@@ -37,7 +37,7 @@ class PlateLogModel {
 
     final cleanBillingType = billingType?.trim();
     if (cleanBillingType != null && cleanBillingType.isNotEmpty) {
-      map['billType'] = cleanBillingType;
+      map['billingType'] = cleanBillingType;
     }
 
     if (updatedFields != null && updatedFields!.isNotEmpty) {
@@ -58,6 +58,23 @@ class PlateLogModel {
       parsedTime = DateTime.now();
     }
 
+    Map<String, dynamic>? parsedUpdatedFields;
+    final rawUpdatedFields = map['updatedFields'];
+
+    if (rawUpdatedFields is Map) {
+      try {
+        parsedUpdatedFields = rawUpdatedFields.map((key, value) {
+          if (value is Map) {
+            return MapEntry(key, Map<String, dynamic>.from(value));
+          } else {
+            return MapEntry(key, {'value': value});
+          }
+        });
+      } catch (_) {
+        parsedUpdatedFields = null;
+      }
+    }
+
     return PlateLogModel(
       plateNumber: map['plateNumber'] ?? '',
       division: map['division'] ?? '',
@@ -67,14 +84,14 @@ class PlateLogModel {
       action: map['action'] ?? '',
       performedBy: map['performedBy'] ?? '',
       timestamp: parsedTime,
-      billingType: map['billType'] as String?,
-      updatedFields: map['updatedFields'] is Map
-          ? Map<String, dynamic>.from(
-              (map['updatedFields'] as Map).map(
-                (key, value) => MapEntry(key, Map<String, dynamic>.from(value)),
-              ),
-            )
-          : null,
+      billingType: map['billingType'] as String?,
+      updatedFields: parsedUpdatedFields,
     );
+  }
+
+  @override
+  String toString() {
+    return '[$timestamp] $plateNumber moved from "$from" to "$to" '
+        'by $performedBy (action: $action${billingType != null ? ', billingType: $billingType' : ''})';
   }
 }

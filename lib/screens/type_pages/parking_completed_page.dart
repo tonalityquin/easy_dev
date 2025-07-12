@@ -87,7 +87,6 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
           .setDepartureRequested(
         selectedPlate.plateNumber,
         selectedPlate.area,
-        plateState,
         selectedPlate.location,
       )
           .then((_) {

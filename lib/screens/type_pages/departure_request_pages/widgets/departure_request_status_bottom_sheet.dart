@@ -5,7 +5,6 @@ import '../../../../models/plate_model.dart';
 import '../../../../screens/modify_pages/modify_plate_screen.dart';
 import '../../../../screens/logs/plate_log_viewer_page.dart';
 import '../../../../states/plate/movement_plate.dart';
-import '../../../../states/plate/plate_state.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../../utils/snackbar_helper.dart';
 import '../../../../enums/plate_type.dart';
@@ -183,14 +182,14 @@ Future<void> showDepartureRequestStatusBottomSheet({
 // 상태 이동 핸들러들
 void handleEntryParkingRequest(BuildContext context, String plateNumber, String area) {
   final movementPlate = context.read<MovementPlate>();
-  final plateState = context.read<PlateState>();
+  final performedBy = context.read<UserState>().name; // ✅ 사용자 이름 가져오기
 
   movementPlate.goBackToParkingRequest(
     fromType: PlateType.departureRequests,
     plateNumber: plateNumber,
     area: area,
-    plateState: plateState,
     newLocation: "미지정",
+    performedBy: performedBy, // ✅ 명시적으로 전달
   );
 
   showSuccessSnackbar(context, "입차 요청이 처리되었습니다.");
@@ -198,12 +197,10 @@ void handleEntryParkingRequest(BuildContext context, String plateNumber, String 
 
 void handleEntryParkingCompleted(BuildContext context, String plateNumber, String area, String location) {
   final movementPlate = context.read<MovementPlate>();
-  final plateState = context.read<PlateState>();
 
   movementPlate.goBackToParkingCompleted(
     plateNumber,
     area,
-    plateState,
     location,
   );
 
@@ -212,12 +209,10 @@ void handleEntryParkingCompleted(BuildContext context, String plateNumber, Strin
 
 void handlePrePayment(BuildContext context, String plateNumber, String area, String location) {
   final movementPlate = context.read<MovementPlate>();
-  final plateState = context.read<PlateState>();
 
   movementPlate.setDepartureRequested(
     plateNumber,
     area,
-    plateState,
     location,
   );
 

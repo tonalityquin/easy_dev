@@ -101,7 +101,6 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
 
       await movementPlate.setDepartureCompleted(
         selectedPlate,
-        plateState,
       );
 
       if (!context.mounted) return;

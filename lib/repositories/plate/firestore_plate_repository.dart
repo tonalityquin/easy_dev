@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
 import 'plate_repository.dart';
@@ -6,6 +8,7 @@ import 'plate_write_service.dart';
 import 'plate_query_service.dart';
 import 'plate_count_service.dart';
 import 'plate_creation_service.dart';
+import 'plate_status_service.dart'; // ✅ 추가된 import
 
 class FirestorePlateRepository implements PlateRepository {
   final PlateStreamService _streamService = PlateStreamService();
@@ -13,6 +16,7 @@ class FirestorePlateRepository implements PlateRepository {
   final PlateQueryService _queryService = PlateQueryService();
   final PlateCountService _countService = PlateCountService();
   final PlateCreationService _creationService = PlateCreationService();
+  final PlateStatusService _statusService = PlateStatusService(); // ✅ 서비스 인스턴스 추가
 
   @override
   Stream<List<PlateModel>> streamToCurrentArea(
@@ -181,6 +185,79 @@ class FirestorePlateRepository implements PlateRepository {
       type,
       selectedDate: selectedDate,
       area: area,
+    );
+  }
+
+  // 🔸 plate_status 관련 메서드 위임
+  @override
+  Future<Map<String, dynamic>?> getPlateStatus(String plateNumber, String area) {
+    return _statusService.getPlateStatus(plateNumber, area);
+  }
+
+  @override
+  Future<void> setPlateStatus({
+    required String plateNumber,
+    required String area,
+    required String customStatus,
+    required List<String> statusList,
+    required String createdBy,
+  }) {
+    return _statusService.setPlateStatus(
+      plateNumber: plateNumber,
+      area: area,
+      customStatus: customStatus,
+      statusList: statusList,
+      createdBy: createdBy,
+    );
+  }
+
+  @override
+  Future<void> deletePlateStatus(String plateNumber, String area) {
+    return _statusService.deletePlateStatus(plateNumber, area);
+  }
+
+  // ✅ 상태 전이
+  @override
+  Future<void> transitionPlateState({
+    required String documentId,
+    required PlateType toType,
+    required String location,
+    required String userName,
+    bool resetSelection = true,
+    bool includeEndTime = false,
+    bool? isLockedFee,
+    int? lockedAtTimeInSeconds,
+    int? lockedFeeAmount,
+  }) async {
+    final updateData = {
+      'type': toType.firestoreValue,
+      'location': location,
+      'userName': userName,
+      'updatedAt': Timestamp.now(),
+      if (resetSelection) ...{
+        'isSelected': false,
+        'selectedBy': null,
+      },
+      if (includeEndTime) 'end_time': DateTime.now(),
+      if (isLockedFee == true) 'isLockedFee': true,
+      if (lockedAtTimeInSeconds != null) 'lockedAtTimeInSeconds': lockedAtTimeInSeconds,
+      if (lockedFeeAmount != null) 'lockedFeeAmount': lockedFeeAmount,
+    };
+
+    await updatePlate(documentId, updateData);
+  }
+
+  @override
+  Future<void> updateToDepartureCompleted(String documentId, PlateModel plate) async {
+    await transitionPlateState(
+      documentId: documentId,
+      toType: PlateType.departureCompleted,
+      location: plate.location,
+      userName: plate.userName,
+      includeEndTime: true,
+      isLockedFee: plate.isLockedFee,
+      lockedAtTimeInSeconds: plate.lockedAtTimeInSeconds,
+      lockedFeeAmount: plate.lockedFeeAmount,
     );
   }
 }

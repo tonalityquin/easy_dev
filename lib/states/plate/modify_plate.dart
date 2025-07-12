@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../models/plate_model.dart';
+import '../../models/plate_log_model.dart';
 import '../../utils/snackbar_helper.dart';
+import '../../utils/gcs_json_uploader.dart';
 import '../area/area_state.dart';
 import '../user/user_state.dart';
 import '../../repositories/plate/plate_repository.dart';
@@ -57,22 +59,50 @@ class ModifyPlate with ChangeNotifier {
 
       await _plateRepository.addOrUpdatePlate(documentId, updatedPlate);
 
-      final isLocationChanged = plate.location != location;
-      final isBillChanged = plate.billingType != billingType;
+      final updatedFields = <String, dynamic>{};
 
-      if (isLocationChanged || isBillChanged) {
-        final changes = <String>[];
+      if (plate.location != location) {
+        updatedFields['location'] = {
+          'from': plate.location,
+          'to': location,
+        };
+      }
 
-        if (isLocationChanged) {
-          changes.add('위치: ${plate.location} → $location');
-        }
-        if (isBillChanged) {
-          final fromBill = plate.billingType ?? '-';
-          final toBill = billingType ?? '-';
-          changes.add('정산: $fromBill → $toBill');
-        }
+      if (plate.billingType != billingType) {
+        updatedFields['billingType'] = {
+          'from': plate.billingType,
+          'to': billingType,
+        };
+      }
 
-        debugPrint('🗂 변경 내역: ${changes.join(', ')}');
+      if (plate.plateNumber != newPlateNumber) {
+        updatedFields['plateNumber'] = {
+          'from': plate.plateNumber,
+          'to': newPlateNumber,
+        };
+      }
+
+      if (updatedFields.isNotEmpty) {
+        debugPrint('🗂 변경 내역: $updatedFields');
+
+        final log = PlateLogModel(
+          plateNumber: newPlateNumber,
+          division: areaState.currentDivision,
+          area: plate.area,
+          from: collectionKey,
+          to: collectionKey,
+          action: '정보 수정',
+          performedBy: userState.name,
+          timestamp: DateTime.now(),
+          updatedFields: updatedFields,
+        );
+
+        await GcsJsonUploader().uploadForPlateLogTypeJson(
+          log.toMap()..removeWhere((k, v) => v == null),
+          newPlateNumber,
+          areaState.currentDivision,
+          plate.area,
+        );
       }
 
       notifyListeners();

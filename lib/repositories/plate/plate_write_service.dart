@@ -13,19 +13,19 @@ class PlateWriteService {
 
     final docRef = _firestore.collection('plates').doc(documentId);
     final docSnapshot = await docRef.get();
-    final data = plate.toMap();
+    final newData = plate.toMap();
 
     if (docSnapshot.exists) {
       final existingData = docSnapshot.data();
-      if (existingData != null && _isSameData(existingData, data)) {
-        dev.log("데이터 변경 없음: $documentId", name: "Firestore");
+      if (existingData != null && _isSameData(existingData, newData)) {
+        dev.log("📦 데이터 변경 없음 → 쓰기 생략: $documentId", name: "Firestore");
         await FirestoreLogger().log('addOrUpdatePlate skipped (no changes)');
         return;
       }
     }
 
-    await docRef.set(data, SetOptions(merge: true));
-    dev.log("DB 문서 저장 완료: $documentId", name: "Firestore");
+    await docRef.set(newData, SetOptions(merge: true));
+    dev.log("✅ 문서 저장 완료: $documentId", name: "Firestore");
     await FirestoreLogger().log('addOrUpdatePlate success: $documentId');
   }
 
@@ -47,14 +47,20 @@ class PlateWriteService {
   Future<void> deletePlate(String documentId) async {
     await FirestoreLogger().log('deletePlate called: $documentId');
     final docRef = _firestore.collection('plates').doc(documentId);
-    final docSnapshot = await docRef.get();
 
-    if (docSnapshot.exists) {
+    try {
       await docRef.delete();
+      dev.log("🗑️ 문서 삭제 완료: $documentId", name: "Firestore");
       await FirestoreLogger().log('deletePlate success: $documentId');
-    } else {
-      debugPrint("DB에 존재하지 않는 문서 (deletePlate): $documentId");
-      await FirestoreLogger().log('deletePlate skipped: document not found');
+    } on FirebaseException catch (e) {
+      if (e.code == 'not-found') {
+        debugPrint("⚠️ 삭제 시 문서 없음 (무시): $documentId");
+        await FirestoreLogger().log('deletePlate skipped (not found): $documentId');
+      } else {
+        dev.log("🔥 문서 삭제 실패: $e", name: "Firestore");
+        await FirestoreLogger().log('deletePlate error: $e');
+        rethrow;
+      }
     }
   }
 
@@ -88,14 +94,36 @@ class PlateWriteService {
     }
   }
 
-  /// 내부 사용: 문서 데이터 비교
+  /// 내부 사용: 문서 데이터 비교 (깊은 비교 포함)
   bool _isSameData(Map<String, dynamic> oldData, Map<String, dynamic> newData) {
     if (oldData.length != newData.length) return false;
+
     for (String key in oldData.keys) {
-      if (!newData.containsKey(key) || oldData[key] != newData[key]) {
+      final oldValue = oldData[key];
+      final newValue = newData[key];
+
+      if (!_deepEquals(oldValue, newValue)) {
         return false;
       }
     }
     return true;
+  }
+
+  bool _deepEquals(dynamic a, dynamic b) {
+    if (a == null || b == null) return a == b;
+
+    if (a is List && b is List) {
+      if (a.length != b.length) return false;
+      for (int i = 0; i < a.length; i++) {
+        if (!_deepEquals(a[i], b[i])) return false;
+      }
+      return true;
+    }
+
+    if (a is Timestamp && b is Timestamp) {
+      return a.toDate() == b.toDate();
+    }
+
+    return a == b;
   }
 }

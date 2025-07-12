@@ -6,8 +6,9 @@ import '../../screens/type_pages/debugs/firestore_logger.dart';
 class PlateCountService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  int? _cachedPlateCount;
-  DateTime? _lastFetchTime;
+  // ✅ area 별로 캐시 저장하도록 확장
+  final Map<String, int> _areaCountCache = {};
+  final Map<String, DateTime> _areaFetchTimeCache = {};
 
   /// 특정 type + area 에 해당하는 plate 개수
   Future<int> getPlateCountForTypePage(
@@ -32,14 +33,15 @@ class PlateCountService {
   Future<int> getPlateCountToCurrentArea(String area) async {
     final now = DateTime.now();
 
-    final isCacheValid = _cachedPlateCount != null &&
-        _lastFetchTime != null &&
-        now.difference(_lastFetchTime!) < const Duration(minutes: 3);
+    final isCacheValid = _areaCountCache.containsKey(area) &&
+        _areaFetchTimeCache.containsKey(area) &&
+        now.difference(_areaFetchTimeCache[area]!) < const Duration(minutes: 3);
 
     if (isCacheValid) {
-      debugPrint('📦 캐시된 plate count 반환: $_cachedPlateCount (area=$area)');
-      await FirestoreLogger().log('getPlateCountToCurrentArea: returned from cache → count=$_cachedPlateCount');
-      return _cachedPlateCount!;
+      final cachedCount = _areaCountCache[area]!;
+      debugPrint('📦 캐시된 plate count 반환: $cachedCount (area=$area)');
+      await FirestoreLogger().log('getPlateCountToCurrentArea: returned from cache → count=$cachedCount');
+      return cachedCount;
     }
 
     debugPrint('📡 Firestore에서 plate count 쿼리 수행 (area=$area)');
@@ -61,8 +63,9 @@ class PlateCountService {
 
       final count = snapshot.count ?? 0;
 
-      _cachedPlateCount = count;
-      _lastFetchTime = now;
+      // 캐시에 저장
+      _areaCountCache[area] = count;
+      _areaFetchTimeCache[area] = now;
 
       debugPrint('✅ Firestore에서 plate count 수신: $count (area=$area)');
       await FirestoreLogger().log('getPlateCountToCurrentArea success: count=$count');
@@ -124,7 +127,6 @@ class PlateCountService {
           .where('type', isEqualTo: type.firestoreValue)
           .where('area', isEqualTo: area);
 
-      // 날짜 필터링: departureCompleted인 경우만 날짜 사용
       if (selectedDate != null && type == PlateType.departureCompleted) {
         final start = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
         final end = start.add(const Duration(days: 1));

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:provider/provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../type_pages/debugs/firestore_logger.dart';
 import '../../utils/snackbar_helper.dart';
@@ -10,6 +9,7 @@ import 'input_plate_service.dart';
 import '../../states/bill/bill_state.dart';
 import '../../states/user/user_state.dart';
 import '../../states/area/area_state.dart';
+import '../../repositories/plate/firestore_plate_repository.dart';
 
 class InputPlateController {
   final TextEditingController controllerFrontDigit = TextEditingController();
@@ -17,6 +17,8 @@ class InputPlateController {
   final TextEditingController controllerBackDigit = TextEditingController();
   final TextEditingController locationController = TextEditingController();
   final TextEditingController customStatusController = TextEditingController();
+
+  final FirestorePlateRepository _plateRepo = FirestorePlateRepository();
 
   bool showKeypad = true;
   bool isLoading = false;
@@ -36,35 +38,12 @@ class InputPlateController {
   List<bool> isSelected = [];
   List<String> selectedStatuses = [];
 
-  /// 불러온 상태 (불러오면 InputStatusOnTapSection에 반영)
   List<String> fetchedStatusList = [];
 
   final List<String> regions = [
-    '전국',
-    '강원',
-    '경기',
-    '경남',
-    '경북',
-    '광주',
-    '대구',
-    '대전',
-    '부산',
-    '서울',
-    '울산',
-    '인천',
-    '전남',
-    '전북',
-    '제주',
-    '충남',
-    '충북',
-    '국기',
-    '대표',
-    '영사',
-    '외교',
-    '임시',
-    '준영',
-    '준외',
-    '협정',
+    '전국', '강원', '경기', '경남', '경북', '광주', '대구', '대전', '부산', '서울',
+    '울산', '인천', '전남', '전북', '제주', '충남', '충북',
+    '국기', '대표', '영사', '외교', '임시', '준영', '준외', '협정',
   ];
 
   late TextEditingController activeController;
@@ -87,9 +66,7 @@ class InputPlateController {
     controllerBackDigit.removeListener(_handleInputChange);
   }
 
-  void _handleInputChange() {
-    // 필요 시 입력 변화를 처리
-  }
+  void _handleInputChange() {}
 
   void setActiveController(TextEditingController controller) {
     activeController = controller;
@@ -163,43 +140,37 @@ class InputPlateController {
   Future<void> deleteCustomStatusFromFirestore(BuildContext context) async {
     final plateNumber = buildPlateNumber();
     final area = context.read<AreaState>().currentArea;
-    final docId = '${plateNumber}_$area';
 
     try {
-      await FirestoreLogger().log('🗑️ 상태 메모 삭제 시도: $docId', level: 'called');
+      await FirestoreLogger().log('🗑️ 상태 메모 삭제 시도: $plateNumber-$area', level: 'called');
 
-      await FirebaseFirestore.instance.collection('plate_status').doc(docId).delete();
+      await _plateRepo.deletePlateStatus(plateNumber, area);
 
       fetchedCustomStatus = null;
       fetchedStatusList = [];
 
-      await FirestoreLogger().log('✅ 상태 메모 삭제 성공: $docId', level: 'success');
+      await FirestoreLogger().log('✅ 상태 메모 삭제 성공: $plateNumber-$area', level: 'success');
     } catch (e) {
       await FirestoreLogger().log('❌ 상태 메모 삭제 실패: $e', level: 'error');
       rethrow;
     }
   }
 
-  /// ✅ Firestore에서 statusList와 customStatus 불러오기
   Future<void> fetchStatusAndMemo(String plateNumber, String area) async {
-    final docId = '${plateNumber}_$area';
+    await FirestoreLogger().log('🔍 상태/메모 조회 시도: $plateNumber-$area', level: 'called');
 
-    await FirestoreLogger().log('🔍 상태/메모 조회 시도: $docId', level: 'called');
+    final data = await _plateRepo.getPlateStatus(plateNumber, area);
 
-    final docSnapshot = await FirebaseFirestore.instance.collection('plate_status').doc(docId).get();
+    if (data != null) {
+      await FirestoreLogger().log('✅ 상태/메모 조회 성공: $plateNumber-$area', level: 'success');
 
-    if (docSnapshot.exists) {
-      await FirestoreLogger().log('✅ 상태/메모 조회 성공: $docId', level: 'success');
-
-      final data = docSnapshot.data();
-      fetchedCustomStatus = data?['customStatus'];
-
-      final List<dynamic>? savedList = data?['statusList'];
+      fetchedCustomStatus = data['customStatus'];
+      final List<dynamic>? savedList = data['statusList'];
       if (savedList != null) {
         fetchedStatusList = savedList.map((e) => e.toString()).toList();
       }
     } else {
-      await FirestoreLogger().log('📭 상태/메모 없음: $docId', level: 'info');
+      await FirestoreLogger().log('📭 상태/메모 없음: $plateNumber-$area', level: 'info');
       fetchedCustomStatus = null;
       fetchedStatusList = [];
     }
@@ -260,39 +231,27 @@ class InputPlateController {
         addAmount: selectedAddAmount,
         region: dropdownValue,
         customStatus:
-            customStatusController.text.trim().isNotEmpty ? customStatusController.text : fetchedCustomStatus ?? '',
+        customStatusController.text.trim().isNotEmpty ? customStatusController.text : fetchedCustomStatus ?? '',
       );
 
-      await FirestoreLogger().log(
-        '📤 plate_status 저장 시도: ${plateNumber}_$area',
-        level: 'called',
+      await FirestoreLogger().log('📤 plate_status 저장 시도: $plateNumber-$area', level: 'called');
+
+      await _plateRepo.setPlateStatus(
+        plateNumber: plateNumber,
+        area: area,
+        customStatus: customStatusController.text.trim(),
+        statusList: selectedStatuses,
+        createdBy: userName,
       );
 
-      await FirebaseFirestore.instance.collection('plate_status').doc('${plateNumber}_$area').set(
-        {
-          'customStatus': customStatusController.text.trim(),
-          'statusList': selectedStatuses,
-          'updatedAt': FieldValue.serverTimestamp(),
-          'expireAt': Timestamp.fromDate(DateTime.now().add(const Duration(days: 1))),
-          'createdBy': userName,
-        },
-        SetOptions(merge: true),
-      );
-
-      await FirestoreLogger().log(
-        '✅ plate_status 저장 성공: ${plateNumber}_$area',
-        level: 'success',
-      );
+      await FirestoreLogger().log('✅ plate_status 저장 성공: $plateNumber-$area', level: 'success');
 
       if (mounted) {
         Navigator.of(context).pop();
         if (wasSuccessful) {
           showSuccessSnackbar(context, '차량 정보 등록 완료');
           resetForm();
-          await FirestoreLogger().log(
-            '🎉 plate 등록 프로세스 완료: $plateNumber',
-            level: 'success',
-          );
+          await FirestoreLogger().log('🎉 plate 등록 프로세스 완료: $plateNumber', level: 'success');
         }
       }
     } catch (e) {
@@ -300,10 +259,7 @@ class InputPlateController {
         Navigator.of(context).pop();
         showFailedSnackbar(context, '등록 실패: ${e.toString()}');
       }
-      await FirestoreLogger().log(
-        '❌ plate 등록 실패: $e',
-        level: 'error',
-      );
+      await FirestoreLogger().log('❌ plate 등록 실패: $e', level: 'error');
     } finally {
       isLoading = false;
       if (mounted) refreshUI();

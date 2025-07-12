@@ -21,21 +21,19 @@ class PlateQueryService {
     required String area,
     required String location,
   }) async {
-    await FirestoreLogger()
-        .log('getPlatesByLocation called: type=${type.name}, area=$area, location=$location');
+    await FirestoreLogger().log(
+      'getPlatesByLocation called: type=${type.name}, area=$area, location=$location',
+    );
 
-    final querySnapshot = await _firestore
+    final query = _firestore
         .collection('plates')
         .where('type', isEqualTo: type.firestoreValue)
         .where('area', isEqualTo: area)
-        .where('location', isEqualTo: location)
-        .get();
+        .where('location', isEqualTo: location);
 
-    final result = querySnapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList();
+    final result = await _queryPlates(query);
 
-    await FirestoreLogger()
-        .log('getPlatesByLocation success: ${result.length} items loaded');
-
+    await FirestoreLogger().log('getPlatesByLocation success: ${result.length} items loaded');
     return result;
   }
 
@@ -44,20 +42,18 @@ class PlateQueryService {
     required String plateFourDigit,
     required String area,
   }) async {
-    await FirestoreLogger()
-        .log('fourDigitCommonQuery called: plateFourDigit=$plateFourDigit, area=$area');
+    await FirestoreLogger().log(
+      'fourDigitCommonQuery called: plateFourDigit=$plateFourDigit, area=$area',
+    );
 
-    final querySnapshot = await _firestore
+    final query = _firestore
         .collection('plates')
         .where('plate_four_digit', isEqualTo: plateFourDigit)
-        .where('area', isEqualTo: area)
-        .get();
+        .where('area', isEqualTo: area);
 
-    final result = querySnapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList();
+    final result = await _queryPlates(query);
 
-    await FirestoreLogger()
-        .log('fourDigitCommonQuery success: ${result.length} items loaded');
-
+    await FirestoreLogger().log('fourDigitCommonQuery success: ${result.length} items loaded');
     return result;
   }
 
@@ -66,21 +62,19 @@ class PlateQueryService {
     required String plateFourDigit,
     required String area,
   }) async {
-    await FirestoreLogger()
-        .log('fourDigitSignatureQuery called: plateFourDigit=$plateFourDigit, area=$area');
+    await FirestoreLogger().log(
+      'fourDigitSignatureQuery called: plateFourDigit=$plateFourDigit, area=$area',
+    );
 
-    final querySnapshot = await _firestore
+    final query = _firestore
         .collection('plates')
         .where('plate_four_digit', isEqualTo: plateFourDigit)
         .where('area', isEqualTo: area)
-        .where('type', isEqualTo: PlateType.parkingCompleted.firestoreValue)
-        .get();
+        .where('type', isEqualTo: PlateType.parkingCompleted.firestoreValue);
 
-    final result = querySnapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList();
+    final result = await _queryPlates(query);
 
-    await FirestoreLogger()
-        .log('fourDigitSignatureQuery success: ${result.length} items loaded');
-
+    await FirestoreLogger().log('fourDigitSignatureQuery success: ${result.length} items loaded');
     return result;
   }
 
@@ -89,8 +83,7 @@ class PlateQueryService {
     required String plateNumber,
     required String area,
   }) async {
-    await FirestoreLogger()
-        .log('checkDuplicatePlate called: plateNumber=$plateNumber, area=$area');
+    await FirestoreLogger().log('checkDuplicatePlate called: plateNumber=$plateNumber, area=$area');
 
     final querySnapshot = await _firestore
         .collection('plates')
@@ -106,9 +99,13 @@ class PlateQueryService {
 
     final isDuplicate = querySnapshot.docs.isNotEmpty;
 
-    await FirestoreLogger()
-        .log('checkDuplicatePlate result: $isDuplicate');
-
+    await FirestoreLogger().log('checkDuplicatePlate result: $isDuplicate');
     return isDuplicate;
+  }
+
+  /// 🔁 공통 쿼리 결과 → PlateModel 목록으로 변환
+  Future<List<PlateModel>> _queryPlates(Query<Map<String, dynamic>> query) async {
+    final querySnapshot = await query.get();
+    return querySnapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList();
   }
 }

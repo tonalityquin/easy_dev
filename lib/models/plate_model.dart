@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import '../../enums/plate_type.dart';
 
 int parseInt(dynamic value) {
@@ -31,7 +32,7 @@ class PlateFields {
   static const String lockedFeeAmount = 'lockedFeeAmount';
   static const String updatedAt = 'updatedAt';
   static const String paymentMethod = 'paymentMethod';
-  static const String customStatus = 'customStatus'; // ✅ 추가됨
+  static const String customStatus = 'customStatus';
 }
 
 class PlateModel {
@@ -59,7 +60,7 @@ class PlateModel {
   final int? lockedFeeAmount;
   final DateTime? updatedAt;
   final String? paymentMethod;
-  final String? customStatus; // ✅ 추가됨
+  final String? customStatus;
 
   PlateModel({
     required this.id,
@@ -86,7 +87,7 @@ class PlateModel {
     this.lockedFeeAmount,
     this.updatedAt,
     this.paymentMethod,
-    this.customStatus, // ✅ 추가됨
+    this.customStatus,
   });
 
   factory PlateModel.fromDocument(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -120,12 +121,12 @@ class PlateModel {
       lockedFeeAmount: parseInt(data[PlateFields.lockedFeeAmount]),
       updatedAt: (updatedTimestamp is Timestamp) ? updatedTimestamp.toDate() : null,
       paymentMethod: data[PlateFields.paymentMethod],
-      customStatus: data[PlateFields.customStatus], // ✅ 추가됨
+      customStatus: data[PlateFields.customStatus],
     );
   }
 
-  Map<String, dynamic> toMap() {
-    return {
+  Map<String, dynamic> toMap({bool removeNullOrEmpty = false}) {
+    final map = {
       PlateFields.plateNumber: plateNumber,
       PlateFields.plateFourDigit: plateFourDigit,
       PlateFields.type: type,
@@ -149,8 +150,14 @@ class PlateModel {
       if (lockedFeeAmount != null) PlateFields.lockedFeeAmount: lockedFeeAmount,
       if (updatedAt != null) PlateFields.updatedAt: Timestamp.fromDate(updatedAt!),
       if (paymentMethod != null) PlateFields.paymentMethod: paymentMethod,
-      if (customStatus != null) PlateFields.customStatus: customStatus, // ✅ 추가됨
+      if (customStatus != null) PlateFields.customStatus: customStatus,
     };
+
+    if (removeNullOrEmpty) {
+      map.removeWhere((key, value) => value == null || (value is String && value.trim().isEmpty));
+    }
+
+    return map;
   }
 
   Map<String, dynamic> diff(PlateModel other) {
@@ -162,7 +169,7 @@ class PlateModel {
     if (billingType != other.billingType) {
       changes['billingType'] = {'before': billingType, 'after': other.billingType};
     }
-    if (statusList.toString() != other.statusList.toString()) {
+    if (!listEquals(statusList, other.statusList)) {
       changes['statusList'] = {'before': statusList, 'after': other.statusList};
     }
     if (paymentMethod != other.paymentMethod) {
@@ -172,7 +179,7 @@ class PlateModel {
       changes['lockedFeeAmount'] = {'before': lockedFeeAmount, 'after': other.lockedFeeAmount};
     }
     if (customStatus != other.customStatus) {
-      changes['customStatus'] = {'before': customStatus, 'after': other.customStatus}; // ✅ 추가됨
+      changes['customStatus'] = {'before': customStatus, 'after': other.customStatus};
     }
 
     return changes;
@@ -203,7 +210,7 @@ class PlateModel {
     int? lockedFeeAmount,
     DateTime? updatedAt,
     String? paymentMethod,
-    String? customStatus, // ✅ 추가됨
+    String? customStatus,
   }) {
     return PlateModel(
       id: id ?? this.id,
@@ -230,12 +237,13 @@ class PlateModel {
       lockedFeeAmount: lockedFeeAmount ?? this.lockedFeeAmount,
       updatedAt: updatedAt ?? this.updatedAt,
       paymentMethod: paymentMethod ?? this.paymentMethod,
-      customStatus: customStatus ?? this.customStatus, // ✅ 추가됨
+      customStatus: customStatus ?? this.customStatus,
     );
   }
 
   @override
-  String toString() => 'PlateModel(id: $id, plateNumber: $plateNumber, user: $userName, area: $area)';
+  String toString() =>
+      'PlateModel(id: $id, plateNumber: $plateNumber, user: $userName, area: $area)';
 }
 
 extension PlateModelTypeExtension on PlateModel {

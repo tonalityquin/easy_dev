@@ -18,7 +18,7 @@ class PlateState extends ChangeNotifier {
     for (var c in PlateType.values) c: true,
   };
 
-  final Map<PlateType, String> _subscribedAreas = {}; // ✅ 구독된 지역 저장
+  final Map<PlateType, String> _subscribedAreas = {};
 
   String? _searchQuery;
   bool _isLoading = false;

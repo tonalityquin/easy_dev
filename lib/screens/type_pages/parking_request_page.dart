@@ -121,7 +121,6 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
       await movementPlate.setParkingCompleted(
         plateNumber,
         area,
-        plateState,
         location,
       );
 

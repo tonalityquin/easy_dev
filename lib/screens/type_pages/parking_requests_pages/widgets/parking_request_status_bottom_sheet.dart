@@ -5,8 +5,6 @@ import '../../../../models/plate_model.dart';
 import '../../../../screens/modify_pages/modify_plate_screen.dart';
 import '../../../../screens/logs/plate_log_viewer_page.dart';
 import '../../../../states/area/area_state.dart';
-import '../../../../states/plate/movement_plate.dart';
-import '../../../../states/plate/plate_state.dart';
 import '../../../../enums/plate_type.dart';
 import '../../../../states/user/user_state.dart';
 
@@ -149,16 +147,3 @@ Future<void> showParkingRequestStatusBottomSheet({
   );
 }
 
-/// 상태 변경 처리: 입차 요청으로 되돌리기
-void handleEntryParkingRequest(BuildContext context, String plateNumber, String area) {
-  final movementPlate = context.read<MovementPlate>();
-  final plateState = context.read<PlateState>();
-
-  movementPlate.goBackToParkingRequest(
-    fromType: PlateType.parkingCompleted,
-    plateNumber: plateNumber,
-    area: area,
-    plateState: plateState,
-    newLocation: "미지정",
-  );
-}

@@ -6,7 +6,6 @@ import '../../../../screens/modify_pages/modify_plate_screen.dart';
 import '../../../../screens/logs/plate_log_viewer_page.dart';
 import '../../../../states/area/area_state.dart';
 import '../../../../states/plate/movement_plate.dart';
-import '../../../../states/plate/plate_state.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../../utils/fee_calculator.dart';
 import '../../../../enums/plate_type.dart';
@@ -176,20 +175,19 @@ Future<void> showParkingCompletedStatusBottomSheet({
 
 void handleEntryParkingRequest(BuildContext context, String plateNumber, String area) {
   final movementPlate = context.read<MovementPlate>();
-  final plateState = context.read<PlateState>();
+  final performedBy = context.read<UserState>().name; // ✅ 사용자 이름 가져오기
 
   movementPlate.goBackToParkingRequest(
     fromType: PlateType.parkingCompleted,
     plateNumber: plateNumber,
     area: area,
-    plateState: plateState,
     newLocation: "미지정",
+    performedBy: performedBy, // ✅ 전달
   );
 }
 
 Future<void> handleEntryDepartureCompleted(BuildContext context, PlateModel plate) async {
   final movementPlate = context.read<MovementPlate>();
-  final plateState = context.read<PlateState>();
 
   PlateModel updatedPlate = plate;
 
@@ -229,7 +227,7 @@ Future<void> handleEntryDepartureCompleted(BuildContext context, PlateModel plat
   }
 
   try {
-    await movementPlate.jumpingDepartureCompleted(updatedPlate, plateState);
+    await movementPlate.jumpingDepartureCompleted(updatedPlate);
   } catch (e) {
     debugPrint("출차 완료 실패: $e");
   }
