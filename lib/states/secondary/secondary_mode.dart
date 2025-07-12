@@ -9,7 +9,6 @@ enum ModeStatus {
   managerField,
   lowMiddleManage,
   highManage,
-  document,
   dev,
 }
 
@@ -31,8 +30,6 @@ extension ModeStatusExtension on ModeStatus {
         return '관리자 관리 페이지';
       case ModeStatus.highManage:
         return '상급 관리자 관리 페이지';
-      case ModeStatus.document:
-        return '이스터 에그';
       case ModeStatus.dev:
         return '개발자 페이지';
     }

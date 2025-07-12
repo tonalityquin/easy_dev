@@ -22,8 +22,6 @@ class SecondaryPage extends StatelessWidget {
         return lowMiddleManagePages;
       case ModeStatus.highManage:
         return highManagePages;
-      case ModeStatus.document:
-        return documentPages;
       case ModeStatus.dev:
         return devPages;
       case ModeStatus.lowField:

@@ -7,8 +7,8 @@ import '../../../../models/user_model.dart';
 import '../../../states/area/area_state.dart';
 import '../../../states/user/user_state.dart';
 import '../../type_pages/debugs/firestore_logger.dart';
-import '../../secondary_pages/field_leader_pages/dash_board/utils/break_log_downloader.dart';
-import '../../secondary_pages/field_leader_pages/dash_board/utils/break_log_uploader.dart';
+import '../../secondary_pages/field_leader_pages/utils/break_log_downloader.dart';
+import '../../secondary_pages/field_leader_pages/utils/break_log_uploader.dart';
 import 'breaks/break_table_row.dart';
 
 class BreakCell extends StatefulWidget {

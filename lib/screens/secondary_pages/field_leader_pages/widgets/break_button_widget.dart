@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../dash_board_controller.dart';
+import '../common_dash_board_controller.dart';
 
 class BreakButtonWidget extends StatelessWidget {
   final DashBoardController controller;

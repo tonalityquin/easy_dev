@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../../states/user/user_state.dart';
-import '../dash_board_controller.dart';
+import '../common_dash_board_controller.dart';
 
 class WorkButtonWidget extends StatelessWidget {
   final DashBoardController controller;

@@ -8,8 +8,8 @@ import '../../../../states/area/area_state.dart';
 import '../../../type_pages/debugs/firestore_logger.dart';
 import '../../../../utils/snackbar_helper.dart';
 import '../break_cell.dart';
-import '../../../secondary_pages/field_leader_pages/dash_board/utils/break_log_uploader.dart';
-import '../../../secondary_pages/field_leader_pages/dash_board/utils/break_log_downloader.dart'; // ✅ 추가
+import '../../../secondary_pages/field_leader_pages/utils/break_log_uploader.dart';
+import '../../../secondary_pages/field_leader_pages/utils/break_log_downloader.dart'; // ✅ 추가
 
 class BreakUi extends StatefulWidget {
   const BreakUi({super.key});

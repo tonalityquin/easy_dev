@@ -6,7 +6,7 @@ import '../../../../states/user/user_state.dart';
 import '../../../../states/location/location_state.dart'; // ✅ 추가
 import '../../../../states/bill/bill_state.dart'; // ✅ 추가
 
-import 'dash_board_controller.dart';
+import 'common_dash_board_controller.dart';
 import 'widgets/user_info_card.dart';
 import 'widgets/break_button_widget.dart';
 import 'widgets/work_button_widget.dart';

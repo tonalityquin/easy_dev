@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../widgets/navigation/secondary_mini_navigation.dart'; // 하단 내비게이션 바
 
-class DocuSign extends StatelessWidget {
-  const DocuSign({super.key});
+class MonthlyParkingManagement extends StatelessWidget {
+  const MonthlyParkingManagement({super.key});
 
   void _handleMenuSelection(BuildContext context, String value) {
     if (value == 'logout') {
@@ -21,7 +21,7 @@ class DocuSign extends StatelessWidget {
         elevation: 0,
         foregroundColor: Colors.black87,
         title: const Text(
-          '문서 서명',
+          '정기 주차 관리 페이지',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
@@ -46,7 +46,7 @@ class DocuSign extends StatelessWidget {
         ],
       ),
       body: const Center(
-        child: Text('DocuSign Page'),
+        child: Text('Monthly parking page'),
       ),
       bottomNavigationBar: const SecondaryMiniNavigation(
         icons: [
