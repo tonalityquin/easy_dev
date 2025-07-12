@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../common_dash_board_controller.dart';
 
 class BreakButtonWidget extends StatelessWidget {
-  final DashBoardController controller;
+  final CommonDashBoardController controller;
 
   const BreakButtonWidget({super.key, required this.controller});
 

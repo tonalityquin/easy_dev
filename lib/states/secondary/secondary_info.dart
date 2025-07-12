@@ -29,7 +29,7 @@ final List<SecondaryInfo> adminPages = [
   SecondaryInfo('쇼트컷 관리', ShortcutManagement(), Icon(Icons.adjust)),
   SecondaryInfo('로컬 데이터 관리', LocalData(), Icon(Icons.tab)),
   SecondaryInfo('필드 대시보드', FielderDashBoardScreen(), Icon(Icons.dashboard)),
-  SecondaryInfo('공통 대시보드', DashBoardScreen(), Icon(Icons.dashboard)),
+  SecondaryInfo('공통 대시보드', CommonDashBoardScreen(), Icon(Icons.dashboard)),
   SecondaryInfo('유저 관리', UserManagement(), Icon(Icons.people)),
   SecondaryInfo('구역 관리', LocationManagement(), Icon(Icons.location_on)),
   SecondaryInfo('정산 관리', BillManagement(), Icon(Icons.adjust)),
@@ -44,7 +44,7 @@ final List<SecondaryInfo> lowUserModePages = [
   SecondaryInfo('백엔드 컨트롤러', BackEndController(), Icon(Icons.free_breakfast)),
 ];
 final List<SecondaryInfo> middleUserModePages = [
-  SecondaryInfo('대시보드', DashBoardScreen(), Icon(Icons.dashboard)),
+  SecondaryInfo('대시보드', CommonDashBoardScreen(), Icon(Icons.dashboard)),
   SecondaryInfo('구역 관리', LocationManagement(), Icon(Icons.location_on)),
   SecondaryInfo('월 주차 관리', MonthlyParkingManagement(), Icon(Icons.local_parking)),
   SecondaryInfo('로컬 데이터 관리', LocalData(), Icon(Icons.tab)),
@@ -52,7 +52,7 @@ final List<SecondaryInfo> middleUserModePages = [
 ];
 
 final List<SecondaryInfo> highUserModePages = [
-  SecondaryInfo('대시보드', DashBoardScreen(), Icon(Icons.dashboard)),
+  SecondaryInfo('대시보드', CommonDashBoardScreen(), Icon(Icons.dashboard)),
   SecondaryInfo('구역 관리', LocationManagement(), Icon(Icons.location_on)),
   SecondaryInfo('월 주차 관리', MonthlyParkingManagement(), Icon(Icons.local_parking)),
   SecondaryInfo('로컬 데이터 관리', LocalData(), Icon(Icons.tab)),
@@ -60,8 +60,9 @@ final List<SecondaryInfo> highUserModePages = [
 ];
 
 final List<SecondaryInfo> managerFieldModePages = [
-  SecondaryInfo('대시보드', DashBoardScreen(), Icon(Icons.dashboard)),
+  SecondaryInfo('대시보드', CommonDashBoardScreen(), Icon(Icons.dashboard)),
   SecondaryInfo('구역 관리', LocationManagement(), Icon(Icons.location_on)),
+  SecondaryInfo('월 주차 관리', MonthlyParkingManagement(), Icon(Icons.local_parking)),
   SecondaryInfo('로컬 데이터 관리', LocalData(), Icon(Icons.tab)),
   SecondaryInfo('백엔드 컨트롤러', BackEndController(), Icon(Icons.free_breakfast)),
 ];

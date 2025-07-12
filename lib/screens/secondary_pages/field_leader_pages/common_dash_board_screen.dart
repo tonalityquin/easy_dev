@@ -13,12 +13,12 @@ import 'widgets/work_button_widget.dart';
 import 'widgets/show_report_dialog.dart';
 import './clock_out_fetch_plate_count_widget.dart'; // ✅ 추가
 
-class DashBoardScreen extends StatelessWidget {
-  const DashBoardScreen({super.key});
+class CommonDashBoardScreen extends StatelessWidget {
+  const CommonDashBoardScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final controller = DashBoardController();
+    final controller = CommonDashBoardController();
 
     return Scaffold(
       appBar: AppBar(

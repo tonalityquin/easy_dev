@@ -3,7 +3,7 @@ import '../../../../../states/user/user_state.dart';
 import '../common_dash_board_controller.dart';
 
 class WorkButtonWidget extends StatelessWidget {
-  final DashBoardController controller;
+  final CommonDashBoardController controller;
   final UserState userState;
 
   const WorkButtonWidget({

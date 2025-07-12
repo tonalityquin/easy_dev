@@ -8,7 +8,7 @@ import '../../../../utils/snackbar_helper.dart';
 import 'utils/clock_out_log_uploader.dart';
 import 'utils/break_log_uploader.dart';
 
-class DashBoardController {
+class CommonDashBoardController {
   /// 출근 상태일 경우 퇴근 기록 및 종료
   Future<void> handleWorkStatus(UserState userState, BuildContext context) async {
     if (userState.isWorking) {
