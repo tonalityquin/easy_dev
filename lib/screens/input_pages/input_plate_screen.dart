@@ -14,7 +14,7 @@ import 'sections/input_photo_section.dart';
 import 'sections/input_plate_section.dart';
 import 'sections/input_status_on_tap_section.dart';
 import 'sections/input_bottom_action_section.dart';
-import 'sections/input_custom_status_section.dart'; // ✅ 추가
+import 'sections/input_custom_status_section.dart';
 
 import 'utils/input_camera_helper.dart';
 
