@@ -8,7 +8,7 @@ class HqState with ChangeNotifier {
 
   HqState({required List<HqPageInfo> pages})
       : _pages = pages,
-        _selectedIndex = pages.isNotEmpty ? 0 : -1;
+        _selectedIndex = pages.isNotEmpty ? 1 : -1;
 
   int get selectedIndex => _selectedIndex;
 
