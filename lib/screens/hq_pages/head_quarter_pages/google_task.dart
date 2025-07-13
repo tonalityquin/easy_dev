@@ -4,7 +4,9 @@ import 'package:googleapis_auth/auth_io.dart';
 import 'package:flutter/services.dart';
 
 class TaskListFromCalendar extends StatefulWidget {
-  const TaskListFromCalendar({super.key});
+  final String selectedArea;
+
+  const TaskListFromCalendar({super.key, required this.selectedArea});
 
   @override
   State<TaskListFromCalendar> createState() => _TaskListFromCalendarState();
@@ -12,11 +14,20 @@ class TaskListFromCalendar extends StatefulWidget {
 
 class _TaskListFromCalendarState extends State<TaskListFromCalendar> {
   final String serviceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
-  final String calendarId =
-      '057a6dc84afa3ba3a28ef0f21f8c298100290f4192bcca55a55a83097d56d7fe@group.calendar.google.com';
 
   List<calendar.Event> _taskEvents = [];
   bool _isLoading = false;
+
+  /// ✅ selectedArea에 따라 calendarId 반환
+  String get calendarId {
+    switch (widget.selectedArea) {
+      case 'pelican':
+        return '4ad4d982312d0b885144406cf7197d536ae7dfc36b52736c6bce726bec19c562@group.calendar.google.com';
+      case 'belivus':
+      default:
+        return '057a6dc84afa3ba3a28ef0f21f8c298100290f4192bcca55a55a83097d56d7fe@group.calendar.google.com';
+    }
+  }
 
   @override
   void initState() {
@@ -27,7 +38,9 @@ class _TaskListFromCalendarState extends State<TaskListFromCalendar> {
   Future<AutoRefreshingAuthClient> getAuthClient({bool write = false}) async {
     final jsonString = await rootBundle.loadString(serviceAccountPath);
     final credentials = ServiceAccountCredentials.fromJson(jsonString);
-    final scopes = write ? [calendar.CalendarApi.calendarScope] : [calendar.CalendarApi.calendarReadonlyScope];
+    final scopes = write
+        ? [calendar.CalendarApi.calendarScope]
+        : [calendar.CalendarApi.calendarReadonlyScope];
     return await clientViaServiceAccount(credentials, scopes);
   }
 
@@ -98,7 +111,6 @@ class _TaskListFromCalendarState extends State<TaskListFromCalendar> {
     final descriptionController = TextEditingController(text: descText);
     bool done = isDone;
 
-    // 기존 날짜 가져오기
     DateTime selectedDate = event.start?.dateTime?.toLocal() ?? event.start?.date?.toLocal() ?? DateTime.now();
 
     await showDialog(
@@ -206,43 +218,43 @@ class _TaskListFromCalendarState extends State<TaskListFromCalendar> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _taskEvents.isEmpty
-              ? const Center(child: Text('할 일이 없습니다.'))
-              : ListView.builder(
-                  itemCount: _taskEvents.length,
-                  itemBuilder: (context, index) {
-                    final event = _taskEvents[index];
-                    final isDone = event.description?.contains('✔️DONE') ?? false;
-                    final description = event.description?.replaceAll('✔️DONE', '').trim();
+          ? const Center(child: Text('할 일이 없습니다.'))
+          : ListView.builder(
+        itemCount: _taskEvents.length,
+        itemBuilder: (context, index) {
+          final event = _taskEvents[index];
+          final isDone = event.description?.contains('✔️DONE') ?? false;
+          final description = event.description?.replaceAll('✔️DONE', '').trim();
 
-                    final dateTime = event.start?.dateTime ?? event.start?.date;
-                    final localDate = dateTime?.toLocal();
-                    final formattedDate = localDate != null
-                        ? "${localDate.year}-${localDate.month.toString().padLeft(2, '0')}-${localDate.day.toString().padLeft(2, '0')}"
-                        : '날짜 없음';
+          final dateTime = event.start?.dateTime ?? event.start?.date;
+          final localDate = dateTime?.toLocal();
+          final formattedDate = localDate != null
+              ? "${localDate.year}-${localDate.month.toString().padLeft(2, '0')}-${localDate.day.toString().padLeft(2, '0')}"
+              : '날짜 없음';
 
-                    return ListTile(
-                      leading: Checkbox(
-                        value: isDone,
-                        onChanged: (_) => _toggleDone(event),
-                      ),
-                      title: Text(
-                        event.summary ?? '제목 없음',
-                        style: TextStyle(
-                          decoration: isDone ? TextDecoration.lineThrough : null,
-                        ),
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('날짜: $formattedDate'),
-                          if (description != null && description.isNotEmpty)
-                            Text('설명: $description', style: const TextStyle(fontSize: 14)),
-                        ],
-                      ),
-                      onTap: () => _editEvent(event),
-                    );
-                  },
-                ),
+          return ListTile(
+            leading: Checkbox(
+              value: isDone,
+              onChanged: (_) => _toggleDone(event),
+            ),
+            title: Text(
+              event.summary ?? '제목 없음',
+              style: TextStyle(
+                decoration: isDone ? TextDecoration.lineThrough : null,
+              ),
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('날짜: $formattedDate'),
+                if (description != null && description.isNotEmpty)
+                  Text('설명: $description', style: const TextStyle(fontSize: 14)),
+              ],
+            ),
+            onTap: () => _editEvent(event),
+          );
+        },
+      ),
     );
   }
 }

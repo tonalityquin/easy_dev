@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../widgets/navigation/navigation_hq_mini.dart';
 import '../../widgets/navigation/top_navigation.dart';
 import 'head_quarter_pages/google_task.dart';
@@ -13,12 +14,32 @@ class LinkToGoogle extends StatefulWidget {
 
 class _LinkToGoogleState extends State<LinkToGoogle> {
   int _selectedIndex = 0;
+  String? _selectedArea;
+  bool _isLoading = true;
 
-  // ✅ 현재 로그인된 유저의 selectedArea 정보 (예: belivus, pelican 등)
-  final String selectedArea = 'belivus'; // 또는 로그인 정보에서 받아오도록 구성
+  @override
+  void initState() {
+    super.initState();
+    _loadSelectedArea();
+  }
+
+  Future<void> _loadSelectedArea() async {
+    final prefs = await SharedPreferences.getInstance();
+    final area = prefs.getString('selectedArea') ?? 'belivus'; // 기본값 지정
+    setState(() {
+      _selectedArea = area;
+      _isLoading = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return WillPopScope(
       onWillPop: () async => false,
       child: Scaffold(
@@ -30,9 +51,9 @@ class _LinkToGoogleState extends State<LinkToGoogle> {
           elevation: 0,
         ),
         body: _selectedIndex == 0
-            ? GoogleCalendar(selectedArea: selectedArea)
+            ? GoogleCalendar(selectedArea: _selectedArea!)
             : _selectedIndex == 1
-            ? const TaskListFromCalendar()
+            ? TaskListFromCalendar(selectedArea: _selectedArea!)
             : const Center(child: Text('해당 탭의 콘텐츠는 준비 중입니다.')),
         bottomNavigationBar: HqMiniNavigation(
           height: 56,
