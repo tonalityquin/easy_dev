@@ -29,7 +29,7 @@ class _LinkToGoogleState extends State<LinkToGoogle> {
         body: _selectedIndex == 0
             ? const GoogleCalendar()
             : _selectedIndex == 1
-                ? const GoogleTask()
+                ? const TaskListFromCalendar()
                 : const Center(child: Text('해당 탭의 콘텐츠는 준비 중입니다.')),
         bottomNavigationBar: HqMiniNavigation(
           height: 56,
