@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import '../../../widgets/navigation/navigation_hq_mini.dart';
 import '../../widgets/navigation/top_navigation.dart';
-import 'head_quarter_pages/head_quarter_calendar.dart';
-import 'head_quarter_pages/head_quarter_task.dart';
+import 'head_quarter_pages/google_task.dart';
+import 'head_quarter_pages/google_calendar.dart';
 
-class HeadQuarter extends StatefulWidget {
-  const HeadQuarter({super.key});
+class LinkToGoogle extends StatefulWidget {
+  const LinkToGoogle({super.key});
 
   @override
-  State<HeadQuarter> createState() => _HeadQuarterState();
+  State<LinkToGoogle> createState() => _LinkToGoogleState();
 }
 
-class _HeadQuarterState extends State<HeadQuarter> {
+class _LinkToGoogleState extends State<LinkToGoogle> {
   int _selectedIndex = 0;
 
   @override
@@ -27,20 +27,20 @@ class _HeadQuarterState extends State<HeadQuarter> {
           elevation: 0,
         ),
         body: _selectedIndex == 0
-            ? const HeadQuarterTask()
+            ? const GoogleCalendar()
             : _selectedIndex == 1
-                ? const HeadQuarterCalendar()
+                ? const GoogleTask()
                 : const Center(child: Text('해당 탭의 콘텐츠는 준비 중입니다.')),
         bottomNavigationBar: HqMiniNavigation(
           height: 56,
           iconSize: 22,
           icons: const [
-            Icons.today,
             Icons.input,
+            Icons.today,
           ],
           labels: const [
-            'Task',
             'Calendar',
+            'Task',
           ],
           onIconTapped: (index) {
             setState(() {

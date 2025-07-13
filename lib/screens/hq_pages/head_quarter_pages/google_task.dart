@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../widgets/navigation/secondary_mini_navigation.dart'; // 하단 내비게이션 바
 
-class BasicForm extends StatelessWidget {
-  const BasicForm({super.key});
+class GoogleTask extends StatelessWidget {
+  const GoogleTask({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -12,14 +12,14 @@ class BasicForm extends StatelessWidget {
         elevation: 0,
         foregroundColor: Colors.black87,
         title: const Text(
-          'title',
+          'Task board role page',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
         automaticallyImplyLeading: false,
       ),
       body: const Center(
-        child: Text('body'),
+        child: Text('use to "google task board API" with "google calendar API"'),
       ),
       bottomNavigationBar: const SecondaryMiniNavigation(
         icons: [

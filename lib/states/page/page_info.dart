@@ -8,7 +8,7 @@ import '../../screens/type_pages/departure_completed_page.dart';
 
 import '../../screens/hq_pages/management.dart';
 import '../../screens/hq_pages/human_resource.dart';
-import '../../screens/hq_pages/head_quarter.dart';
+import '../../screens/hq_pages/link_to_google.dart';
 
 import '../../enums/plate_type.dart';
 import 'page_state.dart';
@@ -64,6 +64,6 @@ class HqPageInfo {
 
 final List<HqPageInfo> hqPage = [
   const HqPageInfo('HR', HumanResource(), Icon(Icons.people)),
-  const HqPageInfo('HQ', HeadQuarter(), Icon(Icons.apartment)),
+  const HqPageInfo('HQ', LinkToGoogle(), Icon(Icons.apartment)),
   const HqPageInfo('MGMT', Management(), Icon(Icons.manage_accounts)),
 ];
