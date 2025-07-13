@@ -6,7 +6,9 @@ import 'package:googleapis/calendar/v3.dart' as calendar;
 import 'package:googleapis_auth/auth_io.dart';
 
 class GoogleCalendar extends StatefulWidget {
-  const GoogleCalendar({super.key});
+  final String selectedArea;
+
+  const GoogleCalendar({super.key, required this.selectedArea});
 
   @override
   State<GoogleCalendar> createState() => _GoogleCalendarState();
@@ -20,12 +22,18 @@ class _GoogleCalendarState extends State<GoogleCalendar> {
   bool _isLoading = false;
 
   final String serviceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
-  final String calendarId =
-      '057a6dc84afa3ba3a28ef0f21f8c298100290f4192bcca55a55a83097d56d7fe@group.calendar.google.com';
+
+  late final String calendarId;
+
+  final Map<String, String> calendarMap = {
+    'belivus': '057a6dc84afa3ba3a28ef0f21f8c298100290f4192bcca55a55a83097d56d7fe@group.calendar.google.com',
+    'pelican': '4ad4d982312d0b885144406cf7197d536ae7dfc36b52736c6bce726bec19c562@group.calendar.google.com',
+  };
 
   @override
   void initState() {
     super.initState();
+    calendarId = calendarMap[widget.selectedArea] ?? calendarMap['belivus']!;
     _selectedDay = _focusedDay;
     _loadAllEvents().then((_) => _loadEventsForDay(_selectedDay!));
   }
@@ -220,9 +228,9 @@ class _GoogleCalendarState extends State<GoogleCalendar> {
         backgroundColor: Colors.white,
         elevation: 0,
         foregroundColor: Colors.black87,
-        title: const Text(
-          'Calendar role page',
-          style: TextStyle(fontWeight: FontWeight.bold),
+        title: Text(
+          '${widget.selectedArea} 캘린더',
+          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
         automaticallyImplyLeading: false,
@@ -256,7 +264,7 @@ class _GoogleCalendarState extends State<GoogleCalendar> {
                     margin: const EdgeInsets.only(bottom: 3),
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: allDone ? Colors.green : Colors.red, // ✅🟥 도트 조건
+                      color: allDone ? Colors.green : Colors.red,
                     ),
                   ),
                 );
@@ -268,37 +276,37 @@ class _GoogleCalendarState extends State<GoogleCalendar> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _events.isEmpty
-                    ? const Center(child: Text("일정이 없습니다."))
-                    : ListView.builder(
-                        itemCount: _events.length,
-                        itemBuilder: (context, index) {
-                          final event = _events[index];
-                          final isDone = event.description?.contains('✔️DONE') ?? false;
-                          final description = event.description?.replaceAll('✔️DONE', '').trim();
+                ? const Center(child: Text("일정이 없습니다."))
+                : ListView.builder(
+              itemCount: _events.length,
+              itemBuilder: (context, index) {
+                final event = _events[index];
+                final isDone = event.description?.contains('✔️DONE') ?? false;
+                final description = event.description?.replaceAll('✔️DONE', '').trim();
 
-                          return ListTile(
-                            leading: Checkbox(
-                              value: isDone,
-                              onChanged: (_) => _toggleDone(event),
-                            ),
-                            title: Text(
-                              event.summary ?? '제목 없음',
-                              style: TextStyle(
-                                decoration: isDone ? TextDecoration.lineThrough : null,
-                              ),
-                            ),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text('종일 일정'),
-                                if (description != null && description.isNotEmpty)
-                                  Text('설명: $description', style: const TextStyle(fontSize: 13)),
-                              ],
-                            ),
-                            onTap: () => _addOrEditEvent(existing: event),
-                          );
-                        },
-                      ),
+                return ListTile(
+                  leading: Checkbox(
+                    value: isDone,
+                    onChanged: (_) => _toggleDone(event),
+                  ),
+                  title: Text(
+                    event.summary ?? '제목 없음',
+                    style: TextStyle(
+                      decoration: isDone ? TextDecoration.lineThrough : null,
+                    ),
+                  ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('종일 일정'),
+                      if (description != null && description.isNotEmpty)
+                        Text('설명: $description', style: const TextStyle(fontSize: 13)),
+                    ],
+                  ),
+                  onTap: () => _addOrEditEvent(existing: event),
+                );
+              },
+            ),
           ),
         ],
       ),

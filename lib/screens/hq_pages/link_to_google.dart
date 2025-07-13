@@ -14,6 +14,9 @@ class LinkToGoogle extends StatefulWidget {
 class _LinkToGoogleState extends State<LinkToGoogle> {
   int _selectedIndex = 0;
 
+  // ✅ 현재 로그인된 유저의 selectedArea 정보 (예: belivus, pelican 등)
+  final String selectedArea = 'belivus'; // 또는 로그인 정보에서 받아오도록 구성
+
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
@@ -27,10 +30,10 @@ class _LinkToGoogleState extends State<LinkToGoogle> {
           elevation: 0,
         ),
         body: _selectedIndex == 0
-            ? const GoogleCalendar()
+            ? GoogleCalendar(selectedArea: selectedArea)
             : _selectedIndex == 1
-                ? const TaskListFromCalendar()
-                : const Center(child: Text('해당 탭의 콘텐츠는 준비 중입니다.')),
+            ? const TaskListFromCalendar()
+            : const Center(child: Text('해당 탭의 콘텐츠는 준비 중입니다.')),
         bottomNavigationBar: HqMiniNavigation(
           height: 56,
           iconSize: 22,
