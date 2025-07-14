@@ -8,6 +8,7 @@ import '../../../../states/area/area_state.dart';
 import '../../../type_pages/debugs/firestore_logger.dart';
 import '../../../../utils/snackbar_helper.dart';
 import '../attendance_cell.dart';
+import '../../../../utils/google_sheets_helper.dart'; // ✅ Google Sheets 연동 추가
 
 class AttendanceUi extends StatefulWidget {
   const AttendanceUi({super.key});
@@ -40,10 +41,10 @@ class _AttendanceUiState extends State<AttendanceUi> {
     selectedMonth = now.month;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final area = context.read<AreaState>().selectedArea; // ✅ 수정됨
+      final area = context.read<AreaState>().selectedArea;
       if (area.isNotEmpty) {
         selectedArea = area;
-        _subscribeToUsers(selectedArea); // ✅ 수정됨
+        _subscribeToUsers(selectedArea);
       }
     });
   }
@@ -51,7 +52,7 @@ class _AttendanceUiState extends State<AttendanceUi> {
   void _subscribeToUsers(String area) {
     _userStreamSub = FirebaseFirestore.instance
         .collection('user_accounts')
-        .where('selectedArea', isEqualTo: area) // ✅ selectedArea 기준
+        .where('selectedArea', isEqualTo: area)
         .snapshots()
         .listen((snapshot) {
       final updatedUsers = snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
@@ -69,30 +70,22 @@ class _AttendanceUiState extends State<AttendanceUi> {
   }
 
   Future<List<UserModel>> getUsersByArea(String area) async {
-    final snapshot = await FirebaseFirestore.instance
-        .collection('user_accounts')
-        .where('selectedArea', isEqualTo: area) // ✅ selectedArea 기준
-        .get();
+    final snapshot =
+        await FirebaseFirestore.instance.collection('user_accounts').where('selectedArea', isEqualTo: area).get();
 
     return snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
   }
 
   Future<void> _reloadUsers(String area) async {
     try {
-      await FirestoreLogger().log(
-        '_reloadUsers() Firestore 쿼리 시작 (area: $area)',
-        level: 'called',
-      );
+      await FirestoreLogger().log('_reloadUsers() Firestore 쿼리 시작 (area: $area)', level: 'called');
 
       final snapshot =
           await FirebaseFirestore.instance.collection('user_accounts').where('selectedArea', isEqualTo: area).get();
 
       final updatedUsers = snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
 
-      await FirestoreLogger().log(
-        '_reloadUsers() 쿼리 결과: ${updatedUsers.length}명',
-        level: 'success',
-      );
+      await FirestoreLogger().log('_reloadUsers() 쿼리 결과: ${updatedUsers.length}명', level: 'success');
 
       final currentIds = users.map((u) => u.id).toSet();
       final newIds = updatedUsers.map((u) => u.id).toSet();
@@ -102,30 +95,13 @@ class _AttendanceUiState extends State<AttendanceUi> {
         setState(() {
           users = updatedUsers;
         });
-
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (context.mounted) {
-            showSuccessSnackbar(context, '최신 사용자 목록으로 갱신되었습니다');
-          }
-        });
+        if (context.mounted) showSuccessSnackbar(context, '최신 사용자 목록으로 갱신되었습니다');
       } else {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (context.mounted) {
-            showSuccessSnackbar(context, '변경 사항 없음');
-          }
-        });
+        if (context.mounted) showSuccessSnackbar(context, '변경 사항 없음');
       }
     } catch (e) {
-      await FirestoreLogger().log(
-        '_reloadUsers() Firestore 쿼리 오류: $e',
-        level: 'error',
-      );
-
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (context.mounted) {
-          showFailedSnackbar(context, '사용자 목록을 불러오지 못했습니다');
-        }
-      });
+      await FirestoreLogger().log('_reloadUsers() Firestore 쿼리 오류: $e', level: 'error');
+      if (context.mounted) showFailedSnackbar(context, '사용자 목록을 불러오지 못했습니다');
     }
   }
 
@@ -140,9 +116,7 @@ class _AttendanceUiState extends State<AttendanceUi> {
       _menuOpen = false;
     });
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (context.mounted) showSuccessSnackbar(context, '저장 완료');
-    });
+    if (context.mounted) showSuccessSnackbar(context, '저장 완료');
   }
 
   Future<void> _clearText(String rowKey) async {
@@ -153,9 +127,7 @@ class _AttendanceUiState extends State<AttendanceUi> {
       _menuOpen = false;
     });
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (context.mounted) showSuccessSnackbar(context, '삭제 완료');
-    });
+    if (context.mounted) showSuccessSnackbar(context, '삭제 완료');
   }
 
   void _onChangeYear(int year) {
@@ -184,12 +156,35 @@ class _AttendanceUiState extends State<AttendanceUi> {
     });
   }
 
-  Future<void> _mergeJsonData(Map<String, Map<int, String>> newData) async {
-    await FirestoreLogger().log(
-      '_mergeJsonData() 머지 시작 (레코드 수: ${newData.length})',
-      level: 'called',
-    );
+  /// Google Sheets 데이터를 로드하여 머지
+  /// Google Sheets 데이터를 로드하여 머지 (출근 + 퇴근)
+  Future<void> _mergeJsonDataFromSheets() async {
+    try {
+      await FirestoreLogger().log('_mergeJsonDataFromSheets() 호출됨', level: 'called');
 
+      // 출근 기록
+      final clockInRows = await GoogleSheetsHelper.loadClockInRows();
+      final clockInMap = GoogleSheetsHelper.mapToCellData(clockInRows, statusFilter: '출근');
+
+      // 퇴근 기록
+      final clockOutRows = await GoogleSheetsHelper.loadClockOutRows();
+      final clockOutMap = GoogleSheetsHelper.mapToCellData(clockOutRows, statusFilter: '퇴근');
+
+      // 병합
+      await _mergeJsonData(clockInMap);
+      await _mergeJsonData(clockOutMap);
+
+      if (context.mounted) {
+        showSuccessSnackbar(context, '출근+퇴근 기록 불러오기 완료');
+      }
+    } catch (e) {
+      await FirestoreLogger().log('_mergeJsonDataFromSheets() 오류: $e', level: 'error');
+      if (context.mounted) showFailedSnackbar(context, '출근/퇴근 기록 로딩 실패');
+    }
+  }
+
+  /// 셀 데이터 병합
+  Future<void> _mergeJsonData(Map<String, Map<int, String>> newData) async {
     setState(() {
       for (final entry in newData.entries) {
         cellData[entry.key] ??= {};
@@ -199,21 +194,14 @@ class _AttendanceUiState extends State<AttendanceUi> {
       }
     });
 
-    await FirestoreLogger().log(
-      '_mergeJsonData() 머지 완료',
-      level: 'success',
-    );
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (context.mounted) {
-        showSuccessSnackbar(context, '출퇴근 기록 불러오기 완료');
-      }
-    });
+    if (context.mounted) {
+      showSuccessSnackbar(context, '출근 기록 불러오기 완료');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    selectedArea = context.watch<AreaState>().selectedArea; // ✅ 수정됨
+    selectedArea = context.watch<AreaState>().selectedArea;
 
     return AttendanceCell(
       controller: _controller,
@@ -231,7 +219,7 @@ class _AttendanceUiState extends State<AttendanceUi> {
       toggleMenu: () => setState(() => _menuOpen = !_menuOpen),
       getUsersByArea: getUsersByArea,
       reloadUsers: _reloadUsers,
-      onLoadJson: _mergeJsonData,
+      onLoadJson: (_) => _mergeJsonDataFromSheets(), // ✅ Google Sheets로부터 불러오기
     );
   }
 }

@@ -1,16 +1,13 @@
-// 생략된 import 생략 없이 포함
+// 생략 없이 import 포함
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../models/user_model.dart';
-import '../../../states/area/area_state.dart';
 import '../../../states/user/user_state.dart';
 import '../../type_pages/debugs/firestore_logger.dart';
-import '../../clock_in_pages/utils/clock_in_log_uploader.dart';
 import '../../clock_in_pages/utils/clock_in_log_downloader.dart';
 import '../../secondary_pages/field_leader_pages/utils/clock_out_log_downloader.dart';
-import '../../secondary_pages/field_leader_pages/utils/clock_out_log_uploader.dart';
 import 'attendances/attendance_table_row.dart';
 
 class AttendanceCell extends StatefulWidget {
@@ -71,28 +68,13 @@ class _AttendanceCellState extends State<AttendanceCell> {
     final userAreas = userState.user?.areas ?? [];
 
     if (userAreas.isEmpty) {
-      await FirestoreLogger().log(
-        '⚠️ 사용자 소속 지역 없음',
-        level: 'error',
-      );
+      await FirestoreLogger().log('⚠️ 사용자 소속 지역 없음', level: 'error');
     }
 
-    await FirestoreLogger().log(
-      'Firestore areas 쿼리 시작',
-      level: 'called',
-    );
-
     final snapshot = await FirebaseFirestore.instance.collection('areas').get();
-
     final allAreas = snapshot.docs.map((doc) => doc['name'] as String).toList();
     final filtered = allAreas.where((area) => userAreas.contains(area)).toList();
 
-    await FirestoreLogger().log(
-      'Firestore areas 쿼리 완료 (필터링 ${filtered.length}개)',
-      level: 'success',
-    );
-
-    if (!mounted) return;
     setState(() {
       _areaList = filtered;
       if (filtered.isNotEmpty) {
@@ -102,17 +84,11 @@ class _AttendanceCellState extends State<AttendanceCell> {
     });
   }
 
-
-
   Future<void> _reloadUsersForArea(String area) async {
     final users = await widget.getUsersByArea(area);
-
-    if (!mounted) return; // ✅ 이 한 줄 추가
-    setState(() {
-      _localUsers = users;
-    });
+    if (!mounted) return;
+    setState(() => _localUsers = users);
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -122,12 +98,11 @@ class _AttendanceCellState extends State<AttendanceCell> {
 
     return Scaffold(
       appBar: AppBar(
+        title: const Text('근무자 출퇴근 테이블', style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0,
         foregroundColor: Colors.black87,
-        title: const Text('근무자 출퇴근 테이블', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
-        automaticallyImplyLeading: false,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -151,17 +126,10 @@ class _AttendanceCellState extends State<AttendanceCell> {
                 DropdownButton<String>(
                   value: _selectedArea,
                   hint: const Text('지역 선택'),
-                  items: _areaList.map((area) {
-                    return DropdownMenuItem(
-                      value: area,
-                      child: Text(area),
-                    );
-                  }).toList(),
+                  items: _areaList.map((area) => DropdownMenuItem(value: area, child: Text(area))).toList(),
                   onChanged: (value) {
                     if (value != null) {
-                      setState(() {
-                        _selectedArea = value;
-                      });
+                      setState(() => _selectedArea = value);
                       _reloadUsersForArea(value);
                     }
                   },
@@ -171,17 +139,13 @@ class _AttendanceCellState extends State<AttendanceCell> {
                     DropdownButton<int>(
                       value: widget.selectedYear,
                       items: yearList.map((y) => DropdownMenuItem(value: y, child: Text('$y년'))).toList(),
-                      onChanged: (value) {
-                        if (value != null) widget.onYearChanged(value);
-                      },
+                      onChanged: (value) => value != null ? widget.onYearChanged(value) : null,
                     ),
                     const SizedBox(width: 12),
                     DropdownButton<int>(
                       value: widget.selectedMonth,
                       items: monthList.map((m) => DropdownMenuItem(value: m, child: Text('$m월'))).toList(),
-                      onChanged: (value) {
-                        if (value != null) widget.onMonthChanged(value);
-                      },
+                      onChanged: (value) => value != null ? widget.onMonthChanged(value) : null,
                     ),
                   ],
                 ),
@@ -223,145 +187,94 @@ class _AttendanceCellState extends State<AttendanceCell> {
           ],
         ),
       ),
-      floatingActionButton: Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          if (widget.menuOpen)
-            Row(
-              children: [
-                const SizedBox(width: 12),
-                FloatingActionButton(
-                  heroTag: 'loadJsonBtn',
-                  mini: true,
-                  onPressed: () async {
-                    try {
-                      final areaState = context.read<AreaState>();
-                      final division = areaState.currentDivision;
-
-                      await FirestoreLogger().log(
-                        '출퇴근 JSON 다운로드 시작 (users=${_localUsers.length})',
-                        level: 'called',
-                      );
-
-                      final mergedData = <String, Map<int, String>>{};
-
-                      for (final user in _localUsers) {
-                        final userId = user.id;
-                        final englishArea = user.englishSelectedAreaName ?? '';
-
-                        final clockInUrl = ClockInLogUploader.getDownloadPath(
-                          division: division,
-                          area: englishArea,
-                          userId: userId,
-                        );
-                        final clockInData = await downloadAttendanceJsonFromGcs(
-                          publicUrl: clockInUrl,
-                          selectedYear: widget.selectedYear,
-                          selectedMonth: widget.selectedMonth,
-                        );
-                        if (clockInData != null && clockInData.isNotEmpty) {
-                          mergedData.addAll(clockInData);
-                          await FirestoreLogger().log(
-                            '출근 JSON 다운로드 완료 - userId:$userId (${clockInData.length}개)',
-                            level: 'success',
-                          );
-                        }
-
-                        final clockOutUrl = ClockOutLogUploader.getDownloadPath(
-                          division: division,
-                          area: englishArea,
-                          userId: userId,
-                        );
-                        final clockOutData = await downloadLeaveJsonFromGcs(
-                          publicUrl: clockOutUrl,
-                          selectedYear: widget.selectedYear,
-                          selectedMonth: widget.selectedMonth,
-                        );
-                        if (clockOutData != null && clockOutData.isNotEmpty) {
-                          mergedData.addAll(clockOutData);
-                          await FirestoreLogger().log(
-                            '퇴근 JSON 다운로드 완료 - userId:$userId (${clockOutData.length}개)',
-                            level: 'success',
-                          );
-                        }
-                      }
-
-                      if (mergedData.isNotEmpty) {
-                        await widget.onLoadJson(mergedData);
-                        await FirestoreLogger().log(
-                          '출퇴근 JSON 병합 완료 (총 ${mergedData.length} entries)',
-                          level: 'success',
-                        );
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('✅ 출근/퇴근 데이터 불러오기 성공')),
-                        );
-                      } else {
-                        await FirestoreLogger().log(
-                          '병합된 출퇴근 데이터 없음',
-                          level: 'info',
-                        );
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('❌ 불러올 데이터가 없습니다')),
-                        );
-                      }
-                    } catch (e) {
-                      await FirestoreLogger().log(
-                        '출퇴근 JSON 로딩 오류: $e',
-                        level: 'error',
-                      );
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('❌ 오류 발생: ${e.toString()}')),
-                      );
-                    }
-                  },
-                ),
-                const SizedBox(width: 12),
-                FloatingActionButton(
-                  heroTag: 'saveBtn',
-                  mini: true,
-                  onPressed: () {
-                    final sr = widget.selectedRow;
-                    if (sr != null && sr ~/ 2 < _localUsers.length) {
-                      final userId = _localUsers[sr ~/ 2].id;
-                      final fullKey = sr % 2 == 0 ? userId : '${userId}_out';
-                      widget.appendText(fullKey);
-                    }
-                  },
-                  backgroundColor: Colors.green,
-                  child: const Icon(Icons.save),
-                ),
-                const SizedBox(width: 12),
-                FloatingActionButton(
-                  heroTag: 'clearBtn',
-                  mini: true,
-                  onPressed: () {
-                    final sr = widget.selectedRow;
-                    if (sr != null && sr ~/ 2 < _localUsers.length) {
-                      final userId = _localUsers[sr ~/ 2].id;
-                      final fullKey = sr % 2 == 0 ? userId : '${userId}_out';
-                      widget.clearText(fullKey);
-                    }
-                  },
-                  backgroundColor: Colors.redAccent,
-                  child: const Icon(Icons.delete),
-                ),
-              ],
-            ),
-          const SizedBox(width: 12),
-          FloatingActionButton(
-            heroTag: 'attendanceFab',
-            onPressed: widget.toggleMenu,
-            backgroundColor: Colors.blueAccent,
-            child: AnimatedRotation(
-              duration: const Duration(milliseconds: 300),
-              turns: widget.menuOpen ? 0.25 : 0.0,
-              child: const Icon(Icons.more_vert),
-            ),
-          ),
-        ],
-      ),
+      floatingActionButton: _buildFloatingButtons(context),
     );
+  }
+
+  Widget _buildFloatingButtons(BuildContext context) {
+    final sr = widget.selectedRow;
+    final rowUserId = (sr != null && sr ~/ 2 < _localUsers.length)
+        ? (sr % 2 == 0 ? _localUsers[sr ~/ 2].id : '${_localUsers[sr ~/ 2].id}_out')
+        : null;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        if (widget.menuOpen)
+          Row(
+            children: [
+              const SizedBox(width: 12),
+              FloatingActionButton(
+                heroTag: 'loadJsonBtn',
+                mini: true,
+                onPressed: _loadAttendanceFromCloud,
+                child: const Icon(Icons.download),
+              ),
+              const SizedBox(width: 12),
+              FloatingActionButton(
+                heroTag: 'saveBtn',
+                mini: true,
+                onPressed: () {
+                  if (rowUserId != null) widget.appendText(rowUserId);
+                },
+                backgroundColor: Colors.green,
+                child: const Icon(Icons.save),
+              ),
+              const SizedBox(width: 12),
+              FloatingActionButton(
+                heroTag: 'clearBtn',
+                mini: true,
+                onPressed: () {
+                  if (rowUserId != null) widget.clearText(rowUserId);
+                },
+                backgroundColor: Colors.redAccent,
+                child: const Icon(Icons.delete),
+              ),
+            ],
+          ),
+        const SizedBox(width: 12),
+        FloatingActionButton(
+          heroTag: 'attendanceFab',
+          onPressed: widget.toggleMenu,
+          backgroundColor: Colors.blueAccent,
+          child: AnimatedRotation(
+            duration: const Duration(milliseconds: 300),
+            turns: widget.menuOpen ? 0.25 : 0.0,
+            child: const Icon(Icons.more_vert),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _loadAttendanceFromCloud() async {
+    try {
+      final mergedData = <String, Map<int, String>>{};
+
+      final clockInData = await downloadAttendanceJsonFromSheets(
+        selectedYear: widget.selectedYear,
+        selectedMonth: widget.selectedMonth,
+      );
+
+      final clockOutData = await downloadLeaveJsonFromSheets(
+        selectedYear: widget.selectedYear,
+        selectedMonth: widget.selectedMonth,
+      );
+
+      if (clockInData != null) mergedData.addAll(clockInData);
+      if (clockOutData != null) mergedData.addAll(clockOutData);
+
+      if (mergedData.isNotEmpty) {
+        await widget.onLoadJson(mergedData);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ 출근/퇴근 데이터 불러오기 성공')));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('📭 불러올 데이터가 없습니다')));
+      }
+    } catch (e) {
+      await FirestoreLogger().log('출퇴근 JSON 로딩 오류: $e', level: 'error');
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('❌ 오류 발생: $e')));
+    }
   }
 
   Widget _buildHeaderCell(String text, {double width = 60}) {
@@ -374,11 +287,7 @@ class _AttendanceCellState extends State<AttendanceCell> {
         border: Border.all(color: Colors.grey.shade300),
         color: Colors.grey.shade200,
       ),
-      child: Text(
-        text,
-        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, height: 1.3),
-        textAlign: TextAlign.center,
-      ),
+      child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, height: 1.3)),
     );
   }
 }

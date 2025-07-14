@@ -1,28 +1,27 @@
-import 'dart:convert';
-import 'dart:io';
-
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:googleapis/storage/v1.dart' as storage;
+import 'package:googleapis/sheets/v4.dart';
 import 'package:googleapis_auth/auth_io.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter/material.dart';
 
 import '../../../../../states/area/area_state.dart';
 import '../../../../../states/user/user_state.dart';
 
 class ClockOutLogUploader {
-  static const _bucketName = 'easydev-image';
+  // 🔐 서비스 계정 키 경로 & Google Sheets 설정
+  static const _spreadsheetId = '14qZa34Ha-y5Z6kj7eUqZxcP2CdLlaUQcyTJtLsyU_uo';
+  static const _sheetName = '퇴근기록';
   static const _serviceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
 
+  /// ✅ 퇴근 기록 Google Sheets에 업로드
   static Future<bool> uploadLeaveJson({
     required BuildContext context,
-    required String recordedTime,
+    required Map<String, dynamic> data,
   }) async {
     try {
       final areaState = context.read<AreaState>();
       final userState = context.read<UserState>();
 
-      final areaForGcs = userState.user?.englishSelectedAreaName ?? '';
       final area = userState.user?.selectedArea ?? '';
       final division = areaState.currentDivision;
       final userId = userState.user?.id ?? '';
@@ -33,86 +32,32 @@ class ClockOutLogUploader {
       final month = now.month.toString().padLeft(2, '0');
       final day = now.day.toString().padLeft(2, '0');
       final dateStr = '$year-$month-$day';
+      final recordedTime = data['recordedTime'] ?? '';
 
-      final gcsPath = '$division/$areaForGcs/exports/clock_out/$year/$month/$userId.json';
+      // 📋 Google Sheets에 추가할 행 데이터
+      final row = [
+        dateStr,
+        recordedTime,
+        userId,
+        userName,
+        area,
+        division,
+        '퇴근',
+      ];
 
-      final newRecord = {
-        'userId': userId,
-        'userName': userName,
-        'area': area,
-        'division': division,
-        'recordedDate': dateStr,
-        'recordedTime': recordedTime,
-        'status': '퇴근',
-      };
+      // 🔐 인증 및 Sheets API 클라이언트 생성
+      final client = await _getSheetsClient();
+      final sheetsApi = SheetsApi(client);
 
-      List<Map<String, dynamic>> logList = [];
-
-      try {
-        final credentialsJson = await rootBundle.loadString(_serviceAccountPath);
-        final credentials = ServiceAccountCredentials.fromJson(credentialsJson);
-        final client = await clientViaServiceAccount(
-          credentials,
-          [storage.StorageApi.devstorageReadOnlyScope],
-        );
-        final storageApi = storage.StorageApi(client);
-
-        final media = await storageApi.objects.get(
-          _bucketName,
-          gcsPath,
-          downloadOptions: storage.DownloadOptions.fullMedia,
-        ) as storage.Media;
-
-        final content = await utf8.decoder.bind(media.stream).join();
-        final decoded = jsonDecode(content);
-
-        if (decoded is List) {
-          logList = List<Map<String, dynamic>>.from(decoded);
-        } else if (decoded is Map) {
-          logList = [Map<String, dynamic>.from(decoded)];
-        }
-
-        client.close();
-      } catch (e) {
-        debugPrint('ℹ️ 기존 퇴근 기록 파일 없음 또는 파싱 실패: $e');
-        logList = [];
-      }
-
-      // ✅ 오늘 날짜 기록이 이미 있으면 추가하지 않음
-      final alreadyExistsToday = logList.any((e) => e['recordedDate'] == dateStr);
-      if (alreadyExistsToday) {
-        debugPrint('⚠️ 오늘 퇴근 기록 이미 존재함: $dateStr');
-        return false;
-      }
-
-      logList.add(newRecord);
-
-      final jsonContent = jsonEncode(logList);
-      final tempDir = Directory.systemTemp;
-      final file = File('${tempDir.path}/clockout_$userId.json');
-      await file.writeAsString(jsonContent);
-
-      final credentialsJson = await rootBundle.loadString(_serviceAccountPath);
-      final credentials = ServiceAccountCredentials.fromJson(credentialsJson);
-      final client = await clientViaServiceAccount(
-        credentials,
-        [storage.StorageApi.devstorageFullControlScope],
-      );
-      final storageApi = storage.StorageApi(client);
-
-      final media = storage.Media(file.openRead(), file.lengthSync());
-      final object = storage.Object()
-        ..name = gcsPath;
-
-      await storageApi.objects.insert(
-        object,
-        _bucketName,
-        uploadMedia: media,
-        predefinedAcl: 'publicRead',
+      // 📤 행 데이터 시트에 append
+      await sheetsApi.spreadsheets.values.append(
+        ValueRange(values: [row]),
+        _spreadsheetId,
+        '$_sheetName!A1',
+        valueInputOption: 'USER_ENTERED',
       );
 
-      client.close();
-      debugPrint('✅ 퇴근 기록 append & 업로드 성공: $gcsPath');
+      debugPrint('✅ 퇴근 기록 업로드 완료 (Google Sheets)');
       return true;
     } catch (e) {
       debugPrint('❌ 퇴근 기록 업로드 실패: $e');
@@ -120,17 +65,23 @@ class ClockOutLogUploader {
     }
   }
 
+  /// 🔐 인증 클라이언트 생성
+  static Future<AuthClient> _getSheetsClient() async {
+    final jsonStr = await rootBundle.loadString(_serviceAccountPath);
+    final credentials = ServiceAccountCredentials.fromJson(jsonStr);
+    return await clientViaServiceAccount(
+      credentials,
+      [SheetsApi.spreadsheetsScope],
+    );
+  }
+
+  /// (선택) GCS처럼 다운로드 링크 제공하려면 사용
   static String getDownloadPath({
     required String division,
     required String area,
     required String userId,
     DateTime? dateTime,
   }) {
-    final dt = dateTime ?? DateTime.now();
-    final year = dt.year.toString().padLeft(4, '0');
-    final month = dt.month.toString().padLeft(2, '0');
-
-    final path = '$division/$area/exports/clock_out/$year/$month/$userId.json';
-    return 'https://storage.googleapis.com/$_bucketName/$path';
+    return 'https://docs.google.com/spreadsheets/d/$_spreadsheetId/edit';
   }
 }

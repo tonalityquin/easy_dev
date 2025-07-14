@@ -36,12 +36,13 @@ class FielderDashBoardController {
   Future<bool> _recordLeaveTime(BuildContext context) async {
     try {
       final now = DateTime.now();
-      final time =
-          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+      final time = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
 
       return await ClockOutLogUploader.uploadLeaveJson(
         context: context,
-        recordedTime: time,
+        data: {
+          'recordedTime': time,
+        },
       );
     } catch (e) {
       debugPrint('❌ 퇴근 기록 오류: $e');
@@ -54,8 +55,7 @@ class FielderDashBoardController {
     try {
       final userState = Provider.of<UserState>(context, listen: false);
       final now = DateTime.now();
-      final time =
-          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+      final time = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
 
       final breakJson = {
         'userId': userState.user?.id ?? '',

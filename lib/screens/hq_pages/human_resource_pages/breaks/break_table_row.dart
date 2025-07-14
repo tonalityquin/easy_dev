@@ -5,8 +5,8 @@ class BreakTableRow extends StatelessWidget {
   final UserModel user;
   final String label; // "시작" 또는 "종료"
   final int rowIndex;
-  final String rowKey; // 예: userId 또는 userId_break
-  final bool isStart; // 시작 셀 여부
+  final String rowKey; // 예: userId
+  final bool isStart; // true면 시작 셀, false면 종료 셀
   final Set<String> selectedCells;
   final Map<String, Map<int, String>> cellData;
   final void Function(int rowIndex, int colIndex, String rowKey) onCellTapped;
@@ -38,7 +38,7 @@ class BreakTableRow extends StatelessWidget {
             );
           }
 
-          // 1번째 열: "시작"/"종료" 라벨
+          // 1번째 열: "시작"/"종료"
           if (colIndex == 1) {
             return _buildCell(
               text: label,
@@ -47,7 +47,7 @@ class BreakTableRow extends StatelessWidget {
             );
           }
 
-          // 마지막 열: 비워둔 사인란
+          // 33번째 열: 사인란
           if (colIndex == 33) {
             return _buildCell(
               text: '',
@@ -57,8 +57,8 @@ class BreakTableRow extends StatelessWidget {
             );
           }
 
-          // 본문 셀 (day index: 1 ~ 31)
-          final day = colIndex - 1;
+          // 본문 셀
+          final day = colIndex - 1; // 2~32 → day 1~31
           final key = '$rowKey:$day';
           final text = cellData[rowKey]?[day] ?? '';
           final isSelected = selectedCells.contains(key);
@@ -83,6 +83,12 @@ class BreakTableRow extends StatelessWidget {
     VoidCallback? onTap,
     double width = 60,
   }) {
+    final backgroundColor = isHeader
+        ? Colors.grey.shade200
+        : isSelected
+        ? Colors.lightBlue.shade100
+        : Colors.white;
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -92,11 +98,7 @@ class BreakTableRow extends StatelessWidget {
         margin: const EdgeInsets.symmetric(horizontal: 2),
         decoration: BoxDecoration(
           border: Border.all(color: Colors.grey.shade300),
-          color: isHeader
-              ? Colors.grey.shade200
-              : isSelected
-              ? Colors.lightBlue.shade100
-              : Colors.white,
+          color: backgroundColor,
         ),
         child: Text(
           text,

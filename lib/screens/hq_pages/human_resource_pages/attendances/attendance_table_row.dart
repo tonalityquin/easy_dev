@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import '../../../../models/user_model.dart';
 
 class AttendanceTableRow extends StatelessWidget {
@@ -40,13 +39,28 @@ class AttendanceTableRow extends StatelessWidget {
       child: Row(
         children: List.generate(34, (colIndex) {
           if (colIndex == 0) {
-            return _buildCell(text: user.name, isHeader: isCheckIn);
+            // 이름 셀
+            return _buildCell(
+              text: user.name,
+              isHeader: true,
+              width: 80,
+            );
           }
           if (colIndex == 1) {
-            return _buildCell(text: label, isHeader: false);
+            // 출근/퇴근 라벨 셀
+            return _buildCell(
+              text: label,
+              isHeader: false,
+              width: 60,
+            );
           }
           if (colIndex == 33) {
-            return _buildCell(text: '', isHeader: false, width: 120);
+            // 사인란
+            return _buildCell(
+              text: '',
+              isHeader: false,
+              width: 120,
+            );
           }
 
           final day = colIndex - 1;

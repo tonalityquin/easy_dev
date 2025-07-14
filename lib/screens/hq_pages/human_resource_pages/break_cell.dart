@@ -1,4 +1,3 @@
-// 생략 없는 전체 코드
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
@@ -28,7 +27,7 @@ class BreakCell extends StatefulWidget {
   final Future<void> Function(String area) reloadUsers;
   final void Function(int year) onYearChanged;
   final void Function(int month) onMonthChanged;
-  final Future<void> Function(Map<String, Map<int, String>> newData) onLoadJson; // ✅ 추가
+  final Future<void> Function(Map<String, Map<int, String>> newData) onLoadJson;
 
   const BreakCell({
     super.key,
@@ -48,7 +47,7 @@ class BreakCell extends StatefulWidget {
     required this.reloadUsers,
     required this.onYearChanged,
     required this.onMonthChanged,
-    required this.onLoadJson, // ✅ 필수
+    required this.onLoadJson,
   });
 
   @override
@@ -71,27 +70,18 @@ class _BreakCellState extends State<BreakCell> {
     final userAreas = userState.user?.areas ?? [];
 
     if (userAreas.isEmpty) {
-      await FirestoreLogger().log(
-        '사용자 소속 지역 없음',
-        level: 'error',
-      );
+      await FirestoreLogger().log('사용자 소속 지역 없음', level: 'error');
     }
 
-    await FirestoreLogger().log(
-      'Firestore areas 컬렉션 쿼리 시작',
-      level: 'called',
-    );
+    await FirestoreLogger().log('Firestore areas 컬렉션 쿼리 시작', level: 'called');
 
     final snapshot = await FirebaseFirestore.instance.collection('areas').get();
-
     final allAreas = snapshot.docs.map((doc) => doc['name'] as String).toList();
     final filteredAreas = allAreas.where((area) => userAreas.contains(area)).toList();
 
-    await FirestoreLogger().log(
-      'Firestore areas 쿼리 완료: ${filteredAreas.length}개 필터링',
-      level: 'success',
-    );
+    await FirestoreLogger().log('Firestore areas 쿼리 완료: ${filteredAreas.length}개 필터링', level: 'success');
 
+    if (!mounted) return;
     setState(() {
       _areaList = filteredAreas;
       if (filteredAreas.isNotEmpty) {
@@ -101,9 +91,9 @@ class _BreakCellState extends State<BreakCell> {
     });
   }
 
-
   Future<void> _reloadUsersForArea(String area) async {
     final users = await widget.getUsersByArea(area);
+    if (!mounted) return;
     setState(() {
       _users = users;
     });
@@ -147,16 +137,11 @@ class _BreakCellState extends State<BreakCell> {
                   value: _selectedArea,
                   hint: const Text('지역 선택'),
                   items: _areaList.map((area) {
-                    return DropdownMenuItem(
-                      value: area,
-                      child: Text(area),
-                    );
+                    return DropdownMenuItem(value: area, child: Text(area));
                   }).toList(),
                   onChanged: (value) {
                     if (value != null) {
-                      setState(() {
-                        _selectedArea = value;
-                      });
+                      setState(() => _selectedArea = value);
                       _reloadUsersForArea(value);
                     }
                   },
@@ -165,9 +150,7 @@ class _BreakCellState extends State<BreakCell> {
                   children: [
                     DropdownButton<int>(
                       value: widget.selectedYear,
-                      items: yearList
-                          .map((y) => DropdownMenuItem(value: y, child: Text('$y년')))
-                          .toList(),
+                      items: yearList.map((y) => DropdownMenuItem(value: y, child: Text('$y년'))).toList(),
                       onChanged: (value) {
                         if (value != null) widget.onYearChanged(value);
                       },
@@ -175,9 +158,7 @@ class _BreakCellState extends State<BreakCell> {
                     const SizedBox(width: 12),
                     DropdownButton<int>(
                       value: widget.selectedMonth,
-                      items: monthList
-                          .map((m) => DropdownMenuItem(value: m, child: Text('$m월')))
-                          .toList(),
+                      items: monthList.map((m) => DropdownMenuItem(value: m, child: Text('$m월'))).toList(),
                       onChanged: (value) {
                         if (value != null) widget.onMonthChanged(value);
                       },
@@ -246,16 +227,14 @@ class _BreakCellState extends State<BreakCell> {
                 FloatingActionButton(
                   heroTag: 'loadJsonBtn',
                   mini: true,
+                  backgroundColor: Colors.orange,
+                  child: const Icon(Icons.cloud_download),
                   onPressed: () async {
                     final areaState = context.read<AreaState>();
                     final division = areaState.currentDivision;
-
                     final Map<String, Map<int, String>> merged = {};
 
-                    await FirestoreLogger().log(
-                      '휴게시간 JSON 다운로드 시작 (users=${_users.length})',
-                      level: 'called',
-                    );
+                    await FirestoreLogger().log('휴게시간 JSON 다운로드 시작 (users=${_users.length})', level: 'called');
 
                     for (final user in _users) {
                       final url = BreakLogUploader.getDownloadPath(
@@ -273,43 +252,30 @@ class _BreakCellState extends State<BreakCell> {
 
                       if (data != null && data.isNotEmpty) {
                         merged.addAll(data);
-                        await FirestoreLogger().log(
-                          '데이터 다운로드 완료 - userId: ${user.id}, entries: ${data.length}',
-                          level: 'success',
-                        );
+                        await FirestoreLogger().log('데이터 다운로드 완료 - userId: ${user.id}, entries: ${data.length}', level: 'success');
                       }
                     }
 
                     if (merged.isNotEmpty) {
                       await widget.onLoadJson(merged);
-                      await FirestoreLogger().log(
-                        '휴게시간 데이터 머지 완료 (총 ${merged.length} entries)',
-                        level: 'success',
-                      );
+                      await FirestoreLogger().log('휴게시간 데이터 머지 완료 (총 ${merged.length} entries)', level: 'success');
                       if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('✅ 휴게시간 데이터 불러오기 완료')),
-                        );
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ 휴게시간 데이터 불러오기 완료')));
                       }
                     } else {
-                      await FirestoreLogger().log(
-                        '휴게시간 데이터 없음',
-                        level: 'info',
-                      );
+                      await FirestoreLogger().log('휴게시간 데이터 없음', level: 'info');
                       if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('📭 불러올 휴게시간 데이터가 없습니다')),
-                        );
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('📭 불러올 휴게시간 데이터가 없습니다')));
                       }
                     }
                   },
-                  backgroundColor: Colors.orange,
-                  child: const Icon(Icons.cloud_download),
                 ),
                 const SizedBox(width: 12),
                 FloatingActionButton(
                   heroTag: 'saveBtn',
                   mini: true,
+                  backgroundColor: Colors.green,
+                  child: const Icon(Icons.save),
                   onPressed: () {
                     final sr = widget.selectedRow;
                     if (sr != null && sr ~/ 2 < _users.length) {
@@ -317,13 +283,13 @@ class _BreakCellState extends State<BreakCell> {
                       widget.appendText(rowKey);
                     }
                   },
-                  backgroundColor: Colors.green,
-                  child: const Icon(Icons.save),
                 ),
                 const SizedBox(width: 12),
                 FloatingActionButton(
                   heroTag: 'clearBtn',
                   mini: true,
+                  backgroundColor: Colors.redAccent,
+                  child: const Icon(Icons.delete),
                   onPressed: () {
                     final Map<String, List<int>> rows = {};
                     for (final cell in widget.selectedCells) {
@@ -340,8 +306,6 @@ class _BreakCellState extends State<BreakCell> {
                       widget.clearText(entry.key, entry.value);
                     }
                   },
-                  backgroundColor: Colors.redAccent,
-                  child: const Icon(Icons.delete),
                 ),
               ],
             ),

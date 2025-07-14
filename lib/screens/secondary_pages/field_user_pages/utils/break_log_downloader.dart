@@ -1,79 +1,33 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import '../../../../utils/google_sheets_helper.dart';
 
-/// GCS에서 휴게시간 JSON을 다운로드하여 파싱합니다.
+/// Google Sheets에서 휴게기록을 가져와 파싱합니다.
 /// 반환 형태: Map<userId, Map<dayIndex, time>>
-Future<Map<String, Map<int, String>>?> downloadBreakJsonFromGcs({
-  required String publicUrl,
+Future<Map<String, Map<int, String>>?> downloadBreakJsonFromSheets({
   required int selectedYear,
   required int selectedMonth,
 }) async {
   try {
-    final uri = Uri.parse(publicUrl);
-    final cacheBypassUrl = uri.replace(
-      queryParameters: {
-        ...uri.queryParameters,
-        'nocache': DateTime.now().millisecondsSinceEpoch.toString(),
-      },
+    // ✅ Google Sheets에서 전체 휴게기록 로드
+    final rows = await GoogleSheetsHelper.loadBreakRows();
+
+    // ✅ 필요한 구조로 변환
+    final result = GoogleSheetsHelper.mapToCellData(
+      rows,
+      statusFilter: '휴게', // 휴게 상태로 필터링
+      selectedYear: selectedYear,
+      selectedMonth: selectedMonth,
     );
 
-    final response = await http.get(
-      cacheBypassUrl,
-      headers: {
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0',
-      },
-    );
-
-    if (response.statusCode == 200) {
-      // ✅ 한글 깨짐 방지를 위해 utf8 디코딩
-      final decodedContent = utf8.decode(response.bodyBytes);
-      debugPrint('📥 휴게 로그 원본: $decodedContent');
-
-      final decoded = jsonDecode(decodedContent);
-
-      if (decoded is! List) {
-        debugPrint('❌ JSON은 List<Map> 형식이어야 합니다.');
-        return null;
-      }
-
-      final Map<String, Map<int, String>> parsed = {};
-
-      for (final entry in decoded) {
-        if (entry is! Map) continue;
-
-        final userId = entry['userId'] as String?;
-        final recordedDate = entry['recordedDate'] as String?;
-        final recordedTime = entry['recordedTime'] as String?;
-
-        if (userId == null || recordedDate == null || recordedTime == null) continue;
-
-        final parts = recordedDate.split('-');
-        if (parts.length != 3) continue;
-
-        final year = int.tryParse(parts[0]);
-        final month = int.tryParse(parts[1]);
-        final day = int.tryParse(parts[2]);
-        if (year == null || month == null || day == null) continue;
-
-        if (year != selectedYear || month != selectedMonth) {
-          debugPrint('📭 $recordedDate → 선택한 연월과 불일치 → 무시됨');
-          continue;
-        }
-
-        parsed.putIfAbsent(userId, () => {})[day] = recordedTime;
-      }
-
-      debugPrint('✅ 휴게 로그 파싱 결과: $parsed');
-      return parsed;
-    } else {
-      debugPrint('❌ HTTP 오류: ${response.statusCode}');
+    if (result.isEmpty) {
+      debugPrint('📭 선택한 월의 휴게기록 없음');
+      return null;
     }
-  } catch (e) {
-    debugPrint('❌ 예외 발생: $e');
-  }
 
-  return null;
+    debugPrint('✅ Google Sheets에서 휴게기록 파싱 완료: ${result.length}명');
+    return result;
+  } catch (e) {
+    debugPrint('❌ Google Sheets 휴게기록 불러오기 실패: $e');
+    return null;
+  }
 }

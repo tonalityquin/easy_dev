@@ -8,8 +8,7 @@ import '../../../../states/area/area_state.dart';
 import '../../../type_pages/debugs/firestore_logger.dart';
 import '../../../../utils/snackbar_helper.dart';
 import '../break_cell.dart';
-import '../../../secondary_pages/field_leader_pages/utils/break_log_uploader.dart';
-import '../../../secondary_pages/field_leader_pages/utils/break_log_downloader.dart'; // ✅ 추가
+import '../../../../utils/google_sheets_helper.dart'; // ✅ Google Sheets 사용
 
 class BreakUi extends StatefulWidget {
   const BreakUi({super.key});
@@ -43,10 +42,10 @@ class _BreakUiState extends State<BreakUi> {
     selectedMonth = now.month;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final area = context.read<AreaState>().selectedArea; // ✅ selectedArea 참조
+      final area = context.read<AreaState>().selectedArea;
       if (area.isNotEmpty) {
         selectedArea = area;
-        _subscribeToUsers(selectedArea); // ✅
+        _subscribeToUsers(selectedArea);
       }
     });
   }
@@ -54,7 +53,7 @@ class _BreakUiState extends State<BreakUi> {
   void _subscribeToUsers(String area) {
     _userStreamSub = FirebaseFirestore.instance
         .collection('user_accounts')
-        .where('selectedArea', isEqualTo: area) // ✅ selectedArea 기준
+        .where('selectedArea', isEqualTo: area)
         .snapshots()
         .listen((snapshot) {
       final updatedUsers = snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
@@ -74,7 +73,7 @@ class _BreakUiState extends State<BreakUi> {
   Future<List<UserModel>> getUsersByArea(String area) async {
     final snapshot = await FirebaseFirestore.instance
         .collection('user_accounts')
-        .where('selectedArea', isEqualTo: area) // ✅ selectedArea 기준
+        .where('selectedArea', isEqualTo: area)
         .get();
 
     return snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
@@ -82,17 +81,11 @@ class _BreakUiState extends State<BreakUi> {
 
   Future<void> _reloadUsers(String area) async {
     try {
-      await FirestoreLogger().log(
-        '_reloadUsers() Firestore 쿼리 시작 (area: $area)',
-        level: 'called',
-      );
+      await FirestoreLogger().log('_reloadUsers() Firestore 쿼리 시작 (area: $area)', level: 'called');
 
       final updatedUsers = await getUsersByArea(area);
 
-      await FirestoreLogger().log(
-        '_reloadUsers() Firestore 쿼리 결과: ${updatedUsers.length}명',
-        level: 'success',
-      );
+      await FirestoreLogger().log('_reloadUsers() 쿼리 결과: ${updatedUsers.length}명', level: 'success');
 
       final currentIds = users.map((u) => u.id).toSet();
       final newIds = updatedUsers.map((u) => u.id).toSet();
@@ -109,10 +102,7 @@ class _BreakUiState extends State<BreakUi> {
         showSuccessSnackbar(context, '변경 사항 없음');
       }
     } catch (e) {
-      await FirestoreLogger().log(
-        '_reloadUsers() Firestore 쿼리 오류: $e',
-        level: 'error',
-      );
+      await FirestoreLogger().log('_reloadUsers() Firestore 쿼리 오류: $e', level: 'error');
       if (mounted) showFailedSnackbar(context, '사용자 목록을 불러오지 못했습니다');
     }
   }
@@ -183,69 +173,31 @@ class _BreakUiState extends State<BreakUi> {
 
   Future<void> _onLoadJson() async {
     try {
-      final areaState = context.read<AreaState>();
-      final division = areaState.currentDivision;
+      await FirestoreLogger().log('_onLoadJson() Google Sheets 호출', level: 'called');
 
-      await FirestoreLogger().log(
-        '_onLoadJson() GCS 다운로드 시작 (division: $division)',
-        level: 'called',
-      );
+      final rows = await GoogleSheetsHelper.loadBreakRows();
+      final mapped = GoogleSheetsHelper.mapToCellData(rows, statusFilter: '휴게');
 
-      final Map<String, Map<int, String>> merged = {};
-
-      for (final user in users) {
-        final userId = user.id;
-
-        final url = BreakLogUploader.getDownloadPath(
-          division: division,
-          area: user.englishSelectedAreaName ?? '',
-          userId: userId,
-        );
-
-        await FirestoreLogger().log(
-          '_onLoadJson() GCS 다운로드 URL: $url',
-          level: 'info',
-        );
-
-        final jsonData = await downloadBreakJsonFromGcs(
-          publicUrl: url,
-          selectedYear: selectedYear,
-          selectedMonth: selectedMonth,
-        );
-
-        if (jsonData != null && jsonData.isNotEmpty) {
-          merged.addAll(jsonData);
-        }
-      }
-
-      if (merged.isEmpty) {
-        await FirestoreLogger().log(
-          '_onLoadJson() 데이터 없음',
-          level: 'error',
-        );
+      if (mapped.isEmpty) {
         showFailedSnackbar(context, '❌ 휴게시간 데이터 없음');
-      } else {
-        setState(() {
-          cellData = merged;
-        });
-        await FirestoreLogger().log(
-          '_onLoadJson() 데이터 로딩 성공 (레코드 ${merged.length})',
-          level: 'success',
-        );
-        showSuccessSnackbar(context, '✅ 휴게시간 데이터 불러오기 완료');
+        return;
       }
+
+      setState(() {
+        cellData = mapped;
+      });
+
+      await FirestoreLogger().log('_onLoadJson() 데이터 로딩 완료 (${mapped.length}명)', level: 'success');
+      showSuccessSnackbar(context, '✅ 휴게시간 데이터 불러오기 완료');
     } catch (e) {
-      await FirestoreLogger().log(
-        '_onLoadJson() 오류: $e',
-        level: 'error',
-      );
+      await FirestoreLogger().log('_onLoadJson() 오류: $e', level: 'error');
       showFailedSnackbar(context, '❌ 휴게시간 데이터 로딩 중 오류: $e');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    selectedArea = context.watch<AreaState>().selectedArea; // ✅ selectedArea 참조
+    selectedArea = context.watch<AreaState>().selectedArea;
 
     return BreakCell(
       controller: _controller,

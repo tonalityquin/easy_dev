@@ -44,10 +44,7 @@ class ClockInController {
       );
 
       try {
-        final doc = await FirebaseFirestore.instance
-            .collection('areas')
-            .doc(docId)
-            .get();
+        final doc = await FirebaseFirestore.instance.collection('areas').doc(docId).get();
 
         _localLogger.log('redirectIfWorking() success: doc.exists=${doc.exists}', level: 'success');
         await FirestoreLogger().log(
@@ -73,10 +70,10 @@ class ClockInController {
   }
 
   Future<void> handleWorkStatus(
-      BuildContext context,
-      UserState userState,
-      VoidCallback onLoadingChanged,
-      ) async {
+    BuildContext context,
+    UserState userState,
+    VoidCallback onLoadingChanged,
+  ) async {
     _localLogger.log('handleWorkStatus() 시작', level: 'called');
     onLoadingChanged.call();
 
@@ -99,9 +96,9 @@ class ClockInController {
   }
 
   Future<void> _navigateToProperPageIfWorking(
-      BuildContext context,
-      UserState userState,
-      ) async {
+    BuildContext context,
+    UserState userState,
+  ) async {
     if (!userState.isWorking || !context.mounted) return;
 
     final division = userState.user?.divisions.first ?? '';
@@ -115,10 +112,7 @@ class ClockInController {
     );
 
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('areas')
-          .doc(docId)
-          .get();
+      final doc = await FirebaseFirestore.instance.collection('areas').doc(docId).get();
 
       _localLogger.log('_navigateToProperPageIfWorking() success: doc.exists=${doc.exists}', level: 'success');
       await FirestoreLogger().log(
@@ -171,9 +165,12 @@ class ClockInController {
 
     _localLogger.log('_uploadAttendanceSilently() called - $area, $name @ $nowTime', level: 'called');
 
+    // ✅ 수정된 부분: 'data' Map 으로 감싸서 전달
     final success = await ClockInLogUploader.uploadAttendanceJson(
       context: context,
-      recordedTime: nowTime,
+      data: {
+        'recordedTime': nowTime,
+      },
     );
 
     if (!context.mounted) return;

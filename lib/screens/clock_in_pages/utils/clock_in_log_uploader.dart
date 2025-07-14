@@ -1,148 +1,86 @@
-import 'dart:convert';
-import 'dart:io';
-
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:googleapis/storage/v1.dart' as storage;
+import 'package:googleapis/sheets/v4.dart';
 import 'package:googleapis_auth/auth_io.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter/material.dart';
 
-import '../../../states/area/area_state.dart';
-import '../../../states/user/user_state.dart';
-import '../debugs/clock_in_debug_firestore_logger.dart'; // ✅ 로컬 로거 추가
+import '../../../../../states/area/area_state.dart';
+import '../../../../../states/user/user_state.dart';
 
 class ClockInLogUploader {
-  static const _bucketName = 'easydev-image';
+  // 🔐 Google Sheets 관련 설정
+  static const _spreadsheetId = '14qZa34Ha-y5Z6kj7eUqZxcP2CdLlaUQcyTJtLsyU_uo'; // ✅ 사용자의 clock test 시트 ID
+  static const _sheetName = '출근기록'; // ✅ 반드시 시트에 동일한 이름의 시트 탭 존재해야 함
   static const _serviceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
 
+  /// ✅ 출근 기록 Google Sheets에 업로드
   static Future<bool> uploadAttendanceJson({
     required BuildContext context,
-    required String recordedTime,
+    required Map<String, dynamic> data,
   }) async {
-    final logger = ClockInDebugFirestoreLogger(); // ✅ 로컬 로거 인스턴스
-
     try {
-      logger.log('uploadAttendanceJson() 시작', level: 'called');
-
       final areaState = context.read<AreaState>();
       final userState = context.read<UserState>();
 
-      final areaForGcs = userState.user?.englishSelectedAreaName ?? '';
       final area = userState.user?.selectedArea ?? '';
       final division = areaState.currentDivision;
-      final userName = userState.name;
       final userId = userState.user?.id ?? '';
-
-      if (area.isEmpty || userId.isEmpty) {
-        logger.log('❌ 유효하지 않은 area 또는 userId', level: 'error');
-        return false;
-      }
+      final userName = userState.name;
 
       final now = DateTime.now();
       final year = now.year.toString().padLeft(4, '0');
       final month = now.month.toString().padLeft(2, '0');
       final day = now.day.toString().padLeft(2, '0');
       final dateStr = '$year-$month-$day';
+      final recordedTime = data['recordedTime'] ?? '';
 
-      final gcsPath = '$division/$areaForGcs/exports/clock_in/$year/$month/$userId.json';
+      // 📋 Google Sheets에 추가할 행 데이터
+      final row = [
+        dateStr,
+        recordedTime,
+        userId,
+        userName,
+        area,
+        division,
+        '출근',
+      ];
 
-      final newRecord = {
-        'userId': userId,
-        'userName': userName,
-        'area': area,
-        'division': division,
-        'recordedDate': dateStr,
-        'recordedTime': recordedTime,
-        'status': '출근',
-      };
+      final client = await _getSheetsClient();
+      final sheetsApi = SheetsApi(client);
 
-      List<Map<String, dynamic>> logList = [];
-
-      try {
-        final credentialsJson = await rootBundle.loadString(_serviceAccountPath);
-        final credentials = ServiceAccountCredentials.fromJson(credentialsJson);
-        final client = await clientViaServiceAccount(
-          credentials,
-          [storage.StorageApi.devstorageReadOnlyScope],
-        );
-        final storageApi = storage.StorageApi(client);
-
-        final media = await storageApi.objects.get(
-          _bucketName,
-          gcsPath,
-          downloadOptions: storage.DownloadOptions.fullMedia,
-        ) as storage.Media;
-
-        final content = await utf8.decoder.bind(media.stream).join();
-        final decoded = jsonDecode(content);
-
-        if (decoded is List) {
-          logList = List<Map<String, dynamic>>.from(decoded);
-        } else if (decoded is Map) {
-          logList = [Map<String, dynamic>.from(decoded)];
-        }
-
-        logger.log('✅ 기존 로그 불러오기 성공: ${logList.length}개', level: 'info');
-
-        client.close();
-      } catch (e) {
-        logger.log('ℹ️ 기존 파일 없음 또는 파싱 실패: $e', level: 'warn');
-        logList = [];
-      }
-
-      final alreadyExistsToday = logList.any((e) => e['recordedDate'] == dateStr);
-      if (alreadyExistsToday) {
-        logger.log('⚠️ 이미 오늘 출근 기록이 존재함: $dateStr', level: 'warn');
-        return false;
-      }
-
-      logList.add(newRecord);
-      logger.log('📝 출근 기록 추가됨: $newRecord', level: 'info');
-
-      final jsonContent = jsonEncode(logList);
-      final tempDir = Directory.systemTemp;
-      final file = File('${tempDir.path}/clockin_$userId.json');
-      await file.writeAsString(jsonContent);
-
-      final credentialsJson = await rootBundle.loadString(_serviceAccountPath);
-      final credentials = ServiceAccountCredentials.fromJson(credentialsJson);
-      final client = await clientViaServiceAccount(
-        credentials,
-        [storage.StorageApi.devstorageFullControlScope],
-      );
-      final storageApi = storage.StorageApi(client);
-
-      final media = storage.Media(file.openRead(), file.lengthSync());
-      final object = storage.Object()..name = gcsPath;
-
-      await storageApi.objects.insert(
-        object,
-        _bucketName,
-        uploadMedia: media,
-        predefinedAcl: 'publicRead',
+      // Google Sheets에 행 데이터 추가 (append)
+      await sheetsApi.spreadsheets.values.append(
+        ValueRange(values: [row]),
+        _spreadsheetId,
+        '$_sheetName!A1',
+        valueInputOption: 'USER_ENTERED',
       );
 
-      client.close();
-
-      logger.log('✅ 출근 기록 업로드 완료: $gcsPath', level: 'success');
+      debugPrint('✅ 출근 기록 업로드 완료 (Google Sheets)');
       return true;
     } catch (e) {
-      logger.log('❌ 출근 기록 업로드 실패: $e', level: 'error');
+      debugPrint('❌ 출근 기록 업로드 실패: $e');
       return false;
     }
   }
 
+  /// 🔐 인증 클라이언트 생성
+  static Future<AuthClient> _getSheetsClient() async {
+    final jsonStr = await rootBundle.loadString(_serviceAccountPath);
+    final credentials = ServiceAccountCredentials.fromJson(jsonStr);
+    return await clientViaServiceAccount(
+      credentials,
+      [SheetsApi.spreadsheetsScope],
+    );
+  }
+
+  /// (옵션) 다운로드 링크 반환
   static String getDownloadPath({
     required String division,
     required String area,
     required String userId,
     DateTime? dateTime,
   }) {
-    final dt = dateTime ?? DateTime.now();
-    final year = dt.year.toString().padLeft(4, '0');
-    final month = dt.month.toString().padLeft(2, '0');
-
-    final path = '$division/$area/exports/clock_in/$year/$month/$userId.json';
-    return 'https://storage.googleapis.com/$_bucketName/$path';
+    return 'https://docs.google.com/spreadsheets/d/$_spreadsheetId/edit';
   }
 }
