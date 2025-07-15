@@ -163,11 +163,11 @@ class _AttendanceUiState extends State<AttendanceUi> {
       await FirestoreLogger().log('_mergeJsonDataFromSheets() 호출됨', level: 'called');
 
       // 출근 기록
-      final clockInRows = await GoogleSheetsHelper.loadClockInRows();
+      final clockInRows = await GoogleSheetsHelper.loadClockInOutRecords();
       final clockInMap = GoogleSheetsHelper.mapToCellData(clockInRows, statusFilter: '출근');
 
       // 퇴근 기록
-      final clockOutRows = await GoogleSheetsHelper.loadClockOutRows();
+      final clockOutRows = await GoogleSheetsHelper.loadClockInOutRecords();
       final clockOutMap = GoogleSheetsHelper.mapToCellData(clockOutRows, statusFilter: '퇴근');
 
       // 병합

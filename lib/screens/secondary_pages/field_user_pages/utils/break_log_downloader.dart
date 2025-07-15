@@ -9,7 +9,7 @@ Future<Map<String, Map<int, String>>?> downloadBreakJsonFromSheets({
 }) async {
   try {
     // ✅ Google Sheets에서 전체 휴게기록 로드
-    final rows = await GoogleSheetsHelper.loadBreakRows();
+    final rows = await GoogleSheetsHelper.loadClockInOutRecords();
 
     // ✅ 필요한 구조로 변환
     final result = GoogleSheetsHelper.mapToCellData(

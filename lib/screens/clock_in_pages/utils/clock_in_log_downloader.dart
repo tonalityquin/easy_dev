@@ -9,7 +9,7 @@ Future<Map<String, Map<int, String>>?> downloadAttendanceJsonFromSheets({
 }) async {
   try {
     // ✅ Google Sheets에서 전체 출근기록 로드
-    final rows = await GoogleSheetsHelper.loadClockInRows();
+    final rows = await GoogleSheetsHelper.loadClockInOutRecords();
 
     // ✅ 필요한 구조로 변환
     final result = GoogleSheetsHelper.mapToCellData(

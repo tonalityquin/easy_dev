@@ -175,7 +175,7 @@ class _BreakUiState extends State<BreakUi> {
     try {
       await FirestoreLogger().log('_onLoadJson() Google Sheets 호출', level: 'called');
 
-      final rows = await GoogleSheetsHelper.loadBreakRows();
+      final rows = await GoogleSheetsHelper.loadBreakRecords();
       final mapped = GoogleSheetsHelper.mapToCellData(rows, statusFilter: '휴게');
 
       if (mapped.isEmpty) {

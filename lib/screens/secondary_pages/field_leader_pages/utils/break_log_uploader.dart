@@ -11,7 +11,7 @@ import '../../../../../states/user/user_state.dart';
 class BreakLogUploader {
   // 🔐 Google Sheets 설정 (통합 시트)
   static const _spreadsheetId = '14qZa34Ha-y5Z6kj7eUqZxcP2CdLlaUQcyTJtLsyU_uo';
-  static const _sheetName = '기록'; // ✅ 출근/퇴근/휴게 모두 기록
+  static const _sheetName = '휴게기록'; // ✅ 출근/퇴근/휴게 모두 기록
   static const _serviceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
 
   /// ✅ 휴게 기록 업로드 (중복 방지 포함)

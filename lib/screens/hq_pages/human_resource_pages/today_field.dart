@@ -1,120 +1,79 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:intl/intl.dart';
 
-class TodayField extends StatefulWidget {
+import '../../../utils/google_sheets_helper.dart';
+
+class TodayField extends StatelessWidget {
   const TodayField({super.key});
 
-  @override
-  State<TodayField> createState() => _TodayFieldState();
-}
+  Future<void> _generateMonthlySummary(BuildContext context) async {
+    final now = DateTime.now();
+    final year = now.year;
+    final month = now.month;
 
-class _TodayFieldState extends State<TodayField> {
-  final TextEditingController _controller = TextEditingController();
-  static const String _memoListKey = 'memo_list';
-  List<String> _memoList = [];
+    final snack = ScaffoldMessenger.of(context);
 
-  @override
-  void initState() {
-    super.initState();
-    _loadMemoList();
-  }
-
-  Future<void> _loadMemoList() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _memoList = prefs.getStringList(_memoListKey) ?? [];
-    });
-  }
-
-  Future<void> _saveMemo() async {
-    final text = _controller.text.trim();
-    if (text.isEmpty) return;
-
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _memoList.insert(0, text); // 최신 메모가 위로 오도록
-      _controller.clear();
-    });
-    await prefs.setStringList(_memoListKey, _memoList);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('메모가 저장되었습니다')),
+    snack.showSnackBar(
+      const SnackBar(content: Text('📊 출퇴근/휴게 통계 시트를 생성 중입니다...')),
     );
-  }
 
-  Future<void> _clearMemos() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _memoList.clear();
-    });
-    await prefs.remove(_memoListKey);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('모든 메모가 삭제되었습니다')),
-    );
+    try {
+      // 🔹 사용자 ID → 이름 매핑 생성
+      final clockRows = await GoogleSheetsHelper.loadClockInOutRecords();
+      final breakRows = await GoogleSheetsHelper.loadBreakRecords();
+
+      final clockUserMap = GoogleSheetsHelper.extractUserMap(clockRows);
+      final breakUserMap = GoogleSheetsHelper.extractUserMap(breakRows);
+
+      // ✅ 출퇴근 + 휴게 통합 userMap 생성
+      final userMap = {...clockUserMap, ...breakUserMap};
+
+      await GoogleSheetsHelper.writeMonthlyClockInOutSummary(
+        year: year,
+        month: month,
+        userMap: userMap,
+      );
+
+      await GoogleSheetsHelper.writeMonthlyBreakSummary(
+        year: year,
+        month: month,
+        userMap: userMap,
+      );
+
+      snack.showSnackBar(
+        SnackBar(content: Text('✅ ${year}년 ${month}월 통계 시트 생성 완료!')),
+      );
+    } catch (e) {
+      snack.showSnackBar(
+        SnackBar(
+          content: Text('❌ 통계 시트 생성 실패: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final yearMonth = DateFormat('yyyy년 M월').format(now);
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('오늘의 메모'),
+        title: const Text('통계 생성'),
         centerTitle: true,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.save),
-            onPressed: _saveMemo,
-            tooltip: '저장',
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete),
-            onPressed: _clearMemos,
-            tooltip: '삭제',
-          ),
-        ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            TextField(
-              controller: _controller,
-              maxLines: null,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText: '오늘의 메모를 입력하세요...',
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                '저장된 메모',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: _memoList.isEmpty
-                  ? const Center(child: Text('저장된 메모가 없습니다.'))
-                  : ListView.builder(
-                itemCount: _memoList.length,
-                itemBuilder: (context, index) {
-                  return Card(
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12.0),
-                      child: Text(
-                        _memoList[index],
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
+      body: Center(
+        child: ElevatedButton.icon(
+          icon: const Icon(Icons.auto_graph),
+          label: Text('$yearMonth 통계 시트 생성'),
+          onPressed: () => _generateMonthlySummary(context),
+          style: ElevatedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            textStyle: const TextStyle(fontSize: 18),
+          ),
         ),
       ),
     );
