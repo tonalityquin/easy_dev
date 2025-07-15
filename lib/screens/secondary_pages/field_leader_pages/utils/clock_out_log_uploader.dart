@@ -3,17 +3,18 @@ import 'package:flutter/services.dart';
 import 'package:googleapis/sheets/v4.dart';
 import 'package:googleapis_auth/auth_io.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../../states/area/area_state.dart';
 import '../../../../../states/user/user_state.dart';
 
 class ClockOutLogUploader {
-  // 🔐 서비스 계정 키 경로 & Google Sheets 설정
+  // 🔐 Google Sheets 설정
   static const _spreadsheetId = '14qZa34Ha-y5Z6kj7eUqZxcP2CdLlaUQcyTJtLsyU_uo';
-  static const _sheetName = '퇴근기록';
+  static const _sheetName = '기록'; // ✅ 통합 시트 이름
   static const _serviceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
 
-  /// ✅ 퇴근 기록 Google Sheets에 업로드
+  /// ✅ 퇴근 기록 업로드 (중복 방지 포함)
   static Future<bool> uploadLeaveJson({
     required BuildContext context,
     required Map<String, dynamic> data,
@@ -28,13 +29,25 @@ class ClockOutLogUploader {
       final userName = userState.name;
 
       final now = DateTime.now();
-      final year = now.year.toString().padLeft(4, '0');
-      final month = now.month.toString().padLeft(2, '0');
-      final day = now.day.toString().padLeft(2, '0');
-      final dateStr = '$year-$month-$day';
+      final dateStr = DateFormat('yyyy-MM-dd').format(now);
       final recordedTime = data['recordedTime'] ?? '';
+      final status = '퇴근';
 
-      // 📋 Google Sheets에 추가할 행 데이터
+      // ✅ [1] 중복 체크
+      final existingRows = await _loadAllRecords();
+      final isDuplicate = existingRows.any((row) =>
+      row.length >= 7 &&
+          row[0] == dateStr &&
+          row[2] == userId &&
+          row[6] == status
+      );
+
+      if (isDuplicate) {
+        debugPrint('⚠️ 이미 퇴근 기록이 존재합니다.');
+        return false;
+      }
+
+      // ✅ [2] 업로드할 행 구성
       final row = [
         dateStr,
         recordedTime,
@@ -42,14 +55,13 @@ class ClockOutLogUploader {
         userName,
         area,
         division,
-        '퇴근',
+        status,
       ];
 
-      // 🔐 인증 및 Sheets API 클라이언트 생성
       final client = await _getSheetsClient();
       final sheetsApi = SheetsApi(client);
 
-      // 📤 행 데이터 시트에 append
+      // ✅ [3] 시트에 행 추가
       await sheetsApi.spreadsheets.values.append(
         ValueRange(values: [row]),
         _spreadsheetId,
@@ -75,7 +87,24 @@ class ClockOutLogUploader {
     );
   }
 
-  /// (선택) GCS처럼 다운로드 링크 제공하려면 사용
+  /// 📥 기록 시트 전체 불러오기 (중복 검사용)
+  static Future<List<List<String>>> _loadAllRecords() async {
+    final client = await _getSheetsClient();
+    final sheetsApi = SheetsApi(client);
+
+    final result = await sheetsApi.spreadsheets.values.get(
+      _spreadsheetId,
+      '$_sheetName!A2:G',
+    );
+
+    client.close();
+
+    return result.values?.map((row) =>
+        row.map((cell) => cell.toString()).toList()
+    ).toList() ?? [];
+  }
+
+  /// (옵션) 시트 링크 반환
   static String getDownloadPath({
     required String division,
     required String area,
