@@ -57,14 +57,17 @@ class _AttendanceCellState extends State<AttendanceCell> {
     setState(() => _isLoadingUsers = true);
 
     try {
-      final snapshot =
-          await FirebaseFirestore.instance.collection('user_accounts').where('selectedArea', isEqualTo: area).get();
+      final snapshot = await FirebaseFirestore.instance
+          .collection('user_accounts')
+          .where('selectedArea', isEqualTo: area)
+          .get();
 
-      final users = snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
+      final users =
+      snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
 
       setState(() {
         _users = users;
-        _selectedUser = users.isNotEmpty ? users.first : null;
+        _selectedUser = null; // ✅ 자동 선택 제거
       });
 
       showSuccessSnackbar(context, '사용자 ${users.length}명 불러옴');
@@ -121,15 +124,8 @@ class _AttendanceCellState extends State<AttendanceCell> {
   @override
   void initState() {
     super.initState();
-    final user = context.read<UserState>().user;
-
-    if (user != null) {
-      final initialArea = user.selectedArea ?? '';
-      if (initialArea.isNotEmpty) {
-        _selectedArea = initialArea;
-        _loadUsers(initialArea);
-      }
-    }
+    // ✅ 자동 선택 제거
+    // 초기 로딩 시 불필요한 Firebase 읽기 방지
   }
 
   @override
@@ -142,10 +138,7 @@ class _AttendanceCellState extends State<AttendanceCell> {
         backgroundColor: Colors.white,
         elevation: 0,
         foregroundColor: Colors.black87,
-        title: const Text(
-          '출석 캘린더',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+        title: const Text('출석 캘린더', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         automaticallyImplyLeading: false,
       ),
@@ -164,11 +157,7 @@ class _AttendanceCellState extends State<AttendanceCell> {
                     items: areaList.map((area) {
                       return DropdownMenuItem(
                         value: area,
-                        child: Text(
-                          area,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 14),
-                        ),
+                        child: Text(area, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14)),
                       );
                     }).toList(),
                     onChanged: (value) {
@@ -191,17 +180,11 @@ class _AttendanceCellState extends State<AttendanceCell> {
                     items: _users.map((user) {
                       return DropdownMenuItem(
                         value: user,
-                        child: Text(
-                          user.name,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 14),
-                        ),
+                        child: Text(user.name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14)),
                       );
                     }).toList(),
                     onChanged: (value) {
-                      setState(() {
-                        _selectedUser = value;
-                      });
+                      setState(() => _selectedUser = value);
                       if (value != null) {
                         _loadAttendanceTimes(value);
                       }
@@ -215,9 +198,7 @@ class _AttendanceCellState extends State<AttendanceCell> {
                     onPressed: _selectedArea == null || _isLoadingUsers ? null : () => _loadUsers(_selectedArea!),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                     child: const Icon(Icons.refresh),
                   ),
@@ -261,9 +242,7 @@ class _AttendanceCellState extends State<AttendanceCell> {
               onPressed: _selectedUser == null ? null : _saveAllChangesToSheets,
               icon: const Icon(Icons.save),
               label: const Text('변경사항 저장'),
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size.fromHeight(48),
-              ),
+              style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
             ),
           ],
         ),
@@ -284,8 +263,8 @@ class _AttendanceCellState extends State<AttendanceCell> {
         color: isSelected
             ? Colors.orange.withOpacity(0.3)
             : isToday
-                ? Colors.blueAccent.withOpacity(0.2)
-                : Colors.transparent,
+            ? Colors.blueAccent.withOpacity(0.2)
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(

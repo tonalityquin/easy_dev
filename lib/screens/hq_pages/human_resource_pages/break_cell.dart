@@ -55,7 +55,7 @@ class _BreakCellState extends State<BreakCell> {
 
       setState(() {
         _users = users;
-        _selectedUser = users.isNotEmpty ? users.first : null;
+        _selectedUser = null; // ✅ 자동 선택 제거
       });
 
       showSuccessSnackbar(context, '사용자 목록 ${users.length}명 불러왔습니다');
@@ -69,15 +69,9 @@ class _BreakCellState extends State<BreakCell> {
   @override
   void initState() {
     super.initState();
-    final user = context.read<UserState>().user;
-
-    if (user != null) {
-      final initialArea = user.selectedArea ?? '';
-      if (initialArea.isNotEmpty) {
-        _selectedArea = initialArea;
-        _loadUsers(initialArea);
-      }
-    }
+    // ✅ 자동 Firebase read 제거
+    // _selectedArea = context.read<UserState>().user?.selectedArea;
+    // if (_selectedArea != null) _loadUsers(_selectedArea!);
   }
 
   @override
@@ -98,7 +92,6 @@ class _BreakCellState extends State<BreakCell> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            /// 🔹 지역 + 사용자 + 버튼 한 줄
             Row(
               children: [
                 Expanded(
@@ -109,21 +102,15 @@ class _BreakCellState extends State<BreakCell> {
                     items: areaList.map((area) {
                       return DropdownMenuItem(
                         value: area,
-                        child: Text(
-                          area,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 14),
-                        ),
+                        child: Text(area, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14)),
                       );
                     }).toList(),
                     onChanged: (value) {
-                      if (value != null) {
-                        setState(() {
-                          _selectedArea = value;
-                          _users = [];
-                          _selectedUser = null;
-                        });
-                      }
+                      setState(() {
+                        _selectedArea = value;
+                        _users = [];
+                        _selectedUser = null;
+                      });
                     },
                   ),
                 ),
@@ -165,7 +152,7 @@ class _BreakCellState extends State<BreakCell> {
             ),
             const SizedBox(height: 8),
 
-            /// 🔹 캘린더
+            /// 캘린더
             TableCalendar(
               firstDay: DateTime.utc(2020, 1, 1),
               lastDay: DateTime.utc(2030, 12, 31),
@@ -177,7 +164,10 @@ class _BreakCellState extends State<BreakCell> {
                   _selectedDay = selectedDay;
                   _focusedDay = focusedDay;
                 });
-                _showEditBottomSheet(selectedDay);
+
+                if (_selectedUser != null) {
+                  _showEditBottomSheet(selectedDay);
+                }
               },
               calendarStyle: const CalendarStyle(
                 outsideDaysVisible: true,
@@ -196,14 +186,12 @@ class _BreakCellState extends State<BreakCell> {
             ),
             const SizedBox(height: 20),
 
-            /// 🔹 저장 버튼
+            /// 저장 버튼
             ElevatedButton.icon(
               onPressed: _selectedUser == null ? null : _saveAllChangesToSheets,
               icon: const Icon(Icons.save),
               label: const Text('변경사항 저장'),
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size.fromHeight(48),
-              ),
+              style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
             ),
           ],
         ),
@@ -214,7 +202,6 @@ class _BreakCellState extends State<BreakCell> {
   Widget _buildCell(BuildContext context, DateTime day, DateTime focusedDay) {
     final isSelected = isSameDay(day, _selectedDay);
     final isToday = isSameDay(day, DateTime.now());
-
     final breakTime = _breakTimeMap[day.day] ?? '';
 
     return Container(
@@ -244,7 +231,7 @@ class _BreakCellState extends State<BreakCell> {
 
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true, // 추가 추천
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
