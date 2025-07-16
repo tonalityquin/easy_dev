@@ -7,6 +7,7 @@ import '../../../../models/user_model.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../../utils/snackbar_helper.dart';
 import '../../../utils/google_sheets_helper.dart';
+import 'breaks/break_edit_bottom_sheet.dart';
 
 class BreakCell extends StatefulWidget {
   const BreakCell({super.key});
@@ -186,6 +187,7 @@ class _BreakCellState extends State<BreakCell> {
                   _selectedDay = selectedDay;
                   _focusedDay = focusedDay;
                 });
+                _showEditBottomSheet(selectedDay);
               },
               calendarStyle: const CalendarStyle(
                 outsideDaysVisible: true,
@@ -234,6 +236,29 @@ class _BreakCellState extends State<BreakCell> {
           const Text('', style: TextStyle(fontSize: 10)), // 빈 줄 유지
         ],
       ),
+    );
+  }
+
+  void _showEditBottomSheet(DateTime day) {
+    final dayKey = day.day;
+    final initialTime = _breakTimeMap[dayKey] ?? '00:00';
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return BreakEditBottomSheet(
+          date: day,
+          initialTime: initialTime,
+          onSave: (newTime) {
+            setState(() {
+              _breakTimeMap[dayKey] = newTime;
+            });
+          },
+        );
+      },
     );
   }
 }
