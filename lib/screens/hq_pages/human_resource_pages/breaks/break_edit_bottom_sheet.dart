@@ -47,8 +47,7 @@ class BreakEditBottomSheet extends StatelessWidget {
             icon: const Icon(Icons.save),
             label: const Text('저장'),
             onPressed: () {
-              final time =
-                  '${hourController.text.padLeft(2, '0')}:${minController.text.padLeft(2, '0')}';
+              final time = '${hourController.text.padLeft(2, '0')}:${minController.text.padLeft(2, '0')}';
               onSave(time);
               Navigator.pop(context);
             },

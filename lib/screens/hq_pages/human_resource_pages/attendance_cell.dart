@@ -57,13 +57,10 @@ class _AttendanceCellState extends State<AttendanceCell> {
     setState(() => _isLoadingUsers = true);
 
     try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('user_accounts')
-          .where('selectedArea', isEqualTo: area)
-          .get();
+      final snapshot =
+          await FirebaseFirestore.instance.collection('user_accounts').where('selectedArea', isEqualTo: area).get();
 
-      final users =
-      snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
+      final users = snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
 
       setState(() {
         _users = users;
@@ -263,8 +260,8 @@ class _AttendanceCellState extends State<AttendanceCell> {
         color: isSelected
             ? Colors.orange.withOpacity(0.3)
             : isToday
-            ? Colors.blueAccent.withOpacity(0.2)
-            : Colors.transparent,
+                ? Colors.blueAccent.withOpacity(0.2)
+                : Colors.transparent,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(

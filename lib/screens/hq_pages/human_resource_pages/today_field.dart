@@ -5,9 +5,7 @@ class AppStrings {
   static const String title = '통계 생성';
   static const String hintYear = '연도';
   static const String hintMonth = '월';
-  static const String buttonGenerate = '통계 시트 생성';
   static const String buttonGenerating = '생성 중...';
-  static const String selectLabel = '연도와 월을 선택하세요';
   static const String generatingMessage = '📊 출퇴근/휴게 통계 시트를 생성 중입니다...';
   static const String successPrefix = '✅';
   static const String failPrefix = '❌ 통계 시트 생성 실패: ';
@@ -64,7 +62,7 @@ class _TodayFieldState extends State<TodayField> {
       );
 
       snack.showSnackBar(
-        SnackBar(content: Text('${AppStrings.successPrefix} ${selectedYear}년 ${selectedMonth}월 통계 시트 생성 완료!')),
+        SnackBar(content: Text('${AppStrings.successPrefix} $selectedYear년 $selectedMonth월 통계 시트 생성 완료!')),
       );
     } catch (e) {
       snack.showSnackBar(
@@ -84,8 +82,6 @@ class _TodayFieldState extends State<TodayField> {
     final years = [for (int y = now.year - 1; y <= now.year + 1; y++) y];
     final months = List.generate(12, (i) => i + 1);
 
-    final label = '$selectedYear년 $selectedMonth월';
-
     return Scaffold(
       appBar: AppBar(
         title: const Text(AppStrings.title),
@@ -96,10 +92,8 @@ class _TodayFieldState extends State<TodayField> {
       body: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(label, style: const TextStyle(fontSize: 18)),
-            const SizedBox(height: 20),
+            /// ✅ 연도 + 월 + 버튼 한 줄
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -118,7 +112,7 @@ class _TodayFieldState extends State<TodayField> {
                     }
                   },
                 ),
-                const SizedBox(width: 20),
+                const SizedBox(width: 12),
                 DropdownButton<int>(
                   value: selectedMonth,
                   hint: const Text(AppStrings.hintMonth),
@@ -134,23 +128,30 @@ class _TodayFieldState extends State<TodayField> {
                     }
                   },
                 ),
+                const SizedBox(width: 12),
+
+                /// 📊 통계 버튼 (아이콘만)
+                Tooltip(
+                  message: '통계 시트 생성',
+                  child: ElevatedButton(
+                    onPressed: isLoading ? null : () => _generateMonthlySummary(context),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.all(12),
+                      shape: const CircleBorder(),
+                    ),
+                    child: isLoading
+                        ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                        : const Icon(Icons.insert_chart),
+                  ),
+                ),
               ],
-            ),
-            const SizedBox(height: 30),
-            ElevatedButton.icon(
-              icon: isLoading
-                  ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-              )
-                  : const Icon(Icons.auto_graph),
-              label: Text(isLoading ? AppStrings.buttonGenerating : AppStrings.buttonGenerate),
-              onPressed: isLoading ? null : () => _generateMonthlySummary(context),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                textStyle: const TextStyle(fontSize: 18),
-              ),
             ),
           ],
         ),

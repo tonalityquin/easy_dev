@@ -57,10 +57,8 @@ class TimeEditBottomSheet extends StatelessWidget {
               icon: const Icon(Icons.save),
               label: const Text('저장'),
               onPressed: () {
-                final inTime =
-                    '${inHourController.text.padLeft(2, '0')}:${inMinController.text.padLeft(2, '0')}';
-                final outTime =
-                    '${outHourController.text.padLeft(2, '0')}:${outMinController.text.padLeft(2, '0')}';
+                final inTime = '${inHourController.text.padLeft(2, '0')}:${inMinController.text.padLeft(2, '0')}';
+                final outTime = '${outHourController.text.padLeft(2, '0')}:${outMinController.text.padLeft(2, '0')}';
 
                 onSave(inTime, outTime);
                 Navigator.pop(context);
