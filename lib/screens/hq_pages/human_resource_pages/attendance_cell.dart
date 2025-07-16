@@ -7,6 +7,7 @@ import '../../../../models/user_model.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../../utils/snackbar_helper.dart';
 import '../../../utils/google_sheets_helper.dart';
+import 'attendances/time_edit_bottom_sheet.dart';
 
 class AttendanceCell extends StatefulWidget {
   const AttendanceCell({super.key});
@@ -191,6 +192,10 @@ class _AttendanceCellState extends State<AttendanceCell> {
                   _selectedDay = selectedDay;
                   _focusedDay = focusedDay;
                 });
+
+                if (_selectedUser != null) {
+                  _showEditBottomSheet(selectedDay);
+                }
               },
               calendarStyle: const CalendarStyle(
                 outsideDaysVisible: true,
@@ -226,8 +231,8 @@ class _AttendanceCellState extends State<AttendanceCell> {
         color: isSelected
             ? Colors.orange.withOpacity(0.3)
             : isToday
-            ? Colors.blueAccent.withOpacity(0.2)
-            : Colors.transparent,
+                ? Colors.blueAccent.withOpacity(0.2)
+                : Colors.transparent,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
@@ -239,6 +244,25 @@ class _AttendanceCellState extends State<AttendanceCell> {
           Text(outTime, style: const TextStyle(fontSize: 10)),
         ],
       ),
+    );
+  }
+
+  void _showEditBottomSheet(DateTime day) {
+    final dayKey = day.day;
+    final inTime = _clockInMap[dayKey] ?? '00:00';
+    final outTime = _clockOutMap[dayKey] ?? '00:00';
+
+    showTimeEditBottomSheet(
+      context: context,
+      day: day,
+      initialInTime: inTime,
+      initialOutTime: outTime,
+      onSaved: (newIn, newOut) {
+        setState(() {
+          _clockInMap[dayKey] = newIn;
+          _clockOutMap[dayKey] = newOut;
+        });
+      },
     );
   }
 }
