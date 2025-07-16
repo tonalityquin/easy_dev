@@ -1,62 +1,79 @@
-// time_edit_bottom_sheet.dart
 import 'package:flutter/material.dart';
 
 typedef OnTimeSaved = void Function(String inTime, String outTime);
 
-void showTimeEditBottomSheet({
-  required BuildContext context,
-  required DateTime day,
-  required String initialInTime,
-  required String initialOutTime,
-  required OnTimeSaved onSaved,
-}) {
-  final inTimeParts = initialInTime.split(':');
-  final outTimeParts = initialOutTime.split(':');
+class TimeEditBottomSheet extends StatelessWidget {
+  final DateTime date;
+  final String initialInTime;
+  final String initialOutTime;
+  final OnTimeSaved onSave;
 
-  final inHourController = TextEditingController(text: inTimeParts[0]);
-  final inMinController = TextEditingController(text: inTimeParts[1]);
+  const TimeEditBottomSheet({
+    super.key,
+    required this.date,
+    required this.initialInTime,
+    required this.initialOutTime,
+    required this.onSave,
+  });
 
-  final outHourController = TextEditingController(text: outTimeParts[0]);
-  final outMinController = TextEditingController(text: outTimeParts[1]);
+  @override
+  Widget build(BuildContext context) {
+    final inTimeParts = initialInTime.split(':');
+    final outTimeParts = initialOutTime.split(':');
 
-  showModalBottomSheet(
-    context: context,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-    ),
-    builder: (context) {
-      return Padding(
-        padding: const EdgeInsets.all(20),
+    final inHourController = TextEditingController(text: inTimeParts[0]);
+    final inMinController = TextEditingController(text: inTimeParts[1]);
+
+    final outHourController = TextEditingController(text: outTimeParts[0]);
+    final outMinController = TextEditingController(text: outTimeParts[1]);
+
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+        top: 20,
+      ),
+      child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            /// 날짜 표시
             Text(
-              '${day.year}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}',
+              '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             const SizedBox(height: 16),
+
+            /// 출근/퇴근 시간 입력
             _TimeInputRow('출근 시간', inHourController, inMinController),
             const SizedBox(height: 12),
             _TimeInputRow('퇴근 시간', outHourController, outMinController),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
+
+            /// 저장 버튼
             ElevatedButton.icon(
               icon: const Icon(Icons.save),
               label: const Text('저장'),
               onPressed: () {
-                final inTime = '${inHourController.text.padLeft(2, '0')}:${inMinController.text.padLeft(2, '0')}';
-                final outTime = '${outHourController.text.padLeft(2, '0')}:${outMinController.text.padLeft(2, '0')}';
-                
+                final inTime =
+                    '${inHourController.text.padLeft(2, '0')}:${inMinController.text.padLeft(2, '0')}';
+                final outTime =
+                    '${outHourController.text.padLeft(2, '0')}:${outMinController.text.padLeft(2, '0')}';
 
-                onSaved(inTime, outTime);
+                onSave(inTime, outTime);
                 Navigator.pop(context);
               },
-              style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(45)),
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size.fromHeight(45),
+              ),
             ),
           ],
         ),
-      );
-    },
-  );
+      ),
+    );
+  }
 }
 
 class _TimeInputRow extends StatelessWidget {
@@ -71,7 +88,10 @@ class _TimeInputRow extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
         const SizedBox(height: 8),
         Row(
           children: [

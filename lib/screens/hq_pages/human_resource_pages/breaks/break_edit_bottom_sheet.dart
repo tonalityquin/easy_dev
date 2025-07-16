@@ -21,33 +21,56 @@ class BreakEditBottomSheet extends StatelessWidget {
     final minController = TextEditingController(text: parts[1]);
 
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+        top: 20,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          /// 날짜
           Text(
             '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
           ),
           const SizedBox(height: 16),
-          _buildTimeInputRow('휴게 시간', hourController, minController),
-          const SizedBox(height: 20),
+
+          /// 시간 입력 필드
+          _TimeInputRow('휴게 시간', hourController, minController),
+          const SizedBox(height: 24),
+
+          /// 저장 버튼
           ElevatedButton.icon(
             icon: const Icon(Icons.save),
             label: const Text('저장'),
             onPressed: () {
-              final time = '${hourController.text.padLeft(2, '0')}:${minController.text.padLeft(2, '0')}';
+              final time =
+                  '${hourController.text.padLeft(2, '0')}:${minController.text.padLeft(2, '0')}';
               onSave(time);
               Navigator.pop(context);
             },
-            style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(45)),
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size.fromHeight(45),
+            ),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildTimeInputRow(String label, TextEditingController hourCtrl, TextEditingController minCtrl) {
+class _TimeInputRow extends StatelessWidget {
+  final String label;
+  final TextEditingController hourCtrl;
+  final TextEditingController minCtrl;
+
+  const _TimeInputRow(this.label, this.hourCtrl, this.minCtrl);
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

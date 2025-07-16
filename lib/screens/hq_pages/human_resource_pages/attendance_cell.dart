@@ -118,7 +118,6 @@ class _AttendanceCellState extends State<AttendanceCell> {
     showSuccessSnackbar(context, 'Google Sheets에 저장 완료');
   }
 
-
   @override
   void initState() {
     super.initState();
@@ -213,9 +212,7 @@ class _AttendanceCellState extends State<AttendanceCell> {
                 Expanded(
                   flex: 2,
                   child: ElevatedButton(
-                    onPressed: _selectedArea == null || _isLoadingUsers
-                        ? null
-                        : () => _loadUsers(_selectedArea!),
+                    onPressed: _selectedArea == null || _isLoadingUsers ? null : () => _loadUsers(_selectedArea!),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
@@ -308,16 +305,24 @@ class _AttendanceCellState extends State<AttendanceCell> {
     final inTime = _clockInMap[dayKey] ?? '00:00';
     final outTime = _clockOutMap[dayKey] ?? '00:00';
 
-    showTimeEditBottomSheet(
+    showModalBottomSheet(
       context: context,
-      day: day,
-      initialInTime: inTime,
-      initialOutTime: outTime,
-      onSaved: (newIn, newOut) {
-        setState(() {
-          _clockInMap[dayKey] = newIn;
-          _clockOutMap[dayKey] = newOut;
-        });
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return TimeEditBottomSheet(
+          date: day,
+          initialInTime: inTime,
+          initialOutTime: outTime,
+          onSave: (newIn, newOut) {
+            setState(() {
+              _clockInMap[dayKey] = newIn;
+              _clockOutMap[dayKey] = newOut;
+            });
+          },
+        );
       },
     );
   }

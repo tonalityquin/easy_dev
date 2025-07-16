@@ -244,6 +244,7 @@ class _BreakCellState extends State<BreakCell> {
 
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true, // 추가 추천
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
