@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../../models/user_model.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../../utils/snackbar_helper.dart';
+import '../../../utils/google_sheets_helper.dart';
 
 class AttendanceCell extends StatefulWidget {
   const AttendanceCell({super.key});
@@ -23,19 +24,42 @@ class _AttendanceCellState extends State<AttendanceCell> {
   List<UserModel> _users = [];
 
   bool _isLoadingUsers = false;
+  Map<int, String> _clockInMap = {};
+  Map<int, String> _clockOutMap = {};
+
+  Future<void> _loadAttendanceTimes(UserModel user) async {
+    final allRows = await GoogleSheetsHelper.loadClockInOutRecords();
+
+    final userId = '${user.phone}-${user.selectedArea}';
+
+    final inMap = GoogleSheetsHelper.mapToCellData(
+      allRows,
+      statusFilter: '출근',
+      selectedYear: _focusedDay.year,
+      selectedMonth: _focusedDay.month,
+    );
+
+    final outMap = GoogleSheetsHelper.mapToCellData(
+      allRows,
+      statusFilter: '퇴근',
+      selectedYear: _focusedDay.year,
+      selectedMonth: _focusedDay.month,
+    );
+
+    setState(() {
+      _clockInMap = inMap[userId] ?? {};
+      _clockOutMap = outMap[userId] ?? {};
+    });
+  }
 
   Future<void> _loadUsers(String area) async {
     setState(() => _isLoadingUsers = true);
 
     try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('user_accounts')
-          .where('selectedArea', isEqualTo: area)
-          .get();
+      final snapshot =
+          await FirebaseFirestore.instance.collection('user_accounts').where('selectedArea', isEqualTo: area).get();
 
-      final users = snapshot.docs
-          .map((doc) => UserModel.fromMap(doc.id, doc.data()))
-          .toList();
+      final users = snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
 
       setState(() {
         _users = users;
@@ -133,6 +157,9 @@ class _AttendanceCellState extends State<AttendanceCell> {
                       setState(() {
                         _selectedUser = value;
                       });
+                      if (value != null) {
+                        _loadAttendanceTimes(value);
+                      }
                     },
                   ),
                 ),
@@ -140,9 +167,7 @@ class _AttendanceCellState extends State<AttendanceCell> {
                 Expanded(
                   flex: 2,
                   child: ElevatedButton(
-                    onPressed: _selectedArea == null || _isLoadingUsers
-                        ? null
-                        : () => _loadUsers(_selectedArea!),
+                    onPressed: _selectedArea == null || _isLoadingUsers ? null : () => _loadUsers(_selectedArea!),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
@@ -192,6 +217,9 @@ class _AttendanceCellState extends State<AttendanceCell> {
     final isSelected = isSameDay(day, _selectedDay);
     final isToday = isSameDay(day, DateTime.now());
 
+    final inTime = _clockInMap[day.day] ?? '';
+    final outTime = _clockOutMap[day.day] ?? '';
+
     return Container(
       margin: const EdgeInsets.all(4),
       decoration: BoxDecoration(
@@ -207,8 +235,8 @@ class _AttendanceCellState extends State<AttendanceCell> {
         children: [
           Text('${day.day}', style: const TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
-          const Text('00:00', style: TextStyle(fontSize: 10)),
-          const Text('00:00', style: TextStyle(fontSize: 10)),
+          Text(inTime, style: const TextStyle(fontSize: 10)),
+          Text(outTime, style: const TextStyle(fontSize: 10)),
         ],
       ),
     );

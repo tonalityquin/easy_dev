@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../../models/user_model.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../../utils/snackbar_helper.dart';
+import '../../../utils/google_sheets_helper.dart';
 
 class BreakCell extends StatefulWidget {
   const BreakCell({super.key});
@@ -23,6 +24,24 @@ class _BreakCellState extends State<BreakCell> {
   List<UserModel> _users = [];
 
   bool _isLoadingUsers = false;
+  Map<int, String> _breakTimeMap = {};
+
+  Future<void> _loadBreakTimes(UserModel user) async {
+    final allRows = await GoogleSheetsHelper.loadBreakRecords();
+
+    final userId = '${user.phone}-${user.selectedArea}';
+
+    final breakMap = GoogleSheetsHelper.mapToCellData(
+      allRows,
+      statusFilter: '휴게',
+      selectedYear: _focusedDay.year,
+      selectedMonth: _focusedDay.month,
+    );
+
+    setState(() {
+      _breakTimeMap = breakMap[userId] ?? {};
+    });
+  }
 
   Future<void> _loadUsers(String area) async {
     setState(() => _isLoadingUsers = true);
@@ -129,6 +148,9 @@ class _BreakCellState extends State<BreakCell> {
                       setState(() {
                         _selectedUser = value;
                       });
+                      if (value != null) {
+                        _loadBreakTimes(value);
+                      }
                     },
                   ),
                 ),
@@ -190,6 +212,8 @@ class _BreakCellState extends State<BreakCell> {
     final isSelected = isSameDay(day, _selectedDay);
     final isToday = isSameDay(day, DateTime.now());
 
+    final breakTime = _breakTimeMap[day.day] ?? '';
+
     return Container(
       margin: const EdgeInsets.all(4),
       decoration: BoxDecoration(
@@ -205,8 +229,9 @@ class _BreakCellState extends State<BreakCell> {
         children: [
           Text('${day.day}', style: const TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
-          const Text('00:00', style: TextStyle(fontSize: 10)),
-          const Text('00:00', style: TextStyle(fontSize: 10)),
+          Text(breakTime, style: const TextStyle(fontSize: 10)),
+          const SizedBox(height: 2),
+          const Text('', style: TextStyle(fontSize: 10)), // 빈 줄 유지
         ],
       ),
     );
