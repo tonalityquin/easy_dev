@@ -42,12 +42,12 @@ class GoogleSheetsHelper {
   }
 
   static Map<String, Map<int, String>> mapToCellData(
-    List<List<String>> rows, {
-    required String statusFilter,
-    int? selectedYear,
-    int? selectedMonth,
-    String suffixForKey = '',
-  }) {
+      List<List<String>> rows, {
+        required String statusFilter,
+        int? selectedYear,
+        int? selectedMonth,
+        String suffixForKey = '',
+      }) {
     final Map<String, Map<int, String>> data = {};
     for (final row in rows) {
       if (row.length < 7) continue;
@@ -78,18 +78,36 @@ class GoogleSheetsHelper {
     return data;
   }
 
+  /// 시트 존재 시 삭제 후 새로 생성
   static Future<void> createMonthlySummarySheet(String sheetName) async {
     final client = await _getSheetsClient();
     final sheetsApi = SheetsApi(client);
 
-    final request = Request(
+    final spreadsheet = await sheetsApi.spreadsheets.get(_spreadsheetId);
+    final sheets = spreadsheet.sheets ?? [];
+
+    final List<Request> requests = [];
+
+    final existingSheet = sheets.firstWhere(
+          (sheet) => sheet.properties?.title == sheetName,
+      orElse: () => Sheet(),
+    );
+
+    final sheetId = existingSheet.properties?.sheetId;
+    if (sheetId != null) {
+      // 기존 시트 삭제 요청
+      requests.add(Request(deleteSheet: DeleteSheetRequest(sheetId: sheetId)));
+    }
+
+    // 새 시트 추가 요청
+    requests.add(Request(
       addSheet: AddSheetRequest(
         properties: SheetProperties(title: sheetName),
       ),
-    );
+    ));
 
     await sheetsApi.spreadsheets.batchUpdate(
-      BatchUpdateSpreadsheetRequest(requests: [request]),
+      BatchUpdateSpreadsheetRequest(requests: requests),
       _spreadsheetId,
     );
 
@@ -97,11 +115,10 @@ class GoogleSheetsHelper {
   }
 
   /// 출퇴근 통계 시트 작성
-  /// 📊 출퇴근 통계 시트 작성 (세로 날짜 기준)
   static Future<void> writeMonthlyClockInOutSummary({
     required int year,
     required int month,
-    required Map<String, String> userMap, // 🔑 사용자 이름 매핑 추가
+    required Map<String, String> userMap,
   }) async {
     final rows = await loadClockInOutRecords();
 
@@ -131,7 +148,7 @@ class GoogleSheetsHelper {
       final dateStr = DateFormat('yyyy-MM-dd').format(date);
 
       for (final userId in userIds) {
-        final name = userMap[userId] ?? ''; // ✅ 이름 매핑 적용
+        final name = userMap[userId] ?? '';
         final inTime = clockInMap[userId]?[day] ?? '';
         final outTime = clockOutMap[userId]?[day] ?? '';
 
@@ -155,11 +172,11 @@ class GoogleSheetsHelper {
     client.close();
   }
 
-  /// \uD734\uACC4 \uD1B5\uACC4 \uC2DC\uD2B8 \uC791\uC131 (\uC138\uB85C \uB0A0\uC9DC \uAE30\uC900)
+  /// 휴게 통계 시트 작성
   static Future<void> writeMonthlyBreakSummary({
     required int year,
     required int month,
-    required Map<String, String> userMap, // 🔑 이름 매핑 추가
+    required Map<String, String> userMap,
   }) async {
     final rows = await loadBreakRecords();
 
@@ -182,7 +199,7 @@ class GoogleSheetsHelper {
       final dateStr = DateFormat('yyyy-MM-dd').format(date);
 
       for (final userId in userIds) {
-        final name = userMap[userId] ?? ''; // ✅ 이름 매핑 적용
+        final name = userMap[userId] ?? '';
         final breakTime = breakMap[userId]?[day] ?? '';
         if (breakTime.isEmpty) continue;
 

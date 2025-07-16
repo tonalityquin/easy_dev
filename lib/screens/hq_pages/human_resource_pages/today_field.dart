@@ -1,7 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-
 import '../../../utils/google_sheets_helper.dart';
+
+class AppStrings {
+  static const String title = '통계 생성';
+  static const String hintYear = '연도';
+  static const String hintMonth = '월';
+  static const String buttonGenerate = '통계 시트 생성';
+  static const String buttonGenerating = '생성 중...';
+  static const String selectLabel = '연도와 월을 선택하세요';
+  static const String generatingMessage = '📊 출퇴근/휴게 통계 시트를 생성 중입니다...';
+  static const String successPrefix = '✅';
+  static const String failPrefix = '❌ 통계 시트 생성 실패: ';
+}
 
 class TodayField extends StatefulWidget {
   const TodayField({super.key});
@@ -12,18 +22,25 @@ class TodayField extends StatefulWidget {
 
 class _TodayFieldState extends State<TodayField> {
   bool isLoading = false;
-  int? selectedYear;
-  int? selectedMonth;
+  late int selectedYear;
+  late int selectedMonth;
 
-  /// 📊 통계 시트 생성
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    selectedYear = now.year;
+    selectedMonth = now.month;
+  }
+
   Future<void> _generateMonthlySummary(BuildContext context) async {
-    if (isLoading || selectedYear == null || selectedMonth == null) return;
+    if (isLoading) return;
 
     setState(() => isLoading = true);
-
     final snack = ScaffoldMessenger.of(context);
+
     snack.showSnackBar(
-      const SnackBar(content: Text('📊 출퇴근/휴게 통계 시트를 생성 중입니다...')),
+      const SnackBar(content: Text(AppStrings.generatingMessage)),
     );
 
     try {
@@ -35,24 +52,24 @@ class _TodayFieldState extends State<TodayField> {
       final userMap = {...clockUserMap, ...breakUserMap};
 
       await GoogleSheetsHelper.writeMonthlyClockInOutSummary(
-        year: selectedYear!,
-        month: selectedMonth!,
+        year: selectedYear,
+        month: selectedMonth,
         userMap: userMap,
       );
 
       await GoogleSheetsHelper.writeMonthlyBreakSummary(
-        year: selectedYear!,
-        month: selectedMonth!,
+        year: selectedYear,
+        month: selectedMonth,
         userMap: userMap,
       );
 
       snack.showSnackBar(
-        SnackBar(content: Text('✅ ${selectedYear}년 ${selectedMonth}월 통계 시트 생성 완료!')),
+        SnackBar(content: Text('${AppStrings.successPrefix} ${selectedYear}년 ${selectedMonth}월 통계 시트 생성 완료!')),
       );
     } catch (e) {
       snack.showSnackBar(
         SnackBar(
-          content: Text('❌ 통계 시트 생성 실패: $e'),
+          content: Text('${AppStrings.failPrefix}$e'),
           backgroundColor: Colors.red,
         ),
       );
@@ -67,13 +84,11 @@ class _TodayFieldState extends State<TodayField> {
     final years = [for (int y = now.year - 1; y <= now.year + 1; y++) y];
     final months = List.generate(12, (i) => i + 1);
 
-    final label = (selectedYear != null && selectedMonth != null)
-        ? '$selectedYear년 $selectedMonth월'
-        : '연도와 월을 선택하세요';
+    final label = '$selectedYear년 $selectedMonth월';
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('통계 생성'),
+        title: const Text(AppStrings.title),
         centerTitle: true,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
@@ -90,26 +105,34 @@ class _TodayFieldState extends State<TodayField> {
               children: [
                 DropdownButton<int>(
                   value: selectedYear,
-                  hint: const Text('연도'),
+                  hint: const Text(AppStrings.hintYear),
                   items: years.map((year) {
                     return DropdownMenuItem(
                       value: year,
                       child: Text('$year년'),
                     );
                   }).toList(),
-                  onChanged: (value) => setState(() => selectedYear = value),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() => selectedYear = value);
+                    }
+                  },
                 ),
                 const SizedBox(width: 20),
                 DropdownButton<int>(
                   value: selectedMonth,
-                  hint: const Text('월'),
+                  hint: const Text(AppStrings.hintMonth),
                   items: months.map((month) {
                     return DropdownMenuItem(
                       value: month,
                       child: Text('$month월'),
                     );
                   }).toList(),
-                  onChanged: (value) => setState(() => selectedMonth = value),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() => selectedMonth = value);
+                    }
+                  },
                 ),
               ],
             ),
@@ -122,10 +145,8 @@ class _TodayFieldState extends State<TodayField> {
                 child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
               )
                   : const Icon(Icons.auto_graph),
-              label: Text(isLoading ? '생성 중...' : '통계 시트 생성'),
-              onPressed: isLoading || selectedYear == null || selectedMonth == null
-                  ? null
-                  : () => _generateMonthlySummary(context),
+              label: Text(isLoading ? AppStrings.buttonGenerating : AppStrings.buttonGenerate),
+              onPressed: isLoading ? null : () => _generateMonthlySummary(context),
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                 textStyle: const TextStyle(fontSize: 18),
