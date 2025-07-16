@@ -42,12 +42,12 @@ class GoogleSheetsHelper {
   }
 
   static Map<String, Map<int, String>> mapToCellData(
-      List<List<String>> rows, {
-        required String statusFilter,
-        int? selectedYear,
-        int? selectedMonth,
-        String suffixForKey = '',
-      }) {
+    List<List<String>> rows, {
+    required String statusFilter,
+    int? selectedYear,
+    int? selectedMonth,
+    String suffixForKey = '',
+  }) {
     final Map<String, Map<int, String>> data = {};
     for (final row in rows) {
       if (row.length < 7) continue;
@@ -89,7 +89,7 @@ class GoogleSheetsHelper {
     final List<Request> requests = [];
 
     final existingSheet = sheets.firstWhere(
-          (sheet) => sheet.properties?.title == sheetName,
+      (sheet) => sheet.properties?.title == sheetName,
       orElse: () => Sheet(),
     );
 
@@ -233,5 +233,119 @@ class GoogleSheetsHelper {
       }
     }
     return map;
+  }
+
+  static Future<void> updateClockInOutRecord({
+    required DateTime date,
+    required String userId,
+    required String userName,
+    required String area,
+    required String division,
+    required String status, // '출근' 또는 '퇴근'
+    required String time,
+  }) async {
+    final client = await _getSheetsClient();
+    final sheetsApi = SheetsApi(client);
+
+    final range = '출퇴근기록!A2:G';
+    final response = await sheetsApi.spreadsheets.values.get(_spreadsheetId, range);
+    final rows = response.values ?? [];
+
+    final targetDate = DateFormat('yyyy-MM-dd').format(date);
+    bool updated = false;
+
+    for (int i = 0; i < rows.length; i++) {
+      final row = rows[i];
+      if (row.length < 7) continue;
+
+      final rowDate = row[0].toString();
+      final rowUser = row[2].toString();
+      final rowStatus = row[6].toString();
+
+      if (rowDate == targetDate && rowUser == userId && rowStatus == status) {
+        final cellRange = '출퇴근기록!B${i + 2}'; // recordedTime
+        await sheetsApi.spreadsheets.values.update(
+          ValueRange(values: [
+            [time]
+          ]),
+          _spreadsheetId,
+          cellRange,
+          valueInputOption: 'USER_ENTERED',
+        );
+        updated = true;
+        break;
+      }
+    }
+
+    if (!updated) {
+      await sheetsApi.spreadsheets.values.append(
+        ValueRange(values: [
+          [targetDate, time, userId, userName, area, division, status]
+        ]),
+        _spreadsheetId,
+        range,
+        valueInputOption: 'USER_ENTERED',
+        insertDataOption: 'INSERT_ROWS',
+      );
+    }
+
+    client.close();
+  }
+
+  static Future<void> updateBreakRecord({
+    required DateTime date,
+    required String userId,
+    required String userName,
+    required String area,
+    required String division,
+    required String time,
+  }) async {
+    final client = await _getSheetsClient();
+    final sheetsApi = SheetsApi(client);
+
+    final range = '휴게기록!A2:G';
+    final response = await sheetsApi.spreadsheets.values.get(_spreadsheetId, range);
+    final rows = response.values ?? [];
+
+    final targetDate = DateFormat('yyyy-MM-dd').format(date);
+    const status = '휴게';
+    bool updated = false;
+
+    for (int i = 0; i < rows.length; i++) {
+      final row = rows[i];
+      if (row.length < 7) continue;
+
+      final rowDate = row[0].toString();
+      final rowUserId = row[2].toString();
+      final rowStatus = row[6].toString();
+
+      if (rowDate == targetDate && rowUserId == userId && rowStatus == status) {
+        final cellRange = '휴게기록!B${i + 2}'; // recordedTime 셀 위치
+        await sheetsApi.spreadsheets.values.update(
+          ValueRange(values: [
+            [time]
+          ]),
+          _spreadsheetId,
+          cellRange,
+          valueInputOption: 'USER_ENTERED',
+        );
+        updated = true;
+        break;
+      }
+    }
+
+    if (!updated) {
+      await sheetsApi.spreadsheets.values.append(
+        ValueRange(values: [
+          [targetDate, time, userId, userName, area, division, status]
+        ]),
+        _spreadsheetId,
+        range,
+        valueInputOption: 'USER_ENTERED',
+        insertDataOption: 'INSERT_ROWS',
+      );
+    }
+
+    client.close();
   }
 }

@@ -90,10 +90,7 @@ class _BreakCellState extends State<BreakCell> {
         backgroundColor: Colors.white,
         elevation: 0,
         foregroundColor: Colors.black87,
-        title: const Text(
-          '휴식 캘린더',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+        title: const Text('휴식 캘린더', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         automaticallyImplyLeading: false,
       ),
@@ -104,7 +101,6 @@ class _BreakCellState extends State<BreakCell> {
             /// 🔹 지역 + 사용자 + 버튼 한 줄
             Row(
               children: [
-                /// 지역 선택
                 Expanded(
                   flex: 4,
                   child: DropdownButtonFormField<String>(
@@ -132,8 +128,6 @@ class _BreakCellState extends State<BreakCell> {
                   ),
                 ),
                 const SizedBox(width: 8),
-
-                /// 사용자 선택
                 Expanded(
                   flex: 4,
                   child: DropdownButtonFormField<UserModel>(
@@ -156,17 +150,13 @@ class _BreakCellState extends State<BreakCell> {
                   ),
                 ),
                 const SizedBox(width: 8),
-
-                /// 불러오기 버튼
                 Expanded(
                   flex: 2,
                   child: ElevatedButton(
                     onPressed: _selectedArea == null || _isLoadingUsers ? null : () => _loadUsers(_selectedArea!),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                     child: const Icon(Icons.refresh),
                   ),
@@ -204,6 +194,17 @@ class _BreakCellState extends State<BreakCell> {
                 selectedBuilder: _buildCell,
               ),
             ),
+            const SizedBox(height: 20),
+
+            /// 🔹 저장 버튼
+            ElevatedButton.icon(
+              onPressed: _selectedUser == null ? null : _saveAllChangesToSheets,
+              icon: const Icon(Icons.save),
+              label: const Text('변경사항 저장'),
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size.fromHeight(48),
+              ),
+            ),
           ],
         ),
       ),
@@ -232,8 +233,6 @@ class _BreakCellState extends State<BreakCell> {
           Text('${day.day}', style: const TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
           Text(breakTime, style: const TextStyle(fontSize: 10)),
-          const SizedBox(height: 2),
-          const Text('', style: TextStyle(fontSize: 10)), // 빈 줄 유지
         ],
       ),
     );
@@ -260,5 +259,29 @@ class _BreakCellState extends State<BreakCell> {
         );
       },
     );
+  }
+
+  Future<void> _saveAllChangesToSheets() async {
+    if (_selectedUser == null) return;
+
+    final user = _selectedUser!;
+    final userId = '${user.phone}-${user.selectedArea}';
+    final division = user.divisions.isNotEmpty ? user.divisions.first : '';
+    final area = user.selectedArea ?? '';
+
+    for (final entry in _breakTimeMap.entries) {
+      final date = DateTime(_focusedDay.year, _focusedDay.month, entry.key);
+
+      await GoogleSheetsHelper.updateBreakRecord(
+        date: date,
+        userId: userId,
+        userName: user.name,
+        area: area,
+        division: division,
+        time: entry.value,
+      );
+    }
+
+    showSuccessSnackbar(context, 'Google Sheets에 저장 완료');
   }
 }

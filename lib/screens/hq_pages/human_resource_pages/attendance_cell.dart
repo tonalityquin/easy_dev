@@ -75,6 +75,50 @@ class _AttendanceCellState extends State<AttendanceCell> {
     }
   }
 
+  Future<void> _saveAllChangesToSheets() async {
+    if (_selectedUser == null) return;
+
+    final user = _selectedUser!;
+    final userId = '${user.phone}-${user.selectedArea}';
+    final division = user.divisions.isNotEmpty ? user.divisions.first : '';
+    final area = user.selectedArea ?? '';
+
+    for (final entry in _clockInMap.entries) {
+      final day = entry.key;
+      final time = entry.value;
+      final date = DateTime(_focusedDay.year, _focusedDay.month, day);
+
+      await GoogleSheetsHelper.updateClockInOutRecord(
+        date: date,
+        userId: userId,
+        userName: user.name,
+        area: area,
+        division: division,
+        status: '출근',
+        time: time,
+      );
+    }
+
+    for (final entry in _clockOutMap.entries) {
+      final day = entry.key;
+      final time = entry.value;
+      final date = DateTime(_focusedDay.year, _focusedDay.month, day);
+
+      await GoogleSheetsHelper.updateClockInOutRecord(
+        date: date,
+        userId: userId,
+        userName: user.name,
+        area: area,
+        division: division,
+        status: '퇴근',
+        time: time,
+      );
+    }
+
+    showSuccessSnackbar(context, 'Google Sheets에 저장 완료');
+  }
+
+
   @override
   void initState() {
     super.initState();
@@ -109,6 +153,7 @@ class _AttendanceCellState extends State<AttendanceCell> {
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
               children: [
@@ -168,7 +213,9 @@ class _AttendanceCellState extends State<AttendanceCell> {
                 Expanded(
                   flex: 2,
                   child: ElevatedButton(
-                    onPressed: _selectedArea == null || _isLoadingUsers ? null : () => _loadUsers(_selectedArea!),
+                    onPressed: _selectedArea == null || _isLoadingUsers
+                        ? null
+                        : () => _loadUsers(_selectedArea!),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
@@ -210,6 +257,15 @@ class _AttendanceCellState extends State<AttendanceCell> {
                 defaultBuilder: _buildCell,
                 todayBuilder: _buildCell,
                 selectedBuilder: _buildCell,
+              ),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: _selectedUser == null ? null : _saveAllChangesToSheets,
+              icon: const Icon(Icons.save),
+              label: const Text('변경사항 저장'),
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size.fromHeight(48),
               ),
             ),
           ],
