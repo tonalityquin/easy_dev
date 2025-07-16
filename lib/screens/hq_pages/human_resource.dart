@@ -5,9 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../../widgets/navigation/navigation_hq_mini.dart';
 import '../../widgets/navigation/top_navigation.dart';
-import '../../../../models/user_model.dart';
 import '../../../../states/area/area_state.dart';
-import '../../../../utils/snackbar_helper.dart';
 import 'human_resource_pages/today_field.dart';
 import 'human_resource_pages/break_cell.dart';
 import 'human_resource_pages/attendance_cell.dart';
@@ -24,7 +22,6 @@ class _HumanResourceState extends State<HumanResource> {
 
   final TextEditingController _controller = TextEditingController();
 
-  List<UserModel> _users = [];
 
   StreamSubscription? _userSubscription; // ✅ Firestore 구독 저장용
 
@@ -45,44 +42,7 @@ class _HumanResourceState extends State<HumanResource> {
         .snapshots()
         .listen((snapshot) {
       if (!mounted) return;
-      final updatedUsers = snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
-      setState(() {
-        _users = updatedUsers;
-      });
     });
-  }
-
-  Future<List<UserModel>> _getUsersByArea(String area) async {
-    final snapshot =
-        await FirebaseFirestore.instance.collection('user_accounts').where('selectedArea', isEqualTo: area).get();
-    return snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
-  }
-
-  Future<void> _reloadUsers(String area) async {
-    try {
-      final snapshot =
-          await FirebaseFirestore.instance.collection('user_accounts').where('selectedArea', isEqualTo: area).get();
-
-      final updatedUsers = snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
-
-      final currentIds = _users.map((u) => u.id).toSet();
-      final newIds = updatedUsers.map((u) => u.id).toSet();
-      final hasChanged = currentIds.length != newIds.length || !currentIds.containsAll(newIds);
-
-      if (hasChanged) {
-        if (!mounted) return;
-        setState(() {
-          _users = updatedUsers;
-        });
-        showSuccessSnackbar(context, '최신 사용자 목록으로 갱신되었습니다');
-      } else {
-        if (!mounted) return;
-        showSuccessSnackbar(context, '변경 사항 없음');
-      }
-    } catch (_) {
-      if (!mounted) return;
-      showFailedSnackbar(context, '사용자 목록을 불러오지 못했습니다');
-    }
   }
 
   @override

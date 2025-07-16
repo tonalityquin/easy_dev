@@ -7,7 +7,7 @@ class UserModel {
   final String email;
   final String role;
   final String password;
-  final String? position; // ✅ 직책 추가
+  final String? position;
 
   final List<String> areas;
   final List<String> divisions;
@@ -31,7 +31,7 @@ class UserModel {
     required this.email,
     required this.role,
     required this.password,
-    this.position, // ✅ 추가
+    this.position,
     required this.areas,
     required this.divisions,
     this.currentArea,
@@ -52,7 +52,7 @@ class UserModel {
     String? email,
     String? role,
     String? password,
-    String? position, // ✅ 추가
+    String? position,
     List<String>? areas,
     List<String>? divisions,
     String? currentArea,
@@ -72,7 +72,7 @@ class UserModel {
       email: email ?? this.email,
       role: role ?? this.role,
       password: password ?? this.password,
-      position: position ?? this.position, // ✅ 반영
+      position: position ?? this.position,
       areas: areas ?? this.areas,
       divisions: divisions ?? this.divisions,
       currentArea: currentArea ?? this.currentArea,
@@ -95,7 +95,7 @@ class UserModel {
       email: data['email'] ?? '',
       role: data['role'] ?? '',
       password: data['password'] ?? '',
-      position: data['position'], // ✅ 추가
+      position: data['position'],
       areas: List<String>.from(data['areas'] ?? []),
       divisions: List<String>.from(data['divisions'] ?? []),
       currentArea: data['currentArea'],
@@ -117,7 +117,7 @@ class UserModel {
       'email': email,
       'role': role,
       'password': password,
-      'position': position, // ✅ 추가
+      'position': position,
       'areas': areas,
       'divisions': divisions,
       'currentArea': currentArea,
@@ -140,7 +140,7 @@ class UserModel {
       email: json['email'] ?? '',
       role: json['role'] ?? '',
       password: json['password'] ?? '',
-      position: json['position'], // ✅ 추가
+      position: json['position'],
       areas: List<String>.from(json['areas'] ?? []),
       divisions: List<String>.from(json['divisions'] ?? []),
       currentArea: json['currentArea'],
@@ -163,7 +163,7 @@ class UserModel {
       'email': email,
       'role': role,
       'password': password,
-      'position': position, // ✅ 추가
+      'position': position,
       'areas': areas,
       'divisions': divisions,
       'currentArea': currentArea,
@@ -195,4 +195,14 @@ class UserModel {
     }
     return null;
   }
+
+  // ✅ 드롭다운에서 제대로 비교될 수 있도록 오버라이딩
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is UserModel && other.id == id;
+  }
+
+  @override
+  int get hashCode => id.hashCode;
 }
