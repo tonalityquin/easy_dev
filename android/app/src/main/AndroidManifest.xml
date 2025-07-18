@@ -25,6 +25,11 @@
     <!-- ✅ [옵션] 부팅 후 서비스 자동 시작을 위한 권한 -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- ✅ [Google Drive 파일 다운로드용 - Android 10 이하] -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+
     <application
         android:label="easydev"
         android:name="${applicationName}"
