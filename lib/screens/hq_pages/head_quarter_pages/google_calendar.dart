@@ -103,66 +103,108 @@ class _GoogleCalendarState extends State<GoogleCalendar> {
     final descriptionController = TextEditingController(text: descText);
     bool done = isDone;
 
-    await showDialog(
+    await showModalBottomSheet(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text(existing == null ? '일정 추가' : '일정 수정'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: titleController,
-                decoration: const InputDecoration(labelText: '제목'),
-              ),
-              TextField(
-                controller: descriptionController,
-                decoration: const InputDecoration(labelText: '설명'),
-                maxLines: 2,
-              ),
-              Row(
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent, // 배경을 투명하게 설정
+      builder: (context) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white, // ✅ 흰색 배경 지정
+            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+          ),
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            left: 16,
+            right: 16,
+            top: 24,
+          ),
+          child: StatefulBuilder(
+            builder: (context, setDialogState) {
+              return Wrap(
                 children: [
-                  Checkbox(
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[400],
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ),
+                  Text(
+                    existing == null ? '일정 추가' : '일정 수정',
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: titleController,
+                    decoration: const InputDecoration(labelText: '제목'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: descriptionController,
+                    decoration: const InputDecoration(labelText: '설명'),
+                    minLines: 2,
+                    maxLines: 4,
+                  ),
+                  const SizedBox(height: 8),
+                  CheckboxListTile(
+                    title: const Text('완료됨'),
                     value: done,
                     onChanged: (value) {
                       setDialogState(() => done = value ?? false);
                     },
+                    controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: EdgeInsets.zero,
                   ),
-                  const Text('완료됨'),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      if (existing != null)
+                        TextButton(
+                          onPressed: () async {
+                            Navigator.pop(context);
+                            await _deleteEvent(existing.id!);
+                          },
+                          child: const Text('삭제', style: TextStyle(color: Colors.red)),
+                        ),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('취소'),
+                      ),
+                      ElevatedButton(
+                        onPressed: () async {
+                          if (titleController.text.trim().isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('제목을 입력해주세요')),
+                            );
+                            return;
+                          }
+
+                          Navigator.pop(context);
+                          String finalDesc = descriptionController.text.trim();
+                          if (done) {
+                            finalDesc = '${finalDesc.isEmpty ? '' : '$finalDesc\n'}✔️DONE';
+                          }
+
+                          await _saveEvent(titleController.text, finalDesc, existing);
+                        },
+                        child: Text(existing == null ? '추가' : '수정'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
                 ],
-              ),
-            ],
+              );
+            },
           ),
-          actions: [
-            if (existing != null)
-              TextButton(
-                onPressed: () async {
-                  Navigator.pop(context);
-                  await _deleteEvent(existing.id!);
-                },
-                child: const Text('삭제', style: TextStyle(color: Colors.red)),
-              ),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('취소'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (titleController.text.trim().isEmpty) return;
-
-                Navigator.pop(context);
-                String finalDesc = descriptionController.text.trim();
-                if (done) {
-                  finalDesc = (finalDesc.isEmpty ? '' : '$finalDesc\n') + '✔️DONE';
-                }
-
-                await _saveEvent(titleController.text, finalDesc, existing);
-              },
-              child: Text(existing == null ? '추가' : '수정'),
-            ),
-          ],
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -276,37 +318,37 @@ class _GoogleCalendarState extends State<GoogleCalendar> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _events.isEmpty
-                ? const Center(child: Text("일정이 없습니다."))
-                : ListView.builder(
-              itemCount: _events.length,
-              itemBuilder: (context, index) {
-                final event = _events[index];
-                final isDone = event.description?.contains('✔️DONE') ?? false;
-                final description = event.description?.replaceAll('✔️DONE', '').trim();
+                    ? const Center(child: Text("일정이 없습니다."))
+                    : ListView.builder(
+                        itemCount: _events.length,
+                        itemBuilder: (context, index) {
+                          final event = _events[index];
+                          final isDone = event.description?.contains('✔️DONE') ?? false;
+                          final description = event.description?.replaceAll('✔️DONE', '').trim();
 
-                return ListTile(
-                  leading: Checkbox(
-                    value: isDone,
-                    onChanged: (_) => _toggleDone(event),
-                  ),
-                  title: Text(
-                    event.summary ?? '제목 없음',
-                    style: TextStyle(
-                      decoration: isDone ? TextDecoration.lineThrough : null,
-                    ),
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('종일 일정'),
-                      if (description != null && description.isNotEmpty)
-                        Text('설명: $description', style: const TextStyle(fontSize: 13)),
-                    ],
-                  ),
-                  onTap: () => _addOrEditEvent(existing: event),
-                );
-              },
-            ),
+                          return ListTile(
+                            leading: Checkbox(
+                              value: isDone,
+                              onChanged: (_) => _toggleDone(event),
+                            ),
+                            title: Text(
+                              event.summary ?? '제목 없음',
+                              style: TextStyle(
+                                decoration: isDone ? TextDecoration.lineThrough : null,
+                              ),
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('종일 일정'),
+                                if (description != null && description.isNotEmpty)
+                                  Text('설명: $description', style: const TextStyle(fontSize: 13)),
+                              ],
+                            ),
+                            onTap: () => _addOrEditEvent(existing: event),
+                          );
+                        },
+                      ),
           ),
         ],
       ),
