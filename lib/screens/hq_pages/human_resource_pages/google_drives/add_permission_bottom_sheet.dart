@@ -6,9 +6,15 @@ import 'package:googleapis_auth/auth_io.dart';
 /// 구글 드라이브에서 특정 파일/폴더에 편집자 권한을 부여하는 Bottom Sheet
 Future<void> showAddPermissionBottomSheet({
   required BuildContext context,
-  String fileId = _defaultFolderId,
+  required String selectedArea, // ✅ 선택된 회사 영역
 }) async {
   final emailController = TextEditingController();
+
+  final folderMap = {
+    'belivus': '1VohUN819zjkbqYBkDofca8fmLKx3MuIO',
+    'pelican': '1ZB0UQoDbuhrEsEqsfCZhEsX5PMfOKGiD',
+  };
+  final fileId = folderMap[selectedArea] ?? folderMap['belivus']!; // 기본 fallback
 
   showModalBottomSheet(
     context: context,
@@ -82,9 +88,6 @@ Future<void> showAddPermissionBottomSheet({
     },
   );
 }
-
-// 기본 폴더 ID (belivusTest)
-const String _defaultFolderId = '1VohUN819zjkbqYBkDofca8fmLKx3MuIO';
 
 Future<void> _addEditorPermission(String fileId, String email) async {
   final client = await _getDriveClient();

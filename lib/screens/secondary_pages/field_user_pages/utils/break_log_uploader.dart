@@ -9,12 +9,21 @@ import '../../../../../states/area/area_state.dart';
 import '../../../../../states/user/user_state.dart';
 
 class BreakLogUploader {
-  // 🔐 Google Sheets 설정 (통합 시트)
-  static const _spreadsheetId = '14qZa34Ha-y5Z6kj7eUqZxcP2CdLlaUQcyTJtLsyU_uo';
-  static const _sheetName = '휴게기록'; // ✅ 출근/퇴근/휴게 모두 기록
+  static const _sheetName = '휴게기록';
   static const _serviceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
 
-  /// ✅ 휴게 기록 업로드 (중복 방지 포함)
+  /// 🔁 area에 따라 스프레드시트 ID 선택
+  static String _getSpreadsheetId(String area) {
+    switch (area.toLowerCase()) {
+      case 'pelican':
+        return '11VXQiw4bHpZHPmAd1GJHdao4d9C3zU4NmkEe81pv57I'; // pelican
+      case 'belivus':
+      default:
+        return '14qZa34Ha-y5Z6kj7eUqZxcP2CdLlaUQcyTJtLsyU_uo'; // 기본값: belivus
+    }
+  }
+
+  /// ✅ 휴게 기록 업로드
   static Future<bool> uploadBreakJson({
     required BuildContext context,
     required Map<String, dynamic> data,
@@ -24,6 +33,8 @@ class BreakLogUploader {
       final userState = context.read<UserState>();
 
       final area = userState.user?.selectedArea ?? '';
+      final spreadsheetId = _getSpreadsheetId(area);
+
       final division = areaState.currentDivision;
       final userId = userState.user?.id ?? '';
       final userName = userState.name;
@@ -33,13 +44,13 @@ class BreakLogUploader {
       final recordedTime = data['recordedTime'] ?? '';
       final status = '휴게';
 
-      // ✅ [1] 중복 체크
-      final existingRows = await _loadAllRecords();
+      // ✅ 중복 체크
+      final existingRows = await _loadAllRecords(spreadsheetId);
       final isDuplicate = existingRows.any((row) =>
       row.length >= 7 &&
           row[0] == dateStr &&
           row[2] == userId &&
-          row[6] == status
+          row[6] == status,
       );
 
       if (isDuplicate) {
@@ -47,7 +58,7 @@ class BreakLogUploader {
         return false;
       }
 
-      // ✅ [2] 업로드할 행 구성
+      // ✅ 업로드할 데이터 구성
       final row = [
         dateStr,
         recordedTime,
@@ -61,13 +72,14 @@ class BreakLogUploader {
       final client = await _getSheetsClient();
       final sheetsApi = SheetsApi(client);
 
-      // ✅ [3] 시트에 행 추가
       await sheetsApi.spreadsheets.values.append(
         ValueRange(values: [row]),
-        _spreadsheetId,
+        spreadsheetId,
         '$_sheetName!A1',
         valueInputOption: 'USER_ENTERED',
       );
+
+      client.close();
 
       debugPrint('✅ 휴게 기록 업로드 완료 (Google Sheets)');
       return true;
@@ -87,13 +99,13 @@ class BreakLogUploader {
     );
   }
 
-  /// 📥 전체 기록 시트 불러오기 (중복 검사용)
-  static Future<List<List<String>>> _loadAllRecords() async {
+  /// 📥 중복 확인용 데이터 불러오기
+  static Future<List<List<String>>> _loadAllRecords(String spreadsheetId) async {
     final client = await _getSheetsClient();
     final sheetsApi = SheetsApi(client);
 
     final result = await sheetsApi.spreadsheets.values.get(
-      _spreadsheetId,
+      spreadsheetId,
       '$_sheetName!A2:G',
     );
 
@@ -104,13 +116,11 @@ class BreakLogUploader {
     ).toList() ?? [];
   }
 
-  /// (선택) 다운로드 링크 반환
+  /// 다운로드 URL 반환
   static String getDownloadPath({
-    required String division,
     required String area,
-    required String userId,
-    DateTime? dateTime,
   }) {
-    return 'https://docs.google.com/spreadsheets/d/$_spreadsheetId/edit';
+    final id = _getSpreadsheetId(area);
+    return 'https://docs.google.com/spreadsheets/d/$id/edit';
   }
 }

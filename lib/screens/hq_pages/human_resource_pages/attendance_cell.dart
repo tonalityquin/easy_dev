@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../models/user_model.dart';
 import '../../../../states/user/user_state.dart';
@@ -10,7 +11,9 @@ import '../../../utils/google_sheets_helper.dart';
 import 'attendances/time_edit_bottom_sheet.dart';
 
 class AttendanceCell extends StatefulWidget {
-  const AttendanceCell({super.key});
+  final String selectedArea;
+
+  const AttendanceCell({super.key, required this.selectedArea});
 
   @override
   State<AttendanceCell> createState() => _AttendanceCellState();
@@ -28,10 +31,33 @@ class _AttendanceCellState extends State<AttendanceCell> {
   Map<int, String> _clockInMap = {};
   Map<int, String> _clockOutMap = {};
 
-  Future<void> _loadAttendanceTimes(UserModel user) async {
-    final allRows = await GoogleSheetsHelper.loadClockInOutRecords();
+  @override
+  void initState() {
+    super.initState();
+    _loadSelectedAreaFromPrefs();
+  }
 
-    final userId = '${user.phone}-${user.selectedArea}';
+  Future<void> _loadSelectedAreaFromPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final area = prefs.getString('selectedArea')?.trim();
+    if (area != null) {
+      setState(() {
+        _selectedArea = area;
+      });
+      await _loadUsers(area);
+    }
+  }
+
+  Future<void> _saveSelectedAreaToPrefs(String area) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('selectedArea', area.trim());
+  }
+
+  Future<void> _loadAttendanceTimes(UserModel user) async {
+    final area = user.selectedArea?.trim() ?? '';
+    final userId = '${user.phone}-$area';
+
+    final allRows = await GoogleSheetsHelper.loadClockInOutRecords(area);
 
     final inMap = GoogleSheetsHelper.mapToCellData(
       allRows,
@@ -64,7 +90,7 @@ class _AttendanceCellState extends State<AttendanceCell> {
 
       setState(() {
         _users = users;
-        _selectedUser = null; // ✅ 자동 선택 제거
+        _selectedUser = null;
       });
 
       showSuccessSnackbar(context, '사용자 ${users.length}명 불러옴');
@@ -79,15 +105,14 @@ class _AttendanceCellState extends State<AttendanceCell> {
     if (_selectedUser == null) return;
 
     final user = _selectedUser!;
-    final userId = '${user.phone}-${user.selectedArea}';
+    final area = user.selectedArea?.trim() ?? '';
+    final userId = '${user.phone}-$area';
     final division = user.divisions.isNotEmpty ? user.divisions.first : '';
-    final area = user.selectedArea ?? '';
+
+    print('[SAVE] userId=$userId, area=$area');
 
     for (final entry in _clockInMap.entries) {
-      final day = entry.key;
-      final time = entry.value;
-      final date = DateTime(_focusedDay.year, _focusedDay.month, day);
-
+      final date = DateTime(_focusedDay.year, _focusedDay.month, entry.key);
       await GoogleSheetsHelper.updateClockInOutRecord(
         date: date,
         userId: userId,
@@ -95,15 +120,12 @@ class _AttendanceCellState extends State<AttendanceCell> {
         area: area,
         division: division,
         status: '출근',
-        time: time,
+        time: entry.value,
       );
     }
 
     for (final entry in _clockOutMap.entries) {
-      final day = entry.key;
-      final time = entry.value;
-      final date = DateTime(_focusedDay.year, _focusedDay.month, day);
-
+      final date = DateTime(_focusedDay.year, _focusedDay.month, entry.key);
       await GoogleSheetsHelper.updateClockInOutRecord(
         date: date,
         userId: userId,
@@ -111,18 +133,11 @@ class _AttendanceCellState extends State<AttendanceCell> {
         area: area,
         division: division,
         status: '퇴근',
-        time: time,
+        time: entry.value,
       );
     }
 
     showSuccessSnackbar(context, 'Google Sheets에 저장 완료');
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    // ✅ 자동 선택 제거
-    // 초기 로딩 시 불필요한 Firebase 읽기 방지
   }
 
   @override
@@ -142,7 +157,6 @@ class _AttendanceCellState extends State<AttendanceCell> {
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
               children: [
@@ -157,13 +171,15 @@ class _AttendanceCellState extends State<AttendanceCell> {
                         child: Text(area, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14)),
                       );
                     }).toList(),
-                    onChanged: (value) {
+                    onChanged: (value) async {
                       if (value != null) {
+                        await _saveSelectedAreaToPrefs(value);
                         setState(() {
                           _selectedArea = value;
                           _users = [];
                           _selectedUser = null;
                         });
+                        await _loadUsers(value);
                       }
                     },
                   ),

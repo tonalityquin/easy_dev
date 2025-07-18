@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../../states/area/area_state.dart';
 import '../../../utils/google_sheets_helper.dart';
 
 class AppStrings {
@@ -42,20 +44,24 @@ class _TodayFieldState extends State<TodayField> {
     );
 
     try {
-      final clockRows = await GoogleSheetsHelper.loadClockInOutRecords();
-      final breakRows = await GoogleSheetsHelper.loadBreakRecords();
+      final area = context.read<AreaState>().selectedArea; // ✅ area 가져오기
+
+      final clockRows = await GoogleSheetsHelper.loadClockInOutRecords(area);
+      final breakRows = await GoogleSheetsHelper.loadBreakRecords(area);
 
       final clockUserMap = GoogleSheetsHelper.extractUserMap(clockRows);
       final breakUserMap = GoogleSheetsHelper.extractUserMap(breakRows);
       final userMap = {...clockUserMap, ...breakUserMap};
 
       await GoogleSheetsHelper.writeMonthlyClockInOutSummary(
+        area: area, // ✅ 필수 파라미터 전달
         year: selectedYear,
         month: selectedMonth,
         userMap: userMap,
       );
 
       await GoogleSheetsHelper.writeMonthlyBreakSummary(
+        area: area, // ✅ 필수 파라미터 전달
         year: selectedYear,
         month: selectedMonth,
         userMap: userMap,
@@ -141,13 +147,13 @@ class _TodayFieldState extends State<TodayField> {
                     ),
                     child: isLoading
                         ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
                         : const Icon(Icons.insert_chart),
                   ),
                 ),

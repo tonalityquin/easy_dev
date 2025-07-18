@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../models/user_model.dart';
 import '../../../../states/user/user_state.dart';
@@ -10,7 +11,9 @@ import '../../../utils/google_sheets_helper.dart';
 import 'breaks/break_edit_bottom_sheet.dart';
 
 class BreakCell extends StatefulWidget {
-  const BreakCell({super.key});
+  final String selectedArea;
+
+  const BreakCell({super.key, required this.selectedArea});
 
   @override
   State<BreakCell> createState() => _BreakCellState();
@@ -27,10 +30,16 @@ class _BreakCellState extends State<BreakCell> {
   bool _isLoadingUsers = false;
   Map<int, String> _breakTimeMap = {};
 
-  Future<void> _loadBreakTimes(UserModel user) async {
-    final allRows = await GoogleSheetsHelper.loadBreakRecords();
+  // ✅ SharedPreferences에서 selectedArea 가져오기
+  Future<String?> _getAreaFromPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('selectedArea')?.trim();
+  }
 
-    final userId = '${user.phone}-${user.selectedArea}';
+  Future<void> _loadBreakTimes(UserModel user) async {
+    final area = user.selectedArea?.trim() ?? '';
+    final allRows = await GoogleSheetsHelper.loadBreakRecords(area);
+    final userId = '${user.phone}-${area}';
 
     final breakMap = GoogleSheetsHelper.mapToCellData(
       allRows,
@@ -55,7 +64,7 @@ class _BreakCellState extends State<BreakCell> {
 
       setState(() {
         _users = users;
-        _selectedUser = null; // ✅ 자동 선택 제거
+        _selectedUser = null;
       });
 
       showSuccessSnackbar(context, '사용자 목록 ${users.length}명 불러왔습니다');
@@ -69,9 +78,19 @@ class _BreakCellState extends State<BreakCell> {
   @override
   void initState() {
     super.initState();
-    // ✅ 자동 Firebase read 제거
-    // _selectedArea = context.read<UserState>().user?.selectedArea;
-    // if (_selectedArea != null) _loadUsers(_selectedArea!);
+
+    // 자동 area 세팅
+    _initArea();
+  }
+
+  Future<void> _initArea() async {
+    final areaFromPrefs = await _getAreaFromPrefs();
+    if (areaFromPrefs != null) {
+      setState(() {
+        _selectedArea = areaFromPrefs;
+      });
+      await _loadUsers(areaFromPrefs);
+    }
   }
 
   @override
@@ -192,10 +211,7 @@ class _BreakCellState extends State<BreakCell> {
               icon: const Icon(Icons.save, size: 20),
               label: const Text(
                 '변경사항 저장',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size.fromHeight(48),
@@ -264,12 +280,15 @@ class _BreakCellState extends State<BreakCell> {
   }
 
   Future<void> _saveAllChangesToSheets() async {
-    if (_selectedUser == null) return;
+
+    if (_selectedUser == null) {
+      return;
+    }
 
     final user = _selectedUser!;
-    final userId = '${user.phone}-${user.selectedArea}';
+    final area = await _getAreaFromPrefs() ?? user.selectedArea ?? '';
+    final userId = '${user.phone}-$area';
     final division = user.divisions.isNotEmpty ? user.divisions.first : '';
-    final area = user.selectedArea ?? '';
 
     for (final entry in _breakTimeMap.entries) {
       final date = DateTime(_focusedDay.year, _focusedDay.month, entry.key);
@@ -286,4 +305,5 @@ class _BreakCellState extends State<BreakCell> {
 
     showSuccessSnackbar(context, 'Google Sheets에 저장 완료');
   }
+
 }

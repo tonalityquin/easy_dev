@@ -8,27 +8,36 @@ import '../../../widgets/navigation/secondary_mini_navigation.dart';
 import 'google_drives/add_permission_bottom_sheet.dart';
 
 class GoogleDrive extends StatefulWidget {
-  const GoogleDrive({super.key});
+  final String selectedArea; // belivus 또는 pelican
+
+  const GoogleDrive({super.key, required this.selectedArea});
 
   @override
   State<GoogleDrive> createState() => _GoogleDriveState();
 }
 
 class _GoogleDriveState extends State<GoogleDrive> {
-  static const String rootFolderId = '1VohUN819zjkbqYBkDofca8fmLKx3MuIO';
+  static const Map<String, String> folderMap = {
+    'belivus': '1VohUN819zjkbqYBkDofca8fmLKx3MuIO',
+    'pelican': '1ZB0UQoDbuhrEsEqsfCZhEsX5PMfOKGiD',
+  };
+
   late Future<List<drive.File>> _rootItemsFuture;
+  late String _rootFolderId;
 
   @override
   void initState() {
     super.initState();
-    _rootItemsFuture = _listFilesInFolder(rootFolderId);
+    final selected = widget.selectedArea.trim().toLowerCase();
+    _rootFolderId = folderMap[selected] ?? folderMap['belivus']!;
+    _rootItemsFuture = _listFilesInFolder(_rootFolderId);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Google Drive 트리 탐색'),
+        title: Text('${widget.selectedArea} Drive 트리 탐색'),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
@@ -49,13 +58,13 @@ class _GoogleDriveState extends State<GoogleDrive> {
         },
       ),
       bottomNavigationBar: SecondaryMiniNavigation(
-        icons: const [
-          Icons.add,
-          Icons.mail,
-        ],
+        icons: const [Icons.add, Icons.mail],
         onIconTapped: (index) {
           if (index == 0) {
-            showAddPermissionBottomSheet(context: context); // ✅ 분리된 위젯 호출
+            showAddPermissionBottomSheet(
+              context: context,
+              selectedArea: widget.selectedArea,
+            );
           }
         },
       ),

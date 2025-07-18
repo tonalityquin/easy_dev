@@ -32,17 +32,24 @@ class CommonDashBoardController {
     }
   }
 
-  /// 퇴근 시간 기록 및 업로드
+  /// ✅ 퇴근 시간 기록 및 업로드
   Future<bool> _recordLeaveTime(BuildContext context) async {
     try {
+      final userState = Provider.of<UserState>(context, listen: false);
+
       final now = DateTime.now();
       final time = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
 
+      final leaveData = {
+        'userId': userState.user?.id ?? '',
+        'userName': userState.name,
+        'division': userState.user?.divisions.first ?? '',
+        'recordedTime': time,
+      };
+
       return await ClockOutLogUploader.uploadLeaveJson(
         context: context,
-        data: {
-          'recordedTime': time,
-        },
+        data: leaveData,
       );
     } catch (e) {
       debugPrint('❌ 퇴근 기록 오류: $e');

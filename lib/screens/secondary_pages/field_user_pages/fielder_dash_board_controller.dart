@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
+import '../../../../states/area/area_state.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../../utils/snackbar_helper.dart';
 import 'utils/clock_out_log_uploader.dart';
@@ -32,17 +33,25 @@ class FielderDashBoardController {
     }
   }
 
-  /// 퇴근 시간 기록 및 업로드
+  /// ✅ 퇴근 시간 기록 및 업로드
   Future<bool> _recordLeaveTime(BuildContext context) async {
     try {
+      final userState = Provider.of<UserState>(context, listen: false);
+      final areaState = Provider.of<AreaState>(context, listen: false);
+
       final now = DateTime.now();
       final time = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
 
+      final leaveData = {
+        'userId': userState.user?.id ?? '',
+        'userName': userState.name,
+        'division': areaState.currentDivision,
+        'recordedTime': time,
+      };
+
       return await ClockOutLogUploader.uploadLeaveJson(
         context: context,
-        data: {
-          'recordedTime': time,
-        },
+        data: leaveData,
       );
     } catch (e) {
       debugPrint('❌ 퇴근 기록 오류: $e');
