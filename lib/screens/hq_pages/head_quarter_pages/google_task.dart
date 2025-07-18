@@ -3,6 +3,8 @@ import 'package:googleapis/calendar/v3.dart' as calendar;
 import 'package:googleapis_auth/auth_io.dart';
 import 'package:flutter/services.dart';
 
+import 'task_bottom_sheet.dart';
+
 class TaskListFromCalendar extends StatefulWidget {
   final String selectedArea;
 
@@ -17,6 +19,9 @@ class _TaskListFromCalendarState extends State<TaskListFromCalendar> {
 
   List<calendar.Event> _taskEvents = [];
   bool _isLoading = false;
+
+  DateTime? _loadedStart;
+  DateTime? _loadedEnd;
 
   /// ✅ selectedArea에 따라 calendarId 반환
   String get calendarId {
@@ -44,20 +49,34 @@ class _TaskListFromCalendarState extends State<TaskListFromCalendar> {
     return await clientViaServiceAccount(credentials, scopes);
   }
 
+  /// ✅ 월 단위 범위 설정 (이전, 현재, 다음)
+  DateTime get _rangeStart {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month - 1, 1);
+  }
+
+  DateTime get _rangeEnd {
+    final now = DateTime.now();
+    final nextMonth = DateTime(now.year, now.month + 2, 1);
+    return DateTime(nextMonth.year, nextMonth.month, 0, 23, 59, 59);
+  }
+
   Future<void> _loadTasksFromCalendar() async {
+    final start = _rangeStart;
+    final end = _rangeEnd;
+
+    if (_loadedStart == start && _loadedEnd == end) return;
+
     setState(() => _isLoading = true);
 
     try {
       final client = await getAuthClient();
       final calendarApi = calendar.CalendarApi(client);
 
-      final now = DateTime.now().toUtc();
-      final oneYearLater = now.add(const Duration(days: 365)).toUtc();
-
       final result = await calendarApi.events.list(
         calendarId,
-        timeMin: now,
-        timeMax: oneYearLater,
+        timeMin: start.toUtc(),
+        timeMax: end.toUtc(),
         singleEvents: true,
         orderBy: 'startTime',
       );
@@ -72,6 +91,8 @@ class _TaskListFromCalendarState extends State<TaskListFromCalendar> {
 
       setState(() {
         _taskEvents = events;
+        _loadedStart = start;
+        _loadedEnd = end;
       });
     } catch (e) {
       print('할 일 로딩 오류: $e');
@@ -102,108 +123,6 @@ class _TaskListFromCalendarState extends State<TaskListFromCalendar> {
     } catch (e) {
       print('완료 상태 업데이트 실패: $e');
     }
-  }
-
-  Future<void> _editEvent(calendar.Event event) async {
-    final titleController = TextEditingController(text: event.summary ?? '');
-    final isDone = event.description?.contains('✔️DONE') ?? false;
-    final descText = (event.description ?? '').replaceAll('✔️DONE', '').trim();
-    final descriptionController = TextEditingController(text: descText);
-    bool done = isDone;
-
-    DateTime selectedDate = event.start?.dateTime?.toLocal() ?? event.start?.date?.toLocal() ?? DateTime.now();
-
-    await showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('할 일 수정'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: titleController,
-                decoration: const InputDecoration(labelText: '제목'),
-              ),
-              TextField(
-                controller: descriptionController,
-                decoration: const InputDecoration(labelText: '설명'),
-                maxLines: 2,
-              ),
-              Row(
-                children: [
-                  Checkbox(
-                    value: done,
-                    onChanged: (value) {
-                      setDialogState(() => done = value ?? false);
-                    },
-                  ),
-                  const Text('완료됨'),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  const Icon(Icons.calendar_today),
-                  const SizedBox(width: 8),
-                  Text(
-                      "${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}"),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: selectedDate,
-                        firstDate: DateTime(2020),
-                        lastDate: DateTime(2100),
-                      );
-                      if (picked != null) {
-                        setDialogState(() => selectedDate = picked);
-                      }
-                    },
-                    child: const Text('날짜 선택'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('취소'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                String finalDesc = descriptionController.text.trim();
-                if (done) {
-                  finalDesc = (finalDesc.isEmpty ? '' : '$finalDesc\n') + '✔️DONE';
-                }
-
-                final updatedEvent = calendar.Event()
-                  ..summary = titleController.text
-                  ..description = finalDesc
-                  ..start = calendar.EventDateTime(
-                      date: DateTime.utc(selectedDate.year, selectedDate.month, selectedDate.day))
-                  ..end = calendar.EventDateTime(
-                      date: DateTime.utc(selectedDate.year, selectedDate.month, selectedDate.day)
-                          .add(const Duration(days: 1)));
-
-                try {
-                  final client = await getAuthClient(write: true);
-                  final calendarApi = calendar.CalendarApi(client);
-                  await calendarApi.events.update(updatedEvent, calendarId, event.id!);
-                  Navigator.pop(context);
-                  await _loadTasksFromCalendar();
-                } catch (e) {
-                  print('이벤트 수정 실패: $e');
-                }
-              },
-              child: const Text('저장'),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   @override
@@ -251,7 +170,13 @@ class _TaskListFromCalendarState extends State<TaskListFromCalendar> {
                   Text('설명: $description', style: const TextStyle(fontSize: 14)),
               ],
             ),
-            onTap: () => _editEvent(event),
+            onTap: () => showEditTaskBottomSheet(
+              context: context,
+              event: event,
+              calendarId: calendarId,
+              getAuthClient: getAuthClient,
+              reloadEvents: _loadTasksFromCalendar,
+            ),
           );
         },
       ),

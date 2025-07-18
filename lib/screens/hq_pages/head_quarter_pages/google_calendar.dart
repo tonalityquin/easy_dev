@@ -19,6 +19,8 @@ class GoogleCalendar extends StatefulWidget {
 class _GoogleCalendarState extends State<GoogleCalendar> {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
+  DateTime? _loadedStart;
+  DateTime? _loadedEnd;
   List<calendar.Event> _events = [];
   Map<DateTime, List<calendar.Event>> _allEvents = {};
   bool _isLoading = false;
@@ -36,7 +38,7 @@ class _GoogleCalendarState extends State<GoogleCalendar> {
     super.initState();
     calendarId = calendarMap[widget.selectedArea] ?? calendarMap['belivus']!;
     _selectedDay = _focusedDay;
-    _loadAllEvents().then((_) => _loadEventsForDay(_selectedDay!));
+    _loadAndDisplayEvents(_focusedDay);
   }
 
   Future<AutoRefreshingAuthClient> getAuthClient({bool write = false}) async {
@@ -46,18 +48,29 @@ class _GoogleCalendarState extends State<GoogleCalendar> {
     return await clientViaServiceAccount(credentials, scopes);
   }
 
-  Future<void> _loadAllEvents() async {
+  DateTime getMonthStart(DateTime day) => DateTime(day.year, day.month - 1, 1);
+  DateTime getMonthEnd(DateTime day) => DateTime(day.year, day.month + 2, 0);
+
+  Future<void> _loadAndDisplayEvents(DateTime forMonth) async {
+    final start = getMonthStart(forMonth);
+    final end = getMonthEnd(forMonth);
+
+    // 같은 범위를 중복 요청하지 않도록 방지
+    if (_loadedStart == start && _loadedEnd == end) {
+      _loadEventsForDay(_selectedDay ?? forMonth);
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
     try {
       final client = await getAuthClient();
       final calendarApi = calendar.CalendarApi(client);
-      final now = DateTime.now();
-      final start = DateTime(now.year, 1, 1).toUtc();
-      final end = DateTime(now.year, 12, 31).toUtc();
 
       final result = await calendarApi.events.list(
         calendarId,
-        timeMin: start,
-        timeMax: end,
+        timeMin: start.toUtc(),
+        timeMax: end.toUtc(),
         singleEvents: true,
         orderBy: 'startTime',
       );
@@ -73,26 +86,26 @@ class _GoogleCalendarState extends State<GoogleCalendar> {
         }
       }
 
+      _loadedStart = start;
+      _loadedEnd = end;
+
       setState(() {
         _allEvents = eventMap;
       });
+
+      await _loadEventsForDay(_selectedDay ?? forMonth);
     } catch (e) {
-      print('모든 일정 로딩 실패: $e');
+      print('일정 로딩 실패: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _loadEventsForDay(DateTime day) async {
     if (!mounted) return;
-    setState(() => _isLoading = true);
-
-    try {
-      final key = DateTime(day.year, day.month, day.day);
-      setState(() {
-        _events = _allEvents[key] ?? [];
-      });
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+    setState(() {
+      _events = _allEvents[DateTime(day.year, day.month, day.day)] ?? [];
+    });
   }
 
   Future<void> _addOrEditEvent({calendar.Event? existing}) async {
@@ -140,8 +153,7 @@ class _GoogleCalendarState extends State<GoogleCalendar> {
       } else {
         await calendarApi.events.update(event, calendarId, existing.id!);
       }
-      await _loadAllEvents();
-      await _loadEventsForDay(date);
+      await _loadAndDisplayEvents(_focusedDay);
     } catch (e) {
       print('일정 저장 실패: $e');
     }
@@ -158,8 +170,7 @@ class _GoogleCalendarState extends State<GoogleCalendar> {
     final calendarApi = calendar.CalendarApi(client);
     try {
       await calendarApi.events.delete(calendarId, eventId);
-      await _loadAllEvents();
-      await _loadEventsForDay(_selectedDay ?? DateTime.now());
+      await _loadAndDisplayEvents(_focusedDay);
     } catch (e) {
       print('일정 삭제 실패: $e');
     }
@@ -182,75 +193,94 @@ class _GoogleCalendarState extends State<GoogleCalendar> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
-              padding: const EdgeInsets.only(bottom: 80),
-              children: [
-                TableCalendar(
-                  firstDay: DateTime.utc(2020, 1, 1),
-                  lastDay: DateTime.utc(2030, 12, 31),
-                  focusedDay: _focusedDay,
-                  selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-                  onDaySelected: (selectedDay, focusedDay) {
-                    setState(() {
-                      _selectedDay = selectedDay;
-                      _focusedDay = focusedDay;
-                    });
-                    _loadEventsForDay(selectedDay);
-                  },
-                  eventLoader: (day) => _allEvents[DateTime(day.year, day.month, day.day)] ?? [],
-                  calendarBuilders: CalendarBuilders(
-                    markerBuilder: (context, date, events) {
-                      if (events.isEmpty) return const SizedBox();
-                      final allDone =
-                          events.every((e) => e is calendar.Event && e.extendedProperties?.private?['done'] == 'true');
-                      return Align(
-                        alignment: Alignment.bottomCenter,
-                        child: Container(
-                          width: 6,
-                          height: 6,
-                          margin: const EdgeInsets.only(bottom: 3),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: allDone ? Colors.green : Colors.red,
-                          ),
-                        ),
-                      );
-                    },
+        padding: const EdgeInsets.only(bottom: 80),
+        children: [
+          TableCalendar(
+            firstDay: DateTime.utc(2020, 1, 1),
+            lastDay: DateTime.utc(2030, 12, 31),
+            focusedDay: _focusedDay,
+            selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+            onDaySelected: (selectedDay, focusedDay) {
+              setState(() {
+                _selectedDay = selectedDay;
+                _focusedDay = focusedDay;
+              });
+              _loadEventsForDay(selectedDay);
+            },
+            onPageChanged: (focusedDay) {
+              _focusedDay = focusedDay;
+              _loadAndDisplayEvents(focusedDay);
+            },
+            eventLoader: (day) => _allEvents[DateTime(day.year, day.month, day.day)] ?? [],
+            calendarBuilders: CalendarBuilders(
+              markerBuilder: (context, date, events) {
+                if (events.isEmpty) return const SizedBox();
+                final allDone =
+                events.every((e) => e is calendar.Event && e.extendedProperties?.private?['done'] == 'true');
+                return Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Container(
+                    width: 6,
+                    height: 6,
+                    margin: const EdgeInsets.only(bottom: 3),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: allDone ? Colors.green : Colors.red,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const Divider(),
+          if (_events.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 30),
+              child: Center(child: Text("일정이 없습니다.")),
+            )
+          else
+            ..._events.map((event) {
+              final isDone = event.extendedProperties?.private?['done'] == 'true';
+              final description = event.description?.trim() ?? '';
+              final startTime = event.start?.dateTime?.toLocal();
+              final isAllDay = event.start?.date != null;
+
+              final timeLabel = isAllDay
+                  ? '종일 일정'
+                  : (startTime != null
+                  ? '${startTime.hour.toString().padLeft(2, '0')}:${startTime.minute.toString().padLeft(2, '0')}'
+                  : '');
+
+              return ListTile(
+                title: Text(
+                  event.summary ?? '제목 없음',
+                  style: TextStyle(
+                    decoration: isDone ? TextDecoration.lineThrough : null,
                   ),
                 ),
-                const Divider(),
-                if (_events.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 30),
-                    child: Center(child: Text("일정이 없습니다.")),
-                  )
-                else
-                  ..._events.map((event) {
-                    final isDone = event.extendedProperties?.private?['done'] == 'true';
-                    final description = event.description?.trim();
-                    return ListTile(
-                      leading: Checkbox(
-                        value: isDone,
-                        onChanged: (_) => _toggleDone(event),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (timeLabel.isNotEmpty)
+                      Text(timeLabel, style: const TextStyle(fontSize: 13, color: Colors.grey)),
+                    if (description.isNotEmpty)
+                      Text(
+                        '설명: $description',
+                        style: const TextStyle(fontSize: 13),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      title: Text(
-                        event.summary ?? '제목 없음',
-                        style: TextStyle(
-                          decoration: isDone ? TextDecoration.lineThrough : null,
-                        ),
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('종일 일정'),
-                          if (description != null && description.isNotEmpty)
-                            Text('설명: $description', style: const TextStyle(fontSize: 13)),
-                        ],
-                      ),
-                      onTap: () => _addOrEditEvent(existing: event),
-                    );
-                  }),
-              ],
-            ),
+                  ],
+                ),
+                trailing: Checkbox(
+                  value: isDone,
+                  onChanged: (_) => _toggleDone(event),
+                ),
+                onTap: () => _addOrEditEvent(existing: event),
+              );
+            }),
+        ],
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _addOrEditEvent(),
         backgroundColor: Theme.of(context).colorScheme.primary,
