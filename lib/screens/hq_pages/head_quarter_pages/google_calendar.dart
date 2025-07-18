@@ -248,11 +248,18 @@ class _GoogleCalendarState extends State<GoogleCalendar> {
                       ),
                       onTap: () => _addOrEditEvent(existing: event),
                     );
-                  }).toList(),
+                  }),
               ],
             ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _addOrEditEvent(),
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        elevation: 4,
+        tooltip: '일정 추가',
         child: const Icon(Icons.add),
       ),
     );
