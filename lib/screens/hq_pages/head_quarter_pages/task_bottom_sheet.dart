@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:googleapis/calendar/v3.dart' as calendar;
 import 'package:googleapis_auth/auth_io.dart';
 
-Future<void> showEditTaskBottomSheet({
+Future<bool?> showEditTaskBottomSheet({
   required BuildContext context,
   required calendar.Event event,
   required String calendarId,
@@ -16,7 +16,7 @@ Future<void> showEditTaskBottomSheet({
   bool done = isDone;
   DateTime selectedDate = event.start?.dateTime?.toLocal() ?? event.start?.date?.toLocal() ?? DateTime.now();
 
-  await showModalBottomSheet(
+  final result = await showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
     shape: const RoundedRectangleBorder(
@@ -90,8 +90,15 @@ Future<void> showEditTaskBottomSheet({
                       Expanded(
                         child: OutlinedButton.icon(
                           onPressed: () async {
-                            Navigator.pop(context);
-                            await _deleteEvent(event.id!, calendarId, getAuthClient, reloadEvents);
+                            final deleted = await _deleteEvent(
+                              event.id!,
+                              calendarId,
+                              getAuthClient,
+                            );
+                            if (deleted) {
+                              await reloadEvents();
+                              Navigator.pop(context, true); // ✅ 변경됨
+                            }
                           },
                           icon: const Icon(Icons.delete, color: Colors.red),
                           label: const Text('삭제', style: TextStyle(color: Colors.red)),
@@ -110,16 +117,26 @@ Future<void> showEditTaskBottomSheet({
                               ..summary = titleController.text
                               ..description = finalDesc
                               ..start = calendar.EventDateTime(
-                                  date: DateTime.utc(selectedDate.year, selectedDate.month, selectedDate.day))
+                                date: DateTime.utc(
+                                  selectedDate.year,
+                                  selectedDate.month,
+                                  selectedDate.day,
+                                ),
+                              )
                               ..end = calendar.EventDateTime(
-                                  date: DateTime.utc(selectedDate.year, selectedDate.month, selectedDate.day + 1));
+                                date: DateTime.utc(
+                                  selectedDate.year,
+                                  selectedDate.month,
+                                  selectedDate.day + 1,
+                                ),
+                              );
 
                             try {
                               final client = await getAuthClient(write: true);
                               final calendarApi = calendar.CalendarApi(client);
                               await calendarApi.events.update(updatedEvent, calendarId, event.id!);
-                              Navigator.pop(context);
                               await reloadEvents();
+                              Navigator.pop(context, true); // ✅ 변경됨
                             } catch (e) {
                               print('이벤트 수정 실패: $e');
                             }
@@ -129,6 +146,7 @@ Future<void> showEditTaskBottomSheet({
                       ),
                     ],
                   ),
+                  const SizedBox(height: 80),
                 ],
               ),
             );
@@ -137,20 +155,21 @@ Future<void> showEditTaskBottomSheet({
       );
     },
   );
-}
 
-Future<void> _deleteEvent(
+  return result;
+}
+Future<bool> _deleteEvent(
     String eventId,
     String calendarId,
     Future<AutoRefreshingAuthClient> Function({bool write}) getAuthClient,
-    Future<void> Function() reloadEvents,
     ) async {
   try {
     final client = await getAuthClient(write: true);
     final calendarApi = calendar.CalendarApi(client);
     await calendarApi.events.delete(calendarId, eventId);
-    await reloadEvents();
+    return true;
   } catch (e) {
     print('이벤트 삭제 실패: $e');
+    return false;
   }
 }

@@ -130,7 +130,7 @@ Future<EventEditorResult?> showEventEditorBottomSheet({
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 80),
                   ],
                 ),
               ),

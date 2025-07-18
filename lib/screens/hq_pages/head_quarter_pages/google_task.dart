@@ -23,7 +23,6 @@ class _TaskListFromCalendarState extends State<TaskListFromCalendar> {
   DateTime? _loadedStart;
   DateTime? _loadedEnd;
 
-  /// ✅ selectedArea에 따라 calendarId 반환
   String get calendarId {
     switch (widget.selectedArea) {
       case 'pelican':
@@ -43,13 +42,10 @@ class _TaskListFromCalendarState extends State<TaskListFromCalendar> {
   Future<AutoRefreshingAuthClient> getAuthClient({bool write = false}) async {
     final jsonString = await rootBundle.loadString(serviceAccountPath);
     final credentials = ServiceAccountCredentials.fromJson(jsonString);
-    final scopes = write
-        ? [calendar.CalendarApi.calendarScope]
-        : [calendar.CalendarApi.calendarReadonlyScope];
+    final scopes = write ? [calendar.CalendarApi.calendarScope] : [calendar.CalendarApi.calendarReadonlyScope];
     return await clientViaServiceAccount(credentials, scopes);
   }
 
-  /// ✅ 월 단위 범위 설정 (이전, 현재, 다음)
   DateTime get _rangeStart {
     final now = DateTime.now();
     return DateTime(now.year, now.month - 1, 1);
@@ -134,51 +130,101 @@ class _TaskListFromCalendarState extends State<TaskListFromCalendar> {
         foregroundColor: Colors.black87,
         centerTitle: true,
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _taskEvents.isEmpty
-          ? const Center(child: Text('할 일이 없습니다.'))
-          : ListView.builder(
-        itemCount: _taskEvents.length,
-        itemBuilder: (context, index) {
-          final event = _taskEvents[index];
-          final isDone = event.description?.contains('✔️DONE') ?? false;
-          final description = event.description?.replaceAll('✔️DONE', '').trim();
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: _loadTasksFromCalendar,
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _taskEvents.isEmpty
+                  ? ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      children: [
+                        const SizedBox(height: 100),
+                        Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.calendar_today_outlined, size: 60, color: Colors.grey),
+                              const SizedBox(height: 12),
+                              const Text('할 일이 없습니다.', style: TextStyle(fontSize: 16)),
+                              const SizedBox(height: 8),
+                              ElevatedButton.icon(
+                                icon: const Icon(Icons.add),
+                                label: const Text('할 일 추가하기'),
+                                onPressed: () {
+                                  // 추후 구현 가능
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.only(bottom: 80),
+                      itemCount: _taskEvents.length,
+                      itemBuilder: (context, index) {
+                        final event = _taskEvents[index];
+                        final isDone = event.description?.contains('✔️DONE') ?? false;
+                        final description = event.description?.replaceAll('✔️DONE', '').trim();
 
-          final dateTime = event.start?.dateTime ?? event.start?.date;
-          final localDate = dateTime?.toLocal();
-          final formattedDate = localDate != null
-              ? "${localDate.year}-${localDate.month.toString().padLeft(2, '0')}-${localDate.day.toString().padLeft(2, '0')}"
-              : '날짜 없음';
+                        final dateTime = event.start?.dateTime ?? event.start?.date;
+                        final localDate = dateTime?.toLocal();
+                        final formattedDate = localDate != null
+                            ? "${localDate.year}-${localDate.month.toString().padLeft(2, '0')}-${localDate.day.toString().padLeft(2, '0')}"
+                            : '날짜 없음';
 
-          return ListTile(
-            leading: Checkbox(
-              value: isDone,
-              onChanged: (_) => _toggleDone(event),
-            ),
-            title: Text(
-              event.summary ?? '제목 없음',
-              style: TextStyle(
-                decoration: isDone ? TextDecoration.lineThrough : null,
-              ),
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('날짜: $formattedDate'),
-                if (description != null && description.isNotEmpty)
-                  Text('설명: $description', style: const TextStyle(fontSize: 14)),
-              ],
-            ),
-            onTap: () => showEditTaskBottomSheet(
-              context: context,
-              event: event,
-              calendarId: calendarId,
-              getAuthClient: getAuthClient,
-              reloadEvents: _loadTasksFromCalendar,
-            ),
-          );
-        },
+                        return Card(
+                          color: isDone ? Colors.grey.shade100 : null,
+                          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          child: ListTile(
+                              title: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      event.summary ?? '제목 없음',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        decoration: isDone ? TextDecoration.lineThrough : null,
+                                      ),
+                                    ),
+                                  ),
+                                  if (isDone) const Icon(Icons.check_circle, color: Colors.green, size: 18),
+                                ],
+                              ),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('날짜: $formattedDate', style: const TextStyle(fontSize: 13)),
+                                  if (description != null && description.isNotEmpty)
+                                    Text(
+                                      '설명: $description',
+                                      style: const TextStyle(fontSize: 13),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                ],
+                              ),
+                              trailing: Checkbox(
+                                value: isDone,
+                                onChanged: (_) => _toggleDone(event),
+                              ),
+                              onTap: () async {
+                                final updated = await showEditTaskBottomSheet(
+                                  context: context,
+                                  event: event,
+                                  calendarId: calendarId,
+                                  getAuthClient: getAuthClient,
+                                  reloadEvents: _loadTasksFromCalendar,
+                                );
+                                if (updated == true) {
+                                  await _loadTasksFromCalendar();
+                                }
+                              }),
+                        );
+                      },
+                    ),
+        ),
       ),
     );
   }

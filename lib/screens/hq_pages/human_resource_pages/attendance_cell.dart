@@ -237,9 +237,20 @@ class _AttendanceCellState extends State<AttendanceCell> {
             const SizedBox(height: 20),
             ElevatedButton.icon(
               onPressed: _selectedUser == null ? null : _saveAllChangesToSheets,
-              icon: const Icon(Icons.save),
-              label: const Text('변경사항 저장'),
-              style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+              icon: const Icon(Icons.save, size: 20),
+              label: const Text(
+                '변경사항 저장',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).primaryColor,
+                foregroundColor: Colors.white,
+                minimumSize: const Size.fromHeight(48),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 0,
+              ),
             ),
           ],
         ),

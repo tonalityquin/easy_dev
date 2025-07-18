@@ -27,7 +27,8 @@ class TimeEditBottomSheet extends StatelessWidget {
     final outHourController = TextEditingController(text: outTimeParts[0]);
     final outMinController = TextEditingController(text: outTimeParts[1]);
 
-    return Padding(
+    return Container(
+      color: Colors.white, // ✅ 배경 하얗게
       padding: EdgeInsets.only(
         left: 20,
         right: 20,
@@ -54,19 +55,29 @@ class TimeEditBottomSheet extends StatelessWidget {
 
             /// 저장 버튼
             ElevatedButton.icon(
-              icon: const Icon(Icons.save),
-              label: const Text('저장'),
+              icon: const Icon(Icons.save, size: 20),
+              label: const Text(
+                '저장',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
               onPressed: () {
                 final inTime = '${inHourController.text.padLeft(2, '0')}:${inMinController.text.padLeft(2, '0')}';
                 final outTime = '${outHourController.text.padLeft(2, '0')}:${outMinController.text.padLeft(2, '0')}';
-
                 onSave(inTime, outTime);
                 Navigator.pop(context);
               },
               style: ElevatedButton.styleFrom(
-                minimumSize: const Size.fromHeight(45),
+                backgroundColor: Theme.of(context).primaryColor,
+                foregroundColor: Colors.white,
+                minimumSize: const Size.fromHeight(48),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 0,
               ),
             ),
+
+            const SizedBox(height: 80), // ✅ 추가 여백
           ],
         ),
       ),
