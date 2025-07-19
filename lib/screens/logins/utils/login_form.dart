@@ -36,7 +36,7 @@ class _LoginFormState extends State<LoginForm> {
         GestureDetector(
           onTap: () {
             Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const GanttCalendar()),
+              MaterialPageRoute(builder: (_) => const MonthlyGanttCalendar()),
             );
           },
           child: SizedBox(
