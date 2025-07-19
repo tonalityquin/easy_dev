@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../states/area/area_state.dart';
 import '../../../states/location/location_state.dart';
 import '../../../repositories/location/location_repository.dart';
+import '../../input_pages/input_plate_bottom_sheet.dart';
 
 class ParkingCompletedLocationPicker extends StatefulWidget {
   final Function(String locationName) onLocationSelected;
@@ -98,9 +99,11 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
       backgroundColor: Colors.white,
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          // 원하는 기능 수행
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("FAB 클릭됨")),
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.white,
+            builder: (_) => const InputPlateBottomSheet(),
           );
         },
         backgroundColor: Colors.teal,
