@@ -3,7 +3,7 @@ import 'package:googleapis/calendar/v3.dart' as calendar;
 import 'package:googleapis_auth/auth_io.dart';
 import 'package:flutter/services.dart';
 
-import 'task_bottom_sheet.dart';
+import 'widget/task_bottom_sheet.dart';
 
 class TaskListFromCalendar extends StatefulWidget {
   final String selectedArea;

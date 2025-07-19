@@ -94,9 +94,21 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
     final area = context.read<AreaState>().currentArea;
     final locationRepo = context.read<LocationRepository>();
 
-    return Material(
-      color: Colors.white,
-      child: Consumer<LocationState>(
+    return Scaffold(
+      backgroundColor: Colors.white,
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          // 원하는 기능 수행
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("FAB 클릭됨")),
+          );
+        },
+        backgroundColor: Colors.teal,
+        foregroundColor: Colors.white,
+        tooltip: '차량 추가',
+        child: const Icon(Icons.add),
+      ),
+      body: Consumer<LocationState>(
         builder: (context, locationState, _) {
           if (locationState.isLoading) {
             return const Center(child: CircularProgressIndicator());

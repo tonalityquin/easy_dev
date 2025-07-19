@@ -57,7 +57,7 @@ class _TypePageState extends State<TypePage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   PageBottomNavigation(),
-                  DebugTriggerBar(), // ✅ 추가된 디버그 트리거
+                  DebugTriggerBar(),
                 ],
               ),
             ),
@@ -83,13 +83,9 @@ class _RefreshableBodyState extends State<RefreshableBody> {
     const distanceThreshold = 80.0;
 
     if (_dragDistance > distanceThreshold && velocity > velocityThreshold) {
-      Navigator.of(context).push(
-        _slidePage(const InputPlateScreen(), fromLeft: true),
-      );
+      Navigator.of(context).push(_slidePage(const InputPlateScreen(), fromLeft: true));
     } else if (_dragDistance < -distanceThreshold && velocity < -velocityThreshold) {
-      Navigator.of(context).push(
-        _slidePage(const SecondaryPage(), fromLeft: false),
-      );
+      Navigator.of(context).push(_slidePage(const SecondaryPage(), fromLeft: false));
     } else {
       debugPrint(
         '⏸ 드래그 거리(${_dragDistance.toStringAsFixed(1)}) 또는 속도($velocity) 부족 → 무시됨',
@@ -106,10 +102,7 @@ class _RefreshableBodyState extends State<RefreshableBody> {
       transitionsBuilder: (_, animation, __, child) {
         final begin = Offset(fromLeft ? -1.0 : 1.0, 0);
         final end = Offset.zero;
-        final tween = Tween(begin: begin, end: end).chain(
-          CurveTween(curve: Curves.easeInOut),
-        );
-
+        final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeInOut));
         return SlideTransition(position: animation.drive(tween), child: child);
       },
     );
@@ -131,9 +124,7 @@ class _RefreshableBodyState extends State<RefreshableBody> {
               if (state.isLoading)
                 Container(
                   color: Colors.black.withAlpha(51),
-                  child: const Center(
-                    child: CircularProgressIndicator(),
-                  ),
+                  child: const Center(child: CircularProgressIndicator()),
                 ),
             ],
           );
@@ -278,7 +269,7 @@ class DebugTriggerBar extends StatelessWidget {
         showModalBottomSheet(
           context: context,
           isScrollControlled: true,
-          builder: (_) => const TypePageDebugBottomSheet(), // 또는 SecondaryDebugBottomSheet()
+          builder: (_) => const TypePageDebugBottomSheet(),
         );
       },
       child: Container(

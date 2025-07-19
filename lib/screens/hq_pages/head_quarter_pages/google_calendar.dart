@@ -5,7 +5,7 @@ import 'package:table_calendar/table_calendar.dart';
 import 'package:googleapis/calendar/v3.dart' as calendar;
 import 'package:googleapis_auth/auth_io.dart';
 
-import 'event_editor_bottom_sheet.dart';
+import 'widget/event_editor_bottom_sheet.dart';
 
 class GoogleCalendar extends StatefulWidget {
   final String selectedArea;
