@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../dev/gantt_calendar.dart';
 import '../login_controller.dart';
 import '../debugs/login_debug_bottom_sheet.dart'; // ✅ 디버깅 바텀시트 import
 
@@ -30,8 +31,22 @@ class _LoginFormState extends State<LoginForm> {
     return Column(
       children: [
         const SizedBox(height: 96),
-        SizedBox(height: 120, child: Image.asset('assets/images/belivus_logo.PNG')),
+
+        // ✅ 회사 로고 클릭 시 GanttCalendar 이동
+        GestureDetector(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const GanttCalendar()),
+            );
+          },
+          child: SizedBox(
+            height: 120,
+            child: Image.asset('assets/images/belivus_logo.PNG'),
+          ),
+        ),
+
         const SizedBox(height: 96),
+
         // 이름 입력
         TextField(
           controller: _controller.nameController,
@@ -41,6 +56,7 @@ class _LoginFormState extends State<LoginForm> {
           decoration: _controller.inputDecoration(label: "이름", icon: Icons.person),
         ),
         const SizedBox(height: 16),
+
         // 전화번호 입력
         TextField(
           controller: _controller.phoneController,
@@ -52,6 +68,7 @@ class _LoginFormState extends State<LoginForm> {
           decoration: _controller.inputDecoration(label: "전화번호", icon: Icons.phone),
         ),
         const SizedBox(height: 16),
+
         // 비밀번호 입력
         TextField(
           controller: _controller.passwordController,
@@ -71,6 +88,7 @@ class _LoginFormState extends State<LoginForm> {
           ),
         ),
         const SizedBox(height: 32),
+
         // 로그인 버튼
         InkWell(
           onTap: _controller.isLoading ? null : _handleLogin,
@@ -122,6 +140,7 @@ class _LoginFormState extends State<LoginForm> {
           ),
         ),
         const SizedBox(height: 12),
+
         // 디버깅 버튼
         SizedBox(
           width: double.infinity,

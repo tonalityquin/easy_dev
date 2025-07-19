@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../widgets/navigation/navigation_hq_mini.dart';
 import '../../widgets/navigation/top_navigation.dart';
-import 'head_quarter_pages/gantt.dart';
 import 'head_quarter_pages/google_task.dart';
 import 'head_quarter_pages/google_calendar.dart';
 
@@ -52,22 +51,18 @@ class _LinkToGoogleState extends State<LinkToGoogle> {
           elevation: 0,
         ),
         body: _selectedIndex == 0
-            ? Gantt()
-            : _selectedIndex == 1
             ? GoogleCalendar(selectedArea: _selectedArea!)
-                : _selectedIndex == 2
+                : _selectedIndex == 1
                     ? TaskListFromCalendar(selectedArea: _selectedArea!)
                     : const Center(child: Text('해당 탭의 콘텐츠는 준비 중입니다.')),
         bottomNavigationBar: HqMiniNavigation(
           height: 56,
           iconSize: 22,
           icons: const [
-            Icons.next_plan,
             Icons.calendar_month,
             Icons.task,
           ],
           labels: const [
-            'Gantt',
             'Calendar',
             'Task',
           ],
