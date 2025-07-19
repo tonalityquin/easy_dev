@@ -76,7 +76,7 @@ class _StatisticsState extends State<Statistics> {
                 children: [
                   ElevatedButton.icon(
                     icon: const Icon(Icons.refresh),
-                    label: const Text('초기화'),
+                    label: const Text(''),
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.grey[300]),
                     onPressed: _savedReports.isNotEmpty
                         ? () {
@@ -93,14 +93,14 @@ class _StatisticsState extends State<Statistics> {
                   Expanded(
                     child: ElevatedButton.icon(
                       icon: const Icon(Icons.calendar_today),
-                      label: const Text('날짜 선택'),
+                      label: const Text(''),
                       onPressed: (_selectedArea != null) ? _pickDate : null,
                     ),
                   ),
                   const SizedBox(width: 8),
                   ElevatedButton.icon(
                     icon: const Icon(Icons.bar_chart),
-                    label: const Text('그래프 생성'),
+                    label: const Text(''),
                     onPressed: _savedReports.isNotEmpty ? _showGraph : null,
                   ),
                 ],
