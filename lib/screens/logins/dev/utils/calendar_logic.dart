@@ -3,7 +3,7 @@ import 'package:googleapis/calendar/v3.dart' as calendar;
 import 'package:googleapis_auth/auth_io.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
-import 'event_editor_bottom_sheet.dart';
+import '../sections/event_editor_bottom_sheet.dart';
 
 const String calendarId = 'surge1868@gmail.com';
 const String serviceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';

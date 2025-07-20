@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../dev/personal_calendar.dart';
 import '../login_controller.dart';
-import '../debugs/login_debug_bottom_sheet.dart'; // ✅ 디버깅 바텀시트 import
+import '../debugs/login_debug_bottom_sheet.dart';
 
 class LoginForm extends StatefulWidget {
   final LoginController controller;
@@ -19,9 +19,10 @@ class _LoginFormState extends State<LoginForm> {
   void initState() {
     super.initState();
     _controller = widget.controller;
-    _controller.initState();
+    _controller.initState(); // 로그인 상태 확인 및 자동 이동 처리
   }
 
+  /// 로그인 요청 실행
   void _handleLogin() {
     _controller.login(setState);
   }
@@ -32,7 +33,7 @@ class _LoginFormState extends State<LoginForm> {
       children: [
         const SizedBox(height: 96),
 
-        // ✅ 회사 로고 클릭 시 GanttCalendar 이동
+        // 로고 클릭 시 개인 캘린더 화면으로 이동
         GestureDetector(
           onTap: () {
             Navigator.of(context).push(
@@ -47,7 +48,7 @@ class _LoginFormState extends State<LoginForm> {
 
         const SizedBox(height: 96),
 
-        // 이름 입력
+        // 이름 입력 필드
         TextField(
           controller: _controller.nameController,
           focusNode: _controller.nameFocus,
@@ -57,7 +58,7 @@ class _LoginFormState extends State<LoginForm> {
         ),
         const SizedBox(height: 16),
 
-        // 전화번호 입력
+        // 전화번호 입력 필드 (입력 중 자동 포맷)
         TextField(
           controller: _controller.phoneController,
           focusNode: _controller.phoneFocus,
@@ -69,7 +70,7 @@ class _LoginFormState extends State<LoginForm> {
         ),
         const SizedBox(height: 16),
 
-        // 비밀번호 입력
+        // 비밀번호 입력 필드 (비밀번호 보이기/숨기기 토글 가능)
         TextField(
           controller: _controller.passwordController,
           focusNode: _controller.passwordFocus,
@@ -89,7 +90,7 @@ class _LoginFormState extends State<LoginForm> {
         ),
         const SizedBox(height: 32),
 
-        // 로그인 버튼
+        // 로그인 버튼 (로딩 중이면 인디케이터 표시)
         InkWell(
           onTap: _controller.isLoading ? null : _handleLogin,
           borderRadius: BorderRadius.circular(24),
@@ -141,7 +142,7 @@ class _LoginFormState extends State<LoginForm> {
         ),
         const SizedBox(height: 12),
 
-        // 디버깅 버튼
+        // 디버깅 로그 확인용 버튼 (BottomSheet 표시)
         SizedBox(
           width: double.infinity,
           child: OutlinedButton.icon(

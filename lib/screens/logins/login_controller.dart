@@ -12,69 +12,82 @@ import 'debugs/login_debug_firestore_logger.dart';
 
 class LoginController {
   final BuildContext context;
+
+  // 입력 필드 컨트롤러
   final TextEditingController nameController = TextEditingController();
   final TextEditingController phoneController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
+
+  // 포커스 관리용
   final FocusNode nameFocus = FocusNode();
   final FocusNode phoneFocus = FocusNode();
   final FocusNode passwordFocus = FocusNode();
+
+  // 로딩 상태 및 비밀번호 가시성 상태
   bool isLoading = false;
   bool obscurePassword = true;
 
   LoginController(this.context);
 
+  // 초기화 시 자동 로그인 여부 확인
   void initState() {
-    LoginDebugFirestoreLogger().log('🔵 LoginController.initState() 호출', level: 'info');
+    LoginDebugFirestoreLogger().log('LoginController 초기화 시작', level: 'info');
 
     Provider.of<UserState>(context, listen: false).loadUserToLogIn().then((_) {
+      final isLoggedIn = Provider.of<UserState>(context, listen: false).isLoggedIn;
+
       LoginDebugFirestoreLogger().log(
-        '✅ loadUserToLogIn() 완료: isLoggedIn=${Provider.of<UserState>(context, listen: false).isLoggedIn}',
+        '이전 로그인 정보 로드 완료: isLoggedIn=$isLoggedIn',
         level: 'success',
       );
 
-      if (Provider.of<UserState>(context, listen: false).isLoggedIn && context.mounted) {
+      if (isLoggedIn && context.mounted) {
+        // 이전 로그인 상태이면 홈 화면으로 자동 이동
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          LoginDebugFirestoreLogger().log('➡️ 이미 로그인되어 홈으로 이동', level: 'info');
+          LoginDebugFirestoreLogger().log('자동 로그인: 홈 화면으로 이동', level: 'info');
           Navigator.pushReplacementNamed(context, '/home');
         });
       }
     });
   }
 
+  // 로그인 실행 함수
   Future<void> login(StateSetter setState) async {
     final name = nameController.text.trim();
     final phone = phoneController.text.trim().replaceAll(RegExp(r'\D'), '');
     final password = passwordController.text.trim();
 
-    LoginDebugFirestoreLogger().log('📥 로그인 시도: name="$name", phone="$phone"', level: 'called');
+    LoginDebugFirestoreLogger().log('로그인 시도: name="$name", phone="$phone"', level: 'called');
 
+    // 입력값 유효성 검사
     final phoneError = LoginValidate.validatePhone(phone);
     final passwordError = LoginValidate.validatePassword(password);
 
     if (name.isEmpty) {
       showFailedSnackbar(context, '이름을 입력해주세요.');
-      LoginDebugFirestoreLogger().log('⚠️ 이름 미입력', level: 'error');
+      LoginDebugFirestoreLogger().log('이름 미입력', level: 'error');
       return;
     }
     if (phoneError != null) {
       showFailedSnackbar(context, phoneError);
-      LoginDebugFirestoreLogger().log('⚠️ 전화번호 유효성 오류: $phoneError', level: 'error');
+      LoginDebugFirestoreLogger().log('전화번호 오류: $phoneError', level: 'error');
       return;
     }
     if (passwordError != null) {
       showFailedSnackbar(context, passwordError);
-      LoginDebugFirestoreLogger().log('⚠️ 비밀번호 유효성 오류: $passwordError', level: 'error');
+      LoginDebugFirestoreLogger().log('비밀번호 오류: $passwordError', level: 'error');
       return;
     }
 
     setState(() => isLoading = true);
-    LoginDebugFirestoreLogger().log('🔄 로그인 진행 중...', level: 'info');
+    LoginDebugFirestoreLogger().log('로그인 처리 중...', level: 'info');
 
+    // 네트워크 연결 확인
     if (!await NetworkService().isConnected()) {
       if (context.mounted) {
         showFailedSnackbar(context, '인터넷 연결이 필요합니다.');
       }
-      LoginDebugFirestoreLogger().log('❌ 네트워크 연결 실패', level: 'error');
+      LoginDebugFirestoreLogger().log('네트워크 연결 실패', level: 'error');
       setState(() => isLoading = false);
       return;
     }
@@ -84,27 +97,29 @@ class LoginController {
       final user = await userRepository.getUserByPhone(phone);
 
       if (user != null) {
-        LoginDebugFirestoreLogger().log('✅ DB에서 사용자 조회 성공: ${user.name}', level: 'success');
+        LoginDebugFirestoreLogger().log('사용자 정보 조회 성공: ${user.name}', level: 'success');
       } else {
-        LoginDebugFirestoreLogger().log('⚠️ DB에서 사용자 조회 실패(null 반환)', level: 'error');
+        LoginDebugFirestoreLogger().log('사용자 정보 조회 실패', level: 'error');
       }
 
+      // 사용자 정보 출력 (디버깅 목적)
       if (context.mounted) {
-        debugPrint("login, 입력값 → name: $name, phone: $phone, password: $password");
-
+        debugPrint("입력값: name=$name, phone=$phone, password=$password");
         if (user != null) {
-          debugPrint("login, DB 유저 → name: ${user.name}, phone: ${user.phone}, password: ${user.password}");
+          debugPrint("DB 유저: name=${user.name}, phone=${user.phone}, password=${user.password}");
         } else {
-          debugPrint("login, DB에서 user가 null로 반환됨");
+          debugPrint("DB에서 사용자 정보 없음");
         }
       }
 
+      // 로그인 조건 일치 시
       if (user != null && user.name == name && user.password == password) {
         final userState = context.read<UserState>();
         final areaState = context.read<AreaState>();
         final updatedUser = user.copyWith(isSaved: true);
         userState.updateLoginUser(updatedUser);
 
+        // 사용자 정보 로컬 저장
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('phone', updatedUser.phone);
         await prefs.setString('selectedArea', updatedUser.selectedArea ?? '');
@@ -112,13 +127,13 @@ class LoginController {
         await prefs.setString('startTime', _timeToString(updatedUser.startTime));
         await prefs.setString('endTime', _timeToString(updatedUser.endTime));
         await prefs.setString('role', updatedUser.role);
-        await prefs.setString('position', updatedUser.position ?? ''); // ✅ position 저장
+        await prefs.setString('position', updatedUser.position ?? '');
         await prefs.setStringList('fixedHolidays', updatedUser.fixedHolidays);
 
-        debugPrint("📌 SharedPreferences 저장 완료 → phone=${prefs.getString('phone')}");
+        debugPrint("SharedPreferences 저장 완료: phone=${prefs.getString('phone')}");
 
         LoginDebugFirestoreLogger().log(
-          '✅ 로그인 성공: user=${user.name}, area=${updatedUser.areas.firstOrNull ?? ''}',
+          '로그인 성공: user=${user.name}, area=${updatedUser.areas.firstOrNull ?? ''}',
           level: 'success',
         );
 
@@ -133,32 +148,32 @@ class LoginController {
         if (context.mounted) {
           showFailedSnackbar(context, '이름 또는 비밀번호가 올바르지 않습니다.');
         }
-        LoginDebugFirestoreLogger().log('❌ 인증 실패: 이름 또는 비밀번호 불일치', level: 'error');
+        LoginDebugFirestoreLogger().log('로그인 인증 실패', level: 'error');
       }
     } catch (e) {
       if (context.mounted) {
         showFailedSnackbar(context, '로그인 실패: $e');
       }
-      LoginDebugFirestoreLogger().log('❌ 예외 발생: $e', level: 'error');
+      LoginDebugFirestoreLogger().log('예외 발생: $e', level: 'error');
     } finally {
       setState(() => isLoading = false);
-      LoginDebugFirestoreLogger().log('🔚 로그인 프로세스 종료', level: 'info');
+      LoginDebugFirestoreLogger().log('로그인 프로세스 종료', level: 'info');
     }
   }
 
+  // TimeOfDay 객체를 "HH:mm" 포맷의 문자열로 변환
   String _timeToString(TimeOfDay? time) {
     if (time == null) return '';
     return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
   }
 
+  // 비밀번호 보이기/숨기기 토글
   void togglePassword() {
     obscurePassword = !obscurePassword;
-    LoginDebugFirestoreLogger().log(
-      '👁️ 비밀번호 표시 상태 변경: $obscurePassword',
-      level: 'info',
-    );
+    LoginDebugFirestoreLogger().log('비밀번호 가시성 변경: $obscurePassword', level: 'info');
   }
 
+  // 전화번호 입력값을 하이픈 포함 형식으로 포맷팅
   void formatPhoneNumber(String value, StateSetter setState) {
     final numbersOnly = value.replaceAll(RegExp(r'\D'), '');
     String formatted = numbersOnly;
@@ -175,9 +190,10 @@ class LoginController {
         selection: TextSelection.collapsed(offset: formatted.length),
       );
     });
-    LoginDebugFirestoreLogger().log('☎️ 전화번호 포맷팅: $formatted', level: 'info');
+    LoginDebugFirestoreLogger().log('전화번호 포맷팅: $formatted', level: 'info');
   }
 
+  // 공통 InputDecoration 스타일 정의
   InputDecoration inputDecoration({
     required String label,
     IconData? icon,
@@ -199,6 +215,7 @@ class LoginController {
     );
   }
 
+  // 컨트롤러 및 포커스 리소스 해제
   void dispose() {
     nameController.dispose();
     phoneController.dispose();
@@ -206,6 +223,6 @@ class LoginController {
     nameFocus.dispose();
     phoneFocus.dispose();
     passwordFocus.dispose();
-    LoginDebugFirestoreLogger().log('🔴 LoginController dispose()', level: 'info');
+    LoginDebugFirestoreLogger().log('LoginController dispose() 호출됨', level: 'info');
   }
 }

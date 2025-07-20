@@ -3,10 +3,10 @@ import 'package:table_calendar/table_calendar.dart';
 import 'package:googleapis/calendar/v3.dart' as calendar;
 
 // 기능별 분리된 로직 import
-import 'sections/calendar_logic.dart';
+import 'utils/calendar_logic.dart';
 import 'sections/calendar_filter_chips.dart';
 import 'sections/calendar_event_card.dart';
-import 'sections/calendar_utils.dart';
+import 'utils/calendar_utils.dart';
 import 'sections/completed_event_sheet.dart';
 
 /// 개인용 Google Calendar 연동 월간 캘린더 화면

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:googleapis/calendar/v3.dart' as calendar;
-import 'calendar_logic.dart';
+import '../utils/calendar_logic.dart';
 
 /// 일정 요약(summary) 기준으로 필터링 가능한 Chip UI를 제공하는 위젯
 class CalendarFilterChips extends StatelessWidget {
@@ -90,7 +90,7 @@ class CalendarFilterChips extends StatelessWidget {
               await editEvent(
                 context: context,
                 event: target,
-                focusedDay: ㅅfocusedDay,
+                focusedDay: focusedDay,
                 updateEvents: updateEvents,
                 filterStates: filterStates,
               );

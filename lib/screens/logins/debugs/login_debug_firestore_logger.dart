@@ -16,7 +16,7 @@ class LoginDebugFirestoreLogger {
   Future<void> init() async {
     try {
       final dir = await getApplicationDocumentsDirectory();
-      _logFile = File('${dir.path}/firestore_log.txt');
+      _logFile = File('${dir.path}/login_debug_firestore_log.txt');
       if (!await _logFile!.exists()) {
         await _logFile!.create();
       }

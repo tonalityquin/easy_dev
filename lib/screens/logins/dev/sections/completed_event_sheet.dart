@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:googleapis/calendar/v3.dart' as calendar;
-import 'calendar_logic.dart';
+import '../utils/calendar_logic.dart';
 
 Future<void> showCompletedEventSheet({
   required BuildContext context,
