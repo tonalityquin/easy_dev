@@ -1,3 +1,4 @@
+// 전체 Dart 코드 (변환 반영)
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -55,7 +56,6 @@ class _GoogleCalendarState extends State<GoogleCalendar> {
     final start = getMonthStart(forMonth);
     final end = getMonthEnd(forMonth);
 
-    // 같은 범위를 중복 요청하지 않도록 방지
     if (_loadedStart == start && _loadedEnd == end) {
       _loadEventsForDay(_selectedDay ?? forMonth);
       return;
@@ -79,7 +79,19 @@ class _GoogleCalendarState extends State<GoogleCalendar> {
       final Map<DateTime, List<calendar.Event>> eventMap = {};
 
       for (var event in items) {
-        final localDate = (event.start?.dateTime ?? event.start?.date)?.toLocal();
+        DateTime? localDate;
+
+        if (event.start?.dateTime != null) {
+          localDate = event.start!.dateTime!.toLocal();
+        } else if (event.start?.date != null) {
+          final utcDate = DateTime.utc(
+            event.start!.date!.year,
+            event.start!.date!.month,
+            event.start!.date!.day,
+          );
+          localDate = utcDate.toLocal();
+        }
+
         if (localDate != null) {
           final key = DateTime(localDate.year, localDate.month, localDate.day);
           eventMap.putIfAbsent(key, () => []).add(event);
@@ -215,8 +227,8 @@ class _GoogleCalendarState extends State<GoogleCalendar> {
             calendarBuilders: CalendarBuilders(
               markerBuilder: (context, date, events) {
                 if (events.isEmpty) return const SizedBox();
-                final allDone =
-                events.every((e) => e is calendar.Event && e.extendedProperties?.private?['done'] == 'true');
+                final allDone = events.every((e) =>
+                e is calendar.Event && e.extendedProperties?.private?['done'] == 'true');
                 return Align(
                   alignment: Alignment.bottomCenter,
                   child: Container(
@@ -242,8 +254,8 @@ class _GoogleCalendarState extends State<GoogleCalendar> {
             ..._events.map((event) {
               final isDone = event.extendedProperties?.private?['done'] == 'true';
               final description = event.description?.trim() ?? '';
-              final startTime = event.start?.dateTime?.toLocal();
               final isAllDay = event.start?.date != null;
+              final startTime = event.start?.dateTime?.toLocal();
 
               final timeLabel = isAllDay
                   ? '종일 일정'
@@ -285,9 +297,7 @@ class _GoogleCalendarState extends State<GoogleCalendar> {
         onPressed: () => _addOrEditEvent(),
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         elevation: 4,
         tooltip: '일정 추가',
         child: const Icon(Icons.add),

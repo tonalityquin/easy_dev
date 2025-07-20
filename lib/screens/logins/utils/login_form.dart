@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../dev/gantt_calendar.dart';
+import '../dev/personal_calendar.dart';
 import '../login_controller.dart';
 import '../debugs/login_debug_bottom_sheet.dart'; // ✅ 디버깅 바텀시트 import
 
@@ -36,7 +36,7 @@ class _LoginFormState extends State<LoginForm> {
         GestureDetector(
           onTap: () {
             Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const MonthlyGanttCalendar()),
+              MaterialPageRoute(builder: (_) => const PersonalCalendar()),
             );
           },
           child: SizedBox(

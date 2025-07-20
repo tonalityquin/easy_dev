@@ -13,7 +13,8 @@ class EventEditorResult {
   final DateTime end;
   final List<ChecklistItem> checklist;
   final String description;
-  final bool deleted; // ✅ 추가
+  final bool deleted;
+  final String? colorId; // ✅ 색상 ID 추가
 
   EventEditorResult({
     required this.title,
@@ -21,10 +22,10 @@ class EventEditorResult {
     required this.end,
     required this.checklist,
     required this.description,
-    this.deleted = false, // 기본값 false
+    this.deleted = false,
+    this.colorId,
   });
 }
-
 
 Future<EventEditorResult?> showEventEditorBottomSheet({
   required BuildContext context,
@@ -32,6 +33,7 @@ Future<EventEditorResult?> showEventEditorBottomSheet({
   DateTime? initialStart,
   DateTime? initialEnd,
   List<ChecklistItem>? initialChecklist,
+  String? initialColorId, // ✅ 초기 색상값도 받을 수 있게
 }) {
   final titleController = TextEditingController(text: initialTitle ?? '');
   final FocusNode _titleFocus = FocusNode();
@@ -47,6 +49,22 @@ Future<EventEditorResult?> showEventEditorBottomSheet({
   final List<TextEditingController> controllers =
   checklist.map((item) => TextEditingController(text: item.text)).toList();
 
+  // ✅ 색상 선택 상태 및 옵션 정의
+  String? selectedColorId = initialColorId ?? "1";
+  final Map<String, Color> colorOptions = {
+    "1": Colors.blue,
+    "2": Colors.green,
+    "3": Colors.purple,
+    "4": Colors.red,
+    "5": Colors.yellow,
+    "6": Colors.orange,
+    "7": Colors.teal,
+    "8": Colors.grey,
+    "9": Colors.brown,
+    "10": Colors.cyan,
+    "11": Colors.indigo,
+  };
+
   void addChecklistItem() {
     checklist.add(ChecklistItem(text: ""));
     controllers.add(TextEditingController());
@@ -59,7 +77,6 @@ Future<EventEditorResult?> showEventEditorBottomSheet({
     final checklistText = list.map((item) => '- [${item.checked ? "x" : " "}] ${item.text.trim()}').join('\n');
     return 'progress:$progress\n$checklistText';
   }
-
 
   return showModalBottomSheet<EventEditorResult>(
     context: context,
@@ -128,6 +145,32 @@ Future<EventEditorResult?> showEventEditorBottomSheet({
                         ),
                       ],
                     ),
+                    const SizedBox(height: 16),
+
+                    /// ✅ 색상 선택 영역
+                    const Text("이벤트 색상", style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: colorOptions.entries.map((entry) {
+                        final isSelected = selectedColorId == entry.key;
+                        return GestureDetector(
+                          onTap: () => setState(() => selectedColorId = entry.key),
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: entry.value,
+                              shape: BoxShape.circle,
+                              border: isSelected
+                                  ? Border.all(color: Colors.black, width: 2)
+                                  : null,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+
                     const SizedBox(height: 16),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -198,7 +241,8 @@ Future<EventEditorResult?> showEventEditorBottomSheet({
                                 end: end,
                                 checklist: [],
                                 description: '',
-                                deleted: true, // ✅ 삭제 처리용
+                                deleted: true,
+                                colorId: selectedColorId, // ✅ 삭제도 색상 유지
                               ),
                             );
                           },
@@ -226,6 +270,7 @@ Future<EventEditorResult?> showEventEditorBottomSheet({
                                 end: end,
                                 checklist: checklist,
                                 description: description,
+                                colorId: selectedColorId, // ✅ 저장에 반영
                               ),
                             );
                           },
