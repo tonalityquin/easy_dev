@@ -5,7 +5,6 @@ import '../../../widgets/navigation/navigation_hq_mini.dart';
 import '../../widgets/navigation/top_navigation.dart';
 import 'management_pages/field.dart';
 import 'management_pages/statistics.dart';
-import 'management_pages/issue.dart';
 
 class Management extends StatefulWidget {
   const Management({super.key});
@@ -43,8 +42,6 @@ class _ManagementState extends State<Management> {
         body: _selectedIndex == 0
             ? const Field()
             : _selectedIndex == 1
-            ? const Issue()
-            : _selectedIndex == 2
             ? const Statistics()
             : const Center(child: Text('해당 탭의 콘텐츠는 준비 중입니다.')),
         bottomNavigationBar: HqMiniNavigation(
@@ -52,12 +49,10 @@ class _ManagementState extends State<Management> {
           iconSize: 22,
           icons: const [
             Icons.directions_walk,    // Field
-            Icons.report_problem,     // Issue
             Icons.compare_arrows,     // InOut (입출차 통계)
           ],
           labels: const [
             'Field',
-            'Issue',
             'InOut',
           ],
           onIconTapped: (index) {

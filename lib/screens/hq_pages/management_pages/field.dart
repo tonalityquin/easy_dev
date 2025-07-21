@@ -148,11 +148,22 @@ class _FieldState extends State<Field> {
   Widget _buildAreaCard(AreaCount areaCount) {
     return InkWell(
       onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => AreaDetailScreen(areaName: areaCount.area),
+        showModalBottomSheet(
+          backgroundColor: Colors.white,
+          context: context,
+          isScrollControlled: true, // BottomSheet 전체 높이 조절 가능
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
+          builder: (context) {
+            final height = MediaQuery.of(context).size.height;
+            return Container(
+              height: height * 0.5, // 화면의 50% 높이
+              width: double.infinity, // 가로 꽉 채움
+              padding: const EdgeInsets.all(16),
+              child: AreaDetailScreen(areaName: areaCount.area),
+            );
+          },
         );
       },
       child: Card(
@@ -175,10 +186,7 @@ class _FieldState extends State<Field> {
                   final count = areaCount.counts[type] ?? 0;
                   return Column(
                     children: [
-                      Text(
-                        type.label,
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                      ),
+                      Text(type.label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 4),
                       Row(
                         children: [

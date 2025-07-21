@@ -67,7 +67,12 @@ class AreaDetailScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        foregroundColor: Colors.black87,
         title: Text('$areaName 지역 근무자 현황'),
+        centerTitle: true,
+        automaticallyImplyLeading: false,
       ),
       body: FutureBuilder<List<UserStatus>>(
         future: _fetchUsersForArea(areaName),
