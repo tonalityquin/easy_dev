@@ -5,44 +5,23 @@ import '../../../states/user/user_state.dart';
 import '../clock_in_controller.dart';
 import '../debugs/clock_in_debug_firestore_logger.dart';
 
-class WorkButtonWidget extends StatefulWidget {
+class WorkButtonWidget extends StatelessWidget {
   final ClockInController controller;
+  final ValueChanged<bool> onLoadingChanged;
 
   const WorkButtonWidget({
     super.key,
     required this.controller,
+    required this.onLoadingChanged,
   });
 
   @override
-  State<WorkButtonWidget> createState() => _WorkButtonWidgetState();
-}
-
-class _WorkButtonWidgetState extends State<WorkButtonWidget> {
-  bool _isLoading = false;
-  final logger = ClockInDebugFirestoreLogger();
-
-  /// 로딩 상태 토글 및 로그 기록
-  void _toggleLoading() {
-    setState(() {
-      _isLoading = !_isLoading;
-      logger.log(
-        _isLoading ? '🔄 출근 버튼: 로딩 시작됨' : '✅ 출근 버튼: 로딩 종료됨',
-        level: 'info',
-      );
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final logger = ClockInDebugFirestoreLogger();
     final userState = context.watch<UserState>();
     final isWorking = userState.isWorking;
 
-    // 버튼에 표시될 텍스트 라벨 설정
-    final label = _isLoading
-        ? '로딩 중...'
-        : isWorking
-        ? '출근 중'
-        : '출근하기';
+    final label = isWorking ? '출근 중' : '출근하기';
 
     return ElevatedButton.icon(
       icon: const Icon(Icons.access_time),
@@ -65,23 +44,18 @@ class _WorkButtonWidgetState extends State<WorkButtonWidget> {
         ),
       ),
 
-      /// 버튼 클릭 이벤트 핸들링
-      onPressed: (_isLoading || isWorking)
-      // 로딩 중이거나 이미 출근 중이면 클릭 무시
+      // 버튼 클릭 핸들링
+      onPressed: isWorking
           ? () {
-        if (_isLoading) {
-          logger.log('⚠️ 출근 버튼 클릭 무시: 로딩 중', level: 'warn');
-        } else {
-          logger.log('🚫 출근 버튼 클릭 무시: 이미 출근 상태', level: 'warn');
-        }
+        logger.log('🚫 출근 버튼 클릭 무시: 이미 출근 상태', level: 'warn');
       }
-      // 출근 상태 확인 및 처리 시작
           : () {
         logger.log('🧲 [UI] 출근 버튼 클릭됨', level: 'called');
-        widget.controller.handleWorkStatus(
+        onLoadingChanged(true); // 상위에서 로딩 시작 처리
+        controller.handleWorkStatus(
           context,
           userState,
-          _toggleLoading,
+              () => onLoadingChanged(false), // 로딩 종료 시 호출
         );
       },
     );

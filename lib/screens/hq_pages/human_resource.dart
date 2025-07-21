@@ -6,8 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../widgets/navigation/navigation_hq_mini.dart';
 import '../../widgets/navigation/top_navigation.dart';
 import 'human_resource_pages/today_field.dart';
-import 'human_resource_pages/break_cell.dart';
-import 'human_resource_pages/attendance_cell.dart';
+import 'human_resource_pages/break_calendar.dart';
+import 'human_resource_pages/attendance_calendar.dart';
 import 'human_resource_pages/google_drive.dart';
 
 class HumanResource extends StatefulWidget {
@@ -77,12 +77,12 @@ class _HumanResourceState extends State<HumanResource> {
           elevation: 0,
         ),
         body: _selectedIndex == 0
-            ? AttendanceCell(selectedArea: _selectedArea!)
+            ? AttendanceCalendar(selectedArea: _selectedArea!)
             : _selectedIndex == 1
-            ? const TodayField()
-            : _selectedIndex == 2
-            ? GoogleDrive(selectedArea: _selectedArea!) // ✅ 안전한 selectedArea 전달
-            : BreakCell(selectedArea: _selectedArea!),
+                ? const TodayField()
+                : _selectedIndex == 2
+                    ? GoogleDrive(selectedArea: _selectedArea!) // ✅ 안전한 selectedArea 전달
+                    : BreakCalendar(selectedArea: _selectedArea!),
         bottomNavigationBar: HqMiniNavigation(
           height: 56,
           iconSize: 22,

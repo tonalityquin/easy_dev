@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../models/user_model.dart';
 import '../../../../states/user/user_state.dart';
@@ -10,16 +9,16 @@ import '../../../../utils/snackbar_helper.dart';
 import '../../../utils/google_sheets_helper.dart';
 import 'attendances/time_edit_bottom_sheet.dart';
 
-class AttendanceCell extends StatefulWidget {
+class AttendanceCalendar extends StatefulWidget {
   final String selectedArea;
 
-  const AttendanceCell({super.key, required this.selectedArea});
+  const AttendanceCalendar({super.key, required this.selectedArea});
 
   @override
-  State<AttendanceCell> createState() => _AttendanceCellState();
+  State<AttendanceCalendar> createState() => _AttendanceCalendarState();
 }
 
-class _AttendanceCellState extends State<AttendanceCell> {
+class _AttendanceCalendarState extends State<AttendanceCalendar> {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
 
@@ -34,23 +33,7 @@ class _AttendanceCellState extends State<AttendanceCell> {
   @override
   void initState() {
     super.initState();
-    _loadSelectedAreaFromPrefs();
-  }
-
-  Future<void> _loadSelectedAreaFromPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    final area = prefs.getString('selectedArea')?.trim();
-    if (area != null) {
-      setState(() {
-        _selectedArea = area;
-      });
-      await _loadUsers(area);
-    }
-  }
-
-  Future<void> _saveSelectedAreaToPrefs(String area) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('selectedArea', area.trim());
+    // 지역 자동 설정 제거됨. 사용자가 수동 선택 필요
   }
 
   Future<void> _loadAttendanceTimes(UserModel user) async {
@@ -83,8 +66,10 @@ class _AttendanceCellState extends State<AttendanceCell> {
     setState(() => _isLoadingUsers = true);
 
     try {
-      final snapshot =
-          await FirebaseFirestore.instance.collection('user_accounts').where('selectedArea', isEqualTo: area).get();
+      final snapshot = await FirebaseFirestore.instance
+          .collection('user_accounts')
+          .where('selectedArea', isEqualTo: area)
+          .get();
 
       final users = snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
 
@@ -102,14 +87,12 @@ class _AttendanceCellState extends State<AttendanceCell> {
   }
 
   Future<void> _saveAllChangesToSheets() async {
-    if (_selectedUser == null) return;
+    if (_selectedUser == null || _selectedArea == null) return;
 
     final user = _selectedUser!;
-    final area = user.selectedArea?.trim() ?? '';
+    final area = _selectedArea!;
     final userId = '${user.phone}-$area';
     final division = user.divisions.isNotEmpty ? user.divisions.first : '';
-
-    print('[SAVE] userId=$userId, area=$area');
 
     for (final entry in _clockInMap.entries) {
       final date = DateTime(_focusedDay.year, _focusedDay.month, entry.key);
@@ -160,6 +143,7 @@ class _AttendanceCellState extends State<AttendanceCell> {
           children: [
             Row(
               children: [
+                /// 지역 선택
                 Expanded(
                   flex: 4,
                   child: DropdownButtonFormField<String>(
@@ -173,7 +157,6 @@ class _AttendanceCellState extends State<AttendanceCell> {
                     }).toList(),
                     onChanged: (value) async {
                       if (value != null) {
-                        await _saveSelectedAreaToPrefs(value);
                         setState(() {
                           _selectedArea = value;
                           _users = [];
@@ -185,6 +168,8 @@ class _AttendanceCellState extends State<AttendanceCell> {
                   ),
                 ),
                 const SizedBox(width: 8),
+
+                /// 사용자 선택
                 Expanded(
                   flex: 4,
                   child: DropdownButtonFormField<UserModel>(
@@ -205,6 +190,8 @@ class _AttendanceCellState extends State<AttendanceCell> {
                   ),
                 ),
                 const SizedBox(width: 8),
+
+                /// 새로고침 버튼
                 Expanded(
                   flex: 2,
                   child: ElevatedButton(
@@ -219,9 +206,11 @@ class _AttendanceCellState extends State<AttendanceCell> {
               ],
             ),
             const SizedBox(height: 8),
+
+            /// 캘린더
             TableCalendar(
-              firstDay: DateTime.utc(2020, 1, 1),
-              lastDay: DateTime.utc(2030, 12, 31),
+              firstDay: DateTime.utc(2025, 1, 1),
+              lastDay: DateTime.utc(2025, 12, 31),
               focusedDay: _focusedDay,
               rowHeight: 80,
               selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
@@ -233,6 +222,15 @@ class _AttendanceCellState extends State<AttendanceCell> {
 
                 if (_selectedUser != null) {
                   _showEditBottomSheet(selectedDay);
+                }
+              },
+              onPageChanged: (focusedDay) async {
+                setState(() {
+                  _focusedDay = focusedDay;
+                });
+
+                if (_selectedUser != null) {
+                  await _loadAttendanceTimes(_selectedUser!);
                 }
               },
               calendarStyle: const CalendarStyle(
@@ -251,8 +249,12 @@ class _AttendanceCellState extends State<AttendanceCell> {
               ),
             ),
             const SizedBox(height: 20),
+
+            /// 저장 버튼
             ElevatedButton.icon(
-              onPressed: _selectedUser == null ? null : _saveAllChangesToSheets,
+              onPressed: _selectedUser == null || _selectedArea == null
+                  ? null
+                  : _saveAllChangesToSheets,
               icon: const Icon(Icons.save, size: 20),
               label: const Text(
                 '변경사항 저장',
@@ -287,8 +289,8 @@ class _AttendanceCellState extends State<AttendanceCell> {
         color: isSelected
             ? Colors.orange.withOpacity(0.3)
             : isToday
-                ? Colors.blueAccent.withOpacity(0.2)
-                : Colors.transparent,
+            ? Colors.blueAccent.withOpacity(0.2)
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(

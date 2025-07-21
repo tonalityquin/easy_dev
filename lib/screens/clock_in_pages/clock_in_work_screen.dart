@@ -1,3 +1,4 @@
+// 생략 없이 전체 코드
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -27,6 +28,7 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
 
   String? kakaoUrl;
   bool loadingUrl = true;
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -43,18 +45,15 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
     final prefs = await SharedPreferences.getInstance();
     final savedUrl = prefs.getString('custom_kakao_url');
 
+    setState(() {
+      kakaoUrl = savedUrl?.isNotEmpty == true ? savedUrl : null;
+      loadingUrl = false;
+    });
+
     if (savedUrl != null && savedUrl.isNotEmpty) {
       logger.log('✅ 사용자 지정 URL 사용: $savedUrl', level: 'info');
-      setState(() {
-        kakaoUrl = savedUrl;
-        loadingUrl = false;
-      });
     } else {
       logger.log('❌ 사용자 URL 없음', level: 'warn');
-      setState(() {
-        kakaoUrl = null;
-        loadingUrl = false;
-      });
     }
   }
 
@@ -152,7 +151,14 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
                               ),
                               const SizedBox(width: 12),
                               Expanded(
-                                child: WorkButtonWidget(controller: controller),
+                                child: WorkButtonWidget(
+                                  controller: controller,
+                                  onLoadingChanged: (value) {
+                                    setState(() {
+                                      _isLoading = value;
+                                    });
+                                  },
+                                ),
                               ),
                             ],
                           ),
@@ -162,6 +168,8 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
                     ),
                   ),
                 ),
+
+                // 우측 상단 메뉴
                 Positioned(
                   top: 16,
                   right: 16,
@@ -201,6 +209,20 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
                     icon: const Icon(Icons.more_vert),
                   ),
                 ),
+
+                // 로딩 중일 때 UI 블로킹
+                if (_isLoading || userState.isWorking)
+                  Positioned.fill(
+                    child: AbsorbPointer(
+                      absorbing: true,
+                      child: Container(
+                        color: Colors.black.withOpacity(0.2),
+                        child: const Center(
+                          child: CircularProgressIndicator(),
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           );

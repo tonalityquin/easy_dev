@@ -59,12 +59,12 @@ class GoogleSheetsHelper {
   }
 
   static Map<String, Map<int, String>> mapToCellData(
-    List<List<String>> rows, {
-    required String statusFilter,
-    int? selectedYear,
-    int? selectedMonth,
-    String suffixForKey = '',
-  }) {
+      List<List<String>> rows, {
+        required String statusFilter,
+        int? selectedYear,
+        int? selectedMonth,
+        String suffixForKey = '',
+      }) {
     final Map<String, Map<int, String>> data = {};
     for (final row in rows) {
       if (row.length < 7) continue;

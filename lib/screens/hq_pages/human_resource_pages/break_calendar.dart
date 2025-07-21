@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../models/user_model.dart';
 import '../../../../states/user/user_state.dart';
@@ -10,16 +9,16 @@ import '../../../../utils/snackbar_helper.dart';
 import '../../../utils/google_sheets_helper.dart';
 import 'breaks/break_edit_bottom_sheet.dart';
 
-class BreakCell extends StatefulWidget {
+class BreakCalendar extends StatefulWidget {
   final String selectedArea;
 
-  const BreakCell({super.key, required this.selectedArea});
+  const BreakCalendar({super.key, required this.selectedArea});
 
   @override
-  State<BreakCell> createState() => _BreakCellState();
+  State<BreakCalendar> createState() => _BreakCalendarState();
 }
 
-class _BreakCellState extends State<BreakCell> {
+class _BreakCalendarState extends State<BreakCalendar> {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
 
@@ -30,16 +29,10 @@ class _BreakCellState extends State<BreakCell> {
   bool _isLoadingUsers = false;
   Map<int, String> _breakTimeMap = {};
 
-  // ✅ SharedPreferences에서 selectedArea 가져오기
-  Future<String?> _getAreaFromPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('selectedArea')?.trim();
-  }
-
   Future<void> _loadBreakTimes(UserModel user) async {
     final area = user.selectedArea?.trim() ?? '';
     final allRows = await GoogleSheetsHelper.loadBreakRecords(area);
-    final userId = '${user.phone}-${area}';
+    final userId = '${user.phone}-$area';
 
     final breakMap = GoogleSheetsHelper.mapToCellData(
       allRows,
@@ -57,8 +50,10 @@ class _BreakCellState extends State<BreakCell> {
     setState(() => _isLoadingUsers = true);
 
     try {
-      final snapshot =
-          await FirebaseFirestore.instance.collection('user_accounts').where('selectedArea', isEqualTo: area).get();
+      final snapshot = await FirebaseFirestore.instance
+          .collection('user_accounts')
+          .where('selectedArea', isEqualTo: area)
+          .get();
 
       final users = snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
 
@@ -72,24 +67,6 @@ class _BreakCellState extends State<BreakCell> {
       showFailedSnackbar(context, '사용자 목록 불러오기 실패: $e');
     } finally {
       setState(() => _isLoadingUsers = false);
-    }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-
-    // 자동 area 세팅
-    _initArea();
-  }
-
-  Future<void> _initArea() async {
-    final areaFromPrefs = await _getAreaFromPrefs();
-    if (areaFromPrefs != null) {
-      setState(() {
-        _selectedArea = areaFromPrefs;
-      });
-      await _loadUsers(areaFromPrefs);
     }
   }
 
@@ -173,8 +150,8 @@ class _BreakCellState extends State<BreakCell> {
 
             /// 캘린더
             TableCalendar(
-              firstDay: DateTime.utc(2020, 1, 1),
-              lastDay: DateTime.utc(2030, 12, 31),
+              firstDay: DateTime.utc(2025, 1, 1),
+              lastDay: DateTime.utc(2025, 12, 31),
               focusedDay: _focusedDay,
               rowHeight: 80,
               selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
@@ -186,6 +163,15 @@ class _BreakCellState extends State<BreakCell> {
 
                 if (_selectedUser != null) {
                   _showEditBottomSheet(selectedDay);
+                }
+              },
+              onPageChanged: (focusedDay) async {
+                setState(() {
+                  _focusedDay = focusedDay;
+                });
+
+                if (_selectedUser != null) {
+                  await _loadBreakTimes(_selectedUser!);
                 }
               },
               calendarStyle: const CalendarStyle(
@@ -207,7 +193,9 @@ class _BreakCellState extends State<BreakCell> {
 
             /// 저장 버튼
             ElevatedButton.icon(
-              onPressed: _selectedUser == null ? null : _saveAllChangesToSheets,
+              onPressed: _selectedUser == null || _selectedArea == null
+                  ? null
+                  : _saveAllChangesToSheets,
               icon: const Icon(Icons.save, size: 20),
               label: const Text(
                 '변경사항 저장',
@@ -240,8 +228,8 @@ class _BreakCellState extends State<BreakCell> {
         color: isSelected
             ? Colors.redAccent.withOpacity(0.3)
             : isToday
-                ? Colors.greenAccent.withOpacity(0.2)
-                : Colors.transparent,
+            ? Colors.greenAccent.withOpacity(0.2)
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
@@ -280,13 +268,10 @@ class _BreakCellState extends State<BreakCell> {
   }
 
   Future<void> _saveAllChangesToSheets() async {
-
-    if (_selectedUser == null) {
-      return;
-    }
+    if (_selectedUser == null || _selectedArea == null) return;
 
     final user = _selectedUser!;
-    final area = await _getAreaFromPrefs() ?? user.selectedArea ?? '';
+    final area = _selectedArea!.trim();
     final userId = '${user.phone}-$area';
     final division = user.divisions.isNotEmpty ? user.divisions.first : '';
 
@@ -305,5 +290,4 @@ class _BreakCellState extends State<BreakCell> {
 
     showSuccessSnackbar(context, 'Google Sheets에 저장 완료');
   }
-
 }
