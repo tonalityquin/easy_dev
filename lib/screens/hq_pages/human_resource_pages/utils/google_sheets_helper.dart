@@ -59,12 +59,12 @@ class GoogleSheetsHelper {
   }
 
   static Map<String, Map<int, String>> mapToCellData(
-      List<List<String>> rows, {
-        required String statusFilter,
-        int? selectedYear,
-        int? selectedMonth,
-        String suffixForKey = '',
-      }) {
+    List<List<String>> rows, {
+    required String statusFilter,
+    int? selectedYear,
+    int? selectedMonth,
+    String suffixForKey = '',
+  }) {
     final Map<String, Map<int, String>> data = {};
     for (final row in rows) {
       if (row.length < 7) continue;
@@ -93,155 +93,6 @@ class GoogleSheetsHelper {
       data[key]![day] = time;
     }
     return data;
-  }
-
-  static Future<void> createMonthlySummarySheet(String area, String sheetName) async {
-    final client = await _getSheetsClient();
-    final sheetsApi = SheetsApi(client);
-    final spreadsheetId = getSpreadsheetId(area);
-
-    final spreadsheet = await sheetsApi.spreadsheets.get(spreadsheetId);
-    final sheets = spreadsheet.sheets ?? [];
-
-    final List<Request> requests = [];
-
-    final existingSheet = sheets.firstWhere(
-      (sheet) => sheet.properties?.title == sheetName,
-      orElse: () => Sheet(),
-    );
-
-    final sheetId = existingSheet.properties?.sheetId;
-    if (sheetId != null) {
-      requests.add(Request(deleteSheet: DeleteSheetRequest(sheetId: sheetId)));
-    }
-
-    requests.add(Request(
-      addSheet: AddSheetRequest(properties: SheetProperties(title: sheetName)),
-    ));
-
-    await sheetsApi.spreadsheets.batchUpdate(
-      BatchUpdateSpreadsheetRequest(requests: requests),
-      spreadsheetId,
-    );
-
-    client.close();
-  }
-
-  static Future<void> writeMonthlyClockInOutSummary({
-    required String area,
-    required int year,
-    required int month,
-    required Map<String, String> userMap,
-  }) async {
-    final rows = await loadClockInOutRecords(area);
-
-    final clockInMap = mapToCellData(
-      rows,
-      statusFilter: '출근',
-      selectedYear: year,
-      selectedMonth: month,
-    );
-
-    final clockOutMap = mapToCellData(
-      rows,
-      statusFilter: '퇴근',
-      selectedYear: year,
-      selectedMonth: month,
-    );
-
-    final List<List<Object>> sheetRows = [
-      ['날짜', '이름', 'ID', '출근', '퇴근']
-    ];
-    final userIds = {...clockInMap.keys, ...clockOutMap.keys};
-
-    for (int day = 1; day <= 31; day++) {
-      final date = DateTime(year, month, day);
-      if (date.month != month) break;
-      final dateStr = DateFormat('yyyy-MM-dd').format(date);
-
-      for (final userId in userIds) {
-        final name = userMap[userId] ?? '';
-        final inTime = clockInMap[userId]?[day] ?? '';
-        final outTime = clockOutMap[userId]?[day] ?? '';
-        if (inTime.isEmpty && outTime.isEmpty) continue;
-
-        sheetRows.add([dateStr, name, userId, inTime, outTime]);
-      }
-    }
-
-    final sheetName = '${year.toString().padLeft(4, '0')}-${month.toString().padLeft(2, '0')} 출퇴근';
-    await createMonthlySummarySheet(area, sheetName);
-
-    final client = await _getSheetsClient();
-    final sheetsApi = SheetsApi(client);
-    await sheetsApi.spreadsheets.values.update(
-      ValueRange(values: sheetRows),
-      getSpreadsheetId(area),
-      '$sheetName!A1',
-      valueInputOption: 'USER_ENTERED',
-    );
-    client.close();
-  }
-
-  static Future<void> writeMonthlyBreakSummary({
-    required String area,
-    required int year,
-    required int month,
-    required Map<String, String> userMap,
-  }) async {
-    final rows = await loadBreakRecords(area);
-
-    final breakMap = mapToCellData(
-      rows,
-      statusFilter: '휴게',
-      selectedYear: year,
-      selectedMonth: month,
-    );
-
-    final List<List<Object>> sheetRows = [
-      ['날짜', '이름', 'ID', '휴게']
-    ];
-
-    for (int day = 1; day <= 31; day++) {
-      final date = DateTime(year, month, day);
-      if (date.month != month) break;
-      final dateStr = DateFormat('yyyy-MM-dd').format(date);
-
-      for (final userId in breakMap.keys) {
-        final name = userMap[userId] ?? '';
-        final breakTime = breakMap[userId]?[day] ?? '';
-        if (breakTime.isEmpty) continue;
-
-        sheetRows.add([dateStr, name, userId, breakTime]);
-      }
-    }
-
-    final sheetName = '${year.toString().padLeft(4, '0')}-${month.toString().padLeft(2, '0')} 휴게';
-    await createMonthlySummarySheet(area, sheetName);
-
-    final client = await _getSheetsClient();
-    final sheetsApi = SheetsApi(client);
-    await sheetsApi.spreadsheets.values.update(
-      ValueRange(values: sheetRows),
-      getSpreadsheetId(area),
-      '$sheetName!A1',
-      valueInputOption: 'USER_ENTERED',
-    );
-    client.close();
-  }
-
-  static Map<String, String> extractUserMap(List<List<String>> rows) {
-    final Map<String, String> map = {};
-    for (final row in rows) {
-      if (row.length >= 4) {
-        final id = row[2];
-        final name = row[3];
-        if (id.isNotEmpty && name.isNotEmpty) {
-          map[id] = name;
-        }
-      }
-    }
-    return map;
   }
 
   static Future<void> updateClockInOutRecord({

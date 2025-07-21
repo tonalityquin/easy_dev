@@ -3,12 +3,12 @@ import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'breaks/break_edit_bottom_sheet.dart';
+import 'utils/google_sheets_helper.dart';
+import '../../../states/head_quarter/calendar_selection_state.dart';
 import '../../../../models/user_model.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../../utils/snackbar_helper.dart';
-import '../../../states/head_quarter/calendar_selection_state.dart';
-import '../../../utils/google_sheets_helper.dart';
-import 'breaks/break_edit_bottom_sheet.dart';
 
 class BreakCalendar extends StatefulWidget {
   const BreakCalendar({super.key});
@@ -25,8 +25,10 @@ class _BreakCalendarState extends State<BreakCalendar> {
   UserModel? _selectedUser;
   List<UserModel> _users = [];
 
-  bool _isLoadingUsers = false;
   Map<int, String> _breakTimeMap = {};
+
+  final Map<String, List<UserModel>> _userCache = {}; // 지역별 사용자 목록 캐시
+  final Map<String, Map<int, String>> _breakTimeCache = {}; // 유저-월별 휴게기록 캐시
 
   @override
   void initState() {
@@ -47,8 +49,20 @@ class _BreakCalendarState extends State<BreakCalendar> {
 
   Future<void> _loadBreakTimes(UserModel user) async {
     final area = user.selectedArea?.trim() ?? '';
-    final allRows = await GoogleSheetsHelper.loadBreakRecords(area);
     final userId = '${user.phone}-$area';
+    final cacheKey = '$userId-${_focusedDay.year}-${_focusedDay.month}';
+
+    if (_breakTimeCache.containsKey(cacheKey)) {
+      print('[CACHE HIT] 휴게기록 - key=$cacheKey');
+      setState(() {
+        _breakTimeMap = _breakTimeCache[cacheKey]!;
+      });
+      return;
+    }
+
+    print('[CACHE MISS] 휴게기록 - key=$cacheKey → Google Sheets 요청');
+
+    final allRows = await GoogleSheetsHelper.loadBreakRecords(area);
 
     final breakMap = GoogleSheetsHelper.mapToCellData(
       allRows,
@@ -59,11 +73,20 @@ class _BreakCalendarState extends State<BreakCalendar> {
 
     setState(() {
       _breakTimeMap = breakMap[userId] ?? {};
+      _breakTimeCache[cacheKey] = _breakTimeMap;
     });
   }
 
   Future<void> _loadUsers(String area) async {
-    setState(() => _isLoadingUsers = true);
+    if (_userCache.containsKey(area)) {
+      print('[CACHE HIT] 사용자 목록 - area=$area');
+      setState(() {
+        _users = _userCache[area]!;
+      });
+      return;
+    }
+
+    print('[CACHE MISS] 사용자 목록 - area=$area → Firestore 요청');
 
     try {
       final snapshot =
@@ -73,13 +96,12 @@ class _BreakCalendarState extends State<BreakCalendar> {
 
       setState(() {
         _users = users;
+        _userCache[area] = users;
       });
 
       showSuccessSnackbar(context, '사용자 목록 ${users.length}명 불러왔습니다');
     } catch (e) {
       showFailedSnackbar(context, '사용자 목록 불러오기 실패: $e');
-    } finally {
-      setState(() => _isLoadingUsers = false);
     }
   }
 
@@ -155,12 +177,12 @@ class _BreakCalendarState extends State<BreakCalendar> {
                 Expanded(
                   flex: 2,
                   child: ElevatedButton(
-                    onPressed: _selectedArea == null || _isLoadingUsers ? null : () => _loadUsers(_selectedArea!),
+                    onPressed: null, // 기능 제거
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
-                    child: const Icon(Icons.refresh),
+                    child: const Icon(Icons.cloud, color: Colors.grey), // 저장 의미의 아이콘으로 교체
                   ),
                 ),
               ],

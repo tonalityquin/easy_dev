@@ -3,12 +3,13 @@ import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'attendances/time_edit_bottom_sheet.dart';
+import 'utils/google_sheets_helper.dart';
+import '../../../states/head_quarter/calendar_selection_state.dart';
 import '../../../../models/user_model.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../../utils/snackbar_helper.dart';
-import '../../../states/head_quarter/calendar_selection_state.dart';
-import '../../../utils/google_sheets_helper.dart';
-import 'attendances/time_edit_bottom_sheet.dart';
+// 상단 import는 동일
 
 class AttendanceCalendar extends StatefulWidget {
   const AttendanceCalendar({super.key});
@@ -25,9 +26,13 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
   UserModel? _selectedUser;
   List<UserModel> _users = [];
 
-  bool _isLoadingUsers = false;
   Map<int, String> _clockInMap = {};
   Map<int, String> _clockOutMap = {};
+
+  // ✅ 캐싱용 메모리 저장소
+  final Map<String, List<UserModel>> _userCache = {};
+  final Map<String, Map<int, String>> _inCache = {};
+  final Map<String, Map<int, String>> _outCache = {};
 
   @override
   void initState() {
@@ -46,9 +51,49 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
     }
   }
 
+  Future<void> _loadUsers(String area) async {
+    if (_userCache.containsKey(area)) {
+      print('[CACHE HIT] 사용자 목록 - area=$area');
+      setState(() {
+        _users = _userCache[area]!;
+      });
+      return;
+    }
+
+    print('[CACHE MISS] 사용자 목록 - area=$area → Firestore 요청');
+
+    try {
+      final snapshot =
+          await FirebaseFirestore.instance.collection('user_accounts').where('selectedArea', isEqualTo: area).get();
+
+      final users = snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
+
+      setState(() {
+        _users = users;
+        _userCache[area] = users;
+      });
+
+      showSuccessSnackbar(context, '사용자 ${users.length}명 불러옴');
+    } catch (e) {
+      showFailedSnackbar(context, '사용자 불러오기 실패: $e');
+    }
+  }
+
   Future<void> _loadAttendanceTimes(UserModel user) async {
     final area = user.selectedArea?.trim() ?? '';
     final userId = '${user.phone}-$area';
+    final cacheKey = '$userId-${_focusedDay.year}-${_focusedDay.month}';
+
+    if (_inCache.containsKey(cacheKey) && _outCache.containsKey(cacheKey)) {
+      print('[CACHE HIT] 출퇴근 기록 - key=$cacheKey');
+      setState(() {
+        _clockInMap = _inCache[cacheKey]!;
+        _clockOutMap = _outCache[cacheKey]!;
+      });
+      return;
+    }
+
+    print('[CACHE MISS] 출퇴근 기록 - key=$cacheKey → Google Sheets 요청');
 
     final allRows = await GoogleSheetsHelper.loadClockInOutRecords(area);
 
@@ -66,33 +111,12 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
       selectedMonth: _focusedDay.month,
     );
 
-    if (!mounted) return;
     setState(() {
       _clockInMap = inMap[userId] ?? {};
       _clockOutMap = outMap[userId] ?? {};
+      _inCache[cacheKey] = _clockInMap;
+      _outCache[cacheKey] = _clockOutMap;
     });
-  }
-
-  Future<void> _loadUsers(String area) async {
-    setState(() => _isLoadingUsers = true);
-
-    try {
-      final snapshot =
-          await FirebaseFirestore.instance.collection('user_accounts').where('selectedArea', isEqualTo: area).get();
-
-      final users = snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
-
-      setState(() {
-        _users = users;
-        // 선택된 사용자 유지 여부 판단은 CalendarSelectionState에서
-      });
-
-      showSuccessSnackbar(context, '사용자 ${users.length}명 불러옴');
-    } catch (e) {
-      showFailedSnackbar(context, '사용자 불러오기 실패: $e');
-    } finally {
-      setState(() => _isLoadingUsers = false);
-    }
   }
 
   Future<void> _saveAllChangesToSheets() async {
@@ -130,6 +154,11 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
     }
 
     showSuccessSnackbar(context, 'Google Sheets에 저장 완료');
+
+    // ✅ 저장 후 캐시도 최신값으로 반영
+    final cacheKey = '$userId-${_focusedDay.year}-${_focusedDay.month}';
+    _inCache[cacheKey] = {..._clockInMap};
+    _outCache[cacheKey] = {..._clockOutMap};
   }
 
   @override
@@ -151,9 +180,9 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
+            // ✅ 상단 드롭다운
             Row(
               children: [
-                /// 지역 선택
                 Expanded(
                   flex: 4,
                   child: DropdownButtonFormField<String>(
@@ -179,8 +208,6 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
                   ),
                 ),
                 const SizedBox(width: 8),
-
-                /// 사용자 선택
                 Expanded(
                   flex: 4,
                   child: DropdownButtonFormField<UserModel>(
@@ -202,24 +229,18 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
                   ),
                 ),
                 const SizedBox(width: 8),
-
-                /// 새로고침 버튼
-                Expanded(
+                const Expanded(
                   flex: 2,
-                  child: ElevatedButton(
-                    onPressed: _selectedArea == null || _isLoadingUsers ? null : () => _loadUsers(_selectedArea!),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    child: const Icon(Icons.refresh),
+                  child: Tooltip(
+                    message: '지역 선택 시 자동으로 사용자 목록이 불러와집니다',
+                    child: Icon(Icons.cloud, color: Colors.grey),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 8),
 
-            /// 캘린더
+            // ✅ 캘린더
             TableCalendar(
               firstDay: DateTime.utc(2025, 1, 1),
               lastDay: DateTime.utc(2025, 12, 31),
@@ -231,18 +252,14 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
                   _selectedDay = selectedDay;
                   _focusedDay = focusedDay;
                 });
-
                 if (_selectedUser != null) {
                   _showEditBottomSheet(selectedDay);
                 }
               },
-              onPageChanged: (focusedDay) async {
-                setState(() {
-                  _focusedDay = focusedDay;
-                });
-
+              onPageChanged: (focusedDay) {
+                setState(() => _focusedDay = focusedDay);
                 if (_selectedUser != null) {
-                  await _loadAttendanceTimes(_selectedUser!);
+                  _loadAttendanceTimes(_selectedUser!);
                 }
               },
               calendarStyle: const CalendarStyle(
@@ -262,21 +279,16 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
             ),
             const SizedBox(height: 20),
 
-            /// 저장 버튼
+            // ✅ 저장 버튼
             ElevatedButton.icon(
               onPressed: _selectedUser == null || _selectedArea == null ? null : _saveAllChangesToSheets,
               icon: const Icon(Icons.save, size: 20),
-              label: const Text(
-                '변경사항 저장',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-              ),
+              label: const Text('변경사항 저장', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Theme.of(context).primaryColor,
                 foregroundColor: Colors.white,
                 minimumSize: const Size.fromHeight(48),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 elevation: 0,
               ),
             ),
