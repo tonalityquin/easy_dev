@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../widgets/navigation/navigation_hq_mini.dart';
 import '../../widgets/navigation/top_navigation.dart';
-import 'head_quarter_pages/google_task.dart';
-import 'head_quarter_pages/google_calendar.dart';
+import 'link_to_google_pages/google_task.dart';
+import 'link_to_google_pages/google_calendar.dart';
 
 class LinkToGoogle extends StatefulWidget {
   const LinkToGoogle({super.key});

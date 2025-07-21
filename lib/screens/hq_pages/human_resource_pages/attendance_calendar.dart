@@ -9,7 +9,6 @@ import '../../../states/head_quarter/calendar_selection_state.dart';
 import '../../../../models/user_model.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../../utils/snackbar_helper.dart';
-// 상단 import는 동일
 
 class AttendanceCalendar extends StatefulWidget {
   const AttendanceCalendar({super.key});
