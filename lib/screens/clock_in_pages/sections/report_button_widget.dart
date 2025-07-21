@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:android_intent_plus/android_intent.dart';
-import '../debugs/clock_in_debug_firestore_logger.dart'; // ✅ 로거 import
+import '../debugs/clock_in_debug_firestore_logger.dart';
 
 class ReportButtonWidget extends StatelessWidget {
   final bool loadingUrl;
@@ -14,7 +14,7 @@ class ReportButtonWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final logger = ClockInDebugFirestoreLogger(); // ✅ 로거 인스턴스
+    final logger = ClockInDebugFirestoreLogger();
 
     return ElevatedButton.icon(
       icon: const Icon(Icons.assignment),

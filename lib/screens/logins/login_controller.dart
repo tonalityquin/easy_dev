@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
+import 'debugs/login_debug_firestore_logger.dart';
+import 'utils/login_network_service.dart';
 import 'utils/login_validate.dart';
 import '../../repositories/user/user_repository.dart';
-import '../../states/user/user_state.dart';
 import '../../states/area/area_state.dart';
+import '../../states/user/user_state.dart';
 import '../../utils/snackbar_helper.dart';
-import '../../utils/login_network_service.dart';
-import 'debugs/login_debug_firestore_logger.dart';
+
 
 class LoginController {
   final BuildContext context;
@@ -83,7 +83,7 @@ class LoginController {
     LoginDebugFirestoreLogger().log('로그인 처리 중...', level: 'info');
 
     // 네트워크 연결 확인
-    if (!await NetworkService().isConnected()) {
+    if (!await LoginNetworkService().isConnected()) {
       if (context.mounted) {
         showFailedSnackbar(context, '인터넷 연결이 필요합니다.');
       }

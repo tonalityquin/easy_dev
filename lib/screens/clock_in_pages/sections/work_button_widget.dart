@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../../states/user/user_state.dart';
 import '../clock_in_controller.dart';
-import '../debugs/clock_in_debug_firestore_logger.dart'; // ✅ 로그 로거 추가
+import '../debugs/clock_in_debug_firestore_logger.dart';
 
 class WorkButtonWidget extends StatefulWidget {
   final ClockInController controller;
@@ -16,7 +16,7 @@ class WorkButtonWidget extends StatefulWidget {
 
 class _WorkButtonWidgetState extends State<WorkButtonWidget> {
   bool _isLoading = false;
-  final logger = ClockInDebugFirestoreLogger(); // ✅ 싱글톤 로거 사용
+  final logger = ClockInDebugFirestoreLogger();
 
   void _toggleLoading() {
     setState(() {

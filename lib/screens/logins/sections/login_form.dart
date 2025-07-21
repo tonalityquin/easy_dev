@@ -41,12 +41,12 @@ class _LoginFormState extends State<LoginForm> {
             );
           },
           child: SizedBox(
-            height: 120,
-            child: Image.asset('assets/images/belivus_logo.PNG'),
+            height: 240,
+            child: Image.asset('assets/images/pelican_logo.png'),
           ),
         ),
 
-        const SizedBox(height: 96),
+        const SizedBox(height: 48),
 
         // 이름 입력 필드
         TextField(

@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:googleapis/calendar/v3.dart' as calendar;
-
-// 기능별 분리된 로직 import
-import 'utils/calendar_logic.dart';
 import 'sections/calendar_filter_chips.dart';
 import 'sections/calendar_event_card.dart';
-import 'utils/calendar_utils.dart';
 import 'sections/completed_event_sheet.dart';
+import 'utils/calendar_logic.dart';
+import 'utils/calendar_utils.dart';
 
 /// 개인용 Google Calendar 연동 월간 캘린더 화면
 class PersonalCalendar extends StatefulWidget {
@@ -18,10 +16,10 @@ class PersonalCalendar extends StatefulWidget {
 }
 
 class _PersonalCalendarState extends State<PersonalCalendar> {
-  DateTime _focusedDay = DateTime.now();              // 현재 포커스된 달
-  DateTime? _selectedDay;                             // 사용자가 선택한 날짜
+  DateTime _focusedDay = DateTime.now(); // 현재 포커스된 달
+  DateTime? _selectedDay; // 사용자가 선택한 날짜
   Map<DateTime, List<calendar.Event>> _eventsByDay = {}; // 날짜별 이벤트 맵
-  Map<String, bool> _filterStates = {};               // 이벤트 제목 필터링 상태
+  Map<String, bool> _filterStates = {}; // 이벤트 제목 필터링 상태
 
   @override
   void initState() {

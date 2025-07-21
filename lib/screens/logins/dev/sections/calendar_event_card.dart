@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:googleapis/calendar/v3.dart' as calendar;
 
+/// Google Calendar의 단일 이벤트를 카드 형태로 보여주는 위젯
 class CalendarEventCard extends StatelessWidget {
   final calendar.Event event;
 
   const CalendarEventCard({super.key, required this.event});
 
+  /// 이벤트 description 문자열에서 진행률(progress:xx)을 추출
   int _getProgress(String? desc) {
     final match = RegExp(r'progress:(\d{1,3})').firstMatch(desc ?? '');
     if (match != null) {
@@ -14,6 +16,8 @@ class CalendarEventCard extends StatelessWidget {
     return 0;
   }
 
+  /// 체크리스트 항목을 description 문자열에서 추출
+  /// - [x] or [ ] 형태의 마크다운을 분석하여 리스트 반환
   List<Map<String, dynamic>> _parseChecklist(String? desc) {
     if (desc == null) return [];
     final lines = desc.split('\n');
@@ -37,10 +41,14 @@ class CalendarEventCard extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+
+        // 이벤트 제목
         title: Text(
           title,
           style: const TextStyle(fontWeight: FontWeight.w600),
         ),
+
+        // 진행률 표시 영역
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 8),
           child: Row(
@@ -69,7 +77,11 @@ class CalendarEventCard extends StatelessWidget {
             ],
           ),
         ),
+
+        // 확장 아이콘
         trailing: const Icon(Icons.expand_more),
+
+        // 카드 클릭 시 상세 바텀시트 표시
         onTap: () {
           if (desc.isNotEmpty) {
             showModalBottomSheet(
@@ -87,6 +99,7 @@ class CalendarEventCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // 이벤트 제목
                         Text(
                           title,
                           style: const TextStyle(
@@ -95,6 +108,8 @@ class CalendarEventCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 12),
+
+                        // 체크리스트 또는 description 표시
                         Expanded(
                           child: SingleChildScrollView(
                             child: checklist.isEmpty
@@ -106,7 +121,7 @@ class CalendarEventCard extends StatelessWidget {
                               children: checklist
                                   .map((item) => CheckboxListTile(
                                 value: item['checked'],
-                                onChanged: null,
+                                onChanged: null, // 읽기 전용
                                 title: Text(item['text']),
                                 controlAffinity: ListTileControlAffinity.leading,
                               ))
@@ -115,6 +130,8 @@ class CalendarEventCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 16),
+
+                        // 바텀시트 닫기 버튼
                         Align(
                           alignment: Alignment.centerRight,
                           child: TextButton(

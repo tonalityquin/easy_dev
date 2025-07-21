@@ -7,12 +7,12 @@ class HeaderWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        const SizedBox(height: 96),
-        SizedBox(
-          height: 120,
-          child: Image.asset('assets/images/belivus_logo.PNG'),
-        ),
         const SizedBox(height: 24),
+        SizedBox(
+          height: 240,
+          child: Image.asset('assets/images/pelican_logo.png'),
+        ),
+        const SizedBox(height: 12),
       ],
     );
   }

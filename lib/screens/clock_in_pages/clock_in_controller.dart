@@ -8,10 +8,10 @@ import '../../../states/area/area_state.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../type_pages/debugs/firestore_logger.dart';
 import 'utils/clock_in_log_uploader.dart';
-import 'debugs/clock_in_debug_firestore_logger.dart'; // ✅ 로컬 로거 추가
+import 'debugs/clock_in_debug_firestore_logger.dart';
 
 class ClockInController {
-  final _localLogger = ClockInDebugFirestoreLogger(); // ✅ 인스턴스
+  final _localLogger = ClockInDebugFirestoreLogger();
 
   void initialize(BuildContext context) {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
