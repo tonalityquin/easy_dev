@@ -22,7 +22,6 @@ class _LoginFormState extends State<LoginForm> {
     _controller.initState(); // 로그인 상태 확인 및 자동 이동 처리
   }
 
-  /// 로그인 요청 실행
   void _handleLogin() {
     _controller.login(setState);
   }
@@ -58,7 +57,7 @@ class _LoginFormState extends State<LoginForm> {
         ),
         const SizedBox(height: 16),
 
-        // 전화번호 입력 필드 (입력 중 자동 포맷)
+        // 전화번호 입력 필드
         TextField(
           controller: _controller.phoneController,
           focusNode: _controller.phoneFocus,
@@ -70,7 +69,7 @@ class _LoginFormState extends State<LoginForm> {
         ),
         const SizedBox(height: 16),
 
-        // 비밀번호 입력 필드 (비밀번호 보이기/숨기기 토글 가능)
+        // 비밀번호 입력 필드
         TextField(
           controller: _controller.passwordController,
           focusNode: _controller.passwordFocus,
@@ -90,59 +89,36 @@ class _LoginFormState extends State<LoginForm> {
         ),
         const SizedBox(height: 32),
 
-        // 로그인 버튼 (로딩 중이면 인디케이터 표시)
-        InkWell(
-          onTap: _controller.isLoading ? null : _handleLogin,
-          borderRadius: BorderRadius.circular(24),
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            transitionBuilder: (child, animation) =>
-                ScaleTransition(scale: animation, child: child),
-            child: Container(
-              key: ValueKey<bool>(_controller.isLoading),
-              height: 55,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF4F93E6), Color(0xFF1976D2)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withAlpha(30),
-                    blurRadius: 6,
-                    offset: Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: Center(
-                child: _controller.isLoading
-                    ? const SizedBox(
-                  height: 24,
-                  width: 24,
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 2,
-                  ),
-                )
-                    : const Text(
-                  "로그인",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.2,
-                  ),
-                ),
+        // ✅ 로그인 버튼 (디자인 완전 통일)
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            icon: const Icon(Icons.login),
+            label: Text(
+              _controller.isLoading ? '로딩 중...' : '로그인',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.1,
               ),
             ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.black,
+              minimumSize: const Size.fromHeight(55),
+              padding: EdgeInsets.zero,
+              side: const BorderSide(color: Colors.grey, width: 1.0),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            onPressed: _controller.isLoading ? null : _handleLogin,
           ),
         ),
+
         const SizedBox(height: 12),
 
-        // 디버깅 로그 확인용 버튼 (BottomSheet 표시)
+        // 디버깅 버튼
         SizedBox(
           width: double.infinity,
           child: OutlinedButton.icon(
