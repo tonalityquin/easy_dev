@@ -64,12 +64,20 @@ class _ClockInFetchPlateCountWidgetState extends State<ClockInFetchPlateCountWid
           width: double.infinity,
           child: ElevatedButton.icon(
             icon: const Icon(Icons.refresh),
-            label: const Text('현황 불러오기'),
+            label: const Text(
+              '현황 불러오기',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.1,
+              ),
+            ),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.white,
               foregroundColor: Colors.black,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              side: const BorderSide(color: Colors.grey),
+              minimumSize: const Size.fromHeight(55),
+              padding: EdgeInsets.zero,
+              side: const BorderSide(color: Colors.grey, width: 1.0),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
