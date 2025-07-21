@@ -177,7 +177,7 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
                           const HeaderWidget(),
                           const ClockInFetchPlateCountWidget(),
                           const UserInfoCard(),
-                          const SizedBox(height: 32),
+                          const SizedBox(height: 6),
                           Row(
                             children: [
                               Expanded(

@@ -18,12 +18,20 @@ class ReportButtonWidget extends StatelessWidget {
 
     return ElevatedButton.icon(
       icon: const Icon(Icons.assignment),
-      label: loadingUrl ? const Text('로딩 중...') : const Text('출근 보고-'),
+      label: Text(
+        loadingUrl ? '로딩 중...' : '출근 보고',
+        style: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 1.1,
+        ),
+      ),
       style: ElevatedButton.styleFrom(
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        side: const BorderSide(color: Colors.grey),
+        minimumSize: const Size.fromHeight(55), // 높이 고정
+        padding: EdgeInsets.zero, // 여백 제거
+        side: const BorderSide(color: Colors.grey, width: 1.0), // 테두리 두께 명시
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
         ),
