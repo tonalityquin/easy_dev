@@ -6,7 +6,6 @@ import '../../screens/secondary_pages/field_user_pages/fielder_dash_board_screen
 import '../../screens/secondary_pages/office_mode_pages/bill_management.dart';
 import '../../screens/secondary_pages/office_mode_pages/location_management.dart';
 import '../../screens/secondary_pages/office_mode_pages/monthly_parking_management.dart';
-import '../../screens/secondary_pages/office_mode_pages/shortcut_management.dart';
 import '../../screens/secondary_pages/office_mode_pages/user_management.dart';
 import '../../screens/secondary_pages/dev_mode_pages/easter_egg.dart';
 import '../../screens/secondary_pages/dev_mode_pages/back_end_controller.dart';
@@ -23,7 +22,6 @@ class SecondaryInfo {
 // ✅ 재사용 가능한 아이템 정의
 const _easterEgg = SecondaryInfo('이스터 에그', EasterEgg(), Icon(Icons.badge));
 const _backendController = SecondaryInfo('백엔드 컨트롤러', BackEndController(), Icon(Icons.free_breakfast));
-const _shortcutManagement = SecondaryInfo('쇼트컷 관리', ShortcutManagement(), Icon(Icons.adjust));
 const _localData = SecondaryInfo('로컬 데이터 관리', LocalData(), Icon(Icons.tab));
 const _fielderDashboard = SecondaryInfo('필드 대시보드', FielderDashBoardScreen(), Icon(Icons.dashboard));
 const _commonDashboard = SecondaryInfo('공통 대시보드', CommonDashBoardScreen(), Icon(Icons.dashboard));
@@ -37,7 +35,6 @@ const _areaManagement = SecondaryInfo('지역 추가', AreaManagement(), Icon(Ic
 final List<SecondaryInfo> adminPages = [
   _easterEgg,
   _backendController,
-  _shortcutManagement,
   _localData,
   _fielderDashboard,
   _commonDashboard,
@@ -93,7 +90,6 @@ final List<SecondaryInfo> lowMiddleManagePages = [
 final List<SecondaryInfo> highManagePages = [
   _userManagement,
   _billManagement,
-  _shortcutManagement,
   _backendController,
 ];
 

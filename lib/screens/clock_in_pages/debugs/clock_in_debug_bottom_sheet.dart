@@ -14,8 +14,8 @@ class ClockInDebugBottomSheet extends StatefulWidget {
 }
 
 class _ClockInDebugBottomSheetState extends State<ClockInDebugBottomSheet> {
-  List<String> _logLines = [];        // 전체 로그
-  List<String> _filteredLines = [];   // 필터링된 로그
+  List<String> _logLines = []; // 전체 로그
+  List<String> _filteredLines = []; // 필터링된 로그
   bool _isLoading = true;
 
   final DateFormat _timestampFormat = DateFormat('yyyy-MM-dd HH:mm:ss');
@@ -35,13 +35,8 @@ class _ClockInDebugBottomSheetState extends State<ClockInDebugBottomSheet> {
       if (text.isEmpty) {
         _logLines = ['🚫 저장된 로그가 없습니다.'];
       } else {
-        _logLines = text
-            .trim()
-            .split('\n')
-            .where((line) => line.trim().isNotEmpty)
-            .toList()
-            .reversed
-            .toList(); // 최신 로그 위로
+        _logLines =
+            text.trim().split('\n').where((line) => line.trim().isNotEmpty).toList().reversed.toList(); // 최신 로그 위로
       }
 
       _filteredLines = List.from(_logLines);
@@ -54,9 +49,7 @@ class _ClockInDebugBottomSheetState extends State<ClockInDebugBottomSheet> {
       if (query.isEmpty) {
         _filteredLines = List.from(_logLines);
       } else {
-        _filteredLines = _logLines
-            .where((line) => line.toLowerCase().contains(query.toLowerCase()))
-            .toList();
+        _filteredLines = _logLines.where((line) => line.toLowerCase().contains(query.toLowerCase())).toList();
       }
     });
   }
@@ -176,9 +169,7 @@ class _ClockInDebugBottomSheetState extends State<ClockInDebugBottomSheet> {
 
             // 본문 로그 리스트
             Expanded(
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _buildLogList(),
+              child: _isLoading ? const Center(child: CircularProgressIndicator()) : _buildLogList(),
             ),
           ],
         ),

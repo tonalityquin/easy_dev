@@ -2,12 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../states/user/user_state.dart';
-import '../../../states/area/area_state.dart';
-import 'debugs/clock_in_debug_bottom_sheet.dart';
 import 'debugs/clock_in_debug_firestore_logger.dart';
 import 'clock_in_controller.dart';
 import 'sections/clock_in_fetch_plate_count_widget.dart';
@@ -33,118 +30,88 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
   @override
   void initState() {
     super.initState();
-
     logger.log('ClockInWorkScreen.initState() 호출됨', level: 'called');
     controller.initialize(context);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _tryLoadKakaoUrl();
+      _loadCustomKakaoUrl();
     });
   }
 
-  Future<void> _tryLoadKakaoUrl() async {
-    final userState = context.read<UserState>();
-
-    if (userState.isLoading || userState.division.isEmpty) {
-      logger.log('UserState 로딩 중... 재시도 예약', level: 'info');
-      await Future.delayed(const Duration(milliseconds: 300));
-      if (mounted) {
-        _tryLoadKakaoUrl();
-      }
-      return;
-    }
-
-    _loadKakaoUrlWithCache(userState, context.read<AreaState>());
-  }
-
-  Future<void> _loadKakaoUrlWithCache(
-      UserState userState,
-      AreaState areaState,
-      ) async {
+  Future<void> _loadCustomKakaoUrl() async {
     final prefs = await SharedPreferences.getInstance();
-    final division = userState.division.trim();
-    final currentArea = userState.user?.selectedArea?.trim() ?? '';
+    final savedUrl = prefs.getString('custom_kakao_url');
 
-    logger.log('_loadKakaoUrlWithCache 호출 - division=$division, area=$currentArea', level: 'called');
-
-    if (division.isEmpty || currentArea.isEmpty) {
-      logger.log('❌ division 또는 area 값 없음', level: 'error');
-      if (!mounted) return;
+    if (savedUrl != null && savedUrl.isNotEmpty) {
+      logger.log('✅ 사용자 지정 URL 사용: $savedUrl', level: 'info');
+      setState(() {
+        kakaoUrl = savedUrl;
+        loadingUrl = false;
+      });
+    } else {
+      logger.log('❌ 사용자 URL 없음', level: 'warn');
       setState(() {
         kakaoUrl = null;
         loadingUrl = false;
       });
-      return;
     }
+  }
 
-    final cacheKey = 'cached_kakao_url_${division}_$currentArea';
-    final cached = prefs.getString(cacheKey);
+  void _handleChangeUrl(BuildContext context) async {
+    final prefs = await SharedPreferences.getInstance();
+    final controller = TextEditingController(text: prefs.getString('custom_kakao_url') ?? '');
 
-    if (cached != null && cached.isNotEmpty) {
-      logger.log('✅ 캐시된 URL 사용됨: $cached', level: 'info');
-      if (!mounted) return;
-      setState(() {
-        kakaoUrl = cached;
-        loadingUrl = false;
-      });
-    }
-
-    try {
-      final query = await FirebaseFirestore.instance
-          .collection('export_link')
-          .where('division', isEqualTo: division)
-          .where('area', isEqualTo: currentArea)
-          .where('purpose', isEqualTo: 'clockin')
-          .limit(1)
-          .get();
-
-      if (query.docs.isNotEmpty) {
-        final url = query.docs.first.data()['url'] as String?;
-        if (url != null && url.isNotEmpty) {
-          logger.log('✅ Firestore에서 URL 로드 성공: $url', level: 'success');
-          await prefs.setString(cacheKey, url);
-          if (!mounted) return;
-          setState(() {
-            kakaoUrl = url;
-            loadingUrl = false;
-          });
-        } else {
-          logger.log('⚠️ URL 필드 비어있음', level: 'warn');
-          if (!mounted) return;
-          setState(() {
-            kakaoUrl = null;
-            loadingUrl = false;
-          });
-        }
-      } else {
-        logger.log('⚠️ Firestore에 export_link 문서 없음', level: 'warn');
-        if (!mounted) return;
-        setState(() {
-          kakaoUrl = null;
-          loadingUrl = false;
-        });
-      }
-    } catch (e) {
-      logger.log('❌ Firestore URL 로드 실패: $e', level: 'error');
-      if (kakaoUrl == null && mounted) {
-        setState(() {
-          kakaoUrl = null;
-          loadingUrl = false;
-        });
-      }
-    }
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => Padding(
+        padding: MediaQuery.of(context).viewInsets,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('출근 보고용 URL을 입력하세요.', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                decoration: const InputDecoration(
+                  labelText: '카카오톡 오픈채팅 URL',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: () async {
+                  final url = controller.text.trim();
+                  await prefs.setString('custom_kakao_url', url);
+                  logger.log('🔧 사용자 URL 저장됨: $url', level: 'success');
+                  if (!mounted) return;
+                  setState(() {
+                    kakaoUrl = url;
+                  });
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('URL이 저장되었습니다.')),
+                  );
+                },
+                child: const Text('저장'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _handleLogout(BuildContext context) async {
     try {
       logger.log('로그아웃 시도 중...', level: 'called');
-      final userState = Provider.of<UserState>(context, listen: false);
-
+      final userState = context.read<UserState>();
       await FlutterForegroundTask.stopService();
       await userState.clearUserToPhone();
       await Future.delayed(const Duration(milliseconds: 500));
       logger.log('✅ 로그아웃 성공', level: 'success');
-
       SystemChannels.platform.invokeMethod('SystemNavigator.pop');
     } catch (e) {
       logger.log('❌ 로그아웃 실패: $e', level: 'error');
@@ -154,18 +121,6 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
         );
       }
     }
-  }
-
-  void _handleAppExit(BuildContext context) {
-    logger.log('앱 종료 선택됨', level: 'info');
-    SystemChannels.platform.invokeMethod('SystemNavigator.pop');
-  }
-
-  void _handleOtherFeature(BuildContext context) {
-    logger.log('미정 기능 클릭됨', level: 'info');
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('아직 구현되지 않은 기능입니다.')),
-    );
   }
 
   @override
@@ -185,7 +140,6 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
                     child: Padding(
                       padding: const EdgeInsets.all(24),
                       child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           const HeaderWidget(),
                           const ClockInFetchPlateCountWidget(),
@@ -206,21 +160,6 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
                             ],
                           ),
                           const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            child: OutlinedButton.icon(
-                              icon: const Icon(Icons.bug_report, size: 18),
-                              label: const Text("디버깅"),
-                              onPressed: () {
-                                showModalBottomSheet(
-                                  context: context,
-                                  isScrollControlled: true,
-                                  builder: (_) => const ClockInDebugBottomSheet(),
-                                );
-                              },
-                            ),
-                          ),
-                          const SizedBox(height: 32),
                         ],
                       ),
                     ),
@@ -235,16 +174,13 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
                         case 'logout':
                           _handleLogout(context);
                           break;
-                        case 'exit':
-                          _handleAppExit(context);
-                          break;
-                        case 'other':
-                          _handleOtherFeature(context);
+                        case 'changeUrl':
+                          _handleChangeUrl(context);
                           break;
                       }
                     },
                     itemBuilder: (context) => [
-                      const PopupMenuItem<String>(
+                      const PopupMenuItem(
                         value: 'logout',
                         child: Row(
                           children: [
@@ -254,23 +190,13 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
                           ],
                         ),
                       ),
-                      const PopupMenuItem<String>(
-                        value: 'exit',
+                      const PopupMenuItem(
+                        value: 'changeUrl',
                         child: Row(
                           children: [
-                            Icon(Icons.exit_to_app, color: Colors.black87),
+                            Icon(Icons.edit_location_alt, color: Colors.blueAccent),
                             SizedBox(width: 8),
-                            Text('앱 종료'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem<String>(
-                        value: 'other',
-                        child: Row(
-                          children: [
-                            Icon(Icons.more_horiz, color: Colors.grey),
-                            SizedBox(width: 8),
-                            Text('기타 기능'),
+                            Text('경로 변경'),
                           ],
                         ),
                       ),
