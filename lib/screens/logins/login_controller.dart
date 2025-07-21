@@ -9,7 +9,6 @@ import '../../states/area/area_state.dart';
 import '../../states/user/user_state.dart';
 import '../../utils/snackbar_helper.dart';
 
-
 class LoginController {
   final BuildContext context;
 
@@ -23,9 +22,14 @@ class LoginController {
   final FocusNode phoneFocus = FocusNode();
   final FocusNode passwordFocus = FocusNode();
 
-  // 로딩 상태 및 비밀번호 가시성 상태
+  // 상태
   bool isLoading = false;
   bool obscurePassword = true;
+
+  // 🔒 개발자 모드 관련 상태
+  int _devModeTapCount = 0;
+  int _devModeExitTapCount = 0;
+  bool isDeveloperMode = false;
 
   LoginController(this.context);
 
@@ -42,13 +46,43 @@ class LoginController {
       );
 
       if (isLoggedIn && context.mounted) {
-        // 이전 로그인 상태이면 홈 화면으로 자동 이동
         WidgetsBinding.instance.addPostFrameCallback((_) {
           LoginDebugFirestoreLogger().log('자동 로그인: 홈 화면으로 이동', level: 'info');
           Navigator.pushReplacementNamed(context, '/home');
         });
       }
     });
+  }
+
+  // ✅ 개발자 모드 진입 및 해제 로직
+  void handleDeveloperTap(StateSetter setState) {
+    final isAdminInput = nameController.text == 'admin' &&
+        phoneController.text.replaceAll(RegExp(r'\D'), '') == '00000000000' &&
+        passwordController.text == '00000';
+
+    if (isDeveloperMode) {
+      _devModeExitTapCount++;
+      if (_devModeExitTapCount >= 2) {
+        isDeveloperMode = false;
+        _devModeTapCount = 0;
+        _devModeExitTapCount = 0;
+        LoginDebugFirestoreLogger().log('🟠 개발자 모드 해제됨', level: 'info');
+        setState(() {});
+      }
+      return;
+    }
+
+    if (isAdminInput) {
+      _devModeTapCount++;
+      if (_devModeTapCount >= 5) {
+        isDeveloperMode = true;
+        _devModeExitTapCount = 0;
+        LoginDebugFirestoreLogger().log('🟢 개발자 모드 진입됨', level: 'success');
+        setState(() {});
+      }
+    } else {
+      _devModeTapCount = 0;
+    }
   }
 
   // 로그인 실행 함수
@@ -59,7 +93,7 @@ class LoginController {
 
     LoginDebugFirestoreLogger().log('로그인 시도: name="$name", phone="$phone"', level: 'called');
 
-    // 입력값 유효성 검사
+    // 유효성 검사
     final phoneError = LoginValidate.validatePhone(phone);
     final passwordError = LoginValidate.validatePassword(password);
 
@@ -82,7 +116,7 @@ class LoginController {
     setState(() => isLoading = true);
     LoginDebugFirestoreLogger().log('로그인 처리 중...', level: 'info');
 
-    // 네트워크 연결 확인
+    // 네트워크 체크
     if (!await LoginNetworkService().isConnected()) {
       if (context.mounted) {
         showFailedSnackbar(context, '인터넷 연결이 필요합니다.');
@@ -102,7 +136,6 @@ class LoginController {
         LoginDebugFirestoreLogger().log('사용자 정보 조회 실패', level: 'error');
       }
 
-      // 사용자 정보 출력 (디버깅 목적)
       if (context.mounted) {
         debugPrint("입력값: name=$name, phone=$phone, password=$password");
         if (user != null) {
@@ -112,14 +145,14 @@ class LoginController {
         }
       }
 
-      // 로그인 조건 일치 시
+      // 로그인 성공 조건
       if (user != null && user.name == name && user.password == password) {
         final userState = context.read<UserState>();
         final areaState = context.read<AreaState>();
         final updatedUser = user.copyWith(isSaved: true);
         userState.updateLoginUser(updatedUser);
 
-        // 사용자 정보 로컬 저장
+        // SharedPreferences 저장
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('phone', updatedUser.phone);
         await prefs.setString('selectedArea', updatedUser.selectedArea ?? '');
@@ -161,19 +194,19 @@ class LoginController {
     }
   }
 
-  // TimeOfDay 객체를 "HH:mm" 포맷의 문자열로 변환
+  // 시간 포맷
   String _timeToString(TimeOfDay? time) {
     if (time == null) return '';
     return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
   }
 
-  // 비밀번호 보이기/숨기기 토글
+  // 비밀번호 보이기 토글
   void togglePassword() {
     obscurePassword = !obscurePassword;
     LoginDebugFirestoreLogger().log('비밀번호 가시성 변경: $obscurePassword', level: 'info');
   }
 
-  // 전화번호 입력값을 하이픈 포함 형식으로 포맷팅
+  // 전화번호 포맷
   void formatPhoneNumber(String value, StateSetter setState) {
     final numbersOnly = value.replaceAll(RegExp(r'\D'), '');
     String formatted = numbersOnly;
@@ -193,7 +226,7 @@ class LoginController {
     LoginDebugFirestoreLogger().log('전화번호 포맷팅: $formatted', level: 'info');
   }
 
-  // 공통 InputDecoration 스타일 정의
+  // 입력 필드 스타일
   InputDecoration inputDecoration({
     required String label,
     IconData? icon,
@@ -215,7 +248,7 @@ class LoginController {
     );
   }
 
-  // 컨트롤러 및 포커스 리소스 해제
+  // 리소스 정리
   void dispose() {
     nameController.dispose();
     phoneController.dispose();

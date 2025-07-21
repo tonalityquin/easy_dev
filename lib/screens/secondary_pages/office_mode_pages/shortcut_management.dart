@@ -17,6 +17,7 @@ class _ShortcutManagementState extends State<ShortcutManagement> {
   final List<_ChatItem> _chatItems = [];
   bool _loading = true;
 
+  // 쇼트컷 목적(purpose) 종류 정의
   static const List<String> purposes = [
     'team',
     'clockin',
@@ -27,9 +28,10 @@ class _ShortcutManagementState extends State<ShortcutManagement> {
   @override
   void initState() {
     super.initState();
-    _loadChats();
+    _loadChats(); // Firestore 데이터 불러오기
   }
 
+  /// Firestore에서 export_link 데이터를 로드하여 리스트에 세팅
   Future<void> _loadChats() async {
     final snapshot = await _firestore.collection('export_link').get();
     final items = snapshot.docs.map((doc) {
@@ -40,6 +42,7 @@ class _ShortcutManagementState extends State<ShortcutManagement> {
         purpose: doc['purpose'] ?? '',
       );
     }).toList();
+
     setState(() {
       _chatItems
         ..clear()
@@ -48,6 +51,7 @@ class _ShortcutManagementState extends State<ShortcutManagement> {
     });
   }
 
+  /// 메뉴 항목 선택 핸들러 (예: 로그아웃)
   void _handleMenuSelection(BuildContext context, String value) {
     if (value == 'logout') {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -56,6 +60,7 @@ class _ShortcutManagementState extends State<ShortcutManagement> {
     }
   }
 
+  /// 새로운 쇼트컷 추가 다이얼로그 표시 및 저장 처리
   void _addNewItem() {
     final prefixController = TextEditingController();
     String? selectedPurpose;
@@ -73,6 +78,7 @@ class _ShortcutManagementState extends State<ShortcutManagement> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Prefix 입력
                 TextField(
                   controller: prefixController,
                   decoration: const InputDecoration(
@@ -81,11 +87,13 @@ class _ShortcutManagementState extends State<ShortcutManagement> {
                   ),
                 ),
                 const SizedBox(height: 8),
+                // Division, Area 표시 (읽기 전용)
                 Text(
                   'Division: $division\nCurrent Area: $currentArea',
                   style: const TextStyle(fontSize: 14, color: Colors.grey),
                 ),
                 const SizedBox(height: 12),
+                // 목적 선택
                 DropdownButtonFormField<String>(
                   value: selectedPurpose,
                   decoration: const InputDecoration(
@@ -116,6 +124,7 @@ class _ShortcutManagementState extends State<ShortcutManagement> {
               onPressed: () async {
                 final prefix = prefixController.text.trim();
 
+                // 필수값 확인
                 if (prefix.isEmpty || selectedPurpose == null) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('모든 항목을 입력해주세요.')),
@@ -125,6 +134,7 @@ class _ShortcutManagementState extends State<ShortcutManagement> {
 
                 final docId = '${prefix}_${division}_$currentArea';
 
+                // Firestore에 문서 저장
                 await _firestore.collection('export_link').doc(docId).set({
                   'name': '$prefix - $division - $currentArea',
                   'prefix': prefix,
@@ -134,6 +144,7 @@ class _ShortcutManagementState extends State<ShortcutManagement> {
                   'url': '',
                 });
 
+                // UI에 추가
                 setState(() {
                   _chatItems.add(
                     _ChatItem(
@@ -155,6 +166,7 @@ class _ShortcutManagementState extends State<ShortcutManagement> {
     );
   }
 
+  /// 쇼트컷 정보 수정 다이얼로그
   void _editItem(int index) {
     final item = _chatItems[index];
     final nameController = TextEditingController(text: item.name);
@@ -170,16 +182,12 @@ class _ShortcutManagementState extends State<ShortcutManagement> {
             children: [
               TextField(
                 controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: '쇼트컷 이름',
-                ),
+                decoration: const InputDecoration(labelText: '쇼트컷 이름'),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: urlController,
-                decoration: const InputDecoration(
-                  labelText: '오픈카톡 URL',
-                ),
+                decoration: const InputDecoration(labelText: '오픈카톡 URL'),
               ),
             ],
           ),
@@ -193,11 +201,13 @@ class _ShortcutManagementState extends State<ShortcutManagement> {
                 final updatedName = nameController.text.trim();
                 final updatedUrl = urlController.text.trim();
 
+                // Firestore 문서 업데이트
                 await _firestore
                     .collection('export_link')
                     .doc(item.id)
                     .update({'name': updatedName, 'url': updatedUrl});
 
+                // UI 업데이트
                 setState(() {
                   _chatItems[index] = _ChatItem(
                     id: item.id,
@@ -217,6 +227,7 @@ class _ShortcutManagementState extends State<ShortcutManagement> {
     );
   }
 
+  /// 선택한 쇼트컷 삭제 처리
   Future<void> _deleteItem(int index) async {
     final item = _chatItems[index];
 
@@ -263,16 +274,19 @@ class _ShortcutManagementState extends State<ShortcutManagement> {
           ),
         ],
       ),
+
+      // 본문 영역
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator()) // 로딩 중
           : _chatItems.isEmpty
-          ? const Center(child: Text('추가된 쇼트컷이 없습니다.'))
+          ? const Center(child: Text('추가된 쇼트컷이 없습니다.')) // 데이터 없음
           : ListView.separated(
         padding: const EdgeInsets.all(16),
         itemCount: _chatItems.length,
         separatorBuilder: (_, __) => const Divider(),
         itemBuilder: (context, index) {
           final item = _chatItems[index];
+
           return ListTile(
             title: Text(item.name),
             subtitle: Column(
@@ -286,28 +300,25 @@ class _ShortcutManagementState extends State<ShortcutManagement> {
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // 외부 URL 열기
                 IconButton(
                   icon: const Icon(Icons.open_in_new),
                   onPressed: () async {
                     if (item.url.isNotEmpty) {
                       final uri = Uri.parse(item.url);
                       if (await canLaunchUrl(uri)) {
-                        await launchUrl(
-                          uri,
-                          mode: LaunchMode.externalApplication,
-                        );
+                        await launchUrl(uri, mode: LaunchMode.externalApplication);
                       } else {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('링크를 열 수 없습니다.'),
-                            ),
+                            const SnackBar(content: Text('링크를 열 수 없습니다.')),
                           );
                         }
                       }
                     }
                   },
                 ),
+                // 삭제 아이콘
                 IconButton(
                   icon: const Icon(Icons.delete, color: Colors.red),
                   onPressed: () async {
@@ -339,6 +350,8 @@ class _ShortcutManagementState extends State<ShortcutManagement> {
           );
         },
       ),
+
+      // 새 항목 추가 버튼
       floatingActionButton: FloatingActionButton(
         heroTag: null,
         onPressed: _addNewItem,
@@ -348,6 +361,7 @@ class _ShortcutManagementState extends State<ShortcutManagement> {
   }
 }
 
+/// 쇼트컷 항목 데이터 클래스
 class _ChatItem {
   final String id;
   final String name;

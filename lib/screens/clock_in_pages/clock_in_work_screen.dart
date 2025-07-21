@@ -144,6 +144,7 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
       await userState.clearUserToPhone();
       await Future.delayed(const Duration(milliseconds: 500));
       logger.log('✅ 로그아웃 성공', level: 'success');
+
       SystemChannels.platform.invokeMethod('SystemNavigator.pop');
     } catch (e) {
       logger.log('❌ 로그아웃 실패: $e', level: 'error');
@@ -153,6 +154,18 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
         );
       }
     }
+  }
+
+  void _handleAppExit(BuildContext context) {
+    logger.log('앱 종료 선택됨', level: 'info');
+    SystemChannels.platform.invokeMethod('SystemNavigator.pop');
+  }
+
+  void _handleOtherFeature(BuildContext context) {
+    logger.log('미정 기능 클릭됨', level: 'info');
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('아직 구현되지 않은 기능입니다.')),
+    );
   }
 
   @override
@@ -218,8 +231,16 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
                   right: 16,
                   child: PopupMenuButton<String>(
                     onSelected: (value) {
-                      if (value == 'logout') {
-                        _handleLogout(context);
+                      switch (value) {
+                        case 'logout':
+                          _handleLogout(context);
+                          break;
+                        case 'exit':
+                          _handleAppExit(context);
+                          break;
+                        case 'other':
+                          _handleOtherFeature(context);
+                          break;
                       }
                     },
                     itemBuilder: (context) => [
@@ -230,6 +251,26 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
                             Icon(Icons.logout, color: Colors.redAccent),
                             SizedBox(width: 8),
                             Text('로그아웃'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem<String>(
+                        value: 'exit',
+                        child: Row(
+                          children: [
+                            Icon(Icons.exit_to_app, color: Colors.black87),
+                            SizedBox(width: 8),
+                            Text('앱 종료'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem<String>(
+                        value: 'other',
+                        child: Row(
+                          children: [
+                            Icon(Icons.more_horiz, color: Colors.grey),
+                            SizedBox(width: 8),
+                            Text('기타 기능'),
                           ],
                         ),
                       ),

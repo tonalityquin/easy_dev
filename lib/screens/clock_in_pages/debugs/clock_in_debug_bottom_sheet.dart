@@ -4,6 +4,8 @@ import 'package:share_plus/share_plus.dart';
 import 'package:flutter/services.dart';
 import 'clock_in_debug_firestore_logger.dart';
 
+/// Firestore 로그 디버깅 바텀시트
+/// - 로그 보기, 검색, 복사, 내보내기, 삭제 기능 제공
 class ClockInDebugBottomSheet extends StatefulWidget {
   const ClockInDebugBottomSheet({super.key});
 
@@ -12,8 +14,8 @@ class ClockInDebugBottomSheet extends StatefulWidget {
 }
 
 class _ClockInDebugBottomSheetState extends State<ClockInDebugBottomSheet> {
-  List<String> _logLines = [];
-  List<String> _filteredLines = [];
+  List<String> _logLines = [];        // 전체 로그
+  List<String> _filteredLines = [];   // 필터링된 로그
   bool _isLoading = true;
 
   final DateFormat _timestampFormat = DateFormat('yyyy-MM-dd HH:mm:ss');
@@ -21,13 +23,15 @@ class _ClockInDebugBottomSheetState extends State<ClockInDebugBottomSheet> {
   @override
   void initState() {
     super.initState();
-    _loadLog();
+    _loadLog(); // 파일에서 로그 불러오기
   }
 
+  /// 로그 파일 로드 및 상태 갱신
   Future<void> _loadLog() async {
     final text = await ClockInDebugFirestoreLogger().readLog();
     setState(() {
       _isLoading = false;
+
       if (text.isEmpty) {
         _logLines = ['🚫 저장된 로그가 없습니다.'];
       } else {
@@ -37,12 +41,14 @@ class _ClockInDebugBottomSheetState extends State<ClockInDebugBottomSheet> {
             .where((line) => line.trim().isNotEmpty)
             .toList()
             .reversed
-            .toList();
+            .toList(); // 최신 로그 위로
       }
+
       _filteredLines = List.from(_logLines);
     });
   }
 
+  /// 검색어 기준으로 로그 필터링
   void _filterLogs(String query) {
     setState(() {
       if (query.isEmpty) {
@@ -55,9 +61,11 @@ class _ClockInDebugBottomSheetState extends State<ClockInDebugBottomSheet> {
     });
   }
 
+  /// 로그 전체 삭제
   Future<void> _clearLog() async {
     await ClockInDebugFirestoreLogger().clearLog();
     await _loadLog();
+
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('로그가 삭제되었습니다.')),
@@ -65,8 +73,10 @@ class _ClockInDebugBottomSheetState extends State<ClockInDebugBottomSheet> {
     }
   }
 
+  /// 로그 파일 내보내기 (공유)
   Future<void> _exportLogFile() async {
     final file = ClockInDebugFirestoreLogger().getLogFile();
+
     if (file == null || !await file.exists()) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -83,9 +93,11 @@ class _ClockInDebugBottomSheetState extends State<ClockInDebugBottomSheet> {
     );
   }
 
+  /// 현재 필터링된 로그를 클립보드에 복사
   Future<void> _copyLogsToClipboard() async {
     final allLogs = _filteredLines.reversed.join('\n');
     await Clipboard.setData(ClipboardData(text: allLogs));
+
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('로그가 클립보드에 복사되었습니다.')),
@@ -107,11 +119,13 @@ class _ClockInDebugBottomSheetState extends State<ClockInDebugBottomSheet> {
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ),
-            // 검색창 + 아이콘 버튼들
+
+            // 검색창 및 기능 버튼들
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: Row(
                 children: [
+                  // 검색 필드
                   Expanded(
                     child: TextField(
                       decoration: const InputDecoration(
@@ -124,16 +138,22 @@ class _ClockInDebugBottomSheetState extends State<ClockInDebugBottomSheet> {
                     ),
                   ),
                   const SizedBox(width: 8),
+
+                  // 로그 내보내기 버튼
                   IconButton(
                     onPressed: _exportLogFile,
                     icon: const Icon(Icons.upload_file, color: Colors.blueGrey),
                     tooltip: '로그 파일 내보내기',
                   ),
+
+                  // 복사 버튼
                   IconButton(
                     onPressed: _copyLogsToClipboard,
                     icon: const Icon(Icons.copy, color: Colors.teal),
                     tooltip: '로그 복사',
                   ),
+
+                  // 삭제 버튼
                   IconButton(
                     onPressed: _clearLog,
                     icon: const Icon(Icons.delete, color: Colors.redAccent),
@@ -142,7 +162,8 @@ class _ClockInDebugBottomSheetState extends State<ClockInDebugBottomSheet> {
                 ],
               ),
             ),
-            // 색상/아이콘 안내
+
+            // 안내 텍스트
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: Text(
@@ -150,7 +171,10 @@ class _ClockInDebugBottomSheetState extends State<ClockInDebugBottomSheet> {
                 style: TextStyle(fontSize: 12, color: Colors.grey),
               ),
             ),
+
             const Divider(height: 1),
+
+            // 본문 로그 리스트
             Expanded(
               child: _isLoading
                   ? const Center(child: CircularProgressIndicator())
@@ -162,6 +186,7 @@ class _ClockInDebugBottomSheetState extends State<ClockInDebugBottomSheet> {
     );
   }
 
+  /// 로그 리스트 렌더링
   Widget _buildLogList() {
     return Scrollbar(
       child: ListView.builder(
@@ -173,12 +198,13 @@ class _ClockInDebugBottomSheetState extends State<ClockInDebugBottomSheet> {
           String timestampStr = '';
           String message = line;
 
+          // 로그 파싱: [timestamp] : [message]
           if (parts.length >= 2) {
             timestampStr = parts.first;
             message = parts.sublist(1).join(': ');
           }
 
-          // 타임스탬프 포맷
+          // 타임스탬프 포맷 변환
           String datePart = '';
           String timePart = '';
           try {
@@ -189,7 +215,7 @@ class _ClockInDebugBottomSheetState extends State<ClockInDebugBottomSheet> {
             timePart = split[1];
           } catch (_) {}
 
-          // 색상/아이콘 결정
+          // 메시지 기반 색상 및 아이콘 지정
           final lcMessage = message.toLowerCase();
           Color color = Colors.black;
           IconData icon = Icons.info;
@@ -205,6 +231,7 @@ class _ClockInDebugBottomSheetState extends State<ClockInDebugBottomSheet> {
             icon = Icons.play_arrow;
           }
 
+          // 로그 한 줄 UI
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Row(
@@ -212,6 +239,8 @@ class _ClockInDebugBottomSheetState extends State<ClockInDebugBottomSheet> {
               children: [
                 Icon(icon, color: color, size: 18),
                 const SizedBox(width: 8),
+
+                // 날짜 및 시간
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -233,7 +262,10 @@ class _ClockInDebugBottomSheetState extends State<ClockInDebugBottomSheet> {
                     ),
                   ],
                 ),
+
                 const SizedBox(width: 12),
+
+                // 로그 메시지 본문
                 Expanded(
                   child: Text(
                     message,

@@ -22,8 +22,19 @@ class _LoginFormState extends State<LoginForm> {
     _controller.initState(); // 로그인 상태 확인 및 자동 이동 처리
   }
 
+  // 실제 로그인 호출 함수
   void _handleLogin() {
     _controller.login(setState);
+  }
+
+  // 로그인 버튼 누를 때 호출되는 함수
+  void _onLoginButtonPressed() {
+    _controller.handleDeveloperTap(setState); // 개발자 모드 진입 또는 해제 시도
+
+    // 개발자 모드가 아니고, 로딩 중이 아닐 때만 로그인 실행
+    if (!_controller.isDeveloperMode && !_controller.isLoading) {
+      _handleLogin();
+    }
   }
 
   @override
@@ -75,7 +86,7 @@ class _LoginFormState extends State<LoginForm> {
           focusNode: _controller.passwordFocus,
           obscureText: _controller.obscurePassword,
           textInputAction: TextInputAction.done,
-          onSubmitted: (_) => _handleLogin(),
+          onSubmitted: (_) => _onLoginButtonPressed(),
           decoration: _controller.inputDecoration(
             label: "비밀번호(5자리 이상)",
             icon: Icons.lock,
@@ -89,13 +100,15 @@ class _LoginFormState extends State<LoginForm> {
         ),
         const SizedBox(height: 32),
 
-        // ✅ 로그인 버튼 (디자인 완전 통일)
+        // ✅ 로그인 / 개발 모드 버튼
         SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
             icon: const Icon(Icons.login),
             label: Text(
-              _controller.isLoading ? '로딩 중...' : '로그인',
+              _controller.isDeveloperMode
+                  ? '개발 모드'
+                  : (_controller.isLoading ? '로딩 중...' : '로그인'),
               style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -112,27 +125,28 @@ class _LoginFormState extends State<LoginForm> {
                 borderRadius: BorderRadius.circular(8),
               ),
             ),
-            onPressed: _controller.isLoading ? null : _handleLogin,
+            onPressed: _controller.isLoading ? null : _onLoginButtonPressed,
           ),
         ),
 
         const SizedBox(height: 12),
 
-        // 디버깅 버튼
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            icon: const Icon(Icons.bug_report, size: 18),
-            label: const Text("디버깅"),
-            onPressed: () {
-              showModalBottomSheet(
-                context: context,
-                isScrollControlled: true,
-                builder: (_) => const LoginDebugBottomSheet(),
-              );
-            },
+        // ✅ 디버깅 버튼 (개발자 모드에서만 보임)
+        if (_controller.isDeveloperMode)
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.bug_report, size: 18),
+              label: const Text("디버깅"),
+              onPressed: () {
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  builder: (_) => const LoginDebugBottomSheet(),
+                );
+              },
+            ),
           ),
-        ),
       ],
     );
   }

@@ -21,6 +21,7 @@ class _WorkButtonWidgetState extends State<WorkButtonWidget> {
   bool _isLoading = false;
   final logger = ClockInDebugFirestoreLogger();
 
+  /// 로딩 상태 토글 및 로그 기록
   void _toggleLoading() {
     setState(() {
       _isLoading = !_isLoading;
@@ -36,6 +37,7 @@ class _WorkButtonWidgetState extends State<WorkButtonWidget> {
     final userState = context.watch<UserState>();
     final isWorking = userState.isWorking;
 
+    // 버튼에 표시될 텍스트 라벨 설정
     final label = _isLoading
         ? '로딩 중...'
         : isWorking
@@ -43,7 +45,7 @@ class _WorkButtonWidgetState extends State<WorkButtonWidget> {
         : '출근하기';
 
     return ElevatedButton.icon(
-      icon: const Icon(Icons.assignment),
+      icon: const Icon(Icons.access_time),
       label: Text(
         label,
         style: const TextStyle(
@@ -62,7 +64,10 @@ class _WorkButtonWidgetState extends State<WorkButtonWidget> {
           borderRadius: BorderRadius.circular(8),
         ),
       ),
+
+      /// 버튼 클릭 이벤트 핸들링
       onPressed: (_isLoading || isWorking)
+      // 로딩 중이거나 이미 출근 중이면 클릭 무시
           ? () {
         if (_isLoading) {
           logger.log('⚠️ 출근 버튼 클릭 무시: 로딩 중', level: 'warn');
@@ -70,6 +75,7 @@ class _WorkButtonWidgetState extends State<WorkButtonWidget> {
           logger.log('🚫 출근 버튼 클릭 무시: 이미 출근 상태', level: 'warn');
         }
       }
+      // 출근 상태 확인 및 처리 시작
           : () {
         logger.log('🧲 [UI] 출근 버튼 클릭됨', level: 'called');
         widget.controller.handleWorkStatus(
