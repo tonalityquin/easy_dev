@@ -6,13 +6,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../../models/user_model.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../../utils/snackbar_helper.dart';
+import '../../../states/head_quarter/calendar_selection_state.dart';
 import '../../../utils/google_sheets_helper.dart';
 import 'attendances/time_edit_bottom_sheet.dart';
 
 class AttendanceCalendar extends StatefulWidget {
-  final String selectedArea;
-
-  const AttendanceCalendar({super.key, required this.selectedArea});
+  const AttendanceCalendar({super.key});
 
   @override
   State<AttendanceCalendar> createState() => _AttendanceCalendarState();
@@ -33,7 +32,18 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
   @override
   void initState() {
     super.initState();
-    // 지역 자동 설정 제거됨. 사용자가 수동 선택 필요
+
+    final calendarState = context.read<CalendarSelectionState>();
+    _selectedArea = calendarState.selectedArea;
+    _selectedUser = calendarState.selectedUser;
+
+    if (_selectedArea != null) {
+      _loadUsers(_selectedArea!).then((_) {
+        if (_selectedUser != null) {
+          _loadAttendanceTimes(_selectedUser!);
+        }
+      });
+    }
   }
 
   Future<void> _loadAttendanceTimes(UserModel user) async {
@@ -56,6 +66,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
       selectedMonth: _focusedDay.month,
     );
 
+    if (!mounted) return;
     setState(() {
       _clockInMap = inMap[userId] ?? {};
       _clockOutMap = outMap[userId] ?? {};
@@ -66,16 +77,14 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
     setState(() => _isLoadingUsers = true);
 
     try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('user_accounts')
-          .where('selectedArea', isEqualTo: area)
-          .get();
+      final snapshot =
+          await FirebaseFirestore.instance.collection('user_accounts').where('selectedArea', isEqualTo: area).get();
 
       final users = snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
 
       setState(() {
         _users = users;
-        _selectedUser = null;
+        // 선택된 사용자 유지 여부 판단은 CalendarSelectionState에서
       });
 
       showSuccessSnackbar(context, '사용자 ${users.length}명 불러옴');
@@ -127,6 +136,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
   Widget build(BuildContext context) {
     final user = context.watch<UserState>().user;
     final areaList = user?.areas ?? [];
+    final calendarState = context.watch<CalendarSelectionState>();
 
     return Scaffold(
       appBar: AppBar(
@@ -157,6 +167,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
                     }).toList(),
                     onChanged: (value) async {
                       if (value != null) {
+                        calendarState.setArea(value);
                         setState(() {
                           _selectedArea = value;
                           _users = [];
@@ -182,6 +193,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
                       );
                     }).toList(),
                     onChanged: (value) {
+                      calendarState.setUser(value);
                       setState(() => _selectedUser = value);
                       if (value != null) {
                         _loadAttendanceTimes(value);
@@ -252,9 +264,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
 
             /// 저장 버튼
             ElevatedButton.icon(
-              onPressed: _selectedUser == null || _selectedArea == null
-                  ? null
-                  : _saveAllChangesToSheets,
+              onPressed: _selectedUser == null || _selectedArea == null ? null : _saveAllChangesToSheets,
               icon: const Icon(Icons.save, size: 20),
               label: const Text(
                 '변경사항 저장',
@@ -289,8 +299,8 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
         color: isSelected
             ? Colors.orange.withOpacity(0.3)
             : isToday
-            ? Colors.blueAccent.withOpacity(0.2)
-            : Colors.transparent,
+                ? Colors.blueAccent.withOpacity(0.2)
+                : Colors.transparent,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(

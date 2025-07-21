@@ -9,6 +9,7 @@ import '../repositories/user/user_repository.dart';
 
 // 📦 States
 import '../states/area/area_state.dart';
+import '../states/head_quarter/calendar_selection_state.dart';
 import '../states/page/page_info.dart';
 import '../states/page/page_state.dart';
 import '../states/plate/input_log_plate.dart';
@@ -119,5 +120,10 @@ final List<SingleChildWidget> stateProviders = [
   // 📅 선택된 날짜 상태
   ChangeNotifierProvider(
     create: (_) => FieldSelectedDateState(),
+  ),
+
+  // 📅 본사 출/퇴근, 휴게시간 날짜 상태 공유
+  ChangeNotifierProvider(
+    create: (_) => CalendarSelectionState(),
   ),
 ];

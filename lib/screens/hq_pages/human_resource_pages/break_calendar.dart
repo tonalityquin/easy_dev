@@ -6,13 +6,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../../models/user_model.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../../utils/snackbar_helper.dart';
+import '../../../states/head_quarter/calendar_selection_state.dart';
 import '../../../utils/google_sheets_helper.dart';
 import 'breaks/break_edit_bottom_sheet.dart';
 
 class BreakCalendar extends StatefulWidget {
-  final String selectedArea;
-
-  const BreakCalendar({super.key, required this.selectedArea});
+  const BreakCalendar({super.key});
 
   @override
   State<BreakCalendar> createState() => _BreakCalendarState();
@@ -28,6 +27,23 @@ class _BreakCalendarState extends State<BreakCalendar> {
 
   bool _isLoadingUsers = false;
   Map<int, String> _breakTimeMap = {};
+
+  @override
+  void initState() {
+    super.initState();
+
+    final calendarState = context.read<CalendarSelectionState>();
+    _selectedArea = calendarState.selectedArea;
+    _selectedUser = calendarState.selectedUser;
+
+    if (_selectedArea != null) {
+      _loadUsers(_selectedArea!).then((_) {
+        if (_selectedUser != null) {
+          _loadBreakTimes(_selectedUser!);
+        }
+      });
+    }
+  }
 
   Future<void> _loadBreakTimes(UserModel user) async {
     final area = user.selectedArea?.trim() ?? '';
@@ -59,7 +75,6 @@ class _BreakCalendarState extends State<BreakCalendar> {
 
       setState(() {
         _users = users;
-        _selectedUser = null;
       });
 
       showSuccessSnackbar(context, '사용자 목록 ${users.length}명 불러왔습니다');
@@ -74,6 +89,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
   Widget build(BuildContext context) {
     final user = context.watch<UserState>().user;
     final areaList = user?.areas ?? [];
+    final calendarState = context.watch<CalendarSelectionState>();
 
     return Scaffold(
       appBar: AppBar(
@@ -102,11 +118,15 @@ class _BreakCalendarState extends State<BreakCalendar> {
                       );
                     }).toList(),
                     onChanged: (value) {
+                      calendarState.setArea(value);
                       setState(() {
                         _selectedArea = value;
                         _users = [];
                         _selectedUser = null;
                       });
+                      if (value != null) {
+                        _loadUsers(value);
+                      }
                     },
                   ),
                 ),
@@ -123,6 +143,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
                       );
                     }).toList(),
                     onChanged: (value) {
+                      calendarState.setUser(value);
                       setState(() {
                         _selectedUser = value;
                       });
@@ -193,9 +214,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
 
             /// 저장 버튼
             ElevatedButton.icon(
-              onPressed: _selectedUser == null || _selectedArea == null
-                  ? null
-                  : _saveAllChangesToSheets,
+              onPressed: _selectedUser == null || _selectedArea == null ? null : _saveAllChangesToSheets,
               icon: const Icon(Icons.save, size: 20),
               label: const Text(
                 '변경사항 저장',
