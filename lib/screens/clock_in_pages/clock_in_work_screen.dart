@@ -5,6 +5,7 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../states/user/user_state.dart';
+import '../../utils/snackbar_helper.dart';
 import 'debugs/clock_in_debug_firestore_logger.dart';
 import 'clock_in_controller.dart';
 import 'sections/clock_in_fetch_plate_count_widget.dart';
@@ -91,9 +92,7 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
                     kakaoUrl = url;
                   });
                   Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('URL이 저장되었습니다.')),
-                  );
+                  showSuccessSnackbar(context, 'URL이 저장되었습니다.');
                 },
                 child: const Text('저장'),
               ),
@@ -116,9 +115,7 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
     } catch (e) {
       logger.log('❌ 로그아웃 실패: $e', level: 'error');
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('로그아웃 실패: $e')),
-        );
+        showFailedSnackbar(context, '로그아웃 실패: $e');
       }
     }
   }
