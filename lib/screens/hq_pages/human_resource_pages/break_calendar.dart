@@ -66,10 +66,8 @@ class _BreakCalendarState extends State<BreakCalendar> {
     setState(() => _isLoadingUsers = true);
 
     try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('user_accounts')
-          .where('selectedArea', isEqualTo: area)
-          .get();
+      final snapshot =
+          await FirebaseFirestore.instance.collection('user_accounts').where('selectedArea', isEqualTo: area).get();
 
       final users = snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
 
@@ -117,15 +115,15 @@ class _BreakCalendarState extends State<BreakCalendar> {
                         child: Text(area, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14)),
                       );
                     }).toList(),
-                    onChanged: (value) {
-                      calendarState.setArea(value);
-                      setState(() {
-                        _selectedArea = value;
-                        _users = [];
-                        _selectedUser = null;
-                      });
+                    onChanged: (value) async {
                       if (value != null) {
-                        _loadUsers(value);
+                        calendarState.setArea(value);
+                        setState(() {
+                          _selectedArea = value;
+                          _users = [];
+                          _selectedUser = null;
+                        });
+                        await _loadUsers(value); // ✅ 지역 선택 시 자동으로 유저 목록 로드
                       }
                     },
                   ),
@@ -247,8 +245,8 @@ class _BreakCalendarState extends State<BreakCalendar> {
         color: isSelected
             ? Colors.redAccent.withOpacity(0.3)
             : isToday
-            ? Colors.greenAccent.withOpacity(0.2)
-            : Colors.transparent,
+                ? Colors.greenAccent.withOpacity(0.2)
+                : Colors.transparent,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
