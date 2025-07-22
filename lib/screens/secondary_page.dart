@@ -6,7 +6,6 @@ import '../states/secondary/secondary_mode.dart';
 import '../states/user/user_state.dart';
 import '../states/secondary/secondary_info.dart';
 import '../widgets/navigation/secondary_role_navigation.dart';
-import 'secondary_pages/debugs/secondary_debug_bottom_sheet.dart';
 
 class SecondaryPage extends StatelessWidget {
   const SecondaryPage({super.key});
@@ -153,22 +152,10 @@ class DebugTriggerBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () {
-        showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          builder: (_) => const SecondaryDebugBottomSheet(),
-        );
-      },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8),
         alignment: Alignment.center,
         color: Colors.transparent,
-        child: const Icon(
-          Icons.bug_report,
-          size: 20,
-          color: Colors.grey,
-        ),
       ),
     );
   }

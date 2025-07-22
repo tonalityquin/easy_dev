@@ -3,7 +3,6 @@ import 'package:easydev/states/page/hq_state.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../states/page/page_info.dart';
-import 'hq_pages/debugs/hq_debug_bottom_sheet.dart'; // hqPage, HqPageInfo 등 포함
 
 class HeadquarterPage extends StatelessWidget {
   const HeadquarterPage({super.key});
@@ -111,29 +110,16 @@ class PageBottomNavigation extends StatelessWidget {
   }
 }
 
-// ✅ DebugTriggerBar 위젯 정의
 class DebugTriggerBar extends StatelessWidget {
   const DebugTriggerBar({super.key});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () {
-        showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          builder: (_) => const HqDebugBottomSheet(), // ✅ 본사 전용 바텀시트
-        );
-      },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8),
         alignment: Alignment.center,
         color: Colors.transparent,
-        child: const Icon(
-          Icons.bug_report,
-          size: 20,
-          color: Colors.grey,
-        ),
       ),
     );
   }

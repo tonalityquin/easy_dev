@@ -175,127 +175,141 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
         centerTitle: true,
         automaticallyImplyLeading: false,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            // ✅ 상단 드롭다운
-            Row(
-              children: [
-                Expanded(
-                  flex: 4,
-                  child: DropdownButtonFormField<String>(
-                    value: _selectedArea,
-                    decoration: const InputDecoration(labelText: '지역'),
-                    items: areaList.map((area) {
-                      return DropdownMenuItem(
-                        value: area,
-                        child: Text(area, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14)),
-                      );
-                    }).toList(),
-                    onChanged: (value) async {
-                      if (value != null) {
-                        calendarState.setArea(value);
-                        setState(() {
-                          _selectedArea = value;
-                          _users = [];
-                          _selectedUser = null;
-                        });
-                        await _loadUsers(value);
+      body: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  // ✅ 상단 드롭다운
+                  Row(
+                    children: [
+                      Expanded(
+                        flex: 4,
+                        child: DropdownButtonFormField<String>(
+                          value: _selectedArea,
+                          decoration: const InputDecoration(labelText: '지역'),
+                          items: areaList.map((area) {
+                            return DropdownMenuItem(
+                              value: area,
+                              child: Text(area, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14)),
+                            );
+                          }).toList(),
+                          onChanged: (value) async {
+                            if (value != null) {
+                              calendarState.setArea(value);
+                              setState(() {
+                                _selectedArea = value;
+                                _users = [];
+                                _selectedUser = null;
+                              });
+                              await _loadUsers(value);
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        flex: 4,
+                        child: DropdownButtonFormField<UserModel>(
+                          value: _selectedUser,
+                          decoration: const InputDecoration(labelText: '사용자'),
+                          items: _users.map((user) {
+                            return DropdownMenuItem(
+                              value: user,
+                              child: Text(user.name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14)),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            calendarState.setUser(value);
+                            setState(() => _selectedUser = value);
+                            if (value != null) {
+                              _loadAttendanceTimes(value);
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        flex: 2,
+                        child: Tooltip(
+                          message: '지역 선택 시 자동으로 사용자 목록이 불러와집니다',
+                          child: Icon(Icons.cloud, color: Colors.grey),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  // ✅ 캘린더
+                  TableCalendar(
+                    firstDay: DateTime.utc(2025, 1, 1),
+                    lastDay: DateTime.utc(2025, 12, 31),
+                    focusedDay: _focusedDay,
+                    rowHeight: 80,
+                    selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+                    onDaySelected: (selectedDay, focusedDay) {
+                      setState(() {
+                        _selectedDay = selectedDay;
+                        _focusedDay = focusedDay;
+                      });
+                      if (_selectedUser != null) {
+                        _showEditBottomSheet(selectedDay);
                       }
                     },
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  flex: 4,
-                  child: DropdownButtonFormField<UserModel>(
-                    value: _selectedUser,
-                    decoration: const InputDecoration(labelText: '사용자'),
-                    items: _users.map((user) {
-                      return DropdownMenuItem(
-                        value: user,
-                        child: Text(user.name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14)),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      calendarState.setUser(value);
-                      setState(() => _selectedUser = value);
-                      if (value != null) {
-                        _loadAttendanceTimes(value);
+                    onPageChanged: (focusedDay) {
+                      setState(() => _focusedDay = focusedDay);
+                      if (_selectedUser != null) {
+                        _loadAttendanceTimes(_selectedUser!);
                       }
                     },
+                    availableGestures: AvailableGestures.none, // ✅ 핵심: 스크롤 방해 제거
+                    calendarStyle: const CalendarStyle(
+                      outsideDaysVisible: true,
+                      isTodayHighlighted: false,
+                      cellMargin: EdgeInsets.all(4),
+                    ),
+                    headerStyle: const HeaderStyle(
+                      formatButtonVisible: false,
+                      titleCentered: true,
+                    ),
+                    calendarBuilders: CalendarBuilders(
+                      defaultBuilder: _buildCell,
+                      todayBuilder: _buildCell,
+                      selectedBuilder: _buildCell,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                const Expanded(
-                  flex: 2,
-                  child: Tooltip(
-                    message: '지역 선택 시 자동으로 사용자 목록이 불러와집니다',
-                    child: Icon(Icons.cloud, color: Colors.grey),
+                  const SizedBox(height: 20),
+
+                  // ✅ 저장 버튼
+                  ElevatedButton.icon(
+                    onPressed: _selectedUser == null || _selectedArea == null ? null : _saveAllChangesToSheets,
+                    icon: const Icon(Icons.save, size: 20),
+                    label: const Text(
+                      '변경사항 저장',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Theme.of(context).colorScheme.primary,
+                      minimumSize: const Size.fromHeight(48),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: Theme.of(context).colorScheme.primary, width: 1.2),
+                      ),
+                      elevation: 2,
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-
-            // ✅ 캘린더
-            TableCalendar(
-              firstDay: DateTime.utc(2025, 1, 1),
-              lastDay: DateTime.utc(2025, 12, 31),
-              focusedDay: _focusedDay,
-              rowHeight: 80,
-              selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-              onDaySelected: (selectedDay, focusedDay) {
-                setState(() {
-                  _selectedDay = selectedDay;
-                  _focusedDay = focusedDay;
-                });
-                if (_selectedUser != null) {
-                  _showEditBottomSheet(selectedDay);
-                }
-              },
-              onPageChanged: (focusedDay) {
-                setState(() => _focusedDay = focusedDay);
-                if (_selectedUser != null) {
-                  _loadAttendanceTimes(_selectedUser!);
-                }
-              },
-              calendarStyle: const CalendarStyle(
-                outsideDaysVisible: true,
-                isTodayHighlighted: false,
-                cellMargin: EdgeInsets.all(4),
-              ),
-              headerStyle: const HeaderStyle(
-                formatButtonVisible: false,
-                titleCentered: true,
-              ),
-              calendarBuilders: CalendarBuilders(
-                defaultBuilder: _buildCell,
-                todayBuilder: _buildCell,
-                selectedBuilder: _buildCell,
+                ],
               ),
             ),
-            const SizedBox(height: 20),
-
-            // ✅ 저장 버튼
-            ElevatedButton.icon(
-              onPressed: _selectedUser == null || _selectedArea == null ? null : _saveAllChangesToSheets,
-              icon: const Icon(Icons.save, size: 20),
-              label: const Text('변경사항 저장', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Theme.of(context).primaryColor,
-                foregroundColor: Colors.white,
-                minimumSize: const Size.fromHeight(48),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                elevation: 0,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
+
 
   Widget _buildCell(BuildContext context, DateTime day, DateTime focusedDay) {
     final isSelected = isSameDay(day, _selectedDay);

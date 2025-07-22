@@ -120,138 +120,149 @@ class _BreakCalendarState extends State<BreakCalendar> {
         centerTitle: true,
         automaticallyImplyLeading: false,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  flex: 4,
-                  child: DropdownButtonFormField<String>(
-                    value: _selectedArea,
-                    decoration: const InputDecoration(labelText: '지역'),
-                    items: areaList.map((area) {
-                      return DropdownMenuItem(
-                        value: area,
-                        child: Text(area, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14)),
-                      );
-                    }).toList(),
-                    onChanged: (value) async {
-                      if (value != null) {
-                        calendarState.setArea(value);
-                        setState(() {
-                          _selectedArea = value;
-                          _users = [];
-                          _selectedUser = null;
-                        });
-                        await _loadUsers(value); // ✅ 지역 선택 시 자동으로 유저 목록 로드
-                      }
-                    },
+      body: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  // ✅ 지역 & 사용자 선택 드롭다운
+                  Row(
+                    children: [
+                      Expanded(
+                        flex: 4,
+                        child: DropdownButtonFormField<String>(
+                          value: _selectedArea,
+                          decoration: const InputDecoration(labelText: '지역'),
+                          items: areaList.map((area) {
+                            return DropdownMenuItem(
+                              value: area,
+                              child: Text(area, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14)),
+                            );
+                          }).toList(),
+                          onChanged: (value) async {
+                            if (value != null) {
+                              calendarState.setArea(value);
+                              setState(() {
+                                _selectedArea = value;
+                                _users = [];
+                                _selectedUser = null;
+                              });
+                              await _loadUsers(value);
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        flex: 4,
+                        child: DropdownButtonFormField<UserModel>(
+                          value: _selectedUser,
+                          decoration: const InputDecoration(labelText: '사용자'),
+                          items: _users.map((user) {
+                            return DropdownMenuItem(
+                              value: user,
+                              child: Text(user.name),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            calendarState.setUser(value);
+                            setState(() {
+                              _selectedUser = value;
+                            });
+                            if (value != null) {
+                              _loadBreakTimes(value);
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        flex: 2,
+                        child: ElevatedButton(
+                          onPressed: null,
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          child: const Icon(Icons.cloud, color: Colors.grey),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  flex: 4,
-                  child: DropdownButtonFormField<UserModel>(
-                    value: _selectedUser,
-                    decoration: const InputDecoration(labelText: '사용자'),
-                    items: _users.map((user) {
-                      return DropdownMenuItem(
-                        value: user,
-                        child: Text(user.name),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      calendarState.setUser(value);
+                  const SizedBox(height: 8),
+
+                  /// ✅ 캘린더
+                  TableCalendar(
+                    firstDay: DateTime.utc(2025, 1, 1),
+                    lastDay: DateTime.utc(2025, 12, 31),
+                    focusedDay: _focusedDay,
+                    rowHeight: 80,
+                    selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+                    onDaySelected: (selectedDay, focusedDay) {
                       setState(() {
-                        _selectedUser = value;
+                        _selectedDay = selectedDay;
+                        _focusedDay = focusedDay;
                       });
-                      if (value != null) {
-                        _loadBreakTimes(value);
+
+                      if (_selectedUser != null) {
+                        _showEditBottomSheet(selectedDay);
                       }
                     },
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  flex: 2,
-                  child: ElevatedButton(
-                    onPressed: null, // 기능 제거
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    onPageChanged: (focusedDay) async {
+                      setState(() {
+                        _focusedDay = focusedDay;
+                      });
+
+                      if (_selectedUser != null) {
+                        await _loadBreakTimes(_selectedUser!);
+                      }
+                    },
+                    availableGestures: AvailableGestures.none,
+                    // ✅ 핵심 추가
+                    calendarStyle: const CalendarStyle(
+                      outsideDaysVisible: true,
+                      isTodayHighlighted: false,
+                      cellMargin: EdgeInsets.all(4),
                     ),
-                    child: const Icon(Icons.cloud, color: Colors.grey), // 저장 의미의 아이콘으로 교체
+                    headerStyle: const HeaderStyle(
+                      formatButtonVisible: false,
+                      titleCentered: true,
+                    ),
+                    calendarBuilders: CalendarBuilders(
+                      defaultBuilder: _buildCell,
+                      todayBuilder: _buildCell,
+                      selectedBuilder: _buildCell,
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
 
-            /// 캘린더
-            TableCalendar(
-              firstDay: DateTime.utc(2025, 1, 1),
-              lastDay: DateTime.utc(2025, 12, 31),
-              focusedDay: _focusedDay,
-              rowHeight: 80,
-              selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-              onDaySelected: (selectedDay, focusedDay) {
-                setState(() {
-                  _selectedDay = selectedDay;
-                  _focusedDay = focusedDay;
-                });
+                  const SizedBox(height: 20),
 
-                if (_selectedUser != null) {
-                  _showEditBottomSheet(selectedDay);
-                }
-              },
-              onPageChanged: (focusedDay) async {
-                setState(() {
-                  _focusedDay = focusedDay;
-                });
-
-                if (_selectedUser != null) {
-                  await _loadBreakTimes(_selectedUser!);
-                }
-              },
-              calendarStyle: const CalendarStyle(
-                outsideDaysVisible: true,
-                isTodayHighlighted: false,
-                cellMargin: EdgeInsets.all(4),
-              ),
-              headerStyle: const HeaderStyle(
-                formatButtonVisible: false,
-                titleCentered: true,
-              ),
-              calendarBuilders: CalendarBuilders(
-                defaultBuilder: _buildCell,
-                todayBuilder: _buildCell,
-                selectedBuilder: _buildCell,
+                  /// ✅ 저장 버튼
+                  ElevatedButton.icon(
+                    onPressed: _selectedUser == null || _selectedArea == null ? null : _saveAllChangesToSheets,
+                    icon: const Icon(Icons.save, size: 20),
+                    label: const Text(
+                      '변경사항 저장',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.black87,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: const BorderSide(color: Colors.grey),
+                      ),
+                      elevation: 2,
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 20),
-
-            /// 저장 버튼
-            ElevatedButton.icon(
-              onPressed: _selectedUser == null || _selectedArea == null ? null : _saveAllChangesToSheets,
-              icon: const Icon(Icons.save, size: 20),
-              label: const Text(
-                '변경사항 저장',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-              ),
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size.fromHeight(48),
-                backgroundColor: Theme.of(context).primaryColor,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                elevation: 0,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

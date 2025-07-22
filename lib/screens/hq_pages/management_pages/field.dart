@@ -167,6 +167,7 @@ class _FieldState extends State<Field> {
         );
       },
       child: Card(
+        color: Colors.white,
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         elevation: 3,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

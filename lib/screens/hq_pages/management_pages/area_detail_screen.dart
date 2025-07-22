@@ -99,12 +99,13 @@ class AreaDetailScreen extends StatelessWidget {
             itemBuilder: (context, index) {
               final user = users[index];
               return Card(
+                color: Colors.white,
                 margin: const EdgeInsets.symmetric(vertical: 8),
                 elevation: 2,
                 child: ListTile(
                   leading: Icon(
                     user.isWorking ? Icons.check_circle : Icons.remove_circle_outline,
-                    color: user.isWorking ? Colors.green : Colors.grey,
+                    color: user.isWorking ? Colors.green : Colors.white,
                   ),
                   title: Text(user.name),
                   subtitle: Text(user.isWorking ? '출근 중' : '퇴근'),
@@ -117,6 +118,7 @@ class AreaDetailScreen extends StatelessWidget {
                   ),
                 ),
               );
+
             },
           );
         },

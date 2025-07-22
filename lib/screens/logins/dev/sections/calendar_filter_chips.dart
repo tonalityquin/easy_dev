@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:googleapis/calendar/v3.dart' as calendar;
 import '../utils/calendar_logic.dart';
 
-/// 일정 요약(summary) 기준으로 필터링 가능한 Chip UI를 제공하는 위젯
 class CalendarFilterChips extends StatelessWidget {
   final Map<String, bool> filterStates;
   final Map<DateTime, List<calendar.Event>> eventsByDay;
@@ -21,7 +20,6 @@ class CalendarFilterChips extends StatelessWidget {
     required this.updateEvents,
   });
 
-  /// description에서 progress 값 추출
   int _getProgress(String? desc) {
     final match = RegExp(r'progress:(\d{1,3})').firstMatch(desc ?? '');
     if (match != null) {
@@ -30,7 +28,6 @@ class CalendarFilterChips extends StatelessWidget {
     return 0;
   }
 
-  /// 날짜 정규화 헬퍼
   DateTime normalizeDate(DateTime d) => DateTime(d.year, d.month, d.day);
 
   @override
@@ -50,7 +47,6 @@ class CalendarFilterChips extends StatelessWidget {
       final first = matchedEvents.first;
       final progress = _getProgress(first.description);
 
-      // ✅ 진행률이 100%인 이벤트는 Chip 숨김
       if (progress == 100) return const SizedBox();
 
       final startUtc = first.start?.date;
@@ -70,17 +66,28 @@ class CalendarFilterChips extends StatelessWidget {
       }
 
       return FilterChip(
-        label: Text(label),
+        label: Text(
+          label,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
         selected: entry.value,
+        selectedColor: Colors.deepPurple.shade50,
+        backgroundColor: Colors.white,
+        checkmarkColor: Colors.deepPurple,
+        side: BorderSide(
+          color: entry.value ? Colors.deepPurple : Colors.grey.shade300,
+          width: 1.2,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
         onSelected: (selected) async {
           onFilterChanged(summary, selected);
           await saveFilterStates(filterStates);
 
           if (selected && selectedDay != null) {
             final normalizedSelected = normalizeDate(selectedDay!);
-
             final selectedDateEvents = eventsByDay[normalizedSelected] ?? [];
-
             final target = selectedDateEvents
                 .where((e) => e.summary == summary)
                 .toList()
@@ -102,9 +109,9 @@ class CalendarFilterChips extends StatelessWidget {
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Wrap(
-        spacing: 8,
+        spacing: 10,
         children: chips,
       ),
     );

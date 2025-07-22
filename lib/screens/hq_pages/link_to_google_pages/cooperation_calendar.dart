@@ -1,40 +1,46 @@
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:googleapis/calendar/v3.dart' as calendar;
-import 'sections/calendar_filter_chips.dart';
-import 'sections/calendar_event_card.dart';
-import 'sections/completed_event_sheet.dart';
-import 'utils/calendar_logic.dart';
-import 'utils/calendar_utils.dart';
+import 'cooperation_Calendar_pages/sections/calendar_filter_chips.dart';
+import 'cooperation_Calendar_pages/sections/calendar_event_card.dart';
+import 'cooperation_Calendar_pages/utils/calendar_logic.dart';
+import 'cooperation_Calendar_pages/utils/calendar_utils.dart';
 
 /// 개인용 Google Calendar 연동 월간 캘린더 화면
-class PersonalCalendar extends StatefulWidget {
-  const PersonalCalendar({super.key});
+class CooperationCalendar extends StatefulWidget {
+  final String calendarId;
+
+  const CooperationCalendar({
+    super.key,
+    required this.calendarId,
+  });
 
   @override
-  State<PersonalCalendar> createState() => _PersonalCalendarState();
+  State<CooperationCalendar> createState() => _CooperationCalendarState();
 }
 
-class _PersonalCalendarState extends State<PersonalCalendar> {
-  DateTime _focusedDay = DateTime.now(); // 현재 포커스된 달
-  DateTime? _selectedDay; // 사용자가 선택한 날짜
-  Map<DateTime, List<calendar.Event>> _eventsByDay = {}; // 날짜별 이벤트 맵
-  Map<String, bool> _filterStates = {}; // 이벤트 제목 필터링 상태
+class _CooperationCalendarState extends State<CooperationCalendar> {
+  DateTime _focusedDay = DateTime.now();
+  DateTime? _selectedDay;
+  Map<DateTime, List<calendar.Event>> _eventsByDay = {};
+  Map<String, bool> _filterStates = {};
 
   @override
   void initState() {
     super.initState();
 
-    // post-frame에서 초기화하여 안정성 확보
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
         final loaded = await loadFilterStates();
+        if (!mounted) return;
         setState(() => _filterStates = loaded);
 
         final events = await loadEventsForMonth(
           month: _focusedDay,
           filterStates: loaded,
+          calendarId: widget.calendarId,
         );
+        if (!mounted) return;
         setState(() => _eventsByDay = events);
       } catch (e, stack) {
         print('🚨 초기화 오류: $e');
@@ -43,7 +49,6 @@ class _PersonalCalendarState extends State<PersonalCalendar> {
     });
   }
 
-  /// 선택한 날짜의 필터된 이벤트 목록 반환
   List<calendar.Event> _getEventsForDay(DateTime day) {
     final normalized = DateTime(day.year, day.month, day.day);
     final raw = _eventsByDay[normalized] ?? [];
@@ -60,22 +65,6 @@ class _PersonalCalendarState extends State<PersonalCalendar> {
         foregroundColor: Colors.black87,
         title: const Text('월간 간트 캘린더', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.check_circle_outline),
-            tooltip: '완료된 할 일 보기',
-            onPressed: () async {
-              await showCompletedEventSheet(
-                context: context,
-                eventsByDay: _eventsByDay,
-                calendarId: calendarId,
-                onEventsDeleted: (updated) {
-                  setState(() => _eventsByDay = updated);
-                },
-              );
-            },
-          ),
-        ],
       ),
       body: Column(
         children: [
@@ -101,6 +90,7 @@ class _PersonalCalendarState extends State<PersonalCalendar> {
                 final events = await loadEventsForMonth(
                   month: focusedDay,
                   filterStates: _filterStates,
+                  calendarId: widget.calendarId,
                 );
                 setState(() => _eventsByDay = events);
               } catch (e) {
@@ -124,6 +114,7 @@ class _PersonalCalendarState extends State<PersonalCalendar> {
 
           /// 🔘 필터 Chip 목록
           CalendarFilterChips(
+            calendarId: widget.calendarId,
             filterStates: _filterStates,
             eventsByDay: _eventsByDay,
             focusedDay: _focusedDay,
@@ -151,30 +142,26 @@ class _PersonalCalendarState extends State<PersonalCalendar> {
       ),
 
       /// ➕ 일정 추가 버튼
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      // ➕ 일정 추가 버튼
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 48),
-        child: FloatingActionButton(
+        padding: const EdgeInsets.only(bottom: 48, right: 16),
+        child: FloatingActionButton.extended(
           onPressed: () async {
             await addEvent(
               context: context,
               focusedDay: _focusedDay,
               updateEvents: (updated) => setState(() => _eventsByDay = updated),
               filterStates: _filterStates,
+              calendarId: widget.calendarId,
             );
           },
           backgroundColor: Colors.white,
-          foregroundColor: Theme.of(context).colorScheme.primary,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(
-              color: Theme.of(context).colorScheme.primary,
-              width: 1.2,
-            ),
-          ),
+          foregroundColor: Colors.black87,
+          icon: const Icon(Icons.add),
+          label: const Text('일정 추가', style: TextStyle(fontWeight: FontWeight.bold)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           elevation: 4,
-          tooltip: '일정 추가',
-          child: const Icon(Icons.add),
         ),
       ),
     );

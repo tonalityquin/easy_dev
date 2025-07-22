@@ -13,7 +13,6 @@ import '../utils/app_colors.dart';
 
 import '../screens/input_pages/input_plate_screen.dart';
 import 'secondary_page.dart';
-import 'type_pages/debugs/type_page_debug_bottom_sheet.dart';
 
 class TypePage extends StatefulWidget {
   const TypePage({super.key});
@@ -265,22 +264,10 @@ class DebugTriggerBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () {
-        showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          builder: (_) => const TypePageDebugBottomSheet(),
-        );
-      },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8),
         alignment: Alignment.center,
         color: Colors.transparent,
-        child: const Icon(
-          Icons.bug_report,
-          size: 20,
-          color: Colors.grey,
-        ),
       ),
     );
   }

@@ -77,16 +77,22 @@ class _StatisticsState extends State<Statistics> {
                   ElevatedButton.icon(
                     icon: const Icon(Icons.refresh),
                     label: const Text(''),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.grey[300]),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.black87,
+                      side: const BorderSide(color: Colors.grey),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    ),
                     onPressed: _savedReports.isNotEmpty
                         ? () {
-                            setState(() {
-                              _savedReports.clear();
-                            });
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text("🗑️ 보관된 통계가 초기화되었습니다.")),
-                            );
-                          }
+                      setState(() {
+                        _savedReports.clear();
+                      });
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("🗑️ 보관된 통계가 초기화되었습니다.")),
+                      );
+                    }
                         : null,
                   ),
                   const SizedBox(width: 8),
@@ -94,6 +100,13 @@ class _StatisticsState extends State<Statistics> {
                     child: ElevatedButton.icon(
                       icon: const Icon(Icons.calendar_today),
                       label: const Text(''),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: Colors.black87,
+                        side: const BorderSide(color: Colors.grey),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      ),
                       onPressed: (_selectedArea != null) ? _pickDate : null,
                     ),
                   ),
@@ -101,6 +114,13 @@ class _StatisticsState extends State<Statistics> {
                   ElevatedButton.icon(
                     icon: const Icon(Icons.bar_chart),
                     label: const Text(''),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.black87,
+                      side: const BorderSide(color: Colors.grey),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    ),
                     onPressed: _savedReports.isNotEmpty ? _showGraph : null,
                   ),
                 ],
@@ -111,7 +131,7 @@ class _StatisticsState extends State<Statistics> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '📅 선택 날짜: ${_selectedDate!.toIso8601String().split("T").first}',
+                      '🗓 선택 날짜: ${_selectedDate!.toIso8601String().split("T").first}',
                       style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                     ),
                     if (_savedReports.any((r) => r['date'] == _selectedDate!.toIso8601String().split("T").first))
@@ -130,7 +150,7 @@ class _StatisticsState extends State<Statistics> {
               else if (_reportData != null)
                 _buildReportCard(_reportData!)
               else if (_selectedDate != null)
-                const Text('📭 해당 날짜의 보고 내역이 없습니다.', style: TextStyle(color: Colors.grey)),
+                  const Text('👭 해당 날짜의 보고 내용이 없습니다.', style: TextStyle(color: Colors.grey)),
             ],
           ),
         ),
@@ -155,7 +175,7 @@ class _StatisticsState extends State<Statistics> {
           children: [
             const Text('📊 통계 결과', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
-            Text('📅 날짜: $dateStr', style: const TextStyle(color: Colors.grey)),
+            Text('🗓 날짜: $dateStr', style: const TextStyle(color: Colors.grey)),
             const Divider(),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -245,7 +265,7 @@ class _StatisticsState extends State<Statistics> {
 
       debugPrint('🌐 요청 URL: $url');
       debugPrint('📦 응답 상태: ${response.statusCode}');
-      debugPrint('📥 응답 본문: ${response.body}');
+      debugPrint('📅 응답 본문: ${response.body}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
