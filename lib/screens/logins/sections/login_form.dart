@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import '../dev/personal_calendar.dart';
+import '../belivus/cooperation_calendar.dart';
 import '../login_controller.dart';
-import '../debugs/login_debug_bottom_sheet.dart';
 
 class LoginForm extends StatefulWidget {
   final LoginController controller;
@@ -22,17 +21,12 @@ class _LoginFormState extends State<LoginForm> {
     _controller.initState(); // 로그인 상태 확인 및 자동 이동 처리
   }
 
-  // 실제 로그인 호출 함수
   void _handleLogin() {
     _controller.login(setState);
   }
 
-  // 로그인 버튼 누를 때 호출되는 함수
   void _onLoginButtonPressed() {
-    _controller.handleDeveloperTap(setState); // 개발자 모드 진입 또는 해제 시도
-
-    // 개발자 모드가 아니고, 로딩 중이 아닐 때만 로그인 실행
-    if (!_controller.isDeveloperMode && !_controller.isLoading) {
+    if (!_controller.isLoading) {
       _handleLogin();
     }
   }
@@ -43,16 +37,20 @@ class _LoginFormState extends State<LoginForm> {
       children: [
         const SizedBox(height: 96),
 
-        // 로고 클릭 시 개인 캘린더 화면으로 이동
+        // 상단 로고
         GestureDetector(
           onTap: () {
             Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const PersonalCalendar()),
+              MaterialPageRoute(
+                builder: (_) => const CooperationCalendar(
+                  calendarId: 'belivus150119@gmail.com', // ✅ 로고 클릭용 캘린더
+                ),
+              ),
             );
           },
           child: SizedBox(
             height: 240,
-            child: Image.asset('assets/images/pelican_logo.png'),
+            child: Image.asset('assets/images/easyvalet_logo_car.png'),
           ),
         ),
 
@@ -100,15 +98,13 @@ class _LoginFormState extends State<LoginForm> {
         ),
         const SizedBox(height: 32),
 
-        // ✅ 로그인 / 개발 모드 버튼
+        // 로그인 버튼
         SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
             icon: const Icon(Icons.login),
             label: Text(
-              _controller.isDeveloperMode
-                  ? '개발 모드'
-                  : (_controller.isLoading ? '로딩 중...' : '로그인'),
+              _controller.isLoading ? '로딩 중...' : '로그인',
               style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -129,24 +125,15 @@ class _LoginFormState extends State<LoginForm> {
           ),
         ),
 
-        const SizedBox(height: 12),
+        const SizedBox(height: 1),
 
-        // ✅ 디버깅 버튼 (개발자 모드에서만 보임)
-        if (_controller.isDeveloperMode)
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              icon: const Icon(Icons.bug_report, size: 18),
-              label: const Text("디버깅"),
-              onPressed: () {
-                showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  builder: (_) => const LoginDebugBottomSheet(),
-                );
-              },
-            ),
+        // ✅ pelican 이미지 삽입 (중앙 정렬)
+        Center(
+          child: SizedBox(
+            height: 80,
+            child: Image.asset('assets/images/pelican.png'),
           ),
+        ),
       ],
     );
   }

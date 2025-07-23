@@ -1,3 +1,4 @@
+import 'package:easydev/screens/logins/personal/personal_calendar.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -38,7 +39,8 @@ class LoginController {
     LoginDebugFirestoreLogger().log('LoginController 초기화 시작', level: 'info');
 
     Provider.of<UserState>(context, listen: false).loadUserToLogIn().then((_) {
-      final isLoggedIn = Provider.of<UserState>(context, listen: false).isLoggedIn;
+      final isLoggedIn =
+          Provider.of<UserState>(context, listen: false).isLoggedIn;
 
       LoginDebugFirestoreLogger().log(
         '이전 로그인 정보 로드 완료: isLoggedIn=$isLoggedIn',
@@ -47,7 +49,8 @@ class LoginController {
 
       if (isLoggedIn && context.mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          LoginDebugFirestoreLogger().log('자동 로그인: 홈 화면으로 이동', level: 'info');
+          LoginDebugFirestoreLogger()
+              .log('자동 로그인: 홈 화면으로 이동', level: 'info');
           Navigator.pushReplacementNamed(context, '/home');
         });
       }
@@ -85,13 +88,24 @@ class LoginController {
     }
   }
 
-  // 로그인 실행 함수
+  // ✅ 로그인 실행 함수
   Future<void> login(StateSetter setState) async {
     final name = nameController.text.trim();
     final phone = phoneController.text.trim().replaceAll(RegExp(r'\D'), '');
     final password = passwordController.text.trim();
 
-    LoginDebugFirestoreLogger().log('로그인 시도: name="$name", phone="$phone"', level: 'called');
+    // ✅ PersonalCalendar 진입 조건 추가
+    if (name.isEmpty && phone.isEmpty && password == '00000') {
+      LoginDebugFirestoreLogger()
+          .log('비밀번호 00000으로 PersonalCalendar 진입', level: 'info');
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const PersonalCalendar()),
+      );
+      return;
+    }
+
+    LoginDebugFirestoreLogger()
+        .log('로그인 시도: name="$name", phone="$phone"', level: 'called');
 
     // 유효성 검사
     final phoneError = LoginValidate.validatePhone(phone);
@@ -131,7 +145,8 @@ class LoginController {
       final user = await userRepository.getUserByPhone(phone);
 
       if (user != null) {
-        LoginDebugFirestoreLogger().log('사용자 정보 조회 성공: ${user.name}', level: 'success');
+        LoginDebugFirestoreLogger()
+            .log('사용자 정보 조회 성공: ${user.name}', level: 'success');
       } else {
         LoginDebugFirestoreLogger().log('사용자 정보 조회 실패', level: 'error');
       }
@@ -139,29 +154,31 @@ class LoginController {
       if (context.mounted) {
         debugPrint("입력값: name=$name, phone=$phone, password=$password");
         if (user != null) {
-          debugPrint("DB 유저: name=${user.name}, phone=${user.phone}, password=${user.password}");
+          debugPrint(
+              "DB 유저: name=${user.name}, phone=${user.phone}, password=${user.password}");
         } else {
           debugPrint("DB에서 사용자 정보 없음");
         }
       }
 
-      // 로그인 성공 조건
       if (user != null && user.name == name && user.password == password) {
         final userState = context.read<UserState>();
         final areaState = context.read<AreaState>();
         final updatedUser = user.copyWith(isSaved: true);
         userState.updateLoginUser(updatedUser);
 
-        // SharedPreferences 저장
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('phone', updatedUser.phone);
         await prefs.setString('selectedArea', updatedUser.selectedArea ?? '');
-        await prefs.setString('division', updatedUser.divisions.firstOrNull ?? '');
-        await prefs.setString('startTime', _timeToString(updatedUser.startTime));
+        await prefs.setString(
+            'division', updatedUser.divisions.firstOrNull ?? '');
+        await prefs.setString(
+            'startTime', _timeToString(updatedUser.startTime));
         await prefs.setString('endTime', _timeToString(updatedUser.endTime));
         await prefs.setString('role', updatedUser.role);
         await prefs.setString('position', updatedUser.position ?? '');
-        await prefs.setStringList('fixedHolidays', updatedUser.fixedHolidays);
+        await prefs.setStringList(
+            'fixedHolidays', updatedUser.fixedHolidays);
 
         debugPrint("SharedPreferences 저장 완료: phone=${prefs.getString('phone')}");
 
@@ -194,27 +211,27 @@ class LoginController {
     }
   }
 
-  // 시간 포맷
   String _timeToString(TimeOfDay? time) {
     if (time == null) return '';
     return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
   }
 
-  // 비밀번호 보이기 토글
   void togglePassword() {
     obscurePassword = !obscurePassword;
-    LoginDebugFirestoreLogger().log('비밀번호 가시성 변경: $obscurePassword', level: 'info');
+    LoginDebugFirestoreLogger()
+        .log('비밀번호 가시성 변경: $obscurePassword', level: 'info');
   }
 
-  // 전화번호 포맷
   void formatPhoneNumber(String value, StateSetter setState) {
     final numbersOnly = value.replaceAll(RegExp(r'\D'), '');
     String formatted = numbersOnly;
 
     if (numbersOnly.length >= 11) {
-      formatted = '${numbersOnly.substring(0, 3)}-${numbersOnly.substring(3, 7)}-${numbersOnly.substring(7, 11)}';
+      formatted =
+      '${numbersOnly.substring(0, 3)}-${numbersOnly.substring(3, 7)}-${numbersOnly.substring(7, 11)}';
     } else if (numbersOnly.length >= 10) {
-      formatted = '${numbersOnly.substring(0, 3)}-${numbersOnly.substring(3, 6)}-${numbersOnly.substring(6, 10)}';
+      formatted =
+      '${numbersOnly.substring(0, 3)}-${numbersOnly.substring(3, 6)}-${numbersOnly.substring(6, 10)}';
     }
 
     setState(() {
@@ -226,7 +243,6 @@ class LoginController {
     LoginDebugFirestoreLogger().log('전화번호 포맷팅: $formatted', level: 'info');
   }
 
-  // 입력 필드 스타일
   InputDecoration inputDecoration({
     required String label,
     IconData? icon,
@@ -237,7 +253,8 @@ class LoginController {
       hintText: label,
       prefixIcon: icon != null ? Icon(icon) : null,
       suffixIcon: suffixIcon,
-      contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
+      contentPadding:
+      const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
       filled: true,
       fillColor: Colors.grey.shade100,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
@@ -248,7 +265,6 @@ class LoginController {
     );
   }
 
-  // 리소스 정리
   void dispose() {
     nameController.dispose();
     phoneController.dispose();

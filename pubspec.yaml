@@ -72,7 +72,9 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/pelican_logo.png
+    - assets/images/pelican.png
     - assets/images/easyvalet_logo.png
+    - assets/images/easyvalet_logo_car.png
     - assets/icons/icon_belivussnc.PNG
     - assets/icons/icon_easyvalet.PNG
     - assets/keys/easydev-97fb6-e31d7e6b30f9.json
