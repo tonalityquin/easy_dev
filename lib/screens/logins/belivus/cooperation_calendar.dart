@@ -20,13 +20,12 @@ class CooperationCalendar extends StatefulWidget {
   State<CooperationCalendar> createState() => _CooperationCalendarState();
 }
 
-bool _isFabOpen = false;
-
 class _CooperationCalendarState extends State<CooperationCalendar> {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
   Map<DateTime, List<calendar.Event>> _eventsByDay = {};
   Map<String, bool> _filterStates = {};
+  bool _isFabOpen = false;
 
   @override
   void initState() {

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-// 체크리스트 항목 데이터 클래스
+/// 체크리스트 항목 데이터 클래스
 class ChecklistItem {
   String text;
   bool checked;
@@ -8,7 +8,7 @@ class ChecklistItem {
   ChecklistItem({required this.text, this.checked = false});
 }
 
-// 바텀시트 종료 시 전달할 이벤트 결과 데이터 클래스
+/// 바텀시트 종료 시 전달할 이벤트 결과 데이터 클래스
 class EventEditorResult {
   final String title;
   final DateTime start;
@@ -29,7 +29,7 @@ class EventEditorResult {
   });
 }
 
-// 이벤트 추가/수정 바텀시트를 표시하고 결과를 반환하는 함수
+/// 이벤트 추가/수정 바텀시트를 표시하고 결과를 반환하는 함수
 Future<EventEditorResult?> showEventEditorBottomSheet({
   required BuildContext context,
   String? initialTitle,
@@ -45,14 +45,12 @@ Future<EventEditorResult?> showEventEditorBottomSheet({
   DateTime start = initialStart ?? DateTime.now();
   DateTime end = initialEnd ?? DateTime.now().add(const Duration(days: 1));
 
-  // 체크리스트 복사 및 개별 컨트롤러 생성
   final List<ChecklistItem> checklist = initialChecklist != null
       ? initialChecklist.map((item) => ChecklistItem(text: item.text, checked: item.checked)).toList()
       : [];
   final List<TextEditingController> controllers =
-      checklist.map((item) => TextEditingController(text: item.text)).toList();
+  checklist.map((item) => TextEditingController(text: item.text)).toList();
 
-  // 색상 선택 초기화 및 색상 맵 정의
   String? selectedColorId = initialColorId ?? "1";
   final Map<String, Color> colorOptions = {
     "1": Colors.blue,
@@ -68,13 +66,11 @@ Future<EventEditorResult?> showEventEditorBottomSheet({
     "11": Colors.indigo,
   };
 
-  // 체크리스트 항목 추가 함수
   void addChecklistItem() {
     checklist.add(ChecklistItem(text: ""));
     controllers.add(TextEditingController());
   }
 
-  // 체크리스트 상태 기반 설명 생성 (진행률 포함)
   String generateDescription(List<ChecklistItem> list) {
     final total = list.length;
     final done = list.where((item) => item.checked).length;
@@ -102,7 +98,6 @@ Future<EventEditorResult?> showEventEditorBottomSheet({
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // 제목 입력 필드
                     const Text("할 일 제목", style: TextStyle(fontWeight: FontWeight.bold)),
                     TextField(
                       focusNode: titleFocus,
@@ -113,7 +108,6 @@ Future<EventEditorResult?> showEventEditorBottomSheet({
                     ),
                     const SizedBox(height: 16),
 
-                    // 시작일 선택
                     Row(
                       children: [
                         const Text("시작일: "),
@@ -134,7 +128,6 @@ Future<EventEditorResult?> showEventEditorBottomSheet({
                       ],
                     ),
 
-                    // 종료일 선택
                     Row(
                       children: [
                         const Text("종료일: "),
@@ -157,7 +150,6 @@ Future<EventEditorResult?> showEventEditorBottomSheet({
                     ),
                     const SizedBox(height: 16),
 
-                    // 색상 선택 UI
                     const Text("이벤트 색상", style: TextStyle(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
                     Wrap(
@@ -181,7 +173,6 @@ Future<EventEditorResult?> showEventEditorBottomSheet({
 
                     const SizedBox(height: 16),
 
-                    // 체크리스트 제목 + 추가 버튼
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -197,7 +188,6 @@ Future<EventEditorResult?> showEventEditorBottomSheet({
                       ],
                     ),
 
-                    // 체크리스트 항목 목록
                     ListView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
@@ -207,7 +197,6 @@ Future<EventEditorResult?> showEventEditorBottomSheet({
                         final controller = controllers[index];
                         return Row(
                           children: [
-                            // 체크 여부
                             Checkbox(
                               value: item.checked,
                               onChanged: (value) {
@@ -216,7 +205,6 @@ Future<EventEditorResult?> showEventEditorBottomSheet({
                                 });
                               },
                             ),
-                            // 텍스트 입력
                             Expanded(
                               child: TextField(
                                 controller: controller,
@@ -224,7 +212,6 @@ Future<EventEditorResult?> showEventEditorBottomSheet({
                                 decoration: const InputDecoration(hintText: '체크 항목 입력'),
                               ),
                             ),
-                            // 삭제 버튼
                             IconButton(
                               icon: const Icon(Icons.clear),
                               onPressed: () {
@@ -240,7 +227,6 @@ Future<EventEditorResult?> showEventEditorBottomSheet({
                     ),
                     const SizedBox(height: 16),
 
-                    // 하단 버튼들: 취소, 삭제, 저장
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [

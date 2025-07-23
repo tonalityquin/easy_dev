@@ -7,7 +7,7 @@ import '../sections/event_editor_bottom_sheet.dart';
 
 const String serviceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
 
-/// ✅ Google API 클라이언트 생성 (calendar + sheets 권한 포함)
+/// ✅ Google API 클라이언트 생성
 Future<AutoRefreshingAuthClient> getAuthClient({bool write = false}) async {
   final jsonString = await rootBundle.loadString(serviceAccountPath);
   final credentials = ServiceAccountCredentials.fromJson(jsonString);
@@ -55,9 +55,8 @@ Future<Map<DateTime, List<calendar.Event>>> loadEventsForMonth({
     final endUtc = event.end?.date;
 
     final start = startUtc != null ? DateTime(startUtc.year, startUtc.month, startUtc.day) : null;
-    final end = endUtc != null
-        ? DateTime(endUtc.year, endUtc.month, endUtc.day).subtract(const Duration(days: 1))
-        : null;
+    final end =
+    endUtc != null ? DateTime(endUtc.year, endUtc.month, endUtc.day).subtract(const Duration(days: 1)) : null;
 
     if (start != null && end != null) {
       for (DateTime date = start; !date.isAfter(end); date = date.add(const Duration(days: 1))) {
@@ -78,7 +77,7 @@ Future<void> addEvent({
   required Map<String, bool> filterStates,
   required String calendarId,
 }) async {
-  final result = await showEventEditorBottomSheet(context: context);
+  final result = await showEventEditorBottomSheet(context: context); // ✅ attendees 제거
   if (result == null) return;
 
   try {
@@ -96,7 +95,11 @@ Future<void> addEvent({
       )
       ..colorId = result.colorId;
 
-    await calendarApi.events.insert(newEvent, calendarId);
+    await calendarApi.events.insert(
+      newEvent,
+      calendarId,
+      sendUpdates: 'all',
+    );
 
     final updated = await loadEventsForMonth(
       month: focusedDay,
@@ -121,12 +124,8 @@ Future<void> editEvent({
   final startUtc = event.start?.date;
   final endUtc = event.end?.date;
 
-  final start = startUtc != null
-      ? DateTime(startUtc.year, startUtc.month, startUtc.day)
-      : DateTime.now();
-  final end = endUtc != null
-      ? DateTime(endUtc.year, endUtc.month, endUtc.day)
-      : start.add(const Duration(days: 1));
+  final start = startUtc != null ? DateTime(startUtc.year, startUtc.month, startUtc.day) : DateTime.now();
+  final end = endUtc != null ? DateTime(endUtc.year, endUtc.month, endUtc.day) : start.add(const Duration(days: 1));
 
   final checklist = parseChecklistFromDescription(event.description);
 
@@ -167,7 +166,12 @@ Future<void> editEvent({
   );
   event.colorId = result.colorId;
 
-  await calendarApi.events.update(event, calendarId, event.id!);
+  await calendarApi.events.update(
+    event,
+    calendarId,
+    event.id!,
+    sendUpdates: 'all',
+  );
 
   final updated = await loadEventsForMonth(
     month: focusedDay,
