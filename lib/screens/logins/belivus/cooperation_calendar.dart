@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:googleapis/calendar/v3.dart' as calendar;
-import 'package:url_launcher/url_launcher.dart';
 import 'completed_task_page.dart';
 import 'cooperation_Calendar_pages/sections/calendar_filter_chips.dart';
 import 'cooperation_Calendar_pages/sections/calendar_event_card.dart';
@@ -192,28 +191,6 @@ class _CooperationCalendarState extends State<CooperationCalendar> {
                 icon: const Icon(Icons.check_circle_outline),
                 label: const Text('완료된 할 일'),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              const SizedBox(height: 12),
-
-              // 드라이브 열기
-              FloatingActionButton.extended(
-                heroTag: 'openDriveBtn',
-                onPressed: () async {
-                  final url = Uri.parse('https://drive.google.com/drive/u/1/folders/1VohUN819zjkbqYBkDofca8fmLKx3MuIO');
-                  if (await canLaunchUrl(url)) {
-                    await launchUrl(url, mode: LaunchMode.externalApplication);
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('드라이브를 열 수 없습니다.')),
-                    );
-                  }
-                },
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.black87,
-                icon: const Icon(Icons.folder_open),
-                label: const Text('드라이브 열기', style: TextStyle(fontWeight: FontWeight.bold)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                elevation: 4,
               ),
               const SizedBox(height: 12),
             ],
