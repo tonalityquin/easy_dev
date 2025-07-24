@@ -1,4 +1,3 @@
-// 생략 없이 전체 코드
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -162,7 +161,15 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 1),
+
+                          // ✅ pelican.png 이미지 추가 (출근하기 버튼 아래)
+                          Center(
+                            child: SizedBox(
+                              height: 80,
+                              child: Image.asset('assets/images/pelican.png'),
+                            ),
+                          ),
                         ],
                       ),
                     ),

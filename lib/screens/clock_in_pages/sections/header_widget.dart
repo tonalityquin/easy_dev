@@ -10,7 +10,7 @@ class HeaderWidget extends StatelessWidget {
         const SizedBox(height: 24),
         SizedBox(
           height: 240,
-          child: Image.asset('assets/images/pelican_logo.png'),
+          child: Image.asset('assets/images/easyvalet_logo_car.png'),
         ),
         const SizedBox(height: 12),
       ],
