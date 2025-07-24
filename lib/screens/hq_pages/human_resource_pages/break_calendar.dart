@@ -131,7 +131,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
                   Row(
                     children: [
                       Expanded(
-                        flex: 4,
+                        flex: 5,
                         child: DropdownButtonFormField<String>(
                           value: _selectedArea,
                           decoration: const InputDecoration(labelText: '지역'),
@@ -156,7 +156,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
                       ),
                       const SizedBox(width: 8),
                       Expanded(
-                        flex: 4,
+                        flex: 5,
                         child: DropdownButtonFormField<UserModel>(
                           value: _selectedUser,
                           decoration: const InputDecoration(labelText: '사용자'),
@@ -177,18 +177,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
                           },
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        flex: 2,
-                        child: ElevatedButton(
-                          onPressed: null,
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          ),
-                          child: const Icon(Icons.cloud, color: Colors.grey),
-                        ),
-                      ),
+                      // 👉 cloud 아이콘 버튼 및 SizedBox 제거됨
                     ],
                   ),
                   const SizedBox(height: 8),

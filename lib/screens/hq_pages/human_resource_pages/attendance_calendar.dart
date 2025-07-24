@@ -186,7 +186,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
                   Row(
                     children: [
                       Expanded(
-                        flex: 4,
+                        flex: 5,
                         child: DropdownButtonFormField<String>(
                           value: _selectedArea,
                           decoration: const InputDecoration(labelText: '지역'),
@@ -211,7 +211,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
                       ),
                       const SizedBox(width: 8),
                       Expanded(
-                        flex: 4,
+                        flex: 5,
                         child: DropdownButtonFormField<UserModel>(
                           value: _selectedUser,
                           decoration: const InputDecoration(labelText: '사용자'),
@@ -230,14 +230,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
                           },
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      const Expanded(
-                        flex: 2,
-                        child: Tooltip(
-                          message: '지역 선택 시 자동으로 사용자 목록이 불러와집니다',
-                          child: Icon(Icons.cloud, color: Colors.grey),
-                        ),
-                      ),
+                      // 🔥 cloud 아이콘 제거됨
                     ],
                   ),
                   const SizedBox(height: 8),

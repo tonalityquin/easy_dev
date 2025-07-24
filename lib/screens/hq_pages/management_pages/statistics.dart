@@ -34,7 +34,6 @@ class _StatisticsState extends State<Statistics> {
     final areaState = context.watch<AreaState>();
     final division = areaState.currentDivision;
     final areaList = areaState.divisionAreaMap[division] ?? [];
-    _selectedArea ??= areaState.currentArea;
 
     return Scaffold(
       appBar: AppBar(
@@ -56,7 +55,10 @@ class _StatisticsState extends State<Statistics> {
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
                 value: _selectedArea,
-                decoration: const InputDecoration(border: OutlineInputBorder()),
+                hint: const Text('지역을 선택하세요'),
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                ),
                 items: areaList.map((area) {
                   return DropdownMenuItem<String>(
                     value: area,
@@ -86,13 +88,13 @@ class _StatisticsState extends State<Statistics> {
                     ),
                     onPressed: _savedReports.isNotEmpty
                         ? () {
-                      setState(() {
-                        _savedReports.clear();
-                      });
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("🗑️ 보관된 통계가 초기화되었습니다.")),
-                      );
-                    }
+                            setState(() {
+                              _savedReports.clear();
+                            });
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text("🗑️ 보관된 통계가 초기화되었습니다.")),
+                            );
+                          }
                         : null,
                   ),
                   const SizedBox(width: 8),
@@ -150,7 +152,7 @@ class _StatisticsState extends State<Statistics> {
               else if (_reportData != null)
                 _buildReportCard(_reportData!)
               else if (_selectedDate != null)
-                  const Text('👭 해당 날짜의 보고 내용이 없습니다.', style: TextStyle(color: Colors.grey)),
+                const Text('👭 해당 날짜의 보고 내용이 없습니다.', style: TextStyle(color: Colors.grey)),
             ],
           ),
         ),
