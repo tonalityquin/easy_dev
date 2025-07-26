@@ -12,6 +12,7 @@ import '../../../utils/snackbar_helper.dart';
 
 import '../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
 import '../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
+import 'widgets/parking_completed_chat_bottom_sheet.dart';
 import 'widgets/parking_completed_status_bottom_sheet.dart';
 import 'widgets/set_departure_request_dialog.dart';
 import '../../../widgets/dialog/plate_remove_dialog.dart';
@@ -61,7 +62,7 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                     : const Icon(Icons.lock, key: ValueKey('lock'), color: Colors.grey))
                     : Icon(Icons.refresh, key: const ValueKey('refresh'), color: Colors.grey[700]),
               ),
-              label: isPlateSelected ? (selectedPlate.isLockedFee ? '정산 취소' : '사전 정산') : '구역 초기화',
+              label: isPlateSelected ? (selectedPlate.isLockedFee ? '정산 취소' : '사전 정산') : '채팅하기',
             ),
             BottomNavigationBarItem(
               icon: Icon(
@@ -88,7 +89,7 @@ class ParkingCompletedControlButtons extends StatelessWidget {
           onTap: (index) async {
             if (!isPlateSelected) {
               if (index == 0) {
-                resetParkingAreaFilter();
+                showChatBottomSheet(context);
               } else if (index == 1) {
                 showSearchDialog();
               } else if (index == 2) {
