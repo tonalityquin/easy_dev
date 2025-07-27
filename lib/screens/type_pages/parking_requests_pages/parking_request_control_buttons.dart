@@ -1,7 +1,6 @@
 import 'package:easydev/utils/gcs_json_uploader.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../enums/plate_type.dart';
 import '../../../repositories/plate/plate_repository.dart';
@@ -13,7 +12,6 @@ import '../../../utils/snackbar_helper.dart';
 import '../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
 import '../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 import 'widgets/parking_request_status_bottom_sheet.dart';
-import 'widgets/parking_status_bottom_sheet.dart';
 
 class ParkingRequestControlButtons extends StatelessWidget {
   final bool isSorted;
@@ -98,35 +96,8 @@ class ParkingRequestControlButtons extends StatelessWidget {
                   area,
                   plateState,
                 );
-              } else {
-                // ✅ Belivus 버튼 → 주차 현황 BottomSheet 표시
-                final prefs = await SharedPreferences.getInstance();
-                final totalCapacity = prefs.getInt('total_capacity_$area') ?? 0;
-                final occupiedCount = await repo.getPlateCountToCurrentArea(area);
-
-                if (!context.mounted) return;
-
-                showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (_) {
-                    return DraggableScrollableSheet(
-                      initialChildSize: 0.35,
-                      minChildSize: 0.2,
-                      maxChildSize: 0.85,
-                      expand: false,
-                      builder: (context, scrollController) {
-                        return ParkingStatusBottomSheet(
-                          totalCapacity: totalCapacity,
-                          occupiedCount: occupiedCount,
-                          scrollController: scrollController,
-                        );
-                      },
-                    );
-                  },
-                );
               }
+              // else: 차량이 선택되지 않았을 때는 아무 작업도 하지 않음 (현황 보기 제거됨)
             } else if (index == 1) {
               isPlateSelected ? onParkingCompleted() : onSearchPressed();
             } else if (index == 2) {

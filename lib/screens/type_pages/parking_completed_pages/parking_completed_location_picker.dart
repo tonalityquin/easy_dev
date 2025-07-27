@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../../../states/area/area_state.dart';
 import '../../../states/location/location_state.dart';
 import '../../../repositories/location/location_repository.dart';
-import '../../input_pages/input_plate_bottom_sheet.dart';
 
 class ParkingCompletedLocationPicker extends StatefulWidget {
   final Function(String locationName) onLocationSelected;
@@ -25,10 +24,10 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
   final Duration _cooldown = const Duration(minutes: 1);
 
   Future<void> _onRefreshPressed(
-    LocationState locationState,
-    LocationRepository repo,
-    String area,
-  ) async {
+      LocationState locationState,
+      LocationRepository repo,
+      String area,
+      ) async {
     final now = DateTime.now();
     if (_lastRefreshedAt != null && now.difference(_lastRefreshedAt!) < _cooldown) {
       final remaining = _cooldown - now.difference(_lastRefreshedAt!);
@@ -55,10 +54,10 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
   }
 
   Widget _buildRefreshButton(
-    LocationState locationState,
-    LocationRepository repo,
-    String area,
-  ) {
+      LocationState locationState,
+      LocationRepository repo,
+      String area,
+      ) {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
@@ -73,13 +72,13 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
         ),
         icon: _isRefreshing
             ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  strokeWidth: 2,
-                ),
-              )
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+            strokeWidth: 2,
+          ),
+        )
             : const Icon(Icons.refresh),
         label: const Text(
           "수동 새로고침",
@@ -97,20 +96,6 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
 
     return Scaffold(
       backgroundColor: Colors.white,
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          showModalBottomSheet(
-            context: context,
-            isScrollControlled: true,
-            backgroundColor: Colors.white,
-            builder: (_) => const InputPlateBottomSheet(),
-          );
-        },
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
-        tooltip: '차량 추가',
-        child: const Icon(Icons.add),
-      ),
       body: Consumer<LocationState>(
         builder: (context, locationState, _) {
           if (locationState.isLoading) {
@@ -210,12 +195,12 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
               const Text('단일 주차 구역', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               const SizedBox(height: 8),
               ...singles.map((loc) => ListTile(
-                    leading: const Icon(Icons.place, color: Colors.teal),
-                    title: Text(loc.locationName),
-                    subtitle: Text('입차 ${loc.plateCount} / 공간 ${loc.capacity}'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => widget.onLocationSelected(loc.locationName),
-                  )),
+                leading: const Icon(Icons.place, color: Colors.teal),
+                title: Text(loc.locationName),
+                subtitle: Text('입차 ${loc.plateCount} / 공간 ${loc.capacity}'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => widget.onLocationSelected(loc.locationName),
+              )),
               const Divider(),
               const Text('복합 주차 구역', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               const SizedBox(height: 8),
