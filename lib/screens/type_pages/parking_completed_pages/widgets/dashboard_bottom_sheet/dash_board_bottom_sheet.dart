@@ -2,77 +2,110 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:android_intent_plus/android_intent.dart';
 
-import '../../../../states/user/user_state.dart';
-import '../../../../states/location/location_state.dart'; // ✅ 추가
-import '../../../../states/bill/bill_state.dart'; // ✅ 추가
+import '../../../../../../states/user/user_state.dart';
+import '../../../../../../states/location/location_state.dart';
+import '../../../../../../states/bill/bill_state.dart';
 
-import 'fielder_dash_board_controller.dart';
+import 'common_dash_board_controller.dart';
 import 'widgets/user_info_card.dart';
 import 'widgets/break_button_widget.dart';
 import 'widgets/work_button_widget.dart';
+import 'widgets/show_report_dialog.dart';
+import './clock_out_fetch_plate_count_widget.dart';
 
-class FielderDashBoardScreen extends StatelessWidget {
-  const FielderDashBoardScreen({super.key});
+class DashBoardBottomSheet extends StatelessWidget {
+  const DashBoardBottomSheet({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final controller = FielderDashBoardController();
+    final controller = CommonDashBoardController();
 
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        foregroundColor: Colors.black87,
-        title: const Text(
-          '대시보드',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        centerTitle: true,
-        automaticallyImplyLeading: false,
-        actions: [
-          PopupMenuButton<String>(
-            onSelected: (value) {
-              if (value == 'logout') {
-                controller.logout(context);
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem<String>(
-                value: 'logout',
-                child: Row(
-                  children: [
-                    Icon(Icons.logout, color: Colors.redAccent),
-                    SizedBox(width: 8),
-                    Text('로그아웃'),
-                  ],
-                ),
-              ),
-            ],
-            icon: const Icon(Icons.more_vert),
-          )
-        ],
-      ),
-      body: Consumer<UserState>(
-        builder: (context, userState, _) {
-          return SafeArea(
-            child: SingleChildScrollView(
-              child: Padding(
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.95,
+      minChildSize: 0.4,
+      maxChildSize: 0.95,
+      builder: (context, scrollController) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Consumer<UserState>(
+            builder: (context, userState, _) {
+              return SingleChildScrollView(
+                controller: scrollController,
                 padding: const EdgeInsets.all(24),
                 child: Column(
                   children: [
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 12),
+                    Container(
+                      width: 60,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    const ClockOutFetchPlateCountWidget(),
+                    const SizedBox(height: 16),
                     UserInfoCard(),
+
+                    // ✅ 로그아웃 버튼 추가
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.logout),
+                        label: const Text('로그아웃'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.redAccent,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        onPressed: () {
+                          controller.logout(context);
+                        },
+                      ),
+                    ),
+
                     const SizedBox(height: 32),
                     BreakButtonWidget(controller: controller),
                     const SizedBox(height: 16),
-
-                    WorkButtonWidget(
-                      controller: controller,
-                      userState: userState,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            icon: const Icon(Icons.assignment),
+                            label: const Text('보고 작성'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: Colors.black,
+                              side: const BorderSide(color: Colors.grey),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            onPressed: () {
+                              showReportDialog(context);
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: WorkButtonWidget(
+                            controller: controller,
+                            userState: userState,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 16),
-
-                    // ✅ Gmail 앱 열기 버튼
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
@@ -113,10 +146,7 @@ class FielderDashBoardScreen extends StatelessWidget {
                         },
                       ),
                     ),
-
                     const SizedBox(height: 16),
-
-                    // ✅ ParkingCompletedLocationPicker 새로고침 버튼 로직 복사
                     Consumer<LocationState>(
                       builder: (context, locationState, _) {
                         bool isRefreshing = false;
@@ -161,15 +191,14 @@ class FielderDashBoardScreen extends StatelessWidget {
                         );
                       },
                     ),
-
                     const SizedBox(height: 32),
                   ],
                 ),
-              ),
-            ),
-          );
-        },
-      ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }

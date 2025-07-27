@@ -12,6 +12,7 @@ import '../../../utils/snackbar_helper.dart';
 
 import '../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
 import '../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
+import 'widgets/dashboard_bottom_sheet/dash_board_bottom_sheet.dart';
 import 'widgets/parking_completed_chat_bottom_sheet.dart';
 import 'widgets/parking_completed_status_bottom_sheet.dart';
 import 'widgets/set_departure_request_dialog.dart';
@@ -59,67 +60,67 @@ class ParkingCompletedControlButtons extends StatelessWidget {
           unselectedItemColor: Colors.grey[700],
           items: isStatusMode
               ? [
-            BottomNavigationBarItem(
-              icon: Icon(isLocked ? Icons.lock : Icons.lock_open),
-              label: '화면 잠금',
-            ),
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.dashboard),
-              label: '대시보드',
-            ),
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.event_available),
-              label: '정기 주차',
-            ),
-          ]
-              : [
-            BottomNavigationBarItem(
-              icon: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
-                transitionBuilder: (child, animation) =>
-                    ScaleTransition(scale: animation, child: child),
-                child: isPlateSelected
-                    ? (selectedPlate.isLockedFee
-                    ? const Icon(Icons.lock_open,
-                    key: ValueKey('unlock'), color: Colors.grey)
-                    : const Icon(Icons.lock,
-                    key: ValueKey('lock'), color: Colors.grey))
-                    : Icon(Icons.refresh,
-                    key: const ValueKey('refresh'), color: Colors.grey[700]),
-              ),
-              label: isPlateSelected
-                  ? (selectedPlate.isLockedFee ? '정산 취소' : '사전 정산')
-                  : '채팅하기',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(
-                isPlateSelected ? Icons.check_circle : Icons.search,
-                color: isPlateSelected ? Colors.green[600] : Colors.grey[700],
-              ),
-              label: isPlateSelected ? '출차 요청' : '번호판 검색',
-            ),
-            BottomNavigationBarItem(
-              icon: AnimatedRotation(
-                turns: isSorted ? 0.5 : 0.0,
-                duration: const Duration(milliseconds: 300),
-                child: Transform.scale(
-                  scaleX: isSorted ? -1 : 1,
-                  child: Icon(
-                    isPlateSelected ? Icons.settings : Icons.sort,
-                    color: Colors.grey[700],
+                  BottomNavigationBarItem(
+                    icon: Icon(isLocked ? Icons.lock : Icons.lock_open),
+                    label: '화면 잠금',
                   ),
-                ),
-              ),
-              label: isPlateSelected ? '상태 수정' : (isSorted ? '최신순' : '오래된 순'),
-            ),
-          ],
+                  const BottomNavigationBarItem(
+                    icon: Icon(Icons.dashboard),
+                    label: '대시보드',
+                  ),
+                  const BottomNavigationBarItem(
+                    icon: Icon(Icons.event_available),
+                    label: '정기 주차',
+                  ),
+                ]
+              : [
+                  BottomNavigationBarItem(
+                    icon: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 300),
+                      transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+                      child: isPlateSelected
+                          ? (selectedPlate.isLockedFee
+                              ? const Icon(Icons.lock_open, key: ValueKey('unlock'), color: Colors.grey)
+                              : const Icon(Icons.lock, key: ValueKey('lock'), color: Colors.grey))
+                          : Icon(Icons.refresh, key: const ValueKey('refresh'), color: Colors.grey[700]),
+                    ),
+                    label: isPlateSelected ? (selectedPlate.isLockedFee ? '정산 취소' : '사전 정산') : '채팅하기',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: Icon(
+                      isPlateSelected ? Icons.check_circle : Icons.search,
+                      color: isPlateSelected ? Colors.green[600] : Colors.grey[700],
+                    ),
+                    label: isPlateSelected ? '출차 요청' : '번호판 검색',
+                  ),
+                  BottomNavigationBarItem(
+                    icon: AnimatedRotation(
+                      turns: isSorted ? 0.5 : 0.0,
+                      duration: const Duration(milliseconds: 300),
+                      child: Transform.scale(
+                        scaleX: isSorted ? -1 : 1,
+                        child: Icon(
+                          isPlateSelected ? Icons.settings : Icons.sort,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                    ),
+                    label: isPlateSelected ? '상태 수정' : (isSorted ? '최신순' : '오래된 순'),
+                  ),
+                ],
           onTap: (index) async {
             // ✅ Status 모드일 때: 잠금 토글 기능 연결
             if (isStatusMode) {
               if (index == 0) {
                 onToggleLock();
               } else if (index == 1) {
-                debugPrint('📊 대시보드 클릭됨');
+                // 📊 대시보드 클릭 → BottomSheet 열기
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (context) => const DashBoardBottomSheet(),
+                );
               } else if (index == 2) {
                 debugPrint('🅿️ 정기 주차 클릭됨');
               }
@@ -145,8 +146,7 @@ class ParkingCompletedControlButtons extends StatelessWidget {
             final uploader = GcsJsonUploader();
             final billingType = selectedPlate.billingType;
             final now = DateTime.now();
-            final entryTime =
-                selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
+            final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
             final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
 
             if (index == 0) {
@@ -250,9 +250,9 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                     builder: (_) => PlateRemoveDialog(
                       onConfirm: () {
                         context.read<DeletePlate>().deleteFromParkingCompleted(
-                          selectedPlate.plateNumber,
-                          selectedPlate.area,
-                        );
+                              selectedPlate.plateNumber,
+                              selectedPlate.area,
+                            );
                         showSuccessSnackbar(context, "삭제 완료: ${selectedPlate.plateNumber}");
                       },
                     ),

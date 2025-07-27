@@ -5,21 +5,21 @@ import 'package:googleapis_auth/auth_io.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../../states/area/area_state.dart';
-import '../../../../../states/user/user_state.dart';
+import '../../../../../../states/area/area_state.dart';
+import '../../../../../../states/user/user_state.dart';
 
 class BreakLogUploader {
   static const _sheetName = '휴게기록';
   static const _serviceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
 
-  /// 🔁 area에 따라 스프레드시트 ID 선택
+  /// 선택된 지역에 따라 다른 Spreadsheet ID 반환
   static String _getSpreadsheetId(String area) {
     switch (area.toLowerCase()) {
       case 'pelican':
-        return '11VXQiw4bHpZHPmAd1GJHdao4d9C3zU4NmkEe81pv57I'; // pelican
+        return '11VXQiw4bHpZHPmAd1GJHdao4d9C3zU4NmkEe81pv57I'; // Pelican 시트 ID
       case 'belivus':
       default:
-        return '14qZa34Ha-y5Z6kj7eUqZxcP2CdLlaUQcyTJtLsyU_uo'; // 기본값: belivus
+        return '14qZa34Ha-y5Z6kj7eUqZxcP2CdLlaUQcyTJtLsyU_uo'; // 기본: Belivus 시트 ID
     }
   }
 
@@ -33,8 +33,6 @@ class BreakLogUploader {
       final userState = context.read<UserState>();
 
       final area = userState.user?.selectedArea ?? '';
-      final spreadsheetId = _getSpreadsheetId(area);
-
       final division = areaState.currentDivision;
       final userId = userState.user?.id ?? '';
       final userName = userState.name;
@@ -44,21 +42,22 @@ class BreakLogUploader {
       final recordedTime = data['recordedTime'] ?? '';
       final status = '휴게';
 
-      // ✅ 중복 체크
+      final spreadsheetId = _getSpreadsheetId(area);
+
+      // ✅ [1] 중복 체크
       final existingRows = await _loadAllRecords(spreadsheetId);
       final isDuplicate = existingRows.any((row) =>
       row.length >= 7 &&
           row[0] == dateStr &&
           row[2] == userId &&
-          row[6] == status,
-      );
+          row[6] == status);
 
       if (isDuplicate) {
         debugPrint('⚠️ 이미 휴게 기록이 존재합니다.');
         return false;
       }
 
-      // ✅ 업로드할 데이터 구성
+      // ✅ [2] 행 구성
       final row = [
         dateStr,
         recordedTime,
@@ -72,6 +71,7 @@ class BreakLogUploader {
       final client = await _getSheetsClient();
       final sheetsApi = SheetsApi(client);
 
+      // ✅ [3] Google Sheets에 추가
       await sheetsApi.spreadsheets.values.append(
         ValueRange(values: [row]),
         spreadsheetId,
@@ -99,7 +99,7 @@ class BreakLogUploader {
     );
   }
 
-  /// 📥 중복 확인용 데이터 불러오기
+  /// 📥 휴게기록 시트 불러오기
   static Future<List<List<String>>> _loadAllRecords(String spreadsheetId) async {
     final client = await _getSheetsClient();
     final sheetsApi = SheetsApi(client);
@@ -111,16 +111,13 @@ class BreakLogUploader {
 
     client.close();
 
-    return result.values?.map((row) =>
-        row.map((cell) => cell.toString()).toList()
-    ).toList() ?? [];
+    return result.values?.map((row) => row.map((cell) => cell.toString()).toList()).toList() ?? [];
   }
 
-  /// 다운로드 URL 반환
+  /// 다운로드 링크
   static String getDownloadPath({
     required String area,
   }) {
-    final id = _getSpreadsheetId(area);
-    return 'https://docs.google.com/spreadsheets/d/$id/edit';
+    return 'https://docs.google.com/spreadsheets/d/${_getSpreadsheetId(area)}/edit';
   }
 }

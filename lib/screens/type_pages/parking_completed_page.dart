@@ -38,7 +38,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
   ParkingViewMode _mode = ParkingViewMode.status;
   String? _selectedParkingArea;
   bool _isSorted = true;
-  bool _isLocked = false;
+  bool _isLocked = true;
 
   void _resetInternalState() {
     setState(() {

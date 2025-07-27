@@ -3,13 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
-import '../../../../states/area/area_state.dart';
-import '../../../../states/user/user_state.dart';
-import '../../../../utils/snackbar_helper.dart';
+import '../../../../../../states/user/user_state.dart';
+import '../../../../../../utils/snackbar_helper.dart';
 import 'utils/clock_out_log_uploader.dart';
 import 'utils/break_log_uploader.dart';
 
-class FielderDashBoardController {
+class CommonDashBoardController {
   /// 출근 상태일 경우 퇴근 기록 및 종료
   Future<void> handleWorkStatus(UserState userState, BuildContext context) async {
     if (userState.isWorking) {
@@ -37,7 +36,6 @@ class FielderDashBoardController {
   Future<bool> _recordLeaveTime(BuildContext context) async {
     try {
       final userState = Provider.of<UserState>(context, listen: false);
-      final areaState = Provider.of<AreaState>(context, listen: false);
 
       final now = DateTime.now();
       final time = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
@@ -45,7 +43,7 @@ class FielderDashBoardController {
       final leaveData = {
         'userId': userState.user?.id ?? '',
         'userName': userState.name,
-        'division': areaState.currentDivision,
+        'division': userState.user?.divisions.first ?? '',
         'recordedTime': time,
       };
 

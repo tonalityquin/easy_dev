@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../enums/plate_type.dart';
-import '../../../../repositories/plate/plate_repository.dart';
-import '../../../../states/user/user_state.dart';
+import '../../../../../../enums/plate_type.dart';
+import '../../../../../../repositories/plate/plate_repository.dart';
+import '../../../../../../states/user/user_state.dart';
 
 class ClockOutFetchPlateCountWidget extends StatefulWidget {
   const ClockOutFetchPlateCountWidget({super.key});
