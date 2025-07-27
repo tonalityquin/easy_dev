@@ -14,11 +14,14 @@ import '../../utils/snackbar_helper.dart';
 
 import '../../widgets/dialog/signature_plate_search_bottom_sheet/signature_plate_search_bottom_sheet.dart';
 import '../../widgets/navigation/top_navigation.dart';
-import 'parking_completed_pages/widgets/parking_completed_status_bottom_sheet.dart';
 import '../../widgets/container/plate_container.dart';
 
 import 'parking_completed_pages/parking_completed_control_buttons.dart';
 import 'parking_completed_pages/parking_completed_location_picker.dart';
+import 'parking_completed_pages/widgets/parking_completed_status_bottom_sheet.dart';
+import 'parking_completed_pages/widgets/parking_status_page.dart';
+
+enum ParkingViewMode { status, locationPicker, plateList }
 
 class ParkingCompletedPage extends StatefulWidget {
   const ParkingCompletedPage({super.key});
@@ -32,14 +35,15 @@ class ParkingCompletedPage extends StatefulWidget {
 }
 
 class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
-  bool _isSorted = true;
-  bool _isParkingAreaMode = true;
+  ParkingViewMode _mode = ParkingViewMode.status;
   String? _selectedParkingArea;
+  bool _isSorted = true;
+  bool _isLocked = false;
 
   void _resetInternalState() {
     setState(() {
+      _mode = ParkingViewMode.status;
       _selectedParkingArea = null;
-      _isParkingAreaMode = true;
       _isSorted = true;
     });
   }
@@ -60,7 +64,6 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
           onSearch: (query) {
             if (query.length == 4) {
               context.read<FilterPlate>().setPlateSearchQuery(query);
-              // ✅ 렌더링 상태 변경 없음
             }
           },
           area: currentArea,
@@ -73,6 +76,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
     context.read<FilterPlate>().clearLocationSearchQuery();
     setState(() {
       _selectedParkingArea = null;
+      _mode = ParkingViewMode.status;
     });
   }
 
@@ -110,10 +114,8 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
       onWillPop: () async {
         final plateState = context.read<PlateState>();
         final userName = context.read<UserState>().name;
-        final selectedPlate = plateState.getSelectedPlate(
-          PlateType.parkingCompleted,
-          userName,
-        );
+        final selectedPlate = plateState.getSelectedPlate(PlateType.parkingCompleted, userName);
+
         if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
           await plateState.togglePlateIsSelected(
             collection: PlateType.parkingCompleted,
@@ -123,6 +125,15 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
           );
           return false;
         }
+
+        if (_mode == ParkingViewMode.plateList) {
+          setState(() => _mode = ParkingViewMode.locationPicker);
+          return false;
+        } else if (_mode == ParkingViewMode.locationPicker) {
+          setState(() => _mode = ParkingViewMode.status);
+          return false;
+        }
+
         return true;
       },
       child: Scaffold(
@@ -133,38 +144,18 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
           foregroundColor: Colors.black,
           elevation: 0,
         ),
-        body: Consumer2<PlateState, AreaState>(
-          builder: (context, plateState, areaState, child) {
-            final userName = context.read<UserState>().name;
-            List<PlateModel> plates = plateState.getPlatesByCollection(PlateType.parkingCompleted);
-
-            // 구역 필터 모드
-            if (_isParkingAreaMode && _selectedParkingArea != null) {
-              plates = plates.where((p) => p.location == _selectedParkingArea).toList();
-            }
-
-            // 정렬
-            plates.sort(
-                  (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime),
-            );
-
-            // 구역 선택 화면
-            if (_isParkingAreaMode && _selectedParkingArea == null) {
-              return ParkingCompletedLocationPicker(
-                onLocationSelected: (selectedLocation) {
-                  setState(() {
-                    _selectedParkingArea = selectedLocation;
-                  });
-                },
-              );
-            }
-
-            return _buildPlateList(plates, userName);
-          },
-        ),
+        body: _buildBody(context),
         bottomNavigationBar: ParkingCompletedControlButtons(
-          isParkingAreaMode: _isParkingAreaMode,
+          isParkingAreaMode: _mode == ParkingViewMode.plateList,
+          isStatusMode: _mode == ParkingViewMode.status,
           isSorted: _isSorted,
+          isLocked: _isLocked,
+          // ✅ 잠금 상태 전달
+          onToggleLock: () {
+            setState(() {
+              _isLocked = !_isLocked; // ✅ 잠금 토글 함수
+            });
+          },
           showSearchDialog: () => _showSearchDialog(context),
           resetParkingAreaFilter: () => _resetParkingAreaFilter(context),
           toggleSortIcon: _toggleSortIcon,
@@ -175,26 +166,53 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
     );
   }
 
-  Widget _buildPlateList(List<PlateModel> plates, String userName) {
-    return ListView(
-      padding: const EdgeInsets.all(8.0),
-      children: [
-        PlateContainer(
-          data: plates,
-          collection: PlateType.parkingCompleted,
-          filterCondition: (request) => request.type == PlateType.parkingCompleted.firestoreValue,
-          onPlateTap: (plateNumber, area) {
-            context.read<PlateState>().togglePlateIsSelected(
-              collection: PlateType.parkingCompleted,
-              plateNumber: plateNumber,
-              userName: userName,
-              onError: (errorMessage) {
-                showFailedSnackbar(context, errorMessage);
-              },
-            );
+  Widget _buildBody(BuildContext context) {
+    final plateState = context.watch<PlateState>();
+    final userName = context.read<UserState>().name;
+
+    switch (_mode) {
+      case ParkingViewMode.status:
+        return GestureDetector(
+          onTap: () => setState(() => _mode = ParkingViewMode.locationPicker),
+          child: ParkingStatusPage(isLocked: _isLocked),
+        );
+
+      case ParkingViewMode.locationPicker:
+        return ParkingCompletedLocationPicker(
+          onLocationSelected: (locationName) {
+            setState(() {
+              _selectedParkingArea = locationName;
+              _mode = ParkingViewMode.plateList;
+            });
           },
-        ),
-      ],
-    );
+        );
+
+      case ParkingViewMode.plateList:
+        List<PlateModel> plates = plateState.getPlatesByCollection(PlateType.parkingCompleted);
+        if (_selectedParkingArea != null) {
+          plates = plates.where((p) => p.location == _selectedParkingArea).toList();
+        }
+        plates.sort(
+            (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime));
+
+        return ListView(
+          padding: const EdgeInsets.all(8.0),
+          children: [
+            PlateContainer(
+              data: plates,
+              collection: PlateType.parkingCompleted,
+              filterCondition: (request) => request.type == PlateType.parkingCompleted.firestoreValue,
+              onPlateTap: (plateNumber, area) {
+                context.read<PlateState>().togglePlateIsSelected(
+                      collection: PlateType.parkingCompleted,
+                      plateNumber: plateNumber,
+                      userName: userName,
+                      onError: (msg) => showFailedSnackbar(context, msg),
+                    );
+              },
+            ),
+          ],
+        );
+    }
   }
 }
