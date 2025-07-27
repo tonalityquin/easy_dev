@@ -175,11 +175,33 @@ class PageBottomNavigation extends StatelessWidget {
           showUnselectedLabels: true,
           type: BottomNavigationBarType.fixed,
           backgroundColor: Colors.white,
+          // PageBottomNavigation 위젯 안 BottomNavigationBarItem 생성 부분
           items: List.generate(
             pageState.pages.length,
             (index) {
               final pageInfo = pageState.pages[index];
               final isSelected = pageState.selectedIndex == index;
+
+              final labelStyle = TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: isSelected ? selectedColor : unselectedColor,
+              );
+
+              // ✅ "홈" 탭 (카운팅 없음, 홈 아이콘 + 라벨)
+              if (pageInfo.title == '홈') {
+                return BottomNavigationBarItem(
+                  icon: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.home, color: isSelected ? selectedColor : unselectedColor),
+                      const SizedBox(height: 2),
+                      Text('홈', style: labelStyle),
+                    ],
+                  ),
+                  label: '',
+                );
+              }
 
               return BottomNavigationBarItem(
                 icon: FutureBuilder<int>(
@@ -189,12 +211,20 @@ class PageBottomNavigation extends StatelessWidget {
                   ),
                   builder: (context, snapshot) {
                     final count = snapshot.data ?? 0;
-                    return _buildCountIcon(
-                      count,
-                      isSelected,
-                      selectedColor,
-                      unselectedColor,
-                      pageInfo.title,
+                    return Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          '$count',
+                          style: TextStyle(
+                            fontSize: isSelected ? 22 : 18,
+                            fontWeight: FontWeight.bold,
+                            color: isSelected ? selectedColor : Colors.redAccent,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(pageInfo.title, style: labelStyle),
+                      ],
                     );
                   },
                 ),
@@ -204,56 +234,6 @@ class PageBottomNavigation extends StatelessWidget {
           ),
         );
       },
-    );
-  }
-
-  Widget _buildCountIcon(
-    int count,
-    bool isSelected,
-    Color selectedColor,
-    Color unselectedColor,
-    String label,
-  ) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
-            child: TweenAnimationBuilder<Color?>(
-              key: ValueKey(count),
-              duration: const Duration(milliseconds: 300),
-              tween: ColorTween(
-                begin: Colors.redAccent,
-                end: isSelected ? selectedColor : unselectedColor,
-              ),
-              builder: (context, color, child) {
-                return Text(
-                  '$count',
-                  style: TextStyle(
-                    fontSize: isSelected ? 26 : 20,
-                    fontWeight: FontWeight.bold,
-                    color: color,
-                  ),
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 4),
-          AnimatedDefaultTextStyle(
-            duration: const Duration(milliseconds: 250),
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: isSelected ? selectedColor : unselectedColor,
-            ),
-            child: Text(label),
-          ),
-        ],
-      ),
     );
   }
 }

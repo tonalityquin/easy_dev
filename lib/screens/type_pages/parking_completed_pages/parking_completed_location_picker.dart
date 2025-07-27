@@ -7,10 +7,12 @@ import '../../../repositories/location/location_repository.dart';
 
 class ParkingCompletedLocationPicker extends StatefulWidget {
   final Function(String locationName) onLocationSelected;
+  final bool isLocked; // ✅ 추가됨
 
   const ParkingCompletedLocationPicker({
     super.key,
     required this.onLocationSelected,
+    required this.isLocked, // ✅ 필수 파라미터 추가
   });
 
   @override
@@ -98,127 +100,132 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
       backgroundColor: Colors.white,
       body: Consumer<LocationState>(
         builder: (context, locationState, _) {
-          if (locationState.isLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
+          return AbsorbPointer( // ✅ 잠금 적용
+            absorbing: widget.isLocked,
+            child: Builder(builder: (context) {
+              if (locationState.isLoading) {
+                return const Center(child: CircularProgressIndicator());
+              }
 
-          final locations = locationState.locations;
-          if (locations.isEmpty) {
-            return Center(
-              child: GestureDetector(
-                onTap: () => _onRefreshPressed(locationState, locationRepo, area),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 32),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.teal),
-                    borderRadius: BorderRadius.circular(12),
-                    color: Colors.teal.withOpacity(0.05),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: const [
-                      Icon(Icons.refresh, color: Colors.teal),
-                      SizedBox(width: 8),
-                      Text(
-                        "주차 구역 갱신",
-                        style: TextStyle(
-                          color: Colors.teal,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          }
-
-          final singles = locations.where((l) => l.type == 'single').toList();
-          final composites = locations.where((l) => l.type == 'composite').toList();
-
-          if (selectedParent != null) {
-            final children = composites.where((loc) => loc.parent == selectedParent).toList();
-
-            return Column(
-              children: [
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      const Divider(),
-                      ...children.map((loc) {
-                        final displayName = '${loc.parent} - ${loc.locationName}';
-                        return ListTile(
-                          leading: const Icon(Icons.subdirectory_arrow_right, color: Colors.teal),
-                          title: Text(displayName),
-                          subtitle: Text('입차 ${loc.plateCount} / 공간 ${loc.capacity}'),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () => widget.onLocationSelected(displayName),
-                        );
-                      }),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  child: InkWell(
-                    onTap: () => setState(() => selectedParent = null),
+              final locations = locationState.locations;
+              if (locations.isEmpty) {
+                return Center(
+                  child: GestureDetector(
+                    onTap: () => _onRefreshPressed(locationState, locationRepo, area),
                     child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 16.0),
+                      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 32),
                       decoration: BoxDecoration(
-                        color: Colors.grey[100],
-                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.teal),
+                        borderRadius: BorderRadius.circular(12),
+                        color: Colors.teal.withOpacity(0.05),
                       ),
                       child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: const [
-                          Icon(Icons.arrow_back, color: Colors.black54),
+                          Icon(Icons.refresh, color: Colors.teal),
                           SizedBox(width: 8),
-                          Text('되돌아가기', style: TextStyle(fontSize: 16)),
+                          Text(
+                            "주차 구역 갱신",
+                            style: TextStyle(
+                              color: Colors.teal,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
                         ],
                       ),
                     ),
                   ),
-                ),
-              ],
-            );
-          }
-
-          final parentGroups = composites.map((loc) => loc.parent).whereType<String>().toSet().toList();
-
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              _buildRefreshButton(locationState, locationRepo, area),
-              const SizedBox(height: 24),
-              const Text('단일 주차 구역', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              const SizedBox(height: 8),
-              ...singles.map((loc) => ListTile(
-                leading: const Icon(Icons.place, color: Colors.teal),
-                title: Text(loc.locationName),
-                subtitle: Text('입차 ${loc.plateCount} / 공간 ${loc.capacity}'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => widget.onLocationSelected(loc.locationName),
-              )),
-              const Divider(),
-              const Text('복합 주차 구역', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              const SizedBox(height: 8),
-              ...parentGroups.map((parent) {
-                final children = composites.where((l) => l.parent == parent).toList();
-                final totalCapacity = children.fold(0, (sum, l) => sum + l.capacity);
-                final totalCount = children.fold(0, (sum, l) => sum + l.plateCount);
-
-                return ListTile(
-                  leading: const Icon(Icons.layers, color: Colors.teal),
-                  title: Text(parent),
-                  subtitle: Text('총 입차 $totalCount / 총 공간 $totalCapacity'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => setState(() => selectedParent = parent),
                 );
-              }),
-              const SizedBox(height: 16),
-            ],
+              }
+
+              final singles = locations.where((l) => l.type == 'single').toList();
+              final composites = locations.where((l) => l.type == 'composite').toList();
+
+              if (selectedParent != null) {
+                final children = composites.where((loc) => loc.parent == selectedParent).toList();
+
+                return Column(
+                  children: [
+                    Expanded(
+                      child: ListView(
+                        padding: const EdgeInsets.all(16),
+                        children: [
+                          const Divider(),
+                          ...children.map((loc) {
+                            final displayName = '${loc.parent} - ${loc.locationName}';
+                            return ListTile(
+                              leading: const Icon(Icons.subdirectory_arrow_right, color: Colors.teal),
+                              title: Text(displayName),
+                              subtitle: Text('입차 ${loc.plateCount} / 공간 ${loc.capacity}'),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: () => widget.onLocationSelected(displayName),
+                            );
+                          }),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      child: InkWell(
+                        onTap: () => setState(() => selectedParent = null),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 16.0),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[100],
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: const [
+                              Icon(Icons.arrow_back, color: Colors.black54),
+                              SizedBox(width: 8),
+                              Text('되돌아가기', style: TextStyle(fontSize: 16)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              }
+
+              final parentGroups = composites.map((loc) => loc.parent).whereType<String>().toSet().toList();
+
+              return ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  _buildRefreshButton(locationState, locationRepo, area),
+                  const SizedBox(height: 24),
+                  const Text('단일 주차 구역', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  const SizedBox(height: 8),
+                  ...singles.map((loc) => ListTile(
+                    leading: const Icon(Icons.place, color: Colors.teal),
+                    title: Text(loc.locationName),
+                    subtitle: Text('입차 ${loc.plateCount} / 공간 ${loc.capacity}'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => widget.onLocationSelected(loc.locationName),
+                  )),
+                  const Divider(),
+                  const Text('복합 주차 구역', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  const SizedBox(height: 8),
+                  ...parentGroups.map((parent) {
+                    final children = composites.where((l) => l.parent == parent).toList();
+                    final totalCapacity = children.fold(0, (sum, l) => sum + l.capacity);
+                    final totalCount = children.fold(0, (sum, l) => sum + l.plateCount);
+
+                    return ListTile(
+                      leading: const Icon(Icons.layers, color: Colors.teal),
+                      title: Text(parent),
+                      subtitle: Text('총 입차 $totalCount / 총 공간 $totalCapacity'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => setState(() => selectedParent = parent),
+                    );
+                  }),
+                  const SizedBox(height: 16),
+                ],
+              );
+            }),
           );
         },
       ),

@@ -148,12 +148,13 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
         bottomNavigationBar: ParkingCompletedControlButtons(
           isParkingAreaMode: _mode == ParkingViewMode.plateList,
           isStatusMode: _mode == ParkingViewMode.status,
+          isLocationPickerMode: _mode == ParkingViewMode.locationPicker,
+          // ✅ 추가된 분기
           isSorted: _isSorted,
           isLocked: _isLocked,
-          // ✅ 잠금 상태 전달
           onToggleLock: () {
             setState(() {
-              _isLocked = !_isLocked; // ✅ 잠금 토글 함수
+              _isLocked = !_isLocked;
             });
           },
           showSearchDialog: () => _showSearchDialog(context),
@@ -185,6 +186,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
               _mode = ParkingViewMode.plateList;
             });
           },
+          isLocked: _isLocked, // ✅ 잠금 상태 전달
         );
 
       case ParkingViewMode.plateList:

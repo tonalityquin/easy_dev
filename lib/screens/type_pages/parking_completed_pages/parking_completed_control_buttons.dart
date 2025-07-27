@@ -12,6 +12,7 @@ import '../../../utils/snackbar_helper.dart';
 
 import '../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
 import '../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
+import '../departure_completed_bottom_sheet.dart';
 import 'widgets/dashboard_bottom_sheet/dash_board_bottom_sheet.dart';
 import 'widgets/parking_completed_chat_bottom_sheet.dart';
 import 'widgets/parking_completed_status_bottom_sheet.dart';
@@ -21,9 +22,10 @@ import '../../../widgets/dialog/plate_remove_dialog.dart';
 class ParkingCompletedControlButtons extends StatelessWidget {
   final bool isParkingAreaMode;
   final bool isStatusMode;
+  final bool isLocationPickerMode; // 추가됨
   final bool isSorted;
-  final bool isLocked; // 🔒 잠금 여부 추가
-  final VoidCallback onToggleLock; // 🔁 잠금 토글 콜백 추가
+  final bool isLocked;
+  final VoidCallback onToggleLock;
   final VoidCallback showSearchDialog;
   final VoidCallback resetParkingAreaFilter;
   final VoidCallback toggleSortIcon;
@@ -34,6 +36,7 @@ class ParkingCompletedControlButtons extends StatelessWidget {
     super.key,
     required this.isParkingAreaMode,
     required this.isStatusMode,
+    required this.isLocationPickerMode, // 추가됨
     required this.isSorted,
     required this.isLocked,
     required this.onToggleLock,
@@ -58,7 +61,7 @@ class ParkingCompletedControlButtons extends StatelessWidget {
           type: BottomNavigationBarType.fixed,
           selectedItemColor: Theme.of(context).primaryColor,
           unselectedItemColor: Colors.grey[700],
-          items: isStatusMode
+          items: isLocationPickerMode
               ? [
                   BottomNavigationBarItem(
                     icon: Icon(isLocked ? Icons.lock : Icons.lock_open),
@@ -69,52 +72,65 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                     label: '대시보드',
                   ),
                   const BottomNavigationBarItem(
-                    icon: Icon(Icons.event_available),
-                    label: '정기 주차',
+                    icon: Icon(Icons.directions_car),
+                    label: '출차 완료',
                   ),
                 ]
-              : [
-                  BottomNavigationBarItem(
-                    icon: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 300),
-                      transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
-                      child: isPlateSelected
-                          ? (selectedPlate.isLockedFee
-                              ? const Icon(Icons.lock_open, key: ValueKey('unlock'), color: Colors.grey)
-                              : const Icon(Icons.lock, key: ValueKey('lock'), color: Colors.grey))
-                          : Icon(Icons.refresh, key: const ValueKey('refresh'), color: Colors.grey[700]),
-                    ),
-                    label: isPlateSelected ? (selectedPlate.isLockedFee ? '정산 취소' : '사전 정산') : '채팅하기',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: Icon(
-                      isPlateSelected ? Icons.check_circle : Icons.search,
-                      color: isPlateSelected ? Colors.green[600] : Colors.grey[700],
-                    ),
-                    label: isPlateSelected ? '출차 요청' : '번호판 검색',
-                  ),
-                  BottomNavigationBarItem(
-                    icon: AnimatedRotation(
-                      turns: isSorted ? 0.5 : 0.0,
-                      duration: const Duration(milliseconds: 300),
-                      child: Transform.scale(
-                        scaleX: isSorted ? -1 : 1,
-                        child: Icon(
-                          isPlateSelected ? Icons.settings : Icons.sort,
-                          color: Colors.grey[700],
-                        ),
+              : isStatusMode
+                  ? [
+                      BottomNavigationBarItem(
+                        icon: Icon(isLocked ? Icons.lock : Icons.lock_open),
+                        label: '화면 잠금',
                       ),
-                    ),
-                    label: isPlateSelected ? '상태 수정' : (isSorted ? '최신순' : '오래된 순'),
-                  ),
-                ],
+                      const BottomNavigationBarItem(
+                        icon: Icon(Icons.dashboard),
+                        label: '대시보드',
+                      ),
+                      const BottomNavigationBarItem(
+                        icon: Icon(Icons.directions_car),
+                        label: '출차 완료',
+                      ),
+                    ]
+                  : [
+                      BottomNavigationBarItem(
+                        icon: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 300),
+                          transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+                          child: isPlateSelected
+                              ? (selectedPlate.isLockedFee
+                                  ? const Icon(Icons.lock_open, key: ValueKey('unlock'), color: Colors.grey)
+                                  : const Icon(Icons.lock, key: ValueKey('lock'), color: Colors.grey))
+                              : Icon(Icons.refresh, key: const ValueKey('refresh'), color: Colors.grey[700]),
+                        ),
+                        label: isPlateSelected ? (selectedPlate.isLockedFee ? '정산 취소' : '사전 정산') : '채팅하기',
+                      ),
+                      BottomNavigationBarItem(
+                        icon: Icon(
+                          isPlateSelected ? Icons.check_circle : Icons.search,
+                          color: isPlateSelected ? Colors.green[600] : Colors.grey[700],
+                        ),
+                        label: isPlateSelected ? '출차 요청' : '번호판 검색',
+                      ),
+                      BottomNavigationBarItem(
+                        icon: AnimatedRotation(
+                          turns: isSorted ? 0.5 : 0.0,
+                          duration: const Duration(milliseconds: 300),
+                          child: Transform.scale(
+                            scaleX: isSorted ? -1 : 1,
+                            child: Icon(
+                              isPlateSelected ? Icons.settings : Icons.sort,
+                              color: Colors.grey[700],
+                            ),
+                          ),
+                        ),
+                        label: isPlateSelected ? '상태 수정' : (isSorted ? '최신순' : '오래된 순'),
+                      ),
+                    ],
           onTap: (index) async {
-            // ✅ Status 모드일 때: 잠금 토글 기능 연결
-            if (isStatusMode) {
+            if (isLocationPickerMode) {
               if (index == 0) {
-                onToggleLock();
+                onToggleLock(); // 잠금 토글
               } else if (index == 1) {
-                // 📊 대시보드 클릭 → BottomSheet 열기
                 showModalBottomSheet(
                   context: context,
                   isScrollControlled: true,
@@ -122,12 +138,37 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                   builder: (context) => const DashBoardBottomSheet(),
                 );
               } else if (index == 2) {
-                debugPrint('🅿️ 정기 주차 클릭됨');
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (context) => const DepartureCompletedBottomSheet(),
+                );
               }
               return;
             }
 
-            // Plate 선택 안 된 일반 모드
+            if (isStatusMode) {
+              if (index == 0) {
+                onToggleLock();
+              } else if (index == 1) {
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (context) => const DashBoardBottomSheet(),
+                );
+              } else if (index == 2) {
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (context) => const DepartureCompletedBottomSheet(),
+                );
+              }
+              return;
+            }
+
             if (!isParkingAreaMode || !isPlateSelected) {
               if (index == 0) {
                 showChatBottomSheet(context);
@@ -139,7 +180,6 @@ class ParkingCompletedControlButtons extends StatelessWidget {
               return;
             }
 
-            // Plate 선택 상태일 때
             final repo = context.read<PlateRepository>();
             final division = context.read<AreaState>().currentDivision;
             final area = context.read<AreaState>().currentArea.trim();

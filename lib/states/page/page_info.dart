@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../../screens/type_pages/parking_request_page.dart';
 import '../../screens/type_pages/parking_completed_page.dart';
 import '../../screens/type_pages/departure_request_page.dart';
-import '../../screens/type_pages/departure_completed_page.dart';
 
 import '../../screens/hq_pages/management.dart';
 import '../../screens/hq_pages/human_resource.dart';
@@ -34,7 +33,7 @@ final List<PageInfo> defaultPages = [
     builder: (_) => const ParkingRequestPage(),
   ),
   PageInfo(
-    title: '입차 완료',
+    title: '홈', // ✅ 이름 변경
     collectionKey: PlateType.parkingCompleted,
     builder: (context) {
       final pageState = context.read<PageState>();
@@ -45,11 +44,6 @@ final List<PageInfo> defaultPages = [
     title: '출차 요청',
     collectionKey: PlateType.departureRequests,
     builder: (_) => const DepartureRequestPage(),
-  ),
-  PageInfo(
-    title: '출차 완료',
-    collectionKey: PlateType.departureCompleted,
-    builder: (_) => const DepartureCompletedPage(),
   ),
 ];
 
