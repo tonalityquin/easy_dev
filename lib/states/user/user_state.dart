@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../repositories/user/user_repository.dart';
 import '../../models/user_model.dart';
 import '../../utils/plate_tts_listener_service.dart';
+import '../../utils/chat_tts_listener_service.dart'; // ✅ 추가
 import '../area/area_state.dart';
 
 class UserState extends ChangeNotifier {
@@ -91,6 +92,11 @@ class UserState extends ChangeNotifier {
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
+
+    // ✅ TTS 중단
+    PlateTtsListenerService.stop();
+    ChatTtsListenerService.stop();
+
     _user = null;
     notifyListeners();
   }
@@ -190,7 +196,10 @@ class UserState extends ChangeNotifier {
       _user = userData;
       notifyListeners();
 
-      Future.microtask(() => PlateTtsListenerService.start(currentArea));
+      Future.microtask(() {
+        PlateTtsListenerService.start(currentArea);
+        ChatTtsListenerService.start(currentArea); // ✅ 추가
+      });
     } catch (e) {
       debugPrint("loadUserToLogIn, 오류: $e");
     }
@@ -213,7 +222,9 @@ class UserState extends ChangeNotifier {
       debugPrint("areaPickerCurrentArea 실패: $e");
     }
 
+    // ✅ TTS 재시작
     PlateTtsListenerService.start(newArea);
+    ChatTtsListenerService.start(newArea); // ✅ 추가
   }
 
   Future<void> _fetchUsersByAreaWithCache() async {

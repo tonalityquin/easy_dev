@@ -34,7 +34,7 @@ class _ChatPanelState extends State<ChatPanel> {
         .orderBy('timestamp')
         .snapshots()
         .listen((snapshot) {
-      if (!mounted) return; // ✅ 안전한 setState 호출
+      if (!mounted) return;
       final newMessages = snapshot.docs.map((doc) => doc.data()).toList();
       setState(() {
         messages = List<Map<String, dynamic>>.from(newMessages);
@@ -50,7 +50,7 @@ class _ChatPanelState extends State<ChatPanel> {
 
     final message = {
       'message': text,
-      'timestamp': FieldValue.serverTimestamp(),
+      'timestamp': Timestamp.now(), // ✅ 서버 반영 지연 없는 확정된 타임스탬프
     };
 
     await FirebaseFirestore.instance
@@ -75,7 +75,7 @@ class _ChatPanelState extends State<ChatPanel> {
 
   @override
   void dispose() {
-    _chatSubscription?.cancel(); // ✅ 리스너 해제
+    _chatSubscription?.cancel();
     _controller.dispose();
     _scrollController.dispose();
     _focusNode.dispose();
@@ -128,7 +128,6 @@ class _ChatPanelState extends State<ChatPanel> {
                   ),
                 ),
                 ...items.map((msg) {
-                  final name = msg['name'] ?? '익명';
                   final text = msg['message'] ?? '';
                   final timestamp = msg['timestamp'];
                   String time = '';
@@ -154,8 +153,8 @@ class _ChatPanelState extends State<ChatPanel> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('[$name]',
-                            style: const TextStyle(fontWeight: FontWeight.bold)),
+                        const Text('[익명]',
+                            style: TextStyle(fontWeight: FontWeight.bold)),
                         const SizedBox(height: 4),
                         Text(text),
                         const SizedBox(height: 4),
