@@ -12,6 +12,7 @@ import '../states/calendar/field_selected_date_state.dart';
 import '../utils/app_colors.dart';
 
 import '../screens/input_pages/input_plate_screen.dart';
+import 'type_pages/commons/chats/chat_bottom_sheet.dart';
 import 'secondary_page.dart';
 
 class TypePage extends StatefulWidget {
@@ -52,11 +53,27 @@ class _TypePageState extends State<TypePage> {
             },
             child: Scaffold(
               body: const RefreshableBody(),
-              bottomNavigationBar: const Column(
+              bottomNavigationBar: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  PageBottomNavigation(),
-                  DebugTriggerBar(),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        chatBottomSheet(context);
+                      },
+                      icon: const Icon(Icons.chat_bubble_outline),
+                      label: const Text('구역 채팅 열기'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                    ),
+                  ),
+                  const PageBottomNavigation(),
+                  const DebugTriggerBar(),
                 ],
               ),
             ),

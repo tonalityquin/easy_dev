@@ -14,7 +14,6 @@ import '../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
 import '../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 import '../departure_completed_bottom_sheet.dart';
 import 'widgets/dashboard_bottom_sheet/dash_board_bottom_sheet.dart';
-import 'widgets/parking_completed_chat_bottom_sheet.dart';
 import 'widgets/parking_completed_status_bottom_sheet.dart';
 import 'widgets/set_departure_request_dialog.dart';
 import '../../../widgets/dialog/plate_remove_dialog.dart';
@@ -171,7 +170,7 @@ class ParkingCompletedControlButtons extends StatelessWidget {
 
             if (!isParkingAreaMode || !isPlateSelected) {
               if (index == 0) {
-                showChatBottomSheet(context);
+                showSearchDialog();
               } else if (index == 1) {
                 showSearchDialog();
               } else if (index == 2) {
