@@ -16,9 +16,24 @@ class ChatTtsListenerService {
     _subscription = null;
   }
 
-  static void _startListening(String roomId) {
+  static Future<void> _startListening(String roomId) async {
     _subscription?.cancel();
-    _lastSpokenTimestamp = null;
+
+    // ✅ Firestore에서 현재 문서 미리 읽고, 마지막 메시지 시각 기억
+    final initialDoc = await FirebaseFirestore.instance
+        .collection('chats')
+        .doc(roomId)
+        .collection('state')
+        .doc('latest_message')
+        .get();
+
+    if (initialDoc.exists) {
+      final data = initialDoc.data();
+      if (data != null && data['timestamp'] is Timestamp) {
+        _lastSpokenTimestamp = data['timestamp'];
+        debugPrint('[ChatTTS] 앱 시작 시점 메시지 타임스탬프 저장: $_lastSpokenTimestamp');
+      }
+    }
 
     debugPrint('[ChatTTS] 감지 시작: $roomId');
 
@@ -42,14 +57,17 @@ class ChatTtsListenerService {
       }
 
       // 동일 메시지 반복 방지
-      if (_lastSpokenTimestamp != null && !timestamp.toDate().isAfter(_lastSpokenTimestamp!.toDate())) {
+      if (_lastSpokenTimestamp != null &&
+          !timestamp.toDate().isAfter(_lastSpokenTimestamp!.toDate())) {
         debugPrint('[ChatTTS] 무시됨 (이미 읽음)');
         return;
       }
 
       _lastSpokenTimestamp = timestamp;
 
-      final String toSpeak = (name == null || name.trim().isEmpty) ? text : "$name 님의 메시지: $text";
+      final String toSpeak = (name == null || name.trim().isEmpty)
+          ? text
+          : "$name 님의 메시지: $text";
 
       debugPrint('[ChatTTS] 새 메시지 ▶ $toSpeak');
       TtsHelper.speak(toSpeak);

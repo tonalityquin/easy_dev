@@ -77,11 +77,21 @@ class _TypePageState extends State<TypePage> {
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             ),
-                            child: Text(
-                              latestMessage.length > 20
-                                  ? '${latestMessage.substring(0, 20)}...'
-                                  : latestMessage,
-                              overflow: TextOverflow.ellipsis,
+                            child: Center(
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min, // 텍스트 폭만큼만 차지하게
+                                children: [
+                                  const Icon(Icons.message, color: Colors.black, size: 20),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    latestMessage.length > 20
+                                        ? '${latestMessage.substring(0, 20)}...'
+                                        : latestMessage,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(color: Colors.black),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         );
