@@ -31,11 +31,18 @@ class _ChatPanelState extends State<ChatPanel> {
         .collection('chats')
         .doc(widget.roomId)
         .collection('messages')
-        .orderBy('timestamp')
+        .orderBy('timestamp', descending: true) // 최신부터 가져오기
+        .limit(3) // 최근 3개 제한
         .snapshots()
         .listen((snapshot) {
       if (!mounted) return;
-      final newMessages = snapshot.docs.map((doc) => doc.data()).toList();
+
+      final newMessages = snapshot.docs
+          .map((doc) => doc.data())
+          .toList()
+          .reversed // 다시 오래된 순으로 정렬
+          .toList();
+
       setState(() {
         messages = List<Map<String, dynamic>>.from(newMessages);
       });
@@ -53,11 +60,7 @@ class _ChatPanelState extends State<ChatPanel> {
       'timestamp': Timestamp.now(), // ✅ 서버 반영 지연 없는 확정된 타임스탬프
     };
 
-    await FirebaseFirestore.instance
-        .collection('chats')
-        .doc(widget.roomId)
-        .collection('messages')
-        .add(message);
+    await FirebaseFirestore.instance.collection('chats').doc(widget.roomId).collection('messages').add(message);
 
     _controller.clear();
     _focusNode.requestFocus();
@@ -89,8 +92,7 @@ class _ChatPanelState extends State<ChatPanel> {
       final rawTime = msg['timestamp'];
       String date = 'Unknown';
       try {
-        date = DateFormat('yyyy-MM-dd')
-            .format((rawTime as Timestamp).toDate().toLocal());
+        date = DateFormat('yyyy-MM-dd').format((rawTime as Timestamp).toDate().toLocal());
       } catch (_) {}
       groupedMessages.putIfAbsent(date, () => []).add(msg);
     }
@@ -132,8 +134,7 @@ class _ChatPanelState extends State<ChatPanel> {
                   final timestamp = msg['timestamp'];
                   String time = '';
                   try {
-                    time = DateFormat('HH:mm')
-                        .format((timestamp as Timestamp).toDate().toLocal());
+                    time = DateFormat('HH:mm').format((timestamp as Timestamp).toDate().toLocal());
                   } catch (_) {}
 
                   return Container(
@@ -153,14 +154,11 @@ class _ChatPanelState extends State<ChatPanel> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('[익명]',
-                            style: TextStyle(fontWeight: FontWeight.bold)),
+                        const Text('[익명]', style: TextStyle(fontWeight: FontWeight.bold)),
                         const SizedBox(height: 4),
                         Text(text),
                         const SizedBox(height: 4),
-                        Text('🕒 $time',
-                            style: TextStyle(
-                                fontSize: 12, color: Colors.grey[600])),
+                        Text('🕒 $time', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
                       ],
                     ),
                   );
@@ -180,8 +178,7 @@ class _ChatPanelState extends State<ChatPanel> {
                   hintText: '메시지를 입력하세요...',
                   filled: true,
                   fillColor: Colors.grey[200],
-                  contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide.none,
