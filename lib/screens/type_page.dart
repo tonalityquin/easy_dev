@@ -57,19 +57,35 @@ class _TypePageState extends State<TypePage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        chatBottomSheet(context);
-                      },
-                      icon: const Icon(Icons.chat_bubble_outline),
-                      label: const Text('구역 채팅 열기'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
+                    child: StreamBuilder<String>(
+                      stream: latestMessageStream(
+                        context.read<UserState>().user?.currentArea?.trim() ?? '',
                       ),
+                      builder: (context, snapshot) {
+                        final latestMessage = snapshot.data ?? '채팅 열기';
+
+                        return SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: () {
+                              chatBottomSheet(context);
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            child: Text(
+                              latestMessage.length > 20
+                                  ? '${latestMessage.substring(0, 20)}...'
+                                  : latestMessage,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                   const PageBottomNavigation(),

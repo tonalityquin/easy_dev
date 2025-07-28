@@ -1,9 +1,29 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../states/user/user_state.dart';
 import 'chat_panel.dart';
 
+/// 🔸 최신 메시지를 실시간으로 스트리밍하는 함수
+Stream<String> latestMessageStream(String roomId) {
+  return FirebaseFirestore.instance
+      .collection('chats')
+      .doc(roomId)
+      .collection('messages')
+      .orderBy('timestamp', descending: true)
+      .limit(1)
+      .snapshots()
+      .map((snapshot) {
+    if (snapshot.docs.isNotEmpty) {
+      final data = snapshot.docs.first.data();
+      return data['message'] ?? '';
+    }
+    return '';
+  });
+}
+
+/// 🔹 채팅 바텀시트
 void chatBottomSheet(BuildContext context) {
   final currentUser = context.read<UserState>().user;
   final String? roomId = currentUser?.currentArea?.trim();
@@ -50,4 +70,42 @@ void chatBottomSheet(BuildContext context) {
       );
     },
   );
+}
+
+/// 🔹 채팅 버튼 위젯 (TypePage 등에서 사용)
+class ChatOpenButton extends StatelessWidget {
+  const ChatOpenButton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final currentUser = context.read<UserState>().user;
+    final String? roomId = currentUser?.currentArea?.trim();
+
+    if (roomId == null || roomId.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return StreamBuilder<String>(
+      stream: latestMessageStream(roomId),
+      builder: (context, snapshot) {
+        final latestMsg = snapshot.data ?? '채팅 열기';
+
+        return ElevatedButton(
+          onPressed: () {
+            chatBottomSheet(context);
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blue,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          child: Text(
+            latestMsg.length > 20 ? '${latestMsg.substring(0, 20)}...' : latestMsg,
+            overflow: TextOverflow.ellipsis,
+          ),
+        );
+      },
+    );
+  }
 }
