@@ -1,11 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'google_drive_chat_helper.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ChatPanel extends StatefulWidget {
-  final String fileId;
+  final String roomId;
 
-  const ChatPanel({super.key, required this.fileId});
+  const ChatPanel({super.key, required this.roomId});
 
   @override
   State<ChatPanel> createState() => _ChatPanelState();
@@ -17,33 +18,29 @@ class _ChatPanelState extends State<ChatPanel> {
   final FocusNode _focusNode = FocusNode();
 
   List<Map<String, dynamic>> messages = [];
-  bool isLoading = true;
+  StreamSubscription<QuerySnapshot>? _chatSubscription;
 
   @override
   void initState() {
     super.initState();
-    _loadMessages();
+    _listenToMessages();
   }
 
-  Future<void> _loadMessages() async {
-    final result = await GoogleDriveChatHelper.readChatJsonFile(widget.fileId);
-    setState(() {
-      messages = result;
-      isLoading = false;
-    });
+  void _listenToMessages() {
+    _chatSubscription = FirebaseFirestore.instance
+        .collection('chats')
+        .doc(widget.roomId)
+        .collection('messages')
+        .orderBy('timestamp')
+        .snapshots()
+        .listen((snapshot) {
+      if (!mounted) return; // ✅ 안전한 setState 호출
+      final newMessages = snapshot.docs.map((doc) => doc.data()).toList();
+      setState(() {
+        messages = List<Map<String, dynamic>>.from(newMessages);
+      });
 
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
-  }
-
-  void _scrollToBottom() {
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent + 150,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
     });
   }
 
@@ -51,39 +48,49 @@ class _ChatPanelState extends State<ChatPanel> {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
 
-    const userName = '근무자';
     final message = {
-      'name': userName,
       'message': text,
-      'timestamp': DateTime.now().toUtc().toIso8601String(),
+      'timestamp': FieldValue.serverTimestamp(),
     };
 
-    await GoogleDriveChatHelper.appendChatMessageJson(widget.fileId, message);
+    await FirebaseFirestore.instance
+        .collection('chats')
+        .doc(widget.roomId)
+        .collection('messages')
+        .add(message);
 
-    setState(() {
-      messages.add(message);
-      _controller.clear();
-    });
+    _controller.clear();
+    _focusNode.requestFocus();
+  }
 
-    _scrollToBottom();
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('메시지가 전송되었습니다')),
+  void _scrollToBottom() {
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent + 150,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
       );
     }
   }
 
   @override
-  Widget build(BuildContext context) {
-    if (isLoading) return const Center(child: CircularProgressIndicator());
+  void dispose() {
+    _chatSubscription?.cancel(); // ✅ 리스너 해제
+    _controller.dispose();
+    _scrollController.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
 
+  @override
+  Widget build(BuildContext context) {
     final groupedMessages = <String, List<Map<String, dynamic>>>{};
     for (var msg in messages) {
-      final rawTime = msg['timestamp'] ?? '';
+      final rawTime = msg['timestamp'];
       String date = 'Unknown';
       try {
-        date = DateFormat('yyyy-MM-dd').format(DateTime.parse(rawTime).toLocal());
+        date = DateFormat('yyyy-MM-dd')
+            .format((rawTime as Timestamp).toDate().toLocal());
       } catch (_) {}
       groupedMessages.putIfAbsent(date, () => []).add(msg);
     }
@@ -113,17 +120,21 @@ class _ChatPanelState extends State<ChatPanel> {
                   child: Center(
                     child: Text(
                       date,
-                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey[700]),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey[700],
+                      ),
                     ),
                   ),
                 ),
                 ...items.map((msg) {
                   final name = msg['name'] ?? '익명';
                   final text = msg['message'] ?? '';
-                  final rawTime = msg['timestamp'] ?? '';
+                  final timestamp = msg['timestamp'];
                   String time = '';
                   try {
-                    time = DateFormat('HH:mm').format(DateTime.parse(rawTime).toLocal());
+                    time = DateFormat('HH:mm')
+                        .format((timestamp as Timestamp).toDate().toLocal());
                   } catch (_) {}
 
                   return Container(
@@ -143,11 +154,14 @@ class _ChatPanelState extends State<ChatPanel> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('[$name]', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        Text('[$name]',
+                            style: const TextStyle(fontWeight: FontWeight.bold)),
                         const SizedBox(height: 4),
                         Text(text),
                         const SizedBox(height: 4),
-                        Text('🕒 $time', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                        Text('🕒 $time',
+                            style: TextStyle(
+                                fontSize: 12, color: Colors.grey[600])),
                       ],
                     ),
                   );
@@ -167,7 +181,8 @@ class _ChatPanelState extends State<ChatPanel> {
                   hintText: '메시지를 입력하세요...',
                   filled: true,
                   fillColor: Colors.grey[200],
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide.none,

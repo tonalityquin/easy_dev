@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'chat_panel.dart'; // ChatPanel이 정의된 파일
+import 'chat_panel.dart'; // Firestore 기반 ChatPanel 위젯
 
 void chatBottomSheet(BuildContext context) {
-  final TextEditingController _fileIdInputController = TextEditingController();
+  final TextEditingController _roomIdInputController = TextEditingController();
 
-  String? fileId;
-  List<String> fileIdHistory = [];
+  String? roomId;
+  List<String> roomIdHistory = [];
 
   showModalBottomSheet(
     context: context,
@@ -19,36 +19,37 @@ void chatBottomSheet(BuildContext context) {
         builder: (ctx, setState) {
           Future<void> loadPrefs() async {
             final prefs = await SharedPreferences.getInstance();
-            final savedId = prefs.getString('chat_file_id');
-            final history = prefs.getStringList('chat_file_id_history') ?? [];
+            final savedId = prefs.getString('chat_room_id');
+            final history = prefs.getStringList('chat_room_id_history') ?? [];
 
-            fileId = (savedId != null && savedId.isNotEmpty)
+            roomId = (savedId != null && savedId.isNotEmpty)
                 ? savedId
-                : '1RlsEmXGlf7sK57B-ITEewiFBLg8GOeLD';
+                : 'main-room'; // 기본 채팅방
 
-            fileIdHistory = history.toSet().toList();
+            roomIdHistory = history.toSet().toList();
             setState(() {});
           }
 
-          Future<void> saveFileId(String id) async {
+          Future<void> saveRoomId(String id) async {
             final prefs = await SharedPreferences.getInstance();
-            await prefs.setString('chat_file_id', id);
-            final updatedHistory = [id, ...fileIdHistory.where((e) => e != id)].take(5).toList();
-            await prefs.setStringList('chat_file_id_history', updatedHistory);
-            fileId = id;
-            fileIdHistory = updatedHistory;
+            await prefs.setString('chat_room_id', id);
+            final updatedHistory = [id, ...roomIdHistory.where((e) => e != id)].take(5).toList();
+            await prefs.setStringList('chat_room_id_history', updatedHistory);
+            roomId = id;
+            roomIdHistory = updatedHistory;
             setState(() {});
           }
 
-          Future<void> clearFileId() async {
+          Future<void> clearRoomId() async {
             final prefs = await SharedPreferences.getInstance();
-            await prefs.remove('chat_file_id');
-            fileId = null;
+            await prefs.remove('chat_room_id');
+            roomId = null;
             setState(() {});
           }
 
+          // 최초 호출 시 SharedPreferences 로딩
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (fileId == null) loadPrefs();
+            if (roomId == null) loadPrefs();
           });
 
           return Padding(
@@ -62,7 +63,7 @@ void chatBottomSheet(BuildContext context) {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // 상단 타이틀과 링크 버튼
+                  // 타이틀 및 방 ID 설정 버튼
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -77,31 +78,31 @@ void chatBottomSheet(BuildContext context) {
                       ),
                       IconButton(
                         icon: const Icon(Icons.link),
-                        tooltip: '구글 드라이브 ID 설정',
+                        tooltip: '채팅방 ID 설정',
                         onPressed: () {
                           showDialog(
                             context: ctx,
                             builder: (_) => AlertDialog(
-                              title: const Text('Google Drive JSON ID 연결'),
+                              title: const Text('Firestore 채팅방 ID 연결'),
                               content: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   TextField(
-                                    controller: _fileIdInputController,
-                                    decoration: const InputDecoration(hintText: '예: 1RlsEmXG...'),
+                                    controller: _roomIdInputController,
+                                    decoration: const InputDecoration(hintText: '예: main-room'),
                                   ),
                                   const SizedBox(height: 12),
-                                  if (fileIdHistory.isNotEmpty)
+                                  if (roomIdHistory.isNotEmpty)
                                     Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         const Text('최근 사용한 ID'),
-                                        ...fileIdHistory.map((id) => ListTile(
+                                        ...roomIdHistory.map((id) => ListTile(
                                           dense: true,
                                           title: Text(id),
                                           onTap: () {
                                             Navigator.pop(ctx);
-                                            saveFileId(id);
+                                            saveRoomId(id);
                                           },
                                         )),
                                       ],
@@ -111,8 +112,8 @@ void chatBottomSheet(BuildContext context) {
                               actions: [
                                 TextButton(
                                   onPressed: () {
-                                    clearFileId();
-                                    _fileIdInputController.clear();
+                                    clearRoomId();
+                                    _roomIdInputController.clear();
                                     Navigator.pop(ctx);
                                   },
                                   child: const Text('초기화'),
@@ -123,9 +124,9 @@ void chatBottomSheet(BuildContext context) {
                                 ),
                                 ElevatedButton(
                                   onPressed: () {
-                                    final newId = _fileIdInputController.text.trim();
+                                    final newId = _roomIdInputController.text.trim();
                                     if (newId.isNotEmpty) {
-                                      saveFileId(newId);
+                                      saveRoomId(newId);
                                     }
                                     Navigator.pop(ctx);
                                   },
@@ -141,7 +142,7 @@ void chatBottomSheet(BuildContext context) {
                   const SizedBox(height: 8),
 
                   // 채팅 영역
-                  if (fileId == null)
+                  if (roomId == null)
                     const Padding(
                       padding: EdgeInsets.all(24),
                       child: Text(
@@ -150,7 +151,7 @@ void chatBottomSheet(BuildContext context) {
                       ),
                     )
                   else
-                    ChatPanel(fileId: fileId!), // ✅ ChatPanel 적용
+                    ChatPanel(roomId: roomId!), // ✅ Firestore 기반 ChatPanel
                 ],
               ),
             ),
