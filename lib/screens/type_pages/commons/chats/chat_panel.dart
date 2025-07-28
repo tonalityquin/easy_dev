@@ -14,40 +14,33 @@ class ChatPanel extends StatefulWidget {
 
 class _ChatPanelState extends State<ChatPanel> {
   final TextEditingController _controller = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
+  StreamSubscription<DocumentSnapshot>? _chatSubscription;
 
-  List<Map<String, dynamic>> messages = [];
-  StreamSubscription<QuerySnapshot>? _chatSubscription;
+  String latestMessage = '';
+  Timestamp? latestTimestamp;
 
   @override
   void initState() {
     super.initState();
-    _listenToMessages();
+    _listenToLatestMessage();
   }
 
-  void _listenToMessages() {
+  void _listenToLatestMessage() {
     _chatSubscription = FirebaseFirestore.instance
         .collection('chats')
         .doc(widget.roomId)
-        .collection('messages')
-        .orderBy('timestamp', descending: true) // 최신부터 가져오기
-        .limit(3) // 최근 3개 제한
+        .collection('state')
+        .doc('latest_message')
         .snapshots()
-        .listen((snapshot) {
-      if (!mounted) return;
-
-      final newMessages = snapshot.docs
-          .map((doc) => doc.data())
-          .toList()
-          .reversed // 다시 오래된 순으로 정렬
-          .toList();
+        .listen((docSnapshot) {
+      final data = docSnapshot.data();
+      if (data == null) return;
 
       setState(() {
-        messages = List<Map<String, dynamic>>.from(newMessages);
+        latestMessage = data['message'] ?? '';
+        latestTimestamp = data['timestamp'];
       });
-
-      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
     });
   }
 
@@ -57,114 +50,65 @@ class _ChatPanelState extends State<ChatPanel> {
 
     final message = {
       'message': text,
-      'timestamp': Timestamp.now(), // ✅ 서버 반영 지연 없는 확정된 타임스탬프
+      'timestamp': Timestamp.now(),
     };
 
-    await FirebaseFirestore.instance.collection('chats').doc(widget.roomId).collection('messages').add(message);
+    await FirebaseFirestore.instance
+        .collection('chats')
+        .doc(widget.roomId)
+        .collection('state')
+        .doc('latest_message')
+        .set(message);
 
     _controller.clear();
     _focusNode.requestFocus();
-  }
-
-  void _scrollToBottom() {
-    if (_scrollController.hasClients) {
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent + 150,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
-    }
   }
 
   @override
   void dispose() {
     _chatSubscription?.cancel();
     _controller.dispose();
-    _scrollController.dispose();
     _focusNode.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final groupedMessages = <String, List<Map<String, dynamic>>>{};
-    for (var msg in messages) {
-      final rawTime = msg['timestamp'];
-      String date = 'Unknown';
+    String timeText = '';
+    if (latestTimestamp != null) {
       try {
-        date = DateFormat('yyyy-MM-dd').format((rawTime as Timestamp).toDate().toLocal());
+        timeText = DateFormat('yyyy-MM-dd HH:mm')
+            .format(latestTimestamp!.toDate().toLocal());
       } catch (_) {}
-      groupedMessages.putIfAbsent(date, () => []).add(msg);
     }
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
+          width: double.infinity,
           constraints: BoxConstraints(
+            minHeight: 100,
             maxHeight: MediaQuery.of(context).size.height * 0.5,
           ),
-          padding: const EdgeInsets.all(8),
+          margin: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Colors.grey[100],
             borderRadius: BorderRadius.circular(12),
           ),
-          child: ListView(
-            controller: _scrollController,
-            shrinkWrap: true,
-            children: groupedMessages.entries.expand((entry) {
-              final date = entry.key;
-              final items = entry.value;
-
-              return [
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Center(
-                    child: Text(
-                      date,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey[700],
-                      ),
-                    ),
-                  ),
-                ),
-                ...items.map((msg) {
-                  final text = msg['message'] ?? '';
-                  final timestamp = msg['timestamp'];
-                  String time = '';
-                  try {
-                    time = DateFormat('HH:mm').format((timestamp as Timestamp).toDate().toLocal());
-                  } catch (_) {}
-
-                  return Container(
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.grey.withOpacity(0.1),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('[익명]', style: TextStyle(fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 4),
-                        Text(text),
-                        const SizedBox(height: 4),
-                        Text('🕒 $time', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-                      ],
-                    ),
-                  );
-                }),
-              ];
-            }).toList(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('[익명]', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              Text(latestMessage),
+              const SizedBox(height: 8),
+              Text(
+                timeText.isNotEmpty ? '🕒 $timeText' : '',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 12),
@@ -178,7 +122,8 @@ class _ChatPanelState extends State<ChatPanel> {
                   hintText: '메시지를 입력하세요...',
                   filled: true,
                   fillColor: Colors.grey[200],
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide.none,

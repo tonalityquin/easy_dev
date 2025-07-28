@@ -5,18 +5,17 @@ import 'package:provider/provider.dart';
 import '../../../../states/user/user_state.dart';
 import 'chat_panel.dart';
 
-/// 🔸 최신 메시지를 실시간으로 스트리밍하는 함수
+/// 🔸 최신 메시지를 실시간으로 스트리밍하는 함수 (단일 문서)
 Stream<String> latestMessageStream(String roomId) {
   return FirebaseFirestore.instance
       .collection('chats')
       .doc(roomId)
-      .collection('messages')
-      .orderBy('timestamp', descending: true)
-      .limit(1)
+      .collection('state')
+      .doc('latest_message')
       .snapshots()
       .map((snapshot) {
-    if (snapshot.docs.isNotEmpty) {
-      final data = snapshot.docs.first.data();
+    final data = snapshot.data();
+    if (data != null && data.containsKey('message')) {
       return data['message'] ?? '';
     }
     return '';
@@ -62,8 +61,6 @@ void chatBottomSheet(BuildContext context) {
               ],
             ),
             const SizedBox(height: 8),
-
-            /// ✅ 로그인한 유저의 currentArea를 기반으로 채팅방 자동 연결
             ChatPanel(roomId: roomId),
           ],
         ),

@@ -5,7 +5,7 @@ import 'package:flutter_tts/flutter_tts.dart';
 
 class ChatTtsListenerService {
   static StreamSubscription? _subscription;
-  static DateTime _startTime = DateTime.now();
+  static Timestamp? _lastSpokenTimestamp;
 
   static void start(String roomId) {
     Future.microtask(() => _startListening(roomId));
@@ -18,46 +18,45 @@ class ChatTtsListenerService {
 
   static void _startListening(String roomId) {
     _subscription?.cancel();
-    _startTime = DateTime.now();
+    _lastSpokenTimestamp = null;
 
-    debugPrint('[ChatTTS] 감지 시작: $roomId @ $_startTime');
+    debugPrint('[ChatTTS] 감지 시작: $roomId');
 
     _subscription = FirebaseFirestore.instance
         .collection('chats')
         .doc(roomId)
-        .collection('messages')
-        .orderBy('timestamp', descending: false)
+        .collection('state')
+        .doc('latest_message')
         .snapshots()
-        .listen((snapshot) {
-      for (var change in snapshot.docChanges) {
-        final doc = change.doc;
-        final data = doc.data();
-        if (data == null) continue;
+        .listen((docSnapshot) {
+      final data = docSnapshot.data();
+      if (data == null) return;
 
-        final Timestamp? timestamp = data['timestamp'];
-        final String text = data['message'] ?? '';
-        final String? name = data['name'];
+      final Timestamp? timestamp = data['timestamp'];
+      final String text = data['message'] ?? '';
+      final String? name = data['name'];
 
-        // 새 메시지 추가만 감지
-        if (change.type == DocumentChangeType.added) {
-          // timestamp 없거나 과거 메시지는 무시
-          if (timestamp == null || !timestamp.toDate().isAfter(_startTime)) {
-            debugPrint('[ChatTTS] 무시됨 (과거 데이터 또는 시간 없음)');
-            continue;
-          }
-
-          // 익명 처리: name 없으면 그냥 본문만 읽음
-          final String toSpeak = (name == null || name.trim().isEmpty) ? text : "$name 님의 메시지: $text";
-
-          debugPrint('[ChatTTS] 새 메시지 ▶ $toSpeak');
-          TtsHelper.speak(toSpeak);
-        }
+      if (timestamp == null) {
+        debugPrint('[ChatTTS] timestamp 없음. 무시');
+        return;
       }
+
+      // 동일 메시지 반복 방지
+      if (_lastSpokenTimestamp != null && !timestamp.toDate().isAfter(_lastSpokenTimestamp!.toDate())) {
+        debugPrint('[ChatTTS] 무시됨 (이미 읽음)');
+        return;
+      }
+
+      _lastSpokenTimestamp = timestamp;
+
+      final String toSpeak = (name == null || name.trim().isEmpty) ? text : "$name 님의 메시지: $text";
+
+      debugPrint('[ChatTTS] 새 메시지 ▶ $toSpeak');
+      TtsHelper.speak(toSpeak);
     });
   }
 }
 
-/// 공통 TTS 유틸리티
 /// 공통 TTS 유틸리티
 class TtsHelper {
   static final FlutterTts _flutterTts = FlutterTts();
