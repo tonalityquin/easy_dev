@@ -12,6 +12,7 @@ import '../states/calendar/field_selected_date_state.dart';
 import '../utils/app_colors.dart';
 
 import '../screens/input_pages/input_plate_screen.dart';
+import '../screens/type_pages/commons/dashboard_bottom_sheet/dash_board_bottom_sheet.dart';
 import 'type_pages/commons/chats/chat_bottom_sheet.dart';
 import 'secondary_page.dart';
 
@@ -58,44 +59,77 @@ class _TypePageState extends State<TypePage> {
                 children: [
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
-                    child: StreamBuilder<String>(
-                      stream: latestMessageStream(
-                        context.read<UserState>().user?.currentArea?.trim() ?? '',
-                      ),
-                      builder: (context, snapshot) {
-                        final latestMessage = snapshot.data ?? '채팅 열기';
+                    child: Row(
+                      children: [
+                        // 📩 채팅 버튼
+                        Expanded(
+                          child: StreamBuilder<String>(
+                            stream: latestMessageStream(
+                              context.read<UserState>().user?.currentArea?.trim() ?? '',
+                            ),
+                            builder: (context, snapshot) {
+                              final latestMessage = snapshot.data ?? '채팅 열기';
 
-                        return SizedBox(
-                          width: double.infinity,
+                              return ElevatedButton(
+                                onPressed: () {
+                                  chatBottomSheet(context);
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.white,
+                                  foregroundColor: Colors.black,
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.message, color: Colors.black, size: 20),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      latestMessage.length > 20
+                                          ? '${latestMessage.substring(0, 20)}...'
+                                          : latestMessage,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(color: Colors.black),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+
+                        const SizedBox(width: 8),
+
+                        // 📊 대시보드 버튼
+                        Expanded(
                           child: ElevatedButton(
                             onPressed: () {
-                              chatBottomSheet(context);
+                              showModalBottomSheet(
+                                context: context,
+                                isScrollControlled: true,
+                                useSafeArea: true,
+                                backgroundColor: Colors.transparent,
+                                builder: (_) => const DashBoardBottomSheet(),
+                              );
                             },
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              foregroundColor: Colors.black,
+                              backgroundColor: Colors.black87,
+                              foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             ),
-                            child: Center(
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min, // 텍스트 폭만큼만 차지하게
-                                children: [
-                                  const Icon(Icons.message, color: Colors.black, size: 20),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    latestMessage.length > 20
-                                        ? '${latestMessage.substring(0, 20)}...'
-                                        : latestMessage,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(color: Colors.black),
-                                  ),
-                                ],
-                              ),
+                            child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.dashboard, size: 20),
+                                SizedBox(width: 6),
+                                Text('대시보드'),
+                              ],
                             ),
                           ),
-                        );
-                      },
+                        ),
+                      ],
                     ),
                   ),
                   const PageBottomNavigation(),

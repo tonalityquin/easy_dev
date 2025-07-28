@@ -13,7 +13,6 @@ import '../../../utils/snackbar_helper.dart';
 import '../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
 import '../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 import '../departure_completed_bottom_sheet.dart';
-import 'widgets/dashboard_bottom_sheet/dash_board_bottom_sheet.dart';
 import 'widgets/parking_completed_status_bottom_sheet.dart';
 import 'widgets/set_departure_request_dialog.dart';
 import '../../../widgets/dialog/plate_remove_dialog.dart';
@@ -67,8 +66,8 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                     label: '화면 잠금',
                   ),
                   const BottomNavigationBarItem(
-                    icon: Icon(Icons.dashboard),
-                    label: '대시보드',
+                    icon: Icon(Icons.search),
+                    label: '번호판 검색',
                   ),
                   const BottomNavigationBarItem(
                     icon: Icon(Icons.directions_car),
@@ -82,8 +81,8 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                         label: '화면 잠금',
                       ),
                       const BottomNavigationBarItem(
-                        icon: Icon(Icons.dashboard),
-                        label: '대시보드',
+                        icon: Icon(Icons.search),
+                        label: '번호판 검색',
                       ),
                       const BottomNavigationBarItem(
                         icon: Icon(Icons.directions_car),
@@ -130,12 +129,7 @@ class ParkingCompletedControlButtons extends StatelessWidget {
               if (index == 0) {
                 onToggleLock(); // 잠금 토글
               } else if (index == 1) {
-                showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (context) => const DashBoardBottomSheet(),
-                );
+                showSearchDialog(); // 🔍 번호판 검색 다이얼로그 호출
               } else if (index == 2) {
                 showModalBottomSheet(
                   context: context,
@@ -151,12 +145,7 @@ class ParkingCompletedControlButtons extends StatelessWidget {
               if (index == 0) {
                 onToggleLock();
               } else if (index == 1) {
-                showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (context) => const DashBoardBottomSheet(),
-                );
+                showSearchDialog(); // 🔍 번호판 검색 다이얼로그 호출
               } else if (index == 2) {
                 showModalBottomSheet(
                   context: context,
