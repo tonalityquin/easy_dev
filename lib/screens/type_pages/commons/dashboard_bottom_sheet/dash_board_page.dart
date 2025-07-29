@@ -3,15 +3,12 @@ import 'package:provider/provider.dart';
 import 'package:android_intent_plus/android_intent.dart';
 
 import '../../../../../../states/user/user_state.dart';
-import '../../../../../../states/location/location_state.dart';
-import '../../../../../../states/bill/bill_state.dart';
 
 import 'common_dash_board_controller.dart';
 import 'widgets/user_info_card.dart';
 import 'widgets/break_button_widget.dart';
 import 'widgets/work_button_widget.dart';
 import 'widgets/show_report_dialog.dart';
-import './clock_out_fetch_plate_count_widget.dart';
 
 class DashBoardPage extends StatelessWidget {
   const DashBoardPage({super.key});
@@ -30,8 +27,6 @@ class DashBoardPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const ClockOutFetchPlateCountWidget(),
-                const SizedBox(height: 16),
                 UserInfoCard(),
                 const SizedBox(height: 16),
                 ElevatedButton.icon(
@@ -115,49 +110,6 @@ class DashBoardPage extends StatelessWidget {
                         }
                       }
                     }
-                  },
-                ),
-                const SizedBox(height: 16),
-                Consumer<LocationState>(
-                  builder: (context, locationState, _) {
-                    bool isRefreshing = false;
-                    return StatefulBuilder(
-                      builder: (context, setState) {
-                        return ElevatedButton.icon(
-                          icon: isRefreshing
-                              ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                              strokeWidth: 2,
-                            ),
-                          )
-                              : const Icon(Icons.refresh),
-                          label: const Text(
-                            "주차 구역 수동 새로고침",
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.teal,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            elevation: 0,
-                          ),
-                          onPressed: isRefreshing
-                              ? null
-                              : () async {
-                            setState(() => isRefreshing = true);
-                            await locationState.manualLocationRefresh();
-                            await context.read<BillState>().manualBillRefresh();
-                            setState(() => isRefreshing = false);
-                          },
-                        );
-                      },
-                    );
                   },
                 ),
                 const SizedBox(height: 32),
