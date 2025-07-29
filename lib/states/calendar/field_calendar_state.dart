@@ -19,6 +19,11 @@ class FieldCalendarState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setCurrentMonth(DateTime date) {
+    currentMonth = DateTime(date.year, date.month);
+    notifyListeners();
+  }
+
   bool isSelected(DateTime date) {
     return selectedDate.year == date.year &&
         selectedDate.month == date.month &&
