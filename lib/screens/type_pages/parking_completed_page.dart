@@ -61,11 +61,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
       context: context,
       builder: (context) {
         return SignaturePlateSearchBottomSheet(
-          onSearch: (query) {
-            if (query.length == 4) {
-              context.read<FilterPlate>().setPlateSearchQuery(query);
-            }
-          },
+          onSearch: (_) {}, // 또는 생략
           area: currentArea,
         );
       },

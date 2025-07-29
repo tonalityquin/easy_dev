@@ -5,11 +5,13 @@ import '../../../../../../models/plate_model.dart';
 class PlateSearchResults extends StatelessWidget {
   final List<PlateModel> results;
   final void Function(PlateModel) onSelect;
+  final VoidCallback? onRefresh; // ✅ 추가
 
   const PlateSearchResults({
     super.key,
     required this.results,
     required this.onSelect,
+    this.onRefresh, // ✅ 추가
   });
 
   @override

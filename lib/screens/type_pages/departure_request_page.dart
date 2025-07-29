@@ -149,17 +149,24 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
           builder: (context, plateState, child) {
             List<PlateModel> departureRequests = plateState.getPlatesByCollection(PlateType.departureRequests);
 
+            debugPrint('📦 전체 출차 요청 plate 수: ${departureRequests.length}');
+            if (departureRequests.isNotEmpty) {
+              debugPrint('🔍 첫 번째 plate: ${departureRequests.first.plateNumber} @ ${departureRequests.first.location}');
+            }
+
             if (_isParkingAreaMode && _selectedParkingArea != null) {
+              debugPrint('📌 현재 선택된 구역: $_selectedParkingArea');
               departureRequests = departureRequests
                   .where((plate) => plate.location == _selectedParkingArea)
                   .toList();
+
+              debugPrint('🎯 필터링된 출차 요청 plate 수: ${departureRequests.length}');
 
               if (departureRequests.isEmpty) {
                 return const Center(child: Text('해당 구역의 출차 요청 차량이 없습니다.'));
               }
             }
 
-            // 정렬
             departureRequests.sort((a, b) {
               final aTime = a.requestTime;
               final bTime = b.requestTime;

@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../../../../models/plate_model.dart';
+import '../parking_completed_status_bottom_sheet.dart';
 import 'keypad/animated_keypad.dart';
 import 'widgets/plate_number_display.dart';
 import 'widgets/plate_search_header.dart';
 import 'widgets/plate_search_results.dart';
 import 'widgets/search_button.dart';
 import '../../../../../../repositories/plate/firestore_plate_repository.dart';
+import '../../../../../../states/plate/movement_plate.dart';
+import '../../../../../../states/plate/delete_plate.dart';
+import '../../../../../../states/user/user_state.dart';
+import '../../../../../../enums/plate_type.dart';
 
 class SignaturePlateSearchBottomSheet extends StatefulWidget {
   final void Function(String) onSearch;
@@ -40,11 +46,8 @@ class SignaturePlateSearchBottomSheet extends StatefulWidget {
           ),
         );
       },
-      transitionBuilder: (_, animation, secondaryAnimation, child) {
-        final curved = CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutQuint,
-        );
+      transitionBuilder: (_, animation, __, child) {
+        final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutQuint);
         return SlideTransition(
           position: Tween<Offset>(
             begin: const Offset(0, 1),
@@ -74,21 +77,12 @@ class _SignaturePlateSearchBottomSheetState extends State<SignaturePlateSearchBo
   @override
   void initState() {
     super.initState();
-    _keypadController = AnimationController(
-      duration: const Duration(milliseconds: 500),
-      vsync: this,
-    );
+    _keypadController = AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 0.2),
       end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _keypadController,
-      curve: Curves.easeOut,
-    ));
-    _fadeAnimation = CurvedAnimation(
-      parent: _keypadController,
-      curve: Curves.easeIn,
-    );
+    ).animate(CurvedAnimation(parent: _keypadController, curve: Curves.easeOut));
+    _fadeAnimation = CurvedAnimation(parent: _keypadController, curve: Curves.easeIn);
     _keypadController.forward();
   }
 
@@ -101,6 +95,31 @@ class _SignaturePlateSearchBottomSheetState extends State<SignaturePlateSearchBo
 
   bool isValidPlate(String value) {
     return RegExp(r'^\d{4}$').hasMatch(value);
+  }
+
+  Future<void> _refreshSearchResults() async {
+    try {
+      final repository = FirestorePlateRepository();
+      final results = await repository.fourDigitSignatureQuery(
+        plateFourDigit: _controller.text,
+        area: widget.area,
+      );
+
+      setState(() {
+        _results = results;
+        _hasSearched = true;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('검색 중 오류가 발생했습니다: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -137,30 +156,45 @@ class _SignaturePlateSearchBottomSheetState extends State<SignaturePlateSearchBo
                     const SizedBox(height: 16),
                     const PlateSearchHeader(),
                     const SizedBox(height: 24),
-                    PlateNumberDisplay(
-                      controller: _controller,
-                      isValidPlate: isValidPlate,
-                    ),
+                    PlateNumberDisplay(controller: _controller, isValidPlate: isValidPlate),
                     const SizedBox(height: 24),
                     if (_hasSearched)
                       _results.isEmpty
-                          ? Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 24),
+                          ? const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24),
                         child: Center(
                           child: Text(
                             '유효하지 않은 번호입니다.',
-                            style: TextStyle(
-                              color: Colors.redAccent,
-                              fontSize: 16,
-                            ),
+                            style: TextStyle(color: Colors.redAccent, fontSize: 16),
                           ),
                         ),
                       )
                           : PlateSearchResults(
                         results: _results,
                         onSelect: (selected) {
-                          // ✅ 여기서 BottomSheet 닫지 않음
-                          debugPrint('선택된 차량: ${selected.plateNumber}');
+                          Navigator.pop(context); // 바텀시트 닫기
+                          showParkingCompletedStatusBottomSheet(
+                            context: context,
+                            plate: selected,
+                            onRequestEntry: () async {
+                              final user = context.read<UserState>().name;
+                              await context.read<MovementPlate>().goBackToParkingRequest(
+                                fromType: PlateType.parkingCompleted,
+                                plateNumber: selected.plateNumber,
+                                area: selected.area,
+                                newLocation: "미지정",
+                                performedBy: user,
+                              );
+                              await _refreshSearchResults(); // ✅ 갱신
+                            },
+                            onDelete: () async {
+                              await context.read<DeletePlate>().deleteFromParkingCompleted(
+                                selected.plateNumber,
+                                selected.area,
+                              );
+                              await _refreshSearchResults(); // ✅ 갱신
+                            },
+                          );
                         },
                       ),
                     Center(
@@ -179,34 +213,9 @@ class _SignaturePlateSearchBottomSheetState extends State<SignaturePlateSearchBo
                           isLoading: _isLoading,
                           onPressed: valid
                               ? () async {
-                            setState(() {
-                              _isLoading = true;
-                            });
-
-                            try {
-                              final repository = FirestorePlateRepository();
-                              final results = await repository.fourDigitSignatureQuery(
-                                plateFourDigit: value.text,
-                                area: widget.area,
-                              );
-
-                              setState(() {
-                                _results = results;
-                                _hasSearched = true;
-                                _isLoading = false;
-                              });
-
-                              widget.onSearch(value.text);
-                            } catch (e) {
-                              setState(() {
-                                _isLoading = false;
-                              });
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('검색 중 오류가 발생했습니다: $e'),
-                                ),
-                              );
-                            }
+                            setState(() => _isLoading = true);
+                            await _refreshSearchResults();
+                            widget.onSearch(value.text);
                           }
                               : null,
                         );
@@ -227,16 +236,12 @@ class _SignaturePlateSearchBottomSheetState extends State<SignaturePlateSearchBo
           controller: _controller,
           maxLength: 4,
           enableDigitModeSwitch: false,
-          onComplete: () {
-            setState(() {});
-          },
-          onReset: () {
-            setState(() {
-              _controller.clear();
-              _hasSearched = false;
-              _results.clear();
-            });
-          },
+          onComplete: () => setState(() {}),
+          onReset: () => setState(() {
+            _controller.clear();
+            _hasSearched = false;
+            _results.clear();
+          }),
         ),
       ),
     );

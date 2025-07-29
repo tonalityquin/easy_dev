@@ -176,6 +176,11 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
           builder: (context, plateState, child) {
             final plates = [...plateState.getPlatesByCollection(PlateType.parkingRequests)];
 
+            debugPrint('📦 PlateState: parkingRequests 총 개수 → ${plates.length}');
+            final userName = context.read<UserState>().name;
+            final selectedPlate = plateState.getSelectedPlate(PlateType.parkingRequests, userName);
+            debugPrint('✅ 선택된 Plate → ${selectedPlate?.plateNumber ?? "없음"}');
+
             plates.sort((a, b) {
               final aTime = a.requestTime;
               final bTime = b.requestTime;
