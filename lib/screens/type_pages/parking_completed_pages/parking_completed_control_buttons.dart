@@ -1,4 +1,4 @@
-import 'package:easydev/utils/gcs_json_uploader.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -20,7 +20,7 @@ import '../../../widgets/dialog/plate_remove_dialog.dart';
 class ParkingCompletedControlButtons extends StatelessWidget {
   final bool isParkingAreaMode;
   final bool isStatusMode;
-  final bool isLocationPickerMode; // 추가됨
+  final bool isLocationPickerMode;
   final bool isSorted;
   final bool isLocked;
   final VoidCallback onToggleLock;
@@ -34,7 +34,7 @@ class ParkingCompletedControlButtons extends StatelessWidget {
     super.key,
     required this.isParkingAreaMode,
     required this.isStatusMode,
-    required this.isLocationPickerMode, // 추가됨
+    required this.isLocationPickerMode,
     required this.isSorted,
     required this.isLocked,
     required this.onToggleLock,
@@ -59,93 +59,62 @@ class ParkingCompletedControlButtons extends StatelessWidget {
           type: BottomNavigationBarType.fixed,
           selectedItemColor: Theme.of(context).primaryColor,
           unselectedItemColor: Colors.grey[700],
-          items: isLocationPickerMode
+          items: isLocationPickerMode || isStatusMode
               ? [
-                  BottomNavigationBarItem(
-                    icon: Icon(isLocked ? Icons.lock : Icons.lock_open),
-                    label: '화면 잠금',
+            BottomNavigationBarItem(
+              icon: Icon(isLocked ? Icons.lock : Icons.lock_open),
+              label: '화면 잠금',
+            ),
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.search),
+              label: '번호판 검색',
+            ),
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.directions_car),
+              label: '출차 완료',
+            ),
+          ]
+              : [
+            BottomNavigationBarItem(
+              icon: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+                child: isPlateSelected
+                    ? (selectedPlate.isLockedFee
+                    ? const Icon(Icons.lock_open, key: ValueKey('unlock'), color: Colors.grey)
+                    : const Icon(Icons.lock, key: ValueKey('lock'), color: Colors.grey))
+                    : Icon(Icons.refresh, key: const ValueKey('refresh'), color: Colors.grey[700]),
+              ),
+              label: isPlateSelected ? (selectedPlate.isLockedFee ? '정산 취소' : '사전 정산') : '채팅하기',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(
+                isPlateSelected ? Icons.check_circle : Icons.search,
+                color: isPlateSelected ? Colors.green[600] : Colors.grey[700],
+              ),
+              label: isPlateSelected ? '출차 요청' : '번호판 검색',
+            ),
+            BottomNavigationBarItem(
+              icon: AnimatedRotation(
+                turns: isSorted ? 0.5 : 0.0,
+                duration: const Duration(milliseconds: 300),
+                child: Transform.scale(
+                  scaleX: isSorted ? -1 : 1,
+                  child: Icon(
+                    isPlateSelected ? Icons.settings : Icons.sort,
+                    color: Colors.grey[700],
                   ),
-                  const BottomNavigationBarItem(
-                    icon: Icon(Icons.search),
-                    label: '번호판 검색',
-                  ),
-                  const BottomNavigationBarItem(
-                    icon: Icon(Icons.directions_car),
-                    label: '출차 완료',
-                  ),
-                ]
-              : isStatusMode
-                  ? [
-                      BottomNavigationBarItem(
-                        icon: Icon(isLocked ? Icons.lock : Icons.lock_open),
-                        label: '화면 잠금',
-                      ),
-                      const BottomNavigationBarItem(
-                        icon: Icon(Icons.search),
-                        label: '번호판 검색',
-                      ),
-                      const BottomNavigationBarItem(
-                        icon: Icon(Icons.directions_car),
-                        label: '출차 완료',
-                      ),
-                    ]
-                  : [
-                      BottomNavigationBarItem(
-                        icon: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 300),
-                          transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
-                          child: isPlateSelected
-                              ? (selectedPlate.isLockedFee
-                                  ? const Icon(Icons.lock_open, key: ValueKey('unlock'), color: Colors.grey)
-                                  : const Icon(Icons.lock, key: ValueKey('lock'), color: Colors.grey))
-                              : Icon(Icons.refresh, key: const ValueKey('refresh'), color: Colors.grey[700]),
-                        ),
-                        label: isPlateSelected ? (selectedPlate.isLockedFee ? '정산 취소' : '사전 정산') : '채팅하기',
-                      ),
-                      BottomNavigationBarItem(
-                        icon: Icon(
-                          isPlateSelected ? Icons.check_circle : Icons.search,
-                          color: isPlateSelected ? Colors.green[600] : Colors.grey[700],
-                        ),
-                        label: isPlateSelected ? '출차 요청' : '번호판 검색',
-                      ),
-                      BottomNavigationBarItem(
-                        icon: AnimatedRotation(
-                          turns: isSorted ? 0.5 : 0.0,
-                          duration: const Duration(milliseconds: 300),
-                          child: Transform.scale(
-                            scaleX: isSorted ? -1 : 1,
-                            child: Icon(
-                              isPlateSelected ? Icons.settings : Icons.sort,
-                              color: Colors.grey[700],
-                            ),
-                          ),
-                        ),
-                        label: isPlateSelected ? '상태 수정' : (isSorted ? '최신순' : '오래된 순'),
-                      ),
-                    ],
+                ),
+              ),
+              label: isPlateSelected ? '상태 수정' : (isSorted ? '최신순' : '오래된 순'),
+            ),
+          ],
           onTap: (index) async {
-            if (isLocationPickerMode) {
-              if (index == 0) {
-                onToggleLock(); // 잠금 토글
-              } else if (index == 1) {
-                showSearchDialog(); // 🔍 번호판 검색 다이얼로그 호출
-              } else if (index == 2) {
-                showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (context) => const DepartureCompletedBottomSheet(),
-                );
-              }
-              return;
-            }
-
-            if (isStatusMode) {
+            if (isLocationPickerMode || isStatusMode) {
               if (index == 0) {
                 onToggleLock();
               } else if (index == 1) {
-                showSearchDialog(); // 🔍 번호판 검색 다이얼로그 호출
+                showSearchDialog();
               } else if (index == 2) {
                 showModalBottomSheet(
                   context: context,
@@ -158,9 +127,7 @@ class ParkingCompletedControlButtons extends StatelessWidget {
             }
 
             if (!isParkingAreaMode || !isPlateSelected) {
-              if (index == 0) {
-                showSearchDialog();
-              } else if (index == 1) {
+              if (index == 0 || index == 1) {
                 showSearchDialog();
               } else if (index == 2) {
                 toggleSortIcon();
@@ -171,11 +138,12 @@ class ParkingCompletedControlButtons extends StatelessWidget {
             final repo = context.read<PlateRepository>();
             final division = context.read<AreaState>().currentDivision;
             final area = context.read<AreaState>().currentArea.trim();
-            final uploader = GcsJsonUploader();
             final billingType = selectedPlate.billingType;
             final now = DateTime.now();
             final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
             final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
+            final firestore = FirebaseFirestore.instance;
+            final documentId = selectedPlate.id;
 
             if (index == 0) {
               if ((billingType ?? '').trim().isEmpty) {
@@ -197,21 +165,22 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                   paymentMethod: null,
                 );
 
-                await repo.addOrUpdatePlate(selectedPlate.id, updatedPlate);
+                await repo.addOrUpdatePlate(documentId, updatedPlate);
                 await plateState.updatePlateLocally(PlateType.parkingCompleted, updatedPlate);
 
-                await uploader.uploadForPlateLogTypeJson(
-                  {
-                    'plateNumber': selectedPlate.plateNumber,
-                    'action': '사전 정산 취소',
-                    'performedBy': userName,
-                    'timestamp': now.toIso8601String(),
-                    'billingType': billingType,
-                  },
-                  selectedPlate.plateNumber,
-                  division,
-                  area,
-                );
+                final cancelLog = {
+                  'plateNumber': selectedPlate.plateNumber,
+                  'action': '사전 정산 취소',
+                  'performedBy': userName,
+                  'timestamp': now.toIso8601String(),
+                  'division': division,
+                  'area': area,
+                  if (billingType != null && billingType.isNotEmpty) 'billingType': billingType,
+                };
+
+                await firestore.collection('plates').doc(documentId).update({
+                  'logs': FieldValue.arrayUnion([cancelLog])
+                });
 
                 showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
               } else {
@@ -233,23 +202,24 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                   paymentMethod: result.paymentMethod,
                 );
 
-                await repo.addOrUpdatePlate(selectedPlate.id, updatedPlate);
+                await repo.addOrUpdatePlate(documentId, updatedPlate);
                 await plateState.updatePlateLocally(PlateType.parkingCompleted, updatedPlate);
 
-                await uploader.uploadForPlateLogTypeJson(
-                  {
-                    'plateNumber': selectedPlate.plateNumber,
-                    'action': '사전 정산',
-                    'performedBy': userName,
-                    'timestamp': now.toIso8601String(),
-                    'lockedFee': result.lockedFee,
-                    'paymentMethod': result.paymentMethod,
-                    'billingType': billingType,
-                  },
-                  selectedPlate.plateNumber,
-                  division,
-                  area,
-                );
+                final log = {
+                  'plateNumber': selectedPlate.plateNumber,
+                  'action': '사전 정산',
+                  'performedBy': userName,
+                  'timestamp': now.toIso8601String(),
+                  'lockedFee': result.lockedFee,
+                  'paymentMethod': result.paymentMethod,
+                  'division': division,
+                  'area': area,
+                  if (billingType != null && billingType.isNotEmpty) 'billingType': billingType,
+                };
+
+                await firestore.collection('plates').doc(documentId).update({
+                  'logs': FieldValue.arrayUnion([log])
+                });
 
                 showSuccessSnackbar(
                   context,
@@ -278,9 +248,9 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                     builder: (_) => PlateRemoveDialog(
                       onConfirm: () {
                         context.read<DeletePlate>().deleteFromParkingCompleted(
-                              selectedPlate.plateNumber,
-                              selectedPlate.area,
-                            );
+                          selectedPlate.plateNumber,
+                          selectedPlate.area,
+                        );
                         showSuccessSnackbar(context, "삭제 완료: ${selectedPlate.plateNumber}");
                       },
                     ),

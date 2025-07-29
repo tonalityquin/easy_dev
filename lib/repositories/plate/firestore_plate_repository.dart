@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../enums/plate_type.dart';
+import '../../models/plate_log_model.dart';
 import '../../models/plate_model.dart';
 import 'plate_repository.dart';
 import 'plate_stream_service.dart';
@@ -20,11 +21,11 @@ class FirestorePlateRepository implements PlateRepository {
 
   @override
   Stream<List<PlateModel>> streamToCurrentArea(
-      PlateType type,
-      String area, {
-        bool descending = true,
-        String? location,
-      }) {
+    PlateType type,
+    String area, {
+    bool descending = true,
+    String? location,
+  }) {
     return _streamService.streamToCurrentArea(
       type,
       area,
@@ -39,8 +40,12 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
-  Future<void> updatePlate(String documentId, Map<String, dynamic> updatedFields) {
-    return _writeService.updatePlate(documentId, updatedFields);
+  Future<void> updatePlate(
+    String documentId,
+    Map<String, dynamic> updatedFields, {
+    PlateLogModel? log,
+  }) {
+    return _writeService.updatePlate(documentId, updatedFields, log: log);
   }
 
   @override
@@ -75,6 +80,7 @@ class FirestorePlateRepository implements PlateRepository {
     String? paymentMethod,
     String? customStatus,
   }) {
+    // ✅ 내부적으로 PlateLogModel 로그가 삽입된 PlateModel이 생성되어 저장됨
     return _creationService.addPlate(
       plateNumber: plateNumber,
       location: location,
@@ -151,9 +157,9 @@ class FirestorePlateRepository implements PlateRepository {
 
   @override
   Future<int> getPlateCountForTypePage(
-      PlateType type,
-      String area,
-      ) {
+    PlateType type,
+    String area,
+  ) {
     return _countService.getPlateCountForTypePage(type, area);
   }
 
@@ -164,10 +170,10 @@ class FirestorePlateRepository implements PlateRepository {
 
   @override
   Future<int> getPlateCountForClockInPage(
-      PlateType type, {
-        DateTime? selectedDate,
-        required String area,
-      }) {
+    PlateType type, {
+    DateTime? selectedDate,
+    required String area,
+  }) {
     return _countService.getPlateCountForClockInPage(
       type,
       selectedDate: selectedDate,
@@ -177,10 +183,10 @@ class FirestorePlateRepository implements PlateRepository {
 
   @override
   Future<int> getPlateCountForClockOutPage(
-      PlateType type, {
-        DateTime? selectedDate,
-        required String area,
-      }) {
+    PlateType type, {
+    DateTime? selectedDate,
+    required String area,
+  }) {
     return _countService.getPlateCountForClockOutPage(
       type,
       selectedDate: selectedDate,
@@ -228,6 +234,7 @@ class FirestorePlateRepository implements PlateRepository {
     bool? isLockedFee,
     int? lockedAtTimeInSeconds,
     int? lockedFeeAmount,
+    PlateLogModel? log, // 🔹 로그 파라미터 추가
   }) async {
     final updateData = {
       'type': toType.firestoreValue,
@@ -242,6 +249,7 @@ class FirestorePlateRepository implements PlateRepository {
       if (isLockedFee == true) 'isLockedFee': true,
       if (lockedAtTimeInSeconds != null) 'lockedAtTimeInSeconds': lockedAtTimeInSeconds,
       if (lockedFeeAmount != null) 'lockedFeeAmount': lockedFeeAmount,
+      if (log != null) 'logs': FieldValue.arrayUnion([log.toMap()]), // 🔹 로그 누적
     };
 
     await updatePlate(documentId, updateData);

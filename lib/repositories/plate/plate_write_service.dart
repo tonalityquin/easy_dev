@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:developer' as dev;
 
+import '../../models/plate_log_model.dart';
 import '../../models/plate_model.dart';
 import '../../screens/type_pages/debugs/firestore_logger.dart';
 
@@ -29,9 +30,16 @@ class PlateWriteService {
     await FirestoreLogger().log('addOrUpdatePlate success: $documentId');
   }
 
-  Future<void> updatePlate(String documentId, Map<String, dynamic> updatedFields) async {
+  Future<void> updatePlate(String documentId, Map<String, dynamic> updatedFields, {
+    PlateLogModel? log,
+  }) async {
     await FirestoreLogger().log('updatePlate called: $documentId, fields=$updatedFields');
+
     final docRef = _firestore.collection('plates').doc(documentId);
+
+    if (log != null) {
+      updatedFields['logs'] = FieldValue.arrayUnion([log.toMap()]);
+    }
 
     try {
       await docRef.update(updatedFields);
@@ -43,6 +51,7 @@ class PlateWriteService {
       rethrow;
     }
   }
+
 
   Future<void> deletePlate(String documentId) async {
     await FirestoreLogger().log('deletePlate called: $documentId');

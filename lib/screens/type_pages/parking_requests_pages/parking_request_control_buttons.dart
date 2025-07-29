@@ -1,4 +1,4 @@
-import 'package:easydev/utils/gcs_json_uploader.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -80,7 +80,6 @@ class ParkingRequestControlButtons extends StatelessWidget {
           ],
           onTap: (index) async {
             final repo = context.read<PlateRepository>();
-            final uploader = GcsJsonUploader();
             final division = context.read<AreaState>().currentDivision;
             final area = context.read<AreaState>().currentArea.trim();
 
@@ -91,13 +90,10 @@ class ParkingRequestControlButtons extends StatelessWidget {
                   selectedPlate,
                   userName,
                   repo,
-                  uploader,
                   division,
                   area,
-                  plateState,
                 );
               }
-              // else: 차량이 선택되지 않았을 때는 아무 작업도 하지 않음 (현황 보기 제거됨)
             } else if (index == 1) {
               isPlateSelected ? onParkingCompleted() : onSearchPressed();
             } else if (index == 2) {
@@ -107,9 +103,9 @@ class ParkingRequestControlButtons extends StatelessWidget {
                   plate: selectedPlate,
                   onCancelEntryRequest: () {
                     context.read<DeletePlate>().deleteFromParkingRequest(
-                          selectedPlate.plateNumber,
-                          selectedPlate.area,
-                        );
+                      selectedPlate.plateNumber,
+                      selectedPlate.area,
+                    );
                     showSuccessSnackbar(context, "입차 요청이 취소되었습니다: ${selectedPlate.plateNumber}");
                   },
                   onDelete: () {},
@@ -125,17 +121,14 @@ class ParkingRequestControlButtons extends StatelessWidget {
   }
 
   Future<void> _handleBillingAction(
-    BuildContext context,
-    dynamic selectedPlate,
-    String userName,
-    PlateRepository repo,
-    GcsJsonUploader uploader,
-    String division,
-    String area,
-    PlateState plateState,
-  ) async {
+      BuildContext context,
+      dynamic selectedPlate,
+      String userName,
+      PlateRepository repo,
+      String division,
+      String area,
+      ) async {
     final billingType = selectedPlate.billingType;
-
     if (billingType == null || billingType.trim().isEmpty) {
       showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
       return;
@@ -144,6 +137,9 @@ class ParkingRequestControlButtons extends StatelessWidget {
     final now = DateTime.now();
     final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
     final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
+    final documentId = selectedPlate.id;
+
+    final firestore = FirebaseFirestore.instance;
 
     if (selectedPlate.isLockedFee) {
       final confirm = await showDialog<bool>(
@@ -159,8 +155,8 @@ class ParkingRequestControlButtons extends StatelessWidget {
         paymentMethod: null,
       );
 
-      await repo.addOrUpdatePlate(selectedPlate.id, updatedPlate);
-      await plateState.updatePlateLocally(PlateType.parkingRequests, updatedPlate);
+      await repo.addOrUpdatePlate(documentId, updatedPlate);
+      context.read<PlateState>().updatePlateLocally(PlateType.parkingRequests, updatedPlate);
 
       final cancelLog = {
         'plateNumber': selectedPlate.plateNumber,
@@ -170,7 +166,10 @@ class ParkingRequestControlButtons extends StatelessWidget {
         if (billingType.isNotEmpty) 'billingType': billingType,
       };
 
-      await uploader.uploadForPlateLogTypeJson(cancelLog, selectedPlate.plateNumber, division, area);
+      await firestore.collection('plates').doc(documentId).update({
+        'logs': FieldValue.arrayUnion([cancelLog])
+      });
+
       showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
     } else {
       final result = await showOnTapBillingBottomSheet(
@@ -191,8 +190,8 @@ class ParkingRequestControlButtons extends StatelessWidget {
         paymentMethod: result.paymentMethod,
       );
 
-      await repo.addOrUpdatePlate(selectedPlate.id, updatedPlate);
-      await plateState.updatePlateLocally(PlateType.parkingRequests, updatedPlate);
+      await repo.addOrUpdatePlate(documentId, updatedPlate);
+      context.read<PlateState>().updatePlateLocally(PlateType.parkingRequests, updatedPlate);
 
       final log = {
         'plateNumber': selectedPlate.plateNumber,
@@ -204,7 +203,10 @@ class ParkingRequestControlButtons extends StatelessWidget {
         if (billingType.isNotEmpty) 'billingType': billingType,
       };
 
-      await uploader.uploadForPlateLogTypeJson(log, selectedPlate.plateNumber, division, area);
+      await firestore.collection('plates').doc(documentId).update({
+        'logs': FieldValue.arrayUnion([log])
+      });
+
       showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
     }
   }

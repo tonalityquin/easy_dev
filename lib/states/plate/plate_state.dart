@@ -66,10 +66,11 @@ class PlateState extends ChangeNotifier {
           final previous = previousIsLockedFee[plate.id];
           if (previous == false && plate.isLockedFee == true) {
             final uploader = GcsJsonUploader();
-            await uploader.mergeAndSummarizeLogs(
-              plate.plateNumber,
-              _areaState.currentDivision,
-              plate.area,
+            await uploader.generateSummaryLog(
+              plateNumber: plate.plateNumber,
+              division: _areaState.currentDivision,
+              area: plate.area,
+              date: DateTime.now(),
             );
           }
           previousIsLockedFee[plate.id] = plate.isLockedFee;

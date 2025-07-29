@@ -1,8 +1,8 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../models/plate_model.dart';
 import '../../repositories/plate/plate_repository.dart';
 import '../../screens/type_pages/debugs/firestore_logger.dart';
-import '../../utils/gcs_json_uploader.dart';
 import '../../enums/plate_type.dart';
 import '../../models/plate_log_model.dart';
 import '../area/area_state.dart';
@@ -10,7 +10,6 @@ import '../area/area_state.dart';
 class MovementPlate {
   final PlateRepository _repository;
   final AreaState _areaState;
-  final _uploader = GcsJsonUploader();
   final _logger = FirestoreLogger();
 
   MovementPlate(this._repository, this._areaState);
@@ -52,9 +51,15 @@ class MovementPlate {
     await _logger.log('[MovementPlate] setDepartureCompleted 시작: $documentId', level: 'called');
 
     try {
-      await _repository.updateToDepartureCompleted(documentId, plate);
-      await _logger.log('출차 완료 업데이트 Firestore 완료: $documentId', level: 'success');
+      // 출차 완료 상태로 필드 업데이트
+      final updateFields = {
+        'type': PlateType.departureCompleted.firestoreValue,
+        'location': plate.location,
+        'endTime': DateTime.now(),
+        'updatedAt': Timestamp.now(),
+      };
 
+      // 로그 생성
       final log = PlateLogModel(
         plateNumber: plate.plateNumber,
         division: _areaState.currentDivision,
@@ -66,20 +71,10 @@ class MovementPlate {
         timestamp: DateTime.now(),
       );
 
-      await _uploader.uploadForPlateLogTypeJson(
-        log.toMap()..removeWhere((k, v) => v == null),
-        plate.plateNumber,
-        _areaState.currentDivision,
-        plate.area,
-      );
+      // Firestore 로그 누적 포함하여 문서 업데이트
+      await _repository.updatePlate(documentId, updateFields, log: log);
 
-      if (plate.isLockedFee == true) {
-        await _uploader.mergeAndSummarizeLogs(
-          plate.plateNumber,
-          _areaState.currentDivision,
-          plate.area,
-        );
-      }
+      await _logger.log('출차 완료 업데이트 Firestore 완료: $documentId', level: 'success');
     } catch (e) {
       await _logger.log('출차 완료 이동 실패: $e', level: 'error');
       debugPrint('출차 완료 이동 실패: $e');
@@ -92,16 +87,7 @@ class MovementPlate {
     await _logger.log('[MovementPlate] jumpingDepartureCompleted 시작: $documentId', level: 'called');
 
     try {
-      await _repository.transitionPlateState(
-        documentId: documentId,
-        toType: PlateType.departureCompleted,
-        location: plate.location,
-        userName: plate.userName,
-        includeEndTime: true,
-      );
-
-      await _logger.log('입차 완료 → 출차 완료 업데이트 완료: $documentId', level: 'success');
-
+      // 로그 생성
       final log = PlateLogModel(
         plateNumber: plate.plateNumber,
         division: _areaState.currentDivision,
@@ -113,20 +99,22 @@ class MovementPlate {
         timestamp: DateTime.now(),
       );
 
-      await _uploader.uploadForPlateLogTypeJson(
-        log.toMap()..removeWhere((k, v) => v == null),
-        plate.plateNumber,
-        _areaState.currentDivision,
-        plate.area,
+      // 상태 전이 + 로그 삽입 포함된 업데이트
+      await _repository.transitionPlateState(
+        documentId: documentId,
+        toType: PlateType.departureCompleted,
+        location: plate.location,
+        userName: plate.userName,
+        includeEndTime: true,
+        log: log, // 🔹 로그 전달
       );
 
-      if (plate.isLockedFee == true) {
-        await _uploader.mergeAndSummarizeLogs(
-          plate.plateNumber,
-          _areaState.currentDivision,
-          plate.area,
-        );
-      }
+      await _logger.log('입차 완료 → 출차 완료 업데이트 완료: $documentId', level: 'success');
+
+      // 🔒 요금 고정 시 summary log 필요 시 Firestore 버전으로 구현
+      // if (plate.isLockedFee == true) {
+      //   await _repository.uploadSummaryLog(...) 또는 별도 구현
+      // }
 
       debugPrint("출차 완료 상태로 업데이트 완료: $documentId");
     } catch (e) {
@@ -161,21 +149,12 @@ class MovementPlate {
     required String plateNumber,
     required String area,
     required String newLocation,
-    required String performedBy, // ✅ 필수 인자로 변경
+    required String performedBy,
   }) async {
     final documentId = '${plateNumber}_$area';
     await _logger.log('[MovementPlate] goBackToParkingRequest 시작: $documentId', level: 'called');
 
     try {
-      await _repository.transitionPlateState(
-        documentId: documentId,
-        toType: PlateType.parkingRequests,
-        location: newLocation,
-        userName: performedBy, // ✅ 작업자 기록
-      );
-
-      await _logger.log('상태 복원 완료 (Firestore): $documentId', level: 'success');
-
       final log = PlateLogModel(
         plateNumber: plateNumber,
         division: _areaState.currentDivision,
@@ -184,16 +163,18 @@ class MovementPlate {
         to: PlateType.parkingRequests.name,
         action: '${fromType.label} → ${PlateType.parkingRequests.label}',
         performedBy: performedBy,
-        // ✅ 시스템이 아닌 실제 사용자로 기록됨
         timestamp: DateTime.now(),
       );
 
-      await _uploader.uploadForPlateLogTypeJson(
-        log.toMap()..removeWhere((k, v) => v == null),
-        plateNumber,
-        _areaState.currentDivision,
-        area,
+      await _repository.transitionPlateState(
+        documentId: documentId,
+        toType: PlateType.parkingRequests,
+        location: newLocation,
+        userName: performedBy,
+        log: log, // ✅ 로그 Firestore에 기록되도록 전달
       );
+
+      await _logger.log('상태 복원 완료 (Firestore): $documentId', level: 'success');
 
       debugPrint("상태 복원 완료: $documentId");
     } catch (e) {
@@ -222,16 +203,6 @@ class MovementPlate {
 
       final selectedBy = document.selectedBy ?? performedBy;
 
-      await _repository.transitionPlateState(
-        documentId: documentId,
-        toType: toType,
-        location: location,
-        userName: selectedBy,
-        includeEndTime: toType == PlateType.departureCompleted,
-      );
-
-      await _logger.log('문서 상태 이동 완료: $fromType → $toType ($plateNumber)', level: 'success');
-
       final log = PlateLogModel(
         plateNumber: plateNumber,
         division: _areaState.currentDivision,
@@ -243,12 +214,17 @@ class MovementPlate {
         timestamp: DateTime.now(),
       );
 
-      await _uploader.uploadForPlateLogTypeJson(
-        log.toMap()..removeWhere((k, v) => v == null),
-        plateNumber,
-        _areaState.currentDivision,
-        area,
+      // ✅ Firestore logs 필드에 로그 누적
+      await _repository.transitionPlateState(
+        documentId: documentId,
+        toType: toType,
+        location: location,
+        userName: selectedBy,
+        includeEndTime: toType == PlateType.departureCompleted,
+        log: log, // 로그 전달
       );
+
+      await _logger.log('문서 상태 이동 완료: $fromType → $toType ($plateNumber)', level: 'success');
 
       return true;
     } catch (e) {

@@ -1,18 +1,21 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 import '../../enums/plate_type.dart';
+import '../../models/plate_log_model.dart';
 import '../../models/plate_model.dart';
 
 abstract class PlateRepository {
   Stream<List<PlateModel>> streamToCurrentArea(
-      PlateType type,
-      String area, {
-        bool descending = true,
-        String? location,
-      });
+    PlateType type,
+    String area, {
+    bool descending = true,
+    String? location,
+  });
 
   Future<int> getPlateCountForTypePage(
-      PlateType type,
-      String area,
-      );
+    PlateType type,
+    String area,
+  );
 
   Future<int> getPlateCountToCurrentArea(String area);
 
@@ -34,7 +37,11 @@ abstract class PlateRepository {
 
   Future<void> addOrUpdatePlate(String documentId, PlateModel plate);
 
-  Future<void> updatePlate(String documentId, Map<String, dynamic> updatedFields);
+  Future<void> updatePlate(
+    String documentId,
+    Map<String, dynamic> updatedFields, {
+    PlateLogModel? log, // ✅ 로그 인자 추가
+  });
 
   Future<void> deletePlate(String documentId);
 
@@ -65,16 +72,16 @@ abstract class PlateRepository {
   });
 
   Future<int> getPlateCountForClockInPage(
-      PlateType type, {
-        DateTime? selectedDate,
-        required String area,
-      });
+    PlateType type, {
+    DateTime? selectedDate,
+    required String area,
+  });
 
   Future<int> getPlateCountForClockOutPage(
-      PlateType type, {
-        DateTime? selectedDate,
-        required String area,
-      });
+    PlateType type, {
+    DateTime? selectedDate,
+    required String area,
+  });
 
   Future<bool> checkDuplicatePlate({
     required String plateNumber,
@@ -105,7 +112,27 @@ abstract class PlateRepository {
     bool? isLockedFee,
     int? lockedAtTimeInSeconds,
     int? lockedFeeAmount,
-  });
+    PlateLogModel? log, // 🔹 추가
+  }) async {
+    final docRef = FirebaseFirestore.instance.collection('plates').doc(documentId);
+    final updateData = <String, dynamic>{
+      'type': toType.name,
+      'location': location,
+      'userName': userName,
+      'updatedAt': Timestamp.now(),
+      if (includeEndTime) 'endTime': Timestamp.now(),
+      if (isLockedFee != null) 'isLockedFee': isLockedFee,
+      if (lockedAtTimeInSeconds != null) 'lockedAtTimeInSeconds': lockedAtTimeInSeconds,
+      if (lockedFeeAmount != null) 'lockedFeeAmount': lockedFeeAmount,
+      if (resetSelection) ...{
+        'isSelected': false,
+        'selectedBy': null,
+      },
+      if (log != null) 'logs': FieldValue.arrayUnion([log.toMap()]), // 🔹 로그 누적
+    };
+
+    await docRef.update(updateData);
+  }
 
   // 🔹 출차 완료 전용 업데이트
   Future<void> updateToDepartureCompleted(String documentId, PlateModel plate);

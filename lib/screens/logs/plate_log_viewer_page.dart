@@ -27,13 +27,11 @@ class PlateLogViewerBottomSheet extends StatefulWidget {
         required DateTime requestTime,
         String? initialPlateNumber,
       }) async {
-    // ✅ 중복 방지: 기존 화면이 있으면 닫고 잠시 대기
     if (Navigator.canPop(context)) {
       Navigator.pop(context);
       await Future.delayed(const Duration(milliseconds: 250));
     }
 
-    // ✅ mounted 체크
     if (!context.mounted) return;
 
     await showGeneralDialog(
@@ -44,7 +42,7 @@ class PlateLogViewerBottomSheet extends StatefulWidget {
       transitionDuration: const Duration(milliseconds: 400),
       pageBuilder: (_, __, ___) {
         return Material(
-          color: Colors.transparent, // ✅ 중요!
+          color: Colors.transparent,
           child: Align(
             alignment: Alignment.bottomCenter,
             child: PlateLogViewerBottomSheet(
@@ -77,11 +75,9 @@ class PlateLogViewerBottomSheet extends StatefulWidget {
       _PlateLogViewerBottomSheetState();
 }
 
-class _PlateLogViewerBottomSheetState
-    extends State<PlateLogViewerBottomSheet> {
+class _PlateLogViewerBottomSheetState extends State<PlateLogViewerBottomSheet> {
   final String bucketName = 'easydev-image';
-  final String serviceAccountPath =
-      'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
+  final String serviceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
 
   List<PlateLogModel> _logs = [];
   bool _isLoading = true;
@@ -102,15 +98,13 @@ class _PlateLogViewerBottomSheetState
       final accountCredentials =
       ServiceAccountCredentials.fromJson(credentialsJson);
       final scopes = [StorageApi.devstorageReadOnlyScope];
-      final client =
-      await clientViaServiceAccount(accountCredentials, scopes);
+      final client = await clientViaServiceAccount(accountCredentials, scopes);
       final storage = StorageApi(client);
 
       final year = widget.requestTime.year.toString();
       final month = widget.requestTime.month.toString().padLeft(2, '0');
       final day = widget.requestTime.day.toString().padLeft(2, '0');
-      final prefix =
-          '${widget.division}/${widget.area}/$year/$month/$day/logs/';
+      final prefix = '${widget.division}/${widget.area}/$year/$month/$day/logs/';
 
       final objects = await storage.objects.list(bucketName, prefix: prefix);
       final logFiles = objects.items
@@ -124,9 +118,17 @@ class _PlateLogViewerBottomSheetState
         Uri.parse('https://storage.googleapis.com/$bucketName/${file.name}');
         final response = await NetworkAssetBundle(uri).load('');
         final jsonString = utf8.decode(response.buffer.asUint8List());
-        final jsonMap = jsonDecode(jsonString);
-        final log = PlateLogModel.fromMap(jsonMap);
-        logs.add(log);
+
+        final decoded = jsonDecode(jsonString);
+        if (decoded is List) {
+          for (final item in decoded) {
+            if (item is Map<String, dynamic>) {
+              logs.add(PlateLogModel.fromMap(item));
+            }
+          }
+        } else {
+          debugPrint('⚠️ 예상치 못한 JSON 포맷: ${file.name}');
+        }
       }
 
       logs.sort((a, b) => b.timestamp.compareTo(a.timestamp));
@@ -176,7 +178,6 @@ class _PlateLogViewerBottomSheetState
               ),
               child: Column(
                 children: [
-                  // Drag handle
                   Container(
                     width: 40,
                     height: 4,
@@ -186,8 +187,6 @@ class _PlateLogViewerBottomSheetState
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-
-                  // Header
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16.0),
                     child: Row(
@@ -211,8 +210,6 @@ class _PlateLogViewerBottomSheetState
                     ),
                   ),
                   const Divider(),
-
-                  // Body
                   Expanded(
                     child: _isLoading
                         ? const Center(child: CircularProgressIndicator())
@@ -235,8 +232,7 @@ class _PlateLogViewerBottomSheetState
                               Text('${log.from} → ${log.to}'),
                               Text(
                                 '담당자: ${log.performedBy}',
-                                style:
-                                const TextStyle(fontSize: 12),
+                                style: const TextStyle(fontSize: 12),
                               ),
                             ],
                           ),
@@ -244,16 +240,13 @@ class _PlateLogViewerBottomSheetState
                             log.timestamp
                                 .toString()
                                 .substring(0, 19),
-                            style:
-                            const TextStyle(fontSize: 12),
+                            style: const TextStyle(fontSize: 12),
                           ),
                           isThreeLine: true,
                         );
                       },
                     ),
                   ),
-
-                  // Footer
                   Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: ElevatedButton.icon(

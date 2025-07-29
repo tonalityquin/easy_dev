@@ -1,4 +1,4 @@
-import 'package:easydev/utils/gcs_json_uploader.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -53,45 +53,43 @@ class DepartureCompletedControlButtons extends StatelessWidget {
       unselectedItemColor: Colors.grey[700],
       items: isPlateSelected
           ? [
-              // 선택 O: 정산 관리 + 상태 수정
-              BottomNavigationBarItem(
-                icon: Tooltip(
-                  message: '정산 관리',
-                  child: Icon(
-                    selectedPlate.isLockedFee ? Icons.lock_open : Icons.lock,
-                    color: Colors.grey[700],
-                  ),
-                ),
-                label: '정산 관리',
-              ),
-              BottomNavigationBarItem(
-                icon: Tooltip(
-                  message: '상태 수정',
-                  child: Icon(Icons.settings, color: Colors.grey[700]),
-                ),
-                label: '상태 수정',
-              ),
-            ]
+        BottomNavigationBarItem(
+          icon: Tooltip(
+            message: '정산 관리',
+            child: Icon(
+              selectedPlate.isLockedFee ? Icons.lock_open : Icons.lock,
+              color: Colors.grey[700],
+            ),
+          ),
+          label: '정산 관리',
+        ),
+        BottomNavigationBarItem(
+          icon: Tooltip(
+            message: '상태 수정',
+            child: Icon(Icons.settings, color: Colors.grey[700]),
+          ),
+          label: '상태 수정',
+        ),
+      ]
           : [
-              // 선택 X: 검색 / 검색 초기화 + 날짜 선택
-              BottomNavigationBarItem(
-                icon: Tooltip(
-                  message: isSearchMode ? '검색 초기화' : '번호판 검색',
-                  child: Icon(
-                    isSearchMode ? Icons.cancel : Icons.search,
-                    color: isSearchMode ? Colors.orange[600] : Colors.grey[700],
-                  ),
-                ),
-                label: isSearchMode ? '검색 초기화' : '번호판 검색',
-              ),
-              BottomNavigationBarItem(
-                icon: Tooltip(
-                  message: '날짜 선택',
-                  child: Icon(Icons.calendar_today, color: Colors.grey[700]),
-                ),
-                label: formattedDate,
-              ),
-            ],
+        BottomNavigationBarItem(
+          icon: Tooltip(
+            message: isSearchMode ? '검색 초기화' : '번호판 검색',
+            child: Icon(
+              isSearchMode ? Icons.cancel : Icons.search,
+              color: isSearchMode ? Colors.orange[600] : Colors.grey[700],
+            ),
+          ),
+          label: isSearchMode ? '검색 초기화' : '번호판 검색',
+        ),
+        BottomNavigationBarItem(
+          icon: Tooltip(
+            message: '날짜 선택',
+            child: Icon(Icons.calendar_today, color: Colors.grey[700]),
+          ),
+          label: formattedDate,
+        ),
+      ],
       onTap: (index) async {
         if (isPlateSelected) {
           if (index == 0) {
@@ -130,12 +128,13 @@ class DepartureCompletedControlButtons extends StatelessWidget {
               paymentMethod: result.paymentMethod,
             );
 
-            await context.read<PlateRepository>().addOrUpdatePlate(selectedPlate.id, updatedPlate);
-            await context.read<PlateState>().updatePlateLocally(PlateType.departureCompleted, updatedPlate);
-
-            final uploader = GcsJsonUploader();
+            final repo = context.read<PlateRepository>();
             final division = context.read<AreaState>().currentDivision;
             final area = context.read<AreaState>().currentArea.trim();
+            final firestore = FirebaseFirestore.instance;
+
+            await repo.addOrUpdatePlate(selectedPlate.id, updatedPlate);
+            await context.read<PlateState>().updatePlateLocally(PlateType.departureCompleted, updatedPlate);
 
             final log = {
               'plateNumber': selectedPlate.plateNumber,
@@ -144,10 +143,15 @@ class DepartureCompletedControlButtons extends StatelessWidget {
               'timestamp': now.toIso8601String(),
               'lockedFee': result.lockedFee,
               'paymentMethod': result.paymentMethod,
-              'billType': billType,
+              'billingType': billType,
+              'division': division,
+              'area': area,
             };
 
-            await uploader.uploadForPlateLogTypeJson(log, selectedPlate.plateNumber, division, area);
+            await firestore.collection('plates').doc(selectedPlate.id).update({
+              'logs': FieldValue.arrayUnion([log])
+            });
+
             showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
           } else if (index == 1) {
             await showDepartureCompletedStatusBottomSheet(

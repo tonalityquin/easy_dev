@@ -1,5 +1,4 @@
-// ⚙️ import 생략 없이 정리
-import 'package:easydev/utils/gcs_json_uploader.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -60,9 +59,7 @@ class DepartureRequestControlButtons extends StatelessWidget {
           items: [
             BottomNavigationBarItem(
               icon: Tooltip(
-                message: isPlateSelected
-                    ? '정산 관리'
-                    : (isParkingAreaMode ? '구역 초기화' : '주차 구역 선택'),
+                message: isPlateSelected ? '정산 관리' : (isParkingAreaMode ? '구역 초기화' : '주차 구역 선택'),
                 child: Icon(
                   isPlateSelected
                       ? (selectedPlate.isLockedFee ? Icons.lock_open : Icons.lock)
@@ -106,7 +103,7 @@ class DepartureRequestControlButtons extends StatelessWidget {
             final repo = context.read<PlateRepository>();
             final division = context.read<AreaState>().currentDivision;
             final area = context.read<AreaState>().currentArea.trim();
-            final uploader = GcsJsonUploader();
+            final firestore = FirebaseFirestore.instance;
 
             if (!isPlateSelected) {
               if (index == 0) {
@@ -119,16 +116,17 @@ class DepartureRequestControlButtons extends StatelessWidget {
               return;
             }
 
+            final billingType = selectedPlate.billingType ?? '';
+            final now = DateTime.now();
+            final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
+            final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
+            final documentId = selectedPlate.id;
+
             if (index == 0) {
-              final billingType = selectedPlate.billingType;
-              if (billingType == null || billingType.trim().isEmpty) {
+              if (billingType.trim().isEmpty) {
                 showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
                 return;
               }
-
-              final now = DateTime.now();
-              final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
-              final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
 
               if (selectedPlate.isLockedFee) {
                 final confirm = await showDialog<bool>(
@@ -144,16 +142,22 @@ class DepartureRequestControlButtons extends StatelessWidget {
                   paymentMethod: null,
                 );
 
-                await repo.addOrUpdatePlate(selectedPlate.id, updatedPlate);
+                await repo.addOrUpdatePlate(documentId, updatedPlate);
                 await plateState.updatePlateLocally(PlateType.departureRequests, updatedPlate);
 
-                await uploader.uploadForPlateLogTypeJson({
+                final cancelLog = {
                   'plateNumber': selectedPlate.plateNumber,
                   'action': '사전 정산 취소',
                   'performedBy': userName,
                   'timestamp': now.toIso8601String(),
                   'billingType': billingType,
-                }, selectedPlate.plateNumber, division, area);
+                  'division': division,
+                  'area': area,
+                };
+
+                await firestore.collection('plates').doc(documentId).update({
+                  'logs': FieldValue.arrayUnion([cancelLog])
+                });
 
                 showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
               } else {
@@ -175,10 +179,10 @@ class DepartureRequestControlButtons extends StatelessWidget {
                   paymentMethod: result.paymentMethod,
                 );
 
-                await repo.addOrUpdatePlate(selectedPlate.id, updatedPlate);
+                await repo.addOrUpdatePlate(documentId, updatedPlate);
                 await plateState.updatePlateLocally(PlateType.departureRequests, updatedPlate);
 
-                await uploader.uploadForPlateLogTypeJson({
+                final log = {
                   'plateNumber': selectedPlate.plateNumber,
                   'action': '사전 정산',
                   'performedBy': userName,
@@ -186,7 +190,13 @@ class DepartureRequestControlButtons extends StatelessWidget {
                   'lockedFee': result.lockedFee,
                   'paymentMethod': result.paymentMethod,
                   'billingType': billingType,
-                }, selectedPlate.plateNumber, division, area);
+                  'division': division,
+                  'area': area,
+                };
+
+                await firestore.collection('plates').doc(documentId).update({
+                  'logs': FieldValue.arrayUnion([log])
+                });
 
                 showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
               }

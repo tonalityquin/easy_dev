@@ -22,12 +22,10 @@ class DepartureCompletedBottomSheet extends StatefulWidget {
   const DepartureCompletedBottomSheet({super.key});
 
   @override
-  State<DepartureCompletedBottomSheet> createState() =>
-      _DepartureCompletedBottomSheetState();
+  State<DepartureCompletedBottomSheet> createState() => _DepartureCompletedBottomSheetState();
 }
 
-class _DepartureCompletedBottomSheetState
-    extends State<DepartureCompletedBottomSheet> {
+class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottomSheet> {
   final bool _isSorted = true;
   bool _isSearchMode = false;
   bool _hasCalendarBeenReset = false;
@@ -70,23 +68,20 @@ class _DepartureCompletedBottomSheetState
 
     final division = areaState.currentDivision;
     final area = areaState.currentArea.trim();
-    final selectedDateRaw =
-        context.watch<FieldSelectedDateState>().selectedDate ?? DateTime.now();
+    final selectedDateRaw = context.watch<FieldSelectedDateState>().selectedDate ?? DateTime.now();
     final selectedDate = DateTime(
       selectedDateRaw.year,
       selectedDateRaw.month,
       selectedDateRaw.day,
     );
 
-    final rawPlates = context
-        .watch<PlateState>()
+    final rawPlates = plateState
         .getPlatesByCollection(
       PlateType.departureCompleted,
       selectedDate: selectedDate,
     )
         .where((p) {
-      final isSearching =
-          filterState.searchQuery.isNotEmpty && filterState.searchQuery.length == 4;
+      final isSearching = filterState.searchQuery.isNotEmpty && filterState.searchQuery.length == 4;
       if (isSearching) {
         return p.area.trim() == area;
       } else {
@@ -96,14 +91,19 @@ class _DepartureCompletedBottomSheetState
 
     List<PlateModel> firestorePlates = rawPlates;
     if (filterState.searchQuery.isNotEmpty && filterState.searchQuery.length == 4) {
-      firestorePlates = firestorePlates
-          .where((p) => p.plateFourDigit == filterState.searchQuery)
-          .toList();
+      firestorePlates = firestorePlates.where((p) => p.plateFourDigit == filterState.searchQuery).toList();
     }
 
-    firestorePlates.sort((a, b) => _isSorted
-        ? b.requestTime.compareTo(a.requestTime)
-        : a.requestTime.compareTo(b.requestTime));
+    firestorePlates
+        .sort((a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime));
+
+    // 👉 선택된 번호판
+    final selectedPlate = plateState.getSelectedPlate(
+      PlateType.departureCompleted,
+      userName,
+    );
+
+    final plateNumber = selectedPlate?.plateNumber ?? '';
 
     return WillPopScope(
       onWillPop: () async {
@@ -111,11 +111,6 @@ class _DepartureCompletedBottomSheetState
           setState(() => _showMergedLog = false);
           return false;
         }
-
-        final selectedPlate = plateState.getSelectedPlate(
-          PlateType.departureCompleted,
-          userName,
-        );
 
         if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
           await plateState.togglePlateIsSelected(
@@ -178,11 +173,14 @@ class _DepartureCompletedBottomSheetState
                   height: 400,
                   child: Container(
                     color: Colors.white,
-                    child: FutureBuilder<List<Map<String, dynamic>>>(
-                      future: GcsJsonUploader().showMergedLogsToDepartureCompletedMergeLog(
-                        division,
-                        area,
-                        filterDate: selectedDate,
+                    child: plateNumber.isEmpty
+                        ? const Center(child: Text('선택된 번호판이 없습니다.'))
+                        : FutureBuilder<List<Map<String, dynamic>>>(
+                      future: GcsJsonUploader().loadPlateLogs(
+                        plateNumber: plateNumber,
+                        division: division,
+                        area: area,
+                        date: selectedDate,
                       ),
                       builder: (context, snapshot) {
                         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -228,16 +226,13 @@ class _DepartureCompletedBottomSheetState
               onToggleMergedLog: () => setState(() => _showMergedLog = !_showMergedLog),
               onToggleCalendar: () {
                 if (!_hasCalendarBeenReset) {
-                  context
-                      .read<FieldSelectedDateState>()
-                      .setSelectedDate(DateTime.now());
+                  context.read<FieldSelectedDateState>().setSelectedDate(DateTime.now());
                   setState(() => _hasCalendarBeenReset = true);
                 } else {
                   setState(() => _hasCalendarBeenReset = false);
                   Navigator.push(
                     context,
-                    MaterialPageRoute(
-                        builder: (_) => const FieldCalendarPage()),
+                    MaterialPageRoute(builder: (_) => const FieldCalendarPage()),
                   );
                 }
               },

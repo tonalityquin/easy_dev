@@ -1,8 +1,8 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../models/plate_model.dart';
 import '../../models/plate_log_model.dart';
 import '../../utils/snackbar_helper.dart';
-import '../../utils/gcs_json_uploader.dart';
 import '../area/area_state.dart';
 import '../user/user_state.dart';
 import '../../repositories/plate/plate_repository.dart';
@@ -91,17 +91,22 @@ class ModifyPlate with ChangeNotifier {
           area: plate.area,
           from: collectionKey,
           to: collectionKey,
-          action: '정보 수정',
+          action: 'modify',
           performedBy: userState.name,
           timestamp: DateTime.now(),
           updatedFields: updatedFields,
         );
 
-        await GcsJsonUploader().uploadForPlateLogTypeJson(
-          log.toMap()..removeWhere((k, v) => v == null),
-          newPlateNumber,
-          areaState.currentDivision,
-          plate.area,
+        await _plateRepository.updatePlate(
+          documentId,
+          {
+            // 실제 변경된 필드만 업데이트
+            if (plate.location != location) 'location': location,
+            if (plate.billingType != billingType) 'billingType': billingType,
+            if (plate.plateNumber != newPlateNumber) 'plate_number': newPlateNumber,
+            'updatedAt': Timestamp.now(),
+          },
+          log: log,
         );
       }
 

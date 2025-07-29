@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:easydev/utils/gcs_json_uploader.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:camera/camera.dart';
@@ -7,6 +7,7 @@ import 'package:googleapis/storage/v1.dart';
 import 'package:googleapis_auth/auth_io.dart';
 import 'package:flutter/services.dart';
 
+import '../../repositories/plate/plate_repository.dart';
 import '../../states/plate/modify_plate.dart';
 import '../../states/area/area_state.dart';
 import '../../states/user/user_state.dart';
@@ -144,11 +145,15 @@ class ModifyPlateService {
         updatedFields: changes,
       );
 
-      await GcsJsonUploader().uploadForPlateLogTypeJson(
-        log.toMap(),
-        updatedPlate.plateNumber,
-        log.division,
-        log.area,
+      await context.read<PlateRepository>().updatePlate(
+        '${originalPlate.plateNumber}_${originalPlate.area}',
+        {
+          if (originalPlate.location != newLocation) 'location': newLocation,
+          if (originalPlate.billingType != newBillingType) 'billingType': newBillingType,
+          if (originalPlate.plateNumber != plateNumber) 'plate_number': plateNumber,
+          'updatedAt': Timestamp.now(),
+        },
+        log: log,
       );
     }
 

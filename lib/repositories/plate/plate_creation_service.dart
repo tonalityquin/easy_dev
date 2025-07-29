@@ -39,7 +39,7 @@ class PlateCreationService {
     final existingPlate = await _queryService.getPlate(documentId);
     if (existingPlate != null) {
       final existingType = PlateType.values.firstWhere(
-            (type) => type.firestoreValue == existingPlate.type,
+        (type) => type.firestoreValue == existingPlate.type,
         orElse: () => PlateType.parkingRequests,
       );
 
@@ -105,8 +105,16 @@ class PlateCreationService {
       customStatus: customStatus,
     );
 
-    debugPrint("🔥 저장할 plate: ${plate.toMap()}");
-    await _writeService.addOrUpdatePlate(documentId, plate);
+    // ✅ 로그 추가
+    final plateWithLog = plate.addLog(
+      action: 'create',
+      performedBy: userName,
+      from: '',
+      to: location.isNotEmpty ? location : '미지정',
+    );
+
+    debugPrint("🔥 저장할 plate: ${plateWithLog.toMap()}");
+    await _writeService.addOrUpdatePlate(documentId, plateWithLog);
 
     // 커스텀 상태 저장
     if (customStatus != null && customStatus.trim().isNotEmpty) {

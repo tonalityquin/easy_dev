@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../../enums/plate_type.dart';
+import 'plate_log_model.dart';
 
 int parseInt(dynamic value) {
   if (value is int) return value;
@@ -33,6 +34,7 @@ class PlateFields {
   static const String updatedAt = 'updatedAt';
   static const String paymentMethod = 'paymentMethod';
   static const String customStatus = 'customStatus';
+  static const String logs = 'logs';
 }
 
 class PlateModel {
@@ -61,6 +63,7 @@ class PlateModel {
   final DateTime? updatedAt;
   final String? paymentMethod;
   final String? customStatus;
+  final List<PlateLogModel>? logs;
 
   PlateModel({
     required this.id,
@@ -88,6 +91,7 @@ class PlateModel {
     this.updatedAt,
     this.paymentMethod,
     this.customStatus,
+    this.logs,
   });
 
   factory PlateModel.fromDocument(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -122,6 +126,9 @@ class PlateModel {
       updatedAt: (updatedTimestamp is Timestamp) ? updatedTimestamp.toDate() : null,
       paymentMethod: data[PlateFields.paymentMethod],
       customStatus: data[PlateFields.customStatus],
+      logs: (data[PlateFields.logs] as List?)
+          ?.map((e) => PlateLogModel.fromMap(Map<String, dynamic>.from(e)))
+          .toList(),
     );
   }
 
@@ -151,6 +158,7 @@ class PlateModel {
       if (updatedAt != null) PlateFields.updatedAt: Timestamp.fromDate(updatedAt!),
       if (paymentMethod != null) PlateFields.paymentMethod: paymentMethod,
       if (customStatus != null) PlateFields.customStatus: customStatus,
+      if (logs != null) PlateFields.logs: logs!.map((e) => e.toMap()).toList(),
     };
 
     if (removeNullOrEmpty) {
@@ -185,6 +193,30 @@ class PlateModel {
     return changes;
   }
 
+  PlateModel addLog({
+    required String action,
+    required String performedBy,
+    required String from,
+    required String to,
+    Map<String, dynamic>? updatedFields,
+  }) {
+    final newLog = PlateLogModel(
+      plateNumber: plateNumber,
+      division: type,
+      area: area,
+      from: from,
+      to: to,
+      action: action,
+      performedBy: performedBy,
+      billingType: billingType,
+      timestamp: DateTime.now(),
+      updatedFields: updatedFields,
+    );
+
+    final updatedLogs = List<PlateLogModel>.from(logs ?? [])..add(newLog);
+    return copyWith(logs: updatedLogs);
+  }
+
   PlateModel copyWith({
     String? id,
     String? plateNumber,
@@ -211,6 +243,7 @@ class PlateModel {
     DateTime? updatedAt,
     String? paymentMethod,
     String? customStatus,
+    List<PlateLogModel>? logs,
   }) {
     return PlateModel(
       id: id ?? this.id,
@@ -238,6 +271,7 @@ class PlateModel {
       updatedAt: updatedAt ?? this.updatedAt,
       paymentMethod: paymentMethod ?? this.paymentMethod,
       customStatus: customStatus ?? this.customStatus,
+      logs: logs ?? this.logs,
     );
   }
 
