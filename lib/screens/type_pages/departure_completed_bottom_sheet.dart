@@ -22,10 +22,12 @@ class DepartureCompletedBottomSheet extends StatefulWidget {
   const DepartureCompletedBottomSheet({super.key});
 
   @override
-  State<DepartureCompletedBottomSheet> createState() => _DepartureCompletedBottomSheetState();
+  State<DepartureCompletedBottomSheet> createState() =>
+      _DepartureCompletedBottomSheetState();
 }
 
-class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottomSheet> {
+class _DepartureCompletedBottomSheetState
+    extends State<DepartureCompletedBottomSheet> {
   final bool _isSorted = true;
   bool _isSearchMode = false;
   bool _hasCalendarBeenReset = false;
@@ -66,15 +68,15 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
     final areaState = context.watch<AreaState>();
     final filterState = context.watch<FilterPlate>();
 
-    debugPrint('✅ plateState: $plateState');
-    debugPrint('✅ userName: $userName');
-    debugPrint('✅ areaState: $areaState');
-    debugPrint('✅ filterState: $filterState');
-
     final division = areaState.currentDivision;
     final area = areaState.currentArea.trim();
-    final selectedDateRaw = context.watch<FieldSelectedDateState>().selectedDate ?? DateTime.now();
-    final selectedDate = DateTime(selectedDateRaw.year, selectedDateRaw.month, selectedDateRaw.day);
+    final selectedDateRaw =
+        context.watch<FieldSelectedDateState>().selectedDate ?? DateTime.now();
+    final selectedDate = DateTime(
+      selectedDateRaw.year,
+      selectedDateRaw.month,
+      selectedDateRaw.day,
+    );
 
     final rawPlates = context
         .watch<PlateState>()
@@ -83,7 +85,8 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
       selectedDate: selectedDate,
     )
         .where((p) {
-      final isSearching = filterState.searchQuery.isNotEmpty && filterState.searchQuery.length == 4;
+      final isSearching =
+          filterState.searchQuery.isNotEmpty && filterState.searchQuery.length == 4;
       if (isSearching) {
         return p.area.trim() == area;
       } else {
@@ -98,8 +101,9 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
           .toList();
     }
 
-    firestorePlates.sort((a, b) =>
-    _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime));
+    firestorePlates.sort((a, b) => _isSorted
+        ? b.requestTime.compareTo(a.requestTime)
+        : a.requestTime.compareTo(b.requestTime));
 
     return WillPopScope(
       onWillPop: () async {
@@ -127,96 +131,117 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
       },
       child: SizedBox(
         height: MediaQuery.of(context).size.height * 0.95,
-        child: Scaffold(
-          backgroundColor: Colors.white,
-          body: Stack(
-            children: [
-              ListView(
-                padding: const EdgeInsets.all(8.0),
-                children: [
-                  PlateContainer(
-                    data: firestorePlates,
-                    collection: PlateType.departureCompleted,
-                    filterCondition: (_) => true,
-                    onPlateTap: (plateNumber, area) {
-                      plateState.togglePlateIsSelected(
-                        collection: PlateType.departureCompleted,
-                        plateNumber: plateNumber,
-                        userName: userName,
-                        onError: (msg) => showFailedSnackbar(context, msg),
-                      );
-                    },
-                  ),
-                ],
-              ),
-              AnimatedPositioned(
-                duration: const Duration(milliseconds: 300),
-                bottom: _showMergedLog ? 0 : -600,
-                left: 0,
-                right: 0,
-                height: 400,
-                child: Container(
-                  color: Colors.white,
-                  child: FutureBuilder<List<Map<String, dynamic>>>(
-                    future: GcsJsonUploader().showMergedLogsToDepartureCompletedMergeLog(
-                      division,
-                      area,
-                      filterDate: selectedDate,
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Scaffold(
+            backgroundColor: Colors.transparent,
+            body: Stack(
+              children: [
+                ListView(
+                  padding: const EdgeInsets.all(8.0),
+                  children: [
+                    const SizedBox(height: 12),
+                    Center(
+                      child: Container(
+                        width: 60,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ),
                     ),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-                      if (snapshot.hasError) {
-                        return const Center(child: Text("병합 로그 로딩 실패"));
-                      }
+                    const SizedBox(height: 24),
+                    PlateContainer(
+                      data: firestorePlates,
+                      collection: PlateType.departureCompleted,
+                      filterCondition: (_) => true,
+                      onPlateTap: (plateNumber, area) {
+                        plateState.togglePlateIsSelected(
+                          collection: PlateType.departureCompleted,
+                          plateNumber: plateNumber,
+                          userName: userName,
+                          onError: (msg) => showFailedSnackbar(context, msg),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 300),
+                  bottom: _showMergedLog ? 0 : -600,
+                  left: 0,
+                  right: 0,
+                  height: 400,
+                  child: Container(
+                    color: Colors.white,
+                    child: FutureBuilder<List<Map<String, dynamic>>>(
+                      future: GcsJsonUploader().showMergedLogsToDepartureCompletedMergeLog(
+                        division,
+                        area,
+                        filterDate: selectedDate,
+                      ),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        if (snapshot.hasError) {
+                          return const Center(child: Text("병합 로그 로딩 실패"));
+                        }
 
-                      final mergedLogs = snapshot.data ?? [];
+                        final mergedLogs = snapshot.data ?? [];
 
-                      return Column(
-                        children: [
-                          const Padding(
-                            padding: EdgeInsets.all(8.0),
-                            child: Align(alignment: Alignment.centerRight),
-                          ),
-                          Expanded(
-                            child: SingleChildScrollView(
-                              child: MergedLogSection(
-                                mergedLogs: mergedLogs,
-                                division: division,
-                                area: area,
-                                selectedDate: selectedDate,
+                        return Column(
+                          children: [
+                            const Padding(
+                              padding: EdgeInsets.all(8.0),
+                              child: Align(alignment: Alignment.centerRight),
+                            ),
+                            Expanded(
+                              child: SingleChildScrollView(
+                                child: MergedLogSection(
+                                  mergedLogs: mergedLogs,
+                                  division: division,
+                                  area: area,
+                                  selectedDate: selectedDate,
+                                ),
                               ),
                             ),
-                          ),
-                        ],
-                      );
-                    },
+                          ],
+                        );
+                      },
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
-          bottomNavigationBar: DepartureCompletedControlButtons(
-            isSearchMode: _isSearchMode,
-            isSorted: _isSorted,
-            showMergedLog: _showMergedLog,
-            hasCalendarBeenReset: _hasCalendarBeenReset,
-            onResetSearch: () => _resetSearch(context),
-            onShowSearchDialog: () => _showSearchDialog(context),
-            onToggleMergedLog: () => setState(() => _showMergedLog = !_showMergedLog),
-            onToggleCalendar: () {
-              if (!_hasCalendarBeenReset) {
-                context.read<FieldSelectedDateState>().setSelectedDate(DateTime.now());
-                setState(() => _hasCalendarBeenReset = true);
-              } else {
-                setState(() => _hasCalendarBeenReset = false);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const FieldCalendarPage()),
-                );
-              }
-            },
+              ],
+            ),
+            bottomNavigationBar: DepartureCompletedControlButtons(
+              isSearchMode: _isSearchMode,
+              isSorted: _isSorted,
+              showMergedLog: _showMergedLog,
+              hasCalendarBeenReset: _hasCalendarBeenReset,
+              onResetSearch: () => _resetSearch(context),
+              onShowSearchDialog: () => _showSearchDialog(context),
+              onToggleMergedLog: () => setState(() => _showMergedLog = !_showMergedLog),
+              onToggleCalendar: () {
+                if (!_hasCalendarBeenReset) {
+                  context
+                      .read<FieldSelectedDateState>()
+                      .setSelectedDate(DateTime.now());
+                  setState(() => _hasCalendarBeenReset = true);
+                } else {
+                  setState(() => _hasCalendarBeenReset = false);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const FieldCalendarPage()),
+                  );
+                }
+              },
+            ),
           ),
         ),
       ),

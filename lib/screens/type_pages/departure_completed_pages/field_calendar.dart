@@ -1,23 +1,28 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:table_calendar/table_calendar.dart';
 import '../../../../states/calendar/field_calendar_state.dart';
 import '../../../../states/calendar/field_selected_date_state.dart';
 import '../../../../utils/snackbar_helper.dart';
+import 'widgets/departure_completed_page_merge_log.dart';
 
 class FieldCalendarPage extends StatefulWidget {
   const FieldCalendarPage({super.key});
 
   @override
-  State<FieldCalendarPage> createState() => _FieldCalendarPage();
+  State<FieldCalendarPage> createState() => _FieldCalendarPageState();
 }
 
-class _FieldCalendarPage extends State<FieldCalendarPage> {
+class _FieldCalendarPageState extends State<FieldCalendarPage> {
   late FieldCalendarState calendar;
   Map<String, String> _memoMap = {};
+  List<Map<String, dynamic>> _mergedLogs = [];
+
   String? _memoKey;
+  String division = 'default';
+  String area = 'default';
 
   @override
   void initState() {
@@ -29,13 +34,14 @@ class _FieldCalendarPage extends State<FieldCalendarPage> {
       context.read<FieldSelectedDateState>().setSelectedDate(DateTime.now());
     });
 
-    _initUserMemoKey();
+    _initUserData();
   }
 
-  Future<void> _initUserMemoKey() async {
+  Future<void> _initUserData() async {
     final prefs = await SharedPreferences.getInstance();
     final phone = prefs.getString('phone') ?? 'unknown';
-    final area = prefs.getString('area') ?? 'unknown';
+    division = prefs.getString('division') ?? 'default';
+    area = prefs.getString('area') ?? 'default';
     final key = 'memoMap_${phone}_$area';
 
     setState(() {
@@ -43,6 +49,7 @@ class _FieldCalendarPage extends State<FieldCalendarPage> {
     });
 
     await _loadMemoData();
+    await _loadMergedLogs(); // 병합 로그도 함께 로드
   }
 
   Future<void> _loadMemoData() async {
@@ -57,8 +64,30 @@ class _FieldCalendarPage extends State<FieldCalendarPage> {
     }
   }
 
+  Future<void> _loadMergedLogs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final d = calendar.selectedDate;
+    final cacheKey = 'mergedLogCache-$division-$area-${d.year}-${d.month}-${d.day}';
+    final raw = prefs.getString(cacheKey);
+
+    if (raw != null) {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        setState(() {
+          _mergedLogs = List<Map<String, dynamic>>.from(decoded);
+        });
+      }
+    } else {
+      setState(() {
+        _mergedLogs = [];
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final selectedDate = calendar.selectedDate;
+
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
@@ -76,6 +105,13 @@ class _FieldCalendarPage extends State<FieldCalendarPage> {
         child: Column(
           children: [
             _buildCalendar(context),
+            const SizedBox(height: 16),
+            MergedLogSection(
+              mergedLogs: _mergedLogs,
+              division: division,
+              area: area,
+              selectedDate: selectedDate,
+            ),
           ],
         ),
       ),
@@ -88,12 +124,13 @@ class _FieldCalendarPage extends State<FieldCalendarPage> {
       lastDay: DateTime.utc(2100, 12, 31),
       focusedDay: calendar.selectedDate,
       selectedDayPredicate: (day) => isSameDay(calendar.selectedDate, day),
-      onDaySelected: (selectedDay, focusedDay) {
+      onDaySelected: (selectedDay, focusedDay) async {
         setState(() {
           calendar.selectDate(selectedDay);
         });
         context.read<FieldSelectedDateState>().setSelectedDate(selectedDay);
         showSelectedSnackbar(context, '선택된 날짜: ${calendar.formatDate(selectedDay)}');
+        await _loadMergedLogs(); // 날짜 변경 시 병합 로그 갱신
       },
       onPageChanged: (focusedDay) {
         setState(() {
