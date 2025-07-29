@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../widgets/navigation/navigation_hq_mini.dart';
 import '../../widgets/navigation/top_navigation.dart';
+import '../type_pages/commons/dashboard_bottom_sheet/dash_board_page.dart';
 import 'link_to_google_pages/cooperation_calendar.dart';
 import 'link_to_google_pages/completed_event_page.dart';
 
@@ -19,7 +20,7 @@ class LinkToGoogle extends StatefulWidget {
 }
 
 class _LinkToGoogleState extends State<LinkToGoogle> {
-  int _selectedIndex = 0;
+  int _selectedIndex = 1;
   String? _selectedArea;
   bool _isLoading = true;
 
@@ -61,18 +62,22 @@ class _LinkToGoogleState extends State<LinkToGoogle> {
         body: _selectedIndex == 0
             ? CooperationCalendar(calendarId: calendarId)
             : _selectedIndex == 1
-            ? CompletedEventPage(calendarId: calendarId)
-            : const Center(child: Text('해당 탭의 콘텐츠는 준비 중입니다.')),
-
+                ? const DashBoardPage() // ✅ DashBoardPage 연결
+                : _selectedIndex == 2
+                    ? CompletedEventPage(calendarId: calendarId)
+                    : const Center(child: Text('해당 탭의 콘텐츠는 준비 중입니다.')),
         bottomNavigationBar: HqMiniNavigation(
           height: 56,
           iconSize: 22,
+          currentIndex: _selectedIndex,
           icons: const [
             Icons.calendar_month,
+            Icons.dashboard, // ✅ DashBoard 아이콘으로 변경
             Icons.task,
           ],
           labels: const [
             'Calendar',
+            'DashBoard',
             'Done',
           ],
           onIconTapped: (index) {
