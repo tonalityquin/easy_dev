@@ -151,36 +151,14 @@ class MovementPlate {
     required String newLocation,
     required String performedBy,
   }) async {
-    final documentId = '${plateNumber}_$area';
-    await _logger.log('[MovementPlate] goBackToParkingRequest 시작: $documentId', level: 'called');
-
-    try {
-      final log = PlateLogModel(
-        plateNumber: plateNumber,
-        division: _areaState.currentDivision,
-        area: area,
-        from: fromType.name,
-        to: PlateType.parkingRequests.name,
-        action: '${fromType.label} → ${PlateType.parkingRequests.label}',
-        performedBy: performedBy,
-        timestamp: DateTime.now(),
-      );
-
-      await _repository.transitionPlateState(
-        documentId: documentId,
-        toType: PlateType.parkingRequests,
-        location: newLocation,
-        userName: performedBy,
-        log: log, // ✅ 로그 Firestore에 기록되도록 전달
-      );
-
-      await _logger.log('상태 복원 완료 (Firestore): $documentId', level: 'success');
-
-      debugPrint("상태 복원 완료: $documentId");
-    } catch (e) {
-      await _logger.log('상태 복원 실패: $e', level: 'error');
-      debugPrint("복원 오류: $e");
-    }
+    await _transferData(
+      fromType: fromType,
+      toType: PlateType.parkingRequests,
+      plateNumber: plateNumber,
+      area: area,
+      location: newLocation,
+      performedBy: performedBy,
+    );
   }
 
   Future<bool> _transferData({

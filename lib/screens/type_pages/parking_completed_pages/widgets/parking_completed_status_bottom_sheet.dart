@@ -11,7 +11,7 @@ import '../../../../enums/plate_type.dart';
 Future<void> showParkingCompletedStatusBottomSheet({
   required BuildContext context,
   required PlateModel plate,
-  required VoidCallback onRequestEntry,
+  required Future<void> Function() onRequestEntry,
   required VoidCallback onDelete,
 }) async {
   final plateNumber = plate.plateNumber;
@@ -75,6 +75,7 @@ Future<void> showParkingCompletedStatusBottomSheet({
                       performedBy: performedBy,
                     );
 
+                    if (!context.mounted) return;
                     Navigator.pop(context);
                   },
                   style: ElevatedButton.styleFrom(
@@ -149,12 +150,24 @@ Future<void> showParkingCompletedStatusBottomSheet({
                 const SizedBox(height: 12),
 
                 // ⬅️ 입차 요청으로 되돌리기
+                // ⬅️ 입차 요청으로 되돌리기
                 ElevatedButton.icon(
                   icon: const Icon(Icons.assignment_return),
                   label: const Text("입차 요청으로 되돌리기"),
-                  onPressed: () {
+                  onPressed: () async {
+                    final movementPlate = context.read<MovementPlate>();
+                    final performedBy = context.read<UserState>().name;
+
+                    await movementPlate.goBackToParkingRequest(
+                      fromType: PlateType.parkingCompleted,
+                      plateNumber: plate.plateNumber,
+                      area: plate.area,
+                      newLocation: "미지정",
+                      performedBy: performedBy,
+                    );
+
+                    if (!context.mounted) return;
                     Navigator.pop(context);
-                    onRequestEntry();
                   },
                   style: ElevatedButton.styleFrom(
                     minimumSize: const Size(double.infinity, 52),
@@ -165,6 +178,7 @@ Future<void> showParkingCompletedStatusBottomSheet({
                     ),
                   ),
                 ),
+
                 const SizedBox(height: 12),
 
                 // 🗑️ 삭제
@@ -185,11 +199,11 @@ Future<void> showParkingCompletedStatusBottomSheet({
   );
 }
 
-void handleEntryParkingRequest(BuildContext context, String plateNumber, String area) {
+Future<void> handleEntryParkingRequest(BuildContext context, String plateNumber, String area) async {
   final movementPlate = context.read<MovementPlate>();
   final performedBy = context.read<UserState>().name;
 
-  movementPlate.goBackToParkingRequest(
+  await movementPlate.goBackToParkingRequest(
     fromType: PlateType.parkingCompleted,
     plateNumber: plateNumber,
     area: area,
