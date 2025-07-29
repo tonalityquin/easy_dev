@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import '../../../models/plate_model.dart';
+import '../../../../../../models/plate_model.dart';
 import 'keypad/animated_keypad.dart';
 import 'widgets/plate_number_display.dart';
 import 'widgets/plate_search_header.dart';
 import 'widgets/plate_search_results.dart';
 import 'widgets/search_button.dart';
-import '../../../repositories/plate/firestore_plate_repository.dart';
+import '../../../../../../repositories/plate/firestore_plate_repository.dart';
 
 class SignaturePlateSearchBottomSheet extends StatefulWidget {
   final void Function(String) onSearch;

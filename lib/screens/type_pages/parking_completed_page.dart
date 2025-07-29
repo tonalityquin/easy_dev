@@ -12,7 +12,7 @@ import '../../states/user/user_state.dart';
 
 import '../../utils/snackbar_helper.dart';
 
-import '../../widgets/dialog/signature_plate_search_bottom_sheet/signature_plate_search_bottom_sheet.dart';
+import 'parking_completed_pages/widgets/signature_plate_search_bottom_sheet/signature_plate_search_bottom_sheet.dart';
 import '../../widgets/navigation/top_navigation.dart';
 import '../../widgets/container/plate_container.dart';
 

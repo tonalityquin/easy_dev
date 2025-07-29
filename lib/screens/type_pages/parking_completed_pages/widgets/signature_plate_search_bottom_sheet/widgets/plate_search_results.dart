@@ -1,6 +1,6 @@
 import 'package:easydev/enums/plate_type.dart';
 import 'package:flutter/material.dart';
-import '../../../../models/plate_model.dart';
+import '../../../../../../models/plate_model.dart';
 
 class PlateSearchResults extends StatelessWidget {
   final List<PlateModel> results;
