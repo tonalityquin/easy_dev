@@ -179,7 +179,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
           onLocationSelected: (locationName) {
             setState(() {
               _selectedParkingArea = locationName;
-              _mode = ParkingViewMode.plateList;
+              // _mode = ParkingViewMode.plateList; # 주차 구역 -> 번호판 선택 화면 진입 차단
             });
           },
           isLocked: _isLocked, // ✅ 잠금 상태 전달
