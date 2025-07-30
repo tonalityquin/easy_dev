@@ -271,7 +271,11 @@ class PageBottomNavigation extends StatelessWidget {
                   icon: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.home, color: isSelected ? selectedColor : unselectedColor),
+                      Icon(
+                        Icons.home,
+                        size: isSelected ? 32 : 28, // ✅ 크기 조정
+                        color: isSelected ? selectedColor : unselectedColor,
+                      ),
                       const SizedBox(height: 2),
                       Text('홈', style: labelStyle),
                     ],
