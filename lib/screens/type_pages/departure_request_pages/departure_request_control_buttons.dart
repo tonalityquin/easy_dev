@@ -54,6 +54,9 @@ class DepartureRequestControlButtons extends StatelessWidget {
           type: BottomNavigationBarType.fixed,
           selectedItemColor: Theme.of(context).primaryColor,
           unselectedItemColor: Colors.grey[700],
+          selectedFontSize: 12,
+          unselectedFontSize: 12,
+          iconSize: 24,
           items: [
             BottomNavigationBarItem(
               icon: Tooltip(

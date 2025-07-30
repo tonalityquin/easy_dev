@@ -38,10 +38,16 @@ class ParkingRequestControlButtons extends StatelessWidget {
         final userName = context.read<UserState>().name;
         final selectedPlate = plateState.getSelectedPlate(PlateType.parkingRequests, userName);
         final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
-        final iconColor = Colors.grey[700];
 
         return BottomNavigationBar(
+          type: BottomNavigationBarType.fixed, // 높이 통일 핵심
           backgroundColor: Colors.white,
+          elevation: 0,
+          selectedFontSize: 12,
+          unselectedFontSize: 12,
+          iconSize: 24,
+          selectedItemColor: Colors.black,
+          unselectedItemColor: Colors.grey[700],
           items: [
             BottomNavigationBarItem(
               icon: Tooltip(
@@ -50,7 +56,7 @@ class ParkingRequestControlButtons extends StatelessWidget {
                   isPlateSelected
                       ? Icons.lock
                       : (isLocked ? Icons.lock : Icons.lock_open),
-                  color: iconColor,
+                  color: Colors.grey[700],
                 ),
               ),
               label: isPlateSelected ? '정산 관리' : '화면 잠금',
@@ -60,7 +66,7 @@ class ParkingRequestControlButtons extends StatelessWidget {
                 message: isPlateSelected ? '입차 완료' : '번호판 검색',
                 child: isPlateSelected
                     ? Icon(Icons.check_circle, color: Colors.green[600])
-                    : Icon(Icons.search, color: iconColor),
+                    : Icon(Icons.search, color: Colors.grey[700]),
               ),
               label: isPlateSelected ? '입차' : '번호판 검색',
             ),
@@ -74,7 +80,7 @@ class ParkingRequestControlButtons extends StatelessWidget {
                     scaleX: isSorted ? -1 : 1,
                     child: Icon(
                       isPlateSelected ? Icons.settings : Icons.sort,
-                      color: iconColor,
+                      color: Colors.grey[700],
                     ),
                   ),
                 ),
@@ -98,7 +104,7 @@ class ParkingRequestControlButtons extends StatelessWidget {
                   area,
                 );
               } else {
-                onToggleLock(); // 🔒 차량 미선택 시 잠금 토글
+                onToggleLock();
               }
             } else if (index == 1) {
               isPlateSelected ? onParkingCompleted() : onSearchPressed();
