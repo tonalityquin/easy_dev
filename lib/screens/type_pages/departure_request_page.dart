@@ -12,7 +12,6 @@ import '../../states/user/user_state.dart';
 import '../../utils/snackbar_helper.dart';
 
 import '../../widgets/navigation/top_navigation.dart';
-import '../../widgets/dialog/parking_location_bottom_sheet.dart';
 import '../../widgets/dialog/common_plate_search_bottom_sheet/common_plate_search_bottom_sheet.dart';
 import 'departure_request_pages/widgets/departure_request_status_bottom_sheet.dart';
 import '../../widgets/container/plate_container.dart';
@@ -28,9 +27,7 @@ class DepartureRequestPage extends StatefulWidget {
 
 class _DepartureRequestPageState extends State<DepartureRequestPage> {
   bool _isSorted = true;
-  bool _isParkingAreaMode = false;
-  String? _selectedParkingArea;
-  final TextEditingController _locationController = TextEditingController();
+  bool _isLocked = false; // 🔐 잠금 상태 추가
 
   void _toggleSortIcon() {
     setState(() {
@@ -38,9 +35,15 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
     });
 
     context.read<PlateState>().updateSortOrder(
-      PlateType.departureRequests,
-      _isSorted,
-    );
+          PlateType.departureRequests,
+          _isSorted,
+        );
+  }
+
+  void _toggleLock() {
+    setState(() {
+      _isLocked = !_isLocked;
+    });
   }
 
   void _showSearchDialog(BuildContext context) {
@@ -49,37 +52,10 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
     showDialog(
       context: context,
       builder: (context) => CommonPlateSearchBottomSheet(
-        onSearch: (query) {
-          // 🔍 검색 결과는 단순 조회 용도, 상태 변경 없음
-        },
+        onSearch: (query) {},
         area: currentArea,
       ),
     );
-  }
-
-  Future<void> _showParkingAreaDialog(BuildContext context) async {
-    final selectedLocation = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => ParkingLocationBottomSheet(
-        locationController: _locationController,
-      ),
-    );
-
-    if (selectedLocation != null && selectedLocation.isNotEmpty) {
-      debugPrint("✅ 선택된 주차 구역: $selectedLocation");
-      setState(() {
-        _isParkingAreaMode = true;
-        _selectedParkingArea = selectedLocation;
-      });
-    }
-  }
-
-  void _resetParkingAreaFilter(BuildContext context) {
-    debugPrint("🔄 주차 구역 초기화 실행됨");
-    setState(() {
-      _isParkingAreaMode = false;
-      _selectedParkingArea = null;
-    });
   }
 
   void _handleDepartureCompleted(BuildContext context) async {
@@ -99,9 +75,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
         onError: (_) {},
       );
 
-      await movementPlate.setDepartureCompleted(
-        selectedPlate,
-      );
+      await movementPlate.setDepartureCompleted(selectedPlate);
 
       if (!context.mounted) return;
       showSuccessSnackbar(context, '출차 완료 처리되었습니다.');
@@ -147,24 +121,12 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
         ),
         body: Consumer<PlateState>(
           builder: (context, plateState, child) {
-            List<PlateModel> departureRequests = plateState.getPlatesByCollection(PlateType.departureRequests);
+            List<PlateModel> departureRequests =
+            plateState.getPlatesByCollection(PlateType.departureRequests);
 
             debugPrint('📦 전체 출차 요청 plate 수: ${departureRequests.length}');
             if (departureRequests.isNotEmpty) {
               debugPrint('🔍 첫 번째 plate: ${departureRequests.first.plateNumber} @ ${departureRequests.first.location}');
-            }
-
-            if (_isParkingAreaMode && _selectedParkingArea != null) {
-              debugPrint('📌 현재 선택된 구역: $_selectedParkingArea');
-              departureRequests = departureRequests
-                  .where((plate) => plate.location == _selectedParkingArea)
-                  .toList();
-
-              debugPrint('🎯 필터링된 출차 요청 plate 수: ${departureRequests.length}');
-
-              if (departureRequests.isEmpty) {
-                return const Center(child: Text('해당 구역의 출차 요청 차량이 없습니다.'));
-              }
             }
 
             departureRequests.sort((a, b) {
@@ -173,36 +135,49 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
               return _isSorted ? bTime.compareTo(aTime) : aTime.compareTo(bTime);
             });
 
-            return ListView(
-              padding: const EdgeInsets.all(8.0),
+            return Stack(
               children: [
-                PlateContainer(
-                  data: departureRequests,
-                  collection: PlateType.departureRequests,
-                  filterCondition: (request) => request.type == PlateType.departureRequests.firestoreValue,
-                  onPlateTap: (plateNumber, area) {
-                    plateState.togglePlateIsSelected(
+                ListView(
+                  padding: const EdgeInsets.all(8.0),
+                  children: [
+                    PlateContainer(
+                      data: departureRequests,
                       collection: PlateType.departureRequests,
-                      plateNumber: plateNumber,
-                      userName: userName,
-                      onError: (errorMessage) {
-                        showFailedSnackbar(context, errorMessage);
+                      filterCondition: (request) => request.type == PlateType.departureRequests.firestoreValue,
+                      onPlateTap: (plateNumber, area) {
+                        if (_isLocked) return;
+
+                        plateState.togglePlateIsSelected(
+                          collection: PlateType.departureRequests,
+                          plateNumber: plateNumber,
+                          userName: userName,
+                          onError: (errorMessage) {
+                            showFailedSnackbar(context, errorMessage);
+                          },
+                        );
                       },
-                    );
-                  },
+                    ),
+                  ],
                 ),
+                if (_isLocked)
+                  Positioned.fill(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {}, // 터치 차단용
+                      child: const SizedBox.expand(),
+                    ),
+                  ),
               ],
             );
           },
         ),
         bottomNavigationBar: DepartureRequestControlButtons(
-          isParkingAreaMode: _isParkingAreaMode,
           isSorted: _isSorted,
+          isLocked: _isLocked,
           showSearchDialog: () => _showSearchDialog(context),
-          showParkingAreaDialog: () => _showParkingAreaDialog(context),
-          resetParkingAreaFilter: () => _resetParkingAreaFilter(context),
           toggleSortIcon: _toggleSortIcon,
-          handleDepartureCompleted: (ctx) => _handleDepartureCompleted(ctx),
+          toggleLock: _toggleLock,
+          handleDepartureCompleted: () => _handleDepartureCompleted(context),
           handleEntryParkingRequest: (ctx, plateNumber, area) {
             handleEntryParkingRequest(ctx, plateNumber, area);
           },

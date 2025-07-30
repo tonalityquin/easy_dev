@@ -17,27 +17,25 @@ import 'widgets/set_departure_completed_dialog.dart';
 import '../../../widgets/dialog/plate_remove_dialog.dart';
 
 class DepartureRequestControlButtons extends StatelessWidget {
-  final bool isParkingAreaMode;
   final bool isSorted;
+  final bool isLocked;
 
   final VoidCallback showSearchDialog;
-  final VoidCallback showParkingAreaDialog;
-  final VoidCallback resetParkingAreaFilter;
   final VoidCallback toggleSortIcon;
+  final VoidCallback handleDepartureCompleted;
+  final VoidCallback toggleLock;
 
-  final Function(BuildContext context) handleDepartureCompleted;
   final Function(BuildContext context, String plateNumber, String area) handleEntryParkingRequest;
   final Function(BuildContext context, String plateNumber, String area, String location) handleEntryParkingCompleted;
 
   const DepartureRequestControlButtons({
     super.key,
-    required this.isParkingAreaMode,
     required this.isSorted,
+    required this.isLocked,
     required this.showSearchDialog,
-    required this.showParkingAreaDialog,
-    required this.resetParkingAreaFilter,
     required this.toggleSortIcon,
     required this.handleDepartureCompleted,
+    required this.toggleLock,
     required this.handleEntryParkingRequest,
     required this.handleEntryParkingCompleted,
   });
@@ -59,21 +57,19 @@ class DepartureRequestControlButtons extends StatelessWidget {
           items: [
             BottomNavigationBarItem(
               icon: Tooltip(
-                message: isPlateSelected ? '정산 관리' : (isParkingAreaMode ? '구역 초기화' : '주차 구역 선택'),
+                message: isPlateSelected ? '정산 관리' : '화면 잠금',
                 child: Icon(
                   isPlateSelected
                       ? (selectedPlate.isLockedFee ? Icons.lock_open : Icons.lock)
-                      : (isParkingAreaMode ? Icons.clear : Icons.local_parking),
-                  color: isPlateSelected
-                      ? Colors.grey[700]
-                      : (isParkingAreaMode ? Colors.orange[600] : Colors.grey[700]),
+                      : (isLocked ? Icons.lock : Icons.lock_open),
+                  color: Colors.grey[700],
                 ),
               ),
-              label: isPlateSelected ? '정산 관리' : (isParkingAreaMode ? '초기화' : '구역 선택'),
+              label: isPlateSelected ? '정산 관리' : '화면 잠금',
             ),
             BottomNavigationBarItem(
               icon: Tooltip(
-                message: isPlateSelected ? '출차 완료 처리' : '번호판 검색',
+                message: isPlateSelected ? '출차 완료' : '번호판 검색',
                 child: Icon(
                   isPlateSelected ? Icons.check_circle : Icons.search,
                   color: isPlateSelected ? Colors.green[600] : Colors.grey[700],
@@ -101,13 +97,13 @@ class DepartureRequestControlButtons extends StatelessWidget {
           ],
           onTap: (index) async {
             final repo = context.read<PlateRepository>();
+            final firestore = FirebaseFirestore.instance;
             final division = context.read<AreaState>().currentDivision;
             final area = context.read<AreaState>().currentArea.trim();
-            final firestore = FirebaseFirestore.instance;
 
             if (!isPlateSelected) {
               if (index == 0) {
-                isParkingAreaMode ? resetParkingAreaFilter() : showParkingAreaDialog();
+                toggleLock();
               } else if (index == 1) {
                 showSearchDialog();
               } else if (index == 2) {
@@ -204,7 +200,7 @@ class DepartureRequestControlButtons extends StatelessWidget {
               showDialog(
                 context: context,
                 builder: (_) => SetDepartureCompletedBottomSheet(
-                  onConfirm: () => handleDepartureCompleted(context),
+                  onConfirm: () => handleDepartureCompleted(),
                 ),
               );
             } else if (index == 2) {

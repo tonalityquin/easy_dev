@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../enums/plate_type.dart';
-
 import '../../states/area/area_state.dart';
 import '../../states/plate/plate_state.dart';
 import '../../states/plate/movement_plate.dart';
@@ -27,6 +26,7 @@ class ParkingRequestPage extends StatefulWidget {
 class _ParkingRequestPageState extends State<ParkingRequestPage> {
   bool _isSorted = true;
   bool _showReportDialog = false;
+  bool _isLocked = false; // ✅ 잠금 상태 추가
 
   void _toggleSortIcon() {
     setState(() {
@@ -39,6 +39,12 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
     );
   }
 
+  void _toggleLock() {
+    setState(() {
+      _isLocked = !_isLocked;
+    });
+  }
+
   void _showSearchDialog(BuildContext context) {
     final currentArea = context.read<AreaState>().currentArea;
 
@@ -46,9 +52,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
       context: context,
       builder: (context) {
         return CommonPlateSearchBottomSheet(
-          onSearch: (query) {
-            // ✅ 단순 조회용으로만 사용. 상태 업데이트 없음.
-          },
+          onSearch: (query) {},
           area: currentArea,
         );
       },
@@ -90,11 +94,10 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
           },
         );
 
-        if (selectedLocation == null) {
-          break;
-        } else if (selectedLocation == 'refresh') {
-          continue;
-        } else if (selectedLocation.isNotEmpty) {
+        if (selectedLocation == null) break;
+        if (selectedLocation == 'refresh') continue;
+
+        if (selectedLocation.isNotEmpty) {
           await _completeParking(
             movementPlate: movementPlate,
             plateState: plateState,
@@ -118,12 +121,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
     required String location,
   }) async {
     try {
-      await movementPlate.setParkingCompleted(
-        plateNumber,
-        area,
-        location,
-      );
-
+      await movementPlate.setParkingCompleted(plateNumber, area, location);
       if (mounted) {
         showSuccessSnackbar(context, "입차 완료: $plateNumber ($location)");
       }
@@ -177,7 +175,6 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
             final plates = [...plateState.getPlatesByCollection(PlateType.parkingRequests)];
 
             debugPrint('📦 PlateState: parkingRequests 총 개수 → ${plates.length}');
-            final userName = context.read<UserState>().name;
             final selectedPlate = plateState.getSelectedPlate(PlateType.parkingRequests, userName);
             debugPrint('✅ 선택된 Plate → ${selectedPlate?.plateNumber ?? "없음"}');
 
@@ -187,29 +184,40 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
               return _isSorted ? bTime.compareTo(aTime) : aTime.compareTo(bTime);
             });
 
-            return ListView(
-              padding: const EdgeInsets.all(8.0),
+            return Stack(
               children: [
-                PlateContainer(
-                  data: plates,
-                  collection: PlateType.parkingRequests,
-                  filterCondition: (request) => request.type == PlateType.parkingRequests.firestoreValue,
-                  onPlateTap: (plateNumber, area) {
-                    _handlePlateTap(context, plateNumber, area);
-                  },
+                ListView(
+                  padding: const EdgeInsets.all(8.0),
+                  children: [
+                    PlateContainer(
+                      data: plates,
+                      collection: PlateType.parkingRequests,
+                      filterCondition: (request) => request.type == PlateType.parkingRequests.firestoreValue,
+                      onPlateTap: (plateNumber, area) {
+                        _handlePlateTap(context, plateNumber, area);
+                      },
+                    ),
+                  ],
                 ),
+                if (_isLocked)
+                  Positioned.fill(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {}, // 터치 막기
+                      child: const SizedBox.expand(),
+                    ),
+                  ),
               ],
             );
           },
         ),
         bottomNavigationBar: ParkingRequestControlButtons(
           isSorted: _isSorted,
+          isLocked: _isLocked, // ✅ 전달
+          onToggleLock: _toggleLock, // ✅ 전달
           onSearchPressed: () => _showSearchDialog(context),
           onSortToggle: _toggleSortIcon,
           onParkingCompleted: () => _handleParkingCompleted(context),
-          onToggleReportDialog: () {
-            setState(() => _showReportDialog = !_showReportDialog);
-          },
         ),
       ),
     );

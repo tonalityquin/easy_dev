@@ -15,18 +15,20 @@ import 'widgets/parking_request_status_bottom_sheet.dart';
 
 class ParkingRequestControlButtons extends StatelessWidget {
   final bool isSorted;
+  final bool isLocked;
   final VoidCallback onSearchPressed;
   final VoidCallback onSortToggle;
   final VoidCallback onParkingCompleted;
-  final VoidCallback onToggleReportDialog; // 사용 안 함
+  final VoidCallback onToggleLock;
 
   const ParkingRequestControlButtons({
     super.key,
     required this.isSorted,
+    required this.isLocked,
     required this.onSearchPressed,
     required this.onSortToggle,
     required this.onParkingCompleted,
-    required this.onToggleReportDialog,
+    required this.onToggleLock,
   });
 
   @override
@@ -43,13 +45,15 @@ class ParkingRequestControlButtons extends StatelessWidget {
           items: [
             BottomNavigationBarItem(
               icon: Tooltip(
-                message: isPlateSelected ? '정산 관리' : '보고서 열기',
+                message: isPlateSelected ? '정산 관리' : '화면 잠금',
                 child: Icon(
-                  isPlateSelected ? Icons.lock : Icons.bar_chart,
+                  isPlateSelected
+                      ? Icons.lock
+                      : (isLocked ? Icons.lock : Icons.lock_open),
                   color: iconColor,
                 ),
               ),
-              label: isPlateSelected ? '정산 관리' : '현황 보기',
+              label: isPlateSelected ? '정산 관리' : '화면 잠금',
             ),
             BottomNavigationBarItem(
               icon: Tooltip(
@@ -93,6 +97,8 @@ class ParkingRequestControlButtons extends StatelessWidget {
                   division,
                   area,
                 );
+              } else {
+                onToggleLock(); // 🔒 차량 미선택 시 잠금 토글
               }
             } else if (index == 1) {
               isPlateSelected ? onParkingCompleted() : onSearchPressed();
