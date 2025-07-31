@@ -49,56 +49,10 @@ class PlateCustomBox extends StatelessWidget {
     this.backgroundColor,
   });
 
-  Widget buildRow({
-    required String leftText,
-    String? centerText,
-    required String rightText,
-    int leftFlex = 7,
-    int centerFlex = 2,
-    int rightFlex = 3,
-    TextStyle? leftTextStyle,
-    TextStyle? rightTextStyle,
-  }) {
-    return Expanded(
-      flex: 2,
-      child: Row(
-        children: [
-          Expanded(
-            flex: leftFlex,
-            child: Center(
-              child: Text(leftText, style: leftTextStyle ?? PlateCustomBoxStyles.subtitleStyle),
-            ),
-          ),
-          if (centerText != null) ...[
-            const VerticalDivider(width: 2.0, color: Colors.black),
-            Expanded(
-              flex: centerFlex,
-              child: Center(
-                child: Text(centerText, style: PlateCustomBoxStyles.subtitleStyle),
-              ),
-            ),
-          ],
-          const VerticalDivider(width: 2.0, color: Colors.black),
-          Expanded(
-            flex: rightFlex,
-            child: Center(
-              child: Text(
-                rightText,
-                style: rightTextStyle ?? PlateCustomBoxStyles.subtitleStyle,
-                textAlign: TextAlign.center,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    // ✅ bottomLeft 부분 텍스트 조합
     final combinedBottomLeftText =
-        [bottomLeftLeftText, if (bottomLeftCenterText.isNotEmpty) bottomLeftCenterText].join(' ');
+    [bottomLeftLeftText, if (bottomLeftCenterText.isNotEmpty) bottomLeftCenterText].join(' ');
 
     return GestureDetector(
       onTap: onTap,
@@ -123,42 +77,118 @@ class PlateCustomBox extends StatelessWidget {
               ),
           ],
         ),
-        child: Stack(
+        child: Column(
           children: [
-            Column(
-              children: [
-                buildRow(
-                  leftText: topLeftText,
-                  rightText: "$topRightUpText\n$topRightDownText",
-                  leftFlex: 7,
-                  rightFlex: 3,
-                  leftTextStyle: PlateCustomBoxStyles.titleStyle,
-                  rightTextStyle: PlateCustomBoxStyles.miniTitleStyle.copyWith(
-                    fontSize: 12,
-                    height: 1.5,
+            // ✅ Top Row: 왼쪽 텍스트와 오른쪽 2줄 분리 텍스트
+            Expanded(
+              flex: 2,
+              child: Row(
+                children: [
+                  // 왼쪽 텍스트
+                  Expanded(
+                    flex: 7,
+                    child: Center(
+                      child: Text(
+                        topLeftText,
+                        style: PlateCustomBoxStyles.titleStyle,
+                      ),
+                    ),
                   ),
-                ),
-                const Divider(height: 1.0, color: Colors.black),
-                buildRow(
-                  leftText: midLeftText,
-                  centerText: midCenterText,
-                  rightText: midRightText,
-                  leftFlex: 5,
-                  centerFlex: 2,
-                  rightFlex: 3,
-                  leftTextStyle: PlateCustomBoxStyles.titleStyle,
-                  rightTextStyle: const TextStyle(color: Colors.green),
-                ),
-                const Divider(height: 1.0, color: Colors.black),
-                buildRow(
-                  leftText: combinedBottomLeftText,
-                  rightText: bottomRightText,
-                  leftFlex: 7,
-                  rightFlex: 3,
-                  leftTextStyle: PlateCustomBoxStyles.miniTitleStyle,
-                  rightTextStyle: const TextStyle(color: Colors.red),
-                ),
-              ],
+                  const VerticalDivider(width: 2.0, color: Colors.black),
+                  // 오른쪽 2줄
+                  Expanded(
+                    flex: 3,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          topRightUpText,
+                          style: PlateCustomBoxStyles.miniTitleStyle.copyWith(
+                            fontSize: 12,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          softWrap: false,
+                          maxLines: 1,
+                          textAlign: TextAlign.center,
+                        ),
+                        Text(
+                          topRightDownText,
+                          style: PlateCustomBoxStyles.miniTitleStyle.copyWith(
+                            fontSize: 12,
+                            height: 1.5,
+                          ),
+                          softWrap: true,
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1.0, color: Colors.black),
+
+            // ✅ Middle Row
+            Expanded(
+              flex: 2,
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 5,
+                    child: Center(
+                      child: Text(midLeftText, style: PlateCustomBoxStyles.titleStyle),
+                    ),
+                  ),
+                  const VerticalDivider(width: 2.0, color: Colors.black),
+                  Expanded(
+                    flex: 2,
+                    child: Center(
+                      child: Text(midCenterText, style: PlateCustomBoxStyles.subtitleStyle),
+                    ),
+                  ),
+                  const VerticalDivider(width: 2.0, color: Colors.black),
+                  Expanded(
+                    flex: 3,
+                    child: Center(
+                      child: Text(
+                        midRightText,
+                        style: const TextStyle(color: Colors.green),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1.0, color: Colors.black),
+
+            // ✅ Bottom Row
+            Expanded(
+              flex: 2,
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 7,
+                    child: Center(
+                      child: Text(
+                        combinedBottomLeftText,
+                        style: PlateCustomBoxStyles.miniTitleStyle,
+                      ),
+                    ),
+                  ),
+                  const VerticalDivider(width: 2.0, color: Colors.black),
+                  Expanded(
+                    flex: 3,
+                    child: Center(
+                      child: Text(
+                        bottomRightText,
+                        style: const TextStyle(color: Colors.red),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
