@@ -10,7 +10,7 @@ class BillTypeInput extends StatelessWidget {
     return TextField(
       controller: controller,
       decoration: InputDecoration(
-        labelText: '요금 종류',
+        labelText: '일반 정산 유형',
         hintText: '예: 기본 요금',
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
       ),

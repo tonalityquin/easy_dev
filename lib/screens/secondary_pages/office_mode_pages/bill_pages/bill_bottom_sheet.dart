@@ -26,11 +26,12 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
   // 정기 정산
   final TextEditingController _regularNameController = TextEditingController();
   final TextEditingController _regularPriceController = TextEditingController();
-  String? _regularType; // '일 주차', '월 주차'
+  final TextEditingController _regularDurationController = TextEditingController();
+  String? _regularType;
 
   // 공통
   String? _errorMessage;
-  String _selectedMode = '일반'; // '일반' 또는 '정기'
+  String _selectedMode = '일반';
 
   static const List<String> _basicStandardOptions = ['1분', '5분', '30분', '60분'];
   static const List<String> _addStandardOptions = ['1분', '10분', '30분', '60분'];
@@ -43,6 +44,7 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
     _addAmountController.dispose();
     _regularNameController.dispose();
     _regularPriceController.dispose();
+    _regularDurationController.dispose();
     super.dispose();
   }
 
@@ -62,7 +64,8 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
     } else {
       if (_regularNameController.text.trim().isEmpty ||
           _regularType == null ||
-          _regularPriceController.text.trim().isEmpty) {
+          _regularPriceController.text.trim().isEmpty ||
+          _regularDurationController.text.trim().isEmpty) {
         setState(() {
           _errorMessage = '정기 정산 정보를 모두 입력해주세요.';
         });
@@ -98,8 +101,9 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
       billData = {
         'type': '정기',
         'CountType': _regularNameController.text.trim(),
-        'regularType': _regularType, // '일 주차' or '월 주차'
+        'regularType': _regularType,
         'regularAmount': int.tryParse(_regularPriceController.text) ?? 0,
+        'regularDurationHours': int.tryParse(_regularDurationController.text) ?? 0,
         'area': currentArea,
         'isSelected': false,
       };
@@ -150,7 +154,7 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
                   ),
                   const SizedBox(height: 16),
 
-                  /// 정산 모드 선택 (일반 / 정기)
+                  /// 정산 모드 선택
                   ToggleButtons(
                     isSelected: [_selectedMode == '일반', _selectedMode == '정기'],
                     onPressed: (index) {
@@ -195,7 +199,7 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
                     TextField(
                       controller: _regularNameController,
                       decoration: const InputDecoration(
-                        labelText: '정산 이름',
+                        labelText: '월 정산 유형',
                         hintText: '예: 월 정기권',
                         border: OutlineInputBorder(),
                       ),
@@ -204,15 +208,26 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
                     DropdownButtonFormField<String>(
                       value: _regularType,
                       decoration: const InputDecoration(
-                        labelText: '정기 정산 유형',
+                        labelText: '일&월 주차 선택',
                         border: OutlineInputBorder(),
                       ),
-                      items: _regularTypeOptions
-                          .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                          .toList(),
+                      items: _regularTypeOptions.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
                       onChanged: (val) => setState(() => _regularType = val),
                     ),
                     const SizedBox(height: 16),
+                    // 💡 정기 사용 시간 먼저
+                    TextField(
+                      controller: _regularDurationController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: '주차 가능 시간',
+                        hintText: '예: 720',
+                        suffixText: '시간',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    // 그 다음 정기 요금
                     TextField(
                       controller: _regularPriceController,
                       keyboardType: TextInputType.number,

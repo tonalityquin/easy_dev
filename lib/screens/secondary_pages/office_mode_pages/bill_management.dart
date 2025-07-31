@@ -34,14 +34,7 @@ class _BillManagementState extends State<BillManagement> {
         return BillSettingBottomSheet(
           onSave: (billData) async {
             try {
-              await context.read<BillState>().addBill(
-                    billData['CountType'],
-                    billData['area'],
-                    billData['basicStandard'].toString(),
-                    billData['basicAmount'].toString(),
-                    billData['addStandard'].toString(),
-                    billData['addAmount'].toString(),
-                  );
+              await context.read<BillState>().addBillFromMap(billData);
               if (context.mounted) {
                 showSuccessSnackbar(context, '✅ 정산 데이터가 성공적으로 추가되었습니다. 앱을 재실행하세요.');
               }
@@ -94,37 +87,22 @@ class _BillManagementState extends State<BillManagement> {
       ),
       body: Consumer<BillState>(
         builder: (context, state, child) {
-          final bills = state.bills.where((bill) => bill.area.trim() == currentArea).toList();
+          final generalBills = state.generalBills.where((bill) => bill.area.trim() == currentArea).toList();
+          final regularBills = state.regularBills.where((bill) => bill.area.trim() == currentArea).toList();
 
-          if (bills.isEmpty) {
+          final allItems = [
+            ...generalBills.map((bill) => _buildGeneralBillTile(context, state, bill)),
+            ...regularBills.map((bill) => _buildRegularBillTile(context, state, bill)),
+          ];
+
+          if (allItems.isEmpty) {
             return const Center(child: Text('현재 지역에 해당하는 정산 데이터가 없습니다.'));
           }
 
           return ListView.separated(
-            itemCount: bills.length,
+            itemCount: allItems.length,
             separatorBuilder: (_, __) => const Divider(height: 1.0, color: Colors.grey),
-            itemBuilder: (context, index) {
-              final bill = bills[index];
-              final isSelected = state.selectedBillId == bill.id;
-
-              return ListTile(
-                tileColor: isSelected ? Colors.green[50] : Colors.white,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                title: Text(
-                  bill.countType,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('기본 기준: ${bill.basicStandard}, 기본 금액: ${bill.basicAmount}'),
-                    Text('추가 기준: ${bill.addStandard}, 추가 금액: ${bill.addAmount}'),
-                  ],
-                ),
-                trailing: isSelected ? const Icon(Icons.check_circle, color: Colors.green) : null,
-                onTap: () => state.toggleBillSelection(bill.id),
-              );
-            },
+            itemBuilder: (context, index) => allItems[index],
           );
         },
       ),
@@ -138,6 +116,42 @@ class _BillManagementState extends State<BillManagement> {
           }
         },
       ),
+    );
+  }
+
+  Widget _buildGeneralBillTile(BuildContext context, BillState state, dynamic bill) {
+    final isSelected = state.selectedBillId == bill.id;
+    return ListTile(
+      tileColor: isSelected ? Colors.green[50] : Colors.white,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      title: Text(bill.countType, style: const TextStyle(fontWeight: FontWeight.bold)),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('기본 기준: ${bill.basicStandard}, 기본 금액: ${bill.basicAmount}'),
+          Text('추가 기준: ${bill.addStandard}, 추가 금액: ${bill.addAmount}'),
+        ],
+      ),
+      trailing: isSelected ? const Icon(Icons.check_circle, color: Colors.green) : null,
+      onTap: () => state.toggleBillSelection(bill.id),
+    );
+  }
+
+  Widget _buildRegularBillTile(BuildContext context, BillState state, dynamic bill) {
+    final isSelected = state.selectedBillId == bill.id;
+    return ListTile(
+      tileColor: isSelected ? Colors.green[50] : Colors.white,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      title: Text(bill.countType, style: const TextStyle(fontWeight: FontWeight.bold)),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('정기 유형: ${bill.regularType}'),
+          Text('요금: ${bill.regularAmount}원, 이용 시간: ${bill.regularDurationHours}시간'),
+        ],
+      ),
+      trailing: isSelected ? const Icon(Icons.check_circle, color: Colors.green) : null,
+      onTap: () => state.toggleBillSelection(bill.id),
     );
   }
 }

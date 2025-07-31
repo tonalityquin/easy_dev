@@ -182,9 +182,12 @@ class InputPlateController {
     final area = areaState.currentArea;
     final division = areaState.currentDivision;
     final userName = context.read<UserState>().name;
-    final billList = context.read<BillState>().bills;
 
-    if (billList.isNotEmpty && selectedBill == null) {
+    // ✅ 수정된 부분: bills 대신 generalBills, regularBills로 대체
+    final billState = context.read<BillState>();
+    final hasAnyBill = billState.generalBills.isNotEmpty || billState.regularBills.isNotEmpty;
+
+    if (hasAnyBill && selectedBill == null) {
       showFailedSnackbar(context, '정산 유형을 선택해주세요');
       return;
     }
@@ -230,8 +233,9 @@ class InputPlateController {
         addStandard: selectedAddStandard,
         addAmount: selectedAddAmount,
         region: dropdownValue,
-        customStatus:
-        customStatusController.text.trim().isNotEmpty ? customStatusController.text : fetchedCustomStatus ?? '',
+        customStatus: customStatusController.text.trim().isNotEmpty
+            ? customStatusController.text
+            : fetchedCustomStatus ?? '',
       );
 
       await FirestoreLogger().log('📤 plate_status 저장 시도: $plateNumber-$area', level: 'called');

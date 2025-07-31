@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/bill_model.dart';
 import '../../models/plate_model.dart';
 import '../../enums/plate_type.dart';
 
+import '../../models/regular_bill_model.dart';
 import '../../states/plate/plate_state.dart';
 import '../../states/bill/bill_state.dart';
 import '../../states/area/area_state.dart';
@@ -49,9 +51,31 @@ class ModifyPlateController {
   List<String> initialSelectedStatuses = [];
 
   final List<String> _regions = [
-    '전국', '강원', '경기', '경남', '경북', '광주', '대구', '대전', '부산', '서울',
-    '울산', '인천', '전남', '전북', '제주', '충남', '충북',
-    '국기', '대표', '영사', '외교', '임시', '준영', '준외', '협정'
+    '전국',
+    '강원',
+    '경기',
+    '경남',
+    '경북',
+    '광주',
+    '대구',
+    '대전',
+    '부산',
+    '서울',
+    '울산',
+    '인천',
+    '전남',
+    '전북',
+    '제주',
+    '충남',
+    '충북',
+    '국기',
+    '대표',
+    '영사',
+    '외교',
+    '임시',
+    '준영',
+    '준외',
+    '협정'
   ];
 
   List<String> get regions => _regions;
@@ -146,16 +170,35 @@ class ModifyPlateController {
     if (billName == null) return;
 
     final billState = context.read<BillState>();
-    final selected = billState.bills.firstWhere(
-          (a) => a.countType == billName,
-      orElse: () => billState.emptyModel,
+    final List<dynamic> allBills = [...billState.generalBills, ...billState.regularBills];
+
+    final selected = allBills.firstWhere(
+      (bill) {
+        if (bill is BillModel || bill is RegularBillModel) {
+          return bill.countType == billName;
+        }
+        return false;
+      },
+      orElse: () => null,
     );
 
+    if (selected == null) return;
+
     selectedBill = selected.countType;
-    selectedBasicAmount = selected.basicAmount;
-    selectedBasicStandard = selected.basicStandard;
-    selectedAddAmount = selected.addAmount;
-    selectedAddStandard = selected.addStandard;
+
+    // BillModel과 RegularBillModel은 프로퍼티가 다를 수 있음.
+    if (selected is BillModel) {
+      selectedBasicAmount = selected.basicAmount;
+      selectedBasicStandard = selected.basicStandard;
+      selectedAddAmount = selected.addAmount;
+      selectedAddStandard = selected.addStandard;
+    } else if (selected is RegularBillModel) {
+      // RegularBillModel에는 기본/추가 요금이 없을 수 있음. 필요 시 따로 처리
+      selectedBasicAmount = selected.regularAmount;
+      selectedBasicStandard = selected.regularDurationHours;
+      selectedAddAmount = 0;
+      selectedAddStandard = 0;
+    }
   }
 
   Future<void> updateCustomStatusToFirestore() async {
@@ -209,9 +252,10 @@ class ModifyPlateController {
       VoidCallback onSuccess,
       List<String> selectedStatuses,
       ) async {
-    final billList = context.read<BillState>().bills;
+    final billState = context.read<BillState>();
+    final allBills = [...billState.generalBills, ...billState.regularBills];
 
-    if (billList.isNotEmpty && (selectedBill == null || selectedBill!.isEmpty)) {
+    if (allBills.isNotEmpty && (selectedBill == null || selectedBill!.isEmpty)) {
       showFailedSnackbar(context, '정산 유형을 선택해주세요');
       return;
     }
@@ -308,6 +352,7 @@ class ModifyPlateController {
       await FirestoreLogger().log('❌ Plate 수정 실패', level: 'error');
     }
   }
+
 
   void dispose() {
     controllerFrontdigit.dispose();

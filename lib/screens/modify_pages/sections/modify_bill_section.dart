@@ -15,8 +15,9 @@ class ModifyBillSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final billState = context.watch<BillState>();
-    final billList = billState.bills;
     final isLoading = billState.isLoading;
+    final generalBills = billState.generalBills;
+    final regularBills = billState.regularBills;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -31,7 +32,7 @@ class ModifyBillSection extends StatelessWidget {
             padding: EdgeInsets.symmetric(vertical: 24),
             child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
           )
-        else if (billList.isEmpty)
+        else if (generalBills.isEmpty && regularBills.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 8),
             child: Center(
@@ -58,7 +59,7 @@ class ModifyBillSection extends StatelessWidget {
                 backgroundColor: Colors.transparent,
                 builder: (_) {
                   return DraggableScrollableSheet(
-                    initialChildSize: 0.4,
+                    initialChildSize: 0.5,
                     minChildSize: 0.3,
                     maxChildSize: 0.9,
                     builder: (context, scrollController) {
@@ -68,42 +69,58 @@ class ModifyBillSection extends StatelessWidget {
                           borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
                         ),
                         padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: ListView(
+                          controller: scrollController,
                           children: [
-                            Container(
-                              width: 40,
-                              height: 4,
-                              margin: const EdgeInsets.only(bottom: 16),
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade300,
-                                borderRadius: BorderRadius.circular(2),
+                            Center(
+                              child: Container(
+                                width: 40,
+                                height: 4,
+                                margin: const EdgeInsets.only(bottom: 16),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade300,
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
                               ),
                             ),
                             const Text(
                               '정산 유형 선택',
                               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                             ),
-                            const SizedBox(height: 16),
-                            Expanded(
-                              child: ListView.builder(
-                                controller: scrollController,
-                                itemCount: billList.length,
-                                itemBuilder: (context, index) {
-                                  final type = billList[index].countType;
-                                  return ListTile(
-                                    title: Text(type),
-                                    trailing: type == selectedBill
-                                        ? const Icon(Icons.check, color: Colors.green)
-                                        : null,
-                                    onTap: () {
-                                      Navigator.pop(context);
-                                      onChanged(type);
-                                    },
-                                  );
+                            const SizedBox(height: 24),
+
+                            // 📦 일반 정산
+                            if (generalBills.isNotEmpty) ...[
+                              const Text('📦 일반 정산', style: TextStyle(fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 8),
+                              ...generalBills.map((bill) => ListTile(
+                                title: Text(bill.countType),
+                                trailing: bill.countType == selectedBill
+                                    ? const Icon(Icons.check, color: Colors.green)
+                                    : null,
+                                onTap: () {
+                                  Navigator.pop(context);
+                                  onChanged(bill.countType);
                                 },
-                              ),
-                            ),
+                              )),
+                              const Divider(),
+                            ],
+
+                            // 📅 정기 정산
+                            if (regularBills.isNotEmpty) ...[
+                              const Text('📅 정기 정산', style: TextStyle(fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 8),
+                              ...regularBills.map((bill) => ListTile(
+                                title: Text(bill.countType),
+                                trailing: bill.countType == selectedBill
+                                    ? const Icon(Icons.check, color: Colors.green)
+                                    : null,
+                                onTap: () {
+                                  Navigator.pop(context);
+                                  onChanged(bill.countType);
+                                },
+                              )),
+                            ],
                           ],
                         ),
                       );

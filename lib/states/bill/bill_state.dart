@@ -3,21 +3,23 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
 import '../../models/bill_model.dart';
+import '../../models/regular_bill_model.dart';
 import '../../repositories/bill_repo/bill_repository.dart';
 import '../area/area_state.dart';
 
 class BillState extends ChangeNotifier {
-  // 🔹 1. 필드
   final BillRepository _repository;
   final AreaState _areaState;
 
-  List<BillModel> _bills = [];
+  List<BillModel> _generalBills = [];
+  List<RegularBillModel> _regularBills = [];
   String? _selectedBillId;
   bool _isLoading = true;
   String _previousArea = '';
 
-  // 🔹 2. 게터
-  List<BillModel> get bills => _bills;
+  List<BillModel> get generalBills => _generalBills;
+
+  List<RegularBillModel> get regularBills => _regularBills;
 
   String? get selectedBillId => _selectedBillId;
 
@@ -31,9 +33,9 @@ class BillState extends ChangeNotifier {
         basicAmount: 0,
         addStandard: 0,
         addAmount: 0,
+        type: '일반',
       );
 
-  // 🔹 3. 생성자
   BillState(this._repository, this._areaState) {
     loadFromBillCache();
 
@@ -46,119 +48,144 @@ class BillState extends ChangeNotifier {
     });
   }
 
-  // 🔹 4. Public 메서드
-
-  /// ✅ SharedPreferences 캐시 우선 로드
   Future<void> loadFromBillCache() async {
     final prefs = await SharedPreferences.getInstance();
     final currentArea = _areaState.currentArea.trim();
-    final cachedJson = prefs.getString('cached_bills_$currentArea');
 
-    if (cachedJson != null) {
-      try {
-        final decoded = json.decode(cachedJson) as List;
-        _bills = decoded.map((e) => BillModel.fromCacheMap(Map<String, dynamic>.from(e))).toList();
-        _selectedBillId = null;
-        _previousArea = currentArea;
-        _isLoading = false;
-        notifyListeners();
-        debugPrint('✅ Bill 캐시 로드 성공 (area: $currentArea)');
-      } catch (e) {
-        debugPrint('⚠️ Bill 캐시 파싱 실패: $e');
+    final generalJson = prefs.getString('cached_general_bills_$currentArea');
+    final regularJson = prefs.getString('cached_regular_bills_$currentArea');
+
+    try {
+      if (generalJson != null) {
+        final decoded = json.decode(generalJson) as List;
+        _generalBills = decoded.map((e) => BillModel.fromCacheMap(Map<String, dynamic>.from(e))).toList();
+      } else {
+        _generalBills = [];
       }
-    } else {
-      debugPrint('⚠️ 캐시에 정산 데이터 없음 → Firestore 호출 없음');
-      _bills = [];
+
+      if (regularJson != null) {
+        final decoded = json.decode(regularJson) as List;
+        _regularBills = decoded.map((e) => RegularBillModel.fromCacheMap(Map<String, dynamic>.from(e))).toList();
+      } else {
+        _regularBills = [];
+      }
+
       _selectedBillId = null;
+      _previousArea = currentArea;
+      _isLoading = false;
+      notifyListeners();
+      debugPrint('✅ Bill 캐시 로드 완료');
+    } catch (e) {
+      debugPrint('⚠️ 캐시 파싱 오류: $e');
+      _generalBills = [];
+      _regularBills = [];
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  /// 🔄 수동 새로고침 Firestore 호출 → 캐시 비교 후 갱신
   Future<void> manualBillRefresh() async {
     final currentArea = _areaState.currentArea.trim();
-    debugPrint('🔥 수동 새로고침 Firestore 호출 → $currentArea');
+    debugPrint('🔥 Firestore 새로고침 시작 → $currentArea');
 
     _isLoading = true;
     notifyListeners();
 
     try {
-      final data = await _repository.getBillOnce(currentArea);
+      final result = await _repository.getAllBills(currentArea);
 
-      final currentIds = _bills.map((e) => e.id).toSet();
-      final newIds = data.map((e) => e.id).toSet();
+      _generalBills = result.generalBills;
+      _regularBills = result.regularBills;
+      _selectedBillId = null;
 
-      final isIdentical = currentIds.length == newIds.length && currentIds.containsAll(newIds);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        'cached_general_bills_$currentArea',
+        json.encode(result.generalBills.map((e) => e.toCacheMap()).toList()),
+      );
+      await prefs.setString(
+        'cached_regular_bills_$currentArea',
+        json.encode(result.regularBills.map((e) => e.toCacheMap()).toList()),
+      );
 
-      if (isIdentical) {
-        debugPrint('✅ Firestore 데이터가 캐시와 동일 → 갱신 없음');
-      } else {
-        _bills = data;
-        _selectedBillId = null;
-
-        final prefs = await SharedPreferences.getInstance();
-        final jsonData = json.encode(data.map((e) => e.toCacheMap()).toList());
-        await prefs.setString('cached_bills_$currentArea', jsonData);
-
-        debugPrint('✅ Firestore 정산 데이터 캐시에 갱신됨 (area: $currentArea)');
-      }
+      debugPrint('✅ Firestore 데이터 캐시 갱신 완료');
     } catch (e) {
-      debugPrint('🔥 Firestore 정산 데이터 조회 실패: $e');
+      debugPrint('🔥 데이터 로드 실패: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  /// ✅ 정산 데이터 추가
-  Future<void> addBill(
-    String countType,
-    String area,
-    String basicStandard,
-    String basicAmount,
-    String addStandard,
-    String addAmount,
-  ) async {
+  Future<void> addBill(BillModel bill) async {
     try {
-      final bill = BillModel(
-        id: '${countType}_$area',
-        countType: countType,
-        area: area,
-        basicStandard: int.tryParse(basicStandard) ?? 0,
-        basicAmount: int.tryParse(basicAmount) ?? 0,
-        addStandard: int.tryParse(addStandard) ?? 0,
-        addAmount: int.tryParse(addAmount) ?? 0,
-      );
-
       await _repository.addBill(bill);
-      await loadFromBillCache();
+      await manualBillRefresh();
     } catch (e) {
-      debugPrint('🔥 Bill 추가 실패: $e');
+      debugPrint('🔥 일반 정산 추가 실패: $e');
       rethrow;
     }
   }
 
-  /// ✅ 정산 데이터 삭제
-  Future<void> deleteBill(
-    List<String> ids, {
-    void Function(String)? onError,
-  }) async {
+  Future<void> addRegularBill(RegularBillModel bill) async {
+    try {
+      await _repository.addRegularBill(bill);
+      await manualBillRefresh();
+    } catch (e) {
+      debugPrint('🔥 정기 정산 추가 실패: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> deleteBill(List<String> ids, {void Function(String)? onError}) async {
     try {
       await _repository.deleteBill(ids);
-      await loadFromBillCache();
+      await manualBillRefresh();
     } catch (e) {
       onError?.call('🚨 정산 데이터 삭제 실패: $e');
     }
   }
 
-  /// ✅ 단일 선택 상태 토글
   void toggleBillSelection(String id) {
-    if (_selectedBillId == id) {
-      _selectedBillId = null; // 같은 거 누르면 해제
-    } else {
-      _selectedBillId = id; // 새로 선택
-    }
+    _selectedBillId = (_selectedBillId == id) ? null : id;
     notifyListeners();
+  }
+
+  Future<void> addBillFromMap(Map<String, dynamic> billData) async {
+    final type = billData['type'];
+
+    try {
+      if (type == '일반') {
+        final bill = BillModel(
+          id: '${billData['CountType']}_${billData['area']}',
+          countType: billData['CountType'],
+          area: billData['area'],
+          type: '일반',
+          basicStandard: billData['basicStandard'],
+          basicAmount: billData['basicAmount'],
+          addStandard: billData['addStandard'],
+          addAmount: billData['addAmount'],
+        );
+        await _repository.addBill(bill);
+      } else if (type == '정기') {
+        final bill = RegularBillModel(
+          id: '${billData['CountType']}_${billData['area']}',
+          countType: billData['CountType'],
+          area: billData['area'],
+          type: '정기',
+          regularType: billData['regularType'],
+          regularAmount: billData['regularAmount'],
+          regularDurationHours: billData['regularDurationHours'],
+        );
+        await _repository.addRegularBill(bill);
+      } else {
+        throw Exception('알 수 없는 정산 유형입니다: $type');
+      }
+
+      await manualBillRefresh(); // 추가 후 갱신
+    } catch (e) {
+      debugPrint('🔥 addBillFromMap 실패: $e');
+      rethrow;
+    }
   }
 }
