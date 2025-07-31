@@ -79,21 +79,30 @@ class PlateContainer extends StatelessWidget {
         final bool isSelected = item.isSelected;
         final String displayUser = isSelected ? item.selectedBy! : item.userName;
 
+        final bool isRegular = item.billingType?.toLowerCase().contains('regular') == true;
+
         int basicStandard = item.basicStandard ?? 0;
         int basicAmount = item.basicAmount ?? 0;
         int addStandard = item.addStandard ?? 0;
         int addAmount = item.addAmount ?? 0;
 
-        int currentFee = calculateParkingFee(
-          entryTimeInSeconds: item.requestTime.millisecondsSinceEpoch ~/ 1000,
-          currentTimeInSeconds: DateTime.now().millisecondsSinceEpoch ~/ 1000,
-          basicStandard: basicStandard,
-          basicAmount: basicAmount,
-          addStandard: addStandard,
-          addAmount: addAmount,
-          isLockedFee: item.isLockedFee,
-          lockedAtTimeInSeconds: item.lockedAtTimeInSeconds,
-        ).toInt();
+        int currentFee = 0;
+        if (!isRegular) {
+          currentFee = calculateParkingFee(
+            entryTimeInSeconds: item.requestTime.millisecondsSinceEpoch ~/ 1000,
+            currentTimeInSeconds: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+            basicStandard: basicStandard,
+            basicAmount: basicAmount,
+            addStandard: addStandard,
+            addAmount: addAmount,
+            isLockedFee: item.isLockedFee,
+            lockedAtTimeInSeconds: item.lockedAtTimeInSeconds,
+          ).toInt();
+        }
+
+        final feeText = isRegular
+            ? '${item.regularAmount ?? 0}원'
+            : '$currentFee원';
 
         final duration = DateTime.now().difference(item.requestTime);
         final elapsedText = formatElapsed(duration);
@@ -108,7 +117,7 @@ class PlateContainer extends StatelessWidget {
               key: ValueKey(item.id),
               topLeftText: '${item.region ?? '전국'} ${item.plateNumber}',
               topRightUpText: item.billingType ?? '없음',
-              topRightDownText: "$currentFee원",
+              topRightDownText: feeText,
               midLeftText: item.location,
               midCenterText: displayUser,
               midRightText: CustomDateUtils.formatTimeForUI(item.requestTime),

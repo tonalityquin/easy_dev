@@ -24,7 +24,16 @@ class InputPlateController {
   bool isLoading = false;
   bool isLocationSelected = false;
   String dropdownValue = '전국';
-  String? selectedBill;
+
+  String selectedBillType = '일반'; // ✅ 일반 / 정기 구분 상태
+  String? _selectedBill;
+
+  String? get selectedBill => _selectedBill;
+
+  set selectedBill(String? value) {
+    _selectedBill = value;
+  }
+
   int selectedBasicStandard = 0;
   int selectedBasicAmount = 0;
   int selectedAddStandard = 0;
@@ -41,9 +50,31 @@ class InputPlateController {
   List<String> fetchedStatusList = [];
 
   final List<String> regions = [
-    '전국', '강원', '경기', '경남', '경북', '광주', '대구', '대전', '부산', '서울',
-    '울산', '인천', '전남', '전북', '제주', '충남', '충북',
-    '국기', '대표', '영사', '외교', '임시', '준영', '준외', '협정',
+    '전국',
+    '강원',
+    '경기',
+    '경남',
+    '경북',
+    '광주',
+    '대구',
+    '대전',
+    '부산',
+    '서울',
+    '울산',
+    '인천',
+    '전남',
+    '전북',
+    '제주',
+    '충남',
+    '충북',
+    '국기',
+    '대표',
+    '영사',
+    '외교',
+    '임시',
+    '준영',
+    '준외',
+    '협정',
   ];
 
   late TextEditingController activeController;
@@ -97,7 +128,7 @@ class InputPlateController {
     clearLocation();
     capturedImages.clear();
     selectedStatuses.clear();
-    selectedBill = null;
+    _selectedBill = null;
     selectedBasicStandard = 0;
     selectedBasicAmount = 0;
     selectedAddStandard = 0;
@@ -107,6 +138,7 @@ class InputPlateController {
     fetchedStatusList = [];
     isSelected = List.generate(statuses.length, (_) => false);
     isThreeDigit = true;
+    selectedBillType = '일반';
   }
 
   String buildPlateNumber() {
@@ -137,18 +169,48 @@ class InputPlateController {
     customStatusController.dispose();
   }
 
+  /// ✅ 정산 유형 선택 시 정산 금액 정보 자동 세팅
+  void setSelectedBill(String? billId, BuildContext context) {
+    _selectedBill = billId;
+
+    if (billId == null) {
+      selectedBasicStandard = 0;
+      selectedBasicAmount = 0;
+      selectedAddStandard = 0;
+      selectedAddAmount = 0;
+      return;
+    }
+
+    final billState = context.read<BillState>();
+
+    if (selectedBillType == '일반') {
+      final matched = billState.generalBills.firstWhere(
+            (b) => b.countType == billId,
+        orElse: () => billState.emptyModel,
+      );
+
+      selectedBasicStandard = matched.basicStandard ?? 0;
+      selectedBasicAmount = matched.basicAmount ?? 0;
+      selectedAddStandard = matched.addStandard ?? 0;
+      selectedAddAmount = matched.addAmount ?? 0;
+    } else {
+      // 정기일 경우에는 금액 정보를 따로 사용하지 않음
+      selectedBasicStandard = 0;
+      selectedBasicAmount = 0;
+      selectedAddStandard = 0;
+      selectedAddAmount = 0;
+    }
+  }
+
   Future<void> deleteCustomStatusFromFirestore(BuildContext context) async {
     final plateNumber = buildPlateNumber();
     final area = context.read<AreaState>().currentArea;
 
     try {
       await FirestoreLogger().log('🗑️ 상태 메모 삭제 시도: $plateNumber-$area', level: 'called');
-
       await _plateRepo.deletePlateStatus(plateNumber, area);
-
       fetchedCustomStatus = null;
       fetchedStatusList = [];
-
       await FirestoreLogger().log('✅ 상태 메모 삭제 성공: $plateNumber-$area', level: 'success');
     } catch (e) {
       await FirestoreLogger().log('❌ 상태 메모 삭제 실패: $e', level: 'error');
@@ -158,12 +220,10 @@ class InputPlateController {
 
   Future<void> fetchStatusAndMemo(String plateNumber, String area) async {
     await FirestoreLogger().log('🔍 상태/메모 조회 시도: $plateNumber-$area', level: 'called');
-
     final data = await _plateRepo.getPlateStatus(plateNumber, area);
 
     if (data != null) {
       await FirestoreLogger().log('✅ 상태/메모 조회 성공: $plateNumber-$area', level: 'success');
-
       fetchedCustomStatus = data['customStatus'];
       final List<dynamic>? savedList = data['statusList'];
       if (savedList != null) {
@@ -183,11 +243,10 @@ class InputPlateController {
     final division = areaState.currentDivision;
     final userName = context.read<UserState>().name;
 
-    // ✅ 수정된 부분: bills 대신 generalBills, regularBills로 대체
     final billState = context.read<BillState>();
     final hasAnyBill = billState.generalBills.isNotEmpty || billState.regularBills.isNotEmpty;
 
-    if (hasAnyBill && selectedBill == null) {
+    if (hasAnyBill && _selectedBill == null) {
       showFailedSnackbar(context, '정산 유형을 선택해주세요');
       return;
     }
@@ -202,10 +261,7 @@ class InputPlateController {
     );
 
     try {
-      await FirestoreLogger().log(
-        '🚀 submitPlateEntry 시작\nplateNumber: $plateNumber\narea: $area\ndivision: $division\nuser: $userName',
-        level: 'called',
-      );
+      await FirestoreLogger().log('🚀 plate 등록 시작: $plateNumber', level: 'called');
 
       final uploadedUrls = await InputPlateService.uploadCapturedImages(
         capturedImages,
@@ -215,10 +271,7 @@ class InputPlateController {
         division,
       );
 
-      await FirestoreLogger().log(
-        '✅ 이미지 업로드 완료: ${uploadedUrls.length}건',
-        level: 'success',
-      );
+      await FirestoreLogger().log('✅ 이미지 업로드 완료: ${uploadedUrls.length}', level: 'success');
 
       final wasSuccessful = await InputPlateService.registerPlateEntry(
         context: context,
@@ -226,19 +279,16 @@ class InputPlateController {
         location: locationController.text,
         isLocationSelected: isLocationSelected,
         imageUrls: uploadedUrls,
-        selectedBill: selectedBill,
+        selectedBill: _selectedBill,
         selectedStatuses: selectedStatuses,
         basicStandard: selectedBasicStandard,
         basicAmount: selectedBasicAmount,
         addStandard: selectedAddStandard,
         addAmount: selectedAddAmount,
         region: dropdownValue,
-        customStatus: customStatusController.text.trim().isNotEmpty
-            ? customStatusController.text
-            : fetchedCustomStatus ?? '',
+        customStatus:
+            customStatusController.text.trim().isNotEmpty ? customStatusController.text : fetchedCustomStatus ?? '',
       );
-
-      await FirestoreLogger().log('📤 plate_status 저장 시도: $plateNumber-$area', level: 'called');
 
       await _plateRepo.setPlateStatus(
         plateNumber: plateNumber,
@@ -248,19 +298,19 @@ class InputPlateController {
         createdBy: userName,
       );
 
-      await FirestoreLogger().log('✅ plate_status 저장 성공: $plateNumber-$area', level: 'success');
-
       if (mounted) {
         Navigator.of(context).pop();
         if (wasSuccessful) {
           showSuccessSnackbar(context, '차량 정보 등록 완료');
           resetForm();
-          await FirestoreLogger().log('🎉 plate 등록 프로세스 완료: $plateNumber', level: 'success');
         }
       }
+
+      await FirestoreLogger().log('🎉 plate 등록 완료: $plateNumber', level: 'success');
     } catch (e) {
       if (mounted) {
         Navigator.of(context).pop();
+        showFailedSnackbar(context, '등록 실패: ${e.toString()}');
         showFailedSnackbar(context, '등록 실패: ${e.toString()}');
       }
       await FirestoreLogger().log('❌ plate 등록 실패: $e', level: 'error');

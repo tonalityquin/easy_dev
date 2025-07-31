@@ -39,7 +39,7 @@ class PlateCreationService {
     final existingPlate = await _queryService.getPlate(documentId);
     if (existingPlate != null) {
       final existingType = PlateType.values.firstWhere(
-        (type) => type.firestoreValue == existingPlate.type,
+            (type) => type.firestoreValue == existingPlate.type,
         orElse: () => PlateType.parkingRequests,
       );
 
@@ -53,16 +53,24 @@ class PlateCreationService {
       }
     }
 
-    // 정산 정보 로드
+    int? regularAmount;
+    int? regularDurationHours;
+
     if (billingType != null && billingType.isNotEmpty) {
       try {
         final billDoc = await _firestore.collection('bill').doc('${billingType}_$area').get();
         if (billDoc.exists) {
           final billData = billDoc.data()!;
+
+          // 일반 정산
           basicStandard = billData['basicStandard'] ?? 0;
           basicAmount = billData['basicAmount'] ?? 0;
           addStandard = billData['addStandard'] ?? 0;
           addAmount = billData['addAmount'] ?? 0;
+
+          // 정기 정산
+          regularAmount = billData['regularAmount'];
+          regularDurationHours = billData['regularDurationHours'];
 
           await FirestoreLogger().log('addPlate billing data loaded: $billingType');
         } else {
@@ -103,9 +111,10 @@ class PlateCreationService {
       lockedFeeAmount: lockedFeeAmount,
       paymentMethod: paymentMethod,
       customStatus: customStatus,
+      regularAmount: regularAmount,
+      regularDurationHours: regularDurationHours,
     );
 
-    // ✅ 로그 추가
     final plateWithLog = plate.addLog(
       action: 'create',
       performedBy: userName,
@@ -116,7 +125,6 @@ class PlateCreationService {
     debugPrint("🔥 저장할 plate: ${plateWithLog.toMap()}");
     await _writeService.addOrUpdatePlate(documentId, plateWithLog);
 
-    // 커스텀 상태 저장
     if (customStatus != null && customStatus.trim().isNotEmpty) {
       final statusDocRef = _firestore.collection('plate_status').doc(documentId);
       final expireAt = Timestamp.fromDate(DateTime.now().add(const Duration(days: 1)));

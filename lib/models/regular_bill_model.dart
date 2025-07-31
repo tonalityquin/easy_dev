@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'bill_model.dart'; // enum BillType 정의되어 있는 파일
 
 class RegularBillModel {
   final String id;
-  final String type; // 항상 '정기'
+  final BillType type; // ✅ BillType.general or BillType.regular
   final String countType; // 정산 이름
   final String area;
   final String regularType; // '일 주차' or '월 주차'
@@ -11,7 +12,7 @@ class RegularBillModel {
 
   RegularBillModel({
     required this.id,
-    this.type = '정기',
+    this.type = BillType.regular, // 항상 정기
     required this.countType,
     required this.area,
     required this.regularType,
@@ -24,6 +25,7 @@ class RegularBillModel {
     try {
       return RegularBillModel(
         id: id,
+        type: billTypeFromString(data['type']),
         countType: data['CountType'] ?? '',
         area: data['area'] ?? '',
         regularType: data['regularType'] ?? '',
@@ -43,7 +45,7 @@ class RegularBillModel {
   /// ✅ Firestore 저장용
   Map<String, dynamic> toFirestoreMap() {
     return {
-      'type': type,
+      'type': billTypeToString(type),
       'CountType': countType,
       'area': area,
       'regularType': regularType,
@@ -56,7 +58,7 @@ class RegularBillModel {
   Map<String, dynamic> toCacheMap() {
     return {
       'id': id,
-      'type': type,
+      'type': billTypeToString(type),
       'CountType': countType,
       'area': area,
       'regularType': regularType,
@@ -69,6 +71,7 @@ class RegularBillModel {
   factory RegularBillModel.fromCacheMap(Map<String, dynamic> data) {
     return RegularBillModel(
       id: data['id'] ?? '',
+      type: billTypeFromString(data['type']),
       countType: data['CountType'] ?? '',
       area: data['area'] ?? '',
       regularType: data['regularType'] ?? '',
@@ -79,6 +82,6 @@ class RegularBillModel {
 
   @override
   String toString() {
-    return 'RegularBillModel(id: $id, type: $type, countType: $countType, area: $area, regularType: $regularType, regularAmount: $regularAmount, regularDurationHours: $regularDurationHours)';
+    return 'RegularBillModel(id: $id, type: ${billTypeToString(type)}, countType: $countType, area: $area, regularType: $regularType, regularAmount: $regularAmount, regularDurationHours: $regularDurationHours)';
   }
 }

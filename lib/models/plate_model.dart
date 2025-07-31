@@ -35,6 +35,8 @@ class PlateFields {
   static const String paymentMethod = 'paymentMethod';
   static const String customStatus = 'customStatus';
   static const String logs = 'logs';
+  static const String regularAmount = 'regularAmount';
+  static const String regularDurationHours = 'regularDurationHours';
 }
 
 class PlateModel {
@@ -64,6 +66,8 @@ class PlateModel {
   final String? paymentMethod;
   final String? customStatus;
   final List<PlateLogModel>? logs;
+  final int? regularAmount;
+  final int? regularDurationHours;
 
   PlateModel({
     required this.id,
@@ -92,7 +96,55 @@ class PlateModel {
     this.paymentMethod,
     this.customStatus,
     this.logs,
+    this.regularAmount,
+    this.regularDurationHours,
   });
+
+  Map<String, dynamic> diff(PlateModel other) {
+    final changes = <String, dynamic>{};
+
+    if (plateNumber != other.plateNumber) {
+      changes['plateNumber'] = {'before': plateNumber, 'after': other.plateNumber};
+    }
+    if (location != other.location) {
+      changes['location'] = {'before': location, 'after': other.location};
+    }
+    if (billingType != other.billingType) {
+      changes['billingType'] = {'before': billingType, 'after': other.billingType};
+    }
+    if (!listEquals(statusList, other.statusList)) {
+      changes['statusList'] = {'before': statusList, 'after': other.statusList};
+    }
+    if (basicStandard != other.basicStandard) {
+      changes['basicStandard'] = {'before': basicStandard, 'after': other.basicStandard};
+    }
+    if (basicAmount != other.basicAmount) {
+      changes['basicAmount'] = {'before': basicAmount, 'after': other.basicAmount};
+    }
+    if (addStandard != other.addStandard) {
+      changes['addStandard'] = {'before': addStandard, 'after': other.addStandard};
+    }
+    if (addAmount != other.addAmount) {
+      changes['addAmount'] = {'before': addAmount, 'after': other.addAmount};
+    }
+    if (regularAmount != other.regularAmount) {
+      changes['regularAmount'] = {'before': regularAmount, 'after': other.regularAmount};
+    }
+    if (regularDurationHours != other.regularDurationHours) {
+      changes['regularDurationHours'] = {'before': regularDurationHours, 'after': other.regularDurationHours};
+    }
+    if (paymentMethod != other.paymentMethod) {
+      changes['paymentMethod'] = {'before': paymentMethod, 'after': other.paymentMethod};
+    }
+    if (region != other.region) {
+      changes['region'] = {'before': region, 'after': other.region};
+    }
+    if (customStatus != other.customStatus) {
+      changes['customStatus'] = {'before': customStatus, 'after': other.customStatus};
+    }
+
+    return changes;
+  }
 
   factory PlateModel.fromDocument(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data() ?? {};
@@ -126,9 +178,9 @@ class PlateModel {
       updatedAt: (updatedTimestamp is Timestamp) ? updatedTimestamp.toDate() : null,
       paymentMethod: data[PlateFields.paymentMethod],
       customStatus: data[PlateFields.customStatus],
-      logs: (data[PlateFields.logs] as List?)
-          ?.map((e) => PlateLogModel.fromMap(Map<String, dynamic>.from(e)))
-          .toList(),
+      logs: (data[PlateFields.logs] as List?)?.map((e) => PlateLogModel.fromMap(Map<String, dynamic>.from(e))).toList(),
+      regularAmount: parseInt(data[PlateFields.regularAmount]),
+      regularDurationHours: parseInt(data[PlateFields.regularDurationHours]),
     );
   }
 
@@ -159,6 +211,8 @@ class PlateModel {
       if (paymentMethod != null) PlateFields.paymentMethod: paymentMethod,
       if (customStatus != null) PlateFields.customStatus: customStatus,
       if (logs != null) PlateFields.logs: logs!.map((e) => e.toMap()).toList(),
+      if (regularAmount != null) PlateFields.regularAmount: regularAmount,
+      if (regularDurationHours != null) PlateFields.regularDurationHours: regularDurationHours,
     };
 
     if (removeNullOrEmpty) {
@@ -166,55 +220,6 @@ class PlateModel {
     }
 
     return map;
-  }
-
-  Map<String, dynamic> diff(PlateModel other) {
-    final changes = <String, dynamic>{};
-
-    if (location != other.location) {
-      changes['location'] = {'before': location, 'after': other.location};
-    }
-    if (billingType != other.billingType) {
-      changes['billingType'] = {'before': billingType, 'after': other.billingType};
-    }
-    if (!listEquals(statusList, other.statusList)) {
-      changes['statusList'] = {'before': statusList, 'after': other.statusList};
-    }
-    if (paymentMethod != other.paymentMethod) {
-      changes['paymentMethod'] = {'before': paymentMethod, 'after': other.paymentMethod};
-    }
-    if (lockedFeeAmount != other.lockedFeeAmount) {
-      changes['lockedFeeAmount'] = {'before': lockedFeeAmount, 'after': other.lockedFeeAmount};
-    }
-    if (customStatus != other.customStatus) {
-      changes['customStatus'] = {'before': customStatus, 'after': other.customStatus};
-    }
-
-    return changes;
-  }
-
-  PlateModel addLog({
-    required String action,
-    required String performedBy,
-    required String from,
-    required String to,
-    Map<String, dynamic>? updatedFields,
-  }) {
-    final newLog = PlateLogModel(
-      plateNumber: plateNumber,
-      division: type,
-      area: area,
-      from: from,
-      to: to,
-      action: action,
-      performedBy: performedBy,
-      billingType: billingType,
-      timestamp: DateTime.now(),
-      updatedFields: updatedFields,
-    );
-
-    final updatedLogs = List<PlateLogModel>.from(logs ?? [])..add(newLog);
-    return copyWith(logs: updatedLogs);
   }
 
   PlateModel copyWith({
@@ -244,6 +249,8 @@ class PlateModel {
     String? paymentMethod,
     String? customStatus,
     List<PlateLogModel>? logs,
+    int? regularAmount,
+    int? regularDurationHours,
   }) {
     return PlateModel(
       id: id ?? this.id,
@@ -272,12 +279,37 @@ class PlateModel {
       paymentMethod: paymentMethod ?? this.paymentMethod,
       customStatus: customStatus ?? this.customStatus,
       logs: logs ?? this.logs,
+      regularAmount: regularAmount ?? this.regularAmount,
+      regularDurationHours: regularDurationHours ?? this.regularDurationHours,
     );
   }
 
+  PlateModel addLog({
+    required String action,
+    required String performedBy,
+    required String from,
+    required String to,
+    Map<String, dynamic>? updatedFields,
+  }) {
+    final newLog = PlateLogModel(
+      plateNumber: plateNumber,
+      division: type,
+      area: area,
+      from: from,
+      to: to,
+      action: action,
+      performedBy: performedBy,
+      billingType: billingType,
+      timestamp: DateTime.now(),
+      updatedFields: updatedFields,
+    );
+
+    final updatedLogs = List<PlateLogModel>.from(logs ?? [])..add(newLog);
+    return copyWith(logs: updatedLogs);
+  }
+
   @override
-  String toString() =>
-      'PlateModel(id: $id, plateNumber: $plateNumber, user: $userName, area: $area)';
+  String toString() => 'PlateModel(id: $id, plateNumber: $plateNumber, user: $userName, area: $area)';
 }
 
 extension PlateModelTypeExtension on PlateModel {

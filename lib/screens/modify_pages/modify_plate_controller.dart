@@ -173,7 +173,7 @@ class ModifyPlateController {
     final List<dynamic> allBills = [...billState.generalBills, ...billState.regularBills];
 
     final selected = allBills.firstWhere(
-      (bill) {
+          (bill) {
         if (bill is BillModel || bill is RegularBillModel) {
           return bill.countType == billName;
         }
@@ -186,20 +186,19 @@ class ModifyPlateController {
 
     selectedBill = selected.countType;
 
-    // BillModel과 RegularBillModel은 프로퍼티가 다를 수 있음.
     if (selected is BillModel) {
-      selectedBasicAmount = selected.basicAmount;
-      selectedBasicStandard = selected.basicStandard;
-      selectedAddAmount = selected.addAmount;
-      selectedAddStandard = selected.addStandard;
+      selectedBasicAmount = selected.basicAmount ?? 0;
+      selectedBasicStandard = selected.basicStandard ?? 0;
+      selectedAddAmount = selected.addAmount ?? 0;
+      selectedAddStandard = selected.addStandard ?? 0;
     } else if (selected is RegularBillModel) {
-      // RegularBillModel에는 기본/추가 요금이 없을 수 있음. 필요 시 따로 처리
-      selectedBasicAmount = selected.regularAmount;
-      selectedBasicStandard = selected.regularDurationHours;
+      selectedBasicAmount = selected.regularAmount; // 항상 int
+      selectedBasicStandard = selected.regularDurationHours; // 항상 int
       selectedAddAmount = 0;
       selectedAddStandard = 0;
     }
   }
+
 
   Future<void> updateCustomStatusToFirestore() async {
     final plateNumber = plate.plateNumber;

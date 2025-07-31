@@ -18,23 +18,20 @@ class BillState extends ChangeNotifier {
   String _previousArea = '';
 
   List<BillModel> get generalBills => _generalBills;
-
   List<RegularBillModel> get regularBills => _regularBills;
-
   String? get selectedBillId => _selectedBillId;
-
   bool get isLoading => _isLoading;
 
   BillModel get emptyModel => BillModel(
-        id: '',
-        countType: '',
-        area: '',
-        basicStandard: 0,
-        basicAmount: 0,
-        addStandard: 0,
-        addAmount: 0,
-        type: '일반',
-      );
+    id: '',
+    countType: '',
+    area: '',
+    basicStandard: 0,
+    basicAmount: 0,
+    addStandard: 0,
+    addAmount: 0,
+    type: BillType.general, // ✅ enum 적용
+  );
 
   BillState(this._repository, this._areaState) {
     loadFromBillCache();
@@ -58,14 +55,18 @@ class BillState extends ChangeNotifier {
     try {
       if (generalJson != null) {
         final decoded = json.decode(generalJson) as List;
-        _generalBills = decoded.map((e) => BillModel.fromCacheMap(Map<String, dynamic>.from(e))).toList();
+        _generalBills = decoded
+            .map((e) => BillModel.fromCacheMap(Map<String, dynamic>.from(e)))
+            .toList();
       } else {
         _generalBills = [];
       }
 
       if (regularJson != null) {
         final decoded = json.decode(regularJson) as List;
-        _regularBills = decoded.map((e) => RegularBillModel.fromCacheMap(Map<String, dynamic>.from(e))).toList();
+        _regularBills = decoded
+            .map((e) => RegularBillModel.fromCacheMap(Map<String, dynamic>.from(e)))
+            .toList();
       } else {
         _regularBills = [];
       }
@@ -151,35 +152,37 @@ class BillState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// ✅ 수정: String -> enum
   Future<void> addBillFromMap(Map<String, dynamic> billData) async {
-    final type = billData['type'];
+    final typeStr = billData['type'];
+    final billType = billTypeFromString(typeStr);
 
     try {
-      if (type == '일반') {
+      if (billType == BillType.general) {
         final bill = BillModel(
           id: '${billData['CountType']}_${billData['area']}',
           countType: billData['CountType'],
           area: billData['area'],
-          type: '일반',
+          type: BillType.general,
           basicStandard: billData['basicStandard'],
           basicAmount: billData['basicAmount'],
           addStandard: billData['addStandard'],
           addAmount: billData['addAmount'],
         );
         await _repository.addBill(bill);
-      } else if (type == '정기') {
+      } else if (billType == BillType.regular) {
         final bill = RegularBillModel(
           id: '${billData['CountType']}_${billData['area']}',
           countType: billData['CountType'],
           area: billData['area'],
-          type: '정기',
+          type: BillType.regular,
           regularType: billData['regularType'],
           regularAmount: billData['regularAmount'],
           regularDurationHours: billData['regularDurationHours'],
         );
         await _repository.addRegularBill(bill);
       } else {
-        throw Exception('알 수 없는 정산 유형입니다: $type');
+        throw Exception('알 수 없는 정산 유형입니다: $typeStr');
       }
 
       await manualBillRefresh(); // 추가 후 갱신

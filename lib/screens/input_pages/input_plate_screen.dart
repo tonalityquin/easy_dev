@@ -17,7 +17,6 @@ import 'sections/input_bottom_action_section.dart';
 import 'sections/input_custom_status_section.dart';
 
 import 'utils/input_camera_helper.dart';
-
 import 'widgets/input_custom_status_bottom_sheet.dart';
 import 'keypad/num_keypad.dart';
 import 'keypad/kor_keypad.dart';
@@ -36,6 +35,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
   List<String> selectedStatusNames = [];
   Key statusSectionKey = UniqueKey();
+
+  String selectedBillType = '일반'; // ✅ '일반' 또는 '정기'
 
   @override
   void initState() {
@@ -188,6 +189,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
             InputBillSection(
               selectedBill: controller.selectedBill,
               onChanged: (value) => setState(() => controller.selectedBill = value),
+              selectedBillType: selectedBillType,
+              onTypeChanged: (newType) => setState(() => selectedBillType = newType),
             ),
             const SizedBox(height: 32),
             InputStatusOnTapSection(

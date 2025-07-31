@@ -8,7 +8,7 @@ import '../../states/area/area_state.dart';
 import '../type_pages/debugs/firestore_logger.dart';
 import 'debugs/input_debug_bottom_sheet.dart';
 import 'input_plate_controller.dart';
-import 'sections/input_bill_section.dart';
+// import 'sections/input_bill_section.dart';
 import 'sections/input_location_section.dart';
 import 'sections/input_photo_section.dart';
 import 'sections/input_plate_section.dart';
@@ -197,10 +197,12 @@ class _InputPlateBottomSheetState extends State<InputPlateBottomSheet> {
                       plateNumber: controller.buildPlateNumber(),
                     ),
                     const SizedBox(height: 32),
-                    InputBillSection(
-                      selectedBill: controller.selectedBill,
-                      onChanged: (value) => setState(() => controller.selectedBill = value),
-                    ),
+                    // InputBillSection(
+                    //   selectedBill: controller.selectedBill,
+                    //   onChanged: (value) => setState(() => controller.selectedBill = value),
+                    //   selectedBillType: selectedBillType, // ✅ 추가
+                    //   onTypeChanged: (type) => setState(() => selectedBillType = type), // ✅ 추가
+                    // ),
                     const SizedBox(height: 32),
                     InputStatusOnTapSection(
                       key: statusSectionKey,
