@@ -195,6 +195,9 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                   basicAmount: selectedPlate.basicAmount ?? 0,
                   addStandard: selectedPlate.addStandard ?? 0,
                   addAmount: selectedPlate.addAmount ?? 0,
+                  billingType: selectedPlate.billingType ?? '일반',
+                  regularAmount: selectedPlate.regularAmount,
+                  regularDurationHours: selectedPlate.regularDurationHours,
                 );
                 if (result == null) return;
 
