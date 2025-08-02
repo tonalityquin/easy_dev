@@ -18,6 +18,7 @@ import 'modify_plate_service.dart';
 
 import '../../repositories/plate/firestore_plate_repository.dart';
 
+// 생략된 import는 동일
 class ModifyPlateController {
   final BuildContext context;
   final PlateModel plate;
@@ -43,6 +44,7 @@ class ModifyPlateController {
   int selectedAddStandard = 0;
   int selectedAddAmount = 0;
   String? selectedBill;
+  String selectedBillType = '일반'; // ✅ 추가됨
   String dropdownValue = '전국';
 
   bool isLocationSelected = false;
@@ -133,7 +135,9 @@ class ModifyPlateController {
       }
       cameraController = null;
       isCameraInitialized = false;
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('❌ 카메라 dispose 중 오류: $e');
+    }
     _isDisposing = false;
   }
 
@@ -166,6 +170,19 @@ class ModifyPlateController {
     initialSelectedStatuses = List<String>.from(plate.statusList);
   }
 
+  void onBillTypeChanged(String type) {
+    if (type != selectedBillType) {
+      debugPrint('❌ 정산 유형 변경은 허용되지 않습니다. 기존: $selectedBillType → 시도: $type');
+      return;
+    }
+
+    selectedBill = null;
+    selectedBasicAmount = 0;
+    selectedBasicStandard = 0;
+    selectedAddAmount = 0;
+    selectedAddStandard = 0;
+  }
+
   void applyBillDefaults(String? billName) {
     if (billName == null) return;
 
@@ -173,12 +190,7 @@ class ModifyPlateController {
     final List<dynamic> allBills = [...billState.generalBills, ...billState.regularBills];
 
     final selected = allBills.firstWhere(
-          (bill) {
-        if (bill is BillModel || bill is RegularBillModel) {
-          return bill.countType == billName;
-        }
-        return false;
-      },
+      (bill) => (bill is BillModel || bill is RegularBillModel) && bill.countType == billName,
       orElse: () => null,
     );
 
@@ -187,18 +199,19 @@ class ModifyPlateController {
     selectedBill = selected.countType;
 
     if (selected is BillModel) {
+      selectedBillType = '일반'; // ✅ 추가
       selectedBasicAmount = selected.basicAmount ?? 0;
       selectedBasicStandard = selected.basicStandard ?? 0;
       selectedAddAmount = selected.addAmount ?? 0;
       selectedAddStandard = selected.addStandard ?? 0;
     } else if (selected is RegularBillModel) {
-      selectedBasicAmount = selected.regularAmount; // 항상 int
-      selectedBasicStandard = selected.regularDurationHours; // 항상 int
+      selectedBillType = '정기'; // ✅ 추가
+      selectedBasicAmount = selected.regularAmount;
+      selectedBasicStandard = selected.regularDurationHours;
       selectedAddAmount = 0;
       selectedAddStandard = 0;
     }
   }
-
 
   Future<void> updateCustomStatusToFirestore() async {
     final plateNumber = plate.plateNumber;
@@ -212,7 +225,6 @@ class ModifyPlateController {
         statusList: initialSelectedStatuses,
         createdBy: 'devAdmin020',
       );
-
       debugPrint('✅ Firestore 문서 업데이트 완료: $plateNumber-$area');
     } catch (e) {
       debugPrint('❌ Firestore 문서 업데이트 실패: $e');
@@ -247,10 +259,7 @@ class ModifyPlateController {
     return '${controllerFrontdigit.text}${controllerMidDigit.text}${controllerBackDigit.text}';
   }
 
-  Future<void> handleAction(
-      VoidCallback onSuccess,
-      List<String> selectedStatuses,
-      ) async {
+  Future<void> handleAction(VoidCallback onSuccess, List<String> selectedStatuses) async {
     final billState = context.read<BillState>();
     final allBills = [...billState.generalBills, ...billState.regularBills];
 
@@ -351,7 +360,6 @@ class ModifyPlateController {
       await FirestoreLogger().log('❌ Plate 수정 실패', level: 'error');
     }
   }
-
 
   void dispose() {
     controllerFrontdigit.dispose();

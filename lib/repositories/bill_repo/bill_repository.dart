@@ -10,7 +10,7 @@ abstract class BillRepository {
   Future<List<RegularBillModel>> getRegularBillOnce(String area);
 
   /// ✅ 일반 정산 데이터 추가
-  Future<void> addBill(BillModel bill);
+  Future<void> addNormalBill(BillModel bill);
 
   /// ✅ 정기 정산 데이터 추가
   Future<void> addRegularBill(RegularBillModel regularBill);

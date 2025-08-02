@@ -23,8 +23,8 @@ class FirestoreBillRepository implements BillRepository {
   }
 
   @override
-  Future<void> addBill(BillModel bill) {
-    return _writeService.addBill(bill);
+  Future<void> addNormalBill(BillModel bill) {
+    return _writeService.addNormalBill(bill);
   }
 
   @override

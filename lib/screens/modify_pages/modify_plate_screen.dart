@@ -48,6 +48,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
 
   final List<XFile> _capturedImages = [];
   final List<String> _existingImageUrls = [];
+  String selectedBillType = '일반'; // ✅ bill 유형 상태
 
   bool isLoading = false;
 
@@ -166,10 +167,19 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
             const SizedBox(height: 32.0),
             ModifyBillSection(
               selectedBill: _controller.selectedBill,
+              selectedBillType: selectedBillType, // ✅ 추가됨
               onChanged: (value) {
                 setState(() {
                   _controller.selectedBill = value;
                   _controller.applyBillDefaults(value);
+                });
+              },
+              onTypeChanged: (type) {
+                // ✅ 추가됨
+                setState(() {
+                  selectedBillType = type;
+                  _controller.selectedBillType = type;
+                  _controller.selectedBill = null; // ✅ 필터 바뀌면 선택 초기화
                 });
               },
             ),

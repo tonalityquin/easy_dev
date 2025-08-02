@@ -118,9 +118,9 @@ class BillState extends ChangeNotifier {
     }
   }
 
-  Future<void> addBill(BillModel bill) async {
+  Future<void> addNormalBill(BillModel bill) async {
     try {
-      await _repository.addBill(bill);
+      await _repository.addNormalBill(bill);
       await manualBillRefresh();
     } catch (e) {
       debugPrint('🔥 일반 정산 추가 실패: $e');
@@ -169,7 +169,7 @@ class BillState extends ChangeNotifier {
           addStandard: billData['addStandard'],
           addAmount: billData['addAmount'],
         );
-        await _repository.addBill(bill);
+        await _repository.addNormalBill(bill);
       } else if (billType == BillType.regular) {
         final bill = RegularBillModel(
           id: '${billData['CountType']}_${billData['area']}',
@@ -187,7 +187,7 @@ class BillState extends ChangeNotifier {
 
       await manualBillRefresh(); // 추가 후 갱신
     } catch (e) {
-      debugPrint('🔥 addBillFromMap 실패: $e');
+      debugPrint('🔥 addNormalBillFromMap 실패: $e');
       rethrow;
     }
   }
