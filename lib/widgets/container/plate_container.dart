@@ -8,6 +8,7 @@ import '../../states/plate/plate_state.dart';
 import '../../states/user/user_state.dart';
 import '../../utils/date_utils.dart';
 import '../../utils/snackbar_helper.dart';
+import '../dialog/billing_bottom_sheet/fee_calculator.dart';
 import 'plate_custom_box.dart';
 
 class PlateContainer extends StatelessWidget {
@@ -78,7 +79,6 @@ class PlateContainer extends StatelessWidget {
       children: filteredData.map((item) {
         final bool isSelected = item.isSelected;
         final String displayUser = isSelected ? item.selectedBy! : item.userName;
-
         final bool isRegular = (item.regularAmount ?? 0) > 0;
 
         int basicStandard = item.basicStandard ?? 0;
@@ -88,28 +88,30 @@ class PlateContainer extends StatelessWidget {
 
         int currentFee = 0;
         if (!isRegular) {
-          currentFee = calculateParkingFee(
-            entryTimeInSeconds: item.requestTime.millisecondsSinceEpoch ~/ 1000,
-            currentTimeInSeconds: DateTime.now().millisecondsSinceEpoch ~/ 1000,
-            basicStandard: basicStandard,
-            basicAmount: basicAmount,
-            addStandard: addStandard,
-            addAmount: addAmount,
-            isLockedFee: item.isLockedFee,
-            lockedAtTimeInSeconds: item.lockedAtTimeInSeconds,
-          ).toInt();
+          if (item.isLockedFee && item.lockedFeeAmount != null) {
+            currentFee = item.lockedFeeAmount!;
+          } else {
+            currentFee = calculateParkingFee(
+              entryTimeInSeconds: item.requestTime.millisecondsSinceEpoch ~/ 1000,
+              currentTimeInSeconds: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+              basicStandard: basicStandard,
+              basicAmount: basicAmount,
+              addStandard: addStandard,
+              addAmount: addAmount,
+              isLockedFee: item.isLockedFee,
+              lockedAtTimeInSeconds: item.lockedAtTimeInSeconds,
+              userAdjustment: item.userAdjustment ?? 0,
+              mode: _parseFeeMode(item.feeMode),
+            ).toInt();
+          }
         }
 
-        final feeText = isRegular
-            ? '${item.regularAmount ?? 0}원'
-            : '$currentFee원';
-
+        final feeText = isRegular ? '${item.regularAmount ?? 0}원' : '$currentFee원';
         final duration = DateTime.now().difference(item.requestTime);
         final elapsedText = formatElapsed(duration);
 
-        final backgroundColor = ((item.billingType?.trim().isNotEmpty ?? false) && item.isLockedFee)
-            ? Colors.orange[50]
-            : Colors.white;
+        final backgroundColor =
+            ((item.billingType?.trim().isNotEmpty ?? false) && item.isLockedFee) ? Colors.orange[50] : Colors.white;
 
         return Column(
           children: [
@@ -131,7 +133,7 @@ class PlateContainer extends StatelessWidget {
 
                 final isOtherUserSelected = item.isSelected && item.selectedBy != userName;
                 final isAnotherPlateSelected = data.any(
-                      (p) => p.isSelected && p.selectedBy == userName && p.id != item.id,
+                  (p) => p.isSelected && p.selectedBy == userName && p.id != item.id,
                 );
 
                 if (isOtherUserSelected) {
@@ -159,5 +161,16 @@ class PlateContainer extends StatelessWidget {
         );
       }).toList(),
     );
+  }
+
+  FeeMode _parseFeeMode(String? modeString) {
+    switch (modeString) {
+      case 'plus':
+        return FeeMode.plus;
+      case 'minus':
+        return FeeMode.minus;
+      default:
+        return FeeMode.normal;
+    }
   }
 }

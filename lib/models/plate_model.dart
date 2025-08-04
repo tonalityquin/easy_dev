@@ -37,6 +37,8 @@ class PlateFields {
   static const String logs = 'logs';
   static const String regularAmount = 'regularAmount';
   static const String regularDurationHours = 'regularDurationHours';
+  static const String userAdjustment = 'userAdjustment';
+  static const String feeMode = 'feeMode';
 }
 
 class PlateModel {
@@ -68,6 +70,8 @@ class PlateModel {
   final List<PlateLogModel>? logs;
   final int? regularAmount;
   final int? regularDurationHours;
+  final int? userAdjustment;
+  final String? feeMode;
 
   PlateModel({
     required this.id,
@@ -98,53 +102,9 @@ class PlateModel {
     this.logs,
     this.regularAmount,
     this.regularDurationHours,
+    this.userAdjustment,
+    this.feeMode,
   });
-
-  Map<String, dynamic> diff(PlateModel other) {
-    final changes = <String, dynamic>{};
-
-    if (plateNumber != other.plateNumber) {
-      changes['plateNumber'] = {'before': plateNumber, 'after': other.plateNumber};
-    }
-    if (location != other.location) {
-      changes['location'] = {'before': location, 'after': other.location};
-    }
-    if (billingType != other.billingType) {
-      changes['billingType'] = {'before': billingType, 'after': other.billingType};
-    }
-    if (!listEquals(statusList, other.statusList)) {
-      changes['statusList'] = {'before': statusList, 'after': other.statusList};
-    }
-    if (basicStandard != other.basicStandard) {
-      changes['basicStandard'] = {'before': basicStandard, 'after': other.basicStandard};
-    }
-    if (basicAmount != other.basicAmount) {
-      changes['basicAmount'] = {'before': basicAmount, 'after': other.basicAmount};
-    }
-    if (addStandard != other.addStandard) {
-      changes['addStandard'] = {'before': addStandard, 'after': other.addStandard};
-    }
-    if (addAmount != other.addAmount) {
-      changes['addAmount'] = {'before': addAmount, 'after': other.addAmount};
-    }
-    if (regularAmount != other.regularAmount) {
-      changes['regularAmount'] = {'before': regularAmount, 'after': other.regularAmount};
-    }
-    if (regularDurationHours != other.regularDurationHours) {
-      changes['regularDurationHours'] = {'before': regularDurationHours, 'after': other.regularDurationHours};
-    }
-    if (paymentMethod != other.paymentMethod) {
-      changes['paymentMethod'] = {'before': paymentMethod, 'after': other.paymentMethod};
-    }
-    if (region != other.region) {
-      changes['region'] = {'before': region, 'after': other.region};
-    }
-    if (customStatus != other.customStatus) {
-      changes['customStatus'] = {'before': customStatus, 'after': other.customStatus};
-    }
-
-    return changes;
-  }
 
   factory PlateModel.fromDocument(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data() ?? {};
@@ -181,6 +141,8 @@ class PlateModel {
       logs: (data[PlateFields.logs] as List?)?.map((e) => PlateLogModel.fromMap(Map<String, dynamic>.from(e))).toList(),
       regularAmount: parseInt(data[PlateFields.regularAmount]),
       regularDurationHours: parseInt(data[PlateFields.regularDurationHours]),
+      userAdjustment: parseInt(data[PlateFields.userAdjustment]),
+      feeMode: data[PlateFields.feeMode],
     );
   }
 
@@ -213,6 +175,8 @@ class PlateModel {
       if (logs != null) PlateFields.logs: logs!.map((e) => e.toMap()).toList(),
       if (regularAmount != null) PlateFields.regularAmount: regularAmount,
       if (regularDurationHours != null) PlateFields.regularDurationHours: regularDurationHours,
+      if (userAdjustment != null) PlateFields.userAdjustment: userAdjustment,
+      if (feeMode != null) PlateFields.feeMode: feeMode,
     };
 
     if (removeNullOrEmpty) {
@@ -251,6 +215,8 @@ class PlateModel {
     List<PlateLogModel>? logs,
     int? regularAmount,
     int? regularDurationHours,
+    int? userAdjustment,
+    String? feeMode,
   }) {
     return PlateModel(
       id: id ?? this.id,
@@ -281,6 +247,8 @@ class PlateModel {
       logs: logs ?? this.logs,
       regularAmount: regularAmount ?? this.regularAmount,
       regularDurationHours: regularDurationHours ?? this.regularDurationHours,
+      userAdjustment: userAdjustment ?? this.userAdjustment,
+      feeMode: feeMode ?? this.feeMode,
     );
   }
 
@@ -306,6 +274,58 @@ class PlateModel {
 
     final updatedLogs = List<PlateLogModel>.from(logs ?? [])..add(newLog);
     return copyWith(logs: updatedLogs);
+  }
+
+  Map<String, dynamic> diff(PlateModel other) {
+    final changes = <String, dynamic>{};
+
+    if (plateNumber != other.plateNumber) {
+      changes['plateNumber'] = {'before': plateNumber, 'after': other.plateNumber};
+    }
+    if (location != other.location) {
+      changes['location'] = {'before': location, 'after': other.location};
+    }
+    if (billingType != other.billingType) {
+      changes['billingType'] = {'before': billingType, 'after': other.billingType};
+    }
+    if (!listEquals(statusList, other.statusList)) {
+      changes['statusList'] = {'before': statusList, 'after': other.statusList};
+    }
+    if (basicStandard != other.basicStandard) {
+      changes['basicStandard'] = {'before': basicStandard, 'after': other.basicStandard};
+    }
+    if (basicAmount != other.basicAmount) {
+      changes['basicAmount'] = {'before': basicAmount, 'after': other.basicAmount};
+    }
+    if (addStandard != other.addStandard) {
+      changes['addStandard'] = {'before': addStandard, 'after': other.addStandard};
+    }
+    if (addAmount != other.addAmount) {
+      changes['addAmount'] = {'before': addAmount, 'after': other.addAmount};
+    }
+    if (regularAmount != other.regularAmount) {
+      changes['regularAmount'] = {'before': regularAmount, 'after': other.regularAmount};
+    }
+    if (regularDurationHours != other.regularDurationHours) {
+      changes['regularDurationHours'] = {'before': regularDurationHours, 'after': other.regularDurationHours};
+    }
+    if (userAdjustment != other.userAdjustment) {
+      changes['userAdjustment'] = {'before': userAdjustment, 'after': other.userAdjustment};
+    }
+    if (feeMode != other.feeMode) {
+      changes['feeMode'] = {'before': feeMode, 'after': other.feeMode};
+    }
+    if (paymentMethod != other.paymentMethod) {
+      changes['paymentMethod'] = {'before': paymentMethod, 'after': other.paymentMethod};
+    }
+    if (region != other.region) {
+      changes['region'] = {'before': region, 'after': other.region};
+    }
+    if (customStatus != other.customStatus) {
+      changes['customStatus'] = {'before': customStatus, 'after': other.customStatus};
+    }
+
+    return changes;
   }
 
   @override
