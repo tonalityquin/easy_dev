@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
 import '../../states/plate/filter_plate.dart';
-import '../../utils/fee_calculator.dart';
+import '../../utils/plate_container_fee_calculator.dart';
 import '../../states/plate/plate_state.dart';
 import '../../states/user/user_state.dart';
 import '../../utils/date_utils.dart';
