@@ -33,6 +33,9 @@ class ModifyPlateService {
   final int selectedBasicAmount;
   final int selectedAddStandard;
   final int selectedAddAmount;
+  final int selectedRegularAmount;
+  final int selectedRegularDurationHours;
+
   final String? selectedBill;
   final String dropdownValue;
 
@@ -53,6 +56,8 @@ class ModifyPlateService {
     required this.selectedAddAmount,
     required this.selectedBill,
     required this.dropdownValue,
+    required this.selectedRegularAmount,
+    required this.selectedRegularDurationHours,
   });
 
   String composePlateNumber() {
@@ -128,6 +133,8 @@ class ModifyPlateService {
       addAmount: selectedAddAmount,
       region: dropdownValue,
       imageUrls: imageUrls,
+      regularAmount: selectedRegularAmount,             // ✅ 정기정산 금액 포함
+      regularDurationHours: selectedRegularDurationHours, // ✅ 정기정산 시간 포함
     );
 
     final changes = originalPlate.diff(updatedPlate);
@@ -173,6 +180,8 @@ class ModifyPlateService {
       addAmount: selectedAddAmount,
       region: dropdownValue,
       imageUrls: imageUrls,
+      regularAmount: selectedRegularAmount,              // ✅ 전달
+      regularDurationHours: selectedRegularDurationHours, // ✅ 전달
     );
   }
 
@@ -194,7 +203,6 @@ class ModifyPlateService {
     final objects = await storage.objects.list(bucketName, prefix: prefix);
 
     final urls = <String>[];
-
     for (final obj in objects.items ?? []) {
       final name = obj.name;
       if (name != null && name.endsWith('.jpg') && name.contains(plateNumber)) {

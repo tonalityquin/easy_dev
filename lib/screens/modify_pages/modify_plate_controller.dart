@@ -43,9 +43,14 @@ class ModifyPlateController {
   int selectedBasicAmount = 0;
   int selectedAddStandard = 0;
   int selectedAddAmount = 0;
+  int selectedRegularAmount = 0;
+  int selectedRegularDurationHours = 0;
+
   String? selectedBill;
   String selectedBillType = '일반'; // ✅ 추가됨
   String dropdownValue = '전국';
+  String? selectedBillCountType; // ✅ 문자열 타입 정산 유형 이름
+  dynamic selectedBillModel; // ✅ BillModel 또는 RegularBillModel 전체 객체 저장
 
   bool isLocationSelected = false;
 
@@ -159,15 +164,29 @@ class ModifyPlateController {
     dropdownValue = plate.region ?? '전국';
     locationController.text = plate.location;
     selectedBill = plate.billingType;
+    selectedBillType = _determineBillType(plate.billingType); // ✅ 여기 추가
+    selectedBillCountType = plate.billingType;
+
     selectedBasicStandard = plate.basicStandard ?? 0;
     selectedBasicAmount = plate.basicAmount ?? 0;
     selectedAddStandard = plate.addStandard ?? 0;
     selectedAddAmount = plate.addAmount ?? 0;
-    isLocationSelected = locationController.text.isNotEmpty;
+    selectedRegularAmount = plate.regularAmount ?? 0;
+    selectedRegularDurationHours = plate.regularDurationHours ?? 0;
 
+    isLocationSelected = locationController.text.isNotEmpty;
     fetchedCustomStatus = plate.customStatus;
     customStatusController.text = plate.customStatus ?? '';
     initialSelectedStatuses = List<String>.from(plate.statusList);
+  }
+
+  String _determineBillType(String? billingType) {
+    if (billingType == null || billingType.isEmpty) return '일반';
+
+    if (billingType.contains('정기')) return '정기';
+    if (plate.regularAmount != null && plate.regularAmount! > 0) return '정기';
+
+    return '일반';
   }
 
   void onBillTypeChanged(String type) {
@@ -183,31 +202,31 @@ class ModifyPlateController {
     selectedAddStandard = 0;
   }
 
-  void applyBillDefaults(String? billName) {
-    if (billName == null) return;
+  void applyBillDefaults(dynamic bill) {
+    if (bill == null) return;
 
-    final billState = context.read<BillState>();
-    final List<dynamic> allBills = [...billState.generalBills, ...billState.regularBills];
+    selectedBillModel = bill;
+    selectedBillCountType = bill.countType;
+    selectedBill = bill.countType; // ✅ billingType 필드 반영용
 
-    final selected = allBills.firstWhere(
-      (bill) => (bill is BillModel || bill is RegularBillModel) && bill.countType == billName,
-      orElse: () => null,
-    );
+    if (bill is BillModel) {
+      selectedBillType = '일반';
+      selectedBasicAmount = bill.basicAmount ?? 0;
+      selectedBasicStandard = bill.basicStandard ?? 0;
+      selectedAddAmount = bill.addAmount ?? 0;
+      selectedAddStandard = bill.addStandard ?? 0;
 
-    if (selected == null) return;
+      // 정기 정산 필드 초기화
+      selectedRegularAmount = 0;
+      selectedRegularDurationHours = 0;
+    } else if (bill is RegularBillModel) {
+      selectedBillType = '정기';
+      selectedRegularAmount = bill.regularAmount;
+      selectedRegularDurationHours = bill.regularDurationHours;
 
-    selectedBill = selected.countType;
-
-    if (selected is BillModel) {
-      selectedBillType = '일반'; // ✅ 추가
-      selectedBasicAmount = selected.basicAmount ?? 0;
-      selectedBasicStandard = selected.basicStandard ?? 0;
-      selectedAddAmount = selected.addAmount ?? 0;
-      selectedAddStandard = selected.addStandard ?? 0;
-    } else if (selected is RegularBillModel) {
-      selectedBillType = '정기'; // ✅ 추가
-      selectedBasicAmount = selected.regularAmount;
-      selectedBasicStandard = selected.regularDurationHours;
+      // 일반 정산 필드 초기화
+      selectedBasicAmount = 0;
+      selectedBasicStandard = 0;
       selectedAddAmount = 0;
       selectedAddStandard = 0;
     }
@@ -285,6 +304,9 @@ class ModifyPlateController {
       selectedAddAmount: selectedAddAmount,
       selectedBill: selectedBill,
       dropdownValue: dropdownValue,
+      selectedRegularAmount: selectedRegularAmount,
+      // ✅ 추가
+      selectedRegularDurationHours: selectedRegularDurationHours, // ✅ 추가
     );
 
     final plateNumber = service.composePlateNumber();
@@ -339,6 +361,8 @@ class ModifyPlateController {
         customStatus: updatedCustomStatus,
         isSelected: false,
         selectedBy: null,
+        regularAmount: selectedRegularAmount,
+        regularDurationHours: selectedRegularDurationHours,
       );
 
       final plateState = context.read<PlateState>();

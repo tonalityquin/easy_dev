@@ -48,11 +48,8 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
 
   final List<XFile> _capturedImages = [];
   final List<String> _existingImageUrls = [];
-  String selectedBillType = '일반'; // ✅ bill 유형 상태
 
   bool isLoading = false;
-
-  /// 상태 선택 결과
   late List<String> selectedStatusNames;
 
   @override
@@ -77,7 +74,6 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
     _controller.initializePlate();
     _controller.initializeFieldValues();
 
-    // 초기 상태 리스트
     selectedStatusNames = List<String>.from(widget.plate.statusList);
   }
 
@@ -166,20 +162,16 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
             ),
             const SizedBox(height: 32.0),
             ModifyBillSection(
-              selectedBill: _controller.selectedBill,
-              selectedBillType: selectedBillType, // ✅ 추가됨
-              onChanged: (value) {
+              selectedBill: _controller.selectedBillCountType,
+              selectedBillType: _controller.selectedBillType,
+              onChanged: (bill) {
                 setState(() {
-                  _controller.selectedBill = value;
-                  _controller.applyBillDefaults(value);
+                  _controller.applyBillDefaults(bill); // ✅ 모델 전체 전달
                 });
               },
               onTypeChanged: (type) {
-                // ✅ 추가됨
                 setState(() {
-                  selectedBillType = type;
-                  _controller.selectedBillType = type;
-                  _controller.selectedBill = null; // ✅ 필터 바뀌면 선택 초기화
+                  _controller.onBillTypeChanged(type); // ✅ controller에서 처리
                 });
               },
             ),
@@ -272,7 +264,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
               ],
             ),
           ),
-          const ModifyDebugTriggerBar(), // ✅ 추가된 디버그 트리거
+          const ModifyDebugTriggerBar(),
         ],
       ),
     );

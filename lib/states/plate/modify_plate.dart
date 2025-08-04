@@ -31,6 +31,8 @@ class ModifyPlate with ChangeNotifier {
     bool? isLockedFee,
     int? lockedAtTimeInSeconds,
     int? lockedFeeAmount,
+    int? regularAmount, // ✅ 추가
+    int? regularDurationHours, // ✅ 추가
   }) async {
     try {
       final documentId = '${plate.plateNumber}_${plate.area}';
@@ -55,6 +57,8 @@ class ModifyPlate with ChangeNotifier {
         isLockedFee: isLockedFee ?? plate.isLockedFee,
         lockedAtTimeInSeconds: lockedAtTimeInSeconds ?? plate.lockedAtTimeInSeconds,
         lockedFeeAmount: lockedFeeAmount ?? plate.lockedFeeAmount,
+        regularAmount: regularAmount ?? plate.regularAmount,
+        regularDurationHours: regularDurationHours ?? plate.regularDurationHours,
       );
 
       await _plateRepository.addOrUpdatePlate(documentId, updatedPlate);
@@ -82,6 +86,20 @@ class ModifyPlate with ChangeNotifier {
         };
       }
 
+      if (plate.regularAmount != regularAmount) {
+        updatedFields['regularAmount'] = {
+          'from': plate.regularAmount,
+          'to': regularAmount,
+        };
+      }
+
+      if (plate.regularDurationHours != regularDurationHours) {
+        updatedFields['regularDurationHours'] = {
+          'from': plate.regularDurationHours,
+          'to': regularDurationHours,
+        };
+      }
+
       if (updatedFields.isNotEmpty) {
         debugPrint('🗂 변경 내역: $updatedFields');
 
@@ -100,7 +118,6 @@ class ModifyPlate with ChangeNotifier {
         await _plateRepository.updatePlate(
           documentId,
           {
-            // 실제 변경된 필드만 업데이트
             if (plate.location != location) 'location': location,
             if (plate.billingType != billingType) 'billingType': billingType,
             if (plate.plateNumber != newPlateNumber) 'plate_number': newPlateNumber,

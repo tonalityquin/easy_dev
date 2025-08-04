@@ -8,7 +8,7 @@ import '../../../models/regular_bill_model.dart';
 class ModifyBillSection extends StatelessWidget {
   final String? selectedBill;
   final String selectedBillType;
-  final ValueChanged<String?> onChanged;
+  final ValueChanged<dynamic> onChanged; // ✅ 모델 전체 전달
   final ValueChanged<String> onTypeChanged;
 
   const ModifyBillSection({
@@ -38,7 +38,7 @@ class ModifyBillSection extends StatelessWidget {
         ),
         const SizedBox(height: 12.0),
 
-        // ✅ 일반 / 정기 버튼 선택
+        /// ✅ 정산 유형 버튼
         Row(
           children: [
             _buildTypeButton(
@@ -54,10 +54,9 @@ class ModifyBillSection extends StatelessWidget {
             ),
           ],
         ),
-
         const SizedBox(height: 12.0),
 
-        // ✅ 정산 항목 드롭다운 or 안내
+        /// ✅ 드롭다운 or 안내
         if (isLoading)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 24),
@@ -119,6 +118,7 @@ class ModifyBillSection extends StatelessWidget {
                             ),
                             const SizedBox(height: 24),
 
+                            /// ✅ 항목 리스트
                             ...filteredBills.map((bill) {
                               final countType = isGeneral
                                   ? (bill as BillModel).countType
@@ -131,7 +131,7 @@ class ModifyBillSection extends StatelessWidget {
                                     : null,
                                 onTap: () {
                                   Navigator.pop(context);
-                                  onChanged(countType);
+                                  onChanged(bill); // ✅ 모델 전체 전달
                                 },
                               );
                             }).toList(),
@@ -155,6 +155,7 @@ class ModifyBillSection extends StatelessWidget {
     );
   }
 
+  /// ✅ 유형 선택 버튼 생성기
   Widget _buildTypeButton({
     required String label,
     required bool isSelected,

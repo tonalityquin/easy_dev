@@ -79,7 +79,7 @@ class PlateContainer extends StatelessWidget {
         final bool isSelected = item.isSelected;
         final String displayUser = isSelected ? item.selectedBy! : item.userName;
 
-        final bool isRegular = item.billingType?.toLowerCase().contains('regular') == true;
+        final bool isRegular = (item.regularAmount ?? 0) > 0;
 
         int basicStandard = item.basicStandard ?? 0;
         int basicAmount = item.basicAmount ?? 0;

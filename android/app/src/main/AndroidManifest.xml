@@ -1,39 +1,49 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    package="com.example.easydev">
 
-    <!-- ✅ [필수] TTS 음성 재생을 위한 네트워크 권한 -->
+
+<!-- ✅ TTS 음성 재생을 위한 네트워크 권한 -->
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <!-- ✅ [필수] 포그라운드 서비스 -->
+    <!-- ✅ 포그라운드 서비스 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-
-    <!-- ✅ [필수] 백그라운드 서비스 -->
-    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
-
-    <!-- ✅ [필수] 포그라운드 서비스에서 위치를 사용하기 위해 추가 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
 
-    <!-- ✅ [필수] 위치 권한 -->
+    <!-- ✅ 백그라운드 위치 사용 -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+
+    <!-- ✅ 위치 권한 -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
-    <!-- ✅ [옵션] 화면 꺼짐 상태에서 앱 동작을 위한 WakeLock -->
+    <!-- ✅ 화면 꺼짐 방지 -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
-    <!-- ✅ [옵션] 네트워크 상태를 모니터링하기 위한 권한 -->
+    <!-- ✅ 네트워크 상태 확인 -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- ✅ [옵션] 부팅 후 서비스 자동 시작을 위한 권한 -->
+    <!-- ✅ 부팅 후 앱 실행 -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
-    <!-- ✅ [Google Drive 파일 다운로드용 - Android 10 이하] -->
+    <!-- ✅ 외부 저장소 접근 (Android 10 이하) -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
 
+    <!-- ✅ Android 11+ 파일 접근 권한 (사용 시 필요) -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
+
+    <!-- ✅ Android 13 알림 권한 (선택 사항) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
-        android:label="easydev"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:label="easydev"
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="true"
+        android:theme="@style/LaunchTheme">
 
         <activity
             android:name=".MainActivity"
@@ -44,7 +54,8 @@
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize"
-            android:requestLegacyExternalStorage="true">
+            android:requestLegacyExternalStorage="true"
+            android:enableOnBackInvokedCallback="true">
 
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
@@ -56,19 +67,19 @@
             </intent-filter>
         </activity>
 
+        <!-- 포그라운드 서비스 -->
         <service
             android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
             android:exported="false"
             android:foregroundServiceType="location" />
 
-        <!-- Don't delete the meta-data below.
-             This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
+        <!-- Flutter 엔진 등록 -->
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
     </application>
 
-    <!-- ProcessText Plugin 권한 -->
+    <!-- ProcessText Plugin (다른 앱 텍스트 접근용) -->
     <queries>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT" />
