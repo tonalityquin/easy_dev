@@ -8,14 +8,10 @@ import '../../../../states/area/area_state.dart';
 import '../../../type_pages/debugs/firestore_logger.dart';
 import 'monthly_plate_controller.dart';
 
-import 'sections/monthly_bill_section.dart';
-
 import 'sections/monthly_plate_section.dart';
-import 'sections/monthly_status_on_tap_section.dart';
 import 'sections/monthly_bottom_action_section.dart';
 import 'sections/monthly_custom_status_section.dart';
-
-import 'utils/monthly_camera_helper.dart';
+import 'sections/monthly_bill_section.dart'; // ✅ 수정된 위젯
 
 import 'widgets/monthly_custom_status_bottom_sheet.dart';
 import 'keypad/num_keypad.dart';
@@ -31,17 +27,18 @@ class MonthlyPlateBottomSheet extends StatefulWidget {
 
 class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
   final controller = MonthlyPlateController();
-  late MonthlyCameraHelper _cameraHelper;
-  String selectedBillType = '정기'; // ✅ '일반' 또는 '정기'
-
   List<String> selectedStatusNames = [];
   Key statusSectionKey = UniqueKey();
+
+  // ✅ 정기 정산 입력용 컨트롤러 및 상태값
+  final TextEditingController _regularNameController = TextEditingController();
+  final TextEditingController _regularAmountController = TextEditingController();
+  final TextEditingController _regularDurationController = TextEditingController();
+  String? _selectedRegularType;
 
   @override
   void initState() {
     super.initState();
-    _cameraHelper = MonthlyCameraHelper();
-    _cameraHelper.initializeInputCamera().then((_) => setState(() {}));
 
     controller.controllerBackDigit.addListener(() async {
       final text = controller.controllerBackDigit.text;
@@ -131,7 +128,9 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
   @override
   void dispose() {
     controller.dispose();
-    _cameraHelper.dispose();
+    _regularNameController.dispose();
+    _regularAmountController.dispose();
+    _regularDurationController.dispose();
     super.dispose();
   }
 
@@ -145,7 +144,7 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
         ),
         child: Column(
           children: [
-            // 상단 제목과 닫기 버튼
+            /// 상단 제목 & 닫기
             Row(
               children: [
                 Expanded(
@@ -163,7 +162,7 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
             ),
             const Divider(),
 
-            // 본문 스크롤
+            /// 본문 스크롤
             Expanded(
               child: SingleChildScrollView(
                 child: Column(
@@ -190,21 +189,17 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
                       isThreeDigit: controller.isThreeDigit,
                     ),
                     const SizedBox(height: 32),
+
+                    /// ✅ 정기 정산 항목 직접 입력
                     MonthlyBillSection(
-                      selectedBill: controller.selectedBill,
-                      onChanged: (value) => setState(() => controller.selectedBill = value),
-                      selectedBillType: selectedBillType,
-                      onTypeChanged: (newType) => setState(() => selectedBillType = newType),
+                      nameController: _regularNameController,
+                      amountController: _regularAmountController,
+                      durationController: _regularDurationController,
+                      selectedType: _selectedRegularType,
+                      onTypeChanged: (val) => setState(() => _selectedRegularType = val),
                     ),
                     const SizedBox(height: 32),
-                    InputStatusOnTapSection(
-                      key: statusSectionKey,
-                      initialSelectedStatuses: selectedStatusNames,
-                      onSelectionChanged: (selected) {
-                        controller.selectedStatuses = selected;
-                      },
-                    ),
-                    const SizedBox(height: 32),
+
                     MonthlyCustomStatusSection(
                       controller: controller,
                       fetchedCustomStatus: controller.fetchedCustomStatus,
@@ -228,7 +223,6 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
               ),
             ),
 
-            // 하단 키패드 및 액션 버튼
             const SizedBox(height: 16),
             MonthlyBottomNavigation(
               showKeypad: controller.showKeypad,
