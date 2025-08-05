@@ -8,10 +8,11 @@ import '../../../../states/area/area_state.dart';
 import '../../../type_pages/debugs/firestore_logger.dart';
 import 'monthly_plate_controller.dart';
 
+import 'sections/date_range_picker_section.dart';
 import 'sections/monthly_plate_section.dart';
 import 'sections/monthly_bottom_action_section.dart';
 import 'sections/monthly_custom_status_section.dart';
-import 'sections/monthly_bill_section.dart'; // ✅ 수정된 위젯
+import 'sections/monthly_bill_section.dart';
 
 import 'widgets/monthly_custom_status_bottom_sheet.dart';
 import 'keypad/num_keypad.dart';
@@ -26,19 +27,34 @@ class MonthlyPlateBottomSheet extends StatefulWidget {
 }
 
 class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
-  final controller = MonthlyPlateController();
+  late final MonthlyPlateController controller;
   List<String> selectedStatusNames = [];
   Key statusSectionKey = UniqueKey();
 
-  // ✅ 정기 정산 입력용 컨트롤러 및 상태값
   final TextEditingController _regularNameController = TextEditingController();
   final TextEditingController _regularAmountController = TextEditingController();
   final TextEditingController _regularDurationController = TextEditingController();
   String? _selectedRegularType;
+  String _selectedBillingType = '정기';
+
+  final TextEditingController _startDateController = TextEditingController();
+  final TextEditingController _endDateController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+
+    // ✅ 필드 주입 방식으로 컨트롤러 초기화
+    controller = MonthlyPlateController(
+      nameController: _regularNameController,
+      amountController: _regularAmountController,
+      durationController: _regularDurationController,
+      startDateController: _startDateController,
+      endDateController: _endDateController,
+      regularAmountController: _regularAmountController,
+      regularDurationController: _regularDurationController,
+      selectedRegularType: _selectedRegularType,
+    );
 
     controller.controllerBackDigit.addListener(() async {
       final text = controller.controllerBackDigit.text;
@@ -131,130 +147,134 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
     _regularNameController.dispose();
     _regularAmountController.dispose();
     _regularDurationController.dispose();
+    _startDateController.dispose();
+    _endDateController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
     return SafeArea(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.95,
-        ),
-        child: Column(
-          children: [
-            /// 상단 제목 & 닫기
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    controller.isThreeDigit ? '현재 앞자리: 세자리' : '현재 앞자리: 두자리',
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+      child: Padding(
+        padding: EdgeInsets.only(bottom: bottomInset),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.95,
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      controller.isThreeDigit ? '현재 앞자리: 세자리' : '현재 앞자리: 두자리',
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+              const Divider(),
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      MonthlyPlateSection(
+                        dropdownValue: controller.dropdownValue,
+                        regions: controller.regions,
+                        controllerFrontDigit: controller.controllerFrontDigit,
+                        controllerMidDigit: controller.controllerMidDigit,
+                        controllerBackDigit: controller.controllerBackDigit,
+                        activeController: controller.activeController,
+                        onKeypadStateChanged: (_) {
+                          setState(() {
+                            controller.clearInput();
+                            controller.setActiveController(controller.controllerFrontDigit);
+                          });
+                        },
+                        onRegionChanged: (region) {
+                          setState(() {
+                            controller.dropdownValue = region;
+                          });
+                        },
+                        isThreeDigit: controller.isThreeDigit,
+                      ),
+                      const SizedBox(height: 32),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: DropdownButtonFormField<String>(
+                          value: _selectedBillingType,
+                          decoration: const InputDecoration(
+                            labelText: '정산 유형',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: const [
+                            DropdownMenuItem(value: '정기', child: Text('정기')),
+                          ],
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedBillingType = value!;
+                              controller.selectedBillType = value;
+                            });
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      MonthlyBillSection(
+                        nameController: _regularNameController,
+                        amountController: _regularAmountController,
+                        durationController: _regularDurationController,
+                        selectedType: _selectedRegularType,
+                        onTypeChanged: (val) => setState(() => _selectedRegularType = val),
+                      ),
+                      const SizedBox(height: 32),
+                      MonthlyCustomStatusSection(
+                        controller: controller,
+                        fetchedCustomStatus: controller.fetchedCustomStatus,
+                        selectedStatusNames: selectedStatusNames,
+                        statusSectionKey: statusSectionKey,
+                        onDeleted: () {
+                          setState(() {
+                            controller.fetchedCustomStatus = null;
+                            controller.customStatusController.clear();
+                          });
+                        },
+                        onStatusCleared: () {
+                          setState(() {
+                            selectedStatusNames = [];
+                            statusSectionKey = UniqueKey();
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      DateRangePickerSection(
+                        startDateController: _startDateController,
+                        endDateController: _endDateController,
+                      ),
+                    ],
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-              ],
-            ),
-            const Divider(),
-
-            /// 본문 스크롤
-            Expanded(
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    MonthlyPlateSection(
-                      dropdownValue: controller.dropdownValue,
-                      regions: controller.regions,
-                      controllerFrontDigit: controller.controllerFrontDigit,
-                      controllerMidDigit: controller.controllerMidDigit,
-                      controllerBackDigit: controller.controllerBackDigit,
-                      activeController: controller.activeController,
-                      onKeypadStateChanged: (_) {
-                        setState(() {
-                          controller.clearInput();
-                          controller.setActiveController(controller.controllerFrontDigit);
-                        });
-                      },
-                      onRegionChanged: (region) {
-                        setState(() {
-                          controller.dropdownValue = region;
-                        });
-                      },
-                      isThreeDigit: controller.isThreeDigit,
-                    ),
-                    const SizedBox(height: 32),
-
-                    /// ✅ 정기 정산 항목 직접 입력
-                    MonthlyBillSection(
-                      nameController: _regularNameController,
-                      amountController: _regularAmountController,
-                      durationController: _regularDurationController,
-                      selectedType: _selectedRegularType,
-                      onTypeChanged: (val) => setState(() => _selectedRegularType = val),
-                    ),
-                    const SizedBox(height: 32),
-
-                    MonthlyCustomStatusSection(
-                      controller: controller,
-                      fetchedCustomStatus: controller.fetchedCustomStatus,
-                      selectedStatusNames: selectedStatusNames,
-                      statusSectionKey: statusSectionKey,
-                      onDeleted: () {
-                        setState(() {
-                          controller.fetchedCustomStatus = null;
-                          controller.customStatusController.clear();
-                        });
-                      },
-                      onStatusCleared: () {
-                        setState(() {
-                          selectedStatusNames = [];
-                          statusSectionKey = UniqueKey();
-                        });
-                      },
-                    ),
-                  ],
+              ),
+              const SizedBox(height: 16),
+              MonthlyBottomNavigation(
+                showKeypad: controller.showKeypad,
+                keypad: _buildKeypad(),
+                actionButton: MonthlyBottomActionSection(
+                  controller: controller,
+                  mountedContext: mounted,
+                  onStateRefresh: () => setState(() {}),
                 ),
               ),
-            ),
-
-            const SizedBox(height: 16),
-            MonthlyBottomNavigation(
-              showKeypad: controller.showKeypad,
-              keypad: _buildKeypad(),
-              actionButton: MonthlyBottomActionSection(
-                controller: controller,
-                mountedContext: mounted,
-                onStateRefresh: () => setState(() {}),
-              ),
-            ),
-            const InputDebugTriggerBar(),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class InputDebugTriggerBar extends StatelessWidget {
-  const InputDebugTriggerBar({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        alignment: Alignment.center,
-        color: Colors.transparent,
-        child: const Icon(
-          Icons.bug_report,
-          size: 20,
-          color: Colors.grey,
+            ],
+          ),
         ),
       ),
     );

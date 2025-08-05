@@ -218,6 +218,36 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
+  Future<void> setMonthlyPlateStatus({
+    required String plateNumber,
+    required String area,
+    required String createdBy,
+    required String customStatus,
+    required List<String> statusList,
+    required String countType,
+    required int regularAmount,
+    required int regularDurationHours,
+    required String regularType,
+    required String startDate, // ✅ 추가
+    required String endDate,   // ✅ 추가
+  }) {
+    return _statusService.setMonthlyPlateStatus(
+      plateNumber: plateNumber,
+      area: area,
+      createdBy: createdBy,
+      customStatus: customStatus,
+      statusList: statusList,
+      countType: countType,
+      regularAmount: regularAmount,
+      regularDurationHours: regularDurationHours,
+      regularType: regularType,
+      startDate: startDate,     // ✅ 전달
+      endDate: endDate,         // ✅ 전달
+    );
+  }
+
+
+  @override
   Future<void> deletePlateStatus(String plateNumber, String area) {
     return _statusService.deletePlateStatus(plateNumber, area);
   }

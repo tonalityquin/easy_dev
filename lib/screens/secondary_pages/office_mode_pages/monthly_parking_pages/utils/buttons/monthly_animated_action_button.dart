@@ -2,14 +2,12 @@ import 'package:flutter/material.dart';
 
 class MonthlyAnimatedActionButton extends StatefulWidget {
   final bool isLoading;
-  final bool isLocationSelected;
   final Future<void> Function() onPressed;
-  final String? buttonLabel;
+  final String? buttonLabel; // 선택적으로 텍스트를 바꾸고 싶을 경우
 
   const MonthlyAnimatedActionButton({
     super.key,
     required this.isLoading,
-    required this.isLocationSelected,
     required this.onPressed,
     this.buttonLabel,
   });
@@ -40,10 +38,9 @@ class _MonthlyAnimatedActionButtonState extends State<MonthlyAnimatedActionButto
   }
 
   Future<void> _handleTap() async {
-    await _controller.reverse();
-    await _controller.forward();
-
-    await widget.onPressed();
+    await _controller.reverse(); // 축소
+    await _controller.forward(); // 원래 크기로 복원
+    await widget.onPressed();   // 실제 동작 실행
   }
 
   @override
@@ -54,27 +51,21 @@ class _MonthlyAnimatedActionButtonState extends State<MonthlyAnimatedActionButto
 
   @override
   Widget build(BuildContext context) {
-    final bool isLoading = widget.isLoading;
-    final bool isLocationSelected = widget.isLocationSelected;
-
-    final String label = widget.buttonLabel ??
-        (isLocationSelected ? '입차 완료' : '입차 요청');
+    final String label = widget.buttonLabel ?? '정기 정산 생성';
 
     return ScaleTransition(
       scale: _scaleAnimation,
       child: ElevatedButton(
-        onPressed: isLoading ? null : _handleTap,
+        onPressed: widget.isLoading ? null : _handleTap,
         style: ElevatedButton.styleFrom(
-          backgroundColor:
-          isLocationSelected ? Colors.indigo[50] : Colors.blueGrey[50],
-          foregroundColor:
-          isLocationSelected ? Colors.indigo[800] : Colors.blueGrey[800],
+          backgroundColor: Colors.indigo[50],
+          foregroundColor: Colors.indigo[800],
           elevation: 0,
           padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 80),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            side: BorderSide(
-              color: isLocationSelected ? Colors.indigo : Colors.blueGrey,
+            side: const BorderSide(
+              color: Colors.indigo,
               width: 1.5,
             ),
           ),
@@ -84,7 +75,7 @@ class _MonthlyAnimatedActionButtonState extends State<MonthlyAnimatedActionButto
           transitionBuilder: (Widget child, Animation<double> animation) {
             return ScaleTransition(scale: animation, child: child);
           },
-          child: isLoading
+          child: widget.isLoading
               ? const SizedBox(
             key: ValueKey('loading'),
             width: 20,

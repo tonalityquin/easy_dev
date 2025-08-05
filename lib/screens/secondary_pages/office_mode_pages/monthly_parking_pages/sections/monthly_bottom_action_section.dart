@@ -20,7 +20,6 @@ class MonthlyBottomActionSection extends StatefulWidget {
 }
 
 class _MonthlyBottomActionSectionState extends State<MonthlyBottomActionSection> {
-
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -29,7 +28,6 @@ class _MonthlyBottomActionSectionState extends State<MonthlyBottomActionSection>
         const SizedBox(height: 15),
         MonthlyAnimatedActionButton(
           isLoading: widget.controller.isLoading,
-          isLocationSelected: widget.controller.isLocationSelected,
           onPressed: () => widget.controller.submitPlateEntry(
             context,
             widget.mountedContext,

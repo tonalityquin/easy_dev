@@ -55,6 +55,49 @@ class PlateStatusService {
     }
   }
 
+  Future<void> setMonthlyPlateStatus({
+    required String plateNumber,
+    required String area,
+    required String createdBy,
+    required String customStatus,
+    required List<String> statusList,
+    required String countType,
+    required int regularAmount,
+    required int regularDurationHours,
+    required String regularType,
+    required String startDate, // 🆕
+    required String endDate,   // 🆕
+  }) async {
+    final docId = '${plateNumber}_$area';
+    final now = DateTime.now();
+    final expireAt = Timestamp.fromDate(now.add(const Duration(days: 1)));
+
+    await FirestoreLogger().log('📥 setMonthlyPlateStatus called: $docId');
+
+    try {
+      await _firestore.collection('plate_status').doc(docId).set({
+        'customStatus': customStatus,
+        'statusList': statusList,
+        'updatedAt': Timestamp.fromDate(now),
+        'expireAt': expireAt,
+        'createdBy': createdBy,
+        'type': '정기',
+        'countType': countType,
+        'regularAmount': regularAmount,
+        'regularDurationHours': regularDurationHours,
+        'regularType': regularType,
+        'startDate': startDate,   // ✅ 추가
+        'endDate': endDate,       // ✅ 추가
+        'area': area,
+      }, SetOptions(merge: true));
+
+      await FirestoreLogger().log('✅ setMonthlyPlateStatus success: $docId');
+    } catch (e) {
+      await FirestoreLogger().log('❌ setMonthlyPlateStatus error: $e');
+      rethrow;
+    }
+  }
+
   /// ❌ plate_status 삭제
   Future<void> deletePlateStatus(String plateNumber, String area) async {
     final docId = '${plateNumber}_$area';

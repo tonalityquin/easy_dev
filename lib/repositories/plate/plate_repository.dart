@@ -99,6 +99,22 @@ abstract class PlateRepository {
     required String createdBy,
   });
 
+  /// 🆕 정기 plate_status 저장
+  Future<void> setMonthlyPlateStatus({
+    required String plateNumber,
+    required String area,
+    required String createdBy,
+    required String customStatus,
+    required List<String> statusList,
+    required String countType,
+    required int regularAmount,
+    required int regularDurationHours,
+    required String regularType,
+    required String startDate, // 🆕
+    required String endDate,   // 🆕
+  });
+
+
   Future<void> deletePlateStatus(String plateNumber, String area);
 
   // 🔹 상태 전이용 공통 메서드
