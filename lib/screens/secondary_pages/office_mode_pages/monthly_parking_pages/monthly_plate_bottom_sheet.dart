@@ -7,9 +7,9 @@ import '../../../../states/area/area_state.dart';
 
 import '../../../type_pages/debugs/firestore_logger.dart';
 import 'monthly_plate_controller.dart';
-// import 'sections/input_bill_section.dart';
-import 'sections/monthly_location_section.dart';
-import 'sections/monthly_photo_section.dart';
+
+import 'sections/monthly_bill_section.dart';
+
 import 'sections/monthly_plate_section.dart';
 import 'sections/monthly_status_on_tap_section.dart';
 import 'sections/monthly_bottom_action_section.dart';
@@ -32,6 +32,7 @@ class MonthlyPlateBottomSheet extends StatefulWidget {
 class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
   final controller = MonthlyPlateController();
   late MonthlyCameraHelper _cameraHelper;
+  String selectedBillType = '정기'; // ✅ '일반' 또는 '정기'
 
   List<String> selectedStatusNames = [];
   Key statusSectionKey = UniqueKey();
@@ -189,19 +190,12 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
                       isThreeDigit: controller.isThreeDigit,
                     ),
                     const SizedBox(height: 32),
-                    MonthlyLocationSection(locationController: controller.locationController),
-                    const SizedBox(height: 32),
-                    MonthlyPhotoSection(
-                      capturedImages: controller.capturedImages,
-                      plateNumber: controller.buildPlateNumber(),
+                    MonthlyBillSection(
+                      selectedBill: controller.selectedBill,
+                      onChanged: (value) => setState(() => controller.selectedBill = value),
+                      selectedBillType: selectedBillType,
+                      onTypeChanged: (newType) => setState(() => selectedBillType = newType),
                     ),
-                    const SizedBox(height: 32),
-                    // InputBillSection(
-                    //   selectedBill: controller.selectedBill,
-                    //   onChanged: (value) => setState(() => controller.selectedBill = value),
-                    //   selectedBillType: selectedBillType, // ✅ 추가
-                    //   onTypeChanged: (type) => setState(() => selectedBillType = type), // ✅ 추가
-                    // ),
                     const SizedBox(height: 32),
                     InputStatusOnTapSection(
                       key: statusSectionKey,

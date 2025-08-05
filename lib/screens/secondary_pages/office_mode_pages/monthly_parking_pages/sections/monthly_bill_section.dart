@@ -5,13 +5,13 @@ import '../../../../../states/bill/bill_state.dart';
 import '../../../../../models/bill_model.dart';
 import '../../../../../models/regular_bill_model.dart';
 
-class InputBillSection extends StatelessWidget {
+class MonthlyBillSection extends StatelessWidget {
   final String? selectedBill;
   final String selectedBillType;
   final ValueChanged<String?> onChanged;
   final ValueChanged<String> onTypeChanged;
 
-  const InputBillSection({
+  const MonthlyBillSection({
     super.key,
     required this.selectedBill,
     required this.selectedBillType,

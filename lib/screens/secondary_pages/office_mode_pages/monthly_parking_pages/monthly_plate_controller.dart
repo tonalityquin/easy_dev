@@ -80,7 +80,7 @@ class MonthlyPlateController {
   late TextEditingController activeController;
   final List<XFile> capturedImages = [];
 
-  InputPlateController() {
+  MonthlyPlateController() {
     activeController = controllerFrontDigit;
     _addInputListeners();
   }
