@@ -194,7 +194,7 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
       bottomNavigationBar: SecondaryMiniNavigation(
         icons: const [
           Icons.add,
-          Icons.person,
+          Icons.wallet,
           Icons.delete,
         ],
         onIconTapped: (index) => _handleIconTap(context, index),

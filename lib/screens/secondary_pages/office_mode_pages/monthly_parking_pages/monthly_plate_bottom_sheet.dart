@@ -1,11 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../../../../states/bill/bill_state.dart';
-import '../../../../states/area/area_state.dart';
-
-import '../../../type_pages/debugs/firestore_logger.dart';
 import 'monthly_plate_controller.dart';
 
 import 'sections/date_range_picker_section.dart';
@@ -14,7 +8,6 @@ import 'sections/monthly_bottom_action_section.dart';
 import 'sections/monthly_custom_status_section.dart';
 import 'sections/monthly_bill_section.dart';
 
-import 'widgets/monthly_custom_status_bottom_sheet.dart';
 import 'keypad/num_keypad.dart';
 import 'keypad/kor_keypad.dart';
 import 'monthly_bottom_navigation.dart';
@@ -55,48 +48,21 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
       selectedRegularType: _selectedRegularType,
     );
 
-    controller.controllerBackDigit.addListener(() async {
+    controller.controllerBackDigit.addListener(() {
       final text = controller.controllerBackDigit.text;
-      if (text.length == 4 && controller.isInputValid()) {
-        final plateNumber = controller.buildPlateNumber();
-        final area = context.read<AreaState>().currentArea;
-        final data = await _fetchPlateStatus(plateNumber, area);
-
-        if (mounted && data != null) {
-          final fetchedStatus = data['customStatus'] as String?;
-          final fetchedList = (data['statusList'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
-
-          setState(() {
-            controller.fetchedCustomStatus = fetchedStatus;
-            controller.customStatusController.text = fetchedStatus ?? '';
-            selectedStatusNames = fetchedList;
-            statusSectionKey = UniqueKey();
-          });
-
-          await monthlyCustomStatusBottomSheet(context, plateNumber, area);
-        }
-      }
-    });
-
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final billState = context.read<BillState>();
-      await billState.loadFromBillCache();
-      setState(() {
-        controller.isLocationSelected = controller.locationController.text.isNotEmpty;
-      });
+      if (text.length == 4 && controller.isInputValid()) {}
     });
   }
 
-  Future<Map<String, dynamic>?> _fetchPlateStatus(String plateNumber, String area) async {
-    final docId = '${plateNumber}_$area';
-    await FirestoreLogger().log('🔍 번호판 상태 조회 시도: $docId', level: 'called');
-    final doc = await FirebaseFirestore.instance.collection('plate_status').doc(docId).get();
-    if (doc.exists) {
-      await FirestoreLogger().log('✅ 상태 조회 성공: $docId', level: 'success');
-      return doc.data();
-    }
-    await FirestoreLogger().log('📭 상태 데이터 없음: $docId', level: 'info');
-    return null;
+  @override
+  void dispose() {
+    controller.dispose();
+    _regularNameController.dispose();
+    _regularAmountController.dispose();
+    _regularDurationController.dispose();
+    _startDateController.dispose();
+    _endDateController.dispose();
+    super.dispose();
   }
 
   Widget _buildKeypad() {
@@ -138,17 +104,6 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
         });
       },
     );
-  }
-
-  @override
-  void dispose() {
-    controller.dispose();
-    _regularNameController.dispose();
-    _regularAmountController.dispose();
-    _regularDurationController.dispose();
-    _startDateController.dispose();
-    _endDateController.dispose();
-    super.dispose();
   }
 
   @override

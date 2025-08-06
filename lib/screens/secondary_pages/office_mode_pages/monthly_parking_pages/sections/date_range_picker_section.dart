@@ -192,7 +192,7 @@ class _DateRangePickerSectionState extends State<DateRangePickerSection> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          '정기 정산 기간',
+          '정기 정산 기간(1달)',
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
