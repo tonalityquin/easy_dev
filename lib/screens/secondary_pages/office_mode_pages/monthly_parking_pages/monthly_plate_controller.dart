@@ -5,10 +5,9 @@ import 'package:provider/provider.dart';
 import '../../../type_pages/debugs/firestore_logger.dart';
 import '../../../../utils/snackbar_helper.dart';
 
-import '../../../../states/bill/bill_state.dart';
+import '../../../../repositories/plate/firestore_plate_repository.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../../states/area/area_state.dart';
-import '../../../../repositories/plate/firestore_plate_repository.dart';
 
 class MonthlyPlateController {
   final TextEditingController controllerFrontDigit = TextEditingController();
@@ -31,9 +30,6 @@ class MonthlyPlateController {
   String dropdownValue = '전국';
 
   String selectedBillType = '일반';
-  String? _selectedBill;
-  String? get selectedBill => _selectedBill;
-  set selectedBill(String? value) => _selectedBill = value;
 
   int selectedBasicStandard = 0;
   int selectedBasicAmount = 0;
@@ -49,20 +45,40 @@ class MonthlyPlateController {
   List<String> fetchedStatusList = [];
 
   final List<String> regions = [
-    '전국', '강원', '경기', '경남', '경북', '광주', '대구', '대전', '부산', '서울',
-    '울산', '인천', '전남', '전북', '제주', '충남', '충북', '국기', '대표',
-    '영사', '외교', '임시', '준영', '준외', '협정',
+    '전국',
+    '강원',
+    '경기',
+    '경남',
+    '경북',
+    '광주',
+    '대구',
+    '대전',
+    '부산',
+    '서울',
+    '울산',
+    '인천',
+    '전남',
+    '전북',
+    '제주',
+    '충남',
+    '충북',
+    '국기',
+    '대표',
+    '영사',
+    '외교',
+    '임시',
+    '준영',
+    '준외',
+    '협정',
   ];
 
   late TextEditingController activeController;
   final List<XFile> capturedImages = [];
 
-  /// ✅ 정기주차 관련 필드
   TextEditingController? regularAmountController;
   TextEditingController? regularDurationController;
   String? selectedRegularType;
 
-  /// ✅ 추가된 기간 단위 (예: 일, 주, 월)
   String selectedPeriodUnit = '월';
 
   MonthlyPlateController({
@@ -124,7 +140,6 @@ class MonthlyPlateController {
     clearLocation();
     capturedImages.clear();
     selectedStatuses.clear();
-    _selectedBill = null;
     selectedBasicStandard = 0;
     selectedBasicAmount = 0;
     selectedAddStandard = 0;
@@ -195,30 +210,6 @@ class MonthlyPlateController {
         '${date.day.toString().padLeft(2, '0')}';
   }
 
-  void setSelectedBill(String? billId, BuildContext context) {
-    _selectedBill = billId;
-
-    final billState = context.read<BillState>();
-
-    if (billId == null || selectedBillType != '일반') {
-      selectedBasicStandard = 0;
-      selectedBasicAmount = 0;
-      selectedAddStandard = 0;
-      selectedAddAmount = 0;
-      return;
-    }
-
-    final matched = billState.generalBills.firstWhere(
-          (b) => b.countType == billId,
-      orElse: () => billState.emptyModel,
-    );
-
-    selectedBasicStandard = matched.basicStandard ?? 0;
-    selectedBasicAmount = matched.basicAmount ?? 0;
-    selectedAddStandard = matched.addStandard ?? 0;
-    selectedAddAmount = matched.addAmount ?? 0;
-  }
-
   Future<void> deleteCustomStatusFromFirestore(BuildContext context) async {
     final plateNumber = buildPlateNumber();
     final area = context.read<AreaState>().currentArea;
@@ -235,29 +226,11 @@ class MonthlyPlateController {
     }
   }
 
-  Future<void> fetchStatusAndMemo(String plateNumber, String area) async {
-    await FirestoreLogger().log('🔍 상태/메모 조회 시도: $plateNumber-$area');
-    final data = await _plateRepo.getPlateStatus(plateNumber, area);
-
-    if (data != null) {
-      fetchedCustomStatus = data['customStatus'];
-      final List<dynamic>? savedList = data['statusList'];
-      if (savedList != null) {
-        fetchedStatusList = savedList.map((e) => e.toString()).toList();
-      }
-      await FirestoreLogger().log('✅ 상태/메모 조회 성공: $plateNumber-$area');
-    } else {
-      fetchedCustomStatus = null;
-      fetchedStatusList = [];
-      await FirestoreLogger().log('📭 상태/메모 없음: $plateNumber-$area');
-    }
-  }
-
   Future<void> submitPlateEntry(
-      BuildContext context,
-      bool mounted,
-      VoidCallback refreshUI,
-      ) async {
+    BuildContext context,
+    bool mounted,
+    VoidCallback refreshUI,
+  ) async {
     final plateNumber = buildPlateNumber();
     final area = context.read<AreaState>().currentArea;
     final userName = context.read<UserState>().name;
@@ -275,11 +248,6 @@ class MonthlyPlateController {
 
     try {
       await FirestoreLogger().log('🚀 plate 등록 시작: $plateNumber');
-
-      // ✅ plates 컬렉션 문서 생성 생략
-      // ✅ 이미지 업로드 생략
-
-      // ✅ 상태 및 메모 저장
       await _plateRepo.setPlateStatus(
         plateNumber: plateNumber,
         area: area,
@@ -288,7 +256,6 @@ class MonthlyPlateController {
         createdBy: userName,
       );
 
-      // ✅ 정기 정산 정보 저장
       await _plateRepo.setMonthlyPlateStatus(
         plateNumber: plateNumber,
         area: area,

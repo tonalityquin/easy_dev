@@ -68,7 +68,7 @@ class PlateStatusService {
     required String regularType,
     required String startDate,
     required String endDate,
-    required String periodUnit, // ✅ 추가된 파라미터
+    required String periodUnit,
   }) async {
     final docId = '${plateNumber}_$area';
     final now = DateTime.now();
