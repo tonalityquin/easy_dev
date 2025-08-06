@@ -46,6 +46,7 @@ class PlateStatusService {
         'updatedAt': Timestamp.fromDate(now),
         'expireAt': expireAt,
         'createdBy': createdBy,
+        'area': area,
       }, SetOptions(merge: true));
 
       await FirestoreLogger().log('setPlateStatus success: $docId');
@@ -65,8 +66,8 @@ class PlateStatusService {
     required int regularAmount,
     required int regularDurationHours,
     required String regularType,
-    required String startDate, // 🆕
-    required String endDate,   // 🆕
+    required String startDate,
+    required String endDate,
   }) async {
     final docId = '${plateNumber}_$area';
     final now = DateTime.now();
@@ -86,8 +87,8 @@ class PlateStatusService {
         'regularAmount': regularAmount,
         'regularDurationHours': regularDurationHours,
         'regularType': regularType,
-        'startDate': startDate,   // ✅ 추가
-        'endDate': endDate,       // ✅ 추가
+        'startDate': startDate,
+        'endDate': endDate,
         'area': area,
       }, SetOptions(merge: true));
 

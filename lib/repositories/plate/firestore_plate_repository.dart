@@ -228,8 +228,8 @@ class FirestorePlateRepository implements PlateRepository {
     required int regularAmount,
     required int regularDurationHours,
     required String regularType,
-    required String startDate, // ✅ 추가
-    required String endDate,   // ✅ 추가
+    required String startDate,
+    required String endDate,
   }) {
     return _statusService.setMonthlyPlateStatus(
       plateNumber: plateNumber,
@@ -241,11 +241,10 @@ class FirestorePlateRepository implements PlateRepository {
       regularAmount: regularAmount,
       regularDurationHours: regularDurationHours,
       regularType: regularType,
-      startDate: startDate,     // ✅ 전달
-      endDate: endDate,         // ✅ 전달
+      startDate: startDate,
+      endDate: endDate,
     );
   }
-
 
   @override
   Future<void> deletePlateStatus(String plateNumber, String area) {
@@ -264,7 +263,7 @@ class FirestorePlateRepository implements PlateRepository {
     bool? isLockedFee,
     int? lockedAtTimeInSeconds,
     int? lockedFeeAmount,
-    PlateLogModel? log, // 🔹 로그 파라미터 추가
+    PlateLogModel? log,
   }) async {
     final updateData = {
       'type': toType.firestoreValue,
@@ -279,7 +278,7 @@ class FirestorePlateRepository implements PlateRepository {
       if (isLockedFee == true) 'isLockedFee': true,
       if (lockedAtTimeInSeconds != null) 'lockedAtTimeInSeconds': lockedAtTimeInSeconds,
       if (lockedFeeAmount != null) 'lockedFeeAmount': lockedFeeAmount,
-      if (log != null) 'logs': FieldValue.arrayUnion([log.toMap()]), // 🔹 로그 누적
+      if (log != null) 'logs': FieldValue.arrayUnion([log.toMap()]),
     };
 
     await updatePlate(documentId, updateData);

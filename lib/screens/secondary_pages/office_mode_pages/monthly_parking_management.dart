@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
 
+import '../../../states/user/user_state.dart'; // ✅ 현재 지역 가져오기 위해 추가
 import '../../../widgets/navigation/secondary_mini_navigation.dart';
 import 'monthly_parking_pages/monthly_plate_bottom_sheet.dart';
 
@@ -35,6 +37,9 @@ class MonthlyParkingManagement extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ 현재 로그인된 사용자의 지역 가져오기
+    final currentArea = context.read<UserState>().currentArea.trim();
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.white,
@@ -50,6 +55,8 @@ class MonthlyParkingManagement extends StatelessWidget {
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('plate_status')
+            .where('type', isEqualTo: '정기') // ✅ 정기 필터
+            .where('area', isEqualTo: currentArea) // ✅ 현재 지역 필터
             .orderBy('updatedAt', descending: true)
             .snapshots(),
         builder: (context, snapshot) {

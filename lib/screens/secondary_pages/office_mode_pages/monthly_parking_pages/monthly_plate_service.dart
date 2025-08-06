@@ -12,11 +12,13 @@ import '../../../../states/area/area_state.dart';
 import '../../../../states/user/user_state.dart';
 
 class MonthlyPlateService {
-  static Future<List<String>> uploadCapturedImages(List<XFile> images,
-      String plateNumber,
-      String area,
-      String userName,
-      String division,) async {
+  static Future<List<String>> uploadCapturedImages(
+    List<XFile> images,
+    String plateNumber,
+    String area,
+    String userName,
+    String division,
+  ) async {
     final uploader = GcsImageUploader();
     final List<String> uploadedUrls = [];
     final List<String> failedFiles = [];
