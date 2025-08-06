@@ -13,7 +13,16 @@ import 'keypad/kor_keypad.dart';
 import 'monthly_bottom_navigation.dart';
 
 class MonthlyPlateBottomSheet extends StatefulWidget {
-  const MonthlyPlateBottomSheet({super.key});
+  final bool isEditMode;
+  final String? initialDocId;
+  final Map<String, dynamic>? initialData;
+
+  const MonthlyPlateBottomSheet({
+    super.key,
+    this.isEditMode = false,
+    this.initialDocId,
+    this.initialData,
+  });
 
   @override
   State<MonthlyPlateBottomSheet> createState() => _MonthlyPlateBottomSheetState();
@@ -29,7 +38,7 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
   final TextEditingController _regularDurationController = TextEditingController();
   String? _selectedRegularType;
   String _selectedBillingType = '정기';
-  String _selectedPeriodUnit = '월'; // 🔹 추가된 기간 단위 상태값
+  String _selectedPeriodUnit = '월';
 
   final TextEditingController _startDateController = TextEditingController();
   final TextEditingController _endDateController = TextEditingController();
@@ -49,12 +58,43 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
       selectedRegularType: _selectedRegularType,
     );
 
+    // ✅ 수정 모드일 경우 키패드 비활성화
+    if (widget.isEditMode) {
+      controller.showKeypad = false;
+    }
+
+    // 초기 데이터 세팅
+    if (widget.isEditMode && widget.initialData != null) {
+      _populateFields(widget.initialData!);
+    }
+
     controller.controllerBackDigit.addListener(() {
-      final text = controller.controllerBackDigit.text;
-      if (text.length == 4 && controller.isInputValid()) {
-        // plate 입력 완료 후 동작 없음
+      if (controller.controllerBackDigit.text.length == 4 && controller.isInputValid()) {
+        // 필요 시 동작 추가
       }
     });
+  }
+
+  void _populateFields(Map<String, dynamic> data) {
+    final plateParts = (widget.initialDocId?.split('_').first ?? '').split('-');
+
+    if (plateParts.length == 3) {
+      controller.controllerFrontDigit.text = plateParts[0];
+      controller.controllerMidDigit.text = plateParts[1];
+      controller.controllerBackDigit.text = plateParts[2];
+    }
+
+    controller.dropdownValue = data['region'] ?? '전국';
+    _regularNameController.text = data['countType'] ?? '';
+    _regularAmountController.text = (data['regularAmount'] ?? '').toString();
+    _regularDurationController.text = (data['regularDurationHours'] ?? '').toString();
+    _startDateController.text = data['startDate'] ?? '';
+    _endDateController.text = data['endDate'] ?? '';
+    _selectedPeriodUnit = data['periodUnit'] ?? '월';
+    _selectedRegularType = data['regularType'];
+    controller.selectedPeriodUnit = _selectedPeriodUnit;
+    controller.customStatusController.text = data['customStatus'] ?? '';
+    controller.selectedStatuses = List<String>.from(data['statusList'] ?? []);
   }
 
   @override
@@ -163,6 +203,7 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
                           });
                         },
                         isThreeDigit: controller.isThreeDigit,
+                        isEditMode: widget.isEditMode,
                       ),
                       const SizedBox(height: 32),
                       Padding(
@@ -236,6 +277,7 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
                   controller: controller,
                   mountedContext: mounted,
                   onStateRefresh: () => setState(() {}),
+                  isEditMode: widget.isEditMode,
                 ),
               ),
             ],

@@ -81,6 +81,10 @@ class MonthlyPlateController {
 
   String selectedPeriodUnit = '월';
 
+  // ✅ 수정 모드 플래그 및 문서 ID
+  bool isEditMode = false;
+  String? docIdToEdit;
+
   MonthlyPlateController({
     this.regularAmountController,
     this.regularDurationController,
@@ -99,14 +103,14 @@ class MonthlyPlateController {
     controllerFrontDigit.addListener(_handleInputChange);
     controllerMidDigit.addListener(_handleInputChange);
     controllerBackDigit.addListener(_handleInputChange);
-    durationController?.addListener(updateEndDateFromDuration); // ✅ 추가
+    durationController?.addListener(updateEndDateFromDuration);
   }
 
   void _removeInputListeners() {
     controllerFrontDigit.removeListener(_handleInputChange);
     controllerMidDigit.removeListener(_handleInputChange);
     controllerBackDigit.removeListener(_handleInputChange);
-    durationController?.removeListener(updateEndDateFromDuration); // ✅ 추가
+    durationController?.removeListener(updateEndDateFromDuration);
   }
 
   void _handleInputChange() {}
@@ -155,6 +159,9 @@ class MonthlyPlateController {
     regularDurationController?.clear();
     selectedRegularType = null;
     selectedPeriodUnit = '월';
+
+    isEditMode = false;
+    docIdToEdit = null;
   }
 
   String buildPlateNumber() {
@@ -226,11 +233,102 @@ class MonthlyPlateController {
     }
   }
 
+  // ✅ 기존 문서 데이터를 폼에 로딩
+  Future<void> loadExistingData(Map<String, dynamic> data, {required String docId}) async {
+    isEditMode = true;
+    docIdToEdit = docId;
+
+    final parts = docId.split('-');
+    if (parts.length == 3) {
+      controllerFrontDigit.text = parts[0];
+      controllerMidDigit.text = parts[1];
+      controllerBackDigit.text = parts[2];
+    }
+
+    dropdownValue = data['region'] ?? '전국';
+    nameController?.text = data['countType'] ?? '';
+    amountController?.text = (data['regularAmount'] ?? 0).toString();
+    durationController?.text = (data['regularDurationHours'] ?? 0).toString();
+    selectedRegularType = data['regularType'] ?? '';
+    selectedPeriodUnit = data['periodUnit'] ?? '월';
+    startDateController?.text = data['startDate'] ?? '';
+    endDateController?.text = data['endDate'] ?? '';
+    customStatusController.text = data['customStatus'] ?? '';
+
+    final statusList = data['statusList'] as List<dynamic>? ?? [];
+    selectedStatuses = statusList.map((e) => e.toString()).toList();
+  }
+
+  // ✅ 수정 메서드
+  Future<void> updatePlateEntry(
+      BuildContext context,
+      bool mounted,
+      VoidCallback refreshUI,
+      ) async {
+    final plateNumber = buildPlateNumber();
+    final area = context.read<AreaState>().currentArea;
+    final userName = context.read<UserState>().name;
+
+    isLoading = true;
+    refreshUI();
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      await FirestoreLogger().log('✏️ plate 수정 시작: $plateNumber');
+
+      await _plateRepo.setPlateStatus(
+        plateNumber: plateNumber,
+        area: area,
+        customStatus: customStatusController.text.trim(),
+        statusList: selectedStatuses,
+        createdBy: userName,
+      );
+
+      await _plateRepo.setMonthlyPlateStatus(
+        plateNumber: plateNumber,
+        area: area,
+        customStatus: customStatusController.text.trim(),
+        statusList: selectedStatuses,
+        createdBy: userName,
+        countType: nameController?.text.trim() ?? '',
+        regularAmount: int.tryParse(amountController?.text.trim() ?? '') ?? 0,
+        regularDurationHours: int.tryParse(durationController?.text.trim() ?? '') ?? 0,
+        regularType: selectedRegularType ?? '정기 주차',
+        startDate: startDateController?.text.trim() ?? '',
+        endDate: endDateController?.text.trim() ?? '',
+        periodUnit: selectedPeriodUnit,
+      );
+
+      if (mounted) {
+        Navigator.of(context).pop();
+        showSuccessSnackbar(context, '수정 완료');
+        resetForm();
+      }
+
+      await FirestoreLogger().log('✅ plate 수정 완료: $plateNumber');
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop();
+        showFailedSnackbar(context, '수정 실패: ${e.toString()}');
+      }
+      await FirestoreLogger().log('❌ plate 수정 실패: $e');
+    } finally {
+      isLoading = false;
+      if (mounted) refreshUI();
+    }
+  }
+
+  // ✅ 등록 메서드
   Future<void> submitPlateEntry(
-    BuildContext context,
-    bool mounted,
-    VoidCallback refreshUI,
-  ) async {
+      BuildContext context,
+      bool mounted,
+      VoidCallback refreshUI,
+      ) async {
     final plateNumber = buildPlateNumber();
     final area = context.read<AreaState>().currentArea;
     final userName = context.read<UserState>().name;

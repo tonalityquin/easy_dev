@@ -11,6 +11,7 @@ class MonthlyPlateField extends StatelessWidget {
   final TextEditingController backController;
   final TextEditingController activeController;
   final Function(TextEditingController) onKeypadStateChanged;
+  final bool isEditMode; // ✅ 수정 모드 여부
 
   const MonthlyPlateField({
     super.key,
@@ -22,6 +23,7 @@ class MonthlyPlateField extends StatelessWidget {
     required this.backController,
     required this.activeController,
     required this.onKeypadStateChanged,
+    this.isEditMode = false, // ✅ 기본값 false
   });
 
   @override
@@ -60,9 +62,10 @@ class MonthlyPlateField extends StatelessWidget {
       child: TextField(
         controller: controller,
         keyboardType: TextInputType.none,
-        maxLength: 4, // 최대 자릿수 제한 (공통적으로 3~4자)
+        maxLength: 4,
         textAlign: TextAlign.center,
-        readOnly: true,
+        readOnly: true, // ✅ 항상 키보드 막기
+        enabled: !isEditMode, // ✅ 수정 모드일 경우 입력 자체 차단
         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
         decoration: const InputDecoration(
           counterText: "",
@@ -70,7 +73,7 @@ class MonthlyPlateField extends StatelessWidget {
             borderSide: BorderSide(width: 2.0, color: Colors.black),
           ),
         ),
-        onTap: () => onKeypadStateChanged(controller),
+        onTap: isEditMode ? null : () => onKeypadStateChanged(controller),
       ),
     );
   }
@@ -92,6 +95,7 @@ class MonthlyPlateField extends StatelessWidget {
         maxLength: 1,
         textAlign: TextAlign.center,
         readOnly: true,
+        enabled: !isEditMode, // ✅ 수정 모드일 경우 입력 차단
         inputFormatters: [
           FilteringTextInputFormatter.allow(RegExp(r'^[ㄱ-ㅎㅏ-ㅣ가-힣]$')),
         ],
@@ -101,7 +105,7 @@ class MonthlyPlateField extends StatelessWidget {
             borderSide: BorderSide(width: 2.0, color: Colors.black),
           ),
         ),
-        onTap: () => onKeypadStateChanged(controller),
+        onTap: isEditMode ? null : () => onKeypadStateChanged(controller),
       ),
     );
   }

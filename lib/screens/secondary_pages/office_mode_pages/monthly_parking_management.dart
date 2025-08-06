@@ -17,17 +17,50 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
   String? _selectedDocId;
 
   void _handleIconTap(BuildContext context, int index) {
+    final isEditMode = _selectedDocId != null;
+
     switch (index) {
       case 0:
-        showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          backgroundColor: Colors.white,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-          ),
-          builder: (context) => const MonthlyPlateBottomSheet(),
-        );
+        if (!isEditMode) {
+          // ➕ 추가 모달
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.white,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            builder: (context) => const MonthlyPlateBottomSheet(),
+          );
+        } else {
+          // ✏️ 수정 모달
+          FirebaseFirestore.instance
+              .collection('plate_status')
+              .doc(_selectedDocId!)
+              .get()
+              .then((doc) {
+            if (doc.exists) {
+              final data = doc.data()!;
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.white,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                ),
+                builder: (context) => MonthlyPlateBottomSheet(
+                  isEditMode: true,
+                  initialDocId: _selectedDocId!,
+                  initialData: data,
+                ),
+              );
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('선택한 문서를 찾을 수 없습니다.')),
+              );
+            }
+          });
+        }
         break;
 
       case 1:
@@ -44,7 +77,11 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
           return;
         }
 
-        FirebaseFirestore.instance.collection('plate_status').doc(_selectedDocId).delete().then((_) {
+        FirebaseFirestore.instance
+            .collection('plate_status')
+            .doc(_selectedDocId)
+            .delete()
+            .then((_) {
           setState(() => _selectedDocId = null);
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('삭제되었습니다.')),
@@ -190,12 +227,6 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 12),
-
-                        // 우측 정렬 여유 공간
-                        const Align(
-                          alignment: Alignment.centerRight,
-                        ),
                       ],
                     ),
                   ),
@@ -206,11 +237,9 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
         },
       ),
       bottomNavigationBar: SecondaryMiniNavigation(
-        icons: const [
-          Icons.add,
-          Icons.wallet,
-          Icons.delete,
-        ],
+        icons: _selectedDocId == null
+            ? const [Icons.add, Icons.wallet, Icons.delete]
+            : const [Icons.edit, Icons.wallet, Icons.delete],
         onIconTapped: (index) => _handleIconTap(context, index),
       ),
     );

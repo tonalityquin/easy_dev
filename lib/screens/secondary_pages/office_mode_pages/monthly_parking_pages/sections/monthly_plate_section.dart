@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../utils/monthly_plate_field.dart';
 import '../widgets/monthly_region_bottom_sheet.dart';
-
 class MonthlyPlateSection extends StatelessWidget {
   final String dropdownValue;
   final List<String> regions;
@@ -12,6 +11,7 @@ class MonthlyPlateSection extends StatelessWidget {
   final ValueChanged<TextEditingController> onKeypadStateChanged;
   final ValueChanged<String> onRegionChanged;
   final bool isThreeDigit;
+  final bool isEditMode; // ✅ 추가
 
   const MonthlyPlateSection({
     super.key,
@@ -24,6 +24,7 @@ class MonthlyPlateSection extends StatelessWidget {
     required this.onKeypadStateChanged,
     required this.onRegionChanged,
     required this.isThreeDigit,
+    this.isEditMode = false, // ✅ 기본값 false
   });
 
   @override
@@ -37,7 +38,9 @@ class MonthlyPlateSection extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             GestureDetector(
-              onTap: () {
+              onTap: isEditMode
+                  ? null // ✅ 수정 모드일 땐 지역 선택도 막기
+                  : () {
                 monthlyRegionPickerBottomSheet(
                   context: context,
                   selectedRegion: dropdownValue,
@@ -54,7 +57,10 @@ class MonthlyPlateSection extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(dropdownValue, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    Text(
+                      dropdownValue,
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
                   ],
                 ),
               ),
@@ -70,6 +76,7 @@ class MonthlyPlateSection extends StatelessWidget {
                 backController: controllerBackDigit,
                 activeController: activeController,
                 onKeypadStateChanged: onKeypadStateChanged,
+                isEditMode: isEditMode, // ✅ 전달
               ),
             ),
           ],
@@ -78,3 +85,4 @@ class MonthlyPlateSection extends StatelessWidget {
     );
   }
 }
+

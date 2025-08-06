@@ -7,12 +7,14 @@ class MonthlyBottomActionSection extends StatefulWidget {
   final MonthlyPlateController controller;
   final bool mountedContext;
   final VoidCallback onStateRefresh;
+  final bool isEditMode; // 🔹 수정 모드 여부 추가
 
   const MonthlyBottomActionSection({
     super.key,
     required this.controller,
     required this.mountedContext,
     required this.onStateRefresh,
+    this.isEditMode = false,
   });
 
   @override
@@ -28,11 +30,21 @@ class _MonthlyBottomActionSectionState extends State<MonthlyBottomActionSection>
         const SizedBox(height: 15),
         MonthlyAnimatedActionButton(
           isLoading: widget.controller.isLoading,
-          onPressed: () => widget.controller.submitPlateEntry(
-            context,
-            widget.mountedContext,
-            widget.onStateRefresh,
-          ),
+          onPressed: () async {
+            if (widget.isEditMode) {
+              await widget.controller.updatePlateEntry(
+                context,
+                widget.mountedContext,
+                widget.onStateRefresh,
+              );
+            } else {
+              await widget.controller.submitPlateEntry(
+                context,
+                widget.mountedContext,
+                widget.onStateRefresh,
+              );
+            }
+          },
         ),
       ],
     );

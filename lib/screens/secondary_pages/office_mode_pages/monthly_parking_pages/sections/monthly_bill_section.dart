@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 class MonthlyBillSection extends StatelessWidget {
   final TextEditingController nameController;
   final TextEditingController amountController;
@@ -34,7 +33,6 @@ class MonthlyBillSection extends StatelessWidget {
         ),
         const SizedBox(height: 16),
 
-        // 📌 정기 정산 이름 입력
         TextField(
           controller: nameController,
           decoration: const InputDecoration(
@@ -45,9 +43,8 @@ class MonthlyBillSection extends StatelessWidget {
         ),
         const SizedBox(height: 16),
 
-        // 📌 주차 타입 선택
         DropdownButtonFormField<String>(
-          value: selectedType,
+          value: regularTypeOptions.contains(selectedType) ? selectedType : null,
           decoration: const InputDecoration(
             labelText: '주차 타입',
             border: OutlineInputBorder(),
@@ -59,7 +56,6 @@ class MonthlyBillSection extends StatelessWidget {
         ),
         const SizedBox(height: 16),
 
-        // 📌 기간 단위 선택
         DropdownButtonFormField<String>(
           value: selectedPeriodUnit,
           decoration: const InputDecoration(
@@ -73,7 +69,6 @@ class MonthlyBillSection extends StatelessWidget {
         ),
         const SizedBox(height: 16),
 
-        // 📌 주차 가능 시간 입력
         TextField(
           controller: durationController,
           keyboardType: TextInputType.number,
@@ -90,7 +85,6 @@ class MonthlyBillSection extends StatelessWidget {
         ),
         const SizedBox(height: 16),
 
-        // 📌 정기 요금 입력
         TextField(
           controller: amountController,
           keyboardType: TextInputType.number,
