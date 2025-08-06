@@ -191,11 +191,11 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
                         durationController: _regularDurationController,
                         selectedType: _selectedRegularType,
                         onTypeChanged: (val) => setState(() => _selectedRegularType = val),
-                        selectedPeriodUnit: _selectedPeriodUnit, // ✅ 필수 추가
+                        selectedPeriodUnit: _selectedPeriodUnit,
                         onPeriodUnitChanged: (val) {
                           setState(() {
                             _selectedPeriodUnit = val!;
-                            controller.selectedPeriodUnit = val; // ✅ 반드시 필요
+                            controller.selectedPeriodUnit = val;
                           });
                         },
                       ),
