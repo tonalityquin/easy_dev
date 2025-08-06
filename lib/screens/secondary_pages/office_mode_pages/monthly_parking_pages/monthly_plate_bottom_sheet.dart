@@ -44,7 +44,6 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
   void initState() {
     super.initState();
 
-    // ✅ 필드 주입 방식으로 컨트롤러 초기화
     controller = MonthlyPlateController(
       nameController: _regularNameController,
       amountController: _regularAmountController,
