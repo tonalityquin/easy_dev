@@ -203,7 +203,6 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
                       MonthlyCustomStatusSection(
                         controller: controller,
                         fetchedCustomStatus: controller.fetchedCustomStatus,
-                        selectedStatusNames: selectedStatusNames,
                         statusSectionKey: statusSectionKey,
                         onDeleted: () {
                           setState(() {

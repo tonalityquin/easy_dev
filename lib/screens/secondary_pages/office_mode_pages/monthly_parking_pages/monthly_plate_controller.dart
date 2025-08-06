@@ -4,13 +4,12 @@ import 'package:provider/provider.dart';
 
 import '../../../type_pages/debugs/firestore_logger.dart';
 import '../../../../utils/snackbar_helper.dart';
-import 'monthly_plate_service.dart';
 
 import '../../../../states/bill/bill_state.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../../states/area/area_state.dart';
 import '../../../../repositories/plate/firestore_plate_repository.dart';
-
+ㅇ먜ㅛ
 class MonthlyPlateController {
   final TextEditingController controllerFrontDigit = TextEditingController();
   final TextEditingController controllerMidDigit = TextEditingController();
@@ -261,7 +260,6 @@ class MonthlyPlateController {
       ) async {
     final plateNumber = buildPlateNumber();
     final area = context.read<AreaState>().currentArea;
-    final division = context.read<AreaState>().currentDivision;
     final userName = context.read<UserState>().name;
 
     selectedBillType = '정기';
@@ -278,34 +276,10 @@ class MonthlyPlateController {
     try {
       await FirestoreLogger().log('🚀 plate 등록 시작: $plateNumber');
 
-      final uploadedUrls = await MonthlyPlateService.uploadCapturedImages(
-        capturedImages,
-        plateNumber,
-        area,
-        userName,
-        division,
-      );
+      // ✅ plates 컬렉션 문서 생성 생략
+      // ✅ 이미지 업로드 생략
 
-      await FirestoreLogger().log('✅ 이미지 업로드 완료: ${uploadedUrls.length}');
-
-      final wasSuccessful = await MonthlyPlateService.registerPlateEntry(
-        context: context,
-        plateNumber: plateNumber,
-        location: locationController.text,
-        isLocationSelected: isLocationSelected,
-        imageUrls: uploadedUrls,
-        selectedBill: _selectedBill,
-        selectedStatuses: selectedStatuses,
-        basicStandard: selectedBasicStandard,
-        basicAmount: selectedBasicAmount,
-        addStandard: selectedAddStandard,
-        addAmount: selectedAddAmount,
-        region: dropdownValue,
-        customStatus: customStatusController.text.trim().isNotEmpty
-            ? customStatusController.text
-            : fetchedCustomStatus ?? '',
-      );
-
+      // ✅ 상태 및 메모 저장
       await _plateRepo.setPlateStatus(
         plateNumber: plateNumber,
         area: area,
@@ -314,6 +288,7 @@ class MonthlyPlateController {
         createdBy: userName,
       );
 
+      // ✅ 정기 정산 정보 저장
       await _plateRepo.setMonthlyPlateStatus(
         plateNumber: plateNumber,
         area: area,
@@ -331,10 +306,8 @@ class MonthlyPlateController {
 
       if (mounted) {
         Navigator.of(context).pop();
-        if (wasSuccessful) {
-          showSuccessSnackbar(context, '차량 정보 등록 완료');
-          resetForm();
-        }
+        showSuccessSnackbar(context, '차량 정보 등록 완료');
+        resetForm();
       }
 
       await FirestoreLogger().log('🎉 plate 등록 완료: $plateNumber');

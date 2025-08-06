@@ -2,11 +2,10 @@ import 'package:flutter/material.dart';
 import '../../../../type_pages/debugs/firestore_logger.dart';
 import '../monthly_plate_controller.dart';
 
-class MonthlyCustomStatusSection extends StatelessWidget {
+class MonthlyCustomStatusSection extends StatefulWidget {
   final MonthlyPlateController controller;
   final String? fetchedCustomStatus;
   final VoidCallback onDeleted;
-  final List<String> selectedStatusNames;
   final VoidCallback onStatusCleared;
   final Key statusSectionKey;
 
@@ -15,28 +14,43 @@ class MonthlyCustomStatusSection extends StatelessWidget {
     required this.controller,
     required this.fetchedCustomStatus,
     required this.onDeleted,
-    required this.selectedStatusNames,
     required this.onStatusCleared,
     required this.statusSectionKey,
   });
+
+  @override
+  State<MonthlyCustomStatusSection> createState() => _MonthlyCustomStatusSectionState();
+}
+
+class _MonthlyCustomStatusSectionState extends State<MonthlyCustomStatusSection> {
+  String? _errorMessage;
+
+  void _validateInput() {
+    final input = widget.controller.customStatusController.text.trim();
+    setState(() {
+      _errorMessage = input.isEmpty ? '⚠ 메모 내용을 입력해주세요.' : null;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('추가 상태 메모 (최대 10자)', style: TextStyle(fontWeight: FontWeight.bold)),
+        const Text('추가 상태 메모 (최대 20자)', style: TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         TextField(
-          controller: controller.customStatusController,
+          controller: widget.controller.customStatusController,
           maxLength: 20,
+          onChanged: (_) => _validateInput(),
           decoration: InputDecoration(
             hintText: '예: 뒷범퍼 손상',
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            errorText: _errorMessage,
           ),
         ),
-        if (fetchedCustomStatus != null)
+        if (widget.fetchedCustomStatus != null)
           Padding(
             padding: const EdgeInsets.only(top: 12),
             child: Container(
@@ -51,7 +65,7 @@ class MonthlyCustomStatusSection extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      '자동 저장된 메모: "$fetchedCustomStatus"',
+                      '자동 저장된 메모: "${widget.fetchedCustomStatus}"',
                       style: const TextStyle(fontSize: 14),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -62,14 +76,14 @@ class MonthlyCustomStatusSection extends StatelessWidget {
                     onPressed: () async {
                       try {
                         await FirestoreLogger().log(
-                          '🗑️ 상태 메모 삭제 시도: ${controller.buildPlateNumber()}',
+                          '🗑️ 상태 메모 삭제 시도: ${widget.controller.buildPlateNumber()}',
                           level: 'called',
                         );
-                        await controller.deleteCustomStatusFromFirestore(context);
+                        await widget.controller.deleteCustomStatusFromFirestore(context);
                         await FirestoreLogger().log('✅ 상태 메모 삭제 완료', level: 'success');
 
-                        onDeleted();
-                        onStatusCleared();
+                        widget.onDeleted();
+                        widget.onStatusCleared();
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('자동 메모가 삭제되었습니다')),
                         );
