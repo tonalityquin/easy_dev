@@ -6,6 +6,8 @@ class MonthlyBillSection extends StatelessWidget {
   final TextEditingController durationController;
   final String? selectedType;
   final Function(String?) onTypeChanged;
+  final String selectedPeriodUnit;
+  final Function(String?) onPeriodUnitChanged;
 
   const MonthlyBillSection({
     super.key,
@@ -14,11 +16,14 @@ class MonthlyBillSection extends StatelessWidget {
     required this.durationController,
     required this.selectedType,
     required this.onTypeChanged,
+    required this.selectedPeriodUnit,
+    required this.onPeriodUnitChanged,
   });
 
   @override
   Widget build(BuildContext context) {
-    final regularTypeOptions = ['월 주차'];
+    final regularTypeOptions = ['월 주차', '주간권', '야간권', '주말권'];
+    final periodUnitOptions = ['일', '주', '월'];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -47,8 +52,24 @@ class MonthlyBillSection extends StatelessWidget {
             labelText: '주차 타입',
             border: OutlineInputBorder(),
           ),
-          items: regularTypeOptions.map((type) => DropdownMenuItem(value: type, child: Text(type))).toList(),
+          items: regularTypeOptions
+              .map((type) => DropdownMenuItem(value: type, child: Text(type)))
+              .toList(),
           onChanged: onTypeChanged,
+        ),
+        const SizedBox(height: 16),
+
+        // 📌 기간 단위 선택
+        DropdownButtonFormField<String>(
+          value: selectedPeriodUnit,
+          decoration: const InputDecoration(
+            labelText: '기간 단위',
+            border: OutlineInputBorder(),
+          ),
+          items: periodUnitOptions
+              .map((unit) => DropdownMenuItem(value: unit, child: Text(unit)))
+              .toList(),
+          onChanged: onPeriodUnitChanged,
         ),
         const SizedBox(height: 16),
 
@@ -56,11 +77,15 @@ class MonthlyBillSection extends StatelessWidget {
         TextField(
           controller: durationController,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: '주차 가능 시간',
-            hintText: '예: 720',
-            suffixText: '시간',
-            border: OutlineInputBorder(),
+            hintText: selectedPeriodUnit == '월'
+                ? '예: 1 → 1개월'
+                : selectedPeriodUnit == '주'
+                ? '예: 2 → 2주'
+                : '예: 3 → 3일',
+            suffixText: selectedPeriodUnit,
+            border: const OutlineInputBorder(),
           ),
         ),
         const SizedBox(height: 16),

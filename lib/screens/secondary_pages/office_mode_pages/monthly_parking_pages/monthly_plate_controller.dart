@@ -17,6 +17,7 @@ class MonthlyPlateController {
   final TextEditingController controllerBackDigit = TextEditingController();
   final TextEditingController locationController = TextEditingController();
   final TextEditingController customStatusController = TextEditingController();
+
   final TextEditingController? nameController;
   final TextEditingController? amountController;
   final TextEditingController? durationController;
@@ -32,9 +33,7 @@ class MonthlyPlateController {
 
   String selectedBillType = '일반';
   String? _selectedBill;
-
   String? get selectedBill => _selectedBill;
-
   set selectedBill(String? value) => _selectedBill = value;
 
   int selectedBasicStandard = 0;
@@ -43,7 +42,6 @@ class MonthlyPlateController {
   int selectedAddAmount = 0;
 
   bool isThreeDigit = true;
-
   String? fetchedCustomStatus;
 
   List<String> statuses = [];
@@ -52,40 +50,21 @@ class MonthlyPlateController {
   List<String> fetchedStatusList = [];
 
   final List<String> regions = [
-    '전국',
-    '강원',
-    '경기',
-    '경남',
-    '경북',
-    '광주',
-    '대구',
-    '대전',
-    '부산',
-    '서울',
-    '울산',
-    '인천',
-    '전남',
-    '전북',
-    '제주',
-    '충남',
-    '충북',
-    '국기',
-    '대표',
-    '영사',
-    '외교',
-    '임시',
-    '준영',
-    '준외',
-    '협정',
+    '전국', '강원', '경기', '경남', '경북', '광주', '대구', '대전', '부산', '서울',
+    '울산', '인천', '전남', '전북', '제주', '충남', '충북', '국기', '대표',
+    '영사', '외교', '임시', '준영', '준외', '협정',
   ];
 
   late TextEditingController activeController;
   final List<XFile> capturedImages = [];
 
-  /// ✅ 정기주차 관련 입력 필드 (외부에서 주입됨)
+  /// ✅ 정기주차 관련 필드
   TextEditingController? regularAmountController;
   TextEditingController? regularDurationController;
   String? selectedRegularType;
+
+  /// ✅ 추가된 기간 단위 (예: 일, 주, 월)
+  String selectedPeriodUnit = '월';
 
   MonthlyPlateController({
     this.regularAmountController,
@@ -105,12 +84,14 @@ class MonthlyPlateController {
     controllerFrontDigit.addListener(_handleInputChange);
     controllerMidDigit.addListener(_handleInputChange);
     controllerBackDigit.addListener(_handleInputChange);
+    durationController?.addListener(updateEndDateFromDuration); // ✅ 추가
   }
 
   void _removeInputListeners() {
     controllerFrontDigit.removeListener(_handleInputChange);
     controllerMidDigit.removeListener(_handleInputChange);
     controllerBackDigit.removeListener(_handleInputChange);
+    durationController?.removeListener(updateEndDateFromDuration); // ✅ 추가
   }
 
   void _handleInputChange() {}
@@ -159,6 +140,7 @@ class MonthlyPlateController {
     regularAmountController?.clear();
     regularDurationController?.clear();
     selectedRegularType = null;
+    selectedPeriodUnit = '월';
   }
 
   String buildPlateNumber() {
@@ -179,10 +161,47 @@ class MonthlyPlateController {
     customStatusController.dispose();
   }
 
+  void updateEndDateFromDuration() {
+    final startText = startDateController?.text.trim();
+    final durationText = durationController?.text.trim();
+
+    if (startText == null || durationText == null) return;
+
+    final start = DateTime.tryParse(startText);
+    final duration = int.tryParse(durationText);
+
+    if (start == null || duration == null) return;
+
+    Duration offset;
+    switch (selectedPeriodUnit) {
+      case '일':
+        offset = Duration(days: duration);
+        break;
+      case '주':
+        offset = Duration(days: duration * 7);
+        break;
+      case '월':
+      default:
+        offset = Duration(days: duration * 30);
+        break;
+    }
+
+    final end = start.add(offset);
+    endDateController?.text = formatDate(end);
+  }
+
+  String formatDate(DateTime date) {
+    return '${date.year.toString().padLeft(4, '0')}-'
+        '${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')}';
+  }
+
   void setSelectedBill(String? billId, BuildContext context) {
     _selectedBill = billId;
 
-    if (billId == null) {
+    final billState = context.read<BillState>();
+
+    if (billId == null || selectedBillType != '일반') {
       selectedBasicStandard = 0;
       selectedBasicAmount = 0;
       selectedAddStandard = 0;
@@ -190,24 +209,15 @@ class MonthlyPlateController {
       return;
     }
 
-    final billState = context.read<BillState>();
+    final matched = billState.generalBills.firstWhere(
+          (b) => b.countType == billId,
+      orElse: () => billState.emptyModel,
+    );
 
-    if (selectedBillType == '일반') {
-      final matched = billState.generalBills.firstWhere(
-        (b) => b.countType == billId,
-        orElse: () => billState.emptyModel,
-      );
-
-      selectedBasicStandard = matched.basicStandard ?? 0;
-      selectedBasicAmount = matched.basicAmount ?? 0;
-      selectedAddStandard = matched.addStandard ?? 0;
-      selectedAddAmount = matched.addAmount ?? 0;
-    } else {
-      selectedBasicStandard = 0;
-      selectedBasicAmount = 0;
-      selectedAddStandard = 0;
-      selectedAddAmount = 0;
-    }
+    selectedBasicStandard = matched.basicStandard ?? 0;
+    selectedBasicAmount = matched.basicAmount ?? 0;
+    selectedAddStandard = matched.addStandard ?? 0;
+    selectedAddAmount = matched.addAmount ?? 0;
   }
 
   Future<void> deleteCustomStatusFromFirestore(BuildContext context) async {
@@ -215,47 +225,45 @@ class MonthlyPlateController {
     final area = context.read<AreaState>().currentArea;
 
     try {
-      await FirestoreLogger().log('🗑️ 상태 메모 삭제 시도: $plateNumber-$area', level: 'called');
+      await FirestoreLogger().log('🗑️ 상태 메모 삭제 시도: $plateNumber-$area');
       await _plateRepo.deletePlateStatus(plateNumber, area);
       fetchedCustomStatus = null;
       fetchedStatusList = [];
-      await FirestoreLogger().log('✅ 상태 메모 삭제 성공: $plateNumber-$area', level: 'success');
+      await FirestoreLogger().log('✅ 상태 메모 삭제 성공: $plateNumber-$area');
     } catch (e) {
-      await FirestoreLogger().log('❌ 상태 메모 삭제 실패: $e', level: 'error');
+      await FirestoreLogger().log('❌ 상태 메모 삭제 실패: $e');
       rethrow;
     }
   }
 
   Future<void> fetchStatusAndMemo(String plateNumber, String area) async {
-    await FirestoreLogger().log('🔍 상태/메모 조회 시도: $plateNumber-$area', level: 'called');
+    await FirestoreLogger().log('🔍 상태/메모 조회 시도: $plateNumber-$area');
     final data = await _plateRepo.getPlateStatus(plateNumber, area);
 
     if (data != null) {
-      await FirestoreLogger().log('✅ 상태/메모 조회 성공: $plateNumber-$area', level: 'success');
       fetchedCustomStatus = data['customStatus'];
       final List<dynamic>? savedList = data['statusList'];
       if (savedList != null) {
         fetchedStatusList = savedList.map((e) => e.toString()).toList();
       }
+      await FirestoreLogger().log('✅ 상태/메모 조회 성공: $plateNumber-$area');
     } else {
-      await FirestoreLogger().log('📭 상태/메모 없음: $plateNumber-$area', level: 'info');
       fetchedCustomStatus = null;
       fetchedStatusList = [];
+      await FirestoreLogger().log('📭 상태/메모 없음: $plateNumber-$area');
     }
   }
 
   Future<void> submitPlateEntry(
-    BuildContext context,
-    bool mounted,
-    VoidCallback refreshUI,
-  ) async {
+      BuildContext context,
+      bool mounted,
+      VoidCallback refreshUI,
+      ) async {
     final plateNumber = buildPlateNumber();
-    final areaState = context.read<AreaState>();
-    final area = areaState.currentArea;
-    final division = areaState.currentDivision;
+    final area = context.read<AreaState>().currentArea;
+    final division = context.read<AreaState>().currentDivision;
     final userName = context.read<UserState>().name;
 
-    // ✅ 항상 정기 주차로 처리
     selectedBillType = '정기';
 
     isLoading = true;
@@ -268,7 +276,7 @@ class MonthlyPlateController {
     );
 
     try {
-      await FirestoreLogger().log('🚀 plate 등록 시작: $plateNumber', level: 'called');
+      await FirestoreLogger().log('🚀 plate 등록 시작: $plateNumber');
 
       final uploadedUrls = await MonthlyPlateService.uploadCapturedImages(
         capturedImages,
@@ -278,7 +286,7 @@ class MonthlyPlateController {
         division,
       );
 
-      await FirestoreLogger().log('✅ 이미지 업로드 완료: ${uploadedUrls.length}', level: 'success');
+      await FirestoreLogger().log('✅ 이미지 업로드 완료: ${uploadedUrls.length}');
 
       final wasSuccessful = await MonthlyPlateService.registerPlateEntry(
         context: context,
@@ -293,8 +301,9 @@ class MonthlyPlateController {
         addStandard: selectedAddStandard,
         addAmount: selectedAddAmount,
         region: dropdownValue,
-        customStatus:
-            customStatusController.text.trim().isNotEmpty ? customStatusController.text : fetchedCustomStatus ?? '',
+        customStatus: customStatusController.text.trim().isNotEmpty
+            ? customStatusController.text
+            : fetchedCustomStatus ?? '',
       );
 
       await _plateRepo.setPlateStatus(
@@ -305,7 +314,6 @@ class MonthlyPlateController {
         createdBy: userName,
       );
 
-      // ✅ 무조건 정기 정산으로 저장
       await _plateRepo.setMonthlyPlateStatus(
         plateNumber: plateNumber,
         area: area,
@@ -318,6 +326,7 @@ class MonthlyPlateController {
         regularType: selectedRegularType ?? '정기 주차',
         startDate: startDateController?.text.trim() ?? '',
         endDate: endDateController?.text.trim() ?? '',
+        periodUnit: selectedPeriodUnit,
       );
 
       if (mounted) {
@@ -328,13 +337,13 @@ class MonthlyPlateController {
         }
       }
 
-      await FirestoreLogger().log('🎉 plate 등록 완료: $plateNumber', level: 'success');
+      await FirestoreLogger().log('🎉 plate 등록 완료: $plateNumber');
     } catch (e) {
       if (mounted) {
         Navigator.of(context).pop();
         showFailedSnackbar(context, '등록 실패: ${e.toString()}');
       }
-      await FirestoreLogger().log('❌ plate 등록 실패: $e', level: 'error');
+      await FirestoreLogger().log('❌ plate 등록 실패: $e');
     } finally {
       isLoading = false;
       if (mounted) refreshUI();

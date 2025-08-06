@@ -29,6 +29,7 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
   final TextEditingController _regularDurationController = TextEditingController();
   String? _selectedRegularType;
   String _selectedBillingType = '정기';
+  String _selectedPeriodUnit = '월'; // 🔹 추가된 기간 단위 상태값
 
   final TextEditingController _startDateController = TextEditingController();
   final TextEditingController _endDateController = TextEditingController();
@@ -50,7 +51,9 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
 
     controller.controllerBackDigit.addListener(() {
       final text = controller.controllerBackDigit.text;
-      if (text.length == 4 && controller.isInputValid()) {}
+      if (text.length == 4 && controller.isInputValid()) {
+        // plate 입력 완료 후 동작 없음
+      }
     });
   }
 
@@ -188,6 +191,13 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
                         durationController: _regularDurationController,
                         selectedType: _selectedRegularType,
                         onTypeChanged: (val) => setState(() => _selectedRegularType = val),
+                        selectedPeriodUnit: _selectedPeriodUnit, // ✅ 필수 추가
+                        onPeriodUnitChanged: (val) {
+                          setState(() {
+                            _selectedPeriodUnit = val!;
+                            controller.selectedPeriodUnit = val; // ✅ 반드시 필요
+                          });
+                        },
                       ),
                       const SizedBox(height: 32),
                       MonthlyCustomStatusSection(
@@ -212,6 +222,8 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
                       DateRangePickerSection(
                         startDateController: _startDateController,
                         endDateController: _endDateController,
+                        periodUnit: _selectedPeriodUnit,
+                        duration: int.tryParse(_regularDurationController.text) ?? 1,
                       ),
                     ],
                   ),

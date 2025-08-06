@@ -230,6 +230,7 @@ class FirestorePlateRepository implements PlateRepository {
     required String regularType,
     required String startDate,
     required String endDate,
+    required String periodUnit, // ✅ 추가됨
   }) {
     return _statusService.setMonthlyPlateStatus(
       plateNumber: plateNumber,
@@ -243,6 +244,7 @@ class FirestorePlateRepository implements PlateRepository {
       regularType: regularType,
       startDate: startDate,
       endDate: endDate,
+      periodUnit: periodUnit,
     );
   }
 

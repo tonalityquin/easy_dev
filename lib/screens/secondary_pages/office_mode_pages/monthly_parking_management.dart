@@ -107,6 +107,7 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
               final duration = data['regularDurationHours'] ?? 0;
               final startDate = data['startDate'] ?? '';
               final endDate = data['endDate'] ?? '';
+              final periodUnit = data['periodUnit'] ?? '시간';
               final isSelected = docId == _selectedDocId;
 
               return GestureDetector(
@@ -119,7 +120,9 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                   elevation: isSelected ? 6 : 3,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
-                    side: isSelected ? const BorderSide(color: Colors.redAccent, width: 2) : BorderSide.none,
+                    side: isSelected
+                        ? const BorderSide(color: Colors.redAccent, width: 2)
+                        : BorderSide.none,
                   ),
                   color: Colors.white,
                   child: Padding(
@@ -127,20 +130,20 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // 상단 Plate 정보
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
                               '$plateNumber - $countType',
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
+                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                             ),
                             const Icon(Icons.more_vert),
                           ],
                         ),
                         const SizedBox(height: 12),
+
+                        // 요금 정보
                         Row(
                           children: [
                             const Icon(Icons.attach_money, size: 20, color: Colors.green),
@@ -149,14 +152,21 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                           ],
                         ),
                         const SizedBox(height: 6),
+
+                        // 주차 시간 + 단위 표시
                         Row(
                           children: [
                             const Icon(Icons.schedule, size: 20, color: Colors.blueGrey),
                             const SizedBox(width: 6),
-                            Text('주차 시간: $duration시간', style: const TextStyle(fontSize: 16)),
+                            Text(
+                              '주차 시간: $duration${periodUnit ?? '시간'}',
+                              style: const TextStyle(fontSize: 16),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 6),
+
+                        // 시작~종료일
                         Row(
                           children: [
                             const Icon(Icons.calendar_today, size: 20, color: Colors.deepOrange),
@@ -168,6 +178,8 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                           ],
                         ),
                         const SizedBox(height: 6),
+
+                        // 상태 메시지
                         Row(
                           children: [
                             const Icon(Icons.info_outline, size: 20, color: Colors.purple),
@@ -179,7 +191,9 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                           ],
                         ),
                         const SizedBox(height: 12),
-                        Align(
+
+                        // 우측 정렬 여유 공간
+                        const Align(
                           alignment: Alignment.centerRight,
                         ),
                       ],

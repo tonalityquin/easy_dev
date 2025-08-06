@@ -6,16 +6,16 @@ import '../../models/plate_model.dart';
 
 abstract class PlateRepository {
   Stream<List<PlateModel>> streamToCurrentArea(
-    PlateType type,
-    String area, {
-    bool descending = true,
-    String? location,
-  });
+      PlateType type,
+      String area, {
+        bool descending = true,
+        String? location,
+      });
 
   Future<int> getPlateCountForTypePage(
-    PlateType type,
-    String area,
-  );
+      PlateType type,
+      String area,
+      );
 
   Future<int> getPlateCountToCurrentArea(String area);
 
@@ -38,10 +38,10 @@ abstract class PlateRepository {
   Future<void> addOrUpdatePlate(String documentId, PlateModel plate);
 
   Future<void> updatePlate(
-    String documentId,
-    Map<String, dynamic> updatedFields, {
-    PlateLogModel? log, // ✅ 로그 인자 추가
-  });
+      String documentId,
+      Map<String, dynamic> updatedFields, {
+        PlateLogModel? log,
+      });
 
   Future<void> deletePlate(String documentId);
 
@@ -72,16 +72,16 @@ abstract class PlateRepository {
   });
 
   Future<int> getPlateCountForClockInPage(
-    PlateType type, {
-    DateTime? selectedDate,
-    required String area,
-  });
+      PlateType type, {
+        DateTime? selectedDate,
+        required String area,
+      });
 
   Future<int> getPlateCountForClockOutPage(
-    PlateType type, {
-    DateTime? selectedDate,
-    required String area,
-  });
+      PlateType type, {
+        DateTime? selectedDate,
+        required String area,
+      });
 
   Future<bool> checkDuplicatePlate({
     required String plateNumber,
@@ -99,7 +99,7 @@ abstract class PlateRepository {
     required String createdBy,
   });
 
-  /// 🆕 정기 plate_status 저장
+  /// ✅ 정기 plate_status 저장 (수정됨)
   Future<void> setMonthlyPlateStatus({
     required String plateNumber,
     required String area,
@@ -110,10 +110,10 @@ abstract class PlateRepository {
     required int regularAmount,
     required int regularDurationHours,
     required String regularType,
-    required String startDate, // 🆕
-    required String endDate,   // 🆕
+    required String startDate,
+    required String endDate,
+    required String periodUnit, // ✅ 추가됨
   });
-
 
   Future<void> deletePlateStatus(String plateNumber, String area);
 
@@ -128,7 +128,7 @@ abstract class PlateRepository {
     bool? isLockedFee,
     int? lockedAtTimeInSeconds,
     int? lockedFeeAmount,
-    PlateLogModel? log, // 🔹 추가
+    PlateLogModel? log,
   }) async {
     final docRef = FirebaseFirestore.instance.collection('plates').doc(documentId);
     final updateData = <String, dynamic>{
@@ -144,7 +144,7 @@ abstract class PlateRepository {
         'isSelected': false,
         'selectedBy': null,
       },
-      if (log != null) 'logs': FieldValue.arrayUnion([log.toMap()]), // 🔹 로그 누적
+      if (log != null) 'logs': FieldValue.arrayUnion([log.toMap()]),
     };
 
     await docRef.update(updateData);
