@@ -9,7 +9,7 @@ import '../../../../states/bill/bill_state.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../../states/area/area_state.dart';
 import '../../../../repositories/plate/firestore_plate_repository.dart';
-ㅇ먜ㅛ
+
 class MonthlyPlateController {
   final TextEditingController controllerFrontDigit = TextEditingController();
   final TextEditingController controllerMidDigit = TextEditingController();
