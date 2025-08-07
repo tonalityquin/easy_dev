@@ -133,8 +133,8 @@ class ModifyPlateService {
       addAmount: selectedAddAmount,
       region: dropdownValue,
       imageUrls: imageUrls,
-      regularAmount: selectedRegularAmount,             // ✅ 정기정산 금액 포함
-      regularDurationHours: selectedRegularDurationHours, // ✅ 정기정산 시간 포함
+      regularAmount: selectedRegularAmount,             // ✅ 고정 금액 포함
+      regularDurationHours: selectedRegularDurationHours, // ✅ 고정 시간 포함
     );
 
     final changes = originalPlate.diff(updatedPlate);

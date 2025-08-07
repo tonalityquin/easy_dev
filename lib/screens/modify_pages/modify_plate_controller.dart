@@ -47,7 +47,7 @@ class ModifyPlateController {
   int selectedRegularDurationHours = 0;
 
   String? selectedBill;
-  String selectedBillType = '일반'; // ✅ 추가됨
+  String selectedBillType = '변동'; // ✅ 추가됨
   String dropdownValue = '전국';
   String? selectedBillCountType; // ✅ 문자열 타입 정산 유형 이름
   dynamic selectedBillModel; // ✅ BillModel 또는 RegularBillModel 전체 객체 저장
@@ -181,12 +181,12 @@ class ModifyPlateController {
   }
 
   String _determineBillType(String? billingType) {
-    if (billingType == null || billingType.isEmpty) return '일반';
+    if (billingType == null || billingType.isEmpty) return '변동';
 
-    if (billingType.contains('정기')) return '정기';
-    if (plate.regularAmount != null && plate.regularAmount! > 0) return '정기';
+    if (billingType.contains('고정')) return '고정';
+    if (plate.regularAmount != null && plate.regularAmount! > 0) return '고정';
 
-    return '일반';
+    return '변동';
   }
 
   void onBillTypeChanged(String type) {
@@ -210,7 +210,7 @@ class ModifyPlateController {
     selectedBill = bill.countType; // ✅ billingType 필드 반영용
 
     if (bill is BillModel) {
-      selectedBillType = '일반';
+      selectedBillType = '변동';
       selectedBasicAmount = bill.basicAmount ?? 0;
       selectedBasicStandard = bill.basicStandard ?? 0;
       selectedAddAmount = bill.addAmount ?? 0;
@@ -220,7 +220,7 @@ class ModifyPlateController {
       selectedRegularAmount = 0;
       selectedRegularDurationHours = 0;
     } else if (bill is RegularBillModel) {
-      selectedBillType = '정기';
+      selectedBillType = '고정';
       selectedRegularAmount = bill.regularAmount;
       selectedRegularDurationHours = bill.regularDurationHours;
 

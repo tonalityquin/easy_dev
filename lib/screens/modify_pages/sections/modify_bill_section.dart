@@ -26,7 +26,7 @@ class ModifyBillSection extends StatelessWidget {
     final generalBills = billState.generalBills;
     final regularBills = billState.regularBills;
 
-    final isGeneral = selectedBillType == '일반';
+    final isGeneral = selectedBillType == '변동';
     final filteredBills = isGeneral ? generalBills : regularBills;
 
     return Column(
@@ -42,15 +42,15 @@ class ModifyBillSection extends StatelessWidget {
         Row(
           children: [
             _buildTypeButton(
-              label: '일반',
+              label: '변동',
               isSelected: isGeneral,
-              onTap: () => onTypeChanged('일반'),
+              onTap: () => onTypeChanged('변동'),
             ),
             const SizedBox(width: 8),
             _buildTypeButton(
-              label: '정기',
+              label: '고정',
               isSelected: !isGeneral,
-              onTap: () => onTypeChanged('정기'),
+              onTap: () => onTypeChanged('고정'),
             ),
           ],
         ),

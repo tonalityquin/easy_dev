@@ -253,27 +253,6 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
-  Future<void> addPaymentHistory({
-    required String plateNumber,
-    required String area,
-    required String paidAt,
-    required String paidBy,
-    required int amount,
-    required String note,
-    required bool extended,
-  }) {
-    return _statusService.addPaymentHistory(
-      plateNumber: plateNumber,
-      area: area,
-      paidAt: paidAt,
-      paidBy: paidBy,
-      amount: amount,
-      note: note,
-      extended: extended,
-    );
-  }
-
-  @override
   Future<void> deletePlateStatus(String plateNumber, String area) {
     return _statusService.deletePlateStatus(plateNumber, area);
   }

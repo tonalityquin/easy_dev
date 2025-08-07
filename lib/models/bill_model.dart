@@ -6,9 +6,9 @@ enum BillType { general, regular }
 /// ✅ 문자열 <-> enum 변환 유틸
 BillType billTypeFromString(String? value) {
   switch (value) {
-    case '정기':
+    case '고정':
       return BillType.regular;
-    case '일반':
+    case '변동':
     default:
       return BillType.general;
   }
@@ -17,26 +17,25 @@ BillType billTypeFromString(String? value) {
 String billTypeToString(BillType type) {
   switch (type) {
     case BillType.regular:
-      return '정기';
+      return '고정';
     case BillType.general:
-      return '일반';
+      return '변동';
   }
 }
 
-/// ✅ BillModel 정의 (일반 + 정기 병합 구조)
 class BillModel {
   final String id;
   final BillType type;
   final String countType;
   final String area;
 
-  // 일반 정산
+  // 변동 정산
   final int? basicStandard;
   final int? basicAmount;
   final int? addStandard;
   final int? addAmount;
 
-  // 정기 정산
+  // 고정 정산
   final int? regularAmount;
   final int? regularDurationHours;
 

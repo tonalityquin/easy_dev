@@ -25,7 +25,7 @@ class InputPlateController {
   bool isLocationSelected = false;
   String dropdownValue = '전국';
 
-  String selectedBillType = '일반'; // ✅ 일반 / 정기 구분 상태
+  String selectedBillType = '변동'; // ✅ 변동 / 정기 구분 상태
   String? _selectedBill;
 
   String? get selectedBill => _selectedBill;
@@ -138,7 +138,7 @@ class InputPlateController {
     fetchedStatusList = [];
     isSelected = List.generate(statuses.length, (_) => false);
     isThreeDigit = true;
-    selectedBillType = '일반';
+    selectedBillType = '변동';
   }
 
   String buildPlateNumber() {
@@ -183,7 +183,7 @@ class InputPlateController {
 
     final billState = context.read<BillState>();
 
-    if (selectedBillType == '일반') {
+    if (selectedBillType == '변동') {
       final matched = billState.generalBills.firstWhere(
             (b) => b.countType == billId,
         orElse: () => billState.emptyModel,

@@ -23,9 +23,9 @@ class BillReadService {
 
       for (var doc in snapshot.docs) {
         final data = doc.data();
-        final type = data['type'] ?? '일반'; // 기본값은 '일반'
+        final type = data['type'] ?? '변동'; // 기본값은 '변동'
 
-        if (type == '정기') {
+        if (type == '고정') {
           try {
             regularBills.add(RegularBillModel.fromMap(doc.id, data));
           } catch (e) {
@@ -41,7 +41,7 @@ class BillReadService {
       }
 
       await FirestoreLogger().log(
-        'getBillOnce success: ${generalBills.length} 일반, ${regularBills.length} 정기 로드됨',
+        'getBillOnce success: ${generalBills.length} 변동, ${regularBills.length} 고정 로드됨',
       );
 
       return (generalBills: generalBills, regularBills: regularBills);

@@ -133,7 +133,7 @@ class BillState extends ChangeNotifier {
       await _repository.addRegularBill(bill);
       await manualBillRefresh();
     } catch (e) {
-      debugPrint('🔥 정기 정산 추가 실패: $e');
+      debugPrint('🔥 고정 정산 추가 실패: $e');
       rethrow;
     }
   }

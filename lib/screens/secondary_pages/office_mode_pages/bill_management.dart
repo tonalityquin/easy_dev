@@ -146,7 +146,7 @@ class _BillManagementState extends State<BillManagement> {
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('정기 유형: ${bill.regularType}'),
+          Text('고정 유형: ${bill.regularType}'),
           Text('요금: ${bill.regularAmount}원, 이용 시간: ${bill.regularDurationHours}시간'),
         ],
       ),

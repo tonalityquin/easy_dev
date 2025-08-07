@@ -192,7 +192,7 @@ class ParkingRequestControlButtons extends StatelessWidget {
         basicAmount: selectedPlate.basicAmount ?? 0,
         addStandard: selectedPlate.addStandard ?? 0,
         addAmount: selectedPlate.addAmount ?? 0,
-        billingType: selectedPlate.billingType ?? '일반',
+        billingType: selectedPlate.billingType ?? '변동',
         regularAmount: selectedPlate.regularAmount,
         regularDurationHours: selectedPlate.regularDurationHours,
       );

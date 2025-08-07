@@ -11,7 +11,7 @@ class BillWriteService {
   Future<void> addNormalBill(BillModel bill) async {
     final docRef = _firestore.collection('bill').doc(bill.id);
     final data = bill.toFirestoreMap()
-      ..putIfAbsent('type', () => '일반'); // 타입 추가
+      ..putIfAbsent('type', () => '변동'); // 타입 추가
 
     // Null 또는 공백 필드 제거
     data.removeWhere((key, value) => value == null || value.toString().trim().isEmpty);

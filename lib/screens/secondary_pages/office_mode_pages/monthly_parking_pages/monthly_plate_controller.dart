@@ -34,7 +34,7 @@ class MonthlyPlateController {
   bool isLocationSelected = false;
 
   String dropdownValue = '전국';
-  String selectedBillType = '일반';
+  String selectedBillType = '변동';
 
   // ✅ 결제 관련 필드
   String specialNote = '';
@@ -162,7 +162,7 @@ class MonthlyPlateController {
     fetchedStatusList = [];
     isSelected = List.generate(statuses.length, (_) => false);
     isThreeDigit = true;
-    selectedBillType = '일반';
+    selectedBillType = '변동';
     regularAmountController?.clear();
     regularDurationController?.clear();
     selectedRegularType = null;

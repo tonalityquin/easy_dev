@@ -6,16 +6,16 @@ import '../../models/plate_model.dart';
 
 abstract class PlateRepository {
   Stream<List<PlateModel>> streamToCurrentArea(
-      PlateType type,
-      String area, {
-        bool descending = true,
-        String? location,
-      });
+    PlateType type,
+    String area, {
+    bool descending = true,
+    String? location,
+  });
 
   Future<int> getPlateCountForTypePage(
-      PlateType type,
-      String area,
-      );
+    PlateType type,
+    String area,
+  );
 
   Future<int> getPlateCountToCurrentArea(String area);
 
@@ -38,10 +38,10 @@ abstract class PlateRepository {
   Future<void> addOrUpdatePlate(String documentId, PlateModel plate);
 
   Future<void> updatePlate(
-      String documentId,
-      Map<String, dynamic> updatedFields, {
-        PlateLogModel? log,
-      });
+    String documentId,
+    Map<String, dynamic> updatedFields, {
+    PlateLogModel? log,
+  });
 
   Future<void> deletePlate(String documentId);
 
@@ -72,16 +72,16 @@ abstract class PlateRepository {
   });
 
   Future<int> getPlateCountForClockInPage(
-      PlateType type, {
-        DateTime? selectedDate,
-        required String area,
-      });
+    PlateType type, {
+    DateTime? selectedDate,
+    required String area,
+  });
 
   Future<int> getPlateCountForClockOutPage(
-      PlateType type, {
-        DateTime? selectedDate,
-        required String area,
-      });
+    PlateType type, {
+    DateTime? selectedDate,
+    required String area,
+  });
 
   Future<bool> checkDuplicatePlate({
     required String plateNumber,
@@ -116,17 +116,6 @@ abstract class PlateRepository {
     String? specialNote,
     bool? isExtended,
   });
-
-  Future<void> addPaymentHistory({
-    required String plateNumber,
-    required String area,
-    required String paidAt,
-    required String paidBy,
-    required int amount,
-    required String note,
-    required bool extended,
-  });
-
 
   Future<void> deletePlateStatus(String plateNumber, String area);
 

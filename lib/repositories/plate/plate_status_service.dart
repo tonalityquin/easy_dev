@@ -110,37 +110,6 @@ class PlateStatusService {
     }
   }
 
-  Future<void> addPaymentHistory({
-    required String plateNumber,
-    required String area,
-    required String paidAt,
-    required String paidBy,
-    required int amount,
-    required String note,
-    required bool extended,
-  }) async {
-    final docId = '${plateNumber}_$area';
-    final now = DateTime.now();
-
-    await FirestoreLogger().log('📄 결제 내역 기록: $docId');
-
-    try {
-      await _firestore.collection('plate_status').doc(docId).collection('payment_history').add({
-        'paidAt': paidAt,
-        'paidBy': paidBy,
-        'amount': amount,
-        'note': note,
-        'extended': extended,
-        'createdAt': now,
-      });
-
-      await FirestoreLogger().log('✅ 결제 내역 저장 완료');
-    } catch (e) {
-      await FirestoreLogger().log('❌ 결제 내역 저장 실패: $e');
-      rethrow;
-    }
-  }
-
   /// ❌ plate_status 삭제
   Future<void> deletePlateStatus(String plateNumber, String area) async {
     final docId = '${plateNumber}_$area';

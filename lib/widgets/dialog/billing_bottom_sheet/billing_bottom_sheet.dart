@@ -94,7 +94,8 @@ class _BillingBottomSheetState extends State<BillingBottomSheet> {
 
   String get _selectedPayment => paymentOptions[_selectedPaymentIndex];
 
-  bool get isRegular => widget.billingType.contains('월 주차') || widget.billingType.contains('정기');
+  BillType get billType => billTypeFromString(widget.billingType);
+  bool get isRegular => billType == BillType.fixed;
 
   int _calculateBaseFee() {
     if (isRegular) return widget.regularAmount ?? 0;
@@ -195,27 +196,27 @@ class _BillingBottomSheetState extends State<BillingBottomSheet> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: isRegular
                             ? [
-                                const Text('정기 주차 정보', style: TextStyle(fontWeight: FontWeight.bold)),
-                                const SizedBox(height: 8),
-                                _buildInfoRow('정기 유형', widget.billingType),
-                                if (widget.regularAmount != null)
-                                  _buildInfoRow('정기 요금', '₩${formatCurrency.format(widget.regularAmount)}'),
-                                if (widget.regularDurationHours != null)
-                                  _buildInfoRow('정기권 시간', '${widget.regularDurationHours}시간'),
-                                _buildInfoRow('입차 시간', _getFormattedEntryTime()),
-                                _buildInfoRow('주차 시간', _getFormattedParkedTime()),
-                              ]
+                          const Text('고정 주차 정보', style: TextStyle(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 8),
+                          _buildInfoRow('고정 유형', widget.billingType),
+                          if (widget.regularAmount != null)
+                            _buildInfoRow('고정 요금', '₩${formatCurrency.format(widget.regularAmount)}'),
+                          if (widget.regularDurationHours != null)
+                            _buildInfoRow('고정 시간', '${widget.regularDurationHours}시간'),
+                          _buildInfoRow('입차 시간', _getFormattedEntryTime()),
+                          _buildInfoRow('주차 시간', _getFormattedParkedTime()),
+                        ]
                             : [
-                                const Text('요금 기준', style: TextStyle(fontWeight: FontWeight.bold)),
-                                const SizedBox(height: 8),
-                                _buildInfoRow('입차 시간', _getFormattedEntryTime()),
-                                _buildInfoRow('기본 시간', _formatMinutesToHourMinute(widget.basicStandard)),
-                                _buildInfoRow('기본 금액', '₩${formatCurrency.format(widget.basicAmount)}'),
-                                _buildInfoRow('추가 시간', _formatMinutesToHourMinute(widget.addStandard)),
-                                _buildInfoRow('추가 금액', '₩${formatCurrency.format(widget.addAmount)}'),
-                                _buildInfoRow('주차 시간', _getFormattedParkedTime()),
-                                _buildInfoRow('요금 모드 적용 전 금액', '₩${formatCurrency.format(baseFee)}'),
-                              ],
+                          const Text('요금 기준', style: TextStyle(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 8),
+                          _buildInfoRow('입차 시간', _getFormattedEntryTime()),
+                          _buildInfoRow('기본 시간', _formatMinutesToHourMinute(widget.basicStandard)),
+                          _buildInfoRow('기본 금액', '₩${formatCurrency.format(widget.basicAmount)}'),
+                          _buildInfoRow('추가 시간', _formatMinutesToHourMinute(widget.addStandard)),
+                          _buildInfoRow('추가 금액', '₩${formatCurrency.format(widget.addAmount)}'),
+                          _buildInfoRow('주차 시간', _getFormattedParkedTime()),
+                          _buildInfoRow('요금 모드 적용 전 금액', '₩${formatCurrency.format(baseFee)}'),
+                        ],
                       ),
                     ),
                   ),
@@ -315,16 +316,16 @@ class _BillingBottomSheetState extends State<BillingBottomSheet> {
                       FilledButton(
                         onPressed: _isSubmitEnabled
                             ? () {
-                                Navigator.of(context).pop(
-                                  BillResult(
-                                    paymentMethod: _selectedPayment,
-                                    lockedFee: lockedFee,
-                                    feeMode: _feeMode,
-                                    adjustment: _userAdjustment,
-                                    reason: _feeMode == FeeMode.normal ? null : _inputReason,
-                                  ),
-                                );
-                              }
+                          Navigator.of(context).pop(
+                            BillResult(
+                              paymentMethod: _selectedPayment,
+                              lockedFee: lockedFee,
+                              feeMode: _feeMode,
+                              adjustment: _userAdjustment,
+                              reason: _feeMode == FeeMode.normal ? null : _inputReason,
+                            ),
+                          );
+                        }
                             : null,
                         style: FilledButton.styleFrom(
                           backgroundColor: Colors.green,

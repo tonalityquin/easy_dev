@@ -31,7 +31,7 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
 
   // 공통
   String? _errorMessage;
-  String _selectedMode = '일반';
+  String _selectedMode = '변동';
 
   static const List<String> _basicStandardOptions = ['1분', '5분', '30분', '60분'];
   static const List<String> _addStandardOptions = ['1분', '10분', '30분', '60분'];
@@ -49,7 +49,7 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
   }
 
   bool _validateInput() {
-    if (_selectedMode == '일반') {
+    if (_selectedMode == '변동') {
       final fields = [
         _billController.text.trim(),
         _basicAmountController.text.trim(),
@@ -67,7 +67,7 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
           _regularPriceController.text.trim().isEmpty ||
           _regularDurationController.text.trim().isEmpty) {
         setState(() {
-          _errorMessage = '정기 정산 정보를 모두 입력해주세요.';
+          _errorMessage = '고정 정산 정보를 모두 입력해주세요.';
         });
         return false;
       }
@@ -86,9 +86,9 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
 
     Map<String, dynamic> billData;
 
-    if (_selectedMode == '일반') {
+    if (_selectedMode == '변동') {
       billData = {
-        'type': '일반',
+        'type': '변동',
         'CountType': _billController.text.trim(),
         'basicStandard': int.tryParse(_basicStandardValue!.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0,
         'basicAmount': int.tryParse(_basicAmountController.text) ?? 0,
@@ -99,7 +99,7 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
       };
     } else {
       billData = {
-        'type': '정기',
+        'type': '고정',
         'CountType': _regularNameController.text.trim(),
         'regularType': _regularType,
         'regularAmount': int.tryParse(_regularPriceController.text) ?? 0,
@@ -156,23 +156,23 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
 
                   /// 정산 모드 선택
                   ToggleButtons(
-                    isSelected: [_selectedMode == '일반', _selectedMode == '정기'],
+                    isSelected: [_selectedMode == '변동', _selectedMode == '고정'],
                     onPressed: (index) {
                       setState(() {
-                        _selectedMode = index == 0 ? '일반' : '정기';
+                        _selectedMode = index == 0 ? '변동' : '고정';
                       });
                     },
                     borderRadius: BorderRadius.circular(8),
                     children: const [
-                      Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: Text('일반')),
-                      Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: Text('정기')),
+                      Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: Text('변동')),
+                      Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: Text('고정')),
                     ],
                   ),
 
                   const SizedBox(height: 24),
 
                   /// 일반 정산
-                  if (_selectedMode == '일반') ...[
+                  if (_selectedMode == '변동') ...[
                     BillTypeInput(controller: _billController),
                     const SizedBox(height: 16),
                     StandardAndAmountRow(
@@ -195,12 +195,12 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
                   ],
 
                   /// 정기 정산
-                  if (_selectedMode == '정기') ...[
+                  if (_selectedMode == '고정') ...[
                     TextField(
                       controller: _regularNameController,
                       decoration: const InputDecoration(
-                        labelText: '월 정산 유형',
-                        hintText: '예: 월 정기권',
+                        labelText: '고정 유형',
+                        hintText: '예: 일일 주차',
                         border: OutlineInputBorder(),
                       ),
                     ),
@@ -232,7 +232,7 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
                       controller: _regularPriceController,
                       keyboardType: TextInputType.number,
                       decoration: const InputDecoration(
-                        labelText: '정기 요금',
+                        labelText: '일일 요금',
                         hintText: '예: 10000',
                         border: OutlineInputBorder(),
                       ),

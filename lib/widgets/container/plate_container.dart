@@ -8,7 +8,7 @@ import '../../states/plate/plate_state.dart';
 import '../../states/user/user_state.dart';
 import '../../utils/date_utils.dart';
 import '../../utils/snackbar_helper.dart';
-import '../dialog/billing_bottom_sheet/fee_calculator.dart';
+import '../dialog/billing_bottom_sheet/fee_calculator.dart'; // billTypeFromString 가져오기 위해 필요
 import 'plate_custom_box.dart';
 
 class PlateContainer extends StatelessWidget {
@@ -79,7 +79,10 @@ class PlateContainer extends StatelessWidget {
       children: filteredData.map((item) {
         final bool isSelected = item.isSelected;
         final String displayUser = isSelected ? item.selectedBy! : item.userName;
-        final bool isRegular = (item.regularAmount ?? 0) > 0;
+
+        // ✅ billingType 기준으로 고정 정산 여부 판단
+        final billType = billTypeFromString(item.billingType);
+        final bool isRegular = billType == BillType.fixed;
 
         int basicStandard = item.basicStandard ?? 0;
         int basicAmount = item.basicAmount ?? 0;
@@ -106,7 +109,11 @@ class PlateContainer extends StatelessWidget {
           }
         }
 
-        final feeText = isRegular ? '${item.regularAmount ?? 0}원' : '$currentFee원';
+        // ✅ 고정 정산일 경우 lockedFeeAmount 우선 적용
+        final feeText = isRegular
+            ? '${item.isLockedFee ? (item.lockedFeeAmount ?? 0) : (item.regularAmount ?? 0)}원'
+            : '$currentFee원';
+
         final duration = DateTime.now().difference(item.requestTime);
         final elapsedText = formatElapsed(duration);
 

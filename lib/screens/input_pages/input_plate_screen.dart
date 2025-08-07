@@ -36,7 +36,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   List<String> selectedStatusNames = [];
   Key statusSectionKey = UniqueKey();
 
-  String selectedBillType = '일반'; // ✅ '일반' 또는 '정기'
+  String selectedBillType = '변동'; // ✅ '변동' 또는 '정기'
 
   @override
   void initState() {

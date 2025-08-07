@@ -1,7 +1,34 @@
+import 'package:flutter/material.dart';
+
 /// 요금 계산 방식 열거형
 enum FeeMode { normal, plus, minus }
 
-/// 통합된 요금 계산 함수 (정기 주차 포함)
+/// 정산 유형 열거형 (한글 대신 영문으로 작성)
+enum BillType { general, fixed }
+
+/// 문자열 → Enum 변환 함수
+BillType billTypeFromString(String? value) {
+  if (value == null) return BillType.general;
+
+  final normalized = value.toLowerCase(); // 소문자 처리
+
+  if (normalized.contains('고정') ||
+      normalized.contains('fixed') ||
+      normalized.contains('daily') ||
+      normalized.contains('일일') ||
+      normalized.contains('정기')) {
+    return BillType.fixed;
+  }
+
+  return BillType.general;
+}
+
+/// Enum → 문자열 변환 함수 (필요 시 UI용)
+String billTypeToString(BillType type) {
+  return type == BillType.fixed ? '고정' : '변동';
+}
+
+/// 통합된 요금 계산 함수 (고정/변동 주차 포함)
 int calculateFee({
   required int entryTimeInSeconds,
   required int currentTimeInSeconds,
@@ -12,14 +39,14 @@ int calculateFee({
   int userAdjustment = 0,
   FeeMode mode = FeeMode.normal,
 
-  // 정기 주차용 필드 추가
-  String? billingType,
+  // 고정 정산용 필드
+  String? billingType, // e.g., '고정' 또는 '변동'
   int? regularAmount,
 }) {
-  final isRegular = billingType != null &&
-      (billingType.contains('월 주차') || billingType.contains('정기'));
+  final billType = billTypeFromString(billingType);
+  final isRegular = billType == BillType.fixed;
 
-  // 1. 정기 차량 요금 처리
+  // 1. 고정 정산
   if (isRegular) {
     final base = regularAmount ?? 0;
 
@@ -34,7 +61,7 @@ int calculateFee({
     }
   }
 
-  // 2. 일반 요금 계산
+  // 2. 변동 정산
   final parkedSeconds = currentTimeInSeconds - entryTimeInSeconds;
   final basicSec = basicStandard * 60;
   final addSec = addStandard * 60;
@@ -44,11 +71,16 @@ int calculateFee({
     baseFee = basicAmount;
   } else {
     final extraTime = parkedSeconds - basicSec;
-    final extraUnits = (extraTime / addSec).ceil();
+    int extraUnits = 0;
+    if (addSec > 0) {
+      extraUnits = (extraTime / addSec).ceil();
+    } else {
+      debugPrint("⚠️ addStandard가 0이므로 추가 요금 계산 생략");
+    }
     baseFee = basicAmount + (extraUnits * addAmount);
   }
 
-  // 3. 모드에 따른 조정
+  // 3. 조정 적용
   switch (mode) {
     case FeeMode.normal:
       return baseFee;
