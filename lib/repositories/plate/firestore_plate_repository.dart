@@ -230,7 +230,9 @@ class FirestorePlateRepository implements PlateRepository {
     required String regularType,
     required String startDate,
     required String endDate,
-    required String periodUnit, // ✅ 추가됨
+    required String periodUnit,
+    String? specialNote,
+    bool? isExtended,
   }) {
     return _statusService.setMonthlyPlateStatus(
       plateNumber: plateNumber,
@@ -245,6 +247,29 @@ class FirestorePlateRepository implements PlateRepository {
       startDate: startDate,
       endDate: endDate,
       periodUnit: periodUnit,
+      specialNote: specialNote,
+      isExtended: isExtended,
+    );
+  }
+
+  @override
+  Future<void> addPaymentHistory({
+    required String plateNumber,
+    required String area,
+    required String paidAt,
+    required String paidBy,
+    required int amount,
+    required String note,
+    required bool extended,
+  }) {
+    return _statusService.addPaymentHistory(
+      plateNumber: plateNumber,
+      area: area,
+      paidAt: paidAt,
+      paidBy: paidBy,
+      amount: amount,
+      note: note,
+      extended: extended,
     );
   }
 

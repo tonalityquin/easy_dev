@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'monthly_plate_controller.dart';
 
 import 'sections/date_range_picker_section.dart';
+import 'sections/monthly_payment_section.dart';
 import 'sections/monthly_plate_section.dart';
 import 'sections/monthly_bottom_action_section.dart';
 import 'sections/monthly_custom_status_section.dart';
@@ -225,6 +226,15 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
                           },
                         ),
                       ),
+                      if (widget.isEditMode)
+                        MonthlyPaymentSection(
+                          controller: controller,
+                          onExtendedChanged: (val) {
+                            setState(() {
+                              controller.isExtended = val ?? false;
+                            });
+                          },
+                        ),
                       const SizedBox(height: 32),
                       MonthlyBillSection(
                         nameController: _regularNameController,

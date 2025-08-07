@@ -69,6 +69,8 @@ class PlateStatusService {
     required String startDate,
     required String endDate,
     required String periodUnit,
+    String? specialNote, // ✅ 추가
+    bool? isExtended, // ✅ 추가
   }) async {
     final docId = '${plateNumber}_$area';
     final now = DateTime.now();
@@ -77,7 +79,7 @@ class PlateStatusService {
     await FirestoreLogger().log('📥 setMonthlyPlateStatus called: $docId');
 
     try {
-      await _firestore.collection('plate_status').doc(docId).set({
+      final data = {
         'customStatus': customStatus,
         'statusList': statusList,
         'updatedAt': Timestamp.fromDate(now),
@@ -92,11 +94,49 @@ class PlateStatusService {
         'endDate': endDate,
         'periodUnit': periodUnit,
         'area': area,
-      }, SetOptions(merge: true));
+        if (specialNote != null) 'specialNote': specialNote, // ✅ null 체크 후 저장
+        if (isExtended != null) 'isExtended': isExtended, // ✅ null 체크 후 저장
+      };
+
+      await _firestore.collection('plate_status').doc(docId).set(
+            data,
+            SetOptions(merge: true),
+          );
 
       await FirestoreLogger().log('✅ setMonthlyPlateStatus success: $docId');
     } catch (e) {
       await FirestoreLogger().log('❌ setMonthlyPlateStatus error: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> addPaymentHistory({
+    required String plateNumber,
+    required String area,
+    required String paidAt,
+    required String paidBy,
+    required int amount,
+    required String note,
+    required bool extended,
+  }) async {
+    final docId = '${plateNumber}_$area';
+    final now = DateTime.now();
+
+    await FirestoreLogger().log('📄 결제 내역 기록: $docId');
+
+    try {
+      await _firestore.collection('plate_status').doc(docId).collection('payment_history').add({
+        'paidAt': paidAt,
+        'paidBy': paidBy,
+        'amount': amount,
+        'note': note,
+        'extended': extended,
+        'createdAt': now,
+      });
+
+      await FirestoreLogger().log('✅ 결제 내역 저장 완료');
+    } catch (e) {
+      await FirestoreLogger().log('❌ 결제 내역 저장 실패: $e');
       rethrow;
     }
   }
