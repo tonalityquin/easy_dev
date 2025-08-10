@@ -43,7 +43,7 @@ class PlateCreationService {
     final existingPlate = await _queryService.getPlate(documentId);
     if (existingPlate != null) {
       final existingType = PlateType.values.firstWhere(
-            (type) => type.firestoreValue == existingPlate.type,
+        (type) => type.firestoreValue == existingPlate.type,
         orElse: () => PlateType.parkingRequests,
       );
 
@@ -69,12 +69,12 @@ class PlateCreationService {
 
           // 변동/고정 정산 세팅
           basicStandard = billData['basicStandard'] ?? 0;
-          basicAmount   = billData['basicAmount']   ?? 0;
-          addStandard   = billData['addStandard']   ?? 0;
-          addAmount     = billData['addAmount']     ?? 0;
+          basicAmount = billData['basicAmount'] ?? 0;
+          addStandard = billData['addStandard'] ?? 0;
+          addAmount = billData['addAmount'] ?? 0;
 
           // (고정에서 쓸 수도 있는) 정기 관련 필드가 정의되어 있으면 유지
-          regularAmount        = billData['regularAmount'];
+          regularAmount = billData['regularAmount'];
           regularDurationHours = billData['regularDurationHours'];
 
           await FirestoreLogger().log('addPlate billing data loaded: $billingType');
@@ -89,16 +89,14 @@ class PlateCreationService {
     } else if (selectedBillType == '정기') {
       // ✅ 정기: 사전 결제 → 0분/0원 강제
       basicStandard = 0;
-      basicAmount   = 0;
-      addStandard   = 0;
-      addAmount     = 0;
+      basicAmount = 0;
+      addStandard = 0;
+      addAmount = 0;
 
       // 정기 메타는 plate_status에 저장/관리. plate에는 필요시 라벨만 저장할 수 있음.
     }
 
-    final plateFourDigit = plateNumber.length >= 4
-        ? plateNumber.substring(plateNumber.length - 4)
-        : plateNumber;
+    final plateFourDigit = plateNumber.length >= 4 ? plateNumber.substring(plateNumber.length - 4) : plateNumber;
 
     // billingType이 비었으면 요금 잠금 처리
     final effectiveIsLockedFee = isLockedFee || (billingType == null || billingType.trim().isEmpty);
@@ -144,16 +142,32 @@ class PlateCreationService {
 
     if (customStatus != null && customStatus.trim().isNotEmpty) {
       final statusDocRef = _firestore.collection('plate_status').doc(documentId);
+      final now = Timestamp.now();
       final expireAt = Timestamp.fromDate(DateTime.now().add(const Duration(days: 1)));
 
-      await statusDocRef.set({
-        'customStatus': customStatus,
-        'updatedAt': Timestamp.now(),
+      final payload = <String, dynamic>{
+        // ✅ 보호 필드(type, countType, regular*, periodUnit, startDate, endDate, payment_history) 건드리지 않음
+        'customStatus': customStatus.trim(),
+        'updatedAt': now,
         'createdBy': userName,
         'expireAt': expireAt,
-      });
+        // 필요하면 area도 처음 생성시에만 남기고 싶다면 merge 시 포함 가능
+        'area': area,
+      };
 
-      await FirestoreLogger().log('addPlate customStatus saved: $customStatus');
+      try {
+        // 먼저 필요한 필드만 부분 업데이트 (기존 문서가 있으면 안전)
+        await statusDocRef.update(payload);
+      } on FirebaseException catch (e) {
+        if (e.code == 'not-found') {
+          // 문서가 없으면 merge:true로 생성 (다른 필드는 그대로)
+          await statusDocRef.set(payload, SetOptions(merge: true));
+        } else {
+          rethrow;
+        }
+      }
+
+      await FirestoreLogger().log('addPlate customStatus upserted (safe merge): $documentId');
     }
 
     await FirestoreLogger().log('addPlate success: $documentId');
