@@ -39,12 +39,15 @@ void chatBottomSheet(BuildContext context) {
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    backgroundColor: Colors.white, // ⬅️ 배경 흰색
-    elevation: 0, // ⬅️ 그림자 제거
+    backgroundColor: Colors.white,
+    // ⬅️ 배경 흰색
+    elevation: 0,
+    // ⬅️ 그림자 제거
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
     ),
-    clipBehavior: Clip.antiAlias, // ⬅️ 둥근 모서리 적용 시 내용 잘림 방지
+    clipBehavior: Clip.antiAlias,
+    // ⬅️ 둥근 모서리 적용 시 내용 잘림 방지
     builder: (ctx) {
       final inset = MediaQuery.of(ctx).viewInsets.bottom; // 키보드 높이
       final maxSheetH = MediaQuery.of(ctx).size.height * 0.6; // 시트 최대높이
