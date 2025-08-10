@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
 import '../../../states/user/user_state.dart';
+import '../../../utils/blocking_dialog.dart';
 import '../clock_in_controller.dart';
 import '../debugs/clock_in_debug_firestore_logger.dart';
 
@@ -27,11 +27,7 @@ class WorkButtonWidget extends StatelessWidget {
       icon: const Icon(Icons.access_time),
       label: Text(
         label,
-        style: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1.1,
-        ),
+        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.1),
       ),
       style: ElevatedButton.styleFrom(
         backgroundColor: Colors.white,
@@ -39,24 +35,29 @@ class WorkButtonWidget extends StatelessWidget {
         minimumSize: const Size.fromHeight(55),
         padding: EdgeInsets.zero,
         side: const BorderSide(color: Colors.grey, width: 1.0),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
-
-      // 버튼 클릭 핸들링
       onPressed: isWorking
-          ? () {
-        logger.log('🚫 출근 버튼 클릭 무시: 이미 출근 상태', level: 'warn');
-      }
-          : () {
+          ? () => logger.log('🚫 출근 버튼 클릭 무시: 이미 출근 상태', level: 'warn')
+          : () async {
         logger.log('🧲 [UI] 출근 버튼 클릭됨', level: 'called');
-        onLoadingChanged(true); // 상위에서 로딩 시작 처리
-        controller.handleWorkStatus(
-          context,
-          userState,
-              () => onLoadingChanged(false), // 로딩 종료 시 호출
-        );
+        onLoadingChanged(true);
+        try {
+          await runWithBlockingDialog(
+            context: context,
+            message: '출근 처리 중입니다...',
+            task: () async {
+              // ⚠️ controller 내부 비동기 작업은 반드시 await
+              await controller.handleWorkStatus(
+                context,
+                context.read<UserState>(),
+                    () => onLoadingChanged(false), // (기존 시그니처 유지 시)
+              );
+            },
+          );
+        } finally {
+          onLoadingChanged(false);
+        }
       },
     );
   }

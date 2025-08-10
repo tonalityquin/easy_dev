@@ -5,6 +5,7 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../../../../../../states/user/user_state.dart';
 import '../../../../../../utils/snackbar_helper.dart';
+import '../../../../utils/blocking_dialog.dart';
 import 'utils/clock_out_log_uploader.dart';
 import 'utils/break_log_uploader.dart';
 
@@ -95,18 +96,23 @@ class CommonDashBoardController {
   /// 로그아웃
   Future<void> logout(BuildContext context) async {
     try {
-      final userState = Provider.of<UserState>(context, listen: false);
+      // 1) 차단 모달을 띄운 상태에서 '오직 정리 작업'만 수행 (네비게이션 금지)
+      await runWithBlockingDialog(
+        context: context,
+        message: '로그아웃 중입니다...',
+        task: () async {
+          final userState = Provider.of<UserState>(context, listen: false);
+          await FlutterForegroundTask.stopService();
+          await userState.isHeWorking();
+          await Future.delayed(const Duration(seconds: 1));
+          await userState.clearUserToPhone();
+          // ❌ 여기서 Navigator.push... 하지 말기
+        },
+      ); // ← 여기서 모달이 깔끔하게 닫힘
 
-      // ✅ 포그라운드 서비스 중지
-      await FlutterForegroundTask.stopService();
-
-      await userState.isHeWorking();
-      await Future.delayed(const Duration(seconds: 1));
-      await userState.clearUserToPhone();
-
+      // 2) 모달이 닫힌 뒤에 화면 전환
       if (!context.mounted) return;
-
-      Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+      Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
     } catch (e) {
       if (context.mounted) {
         showFailedSnackbar(context, '로그아웃 실패: $e');

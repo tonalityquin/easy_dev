@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../../../../../states/area/area_state.dart';
 import '../../../../../../states/user/user_state.dart';
 import '../../../../../../utils/snackbar_helper.dart';
+import '../../../../../../utils/blocking_dialog.dart';
 import 'end_work_report_content.dart';
 
 Future<void> showReportDialog(BuildContext context) {
@@ -32,78 +33,84 @@ Future<void> showReportDialog(BuildContext context) {
                 return;
               }
 
-              final area = context.read<AreaState>().currentArea;
-              final division = context.read<AreaState>().currentDivision;
-              final userName = context.read<UserState>().name;
+              await runWithBlockingDialog(
+                context: context,
+                message: '보고 처리 중입니다. 잠시만 기다려 주세요...',
+                task: () async {
+                  final area = context.read<AreaState>().currentArea;
+                  final division = context.read<AreaState>().currentDivision;
+                  final userName = context.read<UserState>().name;
 
-              if (type == 'end') {
-                final parsed = jsonDecode(content);
+                  if (type == 'end') {
+                    final parsed = jsonDecode(content);
 
-                final dateStr = DateTime.now().toIso8601String().split('T').first;
-                final summaryRef = FirebaseFirestore.instance
-                    .collection('fee_summaries')
-                    .doc('${division}_$area\_$dateStr');
+                    final dateStr = DateTime.now().toIso8601String().split('T').first;
+                    final summaryRef = FirebaseFirestore.instance
+                        .collection('fee_summaries')
+                        .doc('${division}_$area\_$dateStr');
 
-                final doc = await summaryRef.get();
-                if (!doc.exists) {
-                  await _updateLockedFeeSummary(division, area);
-                }
+                    final doc = await summaryRef.get();
+                    if (!doc.exists) {
+                      await _updateLockedFeeSummary(division, area);
+                    }
 
-                final latest = await summaryRef.get();
-                final totalLockedFee = latest['totalLockedFee'] ?? 0;
+                    final latest = await summaryRef.get();
+                    final totalLockedFee = latest['totalLockedFee'] ?? 0;
 
-                final reportLog = {
-                  'division': division,
-                  'area': area,
-                  'vehicleCount': {
-                    'vehicleInput': int.tryParse(parsed['vehicleInput'].toString()) ?? 0,
-                    'vehicleOutput': int.tryParse(parsed['vehicleOutput'].toString()) ?? 0,
-                  },
-                  'totalLockedFee': totalLockedFee,
-                  'timestamp': DateTime.now().toIso8601String(),
-                };
+                    final reportLog = {
+                      'division': division,
+                      'area': area,
+                      'vehicleCount': {
+                        'vehicleInput': int.tryParse(parsed['vehicleInput'].toString()) ?? 0,
+                        'vehicleOutput': int.tryParse(parsed['vehicleOutput'].toString()) ?? 0,
+                      },
+                      'totalLockedFee': totalLockedFee,
+                      'timestamp': DateTime.now().toIso8601String(),
+                    };
 
-                await uploadEndWorkReportJson(
-                  report: reportLog,
-                  division: division,
-                  area: area,
-                  userName: userName,
-                );
+                    await uploadEndWorkReportJson(
+                      report: reportLog,
+                      division: division,
+                      area: area,
+                      userName: userName,
+                    );
 
-                await deleteLockedDepartureDocs(area);
+                    await deleteLockedDepartureDocs(area);
 
-                if (context.mounted) {
-                  Navigator.pop(context);
-                  showSuccessSnackbar(
-                    context,
-                    "업무 종료 보고 업로드 및 출차 초기화 "
-                        "(입차: ${parsed['vehicleInput']}, 출차: ${parsed['vehicleOutput']})",
-                  );
-                }
-              } else if (type == 'start') {
-                if (context.mounted) {
-                  Navigator.pop(context);
-                  showSuccessSnackbar(context, "업무 시작 보고 완료: $content");
-                }
-              } else if (type == 'middle') {
-                final user = context.read<UserState>().user;
-                if (user == null || user.divisions.isEmpty) {
-                  showFailedSnackbar(context, '사용자 정보가 없어 보고를 저장할 수 없습니다.');
-                  return;
-                }
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                      showSuccessSnackbar(
+                        context,
+                        "업무 종료 보고 업로드 및 출차 초기화 "
+                            "(입차: ${parsed['vehicleInput']}, 출차: ${parsed['vehicleOutput']})",
+                      );
+                    }
+                  } else if (type == 'start') {
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                      showSuccessSnackbar(context, "업무 시작 보고 완료: $content");
+                    }
+                  } else if (type == 'middle') {
+                    final user = context.read<UserState>().user;
+                    if (user == null || user.divisions.isEmpty) {
+                      showFailedSnackbar(context, '사용자 정보가 없어 보고를 저장할 수 없습니다.');
+                      return;
+                    }
 
-                await FirebaseFirestore.instance.collection('tasks').add({
-                  'creator': user.id,
-                  'division': user.divisions.first,
-                  'answer': content,
-                  'createdAt': DateTime.now().toIso8601String(),
-                });
+                    await FirebaseFirestore.instance.collection('tasks').add({
+                      'creator': user.id,
+                      'division': user.divisions.first,
+                      'answer': content,
+                      'createdAt': DateTime.now().toIso8601String(),
+                    });
 
-                if (context.mounted) {
-                  Navigator.pop(context);
-                  showSuccessSnackbar(context, "보고란 제출 완료: $content");
-                }
-              }
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                      showSuccessSnackbar(context, "보고란 제출 완료: $content");
+                    }
+                  }
+                },
+              );
             },
           ),
         ),

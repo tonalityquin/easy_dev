@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../../../../states/user/user_state.dart';
+import '../../../../../utils/blocking_dialog.dart';
 import '../common_dash_board_controller.dart';
 
-class WorkButtonWidget extends StatelessWidget {
+class WorkButtonWidget extends StatefulWidget {
   final CommonDashBoardController controller;
   final UserState userState;
 
@@ -13,52 +15,60 @@ class WorkButtonWidget extends StatelessWidget {
   });
 
   @override
+  State<WorkButtonWidget> createState() => _WorkButtonWidgetState();
+}
+
+class _WorkButtonWidgetState extends State<WorkButtonWidget> {
+  bool _submitting = false;
+
+  Future<void> _onTap() async {
+    if (_submitting) return; // ✅ 중복 탭 방지
+    setState(() => _submitting = true);
+    HapticFeedback.lightImpact();
+
+    try {
+      await runWithBlockingDialog(
+        context: context,
+        message: widget.userState.isWorking ? '퇴근 처리 중입니다...' : '출근 처리 중입니다...',
+        task: () async {
+          await widget.controller.handleWorkStatus(widget.userState, context);
+        },
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final isWorking = userState.isWorking;
+    final isWorking = widget.userState.isWorking;
     final label = isWorking ? '퇴근하기' : '출근하기';
     final icon = isWorking ? Icons.logout : Icons.login;
-    final colors = isWorking ? [Colors.redAccent, Colors.deepOrange] : [Colors.green.shade400, Colors.teal];
 
-    return InkWell(
-      onTap: () => controller.handleWorkStatus(userState, context),
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        height: 55,
-        width: double.infinity,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          gradient: LinearGradient(
-            colors: colors,
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: const Color.fromARGB(38, 0, 0, 0),
-              blurRadius: 6,
-              offset: const Offset(0, 3),
-            ),
-          ],
+    return ElevatedButton.icon(
+      icon: _submitting
+          ? const SizedBox(
+        width: 20,
+        height: 20,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
         ),
-        child: Center(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: Colors.white),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.1,
-                ),
-              ),
-            ],
-          ),
-        ),
+      )
+          : Icon(icon),
+      label: Text(
+        label,
+        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.1),
       ),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        minimumSize: const Size.fromHeight(55),
+        padding: EdgeInsets.zero,
+        side: const BorderSide(color: Colors.grey, width: 1.0),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      onPressed: _submitting ? null : _onTap,
     );
   }
 }

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart'; // listEquals 사용
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -36,8 +37,8 @@ class SecondaryPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final userState = context.watch<UserState>();
-    final userRole = userState.role;
+    // ⚠️ watch → read 로 변경하여 UserState 변경 시 전체 리빌드 방지
+    final userRole = context.read<UserState>().role;
 
     return MultiProvider(
       providers: [
@@ -46,7 +47,15 @@ class SecondaryPage extends StatelessWidget {
           create: (_) => SecondaryState(pages: lowUserModePages),
           update: (_, roleState, secondaryState) {
             final newPages = getUpdatedPages(userRole, roleState);
-            return secondaryState!..updatePages(newPages);
+
+            // ✅ 페이지 구성이 동일하면 불필요한 업데이트/리빌드 방지
+            if (listEquals(secondaryState!.pages, newPages)) {
+              return secondaryState;
+            }
+
+            // ✅ 인덱스 보존(필요 시 keepIndex/preserveIndex 옵션 맞춰 사용)
+            secondaryState.updatePages(newPages, keepIndex: true);
+            return secondaryState;
           },
         ),
       ],
@@ -67,12 +76,17 @@ class SecondaryPage extends StatelessWidget {
                   child: SecondaryRoleNavigation(
                     onModeChanged: (selectedLabel) {
                       final manageState = Provider.of<SecondaryMode>(context, listen: false);
+                      // 여기서도 read 사용
                       final userRole = Provider.of<UserState>(context, listen: false).role;
                       final newMode = ModeStatusExtension.fromLabel(selectedLabel);
-                      if (newMode != null) {
+
+                      if (newMode != null && newMode != manageState.currentStatus) {
+                        // ✅ 실제 모드가 바뀔 때만 변경
                         manageState.changeStatus(newMode);
+
                         final newPages = getUpdatedPages(userRole, manageState);
-                        Provider.of<SecondaryState>(context, listen: false).updatePages(newPages);
+                        // ✅ 인덱스 보존하여 불필요한 탭 초기화 방지
+                        Provider.of<SecondaryState>(context, listen: false).updatePages(newPages, keepIndex: true);
                       }
                     },
                   ),

@@ -13,7 +13,8 @@ const String kBucketName = 'easydev-image';
 const String kServiceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
 
 class EndWorkReportContent extends StatefulWidget {
-  final void Function(String reportType, String content) onReport;
+  // ✅ 콜백을 Future<void>로 변경해 상위 onReport의 async 작업을 대기할 수 있게 함
+  final Future<void> Function(String reportType, String content) onReport;
 
   const EndWorkReportContent({super.key, required this.onReport});
 
@@ -45,8 +46,8 @@ class _EndWorkReportContentState extends State<EndWorkReportContent> {
 
   @override
   Widget build(BuildContext context) {
-    final canSubmit = _vehicleCountController.text.trim().isNotEmpty &&
-        _exitVehicleCountController.text.trim().isNotEmpty;
+    final canSubmit =
+        _vehicleCountController.text.trim().isNotEmpty && _exitVehicleCountController.text.trim().isNotEmpty;
 
     return Padding(
       padding: EdgeInsets.only(
@@ -118,9 +119,7 @@ class _EndWorkReportContentState extends State<EndWorkReportContent> {
 
     // Firestore 정산 요약이 없다면 새로 생성
     final dateStr = DateTime.now().toIso8601String().split('T').first;
-    final summaryRef = FirebaseFirestore.instance
-        .collection('fee_summaries')
-        .doc('${division}_$area\_$dateStr');
+    final summaryRef = FirebaseFirestore.instance.collection('fee_summaries').doc('${division}_$area\_$dateStr');
 
     final doc = await summaryRef.get();
     if (!doc.exists) {
@@ -137,7 +136,9 @@ class _EndWorkReportContentState extends State<EndWorkReportContent> {
     };
 
     final content = jsonEncode(reportMap);
-    widget.onReport('end', content);
+
+    // ✅ 상위 onReport의 async 작업(업로드/정리 등)을 완전히 대기
+    await widget.onReport('end', content);
   }
 }
 
@@ -211,7 +212,11 @@ Future<String?> uploadEndWorkReportJson({
     Object()
       ..name = destinationPath
       ..contentDisposition = 'attachment'
-      ..acl = [ObjectAccessControl()..entity = 'allUsers'..role = 'READER'],
+      ..acl = [
+        ObjectAccessControl()
+          ..entity = 'allUsers'
+          ..role = 'READER'
+      ],
     kBucketName,
     uploadMedia: media,
   );

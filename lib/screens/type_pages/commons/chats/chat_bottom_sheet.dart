@@ -23,6 +23,7 @@ Stream<String> latestMessageStream(String roomId) {
 }
 
 /// 🔹 채팅 바텀시트
+/// 🔹 채팅 바텀시트
 void chatBottomSheet(BuildContext context) {
   final currentUser = context.read<UserState>().user;
   final String? roomId = currentUser?.currentArea?.trim();
@@ -37,32 +38,54 @@ void chatBottomSheet(BuildContext context) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
+    useSafeArea: true,
+    backgroundColor: Colors.white, // ⬅️ 배경 흰색
+    elevation: 0, // ⬅️ 그림자 제거
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
     ),
+    clipBehavior: Clip.antiAlias, // ⬅️ 둥근 모서리 적용 시 내용 잘림 방지
     builder: (ctx) {
-      return Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(ctx).viewInsets.bottom,
-          left: 16,
-          right: 16,
-          top: 16,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+      final inset = MediaQuery.of(ctx).viewInsets.bottom; // 키보드 높이
+      final maxSheetH = MediaQuery.of(ctx).size.height * 0.6; // 시트 최대높이
+
+      return AnimatedPadding(
+        duration: const Duration(milliseconds: 150),
+        padding: EdgeInsets.only(bottom: inset), // 키보드만큼 위로 올림
+        child: Container(
+          color: Colors.white, // 내부도 흰색
+          padding: const EdgeInsets.only(left: 16, right: 16, top: 16),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: maxSheetH),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  '구역 채팅',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                // 상단의 iOS-style drag handle
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                  margin: const EdgeInsets.only(bottom: 12),
+                ),
+                const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      '구역 채팅',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Flexible(
+                  child: ChatPanel(roomId: roomId),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            ChatPanel(roomId: roomId),
-          ],
+          ),
         ),
       );
     },

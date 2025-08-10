@@ -48,55 +48,43 @@ class DashBoardBottomSheet extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 24),
+
                     const ClockOutFetchPlateCountWidget(),
                     const SizedBox(height: 16),
-                    UserInfoCard(),
 
-                    // ✅ 로그아웃 버튼 추가
+                    UserInfoCard(),
                     const SizedBox(height: 16),
+
+                    // 1) 로그아웃 버튼 (개별 스타일)
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
                         icon: const Icon(Icons.logout),
                         label: const Text('로그아웃'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.redAccent,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        onPressed: () {
-                          controller.logout(context);
-                        },
+                        style: _logoutBtnStyle(),
+                        onPressed: () => controller.logout(context),
                       ),
                     ),
 
                     const SizedBox(height: 32),
+
                     BreakButtonWidget(controller: controller),
                     const SizedBox(height: 16),
+
                     Row(
                       children: [
+                        // 2) 보고 작성 버튼 (개별 스타일)
                         Expanded(
                           child: ElevatedButton.icon(
                             icon: const Icon(Icons.assignment),
                             label: const Text('보고 작성'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              foregroundColor: Colors.black,
-                              side: const BorderSide(color: Colors.grey),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                            onPressed: () {
-                              showReportDialog(context);
-                            },
+                            style: _reportBtnStyle(),
+                            onPressed: () => showReportDialog(context),
                           ),
                         ),
                         const SizedBox(width: 12),
+
+                        // WorkButtonWidget은 자체 위젯 내부 스타일 사용
                         Expanded(
                           child: WorkButtonWidget(
                             controller: controller,
@@ -105,21 +93,16 @@ class DashBoardBottomSheet extends StatelessWidget {
                         ),
                       ],
                     ),
+
                     const SizedBox(height: 16),
+
+                    // 3) Gmail 열기 버튼 (개별 스타일)
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
                         icon: const Icon(Icons.email),
                         label: const Text('Gmail 열기'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: Colors.black,
-                          side: const BorderSide(color: Colors.grey),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
+                        style: _gmailBtnStyle(),
                         onPressed: () async {
                           try {
                             final intent = AndroidIntent(
@@ -146,7 +129,10 @@ class DashBoardBottomSheet extends StatelessWidget {
                         },
                       ),
                     ),
+
                     const SizedBox(height: 16),
+
+                    // 4) 주차 구역 수동 새로고침 버튼 (개별 스타일)
                     Consumer<LocationState>(
                       builder: (context, locationState, _) {
                         bool isRefreshing = false;
@@ -155,24 +141,16 @@ class DashBoardBottomSheet extends StatelessWidget {
                           builder: (context, setState) => SizedBox(
                             width: double.infinity,
                             child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.teal,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                elevation: 0,
-                              ),
+                              style: _refreshBtnStyle(),
                               icon: isRefreshing
                                   ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                  strokeWidth: 2,
-                                ),
-                              )
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                        strokeWidth: 2,
+                                      ),
+                                    )
                                   : const Icon(Icons.refresh),
                               label: const Text(
                                 "주차 구역 수동 새로고침",
@@ -181,11 +159,11 @@ class DashBoardBottomSheet extends StatelessWidget {
                               onPressed: isRefreshing
                                   ? null
                                   : () async {
-                                setState(() => isRefreshing = true);
-                                await locationState.manualLocationRefresh();
-                                await context.read<BillState>().manualBillRefresh();
-                                setState(() => isRefreshing = false);
-                              },
+                                      setState(() => isRefreshing = true);
+                                      await locationState.manualLocationRefresh();
+                                      await context.read<BillState>().manualBillRefresh();
+                                      setState(() => isRefreshing = false);
+                                    },
                             ),
                           ),
                         );
@@ -201,4 +179,49 @@ class DashBoardBottomSheet extends StatelessWidget {
       },
     );
   }
+}
+
+/// ───────────── 버튼별 “개별 스타일” 정의 ─────────────
+ButtonStyle _logoutBtnStyle() {
+  return ElevatedButton.styleFrom(
+    backgroundColor: Colors.white,
+    foregroundColor: Colors.black,
+    minimumSize: const Size.fromHeight(55),
+    padding: EdgeInsets.zero,
+    side: const BorderSide(color: Colors.grey, width: 1.0),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+  );
+}
+
+ButtonStyle _reportBtnStyle() {
+  return ElevatedButton.styleFrom(
+    backgroundColor: Colors.white,
+    foregroundColor: Colors.black,
+    minimumSize: const Size.fromHeight(55),
+    padding: EdgeInsets.zero,
+    side: const BorderSide(color: Colors.grey, width: 1.0),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+  );
+}
+
+ButtonStyle _gmailBtnStyle() {
+  return ElevatedButton.styleFrom(
+    backgroundColor: Colors.white,
+    foregroundColor: Colors.black,
+    minimumSize: const Size.fromHeight(55),
+    padding: EdgeInsets.zero,
+    side: const BorderSide(color: Colors.grey, width: 1.0),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+  );
+}
+
+ButtonStyle _refreshBtnStyle() {
+  return ElevatedButton.styleFrom(
+    backgroundColor: Colors.white,
+    foregroundColor: Colors.black,
+    minimumSize: const Size.fromHeight(55),
+    padding: EdgeInsets.zero,
+    side: const BorderSide(color: Colors.grey, width: 1.0),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+  );
 }
