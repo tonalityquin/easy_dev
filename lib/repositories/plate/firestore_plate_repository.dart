@@ -79,6 +79,7 @@ class FirestorePlateRepository implements PlateRepository {
     DateTime? endTime,
     String? paymentMethod,
     String? customStatus,
+    required String selectedBillType,
   }) {
     // ✅ 내부적으로 PlateLogModel 로그가 삽입된 PlateModel이 생성되어 저장됨
     return _creationService.addPlate(
@@ -101,6 +102,7 @@ class FirestorePlateRepository implements PlateRepository {
       endTime: endTime,
       paymentMethod: paymentMethod,
       customStatus: customStatus,
+      selectedBillType: selectedBillType,
     );
   }
 
@@ -280,7 +282,7 @@ class FirestorePlateRepository implements PlateRepository {
         'isSelected': false,
         'selectedBy': null,
       },
-      if (includeEndTime) 'end_time': DateTime.now(),
+      if (includeEndTime) 'endTime': DateTime.now(),
       if (isLockedFee == true) 'isLockedFee': true,
       if (lockedAtTimeInSeconds != null) 'lockedAtTimeInSeconds': lockedAtTimeInSeconds,
       if (lockedFeeAmount != null) 'lockedFeeAmount': lockedFeeAmount,

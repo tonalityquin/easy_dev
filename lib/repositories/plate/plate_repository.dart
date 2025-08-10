@@ -62,6 +62,7 @@ abstract class PlateRepository {
     int? addStandard,
     int? addAmount,
     required String region,
+    required String selectedBillType,
     List<String>? imageUrls,
     bool isLockedFee,
     int? lockedAtTimeInSeconds,

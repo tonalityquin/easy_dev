@@ -27,6 +27,10 @@ class InputPlate with ChangeNotifier {
     required bool isLocationSelected,
     required AreaState areaState,
     required UserState userState,
+
+    // ✅ 추가: 변동/고정/정기 타입
+    required String selectedBillType,
+
     String? billingType,
     List<String>? statusList,
     int basicStandard = 0,
@@ -39,7 +43,7 @@ class InputPlate with ChangeNotifier {
     bool isLockedFee = false,
     int? lockedAtTimeInSeconds,
     int? lockedFeeAmount,
-    String? customStatus, // ✅ 추가됨
+    String? customStatus,
   }) async {
     final correctedLocation = location.isEmpty ? '미지정' : location;
     final plateType = isLocationSelected ? PlateType.parkingCompleted : PlateType.parkingRequests;
@@ -69,7 +73,10 @@ class InputPlate with ChangeNotifier {
         isLockedFee: isLockedFee,
         lockedAtTimeInSeconds: lockedAtTimeInSeconds,
         lockedFeeAmount: lockedFeeAmount,
-        customStatus: customStatus, // ✅ 저장 요청에 포함
+        customStatus: customStatus,
+
+        // ✅ 추가: 레포로 전달
+        selectedBillType: selectedBillType,
       );
 
       await _logState.saveLog(
@@ -91,9 +98,9 @@ class InputPlate with ChangeNotifier {
       return true;
     } catch (error) {
       if (!context.mounted) return false;
-
-      final errorMessage = error.toString().contains('이미 등록된 번호판') ? '이미 등록된 번호판입니다: $plateNumber' : '오류 발생: $error';
-
+      final errorMessage = error.toString().contains('이미 등록된 번호판')
+          ? '이미 등록된 번호판입니다: $plateNumber'
+          : '오류 발생: $error';
       showFailedSnackbar(context, errorMessage);
       return false;
     }

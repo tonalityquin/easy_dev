@@ -12,11 +12,13 @@ import '../../states/area/area_state.dart';
 import '../../states/user/user_state.dart';
 
 class InputPlateService {
-  static Future<List<String>> uploadCapturedImages(List<XFile> images,
-      String plateNumber,
-      String area,
-      String userName,
-      String division,) async {
+  static Future<List<String>> uploadCapturedImages(
+    List<XFile> images,
+    String plateNumber,
+    String area,
+    String userName,
+    String division,
+  ) async {
     final uploader = GcsImageUploader();
     final List<String> uploadedUrls = [];
     final List<String> failedFiles = [];
@@ -83,7 +85,7 @@ class InputPlateService {
     required String location,
     required bool isLocationSelected,
     required List<String> imageUrls,
-    required String? selectedBill,
+    required String? selectedBill, // countType or 선택된 요금명
     required List<String> selectedStatuses,
     required int basicStandard,
     required int basicAmount,
@@ -91,10 +93,26 @@ class InputPlateService {
     required int addAmount,
     required String region,
     String? customStatus,
+
+    /// ✅ 추가: 변동/고정/정기 타입 전달
+    required String selectedBillType,
   }) async {
     final inputState = context.read<InputPlate>();
     final areaState = context.read<AreaState>();
     final userState = context.read<UserState>();
+
+    // ✅ 정기면 bill 조회/검증 스킵: 금액/기준 0으로 강제
+    int finalBasicStandard = basicStandard;
+    int finalBasicAmount = basicAmount;
+    int finalAddStandard = addStandard;
+    int finalAddAmount = addAmount;
+
+    if (selectedBillType == '정기') {
+      finalBasicStandard = 0;
+      finalBasicAmount = 0;
+      finalAddStandard = 0;
+      finalAddAmount = 0;
+    }
 
     return await inputState.registerPlateEntry(
       context: context,
@@ -105,13 +123,16 @@ class InputPlateService {
       userState: userState,
       billingType: selectedBill,
       statusList: selectedStatuses,
-      basicStandard: basicStandard,
-      basicAmount: basicAmount,
-      addStandard: addStandard,
-      addAmount: addAmount,
+      basicStandard: finalBasicStandard,
+      basicAmount: finalBasicAmount,
+      addStandard: finalAddStandard,
+      addAmount: finalAddAmount,
       region: region,
       imageUrls: imageUrls,
-      customStatus: customStatus,
+      customStatus: customStatus ?? '',
+
+      // ✅ 이 줄 추가!
+      selectedBillType: selectedBillType,
     );
   }
 
@@ -127,14 +148,16 @@ class InputPlateService {
 
     final credentialsJson = await rootBundle.loadString(serviceAccountPath);
     final accountCredentials = ServiceAccountCredentials.fromJson(credentialsJson);
-    final client = await clientViaServiceAccount(accountCredentials, [StorageApi.devstorageReadOnlyScope]);
+    final client = await clientViaServiceAccount(
+      accountCredentials,
+      [StorageApi.devstorageReadOnlyScope],
+    );
     final storage = StorageApi(client);
 
     final prefix = '$division/$area/images/';
     final objects = await storage.objects.list(bucketName, prefix: prefix);
 
     final urls = <String>[];
-
     for (final obj in objects.items ?? []) {
       final name = obj.name;
       if (name != null && name.endsWith('.jpg') && name.contains(plateNumber)) {

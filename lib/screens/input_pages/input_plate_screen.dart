@@ -55,11 +55,22 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
           final fetchedStatus = data['customStatus'] as String?;
           final fetchedList = (data['statusList'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
 
+          // ✅ countType도 함께 프리필
+          final String? fetchedCountType = (data['countType'] as String?)?.trim();
+
           setState(() {
             controller.fetchedCustomStatus = fetchedStatus;
             controller.customStatusController.text = fetchedStatus ?? '';
             selectedStatusNames = fetchedList;
             statusSectionKey = UniqueKey();
+
+            if (fetchedCountType != null && fetchedCountType.isNotEmpty) {
+              controller.countTypeController.text = fetchedCountType;
+              selectedBillType = '정기';
+              controller.selectedBillType = '정기';
+
+              controller.selectedBill = fetchedCountType; // ← 이 한 줄
+            }
           });
 
           await inputCustomStatusBottomSheet(context, plateNumber, area);
@@ -191,6 +202,9 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
               onChanged: (value) => setState(() => controller.selectedBill = value),
               selectedBillType: selectedBillType,
               onTypeChanged: (newType) => setState(() => selectedBillType = newType),
+
+              // ✅ 정기용 countType 프리필을 위해 컨트롤러 전달
+              countTypeController: controller.countTypeController,
             ),
             const SizedBox(height: 32),
             InputStatusOnTapSection(

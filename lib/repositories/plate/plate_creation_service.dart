@@ -32,10 +32,14 @@ class PlateCreationService {
     DateTime? endTime,
     String? paymentMethod,
     String? customStatus,
+
+    // ✅ 추가: 변동/고정/정기 타입 전달(필수)
+    required String selectedBillType,
   }) async {
     final documentId = '${plateNumber}_$area';
     await FirestoreLogger().log('addPlate called: $documentId, plateNumber=$plateNumber');
 
+    // 중복 검사
     final existingPlate = await _queryService.getPlate(documentId);
     if (existingPlate != null) {
       final existingType = PlateType.values.firstWhere(
@@ -56,20 +60,21 @@ class PlateCreationService {
     int? regularAmount;
     int? regularDurationHours;
 
-    if (billingType != null && billingType.isNotEmpty) {
+    // ✅ 핵심 분기: '정기'가 아니고 billingType이 있을 때만 bill 조회
+    if (selectedBillType != '정기' && billingType != null && billingType.isNotEmpty) {
       try {
         final billDoc = await _firestore.collection('bill').doc('${billingType}_$area').get();
         if (billDoc.exists) {
           final billData = billDoc.data()!;
 
-          // 일반 정산
+          // 변동/고정 정산 세팅
           basicStandard = billData['basicStandard'] ?? 0;
-          basicAmount = billData['basicAmount'] ?? 0;
-          addStandard = billData['addStandard'] ?? 0;
-          addAmount = billData['addAmount'] ?? 0;
+          basicAmount   = billData['basicAmount']   ?? 0;
+          addStandard   = billData['addStandard']   ?? 0;
+          addAmount     = billData['addAmount']     ?? 0;
 
-          // 정기 정산
-          regularAmount = billData['regularAmount'];
+          // (고정에서 쓸 수도 있는) 정기 관련 필드가 정의되어 있으면 유지
+          regularAmount        = billData['regularAmount'];
           regularDurationHours = billData['regularDurationHours'];
 
           await FirestoreLogger().log('addPlate billing data loaded: $billingType');
@@ -81,9 +86,21 @@ class PlateCreationService {
         await FirestoreLogger().log('addPlate billing error: $e');
         throw Exception("Firestore 정산 정보 로드 실패: $e");
       }
+    } else if (selectedBillType == '정기') {
+      // ✅ 정기: 사전 결제 → 0분/0원 강제
+      basicStandard = 0;
+      basicAmount   = 0;
+      addStandard   = 0;
+      addAmount     = 0;
+
+      // 정기 메타는 plate_status에 저장/관리. plate에는 필요시 라벨만 저장할 수 있음.
     }
 
-    final plateFourDigit = plateNumber.length >= 4 ? plateNumber.substring(plateNumber.length - 4) : plateNumber;
+    final plateFourDigit = plateNumber.length >= 4
+        ? plateNumber.substring(plateNumber.length - 4)
+        : plateNumber;
+
+    // billingType이 비었으면 요금 잠금 처리
     final effectiveIsLockedFee = isLockedFee || (billingType == null || billingType.trim().isEmpty);
 
     final plate = PlateModel(
