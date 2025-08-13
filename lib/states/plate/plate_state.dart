@@ -140,7 +140,7 @@ class PlateState extends ChangeNotifier {
 
     try {
       return plates.firstWhere(
-            (plate) => plate.isSelected && plate.selectedBy == userName,
+        (plate) => plate.isSelected && plate.selectedBy == userName,
       );
     } catch (_) {
       return null;
@@ -177,29 +177,27 @@ class PlateState extends ChangeNotifier {
       }
 
       // 동일 사용자에 의해 이미 다른 Plate 선택 중인지 확인
-      final alreadySelected = _data.entries
-          .expand((entry) => entry.value)
-          .firstWhere(
+      final alreadySelected = _data.entries.expand((entry) => entry.value).firstWhere(
             (p) => p.isSelected && p.selectedBy == userName && p.id != plateId,
-        orElse: () => PlateModel(
-          id: '',
-          plateNumber: '',
-          plateFourDigit: '',
-          type: '',
-          requestTime: DateTime.now(),
-          location: '',
-          area: '',
-          userName: '',
-          isSelected: false,
-          statusList: [],
-        ),
-      );
+            orElse: () => PlateModel(
+              id: '',
+              plateNumber: '',
+              plateFourDigit: '',
+              type: '',
+              requestTime: DateTime.now(),
+              location: '',
+              area: '',
+              userName: '',
+              isSelected: false,
+              statusList: [],
+            ),
+          );
 
       if (alreadySelected.id.isNotEmpty && !plate.isSelected) {
         onError(
           '⚠️ 이미 다른 번호판을 선택한 상태입니다.\n'
-              '• 선택된 번호판: ${alreadySelected.plateNumber}\n'
-              '선택을 해제한 후 다시 시도해 주세요.',
+          '• 선택된 번호판: ${alreadySelected.plateNumber}\n'
+          '선택을 해제한 후 다시 시도해 주세요.',
         );
         return;
       }
@@ -224,29 +222,19 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  /// 컬렉션별 Plate 조회 + (출차 완료에 한해) 선택 날짜 필터
-  ///
-  /// - 출차 완료: endTime이 [selectedDate]의 자정 포함 ~ 다음날 자정 미만 범위에 들어가는 항목만 반환
-  /// - 내부 `_searchQuery`에 의한 추가 필터링은 **적용하지 않음** (이중 필터 방지; 화면단에서만 처리)
   List<PlateModel> getPlatesByCollection(PlateType collection, {DateTime? selectedDate}) {
-    List<PlateModel> plates = _data[collection] ?? [];
+    var plates = _data[collection] ?? [];
 
     if (collection == PlateType.departureCompleted && selectedDate != null) {
       final start = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
-      final end   = start.add(const Duration(days: 1));
+      final end = start.add(const Duration(days: 1));
 
-      plates = plates.where((plate) {
-        // ✅ endTime이 없으면 updatedAt → requestTime 순으로 대체
-        final t = plate.endTime ?? plate.updatedAt ?? plate.requestTime;
-        return t != null && !t.isBefore(start) && t.isBefore(end);
+      plates = plates.where((p) {
+        // endTime 없으면 updatedAt → requestTime 순으로 대체
+        final t = p.endTime ?? p.updatedAt ?? p.requestTime;
+        return !t.isBefore(start) && t.isBefore(end);
       }).toList();
     }
-
-
-    // 화면단(FilterPlate 등)과의 이중 필터 방지를 위해 내부 _searchQuery 필터는 제거
-    // if (_searchQuery != null && _searchQuery!.length == 4) {
-    //   plates = plates.where((plate) => plate.plateFourDigit == _searchQuery).toList();
-    // }
 
     return plates;
   }
