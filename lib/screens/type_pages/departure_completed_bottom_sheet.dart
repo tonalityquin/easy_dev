@@ -17,6 +17,7 @@ import '../../widgets/dialog/common_plate_search_bottom_sheet/common_plate_searc
 import 'departure_completed_pages/field_calendar.dart';
 import 'departure_completed_pages/widgets/departure_completed_page_merge_log.dart';
 import 'departure_completed_pages/departure_completed_control_buttons.dart';
+import 'departure_completed_pages/widgets/departure_completed_page_today_log.dart';
 
 class DepartureCompletedBottomSheet extends StatefulWidget {
   const DepartureCompletedBottomSheet({super.key});
@@ -34,7 +35,7 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
   @override
   void initState() {
     super.initState();
-    // ✅ 화면 진입 시 출차 완료 스트림 구독 보장 (중복 방지 가드 포함)
+    // 화면 진입 시 출차 완료 스트림 구독 보장 (중복 방지 가드 포함)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final plateState = context.read<PlateState>();
       final sameArea = plateState.getSubscribedArea(PlateType.departureCompleted) == plateState.currentArea;
@@ -79,7 +80,6 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
 
   @override
   Widget build(BuildContext context) {
-    // 🔄 반드시 watch로 구독해야 리스트가 갱신될 때 다시 빌드됩니다.
     final plateState = context.watch<PlateState>();
     final userName = context.read<UserState>().name;
     final areaState = context.watch<AreaState>();
@@ -88,29 +88,22 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
     final division = areaState.currentDivision;
     final area = areaState.currentArea.trim();
     final selectedDateRaw = context.watch<FieldSelectedDateState>().selectedDate ?? DateTime.now();
-    final selectedDate = DateTime(
-      selectedDateRaw.year,
-      selectedDateRaw.month,
-      selectedDateRaw.day,
-    );
+    final selectedDate = DateTime(selectedDateRaw.year, selectedDateRaw.month, selectedDateRaw.day);
 
-    // PlateState.getPlatesByCollection()은 이미 날짜(자정~자정)로 필터됨
+    // 날짜(자정~자정) 필터까지 반영된 기본 리스트
     final baseList = plateState.getPlatesByCollection(
       PlateType.departureCompleted,
       selectedDate: selectedDate,
     );
 
-    // 화면단 area/검색 필터 추가
+    // 화면단 area/검색 필터
     final isSearching = filterState.searchQuery.isNotEmpty && filterState.searchQuery.length == 4;
     List<PlateModel> firestorePlates = baseList.where((p) {
       final sameArea = _areaEquals(p.area, area);
-
       if (isSearching) {
-        // 검색 중에는 잠금 여부 무시, area만 체크
-        return sameArea;
+        return sameArea; // 검색 중엔 잠금 무시
       } else {
-        // 검색 아님: 잠금 해제 건만 (서버 쿼리에서도 false로 걸지만, 이중 안전망)
-        return !p.isLockedFee && sameArea;
+        return !p.isLockedFee && sameArea; // 일반 모드: 미정산만
       }
     }).toList();
 
@@ -118,14 +111,12 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
       firestorePlates = firestorePlates.where((p) => p.plateFourDigit == filterState.searchQuery).toList();
     }
 
-    firestorePlates.sort((a, b) =>
-    _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime));
+    // 정렬 (기존 로직 유지: requestTime 기준)
+    firestorePlates
+        .sort((a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime));
 
-    // 👉 선택된 번호판
-    final selectedPlate = plateState.getSelectedPlate(
-      PlateType.departureCompleted,
-      userName,
-    );
+    // 선택된 번호판
+    final selectedPlate = plateState.getSelectedPlate(PlateType.departureCompleted, userName);
     final plateNumber = selectedPlate?.plateNumber ?? '';
 
     return WillPopScope(
@@ -134,7 +125,6 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
           setState(() => _showMergedLog = false);
           return false;
         }
-
         if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
           await plateState.togglePlateIsSelected(
             collection: PlateType.departureCompleted,
@@ -144,8 +134,7 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
           );
           return false;
         }
-
-        return true; // BottomSheet 닫기 허용
+        return true;
       },
       child: SizedBox(
         height: MediaQuery.of(context).size.height * 0.95,
@@ -154,111 +143,198 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
             color: Colors.white,
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
-          child: Scaffold(
-            backgroundColor: Colors.transparent,
-            body: Stack(
-              children: [
-                ListView(
-                  padding: const EdgeInsets.all(8.0),
-                  children: [
-                    const SizedBox(height: 12),
-                    Center(
-                      child: Container(
-                        width: 60,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          color: Colors.grey[300],
-                          borderRadius: BorderRadius.circular(3),
-                        ),
+          child: DefaultTabController(
+            length: 2,
+            child: Scaffold(
+              backgroundColor: Colors.transparent,
+              body: Column(
+                children: [
+                  const SizedBox(height: 12),
+                  // 상단 핸들
+                  Center(
+                    child: Container(
+                      width: 60,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(3),
                       ),
-                    ),
-                    const SizedBox(height: 24),
-                    PlateContainer(
-                      data: firestorePlates,
-                      collection: PlateType.departureCompleted,
-                      filterCondition: (_) => true,
-                      onPlateTap: (plateNumber, area) {
-                        plateState.togglePlateIsSelected(
-                          collection: PlateType.departureCompleted,
-                          plateNumber: plateNumber,
-                          userName: userName,
-                          onError: (msg) => showFailedSnackbar(context, msg),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-                AnimatedPositioned(
-                  duration: const Duration(milliseconds: 300),
-                  bottom: _showMergedLog ? 0 : -600,
-                  left: 0,
-                  right: 0,
-                  height: 400,
-                  child: Container(
-                    color: Colors.white,
-                    child: plateNumber.isEmpty
-                        ? const Center(child: Text('선택된 번호판이 없습니다.'))
-                        : FutureBuilder<List<Map<String, dynamic>>>(
-                      future: GcsJsonUploader().loadPlateLogs(
-                        plateNumber: plateNumber,
-                        division: division,
-                        area: area,
-                        date: selectedDate,
-                      ),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
-                        }
-                        if (snapshot.hasError) {
-                          return const Center(child: Text("병합 로그 로딩 실패"));
-                        }
-
-                        final mergedLogs = snapshot.data ?? [];
-
-                        return Column(
-                          children: [
-                            const Padding(
-                              padding: EdgeInsets.all(8.0),
-                              child: Align(alignment: Alignment.centerRight),
-                            ),
-                            Expanded(
-                              child: SingleChildScrollView(
-                                child: MergedLogSection(
-                                  mergedLogs: mergedLogs,
-                                  division: division,
-                                  area: area,
-                                  selectedDate: selectedDate,
-                                ),
-                              ),
-                            ),
-                          ],
-                        );
-                      },
                     ),
                   ),
-                ),
-              ],
-            ),
-            bottomNavigationBar: DepartureCompletedControlButtons(
-              isSearchMode: _isSearchMode,
-              isSorted: _isSorted,
-              showMergedLog: _showMergedLog,
-              hasCalendarBeenReset: _hasCalendarBeenReset,
-              onResetSearch: () => _resetSearch(context),
-              onShowSearchDialog: () => _showSearchDialog(context),
-              onToggleMergedLog: () => setState(() => _showMergedLog = !_showMergedLog),
-              onToggleCalendar: () {
-                if (!_hasCalendarBeenReset) {
-                  context.read<FieldSelectedDateState>().setSelectedDate(DateTime.now());
-                  setState(() => _hasCalendarBeenReset = true);
-                } else {
-                  setState(() => _hasCalendarBeenReset = false);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const FieldCalendarPage()),
-                  );
-                }
-              },
+                  const SizedBox(height: 16),
+                  // 탭 바 (미정산 / 정산)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                    child: TabBar(
+                      labelColor: Colors.black87,
+                      unselectedLabelColor: Colors.grey[600],
+                      indicatorColor: Theme.of(context).primaryColor,
+                      tabs: const [
+                        Tab(text: '미정산'),
+                        Tab(text: '정산'),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  // 탭 콘텐츠
+                  Expanded(
+                    child: TabBarView(
+                      children: [
+                        // ───── 미정산 탭: 기존 리스트(PlateContainer) 유지 ─────
+                        ListView(
+                          padding: const EdgeInsets.all(8.0),
+                          children: [
+                            PlateContainer(
+                              data: firestorePlates,
+                              collection: PlateType.departureCompleted,
+                              filterCondition: (_) => true,
+                              onPlateTap: (plateNumber, area) {
+                                plateState.togglePlateIsSelected(
+                                  collection: PlateType.departureCompleted,
+                                  plateNumber: plateNumber,
+                                  userName: userName,
+                                  onError: (msg) => showFailedSnackbar(context, msg),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+
+                        // ───── 정산 탭: 상/하 1:1 영역 (각 스크롤) ─────
+                        Builder(
+                          builder: (context) {
+                            // baseList: 이미 날짜(자정~자정) 필터 적용됨
+                            final todayPlates = baseList.where((p) => _areaEquals(p.area, area)).toList();
+
+                            // Firestore 문서 → TodayLogSection이 기대하는 맵 형태로 변환
+                            final todayMergedItems = todayPlates.map<Map<String, dynamic>>((p) {
+                              final List<dynamic> logsDyn = (p.logs as List?) ?? const <dynamic>[];
+
+                              // mergedAt 후보: 로그 최신 timestamp → 없으면 endTime → updatedAt → requestTime
+                              DateTime? newestFromLogs;
+                              for (final l in logsDyn.whereType<Map<String, dynamic>>()) {
+                                final ts = DateTime.tryParse((l['timestamp'] ?? '').toString());
+                                if (ts != null && (newestFromLogs == null || ts.isAfter(newestFromLogs))) {
+                                  newestFromLogs = ts;
+                                }
+                              }
+                              final mergedAt = (newestFromLogs ?? p.endTime ?? p.updatedAt ?? p.requestTime);
+
+                              return {
+                                'plateNumber': p.plateNumber,
+                                'mergedAt': mergedAt.toIso8601String(),
+                                'logs': logsDyn,
+                              };
+                            }).toList()
+                              ..sort((a, b) {
+                                final aT =
+                                    DateTime.tryParse(a['mergedAt'] ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+                                final bT =
+                                    DateTime.tryParse(b['mergedAt'] ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+                                return bT.compareTo(aT);
+                              });
+
+                            return Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: Column(
+                                children: [
+                                  // ⬆️ 상단 1/2: TodayLogSection (항상 렌더링)
+                                  Expanded(
+                                    child: ClipRect(
+                                      child: Scrollbar(
+                                        child: SingleChildScrollView(
+                                          child: TodayLogSection(
+                                            mergedLogs: todayMergedItems,
+                                            division: division,
+                                            area: area,
+                                            selectedDate: selectedDate,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+
+                                  const SizedBox(height: 8),
+
+                                  // ⬇️ 하단 1/2: MergedLogSection (항상 렌더링)
+                                  Expanded(
+                                    child: FutureBuilder<List<Map<String, dynamic>>>(
+                                      future: plateNumber.isEmpty
+                                          ? Future.value(<Map<String, dynamic>>[]) // 번호판 미선택: 빈 리스트
+                                          : GcsJsonUploader().loadPlateLogs(
+                                        plateNumber: plateNumber,
+                                        division: division,
+                                        area: area,
+                                        date: selectedDate,
+                                      ),
+                                      builder: (context, snapshot) {
+                                        if (snapshot.connectionState == ConnectionState.waiting) {
+                                          return const Center(child: CircularProgressIndicator());
+                                        }
+                                        if (snapshot.hasError) {
+                                          return const Center(child: Text("병합 로그 로딩 실패"));
+                                        }
+                                        final mergedLogs = snapshot.data ?? [];
+                                        return ClipRect(
+                                          child: Scrollbar(
+                                            child: SingleChildScrollView(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  if (plateNumber.isEmpty)
+                                                    const Padding(
+                                                      padding: EdgeInsets.only(bottom: 8.0),
+                                                      child: Center(
+                                                        child: Text('번호판을 선택하면 상세 병합 로그를 불러옵니다.'),
+                                                      ),
+                                                    ),
+                                                  MergedLogSection(
+                                                    mergedLogs: mergedLogs,
+                                                    division: division,
+                                                    area: area,
+                                                    selectedDate: selectedDate,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+
+              // 기존 하단 버튼 로직 유지
+              bottomNavigationBar: DepartureCompletedControlButtons(
+                isSearchMode: _isSearchMode,
+                isSorted: _isSorted,
+                showMergedLog: _showMergedLog,
+                hasCalendarBeenReset: _hasCalendarBeenReset,
+                onResetSearch: () => _resetSearch(context),
+                onShowSearchDialog: () => _showSearchDialog(context),
+                onToggleMergedLog: () => setState(() => _showMergedLog = !_showMergedLog),
+                onToggleCalendar: () {
+                  if (!_hasCalendarBeenReset) {
+                    context.read<FieldSelectedDateState>().setSelectedDate(DateTime.now());
+                    setState(() => _hasCalendarBeenReset = true);
+                  } else {
+                    setState(() => _hasCalendarBeenReset = false);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const FieldCalendarPage()),
+                    );
+                  }
+                },
+              ),
             ),
           ),
         ),
