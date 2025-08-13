@@ -1,183 +1,87 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../enums/plate_type.dart';
-import '../../../repositories/plate/plate_repository.dart';
-import '../../../states/area/area_state.dart';
 import '../../../states/plate/plate_state.dart';
 import '../../../states/user/user_state.dart';
-import '../../../states/calendar/field_selected_date_state.dart';
-import '../../../utils/snackbar_helper.dart';
-import '../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
 import 'widgets/departure_completed_status_bottom_sheet.dart';
 
 class DepartureCompletedControlButtons extends StatelessWidget {
   final bool isSearchMode;
-  final bool isSorted;
-  final bool showMergedLog;
-  final bool hasCalendarBeenReset;
   final VoidCallback onResetSearch;
   final VoidCallback onShowSearchDialog;
-  final VoidCallback onToggleMergedLog;
-  final VoidCallback onToggleCalendar;
 
   const DepartureCompletedControlButtons({
     super.key,
     required this.isSearchMode,
-    required this.isSorted,
-    required this.showMergedLog,
-    required this.hasCalendarBeenReset,
     required this.onResetSearch,
     required this.onShowSearchDialog,
-    required this.onToggleMergedLog,
-    required this.onToggleCalendar,
   });
 
   @override
   Widget build(BuildContext context) {
+    // ✅ 현재 선택 상태 확인
     final plateState = context.watch<PlateState>();
     final userName = context.read<UserState>().name;
-    final selectedPlate = plateState.getSelectedPlate(PlateType.departureCompleted, userName);
+    final selectedPlate =
+    plateState.getSelectedPlate(PlateType.departureCompleted, userName);
     final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
 
-    final selectedDate = context.watch<FieldSelectedDateState>().selectedDate ?? DateTime.now();
-    final formattedDate =
-        '${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}';
-
-    return BottomNavigationBar(
-      backgroundColor: Colors.white,
+    return BottomAppBar(
+      color: Colors.white,
       elevation: 0,
-      type: BottomNavigationBarType.fixed,
-      selectedItemColor: Theme.of(context).primaryColor,
-      unselectedItemColor: Colors.grey[700],
-      items: isPlateSelected
-          ? [
-        BottomNavigationBarItem(
-          icon: Tooltip(
-            message: '정산 관리',
-            // 🔧 잠김 상태일 때는 lock, 아닐 때는 lock_open이 더 자연스럽습니다.
-            child: Icon(
-              selectedPlate.isLockedFee ? Icons.lock : Icons.lock_open,
-              color: Colors.grey[700],
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 56,
+          child: Center(
+            // ✅ 선택 모드면 "상태 수정" 버튼, 아니면 검색 버튼
+            child: isPlateSelected
+                ? TextButton.icon(
+              onPressed: () async {
+                await showDepartureCompletedStatusBottomSheet(
+                  context: context,
+                  plate: selectedPlate,
+                );
+              },
+              icon: const Icon(Icons.settings, color: Colors.black87),
+              label: const Text(
+                '상태 수정',
+                style: TextStyle(
+                  color: Colors.black87,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 10),
+              ),
+            )
+                : TextButton.icon(
+              onPressed:
+              isSearchMode ? onResetSearch : onShowSearchDialog,
+              icon: Icon(
+                isSearchMode ? Icons.cancel : Icons.search,
+                color:
+                isSearchMode ? Colors.orange[600] : Colors.grey[800],
+              ),
+              label: Text(
+                isSearchMode ? '검색 초기화' : '번호판 검색',
+                style: TextStyle(
+                  color: isSearchMode
+                      ? Colors.orange[600]
+                      : Colors.grey[800],
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 10),
+              ),
             ),
           ),
-          label: '정산 관리',
         ),
-        BottomNavigationBarItem(
-          icon: Tooltip(
-            message: '상태 수정',
-            child: Icon(Icons.settings, color: Colors.grey[700]),
-          ),
-          label: '상태 수정',
-        ),
-      ]
-          : [
-        BottomNavigationBarItem(
-          icon: Tooltip(
-            message: isSearchMode ? '검색 초기화' : '번호판 검색',
-            child: Icon(
-              isSearchMode ? Icons.cancel : Icons.search,
-              color: isSearchMode ? Colors.orange[600] : Colors.grey[700],
-            ),
-          ),
-          label: isSearchMode ? '검색 초기화' : '번호판 검색',
-        ),
-        BottomNavigationBarItem(
-          icon: Tooltip(
-            message: '날짜 선택',
-            child: Icon(Icons.calendar_today, color: Colors.grey[700]),
-          ),
-          label: formattedDate,
-        ),
-      ],
-      onTap: (index) async {
-        if (isPlateSelected) {
-          if (index == 0) {
-            final billType = selectedPlate.billingType;
-            if (billType == null || billType.trim().isEmpty) {
-              showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
-              return;
-            }
-
-            if (selectedPlate.isLockedFee) {
-              showFailedSnackbar(context, '정산 완료된 항목은 취소할 수 없습니다.');
-              return;
-            }
-
-            final now = DateTime.now();
-            final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
-            final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
-
-            final result = await showOnTapBillingBottomSheet(
-              context: context,
-              entryTimeInSeconds: entryTime,
-              currentTimeInSeconds: currentTime,
-              basicStandard: selectedPlate.basicStandard ?? 0,
-              basicAmount: selectedPlate.basicAmount ?? 0,
-              addStandard: selectedPlate.addStandard ?? 0,
-              addAmount: selectedPlate.addAmount ?? 0,
-              billingType: selectedPlate.billingType ?? '변동',
-              regularAmount: selectedPlate.regularAmount,
-              regularDurationHours: selectedPlate.regularDurationHours,
-            );
-
-            if (result == null) return;
-
-            final updatedPlate = selectedPlate.copyWith(
-              isLockedFee: true,
-              isSelected: false,
-              lockedAtTimeInSeconds: currentTime,
-              lockedFeeAmount: result.lockedFee,
-              paymentMethod: result.paymentMethod,
-            );
-
-            try {
-              final repo = context.read<PlateRepository>();
-              final division = context.read<AreaState>().currentDivision;
-              final area = context.read<AreaState>().currentArea.trim();
-              final firestore = FirebaseFirestore.instance;
-
-              // 1) 원격 저장
-              await repo.addOrUpdatePlate(selectedPlate.id, updatedPlate);
-              // 2) 로컬 캐시 동기화
-              await context.read<PlateState>().updatePlateLocally(PlateType.departureCompleted, updatedPlate);
-
-              // 3) 로그 추가
-              final log = {
-                'plateNumber': selectedPlate.plateNumber,
-                'action': '사전 정산',
-                'performedBy': userName,
-                'timestamp': now.toIso8601String(),
-                'lockedFee': result.lockedFee,
-                'paymentMethod': result.paymentMethod,
-                'billingType': billType,
-                'division': division,
-                'area': area,
-              };
-
-              await firestore.collection('plates').doc(selectedPlate.id).update({
-                'logs': FieldValue.arrayUnion([log])
-              });
-
-              showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
-            } catch (e) {
-              showFailedSnackbar(context, '사전 정산 처리 중 오류가 발생했습니다.\n$e');
-            }
-          } else if (index == 1) {
-            await showDepartureCompletedStatusBottomSheet(
-              context: context,
-              plate: selectedPlate,
-            );
-          }
-        } else {
-          if (index == 0) {
-            isSearchMode ? onResetSearch() : onShowSearchDialog();
-          } else if (index == 1) {
-            onToggleCalendar();
-          }
-        }
-      },
+      ),
     );
   }
 }

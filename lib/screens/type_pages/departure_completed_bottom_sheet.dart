@@ -18,6 +18,8 @@ import 'departure_completed_pages/field_calendar.dart';
 import 'departure_completed_pages/widgets/departure_completed_page_merge_log.dart';
 import 'departure_completed_pages/departure_completed_control_buttons.dart';
 import 'departure_completed_pages/widgets/departure_completed_page_today_log.dart';
+// ✅ 상태 수정 바텀시트 import 추가
+import 'departure_completed_pages/widgets/departure_completed_status_bottom_sheet.dart';
 
 class DepartureCompletedBottomSheet extends StatefulWidget {
   const DepartureCompletedBottomSheet({super.key});
@@ -29,8 +31,6 @@ class DepartureCompletedBottomSheet extends StatefulWidget {
 class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottomSheet> {
   final bool _isSorted = true;
   bool _isSearchMode = false;
-  bool _hasCalendarBeenReset = false;
-  bool _showMergedLog = false;
 
   @override
   void initState() {
@@ -112,8 +112,9 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
     }
 
     // 정렬 (기존 로직 유지: requestTime 기준)
-    firestorePlates
-        .sort((a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime));
+    firestorePlates.sort(
+          (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime),
+    );
 
     // 선택된 번호판
     final selectedPlate = plateState.getSelectedPlate(PlateType.departureCompleted, userName);
@@ -121,10 +122,6 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
 
     return WillPopScope(
       onWillPop: () async {
-        if (_showMergedLog) {
-          setState(() => _showMergedLog = false);
-          return false;
-        }
         if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
           await plateState.togglePlateIsSelected(
             collection: PlateType.departureCompleted,
@@ -180,22 +177,50 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
                   Expanded(
                     child: TabBarView(
                       children: [
-                        // ───── 미정산 탭: 기존 리스트(PlateContainer) 유지 ─────
-                        ListView(
-                          padding: const EdgeInsets.all(8.0),
+                        // ───── 미정산 탭: 달력(고정) + 리스트(스크롤) ─────
+                        Column(
                           children: [
-                            PlateContainer(
-                              data: firestorePlates,
-                              collection: PlateType.departureCompleted,
-                              filterCondition: (_) => true,
-                              onPlateTap: (plateNumber, area) {
-                                plateState.togglePlateIsSelected(
-                                  collection: PlateType.departureCompleted,
-                                  plateNumber: plateNumber,
-                                  userName: userName,
-                                  onError: (msg) => showFailedSnackbar(context, msg),
-                                );
-                              },
+                            // ✅ 상단 달력은 스크롤에서 제외(고정)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 8.0),
+                              child: FieldCalendarInline(),
+                            ),
+                            const SizedBox(height: 12),
+                            // ✅ 달력 아래 영역만 스크롤
+                            Expanded(
+                              child: ListView(
+                                padding: const EdgeInsets.all(8.0),
+                                children: [
+                                  PlateContainer(
+                                    data: firestorePlates,
+                                    collection: PlateType.departureCompleted,
+                                    filterCondition: (_) => true,
+                                    onPlateTap: (plateNumber, area) async {
+                                      // ✅ 선택 토글
+                                      await plateState.togglePlateIsSelected(
+                                        collection: PlateType.departureCompleted,
+                                        plateNumber: plateNumber,
+                                        userName: userName,
+                                        onError: (msg) => showFailedSnackbar(context, msg),
+                                      );
+                                      // ✅ 토글 이후 현 선택 상태 확인
+                                      final currentSelected = plateState.getSelectedPlate(
+                                        PlateType.departureCompleted,
+                                        userName,
+                                      );
+                                      // ✅ 선택되어 있으면 즉시 바텀시트 표시
+                                      if (currentSelected != null &&
+                                          currentSelected.isSelected &&
+                                          currentSelected.plateNumber == plateNumber) {
+                                        await showDepartureCompletedStatusBottomSheet(
+                                          context: context,
+                                          plate: currentSelected,
+                                        );
+                                      }
+                                    },
+                                  ),
+                                ],
+                              ),
                             ),
                           ],
                         ),
@@ -227,10 +252,10 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
                               };
                             }).toList()
                               ..sort((a, b) {
-                                final aT =
-                                    DateTime.tryParse(a['mergedAt'] ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
-                                final bT =
-                                    DateTime.tryParse(b['mergedAt'] ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+                                final aT = DateTime.tryParse(a['mergedAt'] ?? '') ??
+                                    DateTime.fromMillisecondsSinceEpoch(0);
+                                final bT = DateTime.tryParse(b['mergedAt'] ?? '') ??
+                                    DateTime.fromMillisecondsSinceEpoch(0);
                                 return bT.compareTo(aT);
                               });
 
@@ -313,27 +338,10 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
                 ],
               ),
 
-              // 기존 하단 버튼 로직 유지
               bottomNavigationBar: DepartureCompletedControlButtons(
                 isSearchMode: _isSearchMode,
-                isSorted: _isSorted,
-                showMergedLog: _showMergedLog,
-                hasCalendarBeenReset: _hasCalendarBeenReset,
                 onResetSearch: () => _resetSearch(context),
                 onShowSearchDialog: () => _showSearchDialog(context),
-                onToggleMergedLog: () => setState(() => _showMergedLog = !_showMergedLog),
-                onToggleCalendar: () {
-                  if (!_hasCalendarBeenReset) {
-                    context.read<FieldSelectedDateState>().setSelectedDate(DateTime.now());
-                    setState(() => _hasCalendarBeenReset = true);
-                  } else {
-                    setState(() => _hasCalendarBeenReset = false);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const FieldCalendarPage()),
-                    );
-                  }
-                },
               ),
             ),
           ),

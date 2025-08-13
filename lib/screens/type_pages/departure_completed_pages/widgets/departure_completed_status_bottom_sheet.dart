@@ -1,11 +1,12 @@
+// lib/screens/type_pages/departure_completed_pages/widgets/departure_completed_status_bottom_sheet.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../models/plate_model.dart';
-import '../../../../screens/modify_pages/modify_plate_screen.dart';
-import '../../../../screens/logs/plate_log_viewer_page.dart';
-import '../../../../states/user/user_state.dart';
-import '../../../../enums/plate_type.dart';
+import 'package:easydev/models/plate_model.dart';
+import 'package:easydev/screens/modify_pages/modify_plate_screen.dart';
+import 'package:easydev/screens/logs/plate_log_viewer_page.dart';
+import 'package:easydev/states/user/user_state.dart';
+import 'package:easydev/enums/plate_type.dart';
 
 Future<void> showDepartureCompletedStatusBottomSheet({
   required BuildContext context,
@@ -46,7 +47,6 @@ Future<void> showDepartureCompletedStatusBottomSheet({
                     ),
                   ),
                 ),
-
                 const Row(
                   children: [
                     Icon(Icons.settings, color: Colors.blueAccent),
@@ -59,7 +59,7 @@ Future<void> showDepartureCompletedStatusBottomSheet({
                 ),
                 const SizedBox(height: 24),
 
-                // 정보 수정 버튼
+                // 정보 수정
                 ElevatedButton.icon(
                   icon: const Icon(Icons.edit_note_outlined),
                   label: const Text("정보 수정"),
@@ -88,7 +88,7 @@ Future<void> showDepartureCompletedStatusBottomSheet({
                 ),
                 const SizedBox(height: 12),
 
-                // 로그 확인 버튼
+                // 로그 확인
                 ElevatedButton.icon(
                   icon: const Icon(Icons.history),
                   label: const Text("로그 확인"),
