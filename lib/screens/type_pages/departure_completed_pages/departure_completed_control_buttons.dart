@@ -56,8 +56,9 @@ class DepartureCompletedControlButtons extends StatelessWidget {
         BottomNavigationBarItem(
           icon: Tooltip(
             message: '정산 관리',
+            // 🔧 잠김 상태일 때는 lock, 아닐 때는 lock_open이 더 자연스럽습니다.
             child: Icon(
-              selectedPlate.isLockedFee ? Icons.lock_open : Icons.lock,
+              selectedPlate.isLockedFee ? Icons.lock : Icons.lock_open,
               color: Colors.grey[700],
             ),
           ),
@@ -131,31 +132,38 @@ class DepartureCompletedControlButtons extends StatelessWidget {
               paymentMethod: result.paymentMethod,
             );
 
-            final repo = context.read<PlateRepository>();
-            final division = context.read<AreaState>().currentDivision;
-            final area = context.read<AreaState>().currentArea.trim();
-            final firestore = FirebaseFirestore.instance;
+            try {
+              final repo = context.read<PlateRepository>();
+              final division = context.read<AreaState>().currentDivision;
+              final area = context.read<AreaState>().currentArea.trim();
+              final firestore = FirebaseFirestore.instance;
 
-            await repo.addOrUpdatePlate(selectedPlate.id, updatedPlate);
-            await context.read<PlateState>().updatePlateLocally(PlateType.departureCompleted, updatedPlate);
+              // 1) 원격 저장
+              await repo.addOrUpdatePlate(selectedPlate.id, updatedPlate);
+              // 2) 로컬 캐시 동기화
+              await context.read<PlateState>().updatePlateLocally(PlateType.departureCompleted, updatedPlate);
 
-            final log = {
-              'plateNumber': selectedPlate.plateNumber,
-              'action': '사전 정산',
-              'performedBy': userName,
-              'timestamp': now.toIso8601String(),
-              'lockedFee': result.lockedFee,
-              'paymentMethod': result.paymentMethod,
-              'billingType': billType,
-              'division': division,
-              'area': area,
-            };
+              // 3) 로그 추가
+              final log = {
+                'plateNumber': selectedPlate.plateNumber,
+                'action': '사전 정산',
+                'performedBy': userName,
+                'timestamp': now.toIso8601String(),
+                'lockedFee': result.lockedFee,
+                'paymentMethod': result.paymentMethod,
+                'billingType': billType,
+                'division': division,
+                'area': area,
+              };
 
-            await firestore.collection('plates').doc(selectedPlate.id).update({
-              'logs': FieldValue.arrayUnion([log])
-            });
+              await firestore.collection('plates').doc(selectedPlate.id).update({
+                'logs': FieldValue.arrayUnion([log])
+              });
 
-            showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
+              showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
+            } catch (e) {
+              showFailedSnackbar(context, '사전 정산 처리 중 오류가 발생했습니다.\n$e');
+            }
           } else if (index == 1) {
             await showDepartureCompletedStatusBottomSheet(
               context: context,

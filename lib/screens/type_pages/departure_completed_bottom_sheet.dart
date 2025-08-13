@@ -31,6 +31,22 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
   bool _hasCalendarBeenReset = false;
   bool _showMergedLog = false;
 
+  @override
+  void initState() {
+    super.initState();
+    // ✅ 화면 진입 시 출차 완료 스트림 구독 보장 (중복 방지 가드 포함)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final plateState = context.read<PlateState>();
+      final sameArea = plateState.getSubscribedArea(PlateType.departureCompleted) == plateState.currentArea;
+      if (!plateState.isSubscribed(PlateType.departureCompleted) || !sameArea) {
+        if (plateState.isSubscribed(PlateType.departureCompleted)) {
+          plateState.unsubscribeType(PlateType.departureCompleted);
+        }
+        plateState.subscribeType(PlateType.departureCompleted);
+      }
+    });
+  }
+
   void _showSearchDialog(BuildContext context) {
     final currentArea = context.read<AreaState>().currentArea;
 
@@ -59,9 +75,12 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
     });
   }
 
+  bool _areaEquals(String a, String b) => a.trim().toLowerCase() == b.trim().toLowerCase();
+
   @override
   Widget build(BuildContext context) {
-    final plateState = context.read<PlateState>();
+    // 🔄 반드시 watch로 구독해야 리스트가 갱신될 때 다시 빌드됩니다.
+    final plateState = context.watch<PlateState>();
     final userName = context.read<UserState>().name;
     final areaState = context.watch<AreaState>();
     final filterState = context.watch<FilterPlate>();
@@ -75,34 +94,38 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
       selectedDateRaw.day,
     );
 
-    final rawPlates = plateState
-        .getPlatesByCollection(
+    // PlateState.getPlatesByCollection()은 이미 날짜(자정~자정)로 필터됨
+    final baseList = plateState.getPlatesByCollection(
       PlateType.departureCompleted,
       selectedDate: selectedDate,
-    )
-        .where((p) {
-      final isSearching = filterState.searchQuery.isNotEmpty && filterState.searchQuery.length == 4;
+    );
+
+    // 화면단 area/검색 필터 추가
+    final isSearching = filterState.searchQuery.isNotEmpty && filterState.searchQuery.length == 4;
+    List<PlateModel> firestorePlates = baseList.where((p) {
+      final sameArea = _areaEquals(p.area, area);
+
       if (isSearching) {
-        return p.area.trim() == area;
+        // 검색 중에는 잠금 여부 무시, area만 체크
+        return sameArea;
       } else {
-        return !p.isLockedFee && p.area.trim() == area;
+        // 검색 아님: 잠금 해제 건만 (서버 쿼리에서도 false로 걸지만, 이중 안전망)
+        return !p.isLockedFee && sameArea;
       }
     }).toList();
 
-    List<PlateModel> firestorePlates = rawPlates;
-    if (filterState.searchQuery.isNotEmpty && filterState.searchQuery.length == 4) {
+    if (isSearching) {
       firestorePlates = firestorePlates.where((p) => p.plateFourDigit == filterState.searchQuery).toList();
     }
 
-    firestorePlates
-        .sort((a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime));
+    firestorePlates.sort((a, b) =>
+    _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime));
 
     // 👉 선택된 번호판
     final selectedPlate = plateState.getSelectedPlate(
       PlateType.departureCompleted,
       userName,
     );
-
     final plateNumber = selectedPlate?.plateNumber ?? '';
 
     return WillPopScope(

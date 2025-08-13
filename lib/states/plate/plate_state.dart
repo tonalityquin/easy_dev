@@ -9,36 +9,53 @@ import '../area/area_state.dart';
 class PlateState extends ChangeNotifier {
   final PlateRepository _repository;
   final AreaState _areaState;
+
+  // 이전 isLockedFee 상태 저장 (요약 로그 생성 트리거 용)
   final Map<String, bool> previousIsLockedFee = {};
+
+  // 타입별 데이터 캐시
   final Map<PlateType, List<PlateModel>> _data = {
     for (var c in PlateType.values) c: [],
   };
+
+  // 타입별 구독 핸들
   final Map<PlateType, StreamSubscription<List<PlateModel>>> _subscriptions = {};
+
+  // 타입별 정렬 상태 (기본: 내림차순)
   final Map<PlateType, bool> _isSortedMap = {
     for (var c in PlateType.values) c: true,
   };
 
+  // 타입별 구독 지역 저장
   final Map<PlateType, String> _subscribedAreas = {};
 
+  // (유지: 외부 의존 코드 고려해 필드/게터는 보존하되 내부 필터에는 사용하지 않음)
   String? _searchQuery;
+
   bool _isLoading = false;
 
   PlateState(this._repository, this._areaState) {
     _areaState.addListener(_onAreaChanged);
   }
 
+  // 외부 참조용 (유지)
   String get searchQuery => _searchQuery ?? "";
 
+  // 현재 지역
   String get currentArea => _areaState.currentArea;
 
   bool get isLoading => _isLoading;
 
+  // 타입별 원시 데이터 조회
   List<PlateModel> dataOfType(PlateType type) => _data[type] ?? [];
 
+  // 구독 여부
   bool isSubscribed(PlateType type) => _subscriptions.containsKey(type);
 
-  String? getSubscribedArea(PlateType type) => _subscribedAreas[type]; // ✅ 추가
+  // 구독 지역 조회
+  String? getSubscribedArea(PlateType type) => _subscribedAreas[type];
 
+  // 타입 구독 시작
   void subscribeType(PlateType type) {
     if (_subscriptions.containsKey(type)) {
       debugPrint('✅ 이미 구독 중: $type');
@@ -61,6 +78,7 @@ class PlateState extends ChangeNotifier {
     bool firstDataReceived = false;
 
     final subscription = stream.listen((filteredData) async {
+      // 출차 완료: isLockedFee 변경 감지 시 요약 로그 생성
       if (type == PlateType.departureCompleted) {
         for (final plate in filteredData) {
           final previous = previousIsLockedFee[plate.id];
@@ -95,9 +113,10 @@ class PlateState extends ChangeNotifier {
     });
 
     _subscriptions[type] = subscription;
-    _subscribedAreas[type] = area; // ✅ 구독 지역 저장
+    _subscribedAreas[type] = area; // 구독 지역 저장
   }
 
+  // 타입 구독 해제
   void unsubscribeType(PlateType type) {
     final sub = _subscriptions[type];
     final area = _subscribedAreas[type];
@@ -105,7 +124,7 @@ class PlateState extends ChangeNotifier {
     if (sub != null) {
       sub.cancel();
       _subscriptions.remove(type);
-      _subscribedAreas.remove(type); // ✅ 제거
+      _subscribedAreas.remove(type);
       _data[type] = [];
       notifyListeners();
       debugPrint('🛑 [${_getTypeLabel(type)}] 구독 해제됨 (지역: $area)');
@@ -114,19 +133,21 @@ class PlateState extends ChangeNotifier {
     }
   }
 
+  // 사용자 기준 선택된 Plate 조회
   PlateModel? getSelectedPlate(PlateType collection, String userName) {
     final plates = _data[collection];
     if (plates == null || plates.isEmpty) return null;
 
     try {
       return plates.firstWhere(
-        (plate) => plate.isSelected && plate.selectedBy == userName,
+            (plate) => plate.isSelected && plate.selectedBy == userName,
       );
     } catch (_) {
       return null;
     }
   }
 
+  // 선택 토글
   Future<void> togglePlateIsSelected({
     required PlateType collection,
     required String plateNumber,
@@ -155,27 +176,30 @@ class PlateState extends ChangeNotifier {
         return;
       }
 
-      final alreadySelected = _data.entries.expand((entry) => entry.value).firstWhere(
+      // 동일 사용자에 의해 이미 다른 Plate 선택 중인지 확인
+      final alreadySelected = _data.entries
+          .expand((entry) => entry.value)
+          .firstWhere(
             (p) => p.isSelected && p.selectedBy == userName && p.id != plateId,
-            orElse: () => PlateModel(
-              id: '',
-              plateNumber: '',
-              plateFourDigit: '',
-              type: '',
-              requestTime: DateTime.now(),
-              location: '',
-              area: '',
-              userName: '',
-              isSelected: false,
-              statusList: [],
-            ),
-          );
+        orElse: () => PlateModel(
+          id: '',
+          plateNumber: '',
+          plateFourDigit: '',
+          type: '',
+          requestTime: DateTime.now(),
+          location: '',
+          area: '',
+          userName: '',
+          isSelected: false,
+          statusList: [],
+        ),
+      );
 
       if (alreadySelected.id.isNotEmpty && !plate.isSelected) {
         onError(
           '⚠️ 이미 다른 번호판을 선택한 상태입니다.\n'
-          '• 선택된 번호판: ${alreadySelected.plateNumber}\n'
-          '선택을 해제한 후 다시 시도해 주세요.',
+              '• 선택된 번호판: ${alreadySelected.plateNumber}\n'
+              '선택을 해제한 후 다시 시도해 주세요.',
         );
         return;
       }
@@ -200,31 +224,40 @@ class PlateState extends ChangeNotifier {
     }
   }
 
+  /// 컬렉션별 Plate 조회 + (출차 완료에 한해) 선택 날짜 필터
+  ///
+  /// - 출차 완료: endTime이 [selectedDate]의 자정 포함 ~ 다음날 자정 미만 범위에 들어가는 항목만 반환
+  /// - 내부 `_searchQuery`에 의한 추가 필터링은 **적용하지 않음** (이중 필터 방지; 화면단에서만 처리)
   List<PlateModel> getPlatesByCollection(PlateType collection, {DateTime? selectedDate}) {
     List<PlateModel> plates = _data[collection] ?? [];
 
     if (collection == PlateType.departureCompleted && selectedDate != null) {
-      final selectedDateOnly = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+      final start = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+      final end   = start.add(const Duration(days: 1));
+
       plates = plates.where((plate) {
-        final end = plate.endTime;
-        if (end == null) return false;
-        final endDate = DateTime(end.year, end.month, end.day);
-        return endDate == selectedDateOnly;
+        // ✅ endTime이 없으면 updatedAt → requestTime 순으로 대체
+        final t = plate.endTime ?? plate.updatedAt ?? plate.requestTime;
+        return t != null && !t.isBefore(start) && t.isBefore(end);
       }).toList();
     }
 
-    if (_searchQuery != null && _searchQuery!.length == 4) {
-      plates = plates.where((plate) => plate.plateFourDigit == _searchQuery).toList();
-    }
+
+    // 화면단(FilterPlate 등)과의 이중 필터 방지를 위해 내부 _searchQuery 필터는 제거
+    // if (_searchQuery != null && _searchQuery!.length == 4) {
+    //   plates = plates.where((plate) => plate.plateFourDigit == _searchQuery).toList();
+    // }
 
     return plates;
   }
 
+  // 정렬 방향 변경 (필요 시 스트림 쿼리 재구독 로직을 함께 넣는 것을 고려)
   void updateSortOrder(PlateType type, bool descending) {
     _isSortedMap[type] = descending;
     notifyListeners();
   }
 
+  // 로컬 캐시 업데이트
   Future<void> updatePlateLocally(PlateType collection, PlateModel updatedPlate) async {
     final list = _data[collection];
     if (list == null) return;
@@ -236,24 +269,28 @@ class PlateState extends ChangeNotifier {
     }
   }
 
+  // AreaState와 동기화(외부 호출용)
   void syncWithAreaState() {
     debugPrint("🔄 syncWithAreaState : 지역 변경 감지 및 상태 갱신 호출됨");
     _cancelAllSubscriptions();
   }
 
+  // AreaState 변경 리스너
   void _onAreaChanged() {
     debugPrint("🔄 지역 변경 감지됨: ${_areaState.currentArea}");
     _cancelAllSubscriptions();
   }
 
+  // 전체 구독 취소 및 상태 초기화
   void _cancelAllSubscriptions() {
     for (var sub in _subscriptions.values) {
       sub.cancel();
     }
     _subscriptions.clear();
-    _subscribedAreas.clear(); // ✅ 함께 초기화
+    _subscribedAreas.clear();
   }
 
+  // 타입 라벨
   String _getTypeLabel(PlateType type) {
     switch (type) {
       case PlateType.parkingRequests:
