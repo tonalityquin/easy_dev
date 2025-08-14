@@ -30,19 +30,7 @@ class PlateState extends ChangeNotifier {
 
   PlateState(this._repository, this._areaState) {
     _areaState.addListener(_onAreaChanged);
-    _initDefaultSubscriptions(); // ✅ 앱 시작 시 기본 구독
-  }
-
-  void _initDefaultSubscriptions() {
-    // ✅ 기본 ON: 입차 요청, 출차 요청, 출차 완료(미정산)
-    final defaults = <PlateType>[
-      PlateType.parkingRequests,
-      PlateType.departureRequests,
-      PlateType.departureCompleted,
-    ];
-    for (final t in defaults) {
-      subscribeType(t);
-    }
+    _initDefaultSubscriptions();
   }
 
   String get currentArea => _areaState.currentArea;
@@ -185,7 +173,6 @@ class PlateState extends ChangeNotifier {
         return;
       }
 
-      // 동일 사용자에 의해 이미 다른 Plate 선택 중인지 확인
       final alreadySelected = _data.entries.expand((entry) => entry.value).firstWhere(
             (p) => p.isSelected && p.selectedBy == userName && p.id != plateId,
             orElse: () => PlateModel(
@@ -268,6 +255,17 @@ class PlateState extends ChangeNotifier {
     debugPrint("🔄 syncWithAreaState : 지역 변경 감지 및 상태 갱신 호출됨");
     _cancelAllSubscriptions();
     for (final t in _desiredSubscriptions) {
+      subscribeType(t);
+    }
+  }
+
+  void _initDefaultSubscriptions() {
+    final defaults = <PlateType>[
+      PlateType.parkingRequests,
+      PlateType.departureRequests,
+      PlateType.departureCompleted,
+    ];
+    for (final t in defaults) {
       subscribeType(t);
     }
   }
