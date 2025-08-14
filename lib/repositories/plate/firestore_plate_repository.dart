@@ -21,16 +21,30 @@ class FirestorePlateRepository implements PlateRepository {
 
   @override
   Stream<List<PlateModel>> streamToCurrentArea(
-    PlateType type,
-    String area, {
-    bool descending = true,
-    String? location,
-  }) {
+      PlateType type,
+      String area, {
+        bool descending = true,
+        String? location,
+      }) {
     return _streamService.streamToCurrentArea(
       type,
       area,
       descending: descending,
       location: location,
+    );
+  }
+
+  /// ✅ 추가: 출차 완료(미정산) 전용 원본 스냅샷 스트림
+  /// - isLockedFee == false 문서만
+  /// - QuerySnapshot을 그대로 노출(PlateState에서 docChanges 사용 용도)
+  @override
+  Stream<QuerySnapshot<Map<String, dynamic>>> departureUnpaidSnapshots(
+      String area, {
+        bool descending = true,
+      }) {
+    return _streamService.departureUnpaidSnapshots(
+      area: area,
+      descending: descending,
     );
   }
 
@@ -41,10 +55,10 @@ class FirestorePlateRepository implements PlateRepository {
 
   @override
   Future<void> updatePlate(
-    String documentId,
-    Map<String, dynamic> updatedFields, {
-    PlateLogModel? log,
-  }) {
+      String documentId,
+      Map<String, dynamic> updatedFields, {
+        PlateLogModel? log,
+      }) {
     return _writeService.updatePlate(documentId, updatedFields, log: log);
   }
 
@@ -159,9 +173,9 @@ class FirestorePlateRepository implements PlateRepository {
 
   @override
   Future<int> getPlateCountForTypePage(
-    PlateType type,
-    String area,
-  ) {
+      PlateType type,
+      String area,
+      ) {
     return _countService.getPlateCountForTypePage(type, area);
   }
 
@@ -172,10 +186,10 @@ class FirestorePlateRepository implements PlateRepository {
 
   @override
   Future<int> getPlateCountForClockInPage(
-    PlateType type, {
-    DateTime? selectedDate,
-    required String area,
-  }) {
+      PlateType type, {
+        DateTime? selectedDate,
+        required String area,
+      }) {
     return _countService.getPlateCountForClockInPage(
       type,
       selectedDate: selectedDate,
@@ -185,10 +199,10 @@ class FirestorePlateRepository implements PlateRepository {
 
   @override
   Future<int> getPlateCountForClockOutPage(
-    PlateType type, {
-    DateTime? selectedDate,
-    required String area,
-  }) {
+      PlateType type, {
+        DateTime? selectedDate,
+        required String area,
+      }) {
     return _countService.getPlateCountForClockOutPage(
       type,
       selectedDate: selectedDate,

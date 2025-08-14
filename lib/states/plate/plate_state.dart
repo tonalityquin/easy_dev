@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 import '../../repositories/plate/plate_repository.dart';
 import '../../models/plate_model.dart';
 import '../../enums/plate_type.dart';
@@ -10,27 +12,36 @@ class PlateState extends ChangeNotifier {
   final PlateRepository _repository;
   final AreaState _areaState;
 
+  /// 출차 완료 전이 감지용(기존 false→true 비교용으로 쓰이던 맵)
   final Map<String, bool> previousIsLockedFee = {};
 
+  /// 타입별 최신 데이터
   final Map<PlateType, List<PlateModel>> _data = {
     for (var c in PlateType.values) c: [],
   };
 
+  /// 화면 리스트용 메인 스트림 구독 (List<PlateModel>)
   final Map<PlateType, StreamSubscription<List<PlateModel>>> _subscriptions = {};
 
+  /// 출차 완료 전이 감지용 보조 스트림 구독 (QuerySnapshot)
+  final Map<PlateType, StreamSubscription<QuerySnapshot<Map<String, dynamic>>>> _transitionSubscriptions = {};
+
+  /// 타입별 정렬 상태 (true: 내림차순)
   final Map<PlateType, bool> _isSortedMap = {
     for (var c in PlateType.values) c: true,
   };
 
+  /// 타입별 구독 중인 지역
   final Map<PlateType, String> _subscribedAreas = {};
 
   bool _isLoading = false;
 
+  /// 사용자가 구독을 원한 타입(지역 변경 시 재구독 대상)
   final Set<PlateType> _desiredSubscriptions = {};
 
   PlateState(this._repository, this._areaState) {
     _areaState.addListener(_onAreaChanged);
-    _initDefaultSubscriptions();
+    _initDefaultSubscriptions(); // 기본: 입차 요청, 출차 요청, 출차 완료 구독
   }
 
   String get currentArea => _areaState.currentArea;
@@ -43,6 +54,7 @@ class PlateState extends ChangeNotifier {
 
   String? getSubscribedArea(PlateType type) => _subscribedAreas[type];
 
+  /// 타입별 구독 시작(이미 같은 지역이면 스킵, 지역 바뀌면 재구독)
   void subscribeType(PlateType type) {
     _desiredSubscriptions.add(type);
 
@@ -68,6 +80,7 @@ class PlateState extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
 
+    // 1) 화면 리스트용 메인 스트림(List<PlateModel>)
     final stream = _repository.streamToCurrentArea(
       type,
       area,
@@ -77,22 +90,6 @@ class PlateState extends ChangeNotifier {
     bool firstDataReceived = false;
 
     final subscription = stream.listen((filteredData) async {
-      if (type == PlateType.departureCompleted) {
-        for (final plate in filteredData) {
-          final previous = previousIsLockedFee[plate.id];
-          if (previous == false && plate.isLockedFee == true) {
-            final uploader = GcsJsonUploader();
-            await uploader.generateSummaryLog(
-              plateNumber: plate.plateNumber,
-              division: _areaState.currentDivision,
-              area: plate.area,
-              date: DateTime.now(),
-            );
-          }
-          previousIsLockedFee[plate.id] = plate.isLockedFee;
-        }
-      }
-
       _data[type] = filteredData;
       notifyListeners();
 
@@ -111,15 +108,52 @@ class PlateState extends ChangeNotifier {
     });
 
     _subscriptions[type] = subscription;
-    _subscribedAreas[type] = area; // 구독 지역 저장
+    _subscribedAreas[type] = area;
+
+    if (type == PlateType.departureCompleted) {
+      _transitionSubscriptions[type]?.cancel();
+
+      final transitionSub = _repository.departureUnpaidSnapshots(area, descending: descending).listen((snapshot) async {
+        for (final change in snapshot.docChanges) {
+          if (change.type == DocumentChangeType.removed) {
+            try {
+              final ref = change.doc.reference;
+              final fresh = await ref.get();
+              final data = fresh.data();
+              if (data != null && data['type'] == PlateType.departureCompleted.firestoreValue && data['area'] == area) {
+                final isLockedFee = data['isLockedFee'] == true;
+                if (isLockedFee) {
+                  unawaited(GcsJsonUploader().generateSummaryLog(
+                    plateNumber: (data['plateNumber'] ?? '').toString(),
+                    division: _areaState.currentDivision,
+                    area: (data['area'] ?? area).toString(),
+                    date: DateTime.now(),
+                  ));
+                }
+                final id = (data['id'] ?? ref.id).toString();
+                previousIsLockedFee[id] = isLockedFee;
+              }
+            } catch (e) {
+              debugPrint('⚠️ [출차 완료 전이 감지] removed 처리 실패: $e');
+            }
+          }
+        }
+      }, onError: (error) {
+        debugPrint('🔥 [출차 완료 전이 감지] 보조 스트림 에러: $error');
+      });
+
+      _transitionSubscriptions[type] = transitionSub;
+    }
   }
 
+  /// 타입별 구독 해제(보조 구독 포함)
   void unsubscribeType(PlateType type) {
     _desiredSubscriptions.remove(type);
 
     final sub = _subscriptions[type];
     final area = _subscribedAreas[type];
 
+    // 메인 구독 해제
     if (sub != null) {
       sub.cancel();
       _subscriptions.remove(type);
@@ -129,6 +163,13 @@ class PlateState extends ChangeNotifier {
       debugPrint('🛑 [${_getTypeLabel(type)}] 구독 해제됨 (지역: $area)');
     } else {
       debugPrint('⚠️ [${_getTypeLabel(type)}] 구독 중이 아님');
+    }
+
+    // 보조 구독 해제
+    if (_transitionSubscriptions[type] != null) {
+      _transitionSubscriptions[type]!.cancel();
+      _transitionSubscriptions.remove(type);
+      debugPrint('🛑 [${_getTypeLabel(type)}] 보조 구독 해제됨 (전이 감지)');
     }
   }
 
@@ -173,6 +214,7 @@ class PlateState extends ChangeNotifier {
         return;
       }
 
+      // 동일 사용자에 의해 이미 다른 Plate 선택 중인지 확인
       final alreadySelected = _data.entries.expand((entry) => entry.value).firstWhere(
             (p) => p.isSelected && p.selectedBy == userName && p.id != plateId,
             orElse: () => PlateModel(
@@ -218,6 +260,7 @@ class PlateState extends ChangeNotifier {
     }
   }
 
+  /// 타입별 데이터 조회(출차 완료는 로컬 날짜 필터 지원)
   List<PlateModel> getPlatesByCollection(PlateType collection, {DateTime? selectedDate}) {
     var plates = _data[collection] ?? [];
 
@@ -235,9 +278,11 @@ class PlateState extends ChangeNotifier {
     return plates;
   }
 
+  /// 정렬 변경(주의: 실제 반영은 재구독 필요)
   void updateSortOrder(PlateType type, bool descending) {
     _isSortedMap[type] = descending;
     notifyListeners();
+    // 필요 시: unsubscribeType(type); subscribeType(type);
   }
 
   Future<void> updatePlateLocally(PlateType collection, PlateModel updatedPlate) async {
@@ -251,6 +296,7 @@ class PlateState extends ChangeNotifier {
     }
   }
 
+  /// 외부에서 강제 동기화(지역 변경 등)
   void syncWithAreaState() {
     debugPrint("🔄 syncWithAreaState : 지역 변경 감지 및 상태 갱신 호출됨");
     _cancelAllSubscriptions();
@@ -259,6 +305,7 @@ class PlateState extends ChangeNotifier {
     }
   }
 
+  /// 앱 시작 시 기본 구독
   void _initDefaultSubscriptions() {
     final defaults = <PlateType>[
       PlateType.parkingRequests,
@@ -270,6 +317,7 @@ class PlateState extends ChangeNotifier {
     }
   }
 
+  /// AreaState에서 지역 변경 감지 시 재구독
   void _onAreaChanged() {
     debugPrint("🔄 지역 변경 감지됨: ${_areaState.currentArea}");
     _cancelAllSubscriptions();
@@ -278,11 +326,16 @@ class PlateState extends ChangeNotifier {
     }
   }
 
+  /// 모든 구독(메인+보조) 취소
   void _cancelAllSubscriptions() {
     for (var sub in _subscriptions.values) {
       sub.cancel();
     }
+    for (var tsub in _transitionSubscriptions.values) {
+      tsub.cancel();
+    }
     _subscriptions.clear();
+    _transitionSubscriptions.clear();
     _subscribedAreas.clear();
     _isLoading = false;
     notifyListeners();

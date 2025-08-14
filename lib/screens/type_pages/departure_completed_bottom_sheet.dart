@@ -36,16 +36,6 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final plateState = context.read<PlateState>();
-      final sameArea = plateState.getSubscribedArea(PlateType.departureCompleted) == plateState.currentArea;
-      if (!plateState.isSubscribed(PlateType.departureCompleted) || !sameArea) {
-        if (plateState.isSubscribed(PlateType.departureCompleted)) {
-          plateState.unsubscribeType(PlateType.departureCompleted);
-        }
-        plateState.subscribeType(PlateType.departureCompleted);
-      }
-    });
   }
 
   void _showSearchDialog(BuildContext context) {

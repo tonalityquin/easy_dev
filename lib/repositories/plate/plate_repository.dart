@@ -1,53 +1,71 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-
 import '../../enums/plate_type.dart';
 import '../../models/plate_log_model.dart';
 import '../../models/plate_model.dart';
 
 abstract class PlateRepository {
+  // ========= Streams =========
   Stream<List<PlateModel>> streamToCurrentArea(
-    PlateType type,
-    String area, {
-    bool descending = true,
-    String? location,
-  });
+      PlateType type,
+      String area, {
+        bool descending = true,
+        String? location,
+      });
 
-  Future<int> getPlateCountForTypePage(
-    PlateType type,
-    String area,
-  );
+  /// 출차 완료(미정산) 원본 스냅샷 스트림 (docChanges 사용용)
+  Stream<QuerySnapshot<Map<String, dynamic>>> departureUnpaidSnapshots(
+      String area, {
+        bool descending,
+      });
 
+  // ========= Counts =========
+  Future<int> getPlateCountForTypePage(PlateType type, String area);
   Future<int> getPlateCountToCurrentArea(String area);
+  Future<int> getPlateCountForClockInPage(
+      PlateType type, {
+        DateTime? selectedDate,
+        required String area,
+      });
+  Future<int> getPlateCountForClockOutPage(
+      PlateType type, {
+        DateTime? selectedDate,
+        required String area,
+      });
 
+  // ========= Queries =========
   Future<List<PlateModel>> fourDigitCommonQuery({
     required String plateFourDigit,
     required String area,
   });
-
   Future<List<PlateModel>> fourDigitSignatureQuery({
     required String plateFourDigit,
     required String area,
   });
-
   Future<List<PlateModel>> getPlatesByLocation({
     required PlateType type,
     required String area,
     required String location,
   });
-
-  Future<void> addOrUpdatePlate(String documentId, PlateModel plate);
-
-  Future<void> updatePlate(
-    String documentId,
-    Map<String, dynamic> updatedFields, {
-    PlateLogModel? log,
+  Future<bool> checkDuplicatePlate({
+    required String plateNumber,
+    required String area,
   });
-
-  Future<void> deletePlate(String documentId);
-
   Future<PlateModel?> getPlate(String documentId);
 
-  Future<void> recordWhoPlateClick(String id, bool isSelected, {String? selectedBy});
+  // ========= Writes =========
+  Future<void> addOrUpdatePlate(String documentId, PlateModel plate);
+  Future<void> updatePlate(
+      String documentId,
+      Map<String, dynamic> updatedFields, {
+        PlateLogModel? log,
+      });
+  Future<void> deletePlate(String documentId);
+
+  Future<void> recordWhoPlateClick(
+      String id,
+      bool isSelected, {
+        String? selectedBy,
+      });
 
   Future<void> addPlate({
     required String plateNumber,
@@ -64,7 +82,7 @@ abstract class PlateRepository {
     required String region,
     required String selectedBillType,
     List<String>? imageUrls,
-    bool isLockedFee,
+    bool isLockedFee = false,           // ✅ 구현과 일치
     int? lockedAtTimeInSeconds,
     int? lockedFeeAmount,
     DateTime? endTime,
@@ -72,24 +90,7 @@ abstract class PlateRepository {
     String? customStatus,
   });
 
-  Future<int> getPlateCountForClockInPage(
-    PlateType type, {
-    DateTime? selectedDate,
-    required String area,
-  });
-
-  Future<int> getPlateCountForClockOutPage(
-    PlateType type, {
-    DateTime? selectedDate,
-    required String area,
-  });
-
-  Future<bool> checkDuplicatePlate({
-    required String plateNumber,
-    required String area,
-  });
-
-  // 🔹 plate_status 관련 메서드
+  // ========= Plate Status =========
   Future<Map<String, dynamic>?> getPlateStatus(String plateNumber, String area);
 
   Future<void> setPlateStatus({
@@ -100,7 +101,6 @@ abstract class PlateRepository {
     required String createdBy,
   });
 
-  /// ✅ 정기 plate_status 저장 (수정됨)
   Future<void> setMonthlyPlateStatus({
     required String plateNumber,
     required String area,
@@ -120,7 +120,8 @@ abstract class PlateRepository {
 
   Future<void> deletePlateStatus(String plateNumber, String area);
 
-  // 🔹 상태 전이용 공통 메서드
+  // ========= Transitions =========
+  /// 상태 전이 공통 메서드 (구현체에서 Firestore 업데이트)
   Future<void> transitionPlateState({
     required String documentId,
     required PlateType toType,
@@ -132,27 +133,8 @@ abstract class PlateRepository {
     int? lockedAtTimeInSeconds,
     int? lockedFeeAmount,
     PlateLogModel? log,
-  }) async {
-    final docRef = FirebaseFirestore.instance.collection('plates').doc(documentId);
-    final updateData = <String, dynamic>{
-      'type': toType.name,
-      'location': location,
-      'userName': userName,
-      'updatedAt': Timestamp.now(),
-      if (includeEndTime) 'endTime': Timestamp.now(),
-      if (isLockedFee != null) 'isLockedFee': isLockedFee,
-      if (lockedAtTimeInSeconds != null) 'lockedAtTimeInSeconds': lockedAtTimeInSeconds,
-      if (lockedFeeAmount != null) 'lockedFeeAmount': lockedFeeAmount,
-      if (resetSelection) ...{
-        'isSelected': false,
-        'selectedBy': null,
-      },
-      if (log != null) 'logs': FieldValue.arrayUnion([log.toMap()]),
-    };
+  });
 
-    await docRef.update(updateData);
-  }
-
-  // 🔹 출차 완료 전용 업데이트
+  /// 출차 완료 전용 업데이트(헬퍼)
   Future<void> updateToDepartureCompleted(String documentId, PlateModel plate);
 }
