@@ -5,14 +5,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../repositories/plate/plate_repository.dart';
 import '../../models/plate_model.dart';
 import '../../enums/plate_type.dart';
-import '../../utils/gcs_json_uploader.dart';
 import '../area/area_state.dart';
 
 class PlateState extends ChangeNotifier {
   final PlateRepository _repository;
   final AreaState _areaState;
 
-  /// 출차 완료 전이 감지용(기존 false→true 비교용으로 쓰이던 맵)
+  /// 전이 추적용 (선택 사용)
   final Map<String, bool> previousIsLockedFee = {};
 
   /// 타입별 최신 데이터
@@ -20,11 +19,8 @@ class PlateState extends ChangeNotifier {
     for (var c in PlateType.values) c: [],
   };
 
-  /// 화면 리스트용 메인 스트림 구독 (List<PlateModel>)
-  final Map<PlateType, StreamSubscription<List<PlateModel>>> _subscriptions = {};
-
-  /// 출차 완료 전이 감지용 보조 스트림 구독 (QuerySnapshot)
-  final Map<PlateType, StreamSubscription<QuerySnapshot<Map<String, dynamic>>>> _transitionSubscriptions = {};
+  /// 타입별 메인 스트림 구독
+  final Map<PlateType, StreamSubscription> _subscriptions = {};
 
   /// 타입별 정렬 상태 (true: 내림차순)
   final Map<PlateType, bool> _isSortedMap = {
@@ -36,12 +32,12 @@ class PlateState extends ChangeNotifier {
 
   bool _isLoading = false;
 
-  /// 사용자가 구독을 원한 타입(지역 변경 시 재구독 대상)
+  /// 사용자가 구독을 원한 타입 (지역 변경시 재구독 대상)
   final Set<PlateType> _desiredSubscriptions = {};
 
   PlateState(this._repository, this._areaState) {
     _areaState.addListener(_onAreaChanged);
-    _initDefaultSubscriptions(); // 기본: 입차 요청, 출차 요청, 출차 완료 구독
+    _initDefaultSubscriptions(); // 기본: 입차 요청, 출차 요청, 출차 완료
   }
 
   String get currentArea => _areaState.currentArea;
@@ -54,7 +50,6 @@ class PlateState extends ChangeNotifier {
 
   String? getSubscribedArea(PlateType type) => _subscribedAreas[type];
 
-  /// 타입별 구독 시작(이미 같은 지역이면 스킵, 지역 바뀌면 재구독)
   void subscribeType(PlateType type) {
     _desiredSubscriptions.add(type);
 
@@ -80,7 +75,63 @@ class PlateState extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
 
-    // 1) 화면 리스트용 메인 스트림(List<PlateModel>)
+    if (type == PlateType.departureCompleted) {
+      final sub = _repository.departureUnpaidSnapshots(area, descending: descending).listen(
+          (QuerySnapshot<Map<String, dynamic>> snapshot) async {
+        final results = snapshot.docs
+            .map((doc) {
+              try {
+                return PlateModel.fromDocument(doc);
+              } catch (e) {
+                debugPrint('❌ departureCompleted parsing error: $e');
+                return null;
+              }
+            })
+            .whereType<PlateModel>()
+            .toList();
+        _data[type] = results;
+        notifyListeners();
+
+        for (final change in snapshot.docChanges) {
+          if (change.type != DocumentChangeType.removed) continue;
+          try {
+            final ref = change.doc.reference;
+
+            final fresh = await ref.get(const GetOptions(source: Source.server));
+
+            final data = fresh.data();
+            if (data == null) continue;
+
+            final isDepartureCompleted = data['type'] == PlateType.departureCompleted.firestoreValue;
+            final sameArea = data['area'] == area;
+            final isLockedFeeTrue = data['isLockedFee'] == true;
+
+            if (isDepartureCompleted && sameArea && isLockedFeeTrue) {
+              // ✅ 전이 확정(미정산 → 정산)
+              debugPrint('✅ 정산 전이 감지: doc=${fresh.id}, plate=${data['plateNumber']}');
+
+              // 선택: 로컬 추적 (중복 처리 방지 용도)
+              final key = (data['id'] ?? fresh.id).toString();
+              previousIsLockedFee[key] = true;
+            }
+          } catch (e) {
+            debugPrint('⚠️ [출차 완료 전이 감지] removed 처리 실패: $e');
+          }
+        }
+
+        _isLoading = false;
+      }, onError: (error) {
+        debugPrint('🔥 [출차 완료] 스냅샷 스트림 에러: $error');
+        _isLoading = false;
+        notifyListeners();
+      });
+
+      _subscriptions[type] = sub;
+      _subscribedAreas[type] = area;
+      return;
+    }
+
+    // ▣ 그 외 타입은 기존처럼 모델 리스트 스트림 사용
     final stream = _repository.streamToCurrentArea(
       type,
       area,
@@ -109,51 +160,15 @@ class PlateState extends ChangeNotifier {
 
     _subscriptions[type] = subscription;
     _subscribedAreas[type] = area;
-
-    if (type == PlateType.departureCompleted) {
-      _transitionSubscriptions[type]?.cancel();
-
-      final transitionSub = _repository.departureUnpaidSnapshots(area, descending: descending).listen((snapshot) async {
-        for (final change in snapshot.docChanges) {
-          if (change.type == DocumentChangeType.removed) {
-            try {
-              final ref = change.doc.reference;
-              final fresh = await ref.get();
-              final data = fresh.data();
-              if (data != null && data['type'] == PlateType.departureCompleted.firestoreValue && data['area'] == area) {
-                final isLockedFee = data['isLockedFee'] == true;
-                if (isLockedFee) {
-                  unawaited(GcsJsonUploader().generateSummaryLog(
-                    plateNumber: (data['plateNumber'] ?? '').toString(),
-                    division: _areaState.currentDivision,
-                    area: (data['area'] ?? area).toString(),
-                    date: DateTime.now(),
-                  ));
-                }
-                final id = (data['id'] ?? ref.id).toString();
-                previousIsLockedFee[id] = isLockedFee;
-              }
-            } catch (e) {
-              debugPrint('⚠️ [출차 완료 전이 감지] removed 처리 실패: $e');
-            }
-          }
-        }
-      }, onError: (error) {
-        debugPrint('🔥 [출차 완료 전이 감지] 보조 스트림 에러: $error');
-      });
-
-      _transitionSubscriptions[type] = transitionSub;
-    }
   }
 
-  /// 타입별 구독 해제(보조 구독 포함)
+  /// 타입별 구독 해제
   void unsubscribeType(PlateType type) {
     _desiredSubscriptions.remove(type);
 
     final sub = _subscriptions[type];
     final area = _subscribedAreas[type];
 
-    // 메인 구독 해제
     if (sub != null) {
       sub.cancel();
       _subscriptions.remove(type);
@@ -163,13 +178,6 @@ class PlateState extends ChangeNotifier {
       debugPrint('🛑 [${_getTypeLabel(type)}] 구독 해제됨 (지역: $area)');
     } else {
       debugPrint('⚠️ [${_getTypeLabel(type)}] 구독 중이 아님');
-    }
-
-    // 보조 구독 해제
-    if (_transitionSubscriptions[type] != null) {
-      _transitionSubscriptions[type]!.cancel();
-      _transitionSubscriptions.remove(type);
-      debugPrint('🛑 [${_getTypeLabel(type)}] 보조 구독 해제됨 (전이 감지)');
     }
   }
 
@@ -278,11 +286,10 @@ class PlateState extends ChangeNotifier {
     return plates;
   }
 
-  /// 정렬 변경(주의: 실제 반영은 재구독 필요)
+  /// 정렬 변경(실제 반영은 재구독 필요)
   void updateSortOrder(PlateType type, bool descending) {
     _isSortedMap[type] = descending;
     notifyListeners();
-    // 필요 시: unsubscribeType(type); subscribeType(type);
   }
 
   Future<void> updatePlateLocally(PlateType collection, PlateModel updatedPlate) async {
@@ -317,7 +324,7 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  /// AreaState에서 지역 변경 감지 시 재구독
+  /// AreaState 지역 변경 시 재구독
   void _onAreaChanged() {
     debugPrint("🔄 지역 변경 감지됨: ${_areaState.currentArea}");
     _cancelAllSubscriptions();
@@ -326,16 +333,12 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  /// 모든 구독(메인+보조) 취소
+  /// 모든 구독 취소
   void _cancelAllSubscriptions() {
     for (var sub in _subscriptions.values) {
       sub.cancel();
     }
-    for (var tsub in _transitionSubscriptions.values) {
-      tsub.cancel();
-    }
     _subscriptions.clear();
-    _transitionSubscriptions.clear();
     _subscribedAreas.clear();
     _isLoading = false;
     notifyListeners();
