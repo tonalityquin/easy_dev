@@ -78,7 +78,7 @@ class BackEndController extends StatelessWidget {
       case PlateType.departureRequests:
         return '출차 요청';
       case PlateType.departureCompleted:
-        return '출차 완료';
+        return '출차 완료 (미정산만)'; // ← 변경
     }
   }
 }

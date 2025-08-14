@@ -18,6 +18,7 @@ import 'departure_completed_pages/field_calendar.dart';
 import 'departure_completed_pages/widgets/departure_completed_page_merge_log.dart';
 import 'departure_completed_pages/departure_completed_control_buttons.dart';
 import 'departure_completed_pages/widgets/departure_completed_page_today_log.dart';
+
 // ✅ 상태 수정 바텀시트 import 추가
 import 'departure_completed_pages/widgets/departure_completed_status_bottom_sheet.dart';
 
@@ -35,7 +36,6 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
   @override
   void initState() {
     super.initState();
-    // 화면 진입 시 출차 완료 스트림 구독 보장 (중복 방지 가드 포함)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final plateState = context.read<PlateState>();
       final sameArea = plateState.getSubscribedArea(PlateType.departureCompleted) == plateState.currentArea;
@@ -113,7 +113,7 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
 
     // 정렬 (기존 로직 유지: requestTime 기준)
     firestorePlates.sort(
-          (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime),
+      (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime),
     );
 
     // 선택된 번호판
@@ -252,10 +252,10 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
                               };
                             }).toList()
                               ..sort((a, b) {
-                                final aT = DateTime.tryParse(a['mergedAt'] ?? '') ??
-                                    DateTime.fromMillisecondsSinceEpoch(0);
-                                final bT = DateTime.tryParse(b['mergedAt'] ?? '') ??
-                                    DateTime.fromMillisecondsSinceEpoch(0);
+                                final aT =
+                                    DateTime.tryParse(a['mergedAt'] ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+                                final bT =
+                                    DateTime.tryParse(b['mergedAt'] ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
                                 return bT.compareTo(aT);
                               });
 
@@ -287,11 +287,11 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
                                       future: plateNumber.isEmpty
                                           ? Future.value(<Map<String, dynamic>>[]) // 번호판 미선택: 빈 리스트
                                           : GcsJsonUploader().loadPlateLogs(
-                                        plateNumber: plateNumber,
-                                        division: division,
-                                        area: area,
-                                        date: selectedDate,
-                                      ),
+                                              plateNumber: plateNumber,
+                                              division: division,
+                                              area: area,
+                                              date: selectedDate,
+                                            ),
                                       builder: (context, snapshot) {
                                         if (snapshot.connectionState == ConnectionState.waiting) {
                                           return const Center(child: CircularProgressIndicator());
@@ -337,7 +337,6 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
                   ),
                 ],
               ),
-
               bottomNavigationBar: DepartureCompletedControlButtons(
                 isSearchMode: _isSearchMode,
                 onResetSearch: () => _resetSearch(context),
