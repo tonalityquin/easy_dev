@@ -1,26 +1,19 @@
-import 'package:easydev/utils/gcs_json_uploader.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
+import '../../states/calendar/field_calendar_state.dart';
 import '../../states/plate/filter_plate.dart';
 import '../../states/plate/plate_state.dart';
 import '../../states/area/area_state.dart';
 import '../../states/user/user_state.dart';
-import '../../states/calendar/field_selected_date_state.dart';
 
-import '../../utils/snackbar_helper.dart';
-
-import '../../widgets/container/plate_container.dart';
 import '../../widgets/dialog/common_plate_search_bottom_sheet/common_plate_search_bottom_sheet.dart';
-import 'departure_completed_pages/field_calendar.dart';
-import 'departure_completed_pages/widgets/departure_completed_page_merge_log.dart';
+import 'departure_completed_pages/departure_completed_tab_settled.dart';
+import 'departure_completed_pages/departure_completed_tab_unsettled.dart';
 import 'departure_completed_pages/departure_completed_control_buttons.dart';
-import 'departure_completed_pages/widgets/departure_completed_page_today_log.dart';
-
-// ✅ 상태 수정 바텀시트 import 추가
-import 'departure_completed_pages/widgets/departure_completed_status_bottom_sheet.dart';
+import 'departure_completed_pages/widgets/selected_date_bar.dart';
 
 class DepartureCompletedBottomSheet extends StatefulWidget {
   const DepartureCompletedBottomSheet({super.key});
@@ -163,164 +156,27 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
                     ),
                   ),
                   const SizedBox(height: 8),
+                  const SelectedDateBar(),
+
+                  const SizedBox(height: 8),
                   // 탭 콘텐츠
                   Expanded(
                     child: TabBarView(
                       children: [
-                        // ───── 미정산 탭: 달력(고정) + 리스트(스크롤) ─────
-                        Column(
-                          children: [
-                            // ✅ 상단 달력은 스크롤에서 제외(고정)
-                            const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 8.0),
-                              child: FieldCalendarInline(),
-                            ),
-                            const SizedBox(height: 12),
-                            // ✅ 달력 아래 영역만 스크롤
-                            Expanded(
-                              child: ListView(
-                                padding: const EdgeInsets.all(8.0),
-                                children: [
-                                  PlateContainer(
-                                    data: firestorePlates,
-                                    collection: PlateType.departureCompleted,
-                                    filterCondition: (_) => true,
-                                    onPlateTap: (plateNumber, area) async {
-                                      // ✅ 선택 토글
-                                      await plateState.togglePlateIsSelected(
-                                        collection: PlateType.departureCompleted,
-                                        plateNumber: plateNumber,
-                                        userName: userName,
-                                        onError: (msg) => showFailedSnackbar(context, msg),
-                                      );
-                                      // ✅ 토글 이후 현 선택 상태 확인
-                                      final currentSelected = plateState.getSelectedPlate(
-                                        PlateType.departureCompleted,
-                                        userName,
-                                      );
-                                      // ✅ 선택되어 있으면 즉시 바텀시트 표시
-                                      if (currentSelected != null &&
-                                          currentSelected.isSelected &&
-                                          currentSelected.plateNumber == plateNumber) {
-                                        await showDepartureCompletedStatusBottomSheet(
-                                          context: context,
-                                          plate: currentSelected,
-                                        );
-                                      }
-                                    },
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
+                        // ───── 미정산 탭
+                        DepartureCompletedUnsettledTab(
+                          firestorePlates: firestorePlates, // 부모에서 이미 필터/정렬된 리스트
+                          userName: userName,
                         ),
 
-                        // ───── 정산 탭: 상/하 1:1 영역 (각 스크롤) ─────
-                        Builder(
-                          builder: (context) {
-                            // baseList: 이미 날짜(자정~자정) 필터 적용됨
-                            final todayPlates = baseList.where((p) => _areaEquals(p.area, area)).toList();
-
-                            // Firestore 문서 → TodayLogSection이 기대하는 맵 형태로 변환
-                            final todayMergedItems = todayPlates.map<Map<String, dynamic>>((p) {
-                              final List<dynamic> logsDyn = (p.logs as List?) ?? const <dynamic>[];
-
-                              // mergedAt 후보: 로그 최신 timestamp → 없으면 endTime → updatedAt → requestTime
-                              DateTime? newestFromLogs;
-                              for (final l in logsDyn.whereType<Map<String, dynamic>>()) {
-                                final ts = DateTime.tryParse((l['timestamp'] ?? '').toString());
-                                if (ts != null && (newestFromLogs == null || ts.isAfter(newestFromLogs))) {
-                                  newestFromLogs = ts;
-                                }
-                              }
-                              final mergedAt = (newestFromLogs ?? p.endTime ?? p.updatedAt ?? p.requestTime);
-
-                              return {
-                                'plateNumber': p.plateNumber,
-                                'mergedAt': mergedAt.toIso8601String(),
-                                'logs': logsDyn,
-                              };
-                            }).toList()
-                              ..sort((a, b) {
-                                final aT =
-                                    DateTime.tryParse(a['mergedAt'] ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
-                                final bT =
-                                    DateTime.tryParse(b['mergedAt'] ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
-                                return bT.compareTo(aT);
-                              });
-
-                            return Padding(
-                              padding: const EdgeInsets.all(8.0),
-                              child: Column(
-                                children: [
-                                  // ⬆️ 상단 1/2: TodayLogSection (항상 렌더링)
-                                  Expanded(
-                                    child: ClipRect(
-                                      child: Scrollbar(
-                                        child: SingleChildScrollView(
-                                          child: TodayLogSection(
-                                            mergedLogs: todayMergedItems,
-                                            division: division,
-                                            area: area,
-                                            selectedDate: selectedDate,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-
-                                  const SizedBox(height: 8),
-
-                                  // ⬇️ 하단 1/2: MergedLogSection (항상 렌더링)
-                                  Expanded(
-                                    child: FutureBuilder<List<Map<String, dynamic>>>(
-                                      future: plateNumber.isEmpty
-                                          ? Future.value(<Map<String, dynamic>>[]) // 번호판 미선택: 빈 리스트
-                                          : GcsJsonUploader().loadPlateLogs(
-                                              plateNumber: plateNumber,
-                                              division: division,
-                                              area: area,
-                                              date: selectedDate,
-                                            ),
-                                      builder: (context, snapshot) {
-                                        if (snapshot.connectionState == ConnectionState.waiting) {
-                                          return const Center(child: CircularProgressIndicator());
-                                        }
-                                        if (snapshot.hasError) {
-                                          return const Center(child: Text("병합 로그 로딩 실패"));
-                                        }
-                                        final mergedLogs = snapshot.data ?? [];
-                                        return ClipRect(
-                                          child: Scrollbar(
-                                            child: SingleChildScrollView(
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  if (plateNumber.isEmpty)
-                                                    const Padding(
-                                                      padding: EdgeInsets.only(bottom: 8.0),
-                                                      child: Center(
-                                                        child: Text('번호판을 선택하면 상세 병합 로그를 불러옵니다.'),
-                                                      ),
-                                                    ),
-                                                  MergedLogSection(
-                                                    mergedLogs: mergedLogs,
-                                                    division: division,
-                                                    area: area,
-                                                    selectedDate: selectedDate,
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
+                        // ───── 정산 탭
+                        DepartureCompletedSettledTab(
+                          baseList: baseList,
+                          // 날짜 필터 적용된 원본
+                          area: area,
+                          division: division,
+                          selectedDate: selectedDate,
+                          plateNumber: plateNumber, // 선택된 번호판(없으면 빈 문자열)
                         ),
                       ],
                     ),
