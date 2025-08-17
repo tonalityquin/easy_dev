@@ -4,12 +4,10 @@ import 'package:provider/provider.dart';
 import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
 import '../../states/calendar/field_calendar_state.dart';
-import '../../states/plate/filter_plate.dart';
 import '../../states/plate/plate_state.dart';
 import '../../states/area/area_state.dart';
 import '../../states/user/user_state.dart';
 
-import '../../widgets/dialog/common_plate_search_bottom_sheet/common_plate_search_bottom_sheet.dart';
 import 'departure_completed_pages/departure_completed_tab_settled.dart';
 import 'departure_completed_pages/departure_completed_tab_unsettled.dart';
 import 'departure_completed_pages/departure_completed_control_buttons.dart';
@@ -24,40 +22,6 @@ class DepartureCompletedBottomSheet extends StatefulWidget {
 
 class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottomSheet> {
   final bool _isSorted = true;
-  bool _isSearchMode = false;
-
-  @override
-  void initState() {
-    super.initState();
-  }
-
-  void _showSearchDialog(BuildContext context) {
-    final currentArea = context.read<AreaState>().currentArea;
-
-    showDialog(
-      context: context,
-      builder: (context) => CommonPlateSearchBottomSheet(
-        onSearch: (query) => _filterPlatesByNumber(context, query),
-        area: currentArea,
-      ),
-    );
-  }
-
-  void _filterPlatesByNumber(BuildContext context, String query) {
-    if (query.length == 4) {
-      context.read<FilterPlate>().setPlateSearchQuery(query);
-      setState(() {
-        _isSearchMode = true;
-      });
-    }
-  }
-
-  void _resetSearch(BuildContext context) {
-    context.read<FilterPlate>().clearPlateSearchQuery();
-    setState(() {
-      _isSearchMode = false;
-    });
-  }
 
   bool _areaEquals(String a, String b) => a.trim().toLowerCase() == b.trim().toLowerCase();
 
@@ -66,7 +30,6 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
     final plateState = context.watch<PlateState>();
     final userName = context.read<UserState>().name;
     final areaState = context.watch<AreaState>();
-    final filterState = context.watch<FilterPlate>();
 
     final division = areaState.currentDivision;
     final area = areaState.currentArea.trim();
@@ -79,24 +42,15 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
       selectedDate: selectedDate,
     );
 
-    // 화면단 area/검색 필터
-    final isSearching = filterState.searchQuery.isNotEmpty && filterState.searchQuery.length == 4;
+    // 화면단 area 필터만 적용 (검색 제거)
     List<PlateModel> firestorePlates = baseList.where((p) {
       final sameArea = _areaEquals(p.area, area);
-      if (isSearching) {
-        return sameArea; // 검색 중엔 잠금 무시
-      } else {
-        return !p.isLockedFee && sameArea; // 일반 모드: 미정산만
-      }
+      return !p.isLockedFee && sameArea; // 일반 모드: 미정산만
     }).toList();
-
-    if (isSearching) {
-      firestorePlates = firestorePlates.where((p) => p.plateFourDigit == filterState.searchQuery).toList();
-    }
 
     // 정렬 (기존 로직 유지: requestTime 기준)
     firestorePlates.sort(
-      (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime),
+          (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime),
     );
 
     // 선택된 번호판
@@ -171,8 +125,7 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
 
                         // ───── 정산 탭
                         DepartureCompletedSettledTab(
-                          baseList: baseList,
-                          // 날짜 필터 적용된 원본
+                          baseList: baseList, // 날짜 필터 적용된 원본
                           area: area,
                           division: division,
                           selectedDate: selectedDate,
@@ -183,10 +136,14 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
                   ),
                 ],
               ),
-              bottomNavigationBar: DepartureCompletedControlButtons(
-                isSearchMode: _isSearchMode,
-                onResetSearch: () => _resetSearch(context),
-                onShowSearchDialog: () => _showSearchDialog(context),
+              // 공간 유지: 컨트롤 바는 그대로 렌더하되 입력은 무시
+              bottomNavigationBar: IgnorePointer(
+                ignoring: true,
+                child: DepartureCompletedControlButtons(
+                  isSearchMode: false,
+                  onResetSearch: () {},        // no-op
+                  onShowSearchDialog: () {},   // no-op
+                ),
               ),
             ),
           ),

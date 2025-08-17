@@ -1,4 +1,3 @@
-// 동일 경로: departure_completed_tab_settled.dart
 import 'package:flutter/material.dart';
 
 import '../../../models/plate_model.dart';
