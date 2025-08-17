@@ -78,6 +78,51 @@ class PlateQueryService {
     return result;
   }
 
+  Future<List<PlateModel>> fourDigitDepartureCompletedQuery({
+    required String plateFourDigit,
+    required String area,
+  }) async {
+    await FirestoreLogger().log(
+      'fourDigitSignatureQuery called: plateFourDigit=$plateFourDigit, area=$area',
+    );
+
+    final query = _firestore
+        .collection('plates')
+        .where('plate_four_digit', isEqualTo: plateFourDigit)
+        .where('area', isEqualTo: area)
+        .where('type', isEqualTo: PlateType.departureCompleted.firestoreValue);
+
+    final result = await _queryPlates(query);
+
+    await FirestoreLogger().log('fourDigitSignatureQuery success: ${result.length} items loaded');
+    return result;
+  }
+
+  Future<List<PlateModel>> departureCompletedQuery({
+    required String area,
+    int? limit,
+  }) async {
+    final areaNorm = area.trim().toLowerCase();
+
+    await FirestoreLogger().log(
+      'departureCompletedQuery: area="$areaNorm", limit=${limit ?? 500}',
+    );
+
+    final query = _firestore
+        .collection('plates')
+        .where('area_normalized', isEqualTo: areaNorm) // 스키마에 맞게: 없다면 'area'
+        .where('type', isEqualTo: PlateType.departureCompleted.firestoreValue)
+        .orderBy('requestTime', descending: true) // 날짜 제한 대신 최신순 정렬
+        .limit(limit ?? 500); // 방어적 상한
+
+    final result = await _queryPlates(query);
+
+    await FirestoreLogger().log(
+      'departureCompletedQuery: ${result.length} hit(s)',
+    );
+    return result;
+  }
+
   /// 중복 번호판 여부 확인
   Future<bool> checkDuplicatePlate({
     required String plateNumber,

@@ -161,6 +161,17 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
+  Future<List<PlateModel>> fourDigitDepartureCompletedQuery({
+    required String plateFourDigit,
+    required String area,
+  }) {
+    return _queryService.fourDigitDepartureCompletedQuery(
+      plateFourDigit: plateFourDigit,
+      area: area,
+    );
+  }
+
+  @override
   Future<bool> checkDuplicatePlate({
     required String plateNumber,
     required String area,

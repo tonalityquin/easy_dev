@@ -34,6 +34,10 @@ class _InputPlateBottomSheetState extends State<InputPlateBottomSheet> {
   final controller = InputPlateController();
   late InputCameraHelper _cameraHelper;
 
+  Future<void>? _cameraInit;     // 초기화 Future 기억
+  bool _cameraReady = false;     // 미리보기 렌더 가드
+  bool _closing = false;         // 중복 닫기 방지
+
   List<String> selectedStatusNames = [];
   Key statusSectionKey = UniqueKey();
 
@@ -41,8 +45,12 @@ class _InputPlateBottomSheetState extends State<InputPlateBottomSheet> {
   void initState() {
     super.initState();
     _cameraHelper = InputCameraHelper();
-    _cameraHelper.initializeInputCamera().then((_) => setState(() {}));
-
+    _cameraInit = _cameraHelper.initializeInputCamera()
+        .then((_) {
+      if (!mounted) return;
+      setState(() => _cameraReady = true);
+    })
+        .catchError((_) { /* 필요 시 로깅 */ });
     controller.controllerBackDigit.addListener(() async {
       final text = controller.controllerBackDigit.text;
       if (text.length == 4 && controller.isInputValid()) {
@@ -131,9 +139,20 @@ class _InputPlateBottomSheetState extends State<InputPlateBottomSheet> {
   @override
   void dispose() {
     controller.dispose();
-    _cameraHelper.dispose();
+
+    // 🔽 초기화가 끝난 뒤 안전하게 dispose
+    final init = _cameraInit;
+    if (init != null) {
+      init.whenComplete(() {
+        try { _cameraHelper.dispose(); } catch (_) {}
+      });
+    } else {
+      try { _cameraHelper.dispose(); } catch (_) {}
+    }
+
     super.dispose();
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -157,8 +176,20 @@ class _InputPlateBottomSheetState extends State<InputPlateBottomSheet> {
                 ),
                 IconButton(
                   icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: () async {
+                    if (_closing) return;
+                    _closing = true;
+
+                    // 🔽 미리보기를 트리에서 먼저 제거
+                    if (mounted) setState(() => _cameraReady = false);
+
+                    // 🔽 플랫폼 뷰가 실제로 내려가도록 한 프레임 대기
+                    try { await WidgetsBinding.instance.endOfFrame; } catch (_) {}
+
+                    if (mounted) Navigator.of(context).pop();
+                  },
                 ),
+
               ],
             ),
             const Divider(),
@@ -192,10 +223,14 @@ class _InputPlateBottomSheetState extends State<InputPlateBottomSheet> {
                     const SizedBox(height: 32),
                     InputLocationSection(locationController: controller.locationController),
                     const SizedBox(height: 32),
-                    InputPhotoSection(
-                      capturedImages: controller.capturedImages,
-                      plateNumber: controller.buildPlateNumber(),
-                    ),
+                    if (_cameraReady)
+                      InputPhotoSection(
+                        capturedImages: controller.capturedImages,
+                        plateNumber: controller.buildPlateNumber(),
+                      )
+                    else
+                      const SizedBox.shrink(),
+
                     const SizedBox(height: 32),
                     // InputBillSection(
                     //   selectedBill: controller.selectedBill,

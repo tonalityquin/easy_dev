@@ -1,92 +1,208 @@
 import 'package:flutter/material.dart';
 
+import '../../../models/plate_log_model.dart';
 import '../../../models/plate_model.dart';
+import '../../../repositories/plate/firestore_plate_repository.dart';
 import '../../../utils/gcs_json_uploader.dart';
 import '../departure_completed_pages/widgets/departure_completed_page_merge_log.dart';
 import '../departure_completed_pages/widgets/departure_completed_page_today_log.dart';
 
-class DepartureCompletedSettledTab extends StatelessWidget {
+class DepartureCompletedSettledTab extends StatefulWidget {
   const DepartureCompletedSettledTab({
     super.key,
-    required this.baseList, // 날짜(자정~자정) 필터가 적용된 리스트
     required this.area,
     required this.division,
     required this.selectedDate,
     required this.plateNumber, // 선택된 번호판(없으면 빈 문자열)
   });
 
-  final List<PlateModel> baseList;
   final String area;
   final String division;
   final DateTime selectedDate;
   final String plateNumber;
 
-  bool _areaEquals(String a, String b) => a.trim().toLowerCase() == b.trim().toLowerCase();
+  @override
+  State<DepartureCompletedSettledTab> createState() => _DepartureCompletedSettledTabState();
+}
+
+class _DepartureCompletedSettledTabState extends State<DepartureCompletedSettledTab> {
+  final TextEditingController _fourDigitCtrl = TextEditingController();
+  bool _isLoading = false;
+  bool _hasSearched = false;
+  List<PlateModel> _results = [];
+
+  // 정산 탭을 떠날 때 검색 상태 초기화용
+  TabController? _tabController;
+  static const int _settledTabIndex = 1; // TabBar: [미정산(0), 정산(1)]
+
+  bool _isValidFourDigit(String v) => RegExp(r'^\d{4}$').hasMatch(v);
+
+  // 텍스트 변경 시 즉시 버튼 활성/비활성 반영
+  void _onTextChanged() {
+    if (mounted) setState(() {});
+  }
+
+  // 탭 전환 시 정산 탭을 떠나면 검색 상태 초기화
+  void _onTabChange() {
+    if (_tabController == null) return;
+    // indexIsChanging 동안 from -> to 전환, 떠날 때 초기화
+    if (_tabController!.indexIsChanging) {
+      final from = _tabController!.previousIndex;
+      final to = _tabController!.index;
+      if (from == _settledTabIndex && to != _settledTabIndex) {
+        _resetSearchState();
+      }
+    }
+  }
+
+  void _resetSearchState() {
+    if (!mounted) return;
+    setState(() {
+      _fourDigitCtrl.clear();
+      _results = [];
+      _hasSearched = false;
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _runSearch() async {
+    final q = _fourDigitCtrl.text.trim();
+    if (!_isValidFourDigit(q)) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final repo = FirestorePlateRepository();
+      final items = await repo.fourDigitDepartureCompletedQuery(
+        plateFourDigit: q,
+        area: widget.area,
+      );
+      if (!mounted) return;
+      setState(() {
+        _results = items;
+        _hasSearched = true;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('검색 중 오류가 발생했습니다: $e')),
+      );
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _fourDigitCtrl.addListener(_onTextChanged);
+    // DefaultTabController는 빌드 이후 접근 가능
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _tabController = DefaultTabController.of(context);
+      _tabController?.addListener(_onTabChange);
+    });
+  }
+
+  @override
+  void dispose() {
+    _tabController?.removeListener(_onTabChange);
+    _fourDigitCtrl.removeListener(_onTextChanged);
+    _fourDigitCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    // 지역 필터 적용
-    final todayPlates = baseList.where((p) => _areaEquals(p.area, area)).toList();
-
-    // Firestore 문서 → TodayLogSection이 기대하는 맵 형태로 변환
-    final todayMergedItems = todayPlates.map<Map<String, dynamic>>((p) {
-      final List<dynamic> logsDyn = (p.logs as List?) ?? const <dynamic>[];
-
-      // mergedAt 후보: 로그 최신 timestamp → 없으면 endTime → updatedAt → requestTime
-      DateTime? newestFromLogs;
-      for (final l in logsDyn.whereType<Map<String, dynamic>>()) {
-        final ts = DateTime.tryParse((l['timestamp'] ?? '').toString());
-        if (ts != null && (newestFromLogs == null || ts.isAfter(newestFromLogs))) {
-          newestFromLogs = ts;
-        }
-      }
-      final mergedAt = (newestFromLogs ?? p.endTime ?? p.updatedAt ?? p.requestTime);
-
-      return {
-        'plateNumber': p.plateNumber,
-        'mergedAt': mergedAt.toIso8601String(),
-        'logs': logsDyn,
-      };
-    }).toList()
-      ..sort((a, b) {
-        final aT = DateTime.tryParse(a['mergedAt'] ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final bT = DateTime.tryParse(b['mergedAt'] ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
-        return bT.compareTo(aT);
-      });
-
     return Padding(
       padding: const EdgeInsets.all(8.0),
       child: Column(
         children: [
-          // 상단 1/2: TodayLogSection
-          Expanded(
-            child: ClipRect(
-              child: Scrollbar(
-                child: SingleChildScrollView(
-                  child: TodayLogSection(
-                    mergedLogs: todayMergedItems,
-                    division: division,
-                    area: area,
-                    selectedDate: selectedDate,
+          // ── 검색 UI
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _fourDigitCtrl,
+                  maxLength: 4,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    counterText: '',
+                    labelText: '번호판 4자리',
+                    hintText: '예) 1234',
+                    border: OutlineInputBorder(),
                   ),
+                  onSubmitted: (_) => _runSearch(),
                 ),
               ),
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                onPressed: _isLoading || !_isValidFourDigit(_fourDigitCtrl.text) ? null : _runSearch,
+                icon: _isLoading
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.search),
+                label: const Text('검색'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+
+          // ── 상단: TodayLogSection (검색 결과 기반)
+          Expanded(
+            child: Builder(
+              builder: (context) {
+                if (!_hasSearched) {
+                  return Center(
+                    child: Text('번호판 4자리를 입력 후 검색하세요.', style: TextStyle(color: Colors.grey[600])),
+                  );
+                }
+                if (_isLoading) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (_results.isEmpty) {
+                  return Center(
+                    child: Text('검색 결과가 없습니다.', style: TextStyle(color: Colors.grey[600])),
+                  );
+                }
+
+                // logs가 비어있지 않은 결과 우선 선택
+                PlateModel target = _results.first;
+                for (final p in _results) {
+                  final l = p.logs ?? const <PlateLogModel>[];
+                  if (l.isNotEmpty) {
+                    target = p;
+                    break;
+                  }
+                }
+
+                final String plate = target.plateNumber;
+
+                // PlateLogModel -> Map 변환 (TodayLogSection은 Map 형태 기대)
+                final List<dynamic> logsRaw =
+                    (target.logs?.map((e) => e.toMap()).toList()) ?? const <dynamic>[];
+
+                // debugPrint('logsRaw length: ${logsRaw.length}');
+
+                return TodayLogSection(
+                  plateNumber: plate,
+                  logsRaw: logsRaw,
+                );
+              },
             ),
           ),
 
           const SizedBox(height: 8),
 
-          // 하단 1/2: MergedLogSection (선택된 번호판 기준)
+          // ── 하단: MergedLogSection (선택된 번호판 기준, 기존 유지)
           Expanded(
             child: FutureBuilder<List<Map<String, dynamic>>>(
-              future: plateNumber.isEmpty
+              future: widget.plateNumber.isEmpty
                   ? Future.value(<Map<String, dynamic>>[])
                   : GcsJsonUploader().loadPlateLogs(
-                      plateNumber: plateNumber,
-                      division: division,
-                      area: area,
-                      date: selectedDate,
-                    ),
+                plateNumber: widget.plateNumber,
+                division: widget.division,
+                area: widget.area,
+                date: widget.selectedDate,
+              ),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -101,7 +217,7 @@ class DepartureCompletedSettledTab extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (plateNumber.isEmpty)
+                          if (widget.plateNumber.isEmpty)
                             const Padding(
                               padding: EdgeInsets.only(bottom: 8.0),
                               child: Center(
@@ -110,9 +226,9 @@ class DepartureCompletedSettledTab extends StatelessWidget {
                             ),
                           MergedLogSection(
                             mergedLogs: mergedLogs,
-                            division: division,
-                            area: area,
-                            selectedDate: selectedDate,
+                            division: widget.division,
+                            area: widget.area,
+                            selectedDate: widget.selectedDate,
                           ),
                         ],
                       ),

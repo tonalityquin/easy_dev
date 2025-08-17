@@ -125,7 +125,6 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
 
                         // ───── 정산 탭
                         DepartureCompletedSettledTab(
-                          baseList: baseList, // 날짜 필터 적용된 원본
                           area: area,
                           division: division,
                           selectedDate: selectedDate,

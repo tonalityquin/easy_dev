@@ -41,6 +41,10 @@ abstract class PlateRepository {
     required String plateFourDigit,
     required String area,
   });
+  Future<List<PlateModel>> fourDigitDepartureCompletedQuery({
+    required String plateFourDigit,
+    required String area,
+  });
   Future<List<PlateModel>> getPlatesByLocation({
     required PlateType type,
     required String area,

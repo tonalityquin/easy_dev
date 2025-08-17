@@ -16,7 +16,8 @@ import 'sections/input_status_on_tap_section.dart';
 import 'sections/input_bottom_action_section.dart';
 import 'sections/input_custom_status_section.dart';
 
-import 'utils/input_camera_helper.dart';
+// 🔻 화면 레벨 카메라 헬퍼 제거
+// import 'utils/input_camera_helper.dart';
 import 'widgets/input_custom_status_bottom_sheet.dart';
 import 'keypad/num_keypad.dart';
 import 'keypad/kor_keypad.dart';
@@ -31,7 +32,6 @@ class InputPlateScreen extends StatefulWidget {
 
 class _InputPlateScreenState extends State<InputPlateScreen> {
   final controller = InputPlateController();
-  late InputCameraHelper _cameraHelper;
 
   List<String> selectedStatusNames = [];
   Key statusSectionKey = UniqueKey();
@@ -41,8 +41,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   @override
   void initState() {
     super.initState();
-    _cameraHelper = InputCameraHelper();
-    _cameraHelper.initializeInputCamera().then((_) => setState(() {}));
+
+    // 🔻 카메라 초기화 제거
 
     controller.controllerBackDigit.addListener(() async {
       final text = controller.controllerBackDigit.text;
@@ -68,8 +68,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
               controller.countTypeController.text = fetchedCountType;
               selectedBillType = '정기';
               controller.selectedBillType = '정기';
-
-              controller.selectedBill = fetchedCountType; // ← 이 한 줄
+              controller.selectedBill = fetchedCountType;
             }
           });
 
@@ -142,8 +141,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
   @override
   void dispose() {
+    // 🔻 화면 레벨 카메라 dispose 제거
     controller.dispose();
-    _cameraHelper.dispose();
     super.dispose();
   }
 
@@ -192,18 +191,19 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
             const SizedBox(height: 32),
             InputLocationSection(locationController: controller.locationController),
             const SizedBox(height: 32),
+
+            // 🔻 항상 섹션을 보여주되, 촬영 시에는 다이얼로그에서 카메라 초기화
             InputPhotoSection(
               capturedImages: controller.capturedImages,
               plateNumber: controller.buildPlateNumber(),
             ),
+
             const SizedBox(height: 32),
             InputBillSection(
               selectedBill: controller.selectedBill,
               onChanged: (value) => setState(() => controller.selectedBill = value),
               selectedBillType: selectedBillType,
               onTypeChanged: (newType) => setState(() => selectedBillType = newType),
-
-              // ✅ 정기용 countType 프리필을 위해 컨트롤러 전달
               countTypeController: controller.countTypeController,
             ),
             const SizedBox(height: 32),

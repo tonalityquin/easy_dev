@@ -23,6 +23,10 @@ class _InputCameraPreviewDialogState extends State<InputCameraPreviewDialog> {
   final List<XFile> _capturedImages = [];
   bool _isCameraReady = false;
 
+  // ⬇️ 추가: 초기화 Future 저장 + 종료 재진입 방지
+  Future<void>? _initFuture;
+  bool _closing = false;
+
   @override
   void initState() {
     super.initState();
@@ -32,22 +36,44 @@ class _InputCameraPreviewDialogState extends State<InputCameraPreviewDialog> {
 
   Future<void> _initializeCamera() async {
     debugPrint('📸 CameraHelper: initializeCamera() 호출');
-    await _cameraHelper.initializeInputCamera();
-    setState(() => _isCameraReady = true);
-    debugPrint('✅ CameraHelper: 카메라 초기화 완료');
+    _initFuture = _cameraHelper.initializeInputCamera();
+    try {
+      await _initFuture;
+      if (!mounted) return;
+      setState(() => _isCameraReady = true);
+      debugPrint('✅ CameraHelper: 카메라 초기화 완료');
+    } catch (e) {
+      debugPrint('❌ Camera 초기화 실패: $e');
+      if (mounted) setState(() => _isCameraReady = false);
+    }
   }
 
   @override
   void dispose() {
     debugPrint('🧹 CameraHelper: dispose() 호출');
     widget.onCaptureComplete?.call(_capturedImages);
-    _cameraHelper.dispose();
+
+    // ⬇️ 초기화 진행 중이면 완료 후 안전하게 정리
+    final f = _initFuture;
+    Future(() async {
+      if (f != null) { try { await f; } catch (_) {} }
+      try { await _cameraHelper.dispose(); } catch (_) {}
+    });
+
     super.dispose();
   }
 
   Future<void> _onCapturePressed() async {
+    final ctrl = _cameraHelper.cameraController;
+
+    if (!_isCameraReady || ctrl == null || !ctrl.value.isInitialized || ctrl.value.isTakingPicture) {
+      debugPrint('⚠️ 촬영 불가 상태(초기화 전/촬영 중/컨트롤러 없음)');
+      return;
+    }
+
     debugPrint('📸 촬영 버튼 클릭됨');
     final image = await _cameraHelper.captureImage();
+    if (!mounted) return;
 
     if (image != null) {
       debugPrint('✅ CameraHelper: 사진 촬영 성공 - ${image.path}');
@@ -77,66 +103,83 @@ class _InputCameraPreviewDialogState extends State<InputCameraPreviewDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Scaffold(
-        backgroundColor: Colors.black,
-        body: Stack(
-          children: [
-            if (_isCameraReady && _cameraHelper.cameraController != null)
-              Positioned.fill(
-                child: RotatedBox(
-                  quarterTurns: 1,
-                  child: CameraPreview(_cameraHelper.cameraController!),
-                ),
-              )
-            else
-              const Center(child: CircularProgressIndicator()),
+    final ctrl = _cameraHelper.cameraController;
 
-            if (_capturedImages.isNotEmpty)
+    return WillPopScope(
+      onWillPop: () async {
+        // ⬇️ 뒤로가기 시 미리보기 먼저 내리고 한 프레임 대기(플랫폼 뷰가 안전히 내려가도록)
+        if (_closing) return true;
+        _closing = true;
+        if (mounted) setState(() => _isCameraReady = false);
+        try { await WidgetsBinding.instance.endOfFrame; } catch (_) {}
+        return true;
+      },
+      child: SafeArea(
+        child: Scaffold(
+          backgroundColor: Colors.black,
+          body: Stack(
+            children: [
+              if (_isCameraReady && ctrl != null && ctrl.value.isInitialized)
+                Positioned.fill(
+                  child: RotatedBox(
+                    quarterTurns: 1,
+                    child: CameraPreview(ctrl),
+                  ),
+                )
+              else
+                const Center(child: CircularProgressIndicator()),
+
+              if (_capturedImages.isNotEmpty)
+                Positioned(
+                  top: 16,
+                  left: 0,
+                  right: 0,
+                  height: 80,
+                  child: GestureDetector(
+                    onTap: _openGalleryView,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _capturedImages.length,
+                      itemBuilder: (context, index) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Image.file(
+                            File(_capturedImages[index].path),
+                            width: 70,
+                            height: 70,
+                            fit: BoxFit.cover,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+
               Positioned(
-                top: 16,
+                bottom: 20,
                 left: 0,
                 right: 0,
-                height: 80,
-                child: GestureDetector(
-                  onTap: _openGalleryView,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: _capturedImages.length,
-                    itemBuilder: (context, index) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: Image.file(
-                          File(_capturedImages[index].path),
-                          width: 70,
-                          height: 70,
-                          fit: BoxFit.cover,
-                        ),
-                      );
-                    },
+                child: Center(
+                  child: ElevatedButton(
+                    onPressed: (!_isCameraReady ||
+                        ctrl == null ||
+                        !ctrl.value.isInitialized ||
+                        ctrl.value.isTakingPicture)
+                        ? null
+                        : _onCapturePressed,
+                    style: ElevatedButton.styleFrom(
+                      shape: const CircleBorder(),
+                      padding: const EdgeInsets.all(20),
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.black,
+                      elevation: 4,
+                    ),
+                    child: const Icon(Icons.camera_alt, size: 30),
                   ),
                 ),
               ),
-
-            Positioned(
-              bottom: 20,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: ElevatedButton(
-                  onPressed: _onCapturePressed,
-                  style: ElevatedButton.styleFrom(
-                    shape: const CircleBorder(),
-                    padding: const EdgeInsets.all(20),
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.black,
-                    elevation: 4,
-                  ),
-                  child: const Icon(Icons.camera_alt, size: 30),
-                ),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
