@@ -117,36 +117,16 @@ class _DepartureCompletedSettledTabState extends State<DepartureCompletedSettled
       padding: const EdgeInsets.all(8.0),
       child: Column(
         children: [
-          // ── 검색 UI
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _fourDigitCtrl,
-                  maxLength: 4,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    counterText: '',
-                    labelText: '번호판 4자리',
-                    hintText: '예) 1234',
-                    border: OutlineInputBorder(),
-                  ),
-                  onSubmitted: (_) => _runSearch(),
-                ),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton.icon(
-                onPressed: _isLoading || !_isValidFourDigit(_fourDigitCtrl.text) ? null : _runSearch,
-                icon: _isLoading
-                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.search),
-                label: const Text('검색'),
-              ),
-            ],
+          _SectionHeader(
+            key: const ValueKey('today-header'),
+            icon: Icons.receipt_long,
+            title: '오늘 입차 로그',
+            // trailing: _hasSearched && _results.isNotEmpty ? '총 $todayLogCount건' : null,
+            trailing: '', // 필요 시 위 주석 라인으로 교체
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
 
-          // ── 상단: TodayLogSection (검색 결과 기반)
+          /// ── 상단: TodayLogSection (검색 결과 기반)
           Expanded(
             child: Builder(
               builder: (context) {
@@ -180,8 +160,6 @@ class _DepartureCompletedSettledTabState extends State<DepartureCompletedSettled
                 final List<dynamic> logsRaw =
                     (target.logs?.map((e) => e.toMap()).toList()) ?? const <dynamic>[];
 
-                // debugPrint('logsRaw length: ${logsRaw.length}');
-
                 return TodayLogSection(
                   plateNumber: plate,
                   logsRaw: logsRaw,
@@ -192,7 +170,15 @@ class _DepartureCompletedSettledTabState extends State<DepartureCompletedSettled
 
           const SizedBox(height: 8),
 
-          // ── 하단: MergedLogSection (선택된 번호판 기준, 기존 유지)
+          _SectionHeader(
+            key: const ValueKey('merged-header'),
+            icon: Icons.merge_type,
+            title: '과거 입차 로그',
+            trailing: widget.plateNumber.isEmpty ? '' : '선택: ${widget.plateNumber}',
+          ),
+          const SizedBox(height: 6),
+
+          /// ── 중간: MergedLogSection (선택된 번호판 기준)
           Expanded(
             child: FutureBuilder<List<Map<String, dynamic>>>(
               future: widget.plateNumber.isEmpty
@@ -214,23 +200,11 @@ class _DepartureCompletedSettledTabState extends State<DepartureCompletedSettled
                 return ClipRect(
                   child: Scrollbar(
                     child: SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (widget.plateNumber.isEmpty)
-                            const Padding(
-                              padding: EdgeInsets.only(bottom: 8.0),
-                              child: Center(
-                                child: Text('번호판을 선택하면 상세 병합 로그를 불러옵니다.'),
-                              ),
-                            ),
-                          MergedLogSection(
-                            mergedLogs: mergedLogs,
-                            division: widget.division,
-                            area: widget.area,
-                            selectedDate: widget.selectedDate,
-                          ),
-                        ],
+                      child: MergedLogSection(
+                        mergedLogs: mergedLogs,
+                        division: widget.division,
+                        area: widget.area,
+                        selectedDate: widget.selectedDate,
                       ),
                     ),
                   ),
@@ -238,6 +212,81 @@ class _DepartureCompletedSettledTabState extends State<DepartureCompletedSettled
               },
             ),
           ),
+
+          const SizedBox(height: 8),
+
+          SafeArea(
+            top: false,
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _fourDigitCtrl,
+                    maxLength: 4,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      counterText: '',
+                      labelText: '번호판 4자리',
+                      hintText: '예) 1234',
+                      border: OutlineInputBorder(),
+                    ),
+                    onSubmitted: (_) => _runSearch(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: _isLoading || !_isValidFourDigit(_fourDigitCtrl.text) ? null : _runSearch,
+                  icon: _isLoading
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.search),
+                  label: const Text('검색'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String? trailing;
+
+  const _SectionHeader({
+    super.key,
+    required this.icon,
+    required this.title,
+    this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final t = (trailing ?? '').trim(); // ← 빈 문자열 처리
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: Colors.grey[700]),
+          const SizedBox(width: 8),
+          Text(
+            title,
+            style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const Spacer(),
+          if (t.isNotEmpty) // ← 빈 문자열이면 표시 안 함
+            Text(
+              t,
+              style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
+            ),
         ],
       ),
     );

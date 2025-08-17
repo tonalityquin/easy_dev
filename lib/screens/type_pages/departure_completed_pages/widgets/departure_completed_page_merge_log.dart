@@ -95,29 +95,7 @@ class _MergedLogSectionState extends State<MergedLogSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Divider(),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Expanded(
-              child: Text(
-                '🔒 병합 로그 항목 (총 ${filteredLogs.length}개, ₩${totalLockedFee.toStringAsFixed(0)})',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            TextButton.icon(
-              onPressed: _refreshMergedLogs,
-              icon: const Icon(Icons.refresh),
-              label: const Text('새로고침'),
-            ),
-          ],
-        ),
-        if (filteredLogs.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: Center(child: Text('병합 로그가 없습니다.')),
-          ),
+        const SizedBox(height: 6),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           color: Colors.grey.shade200,

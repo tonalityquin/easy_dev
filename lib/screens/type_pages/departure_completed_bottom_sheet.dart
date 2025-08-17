@@ -10,7 +10,6 @@ import '../../states/user/user_state.dart';
 
 import 'departure_completed_pages/departure_completed_tab_settled.dart';
 import 'departure_completed_pages/departure_completed_tab_unsettled.dart';
-import 'departure_completed_pages/departure_completed_control_buttons.dart';
 import 'departure_completed_pages/widgets/selected_date_bar.dart';
 
 class DepartureCompletedBottomSheet extends StatefulWidget {
@@ -50,7 +49,7 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
 
     // 정렬 (기존 로직 유지: requestTime 기준)
     firestorePlates.sort(
-          (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime),
+      (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime),
     );
 
     // 선택된 번호판
@@ -79,71 +78,76 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
           ),
           child: DefaultTabController(
             length: 2,
-            child: Scaffold(
-              backgroundColor: Colors.transparent,
-              body: Column(
-                children: [
-                  const SizedBox(height: 12),
-                  // 상단 핸들
-                  Center(
-                    child: Container(
-                      width: 60,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        borderRadius: BorderRadius.circular(3),
+            child: Builder(
+              builder: (context) {
+                final tabController = DefaultTabController.of(context)!;
+                return AnimatedBuilder(
+                  animation: tabController,
+                  builder: (context, _) {
+                    final isSettled = tabController.index == 1; // 0: 미정산, 1: 정산
+
+                    return Scaffold(
+                      backgroundColor: Colors.transparent,
+                      body: Column(
+                        children: [
+                          const SizedBox(height: 12),
+                          // 상단 핸들
+                          Center(
+                            child: Container(
+                              width: 60,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: Colors.grey[300],
+                                borderRadius: BorderRadius.circular(3),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          // 탭 바 (미정산 / 정산)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                            child: TabBar(
+                              labelColor: Colors.black87,
+                              unselectedLabelColor: Colors.grey[600],
+                              indicatorColor: Theme.of(context).primaryColor,
+                              tabs: const [
+                                Tab(text: '미정산'),
+                                Tab(text: '정산'),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+
+                          // ✅ 미정산 탭에서만 표시
+                          SelectedDateBar(visible: !isSettled),
+
+                          const SizedBox(height: 8),
+                          // 탭 콘텐츠
+                          Expanded(
+                            child: TabBarView(
+                              children: [
+                                // ───── 미정산 탭
+                                DepartureCompletedUnsettledTab(
+                                  firestorePlates: firestorePlates, // 부모에서 이미 필터/정렬된 리스트
+                                  userName: userName,
+                                ),
+
+                                // ───── 정산 탭
+                                DepartureCompletedSettledTab(
+                                  area: area,
+                                  division: division,
+                                  selectedDate: selectedDate,
+                                  plateNumber: plateNumber, // 선택된 번호판(없으면 빈 문자열)
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  // 탭 바 (미정산 / 정산)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                    child: TabBar(
-                      labelColor: Colors.black87,
-                      unselectedLabelColor: Colors.grey[600],
-                      indicatorColor: Theme.of(context).primaryColor,
-                      tabs: const [
-                        Tab(text: '미정산'),
-                        Tab(text: '정산'),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const SelectedDateBar(),
-
-                  const SizedBox(height: 8),
-                  // 탭 콘텐츠
-                  Expanded(
-                    child: TabBarView(
-                      children: [
-                        // ───── 미정산 탭
-                        DepartureCompletedUnsettledTab(
-                          firestorePlates: firestorePlates, // 부모에서 이미 필터/정렬된 리스트
-                          userName: userName,
-                        ),
-
-                        // ───── 정산 탭
-                        DepartureCompletedSettledTab(
-                          area: area,
-                          division: division,
-                          selectedDate: selectedDate,
-                          plateNumber: plateNumber, // 선택된 번호판(없으면 빈 문자열)
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              // 공간 유지: 컨트롤 바는 그대로 렌더하되 입력은 무시
-              bottomNavigationBar: IgnorePointer(
-                ignoring: true,
-                child: DepartureCompletedControlButtons(
-                  isSearchMode: false,
-                  onResetSearch: () {},        // no-op
-                  onShowSearchDialog: () {},   // no-op
-                ),
-              ),
+                    );
+                  },
+                );
+              },
             ),
           ),
         ),

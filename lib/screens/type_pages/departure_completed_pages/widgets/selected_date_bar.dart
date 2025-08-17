@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../../states/calendar/field_calendar_state.dart'; // 통합 파일을 쓰지 않는다면 FieldSelectedDateState 경로를 맞춰주세요
-// 통합 파일이 아니라면 아래 import가 필요할 수 있습니다.
-// import '../../../../../states/calendar/field_selected_date_state.dart';
+import '../../../../../states/calendar/field_calendar_state.dart'; // FieldSelectedDateState 를 여기서 export한다고 가정
 
 class SelectedDateBar extends StatelessWidget {
-  const SelectedDateBar({super.key});
+  const SelectedDateBar({
+    super.key,
+    this.visible = true, // ✅ 추가: 표시/숨김 제어
+  });
+
+  final bool visible; // ✅ 추가
 
   String _format(DateTime d) {
     const weekdays = ['월', '화', '수', '목', '금', '토', '일'];
@@ -20,6 +23,9 @@ class SelectedDateBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ visible=false면 렌더하지 않음
+    if (!visible) return const SizedBox.shrink();
+
     final selected =
         context.watch<FieldSelectedDateState>().selectedDate ?? DateTime.now();
     final now = DateTime.now();
