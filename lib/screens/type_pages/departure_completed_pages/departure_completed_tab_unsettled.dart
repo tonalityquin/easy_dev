@@ -11,6 +11,7 @@ import '../departure_completed_pages/field_calendar_inline.dart';
 // 상태 수정 바텀시트
 import '../departure_completed_pages/widgets/departure_completed_status_bottom_sheet.dart';
 import '../../../models/plate_model.dart';
+import 'departure_completed_control_buttons.dart';
 
 class DepartureCompletedUnsettledTab extends StatefulWidget {
   const DepartureCompletedUnsettledTab({
@@ -60,77 +61,85 @@ class _DepartureCompletedUnsettledTabState extends State<DepartureCompletedUnset
     final plateState = context.watch<PlateState>();
     final total = widget.firestorePlates.length;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-      child: Column(
-        children: [
-          // ── 달력 섹션 (헤더 탭 → 열림/닫힘)
-          _SectionHeaderTile(
-            title: '날짜 선택',
-            subtitle: '선택한 날짜의 출차 데이터를 확인합니다.',
-            icon: Icons.calendar_month,
-            isOpen: _openCalendar,
-            onTap: _toggleCalendar,
-          ),
-          _CollapsibleCard(
-            isOpen: _openCalendar,
-            child: const Padding(
-              padding: EdgeInsets.fromLTRB(8, 12, 8, 8),
-              child: FieldCalendarInline(),
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+        child: Column(
+          children: [
+            // ── 달력 섹션 (헤더 탭 → 열림/닫힘)
+            _SectionHeaderTile(
+              title: '날짜 선택',
+              subtitle: '선택한 날짜의 출차 데이터를 확인합니다.',
+              icon: Icons.calendar_month,
+              isOpen: _openCalendar,
+              onTap: _toggleCalendar,
             ),
-          ),
-
-          const SizedBox(height: 12),
-
-          // ── 미정산 섹션 (헤더 탭 → 열림/닫힘)
-          _SectionHeaderTile(
-            title: '미정산',
-            subtitle: '선택한 날짜 · 현재 지역 기준',
-            icon: Icons.list_alt,
-            trailing: _CountBadge(count: total),
-            isOpen: _openUnsettled,
-            onTap: _toggleUnsettled,
-          ),
-          _CollapsibleCard(
-            isOpen: _openUnsettled,
-            child: (total == 0)
-                ? const _EmptyState(
-              icon: Icons.inbox_outlined,
-              title: '표시할 번호판이 없습니다',
-              message: '달력을 바꾸거나 검색을 사용해 보세요.',
-            )
-                : Padding(
-              padding: const EdgeInsets.all(12),
-              child: PlateContainer(
-                data: widget.firestorePlates,
-                collection: PlateType.departureCompleted,
-                filterCondition: (_) => true,
-                onPlateTap: (plateNumber, area) async {
-                  await plateState.togglePlateIsSelected(
-                    collection: PlateType.departureCompleted,
-                    plateNumber: plateNumber,
-                    userName: widget.userName,
-                    onError: (msg) => showFailedSnackbar(context, msg),
-                  );
-
-                  final currentSelected = plateState.getSelectedPlate(
-                    PlateType.departureCompleted,
-                    widget.userName,
-                  );
-
-                  if (currentSelected != null &&
-                      currentSelected.isSelected &&
-                      currentSelected.plateNumber == plateNumber) {
-                    await showDepartureCompletedStatusBottomSheet(
-                      context: context,
-                      plate: currentSelected,
-                    );
-                  }
-                },
+            _CollapsibleCard(
+              isOpen: _openCalendar,
+              child: const Padding(
+                padding: EdgeInsets.fromLTRB(8, 12, 8, 8),
+                child: FieldCalendarInline(),
               ),
             ),
-          ),
-        ],
+
+            const SizedBox(height: 12),
+
+            // ── 미정산 섹션 (헤더 탭 → 열림/닫힘)
+            _SectionHeaderTile(
+              title: '미정산',
+              subtitle: '선택한 날짜 · 현재 지역 기준',
+              icon: Icons.list_alt,
+              trailing: _CountBadge(count: total),
+              isOpen: _openUnsettled,
+              onTap: _toggleUnsettled,
+            ),
+            _CollapsibleCard(
+              isOpen: _openUnsettled,
+              child: (total == 0)
+                  ? const _EmptyState(
+                      icon: Icons.inbox_outlined,
+                      title: '표시할 번호판이 없습니다',
+                      message: '달력을 바꾸거나 검색을 사용해 보세요.',
+                    )
+                  : Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: PlateContainer(
+                        data: widget.firestorePlates,
+                        collection: PlateType.departureCompleted,
+                        filterCondition: (_) => true,
+                        onPlateTap: (plateNumber, area) async {
+                          await plateState.togglePlateIsSelected(
+                            collection: PlateType.departureCompleted,
+                            plateNumber: plateNumber,
+                            userName: widget.userName,
+                            onError: (msg) => showFailedSnackbar(context, msg),
+                          );
+
+                          final currentSelected = plateState.getSelectedPlate(
+                            PlateType.departureCompleted,
+                            widget.userName,
+                          );
+
+                          if (currentSelected != null &&
+                              currentSelected.isSelected &&
+                              currentSelected.plateNumber == plateNumber) {
+                            await showDepartureCompletedStatusBottomSheet(
+                              context: context,
+                              plate: currentSelected,
+                            );
+                          }
+                        },
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ),
+      bottomNavigationBar: DepartureCompletedControlButtons(
+        isSearchMode: false,
+        onResetSearch: () {}, // no-op
+        onShowSearchDialog: () {}, // no-op
       ),
     );
   }
@@ -237,6 +246,7 @@ class _CollapsibleCard extends StatelessWidget {
 /// 공통: 카운트 배지
 class _CountBadge extends StatelessWidget {
   const _CountBadge({required this.count});
+
   final int count;
 
   @override

@@ -80,7 +80,7 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
             length: 2,
             child: Builder(
               builder: (context) {
-                final tabController = DefaultTabController.of(context)!;
+                final tabController = DefaultTabController.of(context);
                 return AnimatedBuilder(
                   animation: tabController,
                   builder: (context, _) {
