@@ -165,7 +165,7 @@ class _CommonPlateSearchBottomSheetState extends State<CommonPlateSearchBottomSh
                               ),
                             )
                           : PlateSearchResults(
-                              results: _results, // ✅ 그대로 넘기기
+                              results: _results,
                               onSelect: (selected) {
                                 Navigator.pop(context);
                               },
@@ -195,7 +195,7 @@ class _CommonPlateSearchBottomSheetState extends State<CommonPlateSearchBottomSh
 
                                     final results = await repository.fourDigitCommonQuery(
                                       plateFourDigit: value.text,
-                                      area: widget.area, // 하드코딩 제거
+                                      area: widget.area,
                                     );
 
                                     setState(() {

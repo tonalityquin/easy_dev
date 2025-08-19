@@ -7,7 +7,6 @@ import '../../models/location_model.dart';
 import '../area/area_state.dart';
 
 class LocationState extends ChangeNotifier {
-  // 🔹 1. 필드
   final LocationRepository _repository;
   final AreaState _areaState;
   final List<IconData> _navigationIcons = [Icons.add, Icons.delete];
@@ -17,7 +16,6 @@ class LocationState extends ChangeNotifier {
   String _previousArea = '';
   bool _isLoading = true;
 
-  // 🔹 2. 게터
   List<LocationModel> get locations => _locations;
 
   List<IconData> get navigationIcons => _navigationIcons;
@@ -26,7 +24,6 @@ class LocationState extends ChangeNotifier {
 
   bool get isLoading => _isLoading;
 
-  // 🔹 3. 생성자
   LocationState(this._repository, this._areaState) {
     loadFromLocationCache();
 
@@ -39,9 +36,6 @@ class LocationState extends ChangeNotifier {
     });
   }
 
-  // 🔹 4. Public 메서드
-
-  /// ✅ SharedPreferences 캐시 우선 조회
   Future<void> loadFromLocationCache() async {
     final prefs = await SharedPreferences.getInstance();
     final currentArea = _areaState.currentArea.trim();
@@ -57,7 +51,6 @@ class LocationState extends ChangeNotifier {
         notifyListeners();
         debugPrint('✅ 캐시에서 주차 구역 ${_locations.length}건 로드 (area: $currentArea)');
 
-        // 🔸 총합 capacity 불러오기 (선택적 사용)
         final totalCapacity = prefs.getInt('total_capacity_$currentArea') ?? 0;
         debugPrint('📦 총 capacity 캐시값: $totalCapacity');
       } catch (e) {
@@ -72,7 +65,6 @@ class LocationState extends ChangeNotifier {
     }
   }
 
-  /// 🔄 수동 Firestore 호출 트리거
   Future<void> manualLocationRefresh() async {
     final currentArea = _areaState.currentArea.trim();
     debugPrint('🔥 수동 새로고침 Firestore 호출 → $currentArea');
@@ -95,11 +87,9 @@ class LocationState extends ChangeNotifier {
 
         final prefs = await SharedPreferences.getInstance();
 
-        // 🔸 위치 정보 캐시 저장
         final jsonData = json.encode(data.map((e) => e.toCacheMap()).toList());
         await prefs.setString('cached_locations_$currentArea', jsonData);
 
-        // 🔸 capacity 총합 계산 및 저장
         final totalCapacity = data.fold<int>(0, (sum, loc) => sum + loc.capacity);
         await prefs.setInt('total_capacity_$currentArea', totalCapacity);
 
@@ -114,7 +104,6 @@ class LocationState extends ChangeNotifier {
     }
   }
 
-  /// ✅ plateCount 상태 업데이트
   void updatePlateCounts(Map<String, int> counts) {
     _locations = _locations.map((loc) {
       final fullName = loc.type == 'composite' ? '${loc.parent} - ${loc.locationName}' : loc.locationName;
@@ -140,7 +129,6 @@ class LocationState extends ChangeNotifier {
     updatePlateCounts(counts);
   }
 
-  /// ➕ 단일 주차 구역 추가
   Future<void> addSingleLocation(
     String locationName,
     String area, {
@@ -165,7 +153,6 @@ class LocationState extends ChangeNotifier {
     }
   }
 
-  /// ➕ 복합 주차 구역 추가
   Future<void> addCompositeLocation(
     String parent,
     List<Map<String, dynamic>> subs,
@@ -186,7 +173,6 @@ class LocationState extends ChangeNotifier {
     }
   }
 
-  /// ❌ 주차 구역 삭제
   Future<void> deleteLocations(
     List<String> ids, {
     void Function(String)? onError,
@@ -199,7 +185,6 @@ class LocationState extends ChangeNotifier {
     }
   }
 
-  /// ✅ 단일 선택 상태 토글
   Future<void> toggleLocationSelection(String id) async {
     if (_selectedLocationId == id) {
       _selectedLocationId = null;

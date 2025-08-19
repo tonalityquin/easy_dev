@@ -31,8 +31,8 @@ class ModifyPlate with ChangeNotifier {
     bool? isLockedFee,
     int? lockedAtTimeInSeconds,
     int? lockedFeeAmount,
-    int? regularAmount, // ✅ 추가
-    int? regularDurationHours, // ✅ 추가
+    int? regularAmount,
+    int? regularDurationHours,
   }) async {
     try {
       final documentId = '${plate.plateNumber}_${plate.area}';

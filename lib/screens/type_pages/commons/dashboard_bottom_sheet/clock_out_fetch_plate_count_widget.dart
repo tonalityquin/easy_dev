@@ -15,7 +15,6 @@ class ClockOutFetchPlateCountWidget extends StatefulWidget {
 class _ClockOutFetchPlateCountWidgetState extends State<ClockOutFetchPlateCountWidget> {
   Future<Map<PlateType, int>>? _futureCounts;
 
-  // 🔑 한 곳에서 필터링된 타입 관리
   static const List<PlateType> _relevantTypes = [
     PlateType.parkingCompleted,
     PlateType.departureCompleted,

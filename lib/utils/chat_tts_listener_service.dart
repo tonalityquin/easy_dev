@@ -19,7 +19,6 @@ class ChatTtsListenerService {
   static Future<void> _startListening(String roomId) async {
     _subscription?.cancel();
 
-    // ✅ Firestore에서 현재 문서 미리 읽고, 마지막 메시지 시각 기억
     final initialDoc = await FirebaseFirestore.instance
         .collection('chats')
         .doc(roomId)
@@ -56,7 +55,6 @@ class ChatTtsListenerService {
         return;
       }
 
-      // 동일 메시지 반복 방지
       if (_lastSpokenTimestamp != null &&
           !timestamp.toDate().isAfter(_lastSpokenTimestamp!.toDate())) {
         debugPrint('[ChatTTS] 무시됨 (이미 읽음)');
@@ -75,7 +73,6 @@ class ChatTtsListenerService {
   }
 }
 
-/// 공통 TTS 유틸리티
 class TtsHelper {
   static final FlutterTts _flutterTts = FlutterTts();
   static bool _isInitialized = false;

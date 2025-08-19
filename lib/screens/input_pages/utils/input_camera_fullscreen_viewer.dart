@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 
-/// ✅ 로컬 XFile용 전체 화면 이미지 뷰어
 void inputShowFullScreenImageViewer(BuildContext context, List<XFile> images, int initialIndex) {
   showDialog(
     context: context,
@@ -31,7 +30,6 @@ void inputShowFullScreenImageViewer(BuildContext context, List<XFile> images, in
   );
 }
 
-/// ✅ URL용 전체 화면 이미지 뷰어
 void showFullScreenImageViewerFromUrls(BuildContext context, List<String> imageUrls, int initialIndex) {
   showDialog(
     context: context,
@@ -64,7 +62,6 @@ void showFullScreenImageViewerFromUrls(BuildContext context, List<String> imageU
   );
 }
 
-/// ✅ 공통 Viewer UI 구성
 Widget _buildViewerBody({
   required BuildContext context,
   required int itemCount,
@@ -147,7 +144,6 @@ Widget _buildViewerBody({
   );
 }
 
-/// ✅ 파일명 기반 메타데이터 파싱
 String _parseMetadataFromFileName(String fileName) {
   try {
     final name = fileName.replaceAll('.jpg', '');

@@ -5,13 +5,11 @@ import '../../screens/type_pages/debugs/firestore_logger.dart';
 class LocationWriteService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  /// 🔹 단일 위치 추가
   Future<void> addSingleLocation(LocationModel location) async {
     final docRef = _firestore.collection('locations').doc(location.id);
     final data = location.toFirestoreMap();
 
-    await FirestoreLogger()
-        .log('addSingleLocation called (id=${location.id}, data=$data)');
+    await FirestoreLogger().log('addSingleLocation called (id=${location.id}, data=$data)');
 
     try {
       await docRef.set(data);
@@ -22,14 +20,12 @@ class LocationWriteService {
     }
   }
 
-  /// 🔹 복합 위치 추가 (하위 구역 포함)
   Future<void> addCompositeLocation(
-      String parent,
-      List<Map<String, dynamic>> subs,
-      String area,
-      ) async {
-    await FirestoreLogger().log(
-        'addCompositeLocation called (parent=$parent, subs=${subs.length}, area=$area)');
+    String parent,
+    List<Map<String, dynamic>> subs,
+    String area,
+  ) async {
+    await FirestoreLogger().log('addCompositeLocation called (parent=$parent, subs=${subs.length}, area=$area)');
 
     final batch = _firestore.batch();
 
@@ -54,15 +50,13 @@ class LocationWriteService {
 
     try {
       await batch.commit();
-      await FirestoreLogger()
-          .log('addCompositeLocation success: ${subs.length} subs saved');
+      await FirestoreLogger().log('addCompositeLocation success: ${subs.length} subs saved');
     } catch (e) {
       await FirestoreLogger().log('addCompositeLocation error: $e');
       rethrow;
     }
   }
 
-  /// 🔹 복수 위치 삭제
   Future<void> deleteLocations(List<String> ids) async {
     if (ids.isEmpty) return;
 

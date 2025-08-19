@@ -21,20 +21,31 @@ class UserState extends ChangeNotifier {
   String _previousSelectedArea = '';
 
   UserModel? get user => _user;
+
   List<UserModel> get users => _users;
+
   String? get selectedUserId => _selectedUserId;
+
   bool get isLoggedIn => _user != null;
+
   bool get isWorking => _user?.isWorking ?? false;
-  bool get isSaved => _user?.isSaved ?? false;
+
   bool get isLoading => _isLoading;
 
   String get role => _user?.role ?? '';
+
   String get position => _user?.position ?? '';
+
   String get name => _user?.name ?? '';
+
   String get phone => _user?.phone ?? '';
+
   String get password => _user?.password ?? '';
+
   String get area => _user?.areas.firstOrNull ?? '';
+
   String get division => _user?.divisions.firstOrNull ?? '';
+
   String get currentArea => _user?.currentArea ?? area;
 
   UserState(this._repository, this._areaState) {
@@ -93,7 +104,6 @@ class UserState extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
 
-    // ✅ TTS 중단
     PlateTtsListenerService.stop();
     ChatTtsListenerService.stop();
 
@@ -130,20 +140,6 @@ class UserState extends ChangeNotifier {
   Future<void> toggleUserCard(String id) async {
     _selectedUserId = (_selectedUserId == id) ? null : id;
     notifyListeners();
-  }
-
-  Future<void> updateUserCard(UserModel updatedUser, {void Function(String)? onError}) async {
-    try {
-      await _repository.updateUser(updatedUser);
-
-      final index = _users.indexWhere((u) => u.id == updatedUser.id);
-      if (index != -1) {
-        _users[index] = updatedUser;
-        notifyListeners();
-      }
-    } catch (e) {
-      onError?.call('사용자 수정 실패: $e');
-    }
   }
 
   Future<void> saveCardToUserPhone(UserModel user) async {
@@ -198,7 +194,7 @@ class UserState extends ChangeNotifier {
 
       Future.microtask(() {
         PlateTtsListenerService.start(currentArea);
-        ChatTtsListenerService.start(currentArea); // ✅ 추가
+        ChatTtsListenerService.start(currentArea);
       });
     } catch (e) {
       debugPrint("loadUserToLogIn, 오류: $e");
@@ -222,9 +218,8 @@ class UserState extends ChangeNotifier {
       debugPrint("areaPickerCurrentArea 실패: $e");
     }
 
-    // ✅ TTS 재시작
     PlateTtsListenerService.start(newArea);
-    ChatTtsListenerService.start(newArea); // ✅ 추가
+    ChatTtsListenerService.start(newArea);
   }
 
   Future<void> _fetchUsersByAreaWithCache() async {

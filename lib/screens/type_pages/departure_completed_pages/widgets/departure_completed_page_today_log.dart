@@ -1,19 +1,17 @@
 import 'package:flutter/material.dart';
 import 'plate_image_dialog.dart';
 
-/// TodayLogSection (사진 버튼만 유지, logs 세로 스크롤 표시)
 class TodayLogSection extends StatelessWidget {
   const TodayLogSection({
     super.key,
     required this.plateNumber,
-    required this.logsRaw, // ← 변경: dynamic 리스트를 받아 내부에서 정규화
+    required this.logsRaw,
   });
 
   final String plateNumber;
   final List<dynamic> logsRaw;
 
   List<Map<String, dynamic>> _normalizeLogs(List<dynamic> raw) {
-    // Firestore/JSON 등 다양한 런타임 타입을 안전하게 Map<String,dynamic>으로 변환
     return raw.where((e) => e is Map).map((e) => Map<String, dynamic>.from(e as Map)).toList();
   }
 
@@ -32,13 +30,12 @@ class TodayLogSection extends StatelessWidget {
       ..sort((a, b) {
         final aT = DateTime.tryParse('${a['timestamp'] ?? ''}') ?? DateTime.fromMillisecondsSinceEpoch(0);
         final bT = DateTime.tryParse('${b['timestamp'] ?? ''}') ?? DateTime.fromMillisecondsSinceEpoch(0);
-        return aT.compareTo(bT); // 오래된 → 최신(오름차순)
+        return aT.compareTo(bT);
       });
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 헤더 + 사진 버튼
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
           child: Row(
@@ -69,7 +66,6 @@ class TodayLogSection extends StatelessWidget {
         ),
         const Divider(height: 1),
 
-        // 본문: 세로 스크롤
         Expanded(
           child: logs.isEmpty
               ? const Center(child: Text('표시할 로그가 없습니다.'))

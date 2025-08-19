@@ -16,8 +16,6 @@ import 'sections/input_status_on_tap_section.dart';
 import 'sections/input_bottom_action_section.dart';
 import 'sections/input_custom_status_section.dart';
 
-// 🔻 화면 레벨 카메라 헬퍼 제거
-// import 'utils/input_camera_helper.dart';
 import 'widgets/input_custom_status_bottom_sheet.dart';
 import 'keypad/num_keypad.dart';
 import 'keypad/kor_keypad.dart';
@@ -36,13 +34,11 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   List<String> selectedStatusNames = [];
   Key statusSectionKey = UniqueKey();
 
-  String selectedBillType = '변동'; // ✅ '변동' 또는 '정기'
+  String selectedBillType = '변동';
 
   @override
   void initState() {
     super.initState();
-
-    // 🔻 카메라 초기화 제거
 
     controller.controllerBackDigit.addListener(() async {
       final text = controller.controllerBackDigit.text;
@@ -55,7 +51,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
           final fetchedStatus = data['customStatus'] as String?;
           final fetchedList = (data['statusList'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
 
-          // ✅ countType도 함께 프리필
           final String? fetchedCountType = (data['countType'] as String?)?.trim();
 
           setState(() {
@@ -141,7 +136,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
   @override
   void dispose() {
-    // 🔻 화면 레벨 카메라 dispose 제거
     controller.dispose();
     super.dispose();
   }
@@ -191,13 +185,10 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
             const SizedBox(height: 32),
             InputLocationSection(locationController: controller.locationController),
             const SizedBox(height: 32),
-
-            // 🔻 항상 섹션을 보여주되, 촬영 시에는 다이얼로그에서 카메라 초기화
             InputPhotoSection(
               capturedImages: controller.capturedImages,
               plateNumber: controller.buildPlateNumber(),
             ),
-
             const SizedBox(height: 32),
             InputBillSection(
               selectedBill: controller.selectedBill,

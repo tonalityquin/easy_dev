@@ -69,9 +69,7 @@ class _KorKeypadState extends State<KorKeypad> with TickerProviderStateMixin {
         ],
       ),
       padding: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 12),
-      child: activeSubLayout == null
-          ? _buildMainLayout()
-          : _buildActiveSubLayout(),
+      child: activeSubLayout == null ? _buildMainLayout() : _buildActiveSubLayout(),
     );
   }
 
@@ -128,8 +126,8 @@ class _KorKeypadState extends State<KorKeypad> with TickerProviderStateMixin {
 
     _controllers.putIfAbsent(
       key,
-          () => AnimationController(
-        duration: const Duration(milliseconds: 80), // 빠르게 축소
+      () => AnimationController(
+        duration: const Duration(milliseconds: 80),
         vsync: this,
         lowerBound: 0.0,
         upperBound: 0.1,
@@ -138,7 +136,7 @@ class _KorKeypadState extends State<KorKeypad> with TickerProviderStateMixin {
     _isPressed.putIfAbsent(key, () => false);
 
     final controller = _controllers[key]!;
-    final animation = Tween(begin: 1.0, end: 0.85).animate( // 더 크게 축소
+    final animation = Tween(begin: 1.0, end: 0.85).animate(
       CurvedAnimation(parent: controller, curve: Curves.easeOut),
     );
 
@@ -147,7 +145,7 @@ class _KorKeypadState extends State<KorKeypad> with TickerProviderStateMixin {
         padding: const EdgeInsets.all(4.0),
         child: GestureDetector(
           onTapDown: (_) {
-            HapticFeedback.selectionClick(); // 진동
+            HapticFeedback.selectionClick();
             setState(() => _isPressed[key] = true);
             controller.forward();
           },

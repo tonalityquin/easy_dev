@@ -29,7 +29,6 @@ class _AddAreaTabState extends State<AddAreaTab> {
 
     final areaId = '$division-$areaName';
 
-    // Firestore: areas 문서 생성
     final areaDoc = FirebaseFirestore.instance.collection('areas').doc(areaId);
     await areaDoc.set({
       'name': areaName,
@@ -41,7 +40,7 @@ class _AddAreaTabState extends State<AddAreaTab> {
     _areaController.clear();
     _englishAreaController.clear();
     FocusScope.of(context).unfocus();
-    setState(() {}); // 🔄 FutureBuilder 리빌드
+    setState(() {});
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('✅ "$areaName" 지역이 추가되었습니다')),

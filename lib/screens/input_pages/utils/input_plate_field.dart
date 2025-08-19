@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// 공통 번호판 입력 필드 위젯
 class InputPlateField extends StatelessWidget {
   final int frontDigitCount;
   final bool hasMiddleChar;
@@ -60,7 +59,7 @@ class InputPlateField extends StatelessWidget {
       child: TextField(
         controller: controller,
         keyboardType: TextInputType.none,
-        maxLength: 4, // 최대 자릿수 제한 (공통적으로 3~4자)
+        maxLength: 4,
         textAlign: TextAlign.center,
         readOnly: true,
         inputFormatters: [FilteringTextInputFormatter.digitsOnly],

@@ -14,7 +14,6 @@ class AreaDetailScreen extends StatelessWidget {
   Future<List<UserStatus>> _fetchUsersForArea(String area) async {
     final now = DateTime.now();
 
-    // ✅ 1. 캐시 유효성 검사 (5분 이내 재사용)
     if (_cachedUsers.containsKey(area)) {
       final lastTime = _lastFetchedTime[area];
       if (lastTime != null && now.difference(lastTime) < const Duration(minutes: 5)) {
@@ -32,7 +31,6 @@ class AreaDetailScreen extends StatelessWidget {
         level: 'called',
       );
 
-      // ✅ 2. Firestore 쿼리
       final snapshot =
           await FirebaseFirestore.instance.collection('user_accounts').where('currentArea', isEqualTo: area).get();
 
@@ -49,7 +47,6 @@ class AreaDetailScreen extends StatelessWidget {
         level: 'success',
       );
 
-      // ✅ 3. 캐시 저장
       _cachedUsers[area] = result;
       _lastFetchedTime[area] = now;
 

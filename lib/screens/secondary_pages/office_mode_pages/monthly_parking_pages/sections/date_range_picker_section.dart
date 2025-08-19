@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 class DateRangePickerSection extends StatefulWidget {
   final TextEditingController startDateController;
   final TextEditingController endDateController;
-  final String periodUnit; // ✅ 추가
-  final int duration;       // ✅ 추가
+  final String periodUnit;
+  final int duration;
 
   const DateRangePickerSection({
     super.key,
@@ -26,7 +26,6 @@ class _DateRangePickerSectionState extends State<DateRangePickerSection> {
     if (picked != null) {
       widget.startDateController.text = _formatDate(picked);
 
-      // ✅ 종료일 계산
       final endDate = _calculateEndDate(picked);
       widget.endDateController.text = _formatDate(endDate);
 

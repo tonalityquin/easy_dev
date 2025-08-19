@@ -162,8 +162,6 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
                             ],
                           ),
                           const SizedBox(height: 1),
-
-                          // ✅ pelican.png 이미지 추가 (출근하기 버튼 아래)
                           Center(
                             child: SizedBox(
                               height: 80,
@@ -175,8 +173,6 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
                     ),
                   ),
                 ),
-
-                // 우측 상단 메뉴
                 Positioned(
                   top: 16,
                   right: 16,
@@ -216,8 +212,6 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
                     icon: const Icon(Icons.more_vert),
                   ),
                 ),
-
-                // 로딩 중일 때 UI 블로킹
                 if (_isLoading || userState.isWorking)
                   Positioned.fill(
                     child: AbsorbPointer(

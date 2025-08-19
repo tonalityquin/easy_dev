@@ -9,7 +9,7 @@ void secondaryPickerBottomSheet({
   required SecondaryMode manageState,
   required String currentStatus,
   required List<String> availableStatus,
-  required void Function(String selectedLabel) onConfirm, // ✅ 추가
+  required void Function(String selectedLabel) onConfirm,
 }) {
   String tempSelected = currentStatus;
   int outsideTapCount = 0;
@@ -27,7 +27,7 @@ void secondaryPickerBottomSheet({
               outsideTapCount++;
               if (outsideTapCount >= 10) {
                 tempSelected = "개발자 페이지"; // label
-                onConfirm(tempSelected); // ✅ 콜백으로 처리
+                onConfirm(tempSelected);
                 Navigator.of(context).pop();
               }
             },
@@ -85,7 +85,7 @@ void secondaryPickerBottomSheet({
                       const SizedBox(height: 16),
                       GestureDetector(
                         onTap: () {
-                          onConfirm(tempSelected); // ✅ 여기서 페이지 갱신도 트리거됨
+                          onConfirm(tempSelected);
                           Navigator.of(context).pop();
                         },
                         onTapDown: (_) {

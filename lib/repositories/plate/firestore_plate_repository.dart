@@ -9,7 +9,7 @@ import 'plate_write_service.dart';
 import 'plate_query_service.dart';
 import 'plate_count_service.dart';
 import 'plate_creation_service.dart';
-import 'plate_status_service.dart'; // ✅ 추가된 import
+import 'plate_status_service.dart';
 
 class FirestorePlateRepository implements PlateRepository {
   final PlateStreamService _streamService = PlateStreamService();
@@ -17,15 +17,15 @@ class FirestorePlateRepository implements PlateRepository {
   final PlateQueryService _queryService = PlateQueryService();
   final PlateCountService _countService = PlateCountService();
   final PlateCreationService _creationService = PlateCreationService();
-  final PlateStatusService _statusService = PlateStatusService(); // ✅ 서비스 인스턴스 추가
+  final PlateStatusService _statusService = PlateStatusService();
 
   @override
   Stream<List<PlateModel>> streamToCurrentArea(
-      PlateType type,
-      String area, {
-        bool descending = true,
-        String? location,
-      }) {
+    PlateType type,
+    String area, {
+    bool descending = true,
+    String? location,
+  }) {
     return _streamService.streamToCurrentArea(
       type,
       area,
@@ -34,14 +34,11 @@ class FirestorePlateRepository implements PlateRepository {
     );
   }
 
-  /// ✅ 추가: 출차 완료(미정산) 전용 원본 스냅샷 스트림
-  /// - isLockedFee == false 문서만
-  /// - QuerySnapshot을 그대로 노출(PlateState에서 docChanges 사용 용도)
   @override
   Stream<QuerySnapshot<Map<String, dynamic>>> departureUnpaidSnapshots(
-      String area, {
-        bool descending = true,
-      }) {
+    String area, {
+    bool descending = true,
+  }) {
     return _streamService.departureUnpaidSnapshots(
       area: area,
       descending: descending,
@@ -55,10 +52,10 @@ class FirestorePlateRepository implements PlateRepository {
 
   @override
   Future<void> updatePlate(
-      String documentId,
-      Map<String, dynamic> updatedFields, {
-        PlateLogModel? log,
-      }) {
+    String documentId,
+    Map<String, dynamic> updatedFields, {
+    PlateLogModel? log,
+  }) {
     return _writeService.updatePlate(documentId, updatedFields, log: log);
   }
 
@@ -95,7 +92,6 @@ class FirestorePlateRepository implements PlateRepository {
     String? customStatus,
     required String selectedBillType,
   }) {
-    // ✅ 내부적으로 PlateLogModel 로그가 삽입된 PlateModel이 생성되어 저장됨
     return _creationService.addPlate(
       plateNumber: plateNumber,
       location: location,
@@ -184,9 +180,9 @@ class FirestorePlateRepository implements PlateRepository {
 
   @override
   Future<int> getPlateCountForTypePage(
-      PlateType type,
-      String area,
-      ) {
+    PlateType type,
+    String area,
+  ) {
     return _countService.getPlateCountForTypePage(type, area);
   }
 
@@ -197,10 +193,10 @@ class FirestorePlateRepository implements PlateRepository {
 
   @override
   Future<int> getPlateCountForClockInPage(
-      PlateType type, {
-        DateTime? selectedDate,
-        required String area,
-      }) {
+    PlateType type, {
+    DateTime? selectedDate,
+    required String area,
+  }) {
     return _countService.getPlateCountForClockInPage(
       type,
       selectedDate: selectedDate,
@@ -210,10 +206,10 @@ class FirestorePlateRepository implements PlateRepository {
 
   @override
   Future<int> getPlateCountForClockOutPage(
-      PlateType type, {
-        DateTime? selectedDate,
-        required String area,
-      }) {
+    PlateType type, {
+    DateTime? selectedDate,
+    required String area,
+  }) {
     return _countService.getPlateCountForClockOutPage(
       type,
       selectedDate: selectedDate,
@@ -221,7 +217,6 @@ class FirestorePlateRepository implements PlateRepository {
     );
   }
 
-  // 🔸 plate_status 관련 메서드 위임
   @override
   Future<Map<String, dynamic>?> getPlateStatus(String plateNumber, String area) {
     return _statusService.getPlateStatus(plateNumber, area);
@@ -284,7 +279,6 @@ class FirestorePlateRepository implements PlateRepository {
     return _statusService.deletePlateStatus(plateNumber, area);
   }
 
-  // ✅ 상태 전이
   @override
   Future<void> transitionPlateState({
     required String documentId,

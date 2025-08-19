@@ -48,8 +48,8 @@ class _ManagementState extends State<Management> {
           height: 56,
           iconSize: 22,
           icons: const [
-            Icons.directions_walk,    // Field
-            Icons.compare_arrows,     // InOut (입출차 통계)
+            Icons.directions_walk,
+            Icons.compare_arrows,
           ],
           labels: const [
             'Field',

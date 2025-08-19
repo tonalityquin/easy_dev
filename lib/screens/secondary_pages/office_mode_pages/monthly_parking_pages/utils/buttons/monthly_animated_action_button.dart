@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 class MonthlyAnimatedActionButton extends StatefulWidget {
   final bool isLoading;
   final Future<void> Function() onPressed;
-  final String? buttonLabel; // 선택적으로 텍스트를 바꾸고 싶을 경우
+  final String? buttonLabel;
 
   const MonthlyAnimatedActionButton({
     super.key,
@@ -38,9 +38,9 @@ class _MonthlyAnimatedActionButtonState extends State<MonthlyAnimatedActionButto
   }
 
   Future<void> _handleTap() async {
-    await _controller.reverse(); // 축소
-    await _controller.forward(); // 원래 크기로 복원
-    await widget.onPressed();   // 실제 동작 실행
+    await _controller.reverse();
+    await _controller.forward();
+    await widget.onPressed();
   }
 
   @override

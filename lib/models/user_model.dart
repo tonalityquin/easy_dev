@@ -196,7 +196,6 @@ class UserModel {
     return null;
   }
 
-  // ✅ 드롭다운에서 제대로 비교될 수 있도록 오버라이딩
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;

@@ -27,10 +27,7 @@ class InputPlate with ChangeNotifier {
     required bool isLocationSelected,
     required AreaState areaState,
     required UserState userState,
-
-    // ✅ 추가: 변동/고정/정기 타입
     required String selectedBillType,
-
     String? billingType,
     List<String>? statusList,
     int basicStandard = 0,
@@ -74,8 +71,6 @@ class InputPlate with ChangeNotifier {
         lockedAtTimeInSeconds: lockedAtTimeInSeconds,
         lockedFeeAmount: lockedFeeAmount,
         customStatus: customStatus,
-
-        // ✅ 추가: 레포로 전달
         selectedBillType: selectedBillType,
       );
 
@@ -98,9 +93,7 @@ class InputPlate with ChangeNotifier {
       return true;
     } catch (error) {
       if (!context.mounted) return false;
-      final errorMessage = error.toString().contains('이미 등록된 번호판')
-          ? '이미 등록된 번호판입니다: $plateNumber'
-          : '오류 발생: $error';
+      final errorMessage = error.toString().contains('이미 등록된 번호판') ? '이미 등록된 번호판입니다: $plateNumber' : '오류 발생: $error';
       showFailedSnackbar(context, errorMessage);
       return false;
     }

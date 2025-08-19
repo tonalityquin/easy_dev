@@ -11,7 +11,7 @@ class MonthlyPlateSection extends StatelessWidget {
   final ValueChanged<TextEditingController> onKeypadStateChanged;
   final ValueChanged<String> onRegionChanged;
   final bool isThreeDigit;
-  final bool isEditMode; // ✅ 추가
+  final bool isEditMode;
 
   const MonthlyPlateSection({
     super.key,
@@ -24,7 +24,7 @@ class MonthlyPlateSection extends StatelessWidget {
     required this.onKeypadStateChanged,
     required this.onRegionChanged,
     required this.isThreeDigit,
-    this.isEditMode = false, // ✅ 기본값 false
+    this.isEditMode = false,
   });
 
   @override
@@ -39,7 +39,7 @@ class MonthlyPlateSection extends StatelessWidget {
           children: [
             GestureDetector(
               onTap: isEditMode
-                  ? null // ✅ 수정 모드일 땐 지역 선택도 막기
+                  ? null
                   : () {
                 monthlyRegionPickerBottomSheet(
                   context: context,
@@ -76,7 +76,7 @@ class MonthlyPlateSection extends StatelessWidget {
                 backController: controllerBackDigit,
                 activeController: activeController,
                 onKeypadStateChanged: onKeypadStateChanged,
-                isEditMode: isEditMode, // ✅ 전달
+                isEditMode: isEditMode,
               ),
             ),
           ],

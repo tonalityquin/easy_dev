@@ -7,13 +7,10 @@ import '../../screens/type_pages/debugs/firestore_logger.dart';
 class BillWriteService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  /// ✅ 일반 정산(BillModel) 저장
   Future<void> addNormalBill(BillModel bill) async {
     final docRef = _firestore.collection('bill').doc(bill.id);
-    final data = bill.toFirestoreMap()
-      ..putIfAbsent('type', () => '변동'); // 타입 추가
+    final data = bill.toFirestoreMap()..putIfAbsent('type', () => '변동');
 
-    // Null 또는 공백 필드 제거
     data.removeWhere((key, value) => value == null || value.toString().trim().isEmpty);
 
     await FirestoreLogger().log('addNormalBill called (id=${bill.id}, data=$data)');
@@ -29,12 +26,10 @@ class BillWriteService {
     }
   }
 
-  /// ✅ 정기 정산(RegularBillModel) 저장
   Future<void> addRegularBill(RegularBillModel bill) async {
     final docRef = _firestore.collection('bill').doc(bill.id);
-    final data = bill.toFirestoreMap(); // 이미 type: '정기' 포함
+    final data = bill.toFirestoreMap();
 
-    // Null 또는 공백 필드 제거
     data.removeWhere((key, value) => value == null || value.toString().trim().isEmpty);
 
     await FirestoreLogger().log('addRegularBill called (id=${bill.id}, data=$data)');

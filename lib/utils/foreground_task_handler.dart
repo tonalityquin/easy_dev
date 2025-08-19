@@ -10,7 +10,6 @@ class MyTaskHandler implements TaskHandler {
 
   @override
   Future<void> onRepeatEvent(DateTime timestamp) async {
-    // repeat 호출마다 실행
   }
 
   @override

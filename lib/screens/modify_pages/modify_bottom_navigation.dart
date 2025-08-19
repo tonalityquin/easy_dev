@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import '../../../utils/app_colors.dart';
 
 class ModifyBottomNavigation extends StatelessWidget {
-  final bool? showKeypad; // ✅ 선택적
-  final Widget? keypad; // ✅ 선택적
+  final bool? showKeypad;
+  final Widget? keypad;
   final Widget actionButton;
   final VoidCallback? onTap;
   final Color? backgroundColor;

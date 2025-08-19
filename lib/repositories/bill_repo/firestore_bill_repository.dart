@@ -36,11 +36,13 @@ class FirestoreBillRepository implements BillRepository {
   Future<void> deleteBill(List<String> ids) {
     return _deleteService.deleteBill(ids);
   }
+
   @override
-  Future<({
-  List<BillModel> generalBills,
-  List<RegularBillModel> regularBills,
-  })> getAllBills(String area) {
-    return _readService.getBillOnce(area); // 🔁 기존 getBillOnce는 general+regular 모두 반환하므로 재사용 가능
+  Future<
+      ({
+        List<BillModel> generalBills,
+        List<RegularBillModel> regularBills,
+      })> getAllBills(String area) {
+    return _readService.getBillOnce(area);
   }
 }

@@ -5,7 +5,7 @@ import '../../../../states/location/location_state.dart';
 import '../../../../repositories/location/location_repository.dart';
 
 class ParkingStatusPage extends StatefulWidget {
-  final bool isLocked; // 🔒 외부에서 전달받는 잠금 상태
+  final bool isLocked;
 
   const ParkingStatusPage({super.key, required this.isLocked});
 
@@ -18,7 +18,6 @@ class _ParkingStatusPageState extends State<ParkingStatusPage> {
   void initState() {
     super.initState();
 
-    // 🚗 주차 현황 데이터 갱신
     Future.microtask(() {
       final locationRepo = context.read<LocationRepository>();
       context.read<LocationState>().updatePlateCountsFromRepository(locationRepo);
@@ -80,7 +79,6 @@ class _ParkingStatusPageState extends State<ParkingStatusPage> {
             },
           ),
 
-          // 🔒 잠금 상태일 때 화면 터치 방지 레이어
           if (widget.isLocked)
             Positioned.fill(
               child: GestureDetector(

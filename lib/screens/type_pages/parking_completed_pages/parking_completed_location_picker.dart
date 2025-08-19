@@ -7,12 +7,12 @@ import '../../../repositories/location/location_repository.dart';
 
 class ParkingCompletedLocationPicker extends StatefulWidget {
   final Function(String locationName) onLocationSelected;
-  final bool isLocked; // ✅ 추가됨
+  final bool isLocked;
 
   const ParkingCompletedLocationPicker({
     super.key,
     required this.onLocationSelected,
-    required this.isLocked, // ✅ 필수 파라미터 추가
+    required this.isLocked,
   });
 
   @override
@@ -100,7 +100,7 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
       backgroundColor: Colors.white,
       body: Consumer<LocationState>(
         builder: (context, locationState, _) {
-          return AbsorbPointer( // ✅ 잠금 적용
+          return AbsorbPointer(
             absorbing: widget.isLocked,
             child: Builder(builder: (context) {
               if (locationState.isLoading) {

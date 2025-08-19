@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 import '../../../../states/user/user_state.dart';
 import 'chat_panel.dart';
 
-/// 🔸 최신 메시지를 실시간으로 스트리밍하는 함수 (단일 문서)
 Stream<String> latestMessageStream(String roomId) {
   return FirebaseFirestore.instance
       .collection('chats')
@@ -22,8 +21,6 @@ Stream<String> latestMessageStream(String roomId) {
   });
 }
 
-/// 🔹 채팅 바텀시트
-/// 🔹 채팅 바텀시트
 void chatBottomSheet(BuildContext context) {
   final currentUser = context.read<UserState>().user;
   final String? roomId = currentUser?.currentArea?.trim();
@@ -40,30 +37,26 @@ void chatBottomSheet(BuildContext context) {
     isScrollControlled: true,
     useSafeArea: true,
     backgroundColor: Colors.white,
-    // ⬅️ 배경 흰색
     elevation: 0,
-    // ⬅️ 그림자 제거
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
     ),
     clipBehavior: Clip.antiAlias,
-    // ⬅️ 둥근 모서리 적용 시 내용 잘림 방지
     builder: (ctx) {
-      final inset = MediaQuery.of(ctx).viewInsets.bottom; // 키보드 높이
-      final maxSheetH = MediaQuery.of(ctx).size.height * 0.6; // 시트 최대높이
+      final inset = MediaQuery.of(ctx).viewInsets.bottom;
+      final maxSheetH = MediaQuery.of(ctx).size.height * 0.6;
 
       return AnimatedPadding(
         duration: const Duration(milliseconds: 150),
-        padding: EdgeInsets.only(bottom: inset), // 키보드만큼 위로 올림
+        padding: EdgeInsets.only(bottom: inset),
         child: Container(
-          color: Colors.white, // 내부도 흰색
+          color: Colors.white,
           padding: const EdgeInsets.only(left: 16, right: 16, top: 16),
           child: ConstrainedBox(
             constraints: BoxConstraints(maxHeight: maxSheetH),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // 상단의 iOS-style drag handle
                 Container(
                   width: 40,
                   height: 4,
@@ -95,7 +88,6 @@ void chatBottomSheet(BuildContext context) {
   );
 }
 
-/// 🔹 채팅 버튼 위젯 (TypePage 등에서 사용)
 class ChatOpenButton extends StatelessWidget {
   const ChatOpenButton({super.key});
 

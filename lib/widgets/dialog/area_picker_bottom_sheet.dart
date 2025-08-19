@@ -21,7 +21,7 @@ void areaPickerBottomSheet({
     return;
   }
 
-  final rootContext = context; // ✅ 외부 context 저장
+  final rootContext = context;
   String tempSelected = areaState.currentArea.isNotEmpty
       ? areaState.currentArea
       : userAreas.first;
@@ -87,7 +87,7 @@ void areaPickerBottomSheet({
                 const SizedBox(height: 16),
                 GestureDetector(
                   onTap: () async {
-                    Navigator.of(context).pop(); // ✅ bottom sheet 닫기
+                    Navigator.of(context).pop();
 
                     areaState.updateAreaPicker(tempSelected);
                     await userState.areaPickerCurrentArea(tempSelected);
@@ -107,7 +107,6 @@ void areaPickerBottomSheet({
                     debugPrint('📌 조회된 문서 ID: ${areaDoc.id}');
                     debugPrint('📌 isHeadquarter 필드: ${data?['isHeadquarter']}');
 
-                    // ✅ context가 dispose되지 않았는지 체크
                     if (!rootContext.mounted) return;
 
                     if (isHeadquarter) {

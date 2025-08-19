@@ -32,7 +32,7 @@ class _HumanResourceState extends State<HumanResource> {
 
   Future<void> _loadSelectedArea() async {
     final prefs = await SharedPreferences.getInstance();
-    final area = prefs.getString('selectedArea') ?? 'belivus'; // 기본값 설정
+    final area = prefs.getString('selectedArea') ?? 'belivus';
     _subscribeToUsers(area);
     setState(() {
       _selectedArea = area;
@@ -78,7 +78,7 @@ class _HumanResourceState extends State<HumanResource> {
         body: _selectedIndex == 0
             ? AttendanceCalendar()
                 : _selectedIndex == 1
-                    ? GoogleDrive(selectedArea: _selectedArea!) // ✅ 안전한 selectedArea 전달
+                    ? GoogleDrive(selectedArea: _selectedArea!)
                     : BreakCalendar(),
         bottomNavigationBar: HqMiniNavigation(
           height: 56,

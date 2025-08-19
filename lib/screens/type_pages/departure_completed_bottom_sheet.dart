@@ -35,24 +35,20 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
     final selectedDateRaw = context.watch<FieldSelectedDateState>().selectedDate ?? DateTime.now();
     final selectedDate = DateTime(selectedDateRaw.year, selectedDateRaw.month, selectedDateRaw.day);
 
-    // 날짜(자정~자정) 필터까지 반영된 기본 리스트
     final baseList = plateState.getPlatesByCollection(
       PlateType.departureCompleted,
       selectedDate: selectedDate,
     );
 
-    // 화면단 area 필터만 적용 (검색 제거)
     List<PlateModel> firestorePlates = baseList.where((p) {
       final sameArea = _areaEquals(p.area, area);
       return !p.isLockedFee && sameArea; // 일반 모드: 미정산만
     }).toList();
 
-    // 정렬 (기존 로직 유지: requestTime 기준)
     firestorePlates.sort(
       (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime),
     );
 
-    // 선택된 번호판
     final selectedPlate = plateState.getSelectedPlate(PlateType.departureCompleted, userName);
     final plateNumber = selectedPlate?.plateNumber ?? '';
 
@@ -84,14 +80,13 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
                 return AnimatedBuilder(
                   animation: tabController,
                   builder: (context, _) {
-                    final isSettled = tabController.index == 1; // 0: 미정산, 1: 정산
+                    final isSettled = tabController.index == 1;
 
                     return Scaffold(
                       backgroundColor: Colors.transparent,
                       body: Column(
                         children: [
                           const SizedBox(height: 12),
-                          // 상단 핸들
                           Center(
                             child: Container(
                               width: 60,
@@ -103,7 +98,6 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
                             ),
                           ),
                           const SizedBox(height: 16),
-                          // 탭 바 (미정산 / 정산)
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 8.0),
                             child: TabBar(
@@ -117,27 +111,20 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
                             ),
                           ),
                           const SizedBox(height: 8),
-
-                          // ✅ 미정산 탭에서만 표시
                           SelectedDateBar(visible: !isSettled),
-
                           const SizedBox(height: 8),
-                          // 탭 콘텐츠
                           Expanded(
                             child: TabBarView(
                               children: [
-                                // ───── 미정산 탭
                                 DepartureCompletedUnsettledTab(
-                                  firestorePlates: firestorePlates, // 부모에서 이미 필터/정렬된 리스트
+                                  firestorePlates: firestorePlates,
                                   userName: userName,
                                 ),
-
-                                // ───── 정산 탭
                                 DepartureCompletedSettledTab(
                                   area: area,
                                   division: division,
                                   selectedDate: selectedDate,
-                                  plateNumber: plateNumber, // 선택된 번호판(없으면 빈 문자열)
+                                  plateNumber: plateNumber,
                                 ),
                               ],
                             ),

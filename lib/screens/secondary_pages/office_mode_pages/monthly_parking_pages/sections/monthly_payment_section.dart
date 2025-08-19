@@ -31,20 +31,18 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
     try {
       widget.controller.specialNote = _noteController.text;
 
-      await widget.controller.recordPaymentHistory(context); // ✅ Firestore 기록
+      await widget.controller.recordPaymentHistory(context);
 
       if (!mounted) return;
 
-      // ✅ 로그 추가
       setState(() {
         _paymentHistoryLog.insert(
           0,
           '${DateTime.now().toLocal().toString().substring(0, 16)} - 결제 완료'
-              '${_noteController.text.isNotEmpty ? ' | 메모: ${_noteController.text}' : ''}',
+          '${_noteController.text.isNotEmpty ? ' | 메모: ${_noteController.text}' : ''}',
         );
       });
 
-      // ✅ 입력값 초기화
       _noteController.clear();
       widget.controller.specialNote = '';
       widget.controller.isExtended = false;
@@ -71,8 +69,6 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 16),
-
-        // 📝 특이사항 입력
         TextFormField(
           controller: _noteController,
           decoration: const InputDecoration(
@@ -81,10 +77,7 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
           ),
           maxLines: 2,
         ),
-
         const SizedBox(height: 16),
-
-        // 💳 결제 버튼 + ✅ 연장 체크박스
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -92,13 +85,13 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
               onPressed: _isPaying ? null : _handlePayment,
               icon: _isPaying
                   ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
-                ),
-              )
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
                   : const Icon(Icons.payment),
               label: Text(_isPaying ? '처리 중...' : '결제'),
             ),
@@ -113,21 +106,17 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
             ),
           ],
         ),
-
         const SizedBox(height: 24),
-
-        // 🧾 결제 내역 표시
         const Text(
           '최근 결제 내역',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
-        if (_paymentHistoryLog.isEmpty)
-          const Text('결제 내역이 없습니다.', style: TextStyle(color: Colors.grey)),
+        if (_paymentHistoryLog.isEmpty) const Text('결제 내역이 없습니다.', style: TextStyle(color: Colors.grey)),
         ..._paymentHistoryLog.map((entry) => Padding(
-          padding: const EdgeInsets.only(bottom: 6),
-          child: Text('• $entry'),
-        )),
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Text('• $entry'),
+            )),
       ],
     );
   }

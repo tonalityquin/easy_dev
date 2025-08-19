@@ -4,7 +4,6 @@ import '../../screens/type_pages/debugs/firestore_logger.dart';
 class LocationCountService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  /// ✅ 단일 위치의 입차 수 조회
   Future<int> getPlateCount({
     required String locationName,
     required String area,
@@ -27,14 +26,13 @@ class LocationCountService {
         'getPlateCount success: count=${snapshot.count}, location=$locationName',
       );
 
-      return snapshot.count ?? 0; // ✅ null 안전 처리
+      return snapshot.count ?? 0;
     } catch (e) {
       await FirestoreLogger().log('getPlateCount error: $e');
       rethrow;
     }
   }
 
-  /// ✅ 여러 위치의 입차 수 일괄 조회
   Future<Map<String, int>> getPlateCountsForLocations({
     required List<String> locationNames,
     required String area,
@@ -45,7 +43,6 @@ class LocationCountService {
     );
 
     try {
-      // ✅ 병렬 요청 처리
       final futures = locationNames.map((name) async {
         final count = await getPlateCount(
           locationName: name,

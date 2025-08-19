@@ -17,7 +17,6 @@ class SecondaryInfo {
   const SecondaryInfo(this.title, this.page, this.icon);
 }
 
-// ✅ 재사용 가능한 아이템 정의
 const _easterEgg = SecondaryInfo('이스터 에그', EasterEgg(), Icon(Icons.badge));
 const _backendController = SecondaryInfo('백엔드 컨트롤러', BackEndController(), Icon(Icons.free_breakfast));
 const _localData = SecondaryInfo('로컬 데이터 관리', LocalData(), Icon(Icons.tab));
@@ -27,7 +26,6 @@ const _billManagement = SecondaryInfo('정산 관리', BillManagement(), Icon(Ic
 const _monthlyParking = SecondaryInfo('월 주차 관리', MonthlyParkingManagement(), Icon(Icons.local_parking));
 const _areaManagement = SecondaryInfo('지역 추가', AreaManagement(), Icon(Icons.tab));
 
-/// 🔹 최고 관리자(admin)
 final List<SecondaryInfo> adminPages = [
   _backendController,
   _easterEgg,
@@ -38,14 +36,12 @@ final List<SecondaryInfo> adminPages = [
   _areaManagement,
 ];
 
-/// 🔹 일반 사용자 (현장 근무자 등)
 final List<SecondaryInfo> lowUserModePages = [
   _backendController,
   _localData,
   _monthlyParking,
 ];
 
-/// 🔹 중간 등급 사용자
 final List<SecondaryInfo> middleUserModePages = [
   _backendController,
   _locationManagement,
@@ -53,7 +49,6 @@ final List<SecondaryInfo> middleUserModePages = [
   _localData,
 ];
 
-/// 🔹 고등급 사용자
 final List<SecondaryInfo> highUserModePages = [
   _backendController,
   _locationManagement,
@@ -61,7 +56,6 @@ final List<SecondaryInfo> highUserModePages = [
   _localData,
 ];
 
-/// 🔹 현장 관리자
 final List<SecondaryInfo> managerFieldModePages = [
   _backendController,
   _locationManagement,
@@ -69,21 +63,18 @@ final List<SecondaryInfo> managerFieldModePages = [
   _localData,
 ];
 
-/// 🔹 관리 기능 접근 권한 (중간/하위 관리자)
 final List<SecondaryInfo> lowMiddleManagePages = [
   _backendController,
   _userManagement,
   _billManagement,
 ];
 
-/// 🔹 고등급 관리자 기능
 final List<SecondaryInfo> highManagePages = [
   _backendController,
   _userManagement,
   _billManagement,
 ];
 
-/// 🔹 개발자 전용 페이지
 final List<SecondaryInfo> devPages = [
   _backendController,
   _easterEgg,

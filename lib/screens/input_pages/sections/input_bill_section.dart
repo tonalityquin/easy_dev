@@ -7,12 +7,11 @@ import '../../../models/regular_bill_model.dart';
 
 class InputBillSection extends StatelessWidget {
   final String? selectedBill;
-  /// '변동' | '고정' | '정기'
+
   final String selectedBillType;
   final ValueChanged<String?> onChanged;
   final ValueChanged<String> onTypeChanged;
 
-  /// 정기 countType 프리필/표시용 컨트롤러 (정기일 때만 사용)
   final TextEditingController? countTypeController;
 
   const InputBillSection({
@@ -28,14 +27,13 @@ class InputBillSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final billState = context.watch<BillState>();
     final isLoading = billState.isLoading;
-    final generalBills = billState.generalBills;  // 변동
-    final fixedBills = billState.regularBills;    // 고정(기존 로직 유지)
+    final generalBills = billState.generalBills;
+    final fixedBills = billState.regularBills;
 
     final isGeneral = selectedBillType == '변동';
-    final isFixed   = selectedBillType == '고정';
+    final isFixed = selectedBillType == '고정';
     final isMonthly = selectedBillType == '정기';
 
-    // 변동/고정에서만 사용
     final filteredBills = isGeneral ? generalBills : fixedBills;
 
     return Column(
@@ -46,8 +44,6 @@ class InputBillSection extends StatelessWidget {
           style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12.0),
-
-        // 변동 / 고정 / 정기
         Row(
           children: [
             _buildTypeButton(
@@ -57,35 +53,30 @@ class InputBillSection extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             _buildTypeButton(
-              label: '고정', // ✅ 기존 로직 유지
+              label: '고정',
               isSelected: isFixed,
               onTap: () => onTypeChanged('고정'),
             ),
             const SizedBox(width: 8),
             _buildTypeButton(
-              label: '정기', // ✅ 새로 추가
+              label: '정기',
               isSelected: isMonthly,
               onTap: () => onTypeChanged('정기'),
             ),
           ],
         ),
-
         const SizedBox(height: 12.0),
-
-        // 정기: TextField (countType)
         if (isMonthly) ...[
           TextField(
             controller: countTypeController,
-            onChanged: (v) => onChanged(v), // 상위에 즉시 반영
+            onChanged: (v) => onChanged(v),
             decoration: const InputDecoration(
               labelText: '정기 - 호실/구분(=countType)',
               hintText: '예: 1901호',
               border: OutlineInputBorder(),
             ),
           ),
-        ]
-        // 변동/고정: 기존 드롭다운(바텀시트) 그대로
-        else ...[
+        ] else ...[
           if (isLoading)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 24),
@@ -146,18 +137,14 @@ class InputBillSection extends StatelessWidget {
                                 style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                               ),
                               const SizedBox(height: 24),
-
-                              // 변동/고정 모두 countType 표시 (기존 로직 유지)
                               ...filteredBills.map((bill) {
-                                final countType = isGeneral
-                                    ? (bill as BillModel).countType
-                                    : (bill as RegularBillModel).countType;
+                                final countType =
+                                    isGeneral ? (bill as BillModel).countType : (bill as RegularBillModel).countType;
 
                                 return ListTile(
                                   title: Text(countType),
-                                  trailing: countType == selectedBill
-                                      ? const Icon(Icons.check, color: Colors.green)
-                                      : null,
+                                  trailing:
+                                      countType == selectedBill ? const Icon(Icons.check, color: Colors.green) : null,
                                   onTap: () {
                                     Navigator.pop(context);
                                     onChanged(countType);

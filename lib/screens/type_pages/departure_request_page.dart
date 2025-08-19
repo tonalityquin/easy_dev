@@ -27,7 +27,7 @@ class DepartureRequestPage extends StatefulWidget {
 
 class _DepartureRequestPageState extends State<DepartureRequestPage> {
   bool _isSorted = true;
-  bool _isLocked = false; // 🔐 잠금 상태 추가
+  bool _isLocked = false;
 
   void _toggleSortIcon() {
     setState(() {
@@ -121,8 +121,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
         ),
         body: Consumer<PlateState>(
           builder: (context, plateState, child) {
-            List<PlateModel> departureRequests =
-            plateState.getPlatesByCollection(PlateType.departureRequests);
+            List<PlateModel> departureRequests = plateState.getPlatesByCollection(PlateType.departureRequests);
 
             debugPrint('📦 전체 출차 요청 plate 수: ${departureRequests.length}');
             if (departureRequests.isNotEmpty) {

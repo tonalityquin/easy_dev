@@ -61,7 +61,6 @@ Future<void> showParkingRequestStatusBottomSheet({
                 ),
                 const SizedBox(height: 24),
 
-                // 🔹 로그 확인 버튼
                 ElevatedButton.icon(
                   icon: const Icon(Icons.history),
                   label: const Text("로그 확인"),
@@ -92,7 +91,6 @@ Future<void> showParkingRequestStatusBottomSheet({
                 ),
                 const SizedBox(height: 12),
 
-                // 🔹 정보 수정 버튼
                 ElevatedButton.icon(
                   icon: const Icon(Icons.edit_note_outlined),
                   label: const Text("정보 수정"),
@@ -121,7 +119,6 @@ Future<void> showParkingRequestStatusBottomSheet({
                 ),
                 const SizedBox(height: 12),
 
-                // 🔴 입차 요청 취소 버튼
                 ElevatedButton.icon(
                   icon: const Icon(Icons.assignment_return),
                   label: const Text("입차 요청 취소"),

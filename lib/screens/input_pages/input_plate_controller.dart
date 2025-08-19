@@ -18,7 +18,6 @@ class InputPlateController {
   final TextEditingController locationController = TextEditingController();
   final TextEditingController customStatusController = TextEditingController();
 
-  /// ✅ 정기(월정기) countType 프리필/표시용 컨트롤러
   final TextEditingController countTypeController = TextEditingController();
 
   final FirestorePlateRepository _plateRepo = FirestorePlateRepository();
@@ -28,7 +27,7 @@ class InputPlateController {
   bool isLocationSelected = false;
   String dropdownValue = '전국';
 
-  String selectedBillType = '변동'; // ✅ 변동 / 정기 구분 상태
+  String selectedBillType = '변동';
   String? _selectedBill;
 
   String? get selectedBill => _selectedBill;
@@ -138,7 +137,7 @@ class InputPlateController {
     selectedAddAmount = 0;
 
     customStatusController.clear();
-    countTypeController.clear(); // ✅ 추가: countType 초기화
+    countTypeController.clear();
 
     fetchedCustomStatus = null;
     fetchedStatusList = [];
@@ -156,16 +155,6 @@ class InputPlateController {
     return validFront && controllerMidDigit.text.length == 1 && controllerBackDigit.text.length == 4;
   }
 
-  void toggleStatus(int index) {
-    isSelected[index] = !isSelected[index];
-    final status = statuses[index];
-    if (isSelected[index]) {
-      selectedStatuses.add(status);
-    } else {
-      selectedStatuses.remove(status);
-    }
-  }
-
   void dispose() {
     _removeInputListeners();
     controllerFrontDigit.dispose();
@@ -173,39 +162,7 @@ class InputPlateController {
     controllerBackDigit.dispose();
     locationController.dispose();
     customStatusController.dispose();
-    countTypeController.dispose(); // ✅ 추가: dispose
-  }
-
-  /// ✅ 정산 유형 선택 시 정산 금액 정보 자동 세팅
-  void setSelectedBill(String? billId, BuildContext context) {
-    _selectedBill = billId;
-
-    if (billId == null) {
-      selectedBasicStandard = 0;
-      selectedBasicAmount = 0;
-      selectedAddStandard = 0;
-      selectedAddAmount = 0;
-      return;
-    }
-
-    final billState = context.read<BillState>();
-
-    if (selectedBillType == '변동') {
-      final matched = billState.generalBills.firstWhere(
-        (b) => b.countType == billId,
-        orElse: () => billState.emptyModel,
-      );
-      selectedBasicStandard = matched.basicStandard ?? 0;
-      selectedBasicAmount = matched.basicAmount ?? 0;
-      selectedAddStandard = matched.addStandard ?? 0;
-      selectedAddAmount = matched.addAmount ?? 0;
-    } else {
-      // '고정'과 '정기'는 입차 화면에서 기본/추가 금액 계산을 쓰지 않음 → 0으로 통일
-      selectedBasicStandard = 0;
-      selectedBasicAmount = 0;
-      selectedAddStandard = 0;
-      selectedAddAmount = 0;
-    }
+    countTypeController.dispose();
   }
 
   Future<void> deleteCustomStatusFromFirestore(BuildContext context) async {
@@ -224,42 +181,6 @@ class InputPlateController {
     }
   }
 
-  /// ✅ plate_status 조회 후 customStatus, statusList, countType 프리필
-  Future<void> fetchStatusAndMemo(String plateNumber, String area) async {
-    await FirestoreLogger().log('🔍 상태/메모 조회 시도: $plateNumber-$area', level: 'called');
-    final data = await _plateRepo.getPlateStatus(plateNumber, area);
-
-    if (data != null) {
-      await FirestoreLogger().log('✅ 상태/메모 조회 성공: $plateNumber-$area', level: 'success');
-
-      // 메모/상태
-      fetchedCustomStatus = data['customStatus'];
-      final List<dynamic>? savedList = data['statusList'];
-      if (savedList != null) {
-        fetchedStatusList = savedList.map((e) => e.toString()).toList();
-      } else {
-        fetchedStatusList = [];
-      }
-
-      // ✅ 정기에서 사용하는 countType 프리필
-      final String? fetchedCountType = (data['countType'] as String?)?.trim();
-      if (fetchedCountType != null && fetchedCountType.isNotEmpty) {
-        countTypeController.text = fetchedCountType;
-
-        // UX상 countType 존재 시 정기로 전환
-        selectedBillType = '정기';
-
-        _selectedBill = fetchedCountType;
-      }
-    } else {
-      await FirestoreLogger().log('📭 상태/메모 없음: $plateNumber-$area', level: 'info');
-      fetchedCustomStatus = null;
-      fetchedStatusList = [];
-      // countType은 그대로 두되, 필요하면 아래 주석 해제:
-      // countTypeController.clear();
-    }
-  }
-
   Future<void> submitPlateEntry(BuildContext context, bool mounted, VoidCallback refreshUI) async {
     final plateNumber = buildPlateNumber();
     final areaState = context.read<AreaState>();
@@ -267,7 +188,6 @@ class InputPlateController {
     final division = areaState.currentDivision;
     final userName = context.read<UserState>().name;
 
-    // ✅ 정기일 때는 드롭다운이 아니라 텍스트필드이므로 선택값 보정
     if (selectedBillType == '정기' && (_selectedBill == null || _selectedBill!.trim().isEmpty)) {
       final ct = countTypeController.text.trim();
       if (ct.isNotEmpty) _selectedBill = ct;
@@ -276,7 +196,6 @@ class InputPlateController {
     final billState = context.read<BillState>();
     final hasAnyBill = billState.generalBills.isNotEmpty || billState.regularBills.isNotEmpty;
 
-    // ✅ 변동/고정일 때만 선택 강제(정기는 사전 결제이므로 스킵)
     if (hasAnyBill && _selectedBill == null && selectedBillType != '정기') {
       showFailedSnackbar(context, '정산 유형을 선택해주세요');
       return;
@@ -319,11 +238,9 @@ class InputPlateController {
         region: dropdownValue,
         customStatus:
             customStatusController.text.trim().isNotEmpty ? customStatusController.text : fetchedCustomStatus ?? '',
-        // ✅ 추가: 서비스에서 정기 분기(0분/0원 + bill 조회 스킵) 처리
         selectedBillType: selectedBillType,
       );
 
-      // ✅ plate_status 저장 (레포에서 빈 입력 가드 처리)
       await _plateRepo.setPlateStatus(
         plateNumber: plateNumber,
         area: area,

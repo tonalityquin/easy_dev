@@ -289,7 +289,6 @@ class _CompletedEventPageState extends State<CompletedEventPage> {
   }
 }
 
-/// ✅ 공통 버튼 스타일 정의
 final ButtonStyle commonActionButtonStyle = ElevatedButton.styleFrom(
   backgroundColor: Colors.white,
   foregroundColor: Colors.black87,

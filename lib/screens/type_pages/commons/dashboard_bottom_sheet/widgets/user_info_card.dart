@@ -15,13 +15,11 @@ class UserInfoCard extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(12),
       onTap: () {
-        // TODO: 상세 정보 페이지 연결
-        // Navigator.push(context, MaterialPageRoute(builder: (_) => const UserDetailPage()));
         print('📄 사용자 상세 정보 보기');
       },
       child: Card(
         elevation: 2,
-        color: Colors.grey[50], // ✅ 톤 다운된 배경색
+        color: Colors.grey[50],
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
           side: BorderSide(color: Colors.grey.shade300),
@@ -32,7 +30,6 @@ class UserInfoCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ✅ 부제목 + 아이콘
               Row(
                 children: [
                   Icon(Icons.badge, size: 14, color: Colors.grey[600]),

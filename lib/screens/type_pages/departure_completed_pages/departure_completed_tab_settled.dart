@@ -13,7 +13,7 @@ class DepartureCompletedSettledTab extends StatefulWidget {
     required this.area,
     required this.division,
     required this.selectedDate,
-    required this.plateNumber, // 선택된 번호판(없으면 빈 문자열)
+    required this.plateNumber,
   });
 
   final String area;
@@ -31,21 +31,17 @@ class _DepartureCompletedSettledTabState extends State<DepartureCompletedSettled
   bool _hasSearched = false;
   List<PlateModel> _results = [];
 
-  // 정산 탭을 떠날 때 검색 상태 초기화용
   TabController? _tabController;
-  static const int _settledTabIndex = 1; // TabBar: [미정산(0), 정산(1)]
+  static const int _settledTabIndex = 1;
 
   bool _isValidFourDigit(String v) => RegExp(r'^\d{4}$').hasMatch(v);
 
-  // 텍스트 변경 시 즉시 버튼 활성/비활성 반영
   void _onTextChanged() {
     if (mounted) setState(() {});
   }
 
-  // 탭 전환 시 정산 탭을 떠나면 검색 상태 초기화
   void _onTabChange() {
     if (_tabController == null) return;
-    // indexIsChanging 동안 from -> to 전환, 떠날 때 초기화
     if (_tabController!.indexIsChanging) {
       final from = _tabController!.previousIndex;
       final to = _tabController!.index;
@@ -96,7 +92,6 @@ class _DepartureCompletedSettledTabState extends State<DepartureCompletedSettled
   void initState() {
     super.initState();
     _fourDigitCtrl.addListener(_onTextChanged);
-    // DefaultTabController는 빌드 이후 접근 가능
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _tabController = DefaultTabController.of(context);
       _tabController?.addListener(_onTabChange);
@@ -121,12 +116,9 @@ class _DepartureCompletedSettledTabState extends State<DepartureCompletedSettled
             key: const ValueKey('today-header'),
             icon: Icons.receipt_long,
             title: '오늘 입차 로그',
-            // trailing: _hasSearched && _results.isNotEmpty ? '총 $todayLogCount건' : null,
-            trailing: '', // 필요 시 위 주석 라인으로 교체
+            trailing: '',
           ),
           const SizedBox(height: 6),
-
-          /// ── 상단: TodayLogSection (검색 결과 기반)
           Expanded(
             child: Builder(
               builder: (context) {
@@ -144,7 +136,6 @@ class _DepartureCompletedSettledTabState extends State<DepartureCompletedSettled
                   );
                 }
 
-                // logs가 비어있지 않은 결과 우선 선택
                 PlateModel target = _results.first;
                 for (final p in _results) {
                   final l = p.logs ?? const <PlateLogModel>[];
@@ -156,9 +147,7 @@ class _DepartureCompletedSettledTabState extends State<DepartureCompletedSettled
 
                 final String plate = target.plateNumber;
 
-                // PlateLogModel -> Map 변환 (TodayLogSection은 Map 형태 기대)
-                final List<dynamic> logsRaw =
-                    (target.logs?.map((e) => e.toMap()).toList()) ?? const <dynamic>[];
+                final List<dynamic> logsRaw = (target.logs?.map((e) => e.toMap()).toList()) ?? const <dynamic>[];
 
                 return TodayLogSection(
                   plateNumber: plate,
@@ -167,9 +156,7 @@ class _DepartureCompletedSettledTabState extends State<DepartureCompletedSettled
               },
             ),
           ),
-
           const SizedBox(height: 8),
-
           _SectionHeader(
             key: const ValueKey('merged-header'),
             icon: Icons.merge_type,
@@ -177,18 +164,16 @@ class _DepartureCompletedSettledTabState extends State<DepartureCompletedSettled
             trailing: widget.plateNumber.isEmpty ? '' : '선택: ${widget.plateNumber}',
           ),
           const SizedBox(height: 6),
-
-          /// ── 중간: MergedLogSection (선택된 번호판 기준)
           Expanded(
             child: FutureBuilder<List<Map<String, dynamic>>>(
               future: widget.plateNumber.isEmpty
                   ? Future.value(<Map<String, dynamic>>[])
                   : GcsJsonUploader().loadPlateLogs(
-                plateNumber: widget.plateNumber,
-                division: widget.division,
-                area: widget.area,
-                date: widget.selectedDate,
-              ),
+                      plateNumber: widget.plateNumber,
+                      division: widget.division,
+                      area: widget.area,
+                      date: widget.selectedDate,
+                    ),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
@@ -212,9 +197,7 @@ class _DepartureCompletedSettledTabState extends State<DepartureCompletedSettled
               },
             ),
           ),
-
           const SizedBox(height: 8),
-
           SafeArea(
             top: false,
             child: Row(
@@ -265,7 +248,7 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final t = (trailing ?? '').trim(); // ← 빈 문자열 처리
+    final t = (trailing ?? '').trim();
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
@@ -282,7 +265,7 @@ class _SectionHeader extends StatelessWidget {
             style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
           ),
           const Spacer(),
-          if (t.isNotEmpty) // ← 빈 문자열이면 표시 안 함
+          if (t.isNotEmpty)
             Text(
               t,
               style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey[600]),

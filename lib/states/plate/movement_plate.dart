@@ -59,7 +59,6 @@ class MovementPlate {
         'updatedAt': Timestamp.now(),
       };
 
-      // 로그 생성
       final log = PlateLogModel(
         plateNumber: plate.plateNumber,
         division: _areaState.currentDivision,
@@ -71,7 +70,6 @@ class MovementPlate {
         timestamp: DateTime.now(),
       );
 
-      // Firestore 로그 누적 포함하여 문서 업데이트
       await _repository.updatePlate(documentId, updateFields, log: log);
 
       await _logger.log('출차 완료 업데이트 Firestore 완료: $documentId', level: 'success');
@@ -87,7 +85,6 @@ class MovementPlate {
     await _logger.log('[MovementPlate] jumpingDepartureCompleted 시작: $documentId', level: 'called');
 
     try {
-      // 로그 생성
       final log = PlateLogModel(
         plateNumber: plate.plateNumber,
         division: _areaState.currentDivision,
@@ -99,14 +96,13 @@ class MovementPlate {
         timestamp: DateTime.now(),
       );
 
-      // 상태 전이 + 로그 삽입 포함된 업데이트
       await _repository.transitionPlateState(
         documentId: documentId,
         toType: PlateType.departureCompleted,
         location: plate.location,
         userName: plate.userName,
         includeEndTime: true,
-        log: log, // 🔹 로그 전달
+        log: log,
       );
 
       await _logger.log('입차 완료 → 출차 완료 업데이트 완료: $documentId', level: 'success');
@@ -192,14 +188,13 @@ class MovementPlate {
         timestamp: DateTime.now(),
       );
 
-      // ✅ Firestore logs 필드에 로그 누적
       await _repository.transitionPlateState(
         documentId: documentId,
         toType: toType,
         location: location,
         userName: selectedBy,
         includeEndTime: toType == PlateType.departureCompleted,
-        log: log, // 로그 전달
+        log: log,
       );
 
       await _logger.log('문서 상태 이동 완료: $fromType → $toType ($plateNumber)', level: 'success');

@@ -56,7 +56,6 @@ class PlateSearchResults extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      /// 차량 번호 및 상태 (type)
                       Row(
                         children: [
                           const Icon(Icons.directions_car, size: 20, color: Colors.blueAccent),
@@ -90,7 +89,6 @@ class PlateSearchResults extends StatelessWidget {
                       ),
                       const SizedBox(height: 12),
 
-                      /// 요청 시간
                       Row(
                         children: [
                           const Icon(Icons.access_time, size: 16, color: Colors.grey),
@@ -103,7 +101,6 @@ class PlateSearchResults extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
 
-                      /// 위치 강조
                       Row(
                         children: [
                           const Icon(Icons.location_on, size: 16, color: Colors.redAccent),
@@ -123,7 +120,6 @@ class PlateSearchResults extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
 
-                      /// 기타 정보
                       if (plate.isSelected ||
                           (plate.selectedBy?.isNotEmpty ?? false) ||
                           (plate.billingType?.isNotEmpty ?? false) ||

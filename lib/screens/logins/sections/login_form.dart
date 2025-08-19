@@ -18,7 +18,7 @@ class _LoginFormState extends State<LoginForm> {
   void initState() {
     super.initState();
     _controller = widget.controller;
-    _controller.initState(); // 로그인 상태 확인 및 자동 이동 처리
+    _controller.initState();
   }
 
   void _handleLogin() {
@@ -37,13 +37,12 @@ class _LoginFormState extends State<LoginForm> {
       children: [
         const SizedBox(height: 96),
 
-        // 상단 로고
         GestureDetector(
           onTap: () {
             Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) => const CooperationCalendar(
-                  calendarId: 'belivus150119@gmail.com', // ✅ 로고 클릭용 캘린더
+                  calendarId: 'belivus150119@gmail.com',
                 ),
               ),
             );
@@ -56,7 +55,6 @@ class _LoginFormState extends State<LoginForm> {
 
         const SizedBox(height: 48),
 
-        // 이름 입력 필드
         TextField(
           controller: _controller.nameController,
           focusNode: _controller.nameFocus,
@@ -66,7 +64,6 @@ class _LoginFormState extends State<LoginForm> {
         ),
         const SizedBox(height: 16),
 
-        // 전화번호 입력 필드
         TextField(
           controller: _controller.phoneController,
           focusNode: _controller.phoneFocus,
@@ -78,7 +75,6 @@ class _LoginFormState extends State<LoginForm> {
         ),
         const SizedBox(height: 16),
 
-        // 비밀번호 입력 필드
         TextField(
           controller: _controller.passwordController,
           focusNode: _controller.passwordFocus,
@@ -98,7 +94,6 @@ class _LoginFormState extends State<LoginForm> {
         ),
         const SizedBox(height: 32),
 
-        // 로그인 버튼
         SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
@@ -127,7 +122,6 @@ class _LoginFormState extends State<LoginForm> {
 
         const SizedBox(height: 1),
 
-        // ✅ pelican 이미지 삽입 (중앙 정렬)
         Center(
           child: SizedBox(
             height: 80,

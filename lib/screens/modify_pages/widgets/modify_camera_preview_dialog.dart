@@ -91,7 +91,6 @@ class _ModifyCameraPreviewDialogState extends State<ModifyCameraPreviewDialog> {
               )
             else
               const Center(child: CircularProgressIndicator()),
-
             if (_capturedImages.isNotEmpty)
               Positioned(
                 top: 16,
@@ -117,7 +116,6 @@ class _ModifyCameraPreviewDialogState extends State<ModifyCameraPreviewDialog> {
                   ),
                 ),
               ),
-
             Positioned(
               bottom: 20,
               left: 0,
@@ -143,7 +141,6 @@ class _ModifyCameraPreviewDialogState extends State<ModifyCameraPreviewDialog> {
   }
 }
 
-// ✅ 전체 미리보기 갤러리
 class GalleryView extends StatelessWidget {
   final List<XFile> images;
   final void Function(int index) onDelete;
@@ -176,8 +173,8 @@ class GalleryView extends StatelessWidget {
                     images: images,
                     initialIndex: index,
                     onDelete: (deleteIndex) {
-                      Navigator.pop(context); // 닫기
-                      onDelete(deleteIndex); // 삭제 콜백
+                      Navigator.pop(context);
+                      onDelete(deleteIndex);
                     },
                   ),
                 ),
@@ -194,7 +191,6 @@ class GalleryView extends StatelessWidget {
   }
 }
 
-// ✅ 전체 화면 뷰 (스와이프 + 삭제 + 확대)
 class FullScreenGalleryView extends StatefulWidget {
   final List<XFile> images;
   final int initialIndex;

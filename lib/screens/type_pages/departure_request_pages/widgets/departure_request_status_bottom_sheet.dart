@@ -50,7 +50,6 @@ Future<void> showDepartureRequestStatusBottomSheet({
                     ),
                   ),
                 ),
-
                 const Row(
                   children: [
                     Icon(Icons.settings, color: Colors.blueAccent),
@@ -62,8 +61,6 @@ Future<void> showDepartureRequestStatusBottomSheet({
                   ],
                 ),
                 const SizedBox(height: 24),
-
-                // 정보 수정 버튼
                 ElevatedButton.icon(
                   icon: const Icon(Icons.edit_note_outlined),
                   label: const Text("정보 수정"),
@@ -91,8 +88,6 @@ Future<void> showDepartureRequestStatusBottomSheet({
                   ),
                 ),
                 const SizedBox(height: 12),
-
-                // 로그 확인 버튼
                 ElevatedButton.icon(
                   icon: const Icon(Icons.history),
                   label: const Text("로그 확인"),
@@ -122,8 +117,6 @@ Future<void> showDepartureRequestStatusBottomSheet({
                   ),
                 ),
                 const SizedBox(height: 12),
-
-                // 입차 요청으로 되돌리기
                 ElevatedButton.icon(
                   icon: const Icon(Icons.assignment_return),
                   label: const Text("입차 요청으로 되돌리기"),
@@ -141,8 +134,6 @@ Future<void> showDepartureRequestStatusBottomSheet({
                   ),
                 ),
                 const SizedBox(height: 12),
-
-                // 입차 완료 처리
                 ElevatedButton.icon(
                   icon: const Icon(Icons.check_circle_outline),
                   label: const Text("입차 완료 처리"),
@@ -160,8 +151,6 @@ Future<void> showDepartureRequestStatusBottomSheet({
                   ),
                 ),
                 const SizedBox(height: 12),
-
-                // 삭제 버튼
                 TextButton.icon(
                   icon: const Icon(Icons.delete_forever, color: Colors.red),
                   label: const Text("삭제", style: TextStyle(color: Colors.red)),
@@ -179,17 +168,16 @@ Future<void> showDepartureRequestStatusBottomSheet({
   );
 }
 
-// 상태 이동 핸들러들
 void handleEntryParkingRequest(BuildContext context, String plateNumber, String area) {
   final movementPlate = context.read<MovementPlate>();
-  final performedBy = context.read<UserState>().name; // ✅ 사용자 이름 가져오기
+  final performedBy = context.read<UserState>().name;
 
   movementPlate.goBackToParkingRequest(
     fromType: PlateType.departureRequests,
     plateNumber: plateNumber,
     area: area,
     newLocation: "미지정",
-    performedBy: performedBy, // ✅ 명시적으로 전달
+    performedBy: performedBy,
   );
 
   showSuccessSnackbar(context, "입차 요청이 처리되었습니다.");
@@ -205,16 +193,4 @@ void handleEntryParkingCompleted(BuildContext context, String plateNumber, Strin
   );
 
   showSuccessSnackbar(context, "입차 완료가 처리되었습니다.");
-}
-
-void handlePrePayment(BuildContext context, String plateNumber, String area, String location) {
-  final movementPlate = context.read<MovementPlate>();
-
-  movementPlate.setDepartureRequested(
-    plateNumber,
-    area,
-    location,
-  );
-
-  showSuccessSnackbar(context, "사전 정산이 처리되었습니다.");
 }

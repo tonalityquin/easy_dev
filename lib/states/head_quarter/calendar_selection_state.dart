@@ -1,4 +1,3 @@
-// 📁 states/calendar/calendar_selection_state.dart
 import 'package:flutter/material.dart';
 import '../../models/user_model.dart';
 
@@ -16,12 +15,6 @@ class CalendarSelectionState extends ChangeNotifier {
 
   void setUser(UserModel? user) {
     _selectedUser = user;
-    notifyListeners();
-  }
-
-  void clear() {
-    _selectedArea = null;
-    _selectedUser = null;
     notifyListeners();
   }
 }

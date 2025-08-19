@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // HapticFeedback
+import 'package:flutter/services.dart';
 
 class KorKeypadUtils {
   static Widget buildSubLayout(
       List<List<String>> keyRows,
       Function(String) onKeyTap, {
-        required State state, // ✅ State로 변경
+        required State state,
         Map<String, AnimationController>? controllers,
         Map<String, bool>? isPressed,
       }) {
@@ -31,7 +31,7 @@ class KorKeypadUtils {
   static Widget _buildAnimatedKeyButton(
       String key,
       VoidCallback? onTap,
-      State state, // ✅ State로 변경
+      State state,
       Map<String, AnimationController> controllers,
       Map<String, bool> isPressed,
       ) {

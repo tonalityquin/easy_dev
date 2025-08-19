@@ -13,13 +13,11 @@ import 'utils/init/dev_initializer.dart';
 import 'utils/foreground_task_handler.dart';
 import 'screens/type_pages/debugs/firestore_logger.dart'; // ✅ FirestoreLogger import
 
-/// 🔹 포그라운드 태스크 콜백
 @pragma('vm:entry-point')
 void myForegroundCallback() {
   FlutterForegroundTask.setTaskHandler(MyTaskHandler());
 }
 
-/// 🔹 앱 진입점
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -46,7 +44,6 @@ void main() async {
   runApp(const AppBootstrapper());
 }
 
-/// 🔹 앱 초기화 위젯
 class AppBootstrapper extends StatelessWidget {
   const AppBootstrapper({super.key});
 
@@ -70,31 +67,23 @@ class AppBootstrapper extends StatelessWidget {
     );
   }
 
-  /// 초기화 로직
   Future<void> _initializeApp() async {
-    // ✅ Firebase 초기화
     await Firebase.initializeApp();
 
-    // ✅ FirestoreLogger 초기화
     await FirestoreLogger().init();
 
-    // ✅ LoginDebugFirestoreLogger 초기화
     await LoginDebugFirestoreLogger().init();
 
     await ClockInDebugFirestoreLogger().init();
-    // ✅ 개발용 리소스 초기화
     await registerDevResources();
 
-    // 📍 런타임 퍼미션 요청
     var status = await Permission.locationWhenInUse.status;
     if (!status.isGranted) {
       status = await Permission.locationWhenInUse.request();
     }
 
-    // 배터리 최적화 제외 요청
     await Permission.ignoreBatteryOptimizations.request();
 
-    // Foreground Service 시작
     await FlutterForegroundTask.startService(
       notificationTitle: '출차 요청 수신 중',
       notificationText: '포그라운드에서 대기 중',
@@ -102,7 +91,6 @@ class AppBootstrapper extends StatelessWidget {
   }
 }
 
-/// 🔹 메인 앱 위젯
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -124,7 +112,6 @@ class MyApp extends StatelessWidget {
   }
 }
 
-/// 🔹 에러 화면
 class ErrorApp extends StatelessWidget {
   final String message;
 
@@ -148,7 +135,6 @@ class ErrorApp extends StatelessWidget {
   }
 }
 
-/// 🔹 404 페이지
 class NotFoundPage extends StatelessWidget {
   const NotFoundPage({super.key});
 

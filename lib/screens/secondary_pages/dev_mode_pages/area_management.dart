@@ -24,7 +24,7 @@ class _AreaManagementState extends State<AreaManagement> with SingleTickerProvid
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this); // ✅ 탭 수 4개로 수정
+    _tabController = TabController(length: 4, vsync: this);
     _loadDivisions();
   }
 
@@ -35,9 +35,7 @@ class _AreaManagementState extends State<AreaManagement> with SingleTickerProvid
     final divisions = divisionSnapshot.docs.map((e) => e['name'] as String).toList();
 
     final areaSnapshot = await firestore.collection('areas').get();
-    final areas = areaSnapshot.docs
-        .map((doc) => '${doc['division']}-${doc['name']}')
-        .toList();
+    final areas = areaSnapshot.docs.map((doc) => '${doc['division']}-${doc['name']}').toList();
 
     setState(() {
       _divisionList = divisions;
@@ -62,7 +60,6 @@ class _AreaManagementState extends State<AreaManagement> with SingleTickerProvid
       'createdAt': FieldValue.serverTimestamp(),
     });
 
-    // ✅ 추가 후 갱신
     _loadDivisions();
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -74,10 +71,8 @@ class _AreaManagementState extends State<AreaManagement> with SingleTickerProvid
     try {
       await FirebaseFirestore.instance.collection('divisions').doc(name).delete();
 
-      final areaSnapshot = await FirebaseFirestore.instance
-          .collection('areas')
-          .where('division', isEqualTo: name)
-          .get();
+      final areaSnapshot =
+          await FirebaseFirestore.instance.collection('areas').where('division', isEqualTo: name).get();
       for (var doc in areaSnapshot.docs) {
         await doc.reference.delete();
       }
@@ -124,7 +119,7 @@ class _AreaManagementState extends State<AreaManagement> with SingleTickerProvid
               Tab(icon: Icon(Icons.location_city), text: '지역 추가'),
               Tab(icon: Icon(Icons.business), text: '회사 관리'),
               Tab(icon: Icon(Icons.manage_accounts), text: '계정 조회/관리'),
-              Tab(icon: Icon(Icons.settings), text: '리밋 설정'), // ✅ 새 탭 추가
+              Tab(icon: Icon(Icons.settings), text: '리밋 설정'),
             ],
           ),
         ),
@@ -152,7 +147,7 @@ class _AreaManagementState extends State<AreaManagement> with SingleTickerProvid
               },
               onAreaChanged: (val) => setState(() => _accountSelectedArea = val),
             ),
-            const StatusMappingHelper(), // ✅ 탭 뷰에 새 위젯 추가
+            const StatusMappingHelper(),
           ],
         ),
       ),

@@ -23,13 +23,11 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
   String? _basicStandardValue;
   String? _addStandardValue;
 
-  // 정기 정산
   final TextEditingController _regularNameController = TextEditingController();
   final TextEditingController _regularPriceController = TextEditingController();
   final TextEditingController _regularDurationController = TextEditingController();
   String? _regularType;
 
-  // 공통
   String? _errorMessage;
   String _selectedMode = '변동';
 
@@ -153,8 +151,6 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 16),
-
-                  /// 정산 모드 선택
                   ToggleButtons(
                     isSelected: [_selectedMode == '변동', _selectedMode == '고정'],
                     onPressed: (index) {
@@ -168,10 +164,7 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
                       Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: Text('고정')),
                     ],
                   ),
-
                   const SizedBox(height: 24),
-
-                  /// 일반 정산
                   if (_selectedMode == '변동') ...[
                     BillTypeInput(controller: _billController),
                     const SizedBox(height: 16),
@@ -193,8 +186,6 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
                       amountLabel: '추가 요금',
                     ),
                   ],
-
-                  /// 정기 정산
                   if (_selectedMode == '고정') ...[
                     TextField(
                       controller: _regularNameController,
@@ -215,7 +206,6 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
                       onChanged: (val) => setState(() => _regularType = val),
                     ),
                     const SizedBox(height: 16),
-                    // 💡 정기 사용 시간 먼저
                     TextField(
                       controller: _regularDurationController,
                       keyboardType: TextInputType.number,
@@ -227,7 +217,6 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    // 그 다음 정기 요금
                     TextField(
                       controller: _regularPriceController,
                       keyboardType: TextInputType.number,
@@ -238,7 +227,6 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
                       ),
                     ),
                   ],
-
                   const SizedBox(height: 16),
                   ErrorMessageText(message: _errorMessage),
                   const SizedBox(height: 24),

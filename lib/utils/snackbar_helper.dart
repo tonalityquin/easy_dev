@@ -40,7 +40,6 @@ void showCustomSnackbar({
   });
 }
 
-// ✅ 성공 snackbar
 void showSuccessSnackbar(BuildContext context, String message) {
   showCustomSnackbar(
     context: context,
@@ -50,7 +49,6 @@ void showSuccessSnackbar(BuildContext context, String message) {
   );
 }
 
-// ✅ 실패 snackbar
 void showFailedSnackbar(BuildContext context, String message) {
   showCustomSnackbar(
     context: context,
@@ -60,7 +58,6 @@ void showFailedSnackbar(BuildContext context, String message) {
   );
 }
 
-// ✅ 경고 snackbar
 void showSelectedSnackbar(BuildContext context, String message) {
   showCustomSnackbar(
     context: context,

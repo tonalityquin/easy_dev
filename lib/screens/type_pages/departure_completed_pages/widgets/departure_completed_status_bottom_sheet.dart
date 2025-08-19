@@ -1,4 +1,3 @@
-// lib/screens/type_pages/departure_completed_pages/widgets/departure_completed_status_bottom_sheet.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -58,8 +57,6 @@ Future<void> showDepartureCompletedStatusBottomSheet({
                   ],
                 ),
                 const SizedBox(height: 24),
-
-                // 정보 수정
                 ElevatedButton.icon(
                   icon: const Icon(Icons.edit_note_outlined),
                   label: const Text("정보 수정"),
@@ -87,8 +84,6 @@ Future<void> showDepartureCompletedStatusBottomSheet({
                   ),
                 ),
                 const SizedBox(height: 12),
-
-                // 로그 확인
                 ElevatedButton.icon(
                   icon: const Icon(Icons.history),
                   label: const Text("로그 확인"),

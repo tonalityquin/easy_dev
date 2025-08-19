@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../../../enums/plate_type.dart';
 import '../../../../states/plate/plate_state.dart';
-import '../../../../utils/snackbar_helper.dart'; // ✅ 커스텀 스낵바 사용을 위한 import
+import '../../../../utils/snackbar_helper.dart';
 
 class BackEndController extends StatelessWidget {
   const BackEndController({super.key});
@@ -78,7 +78,7 @@ class BackEndController extends StatelessWidget {
       case PlateType.departureRequests:
         return '출차 요청';
       case PlateType.departureCompleted:
-        return '출차 완료 (미정산만)'; // ← 변경
+        return '출차 완료 (미정산만)';
     }
   }
 }

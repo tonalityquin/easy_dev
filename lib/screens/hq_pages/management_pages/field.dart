@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 import '../../../enums/plate_type.dart';
 import '../../../states/user/user_state.dart';
 import '../../type_pages/debugs/firestore_logger.dart';
-import 'area_detail_screen.dart'; // 상세 페이지 import
+import 'area_detail_screen.dart';
 
 class Field extends StatefulWidget {
   const Field({super.key});

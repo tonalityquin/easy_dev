@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import '../../../modify_pages/modify_plate_service.dart';
 
-/// 저장된 사진 목록을 보여주는 다이얼로그
 class PlateImageDialog extends StatelessWidget {
   final String plateNumber;
 
@@ -100,7 +99,6 @@ class PlateImageDialog extends StatelessWidget {
   }
 }
 
-/// 전체 화면 이미지 뷰어 (XFile 또는 URL)
 void modifyshowFullScreenImageViewer(
     BuildContext context,
     List<dynamic> images,
@@ -209,7 +207,6 @@ void modifyshowFullScreenImageViewer(
   );
 }
 
-/// 파일 이름 기반 메타데이터 추출
 String _parseMetadataFromFileName(String fileName) {
   try {
     final name = fileName.replaceAll('.jpg', '');
@@ -230,7 +227,6 @@ String _parseMetadataFromFileName(String fileName) {
   }
 }
 
-/// URL 기반 메타데이터 추출
 String _parseMetadataFromUrl(String url) {
   try {
     final segments = Uri.parse(url).pathSegments;

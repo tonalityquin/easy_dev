@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../../screens/type_pages/debugs/firestore_logger.dart'; // FirestoreLogger import
+import '../../screens/type_pages/debugs/firestore_logger.dart';
 
 enum AreaType {
   dev;
@@ -10,9 +10,8 @@ enum AreaType {
 }
 
 class AreaState with ChangeNotifier {
-  // 🔹 1. 필드
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirestoreLogger _logger = FirestoreLogger(); // ✅ 로거 인스턴스
+  final FirestoreLogger _logger = FirestoreLogger();
 
   final Set<String> _availableAreas = {};
   final Map<String, List<String>> _divisionAreaMap = {};
@@ -25,21 +24,22 @@ class AreaState with ChangeNotifier {
 
   bool _isLocked = false;
 
-  // 🔹 2. 게터
   String get currentArea => _currentArea;
+
   String get currentDivision => _currentDivision;
+
   String get selectedArea => _selectedArea;
+
   String get selectedDivision => _selectedDivision;
+
   List<String> get availableAreas => _availableAreas.toList();
+
   bool get isLocked => _isLocked;
+
   Map<String, List<String>> get divisionAreaMap => _divisionAreaMap;
 
-  // 🔹 3. 생성자
   AreaState();
 
-  // 🔹 4. Public 메서드
-
-  /// 모든 division-area 구조 로딩 (관리자용)
   Future<void> loadAreasForDivision(String userDivision) async {
     await _logger.log('loadAreasForDivision 시작 - division="$userDivision"', level: 'called');
     try {
@@ -66,7 +66,6 @@ class AreaState with ChangeNotifier {
     }
   }
 
-  /// ✅ currentArea 초기화
   Future<void> initializeArea(String userArea) async {
     await _logger.log('initializeArea 시작 - userArea="$userArea"', level: 'called');
     try {
@@ -145,7 +144,6 @@ class AreaState with ChangeNotifier {
     }
   }
 
-  /// ✅ currentArea 업데이트
   Future<void> updateArea(String newArea, {bool isSyncing = false}) async {
     if (_isLocked && !isSyncing) {
       debugPrint('⛔ currentArea는 보호 중 → 변경 무시됨 (입력: $newArea)');

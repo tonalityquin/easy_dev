@@ -6,7 +6,6 @@ import 'cooperation_Calendar_pages/sections/calendar_event_card.dart';
 import 'cooperation_Calendar_pages/utils/calendar_logic.dart';
 import 'cooperation_Calendar_pages/utils/calendar_utils.dart';
 
-/// 개인용 Google Calendar 연동 월간 캘린더 화면
 class CooperationCalendar extends StatefulWidget {
   final String calendarId;
 
@@ -68,7 +67,6 @@ class _CooperationCalendarState extends State<CooperationCalendar> {
       ),
       body: Column(
         children: [
-          /// 📅 캘린더 위젯
           TableCalendar(
             firstDay: DateTime(2020),
             lastDay: DateTime(2030),
@@ -112,7 +110,6 @@ class _CooperationCalendarState extends State<CooperationCalendar> {
 
           const Divider(),
 
-          /// 🔘 필터 Chip 목록
           CalendarFilterChips(
             calendarId: widget.calendarId,
             filterStates: _filterStates,
@@ -127,7 +124,6 @@ class _CooperationCalendarState extends State<CooperationCalendar> {
             },
           ),
 
-          /// 📋 일정 카드 리스트
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.all(8),
@@ -141,8 +137,6 @@ class _CooperationCalendarState extends State<CooperationCalendar> {
         ],
       ),
 
-      /// ➕ 일정 추가 버튼
-      // ➕ 일정 추가 버튼
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton: Padding(
         padding: const EdgeInsets.only(bottom: 48, right: 16),

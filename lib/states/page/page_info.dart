@@ -12,7 +12,6 @@ import '../../screens/hq_pages/link_to_google.dart';
 import '../../enums/plate_type.dart';
 import 'page_state.dart';
 
-/// ✅ PageInfo를 builder 패턴으로 변경
 class PageInfo {
   final String title;
   final PlateType collectionKey;
@@ -25,7 +24,6 @@ class PageInfo {
   });
 }
 
-/// ✅ defaultPages에서 builder로 구성
 final List<PageInfo> defaultPages = [
   PageInfo(
     title: '입차 요청',
@@ -33,7 +31,7 @@ final List<PageInfo> defaultPages = [
     builder: (_) => const ParkingRequestPage(),
   ),
   PageInfo(
-    title: '홈', // ✅ 이름 변경
+    title: '홈',
     collectionKey: PlateType.parkingCompleted,
     builder: (context) {
       final pageState = context.read<PageState>();
@@ -47,7 +45,6 @@ final List<PageInfo> defaultPages = [
   ),
 ];
 
-/// ✅ 본사(HQ) 전용 페이지 정보
 class HqPageInfo {
   final String title;
   final Widget page;

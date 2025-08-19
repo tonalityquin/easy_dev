@@ -11,7 +11,6 @@ import '../widgets/navigation/secondary_role_navigation.dart';
 class SecondaryPage extends StatelessWidget {
   const SecondaryPage({super.key});
 
-  /// ✅ 역할에 따른 페이지 구성 함수 (바텀시트에서도 접근 가능하게 static 처리)
   static List<SecondaryInfo> getUpdatedPages(String userRole, SecondaryMode roleState) {
     final mode = roleState.currentStatus;
 
@@ -37,7 +36,6 @@ class SecondaryPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ⚠️ watch → read 로 변경하여 UserState 변경 시 전체 리빌드 방지
     final userRole = context.read<UserState>().role;
 
     return MultiProvider(
@@ -48,12 +46,10 @@ class SecondaryPage extends StatelessWidget {
           update: (_, roleState, secondaryState) {
             final newPages = getUpdatedPages(userRole, roleState);
 
-            // ✅ 페이지 구성이 동일하면 불필요한 업데이트/리빌드 방지
             if (listEquals(secondaryState!.pages, newPages)) {
               return secondaryState;
             }
 
-            // ✅ 인덱스 보존(필요 시 keepIndex/preserveIndex 옵션 맞춰 사용)
             secondaryState.updatePages(newPages, keepIndex: true);
             return secondaryState;
           },
@@ -76,16 +72,13 @@ class SecondaryPage extends StatelessWidget {
                   child: SecondaryRoleNavigation(
                     onModeChanged: (selectedLabel) {
                       final manageState = Provider.of<SecondaryMode>(context, listen: false);
-                      // 여기서도 read 사용
                       final userRole = Provider.of<UserState>(context, listen: false).role;
                       final newMode = ModeStatusExtension.fromLabel(selectedLabel);
 
                       if (newMode != null && newMode != manageState.currentStatus) {
-                        // ✅ 실제 모드가 바뀔 때만 변경
                         manageState.changeStatus(newMode);
 
                         final newPages = getUpdatedPages(userRole, manageState);
-                        // ✅ 인덱스 보존하여 불필요한 탭 초기화 방지
                         Provider.of<SecondaryState>(context, listen: false).updatePages(newPages, keepIndex: true);
                       }
                     },

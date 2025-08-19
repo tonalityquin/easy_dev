@@ -23,7 +23,6 @@ class BreakLogUploader {
     }
   }
 
-  /// ✅ 휴게 기록 업로드
   static Future<bool> uploadBreakJson({
     required BuildContext context,
     required Map<String, dynamic> data,
@@ -44,20 +43,15 @@ class BreakLogUploader {
 
       final spreadsheetId = _getSpreadsheetId(area);
 
-      // ✅ [1] 중복 체크
       final existingRows = await _loadAllRecords(spreadsheetId);
-      final isDuplicate = existingRows.any((row) =>
-      row.length >= 7 &&
-          row[0] == dateStr &&
-          row[2] == userId &&
-          row[6] == status);
+      final isDuplicate =
+          existingRows.any((row) => row.length >= 7 && row[0] == dateStr && row[2] == userId && row[6] == status);
 
       if (isDuplicate) {
         debugPrint('⚠️ 이미 휴게 기록이 존재합니다.');
         return false;
       }
 
-      // ✅ [2] 행 구성
       final row = [
         dateStr,
         recordedTime,
@@ -71,7 +65,6 @@ class BreakLogUploader {
       final client = await _getSheetsClient();
       final sheetsApi = SheetsApi(client);
 
-      // ✅ [3] Google Sheets에 추가
       await sheetsApi.spreadsheets.values.append(
         ValueRange(values: [row]),
         spreadsheetId,
@@ -89,7 +82,6 @@ class BreakLogUploader {
     }
   }
 
-  /// 🔐 인증 클라이언트 생성
   static Future<AuthClient> _getSheetsClient() async {
     final jsonStr = await rootBundle.loadString(_serviceAccountPath);
     final credentials = ServiceAccountCredentials.fromJson(jsonStr);
@@ -99,7 +91,6 @@ class BreakLogUploader {
     );
   }
 
-  /// 📥 휴게기록 시트 불러오기
   static Future<List<List<String>>> _loadAllRecords(String spreadsheetId) async {
     final client = await _getSheetsClient();
     final sheetsApi = SheetsApi(client);
@@ -112,12 +103,5 @@ class BreakLogUploader {
     client.close();
 
     return result.values?.map((row) => row.map((cell) => cell.toString()).toList()).toList() ?? [];
-  }
-
-  /// 다운로드 링크
-  static String getDownloadPath({
-    required String area,
-  }) {
-    return 'https://docs.google.com/spreadsheets/d/${_getSpreadsheetId(area)}/edit';
   }
 }

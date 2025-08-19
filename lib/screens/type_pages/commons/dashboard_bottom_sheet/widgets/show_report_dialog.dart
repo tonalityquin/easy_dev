@@ -119,7 +119,6 @@ Future<void> showReportDialog(BuildContext context) {
   );
 }
 
-/// 🔄 Firestore 정산 요약 작성 (중복 방지 포함)
 Future<void> _updateLockedFeeSummary(String division, String area) async {
   final firestore = FirebaseFirestore.instance;
   final date = DateTime.now();

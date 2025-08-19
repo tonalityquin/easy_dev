@@ -20,7 +20,6 @@ class DepartureCompletedControlButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ 현재 선택 상태 확인
     final plateState = context.watch<PlateState>();
     final userName = context.read<UserState>().name;
     final selectedPlate =
@@ -35,7 +34,6 @@ class DepartureCompletedControlButtons extends StatelessWidget {
         child: SizedBox(
           height: 56,
           child: Center(
-            // ✅ 선택 모드면 "상태 수정" 버튼, 아니면 검색 버튼
             child: isPlateSelected
                 ? TextButton.icon(
               onPressed: () async {

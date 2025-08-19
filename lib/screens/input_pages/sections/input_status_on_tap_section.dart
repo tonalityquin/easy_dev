@@ -4,13 +4,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../utils/status_mapping_helper.dart';
 
 class InputStatusOnTapSection extends StatefulWidget {
-  /// 부모에게 선택된 상태 목록을 전달하는 콜백
   final ValueChanged<List<String>>? onSelectionChanged;
 
-  /// 초기 선택된 상태 이름들
   final List<String>? initialSelectedStatuses;
 
-  /// 초기 업종
   final String? initialCategory;
 
   const InputStatusOnTapSection({
@@ -39,7 +36,6 @@ class _InputStatusOnTapSectionState extends State<InputStatusOnTapSection> {
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getString('selected_category');
 
-    // SharedPreferences > initialCategory > 기본값 '공통'
     setState(() {
       selectedCategory = saved?.isNotEmpty == true
           ? saved

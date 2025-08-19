@@ -5,7 +5,6 @@ import '../../screens/type_pages/debugs/firestore_logger.dart';
 class LocationReadService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  /// 특정 지역의 위치 정보를 1회 조회합니다.
   Future<List<LocationModel>> getLocationsOnce(String area) async {
     await FirestoreLogger().log('getLocationsOnce called (area=$area)');
 

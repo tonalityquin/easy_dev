@@ -25,42 +25,6 @@ class SignaturePlateSearchBottomSheet extends StatefulWidget {
 
   @override
   State<SignaturePlateSearchBottomSheet> createState() => _SignaturePlateSearchBottomSheetState();
-
-  static Future<void> show(
-      BuildContext context,
-      void Function(String) onSearch,
-      String area,
-      ) async {
-    await showGeneralDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: '닫기',
-      barrierColor: Colors.black54,
-      transitionDuration: const Duration(milliseconds: 500),
-      pageBuilder: (_, __, ___) {
-        return Align(
-          alignment: Alignment.bottomCenter,
-          child: SignaturePlateSearchBottomSheet(
-            onSearch: onSearch,
-            area: area,
-          ),
-        );
-      },
-      transitionBuilder: (_, animation, __, child) {
-        final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutQuint);
-        return SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0, 1),
-            end: Offset.zero,
-          ).animate(curved),
-          child: FadeTransition(
-            opacity: curved,
-            child: child,
-          ),
-        );
-      },
-    );
-  }
 }
 
 class _SignaturePlateSearchBottomSheetState extends State<SignaturePlateSearchBottomSheet>
@@ -161,42 +125,42 @@ class _SignaturePlateSearchBottomSheetState extends State<SignaturePlateSearchBo
                     if (_hasSearched)
                       _results.isEmpty
                           ? const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 24),
-                        child: Center(
-                          child: Text(
-                            '유효하지 않은 번호입니다.',
-                            style: TextStyle(color: Colors.redAccent, fontSize: 16),
-                          ),
-                        ),
-                      )
+                              padding: EdgeInsets.symmetric(vertical: 24),
+                              child: Center(
+                                child: Text(
+                                  '유효하지 않은 번호입니다.',
+                                  style: TextStyle(color: Colors.redAccent, fontSize: 16),
+                                ),
+                              ),
+                            )
                           : PlateSearchResults(
-                        results: _results,
-                        onSelect: (selected) {
-                          Navigator.pop(context); // 바텀시트 닫기
-                          showParkingCompletedStatusBottomSheet(
-                            context: context,
-                            plate: selected,
-                            onRequestEntry: () async {
-                              final user = context.read<UserState>().name;
-                              await context.read<MovementPlate>().goBackToParkingRequest(
-                                fromType: PlateType.parkingCompleted,
-                                plateNumber: selected.plateNumber,
-                                area: selected.area,
-                                newLocation: "미지정",
-                                performedBy: user,
-                              );
-                              await _refreshSearchResults(); // ✅ 갱신
-                            },
-                            onDelete: () async {
-                              await context.read<DeletePlate>().deleteFromParkingCompleted(
-                                selected.plateNumber,
-                                selected.area,
-                              );
-                              await _refreshSearchResults(); // ✅ 갱신
-                            },
-                          );
-                        },
-                      ),
+                              results: _results,
+                              onSelect: (selected) {
+                                Navigator.pop(context);
+                                showParkingCompletedStatusBottomSheet(
+                                  context: context,
+                                  plate: selected,
+                                  onRequestEntry: () async {
+                                    final user = context.read<UserState>().name;
+                                    await context.read<MovementPlate>().goBackToParkingRequest(
+                                          fromType: PlateType.parkingCompleted,
+                                          plateNumber: selected.plateNumber,
+                                          area: selected.area,
+                                          newLocation: "미지정",
+                                          performedBy: user,
+                                        );
+                                    await _refreshSearchResults();
+                                  },
+                                  onDelete: () async {
+                                    await context.read<DeletePlate>().deleteFromParkingCompleted(
+                                          selected.plateNumber,
+                                          selected.area,
+                                        );
+                                    await _refreshSearchResults();
+                                  },
+                                );
+                              },
+                            ),
                     Center(
                       child: TextButton(
                         onPressed: () => Navigator.pop(context),
@@ -213,10 +177,10 @@ class _SignaturePlateSearchBottomSheetState extends State<SignaturePlateSearchBo
                           isLoading: _isLoading,
                           onPressed: valid
                               ? () async {
-                            setState(() => _isLoading = true);
-                            await _refreshSearchResults();
-                            widget.onSearch(value.text);
-                          }
+                                  setState(() => _isLoading = true);
+                                  await _refreshSearchResults();
+                                  widget.onSearch(value.text);
+                                }
                               : null,
                         );
                       },
@@ -231,18 +195,18 @@ class _SignaturePlateSearchBottomSheetState extends State<SignaturePlateSearchBo
         bottomNavigationBar: _hasSearched
             ? const SizedBox.shrink()
             : AnimatedKeypad(
-          slideAnimation: _slideAnimation,
-          fadeAnimation: _fadeAnimation,
-          controller: _controller,
-          maxLength: 4,
-          enableDigitModeSwitch: false,
-          onComplete: () => setState(() {}),
-          onReset: () => setState(() {
-            _controller.clear();
-            _hasSearched = false;
-            _results.clear();
-          }),
-        ),
+                slideAnimation: _slideAnimation,
+                fadeAnimation: _fadeAnimation,
+                controller: _controller,
+                maxLength: 4,
+                enableDigitModeSwitch: false,
+                onComplete: () => setState(() {}),
+                onReset: () => setState(() {
+                  _controller.clear();
+                  _hasSearched = false;
+                  _results.clear();
+                }),
+              ),
       ),
     );
   }

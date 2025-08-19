@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
-import 'bill_model.dart'; // enum BillType 정의되어 있는 파일
+import 'bill_model.dart';
 
 class RegularBillModel {
   final String id;
-  final BillType type; // ✅ BillType.general or BillType.regular
-  final String countType; // 정산 이름
+  final BillType type;
+  final String countType;
   final String area;
-  final String regularType; // '일 주차' or '월 주차'
-  final int regularAmount; // 요금
-  final int regularDurationHours; // 주차 가능 시간 (시간 단위)
+  final String regularType;
+  final int regularAmount;
+  final int regularDurationHours;
 
   RegularBillModel({
     required this.id,
-    this.type = BillType.regular, // 항상 정기
+    this.type = BillType.regular,
     required this.countType,
     required this.area,
     required this.regularType,
@@ -20,7 +20,6 @@ class RegularBillModel {
     required this.regularDurationHours,
   });
 
-  /// ✅ Firestore → 모델
   factory RegularBillModel.fromMap(String id, Map<String, dynamic> data) {
     try {
       return RegularBillModel(
@@ -42,7 +41,6 @@ class RegularBillModel {
     }
   }
 
-  /// ✅ Firestore 저장용
   Map<String, dynamic> toFirestoreMap() {
     return {
       'type': billTypeToString(type),
@@ -54,7 +52,6 @@ class RegularBillModel {
     };
   }
 
-  /// ✅ 캐시 저장용
   Map<String, dynamic> toCacheMap() {
     return {
       'id': id,
@@ -67,7 +64,6 @@ class RegularBillModel {
     };
   }
 
-  /// ✅ 캐시 복원용
   factory RegularBillModel.fromCacheMap(Map<String, dynamic> data) {
     return RegularBillModel(
       id: data['id'] ?? '',

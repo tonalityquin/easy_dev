@@ -14,7 +14,6 @@ class UserInfoCard extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(12),
       onTap: () {
-        // 👉 추후 상세 정보 페이지로 연결 예정
         print('📄 사용자 상세 정보 보기');
       },
       child: Card(
@@ -30,7 +29,6 @@ class UserInfoCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 상단 타이틀(부제목) 및 아이콘
               Row(
                 children: [
                   Icon(Icons.badge, size: 14, color: Colors.grey[600]),
@@ -46,8 +44,6 @@ class UserInfoCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
-
-              // 사용자 기본 정보 (이름, 직책, 프로필 아이콘, QR 코드 아이콘)
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -83,12 +79,9 @@ class UserInfoCard extends StatelessWidget {
                   Icon(Icons.qr_code, color: Colors.grey[600]),
                 ],
               ),
-
               const SizedBox(height: 16),
               const Divider(),
               const SizedBox(height: 12),
-
-              // 연락처 및 근무 지역 정보
               _infoRow(Icons.phone, 'Tel.', formatPhoneNumber(userState.phone)),
               _infoRow(Icons.location_on, 'Sector.', userState.area),
             ],
@@ -98,7 +91,6 @@ class UserInfoCard extends StatelessWidget {
     );
   }
 
-  /// 아이콘과 텍스트를 한 줄에 정렬하여 보여주는 행 구성
   Widget _infoRow(IconData icon, String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
@@ -131,7 +123,6 @@ class UserInfoCard extends StatelessWidget {
     );
   }
 
-  /// 전화번호 형식을 010-1234-5678 형태로 포맷
   String formatPhoneNumber(String phone) {
     if (phone.length == 11) {
       return '${phone.substring(0, 3)}-${phone.substring(3, 7)}-${phone.substring(7)}';

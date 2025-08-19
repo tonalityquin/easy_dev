@@ -19,7 +19,6 @@ extension PlateTypeExtension on PlateType {
     }
   }
 
-  /// UI에 표시할 라벨 (한글)
   String get label {
     switch (this) {
       case PlateType.parkingRequests:

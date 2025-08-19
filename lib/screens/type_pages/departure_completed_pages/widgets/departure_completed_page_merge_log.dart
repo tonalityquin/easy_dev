@@ -1,9 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../states/plate/filter_plate.dart';
-import '../../../../utils/snackbar_helper.dart';
 import 'plate_image_dialog.dart';
 
 class MergedLogSection extends StatefulWidget {
@@ -27,43 +25,6 @@ class MergedLogSection extends StatefulWidget {
 class _MergedLogSectionState extends State<MergedLogSection> {
   final Set<String> _expandedPlates = {};
 
-  Future<void> _refreshMergedLogs() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('병합 로그 새로고침'),
-        content: const Text(
-          '본 작업은 이하에 해당될 경우에만 수행하세요,\n'
-          '1. 차량 사고 등의 이슈가 발생하였을 때.\n\n'
-          '2. 고객 컴플레인 등의 이슈가 발생하였을 때.\n\n\n'
-          '계속 하시겠습니까?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('취소'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('동의'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) return;
-
-    final prefs = await SharedPreferences.getInstance();
-    final d = widget.selectedDate;
-    final cacheKey = 'mergedLogCache-${widget.division}-${widget.area}-${d.year}-${d.month}-${d.day}';
-    await prefs.remove(cacheKey);
-
-    if (mounted) {
-      showSuccessSnackbar(context, '병합 로그가 새로고침되었습니다.');
-      setState(() {});
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final searchQuery = context.watch<FilterPlate>().searchQuery;
@@ -75,22 +36,8 @@ class _MergedLogSectionState extends State<MergedLogSection> {
       ..sort((a, b) {
         final aTime = DateTime.tryParse(a['mergedAt'] ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
         final bTime = DateTime.tryParse(b['mergedAt'] ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
-        return bTime.compareTo(aTime); // 최신 순 정렬
+        return bTime.compareTo(aTime);
       });
-
-    final totalLockedFee = filteredLogs.map((log) {
-      final logs = (log['logs'] as List?) ?? [];
-      final latestBill = logs
-          .whereType<Map<String, dynamic>>()
-          .where((l) => l['action'] == '사전 정산')
-          .fold<Map<String, dynamic>?>(null, (prev, curr) {
-        final currTime = DateTime.tryParse(curr['timestamp'] ?? '');
-        final prevTime = prev != null ? DateTime.tryParse(prev['timestamp'] ?? '') : null;
-        if (prevTime == null || (currTime != null && currTime.isAfter(prevTime))) return curr;
-        return prev;
-      });
-      return latestBill?['lockedFee'] as num? ?? 0;
-    }).fold<num>(0, (sum, fee) => sum + fee);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -164,9 +111,7 @@ class _MergedLogSectionState extends State<MergedLogSection> {
                       Expanded(
                           flex: 2, child: Center(child: Text(formattedTime, style: const TextStyle(fontSize: 18)))),
                       Expanded(flex: 5, child: Center(child: Text(plate, style: const TextStyle(fontSize: 18)))),
-                      Expanded(
-                          flex: 3,
-                          child: Center(child: Text(billTypeText, style: const TextStyle(fontSize: 16)))),
+                      Expanded(flex: 3, child: Center(child: Text(billTypeText, style: const TextStyle(fontSize: 16)))),
                     ],
                   ),
                 ),
@@ -208,10 +153,10 @@ class _MergedLogSectionState extends State<MergedLogSection> {
                                         child: Text(
                                           const JsonEncoder.withIndent('  ').convert(logs),
                                           style: const TextStyle(
-                                            fontSize: 12,                     // ✅ 폰트 크기 증가
-                                            fontFamily: 'monospace',          // ✅ Android 대응 고정폭
-                                            color: Colors.black,              // ✅ 흰배경 대비 검정 글자
-                                            height: 1.5,                      // ✅ 줄 간격 증가
+                                            fontSize: 12,
+                                            fontFamily: 'monospace',
+                                            color: Colors.black,
+                                            height: 1.5,
                                           ),
                                         ),
                                       ),

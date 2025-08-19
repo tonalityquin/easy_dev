@@ -11,33 +11,27 @@ class PlateState extends ChangeNotifier {
   final PlateRepository _repository;
   final AreaState _areaState;
 
-  /// 전이 추적용 (선택 사용)
   final Map<String, bool> previousIsLockedFee = {};
 
-  /// 타입별 최신 데이터
   final Map<PlateType, List<PlateModel>> _data = {
     for (var c in PlateType.values) c: [],
   };
 
-  /// 타입별 메인 스트림 구독
   final Map<PlateType, StreamSubscription> _subscriptions = {};
 
-  /// 타입별 정렬 상태 (true: 내림차순)
   final Map<PlateType, bool> _isSortedMap = {
     for (var c in PlateType.values) c: true,
   };
 
-  /// 타입별 구독 중인 지역
   final Map<PlateType, String> _subscribedAreas = {};
 
   bool _isLoading = false;
 
-  /// 사용자가 구독을 원한 타입 (지역 변경시 재구독 대상)
   final Set<PlateType> _desiredSubscriptions = {};
 
   PlateState(this._repository, this._areaState) {
     _areaState.addListener(_onAreaChanged);
-    _initDefaultSubscriptions(); // 기본: 입차 요청, 출차 요청, 출차 완료
+    _initDefaultSubscriptions();
   }
 
   String get currentArea => _areaState.currentArea;
@@ -107,10 +101,8 @@ class PlateState extends ChangeNotifier {
             final isLockedFeeTrue = data['isLockedFee'] == true;
 
             if (isDepartureCompleted && sameArea && isLockedFeeTrue) {
-              // ✅ 전이 확정(미정산 → 정산)
               debugPrint('✅ 정산 전이 감지: doc=${fresh.id}, plate=${data['plateNumber']}');
 
-              // 선택: 로컬 추적 (중복 처리 방지 용도)
               final key = (data['id'] ?? fresh.id).toString();
               previousIsLockedFee[key] = true;
             }
@@ -131,7 +123,6 @@ class PlateState extends ChangeNotifier {
       return;
     }
 
-    // ▣ 그 외 타입은 기존처럼 모델 리스트 스트림 사용
     final stream = _repository.streamToCurrentArea(
       type,
       area,
@@ -162,7 +153,6 @@ class PlateState extends ChangeNotifier {
     _subscribedAreas[type] = area;
   }
 
-  /// 타입별 구독 해제
   void unsubscribeType(PlateType type) {
     _desiredSubscriptions.remove(type);
 
@@ -222,7 +212,6 @@ class PlateState extends ChangeNotifier {
         return;
       }
 
-      // 동일 사용자에 의해 이미 다른 Plate 선택 중인지 확인
       final alreadySelected = _data.entries.expand((entry) => entry.value).firstWhere(
             (p) => p.isSelected && p.selectedBy == userName && p.id != plateId,
             orElse: () => PlateModel(
@@ -268,7 +257,6 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  /// 타입별 데이터 조회(출차 완료는 로컬 날짜 필터 지원)
   List<PlateModel> getPlatesByCollection(PlateType collection, {DateTime? selectedDate}) {
     var plates = _data[collection] ?? [];
 
@@ -277,7 +265,6 @@ class PlateState extends ChangeNotifier {
       final end = start.add(const Duration(days: 1));
 
       plates = plates.where((p) {
-        // endTime 없으면 updatedAt → requestTime 순으로 대체
         final t = p.endTime ?? p.updatedAt ?? p.requestTime;
         return !t.isBefore(start) && t.isBefore(end);
       }).toList();
@@ -286,7 +273,6 @@ class PlateState extends ChangeNotifier {
     return plates;
   }
 
-  /// 정렬 변경(실제 반영은 재구독 필요)
   void updateSortOrder(PlateType type, bool descending) {
     _isSortedMap[type] = descending;
     notifyListeners();
@@ -303,7 +289,6 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  /// 외부에서 강제 동기화(지역 변경 등)
   void syncWithAreaState() {
     debugPrint("🔄 syncWithAreaState : 지역 변경 감지 및 상태 갱신 호출됨");
     _cancelAllSubscriptions();
@@ -312,7 +297,6 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  /// 앱 시작 시 기본 구독
   void _initDefaultSubscriptions() {
     final defaults = <PlateType>[
       PlateType.parkingRequests,
@@ -324,7 +308,6 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  /// AreaState 지역 변경 시 재구독
   void _onAreaChanged() {
     debugPrint("🔄 지역 변경 감지됨: ${_areaState.currentArea}");
     _cancelAllSubscriptions();
@@ -333,7 +316,6 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  /// 모든 구독 취소
   void _cancelAllSubscriptions() {
     for (var sub in _subscriptions.values) {
       sub.cancel();

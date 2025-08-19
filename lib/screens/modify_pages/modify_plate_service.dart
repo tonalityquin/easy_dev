@@ -133,8 +133,8 @@ class ModifyPlateService {
       addAmount: selectedAddAmount,
       region: dropdownValue,
       imageUrls: imageUrls,
-      regularAmount: selectedRegularAmount,             // ✅ 고정 금액 포함
-      regularDurationHours: selectedRegularDurationHours, // ✅ 고정 시간 포함
+      regularAmount: selectedRegularAmount,
+      regularDurationHours: selectedRegularDurationHours,
     );
 
     final changes = originalPlate.diff(updatedPlate);
@@ -153,15 +153,15 @@ class ModifyPlateService {
       );
 
       await context.read<PlateRepository>().updatePlate(
-        '${originalPlate.plateNumber}_${originalPlate.area}',
-        {
-          if (originalPlate.location != newLocation) 'location': newLocation,
-          if (originalPlate.billingType != newBillingType) 'billingType': newBillingType,
-          if (originalPlate.plateNumber != plateNumber) 'plate_number': plateNumber,
-          'updatedAt': Timestamp.now(),
-        },
-        log: log,
-      );
+            '${originalPlate.plateNumber}_${originalPlate.area}',
+            {
+              if (originalPlate.location != newLocation) 'location': newLocation,
+              if (originalPlate.billingType != newBillingType) 'billingType': newBillingType,
+              if (originalPlate.plateNumber != plateNumber) 'plate_number': plateNumber,
+              'updatedAt': Timestamp.now(),
+            },
+            log: log,
+          );
     }
 
     return await modifyState.modifyPlateInfo(
@@ -180,8 +180,8 @@ class ModifyPlateService {
       addAmount: selectedAddAmount,
       region: dropdownValue,
       imageUrls: imageUrls,
-      regularAmount: selectedRegularAmount,              // ✅ 전달
-      regularDurationHours: selectedRegularDurationHours, // ✅ 전달
+      regularAmount: selectedRegularAmount,
+      regularDurationHours: selectedRegularDurationHours,
     );
   }
 

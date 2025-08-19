@@ -18,20 +18,12 @@ class BillState extends ChangeNotifier {
   String _previousArea = '';
 
   List<BillModel> get generalBills => _generalBills;
-  List<RegularBillModel> get regularBills => _regularBills;
-  String? get selectedBillId => _selectedBillId;
-  bool get isLoading => _isLoading;
 
-  BillModel get emptyModel => BillModel(
-    id: '',
-    countType: '',
-    area: '',
-    basicStandard: 0,
-    basicAmount: 0,
-    addStandard: 0,
-    addAmount: 0,
-    type: BillType.general, // ✅ enum 적용
-  );
+  List<RegularBillModel> get regularBills => _regularBills;
+
+  String? get selectedBillId => _selectedBillId;
+
+  bool get isLoading => _isLoading;
 
   BillState(this._repository, this._areaState) {
     loadFromBillCache();
@@ -55,18 +47,14 @@ class BillState extends ChangeNotifier {
     try {
       if (generalJson != null) {
         final decoded = json.decode(generalJson) as List;
-        _generalBills = decoded
-            .map((e) => BillModel.fromCacheMap(Map<String, dynamic>.from(e)))
-            .toList();
+        _generalBills = decoded.map((e) => BillModel.fromCacheMap(Map<String, dynamic>.from(e))).toList();
       } else {
         _generalBills = [];
       }
 
       if (regularJson != null) {
         final decoded = json.decode(regularJson) as List;
-        _regularBills = decoded
-            .map((e) => RegularBillModel.fromCacheMap(Map<String, dynamic>.from(e)))
-            .toList();
+        _regularBills = decoded.map((e) => RegularBillModel.fromCacheMap(Map<String, dynamic>.from(e))).toList();
       } else {
         _regularBills = [];
       }
@@ -118,26 +106,6 @@ class BillState extends ChangeNotifier {
     }
   }
 
-  Future<void> addNormalBill(BillModel bill) async {
-    try {
-      await _repository.addNormalBill(bill);
-      await manualBillRefresh();
-    } catch (e) {
-      debugPrint('🔥 일반 정산 추가 실패: $e');
-      rethrow;
-    }
-  }
-
-  Future<void> addRegularBill(RegularBillModel bill) async {
-    try {
-      await _repository.addRegularBill(bill);
-      await manualBillRefresh();
-    } catch (e) {
-      debugPrint('🔥 고정 정산 추가 실패: $e');
-      rethrow;
-    }
-  }
-
   Future<void> deleteBill(List<String> ids, {void Function(String)? onError}) async {
     try {
       await _repository.deleteBill(ids);
@@ -152,7 +120,6 @@ class BillState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// ✅ 수정: String -> enum
   Future<void> addBillFromMap(Map<String, dynamic> billData) async {
     final typeStr = billData['type'];
     final billType = billTypeFromString(typeStr);
@@ -185,7 +152,7 @@ class BillState extends ChangeNotifier {
         throw Exception('알 수 없는 정산 유형입니다: $typeStr');
       }
 
-      await manualBillRefresh(); // 추가 후 갱신
+      await manualBillRefresh();
     } catch (e) {
       debugPrint('🔥 addNormalBillFromMap 실패: $e');
       rethrow;

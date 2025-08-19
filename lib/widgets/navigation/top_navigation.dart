@@ -6,7 +6,6 @@ import '../../states/area/area_state.dart';
 import '../../states/plate/plate_state.dart';
 import '../../widgets/dialog/area_picker_bottom_sheet.dart';
 
-/// ✅ 지역 선택 위젯 (AppBar의 title로 삽입)
 class TopNavigation extends StatelessWidget {
   final bool isAreaSelectable;
 

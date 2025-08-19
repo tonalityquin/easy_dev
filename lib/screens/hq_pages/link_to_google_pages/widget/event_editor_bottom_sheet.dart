@@ -28,11 +28,11 @@ Future<EventEditorResult?> showEventEditorBottomSheet({
   return showModalBottomSheet<EventEditorResult>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: Colors.transparent, // 상단 radius를 위해 transparent로 설정
+    backgroundColor: Colors.transparent,
     builder: (context) {
       return Container(
         decoration: const BoxDecoration(
-          color: Colors.white, // 여기서 흰색 배경 지정
+          color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
         padding: EdgeInsets.only(

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // 진동
+import 'package:flutter/services.dart';
 
 class NumKeypadForPlateSearch extends StatefulWidget {
   final TextEditingController controller;
@@ -90,8 +90,8 @@ class _NumKeypadForPlateSearchState extends State<NumKeypadForPlateSearch> with 
 
     _controllers.putIfAbsent(
       key,
-          () => AnimationController(
-        duration: const Duration(milliseconds: 80), // 더 빠르게 축소
+      () => AnimationController(
+        duration: const Duration(milliseconds: 80),
         vsync: this,
         lowerBound: 0.0,
         upperBound: 0.1,
@@ -100,7 +100,7 @@ class _NumKeypadForPlateSearchState extends State<NumKeypadForPlateSearch> with 
     _isPressed.putIfAbsent(key, () => false);
 
     final controller = _controllers[key]!;
-    final animation = Tween(begin: 1.0, end: 0.85).animate( // 더 크게 축소
+    final animation = Tween(begin: 1.0, end: 0.85).animate(
       CurvedAnimation(parent: controller, curve: Curves.easeOut),
     );
 
@@ -109,7 +109,7 @@ class _NumKeypadForPlateSearchState extends State<NumKeypadForPlateSearch> with 
         padding: const EdgeInsets.all(4.0),
         child: GestureDetector(
           onTapDown: (_) {
-            HapticFeedback.selectionClick(); // ✅ 진동 발생
+            HapticFeedback.selectionClick();
             setState(() => _isPressed[key] = true);
             controller.forward();
           },
@@ -140,10 +140,10 @@ class _NumKeypadForPlateSearchState extends State<NumKeypadForPlateSearch> with 
                 child: Text(
                   key,
                   style: (widget.textStyle ??
-                      const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w500,
-                      ))
+                          const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w500,
+                          ))
                       .copyWith(color: Colors.black87),
                 ),
               ),

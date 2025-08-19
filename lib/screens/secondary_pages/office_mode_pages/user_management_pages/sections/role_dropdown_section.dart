@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'role_type.dart'; // RoleType enum 정의 import
+import 'role_type.dart';
 
 class RoleDropdownSection extends StatelessWidget {
   final RoleType selectedRole;

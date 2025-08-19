@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:googleapis/calendar/v3.dart' as calendar;
 import '../utils/calendar_logic.dart';
 
-/// 일정 요약(summary) 기준으로 필터링 가능한 Chip UI를 제공하는 위젯
 class CalendarFilterChips extends StatelessWidget {
-  final String calendarId; // 🔄 추가됨
+  final String calendarId;
   final Map<String, bool> filterStates;
   final Map<DateTime, List<calendar.Event>> eventsByDay;
   final DateTime focusedDay;
@@ -14,7 +13,7 @@ class CalendarFilterChips extends StatelessWidget {
 
   const CalendarFilterChips({
     super.key,
-    required this.calendarId, // 🔄 추가됨
+    required this.calendarId,
     required this.filterStates,
     required this.eventsByDay,
     required this.focusedDay,
@@ -23,7 +22,6 @@ class CalendarFilterChips extends StatelessWidget {
     required this.updateEvents,
   });
 
-  /// description에서 progress 값 추출
   int _getProgress(String? desc) {
     final match = RegExp(r'progress:(\d{1,3})').firstMatch(desc ?? '');
     if (match != null) {
@@ -32,7 +30,6 @@ class CalendarFilterChips extends StatelessWidget {
     return 0;
   }
 
-  /// 날짜 정규화 헬퍼
   DateTime normalizeDate(DateTime d) => DateTime(d.year, d.month, d.day);
 
   @override
@@ -50,7 +47,6 @@ class CalendarFilterChips extends StatelessWidget {
           final first = matchedEvents.first;
           final progress = _getProgress(first.description);
 
-          // ✅ 진행률이 100%인 이벤트는 Chip 숨김
           if (progress == 100) return const SizedBox();
 
           final startUtc = first.start?.date;
@@ -87,7 +83,7 @@ class CalendarFilterChips extends StatelessWidget {
                     focusedDay: focusedDay,
                     updateEvents: updateEvents,
                     filterStates: filterStates,
-                    calendarId: calendarId, // 🔄 calendarId 전달됨
+                    calendarId: calendarId,
                   );
                 }
               }

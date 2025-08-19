@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 
-/// ✅ BillType enum
 enum BillType { general, regular }
 
-/// ✅ 문자열 <-> enum 변환 유틸
 BillType billTypeFromString(String? value) {
   switch (value) {
     case '고정':
@@ -29,13 +27,11 @@ class BillModel {
   final String countType;
   final String area;
 
-  // 변동 정산
   final int? basicStandard;
   final int? basicAmount;
   final int? addStandard;
   final int? addAmount;
 
-  // 고정 정산
   final int? regularAmount;
   final int? regularDurationHours;
 
@@ -52,7 +48,6 @@ class BillModel {
     this.regularDurationHours,
   });
 
-  /// ✅ Firestore → 모델
   factory BillModel.fromMap(String id, Map<String, dynamic> data) {
     try {
       final type = billTypeFromString(data['type']);
@@ -64,15 +59,11 @@ class BillModel {
         basicStandard: (data['basicStandard'] is int)
             ? data['basicStandard']
             : int.tryParse(data['basicStandard']?.toString() ?? ''),
-        basicAmount: (data['basicAmount'] is int)
-            ? data['basicAmount']
-            : int.tryParse(data['basicAmount']?.toString() ?? ''),
-        addStandard: (data['addStandard'] is int)
-            ? data['addStandard']
-            : int.tryParse(data['addStandard']?.toString() ?? ''),
-        addAmount: (data['addAmount'] is int)
-            ? data['addAmount']
-            : int.tryParse(data['addAmount']?.toString() ?? ''),
+        basicAmount:
+            (data['basicAmount'] is int) ? data['basicAmount'] : int.tryParse(data['basicAmount']?.toString() ?? ''),
+        addStandard:
+            (data['addStandard'] is int) ? data['addStandard'] : int.tryParse(data['addStandard']?.toString() ?? ''),
+        addAmount: (data['addAmount'] is int) ? data['addAmount'] : int.tryParse(data['addAmount']?.toString() ?? ''),
         regularAmount: (data['regularAmount'] is int)
             ? data['regularAmount']
             : int.tryParse(data['regularAmount']?.toString() ?? ''),
@@ -86,7 +77,6 @@ class BillModel {
     }
   }
 
-  /// ✅ Firestore 저장용
   Map<String, dynamic> toFirestoreMap() {
     return {
       'type': billTypeToString(type),
@@ -101,7 +91,6 @@ class BillModel {
     };
   }
 
-  /// ✅ 캐시 저장용
   Map<String, dynamic> toCacheMap() {
     return {
       'id': id,
@@ -117,7 +106,6 @@ class BillModel {
     };
   }
 
-  /// ✅ 캐시 복원용
   factory BillModel.fromCacheMap(Map<String, dynamic> data) {
     return BillModel(
       id: data['id'] ?? '',

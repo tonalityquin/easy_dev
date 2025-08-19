@@ -37,15 +37,14 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
       isValid = isValid && capacityText.isNotEmpty && parsed != null && parsed > 0;
     } else {
       bool hasValidSub = _subControllers.any(
-            (map) => map['name']!.text.trim().isNotEmpty,
+        (map) => map['name']!.text.trim().isNotEmpty,
       );
       isValid = isValid && hasValidSub;
     }
 
     setState(() {
-      _errorMessage = !isValid
-          ? (_isSingle ? '주차 구역명과 1 이상의 유효한 수용 대수를 입력하세요.' : '상위 구역명과 하나 이상의 하위 구역이 필요합니다.')
-          : null;
+      _errorMessage =
+          !isValid ? (_isSingle ? '주차 구역명과 1 이상의 유효한 수용 대수를 입력하세요.' : '상위 구역명과 하나 이상의 하위 구역이 필요합니다.') : null;
     });
 
     return isValid;
@@ -86,9 +85,7 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
         'capacity': int.parse(_capacityController.text.trim()),
       });
     } else {
-      final subs = _subControllers
-          .where((map) => map['name']!.text.trim().isNotEmpty)
-          .map((map) {
+      final subs = _subControllers.where((map) => map['name']!.text.trim().isNotEmpty).map((map) {
         final cap = int.tryParse(map['capacity']!.text.trim()) ?? 0;
         return {
           'name': map['name']!.text.trim(),
@@ -140,7 +137,6 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
               ),
               const SizedBox(height: 16),
 
-              // 유형 선택
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -174,7 +170,6 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
               ),
               const SizedBox(height: 20),
 
-              // 이름 필드
               TextField(
                 controller: _locationController,
                 decoration: _inputDecoration(_isSingle ? '구역명' : '상위 구역명'),

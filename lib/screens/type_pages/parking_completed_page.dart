@@ -61,7 +61,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
       context: context,
       builder: (context) {
         return SignaturePlateSearchBottomSheet(
-          onSearch: (_) {}, // 또는 생략
+          onSearch: (_) {},
           area: currentArea,
         );
       },
@@ -145,7 +145,6 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
           isParkingAreaMode: _mode == ParkingViewMode.plateList,
           isStatusMode: _mode == ParkingViewMode.status,
           isLocationPickerMode: _mode == ParkingViewMode.locationPicker,
-          // ✅ 추가된 분기
           isSorted: _isSorted,
           isLocked: _isLocked,
           onToggleLock: () {
@@ -182,7 +181,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
               // _mode = ParkingViewMode.plateList; # 주차 구역 -> 번호판 선택 화면 진입 차단
             });
           },
-          isLocked: _isLocked, // ✅ 잠금 상태 전달
+          isLocked: _isLocked,
         );
 
       case ParkingViewMode.plateList:

@@ -7,10 +7,9 @@ class LocationModel {
   final bool isSelected;
   final int capacity;
 
-  final String? parent; // 상위 구역 이름 (복합일 경우)
-  final String? type;   // 'single' | 'composite'
+  final String? parent;
+  final String? type;
 
-  /// ✅ 입차 수 필드 추가
   final int plateCount;
 
   LocationModel({
@@ -24,7 +23,6 @@ class LocationModel {
     this.plateCount = 0, // 기본값
   }) : assert(id.isNotEmpty, 'ID cannot be empty');
 
-  /// ✅ 편의 생성자: ID 자동 생성 (locationName_area 형식)
   factory LocationModel.create({
     required String locationName,
     required String area,
@@ -45,7 +43,6 @@ class LocationModel {
     );
   }
 
-  /// ✅ Firestore → 모델
   factory LocationModel.fromMap(String id, Map<String, dynamic> data) {
     return LocationModel(
       id: id,
@@ -55,11 +52,10 @@ class LocationModel {
       capacity: (data['capacity'] as num?)?.toInt() ?? 0,
       parent: data['parent'],
       type: data['type'],
-      plateCount: (data['plateCount'] as num?)?.toInt() ?? 0, // ✅
+      plateCount: (data['plateCount'] as num?)?.toInt() ?? 0,
     );
   }
 
-  /// ✅ 모델 → Firestore Map
   Map<String, dynamic> toFirestoreMap() {
     final resolvedType = type ?? 'single';
     return {
@@ -70,11 +66,9 @@ class LocationModel {
       'isSelected': isSelected,
       'capacity': capacity,
       'timestamp': FieldValue.serverTimestamp(),
-      // plateCount는 Firestore에는 저장하지 않음
     };
   }
 
-  /// ✅ 모델 → SharedPreferences 캐시용 Map
   Map<String, dynamic> toCacheMap() {
     return {
       'id': id,
@@ -84,11 +78,10 @@ class LocationModel {
       'type': type,
       'isSelected': isSelected,
       'capacity': capacity,
-      'plateCount': plateCount, // ✅
+      'plateCount': plateCount,
     };
   }
 
-  /// ✅ SharedPreferences 캐시 → 모델
   factory LocationModel.fromCacheMap(Map<String, dynamic> data) {
     return LocationModel(
       id: data['id'] ?? '',
@@ -98,11 +91,10 @@ class LocationModel {
       capacity: (data['capacity'] as num?)?.toInt() ?? 0,
       parent: data['parent'],
       type: data['type'],
-      plateCount: (data['plateCount'] as num?)?.toInt() ?? 0, // ✅
+      plateCount: (data['plateCount'] as num?)?.toInt() ?? 0,
     );
   }
 
-  /// ✅ 복사 및 수정용 copyWith
   LocationModel copyWith({
     String? id,
     String? locationName,
@@ -111,7 +103,7 @@ class LocationModel {
     String? parent,
     String? type,
     int? capacity,
-    int? plateCount, // ✅
+    int? plateCount,
   }) {
     return LocationModel(
       id: id ?? this.id,

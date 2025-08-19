@@ -79,12 +79,10 @@ class PlateCustomBox extends StatelessWidget {
         ),
         child: Column(
           children: [
-            // ✅ Top Row: 왼쪽 텍스트와 오른쪽 2줄 분리 텍스트
             Expanded(
               flex: 2,
               child: Row(
                 children: [
-                  // 왼쪽 텍스트
                   Expanded(
                     flex: 7,
                     child: Center(
@@ -95,7 +93,6 @@ class PlateCustomBox extends StatelessWidget {
                     ),
                   ),
                   const VerticalDivider(width: 2.0, color: Colors.black),
-                  // 오른쪽 2줄
                   Expanded(
                     flex: 3,
                     child: Column(
@@ -128,7 +125,6 @@ class PlateCustomBox extends StatelessWidget {
             ),
             const Divider(height: 1.0, color: Colors.black),
 
-            // ✅ Middle Row
             Expanded(
               flex: 2,
               child: Row(
@@ -162,7 +158,6 @@ class PlateCustomBox extends StatelessWidget {
             ),
             const Divider(height: 1.0, color: Colors.black),
 
-            // ✅ Bottom Row
             Expanded(
               flex: 2,
               child: Row(

@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 
-/// 전체 화면 이미지 뷰어: 로컬 XFile 또는 URL (String) 지원
 void modifyshowFullScreenImageViewer(
     BuildContext context,
     List<dynamic> images,
@@ -111,7 +110,6 @@ void modifyshowFullScreenImageViewer(
   );
 }
 
-/// 📦 파일명 기반 메타데이터 추출
 String _parseMetadataFromFileName(String fileName) {
   try {
     final name = fileName.replaceAll('.jpg', '');
@@ -132,7 +130,6 @@ String _parseMetadataFromFileName(String fileName) {
   }
 }
 
-/// 🌐 URL 기반 메타데이터 추출
 String _parseMetadataFromUrl(String url) {
   try {
     final segments = Uri.parse(url).pathSegments;

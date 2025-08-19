@@ -34,7 +34,6 @@ class GcsJsonUploader {
       final storage = StorageApi(client);
       List<dynamic> existingLogs = [];
 
-      // 기존 로그 불러오기
       try {
         final obj = await storage.objects.get(
           bucketName,
@@ -53,7 +52,6 @@ class GcsJsonUploader {
         debugPrint('📄 기존 로그 없음. 새로 생성됩니다.');
       }
 
-      // 로그 데이터 보정
       final enrichedLog = {
         ...newLog,
         'performedBy': newLog['performedBy'] ?? '시스템',
@@ -75,7 +73,6 @@ class GcsJsonUploader {
 
       debugPrint('📌 DEBUG: 최종 로그 배열 길이 → ${existingLogs.length}');
 
-      // 업로드
       final tempPath = '${Directory.systemTemp.path}/upload_${DateTime.now().millisecondsSinceEpoch}.json';
       final tempFile = File(tempPath);
       await tempFile.writeAsString(jsonEncode(existingLogs));

@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// 수정된 번호판 입력 필드 위젯 (ModifyPlateInfo 용)
 class ModifyPlateInput extends StatelessWidget {
-  final int frontDigitCount; // 앞자리 숫자 개수
-  final bool hasMiddleChar; // 중간 한글 여부
-  final int backDigitCount; // 뒷자리 숫자 개수
+  final int frontDigitCount;
+  final bool hasMiddleChar;
+  final int backDigitCount;
   final TextEditingController frontController;
   final TextEditingController? middleController;
   final TextEditingController backController;
-  final bool isEditable; // 수정 가능한지 여부 (ModifyPlateInfo에서는 false)
+  final bool isEditable;
 
   const ModifyPlateInput({
     super.key,

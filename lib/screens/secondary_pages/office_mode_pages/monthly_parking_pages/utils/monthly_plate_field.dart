@@ -11,7 +11,7 @@ class MonthlyPlateField extends StatelessWidget {
   final TextEditingController backController;
   final TextEditingController activeController;
   final Function(TextEditingController) onKeypadStateChanged;
-  final bool isEditMode; // ✅ 수정 모드 여부
+  final bool isEditMode;
 
   const MonthlyPlateField({
     super.key,
@@ -23,7 +23,7 @@ class MonthlyPlateField extends StatelessWidget {
     required this.backController,
     required this.activeController,
     required this.onKeypadStateChanged,
-    this.isEditMode = false, // ✅ 기본값 false
+    this.isEditMode = false,
   });
 
   @override
@@ -64,8 +64,8 @@ class MonthlyPlateField extends StatelessWidget {
         keyboardType: TextInputType.none,
         maxLength: 4,
         textAlign: TextAlign.center,
-        readOnly: true, // ✅ 항상 키보드 막기
-        enabled: !isEditMode, // ✅ 수정 모드일 경우 입력 자체 차단
+        readOnly: true,
+        enabled: !isEditMode,
         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
         decoration: const InputDecoration(
           counterText: "",
@@ -95,7 +95,7 @@ class MonthlyPlateField extends StatelessWidget {
         maxLength: 1,
         textAlign: TextAlign.center,
         readOnly: true,
-        enabled: !isEditMode, // ✅ 수정 모드일 경우 입력 차단
+        enabled: !isEditMode,
         inputFormatters: [
           FilteringTextInputFormatter.allow(RegExp(r'^[ㄱ-ㅎㅏ-ㅣ가-힣]$')),
         ],

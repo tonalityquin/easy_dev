@@ -13,32 +13,6 @@ class ParkingLocationBottomSheet extends StatefulWidget {
     required this.locationController,
   });
 
-  static Future<void> show(BuildContext context, TextEditingController controller) async {
-    await showGeneralDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: '닫기',
-      barrierColor: Colors.black54,
-      transitionDuration: const Duration(milliseconds: 400),
-      pageBuilder: (_, __, ___) {
-        return Align(
-          alignment: Alignment.bottomCenter,
-          child: ParkingLocationBottomSheet(locationController: controller),
-        );
-      },
-      transitionBuilder: (_, animation, __, child) {
-        final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutQuint);
-        return SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0, 1),
-            end: Offset.zero,
-          ).animate(curved),
-          child: FadeTransition(opacity: curved, child: child),
-        );
-      },
-    );
-  }
-
   @override
   State<ParkingLocationBottomSheet> createState() => _ParkingLocationBottomSheetState();
 }

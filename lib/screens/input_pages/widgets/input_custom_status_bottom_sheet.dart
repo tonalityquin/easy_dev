@@ -6,12 +6,11 @@ String _formatAnyDate(dynamic v) {
   if (v == null) return '시간 정보 없음';
   if (v is Timestamp) return DateFormat('yyyy-MM-dd HH:mm:ss').format(v.toDate());
   if (v is String) {
-    // ISO8601 or yyyy-MM-dd 형태를 최대한 포맷
     try {
       final dt = DateTime.tryParse(v);
       if (dt != null) return DateFormat('yyyy-MM-dd HH:mm:ss').format(dt);
     } catch (_) {}
-    return v; // 모르는 포맷은 원문 출력
+    return v;
   }
   return v.toString();
 }
@@ -56,13 +55,11 @@ Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
 
   final data = docSnapshot.data() ?? {};
 
-  // 기존 필드
   final String? customStatus = (data['customStatus'] as String?)?.trim();
   final Timestamp? updatedAt = data['updatedAt'];
   final List<dynamic>? statusListRaw = data['statusList'];
   final List<String> statusList = statusListRaw?.map((e) => e.toString()).toList() ?? [];
 
-  // 추가로 보여줄 정기 관련/부가 필드
   final String? countType = (data['countType'] as String?)?.trim();
   final String? type = (data['type'] as String?)?.trim();
   final String? periodUnit = (data['periodUnit'] as String?)?.trim();
@@ -74,14 +71,12 @@ Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
   final int? regularDurationHours =
   data['regularDurationHours'] is int ? data['regularDurationHours'] as int : null;
 
-  // 결제 내역
   final List<Map<String, dynamic>> paymentHistory =
       (data['payment_history'] as List<dynamic>?)
           ?.map((e) => Map<String, dynamic>.from(e as Map))
           .toList() ??
           [];
 
-  // customStatus가 완전 비어있더라도(정기 전용 문서 등) 상세 정보는 보여줄 수 있게 모달은 띄웁니다.
   final formattedUpdatedAt = _formatAnyDate(updatedAt);
 
   await showModalBottomSheet(
@@ -263,7 +258,6 @@ Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
     },
   );
 
-  // 호출부가 필요 시 사용할 수 있도록 반환값 확장
   return {
     'customStatus': customStatus ?? '',
     'statusList': statusList,

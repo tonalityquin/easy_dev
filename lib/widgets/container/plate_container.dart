@@ -80,7 +80,6 @@ class PlateContainer extends StatelessWidget {
         final bool isSelected = item.isSelected;
         final String displayUser = isSelected ? item.selectedBy! : item.userName;
 
-        // ✅ billingType 기준으로 고정 정산 여부 판단
         final billType = billTypeFromString(item.billingType);
         final bool isRegular = billType == BillType.fixed;
 
@@ -109,7 +108,6 @@ class PlateContainer extends StatelessWidget {
           }
         }
 
-        // ✅ 고정 정산일 경우 lockedFeeAmount 우선 적용
         final feeText = isRegular
             ? '${item.isLockedFee ? (item.lockedFeeAmount ?? 0) : (item.regularAmount ?? 0)}원'
             : '$currentFee원';

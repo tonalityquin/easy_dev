@@ -8,7 +8,7 @@ class HqMiniNavigation extends StatefulWidget {
   final void Function(int index)? onIconTapped;
   final Color? backgroundColor;
   final double iconSize;
-  final int currentIndex; // ✅ 외부에서 선택된 인덱스 받기
+  final int currentIndex;
 
   const HqMiniNavigation({
     super.key,
@@ -19,7 +19,7 @@ class HqMiniNavigation extends StatefulWidget {
     this.onIconTapped,
     this.backgroundColor = Colors.white,
     this.iconSize = 24.0,
-    this.currentIndex = 0, // ✅ 기본값 지정
+    this.currentIndex = 0,
   });
 
   @override
@@ -38,7 +38,7 @@ class HqMiniNavigationState extends State<HqMiniNavigation> {
 
   Widget _buildIcon(IconData iconData, int index) {
     final isSortIcon = iconData == Icons.sort;
-    final isSelected = widget.currentIndex == index; // ✅ 외부 상태 사용
+    final isSelected = widget.currentIndex == index;
 
     final iconColor = isSelected ? Colors.green : Colors.grey;
     final labelColor = isSelected ? Colors.green : Colors.grey;

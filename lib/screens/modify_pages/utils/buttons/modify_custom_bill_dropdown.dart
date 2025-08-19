@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
 class ModifyCustomBillDropdown extends StatelessWidget {
-  final List<String> items; // ✅ countType 문자열 리스트
-  final String? selectedValue; // ✅ 선택된 countType (String)
-  final void Function(String?)? onChanged; // ✅ 문자열 선택 콜백
+  final List<String> items;
+  final String? selectedValue;
+  final void Function(String?)? onChanged;
 
   const ModifyCustomBillDropdown({
     super.key,
@@ -23,13 +23,13 @@ class ModifyCustomBillDropdown extends StatelessWidget {
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
-          value: selectedValue, // ✅ 반드시 countType 문자열
+          value: selectedValue,
           isExpanded: true,
           icon: const Icon(Icons.keyboard_arrow_down),
           onChanged: onChanged,
           items: items.map((item) {
             return DropdownMenuItem<String>(
-              value: item, // ✅ 각 아이템도 문자열
+              value: item,
               child: Text(
                 item,
                 style: const TextStyle(fontWeight: FontWeight.w500),

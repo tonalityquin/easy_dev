@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-// 앱 전체 테마 설정
 final ThemeData appTheme = ThemeData(
   primarySwatch: Colors.blue,
   scaffoldBackgroundColor: Colors.white,

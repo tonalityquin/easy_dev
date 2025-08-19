@@ -4,13 +4,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../utils/status_mapping_helper.dart';
 
 class ModifyStatusOnTapSection extends StatefulWidget {
-  /// 초기 선택된 상태 이름들
   final List<String>? initialSelectedStatuses;
 
-  /// 초기 업종
   final String? initialCategory;
 
-  /// 상태 선택 콜백
   final ValueChanged<List<String>>? onSelectionChanged;
 
   const ModifyStatusOnTapSection({
@@ -21,8 +18,7 @@ class ModifyStatusOnTapSection extends StatefulWidget {
   });
 
   @override
-  State<ModifyStatusOnTapSection> createState() =>
-      _ModifyStatusOnTapSectionState();
+  State<ModifyStatusOnTapSection> createState() => _ModifyStatusOnTapSectionState();
 }
 
 class _ModifyStatusOnTapSectionState extends State<ModifyStatusOnTapSection> {
@@ -35,7 +31,6 @@ class _ModifyStatusOnTapSectionState extends State<ModifyStatusOnTapSection> {
     _loadInitialCategoryAndStatuses();
   }
 
-  /// 업종 로드: SharedPreferences > initialCategory > '공통'
   Future<void> _loadInitialCategoryAndStatuses() async {
     final prefs = await SharedPreferences.getInstance();
     final savedCategory = prefs.getString('selected_category');
@@ -43,25 +38,18 @@ class _ModifyStatusOnTapSectionState extends State<ModifyStatusOnTapSection> {
     setState(() {
       selectedCategory = savedCategory?.isNotEmpty == true
           ? savedCategory
-          : (widget.initialCategory?.isNotEmpty == true
-          ? widget.initialCategory
-          : '공통');
+          : (widget.initialCategory?.isNotEmpty == true ? widget.initialCategory : '공통');
     });
 
-    // 상태 복원
     if (selectedCategory != null && widget.initialSelectedStatuses != null) {
-      final currentStatuses =
-      StatusMappingHelper.getStatuses(selectedCategory!);
-      selectedIndexes = widget.initialSelectedStatuses!
-          .map((name) => currentStatuses.indexOf(name))
-          .where((i) => i != -1)
-          .toSet();
+      final currentStatuses = StatusMappingHelper.getStatuses(selectedCategory!);
+      selectedIndexes =
+          widget.initialSelectedStatuses!.map((name) => currentStatuses.indexOf(name)).where((i) => i != -1).toSet();
     }
 
     _notifySelection();
   }
 
-  /// 업종 저장
   Future<void> _saveSelectedCategory(String? category) async {
     final prefs = await SharedPreferences.getInstance();
     if (category != null && category.isNotEmpty) {
@@ -74,12 +62,9 @@ class _ModifyStatusOnTapSectionState extends State<ModifyStatusOnTapSection> {
   void _notifySelection() {
     if (selectedCategory == null || widget.onSelectionChanged == null) return;
 
-    final currentStatuses =
-    StatusMappingHelper.getStatuses(selectedCategory!);
-    final selectedNames = selectedIndexes
-        .where((i) => i < currentStatuses.length)
-        .map((i) => currentStatuses[i])
-        .toList();
+    final currentStatuses = StatusMappingHelper.getStatuses(selectedCategory!);
+    final selectedNames =
+        selectedIndexes.where((i) => i < currentStatuses.length).map((i) => currentStatuses[i]).toList();
     widget.onSelectionChanged!(selectedNames);
   }
 
@@ -147,8 +132,7 @@ class _ModifyStatusOnTapSectionState extends State<ModifyStatusOnTapSection> {
                 label: Text(
                   currentStatuses[index],
                   style: TextStyle(
-                    fontWeight:
-                    selected ? FontWeight.bold : FontWeight.normal,
+                    fontWeight: selected ? FontWeight.bold : FontWeight.normal,
                     color: selected ? theme.primaryColor : Colors.black87,
                   ),
                 ),
@@ -168,9 +152,7 @@ class _ModifyStatusOnTapSectionState extends State<ModifyStatusOnTapSection> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                   side: BorderSide(
-                    color: selected
-                        ? theme.primaryColor
-                        : Colors.grey.shade300,
+                    color: selected ? theme.primaryColor : Colors.grey.shade300,
                   ),
                 ),
                 padding: const EdgeInsets.symmetric(
@@ -195,11 +177,10 @@ class _ModifyStatusOnTapSectionState extends State<ModifyStatusOnTapSection> {
                 children: selectedIndexes
                     .map(
                       (i) => Chip(
-                    label: Text(currentStatuses[i]),
-                    backgroundColor:
-                    theme.primaryColor.withOpacity(0.1),
-                  ),
-                )
+                        label: Text(currentStatuses[i]),
+                        backgroundColor: theme.primaryColor.withOpacity(0.1),
+                      ),
+                    )
                     .toList(),
               ),
             ],

@@ -13,34 +13,24 @@ import '../../utils/snackbar_helper.dart';
 class LoginController {
   final BuildContext context;
 
-  // 입력 필드 컨트롤러
   final TextEditingController nameController = TextEditingController();
   final TextEditingController phoneController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
 
-  // 포커스 관리용
   final FocusNode nameFocus = FocusNode();
   final FocusNode phoneFocus = FocusNode();
   final FocusNode passwordFocus = FocusNode();
 
-  // 상태
   bool isLoading = false;
   bool obscurePassword = true;
 
-  // 🔒 개발자 모드 관련 상태
-  int _devModeTapCount = 0;
-  int _devModeExitTapCount = 0;
-  bool isDeveloperMode = false;
-
   LoginController(this.context);
 
-  // 초기화 시 자동 로그인 여부 확인
   void initState() {
     LoginDebugFirestoreLogger().log('LoginController 초기화 시작', level: 'info');
 
     Provider.of<UserState>(context, listen: false).loadUserToLogIn().then((_) {
-      final isLoggedIn =
-          Provider.of<UserState>(context, listen: false).isLoggedIn;
+      final isLoggedIn = Provider.of<UserState>(context, listen: false).isLoggedIn;
 
       LoginDebugFirestoreLogger().log(
         '이전 로그인 정보 로드 완료: isLoggedIn=$isLoggedIn',
@@ -49,65 +39,28 @@ class LoginController {
 
       if (isLoggedIn && context.mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          LoginDebugFirestoreLogger()
-              .log('자동 로그인: 홈 화면으로 이동', level: 'info');
+          LoginDebugFirestoreLogger().log('자동 로그인: 홈 화면으로 이동', level: 'info');
           Navigator.pushReplacementNamed(context, '/home');
         });
       }
     });
   }
 
-  // ✅ 개발자 모드 진입 및 해제 로직
-  void handleDeveloperTap(StateSetter setState) {
-    final isAdminInput = nameController.text == 'admin' &&
-        phoneController.text.replaceAll(RegExp(r'\D'), '') == '00000000000' &&
-        passwordController.text == '00000';
-
-    if (isDeveloperMode) {
-      _devModeExitTapCount++;
-      if (_devModeExitTapCount >= 2) {
-        isDeveloperMode = false;
-        _devModeTapCount = 0;
-        _devModeExitTapCount = 0;
-        LoginDebugFirestoreLogger().log('🟠 개발자 모드 해제됨', level: 'info');
-        setState(() {});
-      }
-      return;
-    }
-
-    if (isAdminInput) {
-      _devModeTapCount++;
-      if (_devModeTapCount >= 5) {
-        isDeveloperMode = true;
-        _devModeExitTapCount = 0;
-        LoginDebugFirestoreLogger().log('🟢 개발자 모드 진입됨', level: 'success');
-        setState(() {});
-      }
-    } else {
-      _devModeTapCount = 0;
-    }
-  }
-
-  // ✅ 로그인 실행 함수
   Future<void> login(StateSetter setState) async {
     final name = nameController.text.trim();
     final phone = phoneController.text.trim().replaceAll(RegExp(r'\D'), '');
     final password = passwordController.text.trim();
 
-    // ✅ PersonalCalendar 진입 조건 추가
     if (name.isEmpty && phone.isEmpty && password == '00000') {
-      LoginDebugFirestoreLogger()
-          .log('비밀번호 00000으로 PersonalCalendar 진입', level: 'info');
+      LoginDebugFirestoreLogger().log('비밀번호 00000으로 PersonalCalendar 진입', level: 'info');
       Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const PersonalCalendar()),
       );
       return;
     }
 
-    LoginDebugFirestoreLogger()
-        .log('로그인 시도: name="$name", phone="$phone"', level: 'called');
+    LoginDebugFirestoreLogger().log('로그인 시도: name="$name", phone="$phone"', level: 'called');
 
-    // 유효성 검사
     final phoneError = LoginValidate.validatePhone(phone);
     final passwordError = LoginValidate.validatePassword(password);
 
@@ -130,7 +83,6 @@ class LoginController {
     setState(() => isLoading = true);
     LoginDebugFirestoreLogger().log('로그인 처리 중...', level: 'info');
 
-    // 네트워크 체크
     if (!await LoginNetworkService().isConnected()) {
       if (context.mounted) {
         showFailedSnackbar(context, '인터넷 연결이 필요합니다.');
@@ -145,8 +97,7 @@ class LoginController {
       final user = await userRepository.getUserByPhone(phone);
 
       if (user != null) {
-        LoginDebugFirestoreLogger()
-            .log('사용자 정보 조회 성공: ${user.name}', level: 'success');
+        LoginDebugFirestoreLogger().log('사용자 정보 조회 성공: ${user.name}', level: 'success');
       } else {
         LoginDebugFirestoreLogger().log('사용자 정보 조회 실패', level: 'error');
       }
@@ -154,8 +105,7 @@ class LoginController {
       if (context.mounted) {
         debugPrint("입력값: name=$name, phone=$phone, password=$password");
         if (user != null) {
-          debugPrint(
-              "DB 유저: name=${user.name}, phone=${user.phone}, password=${user.password}");
+          debugPrint("DB 유저: name=${user.name}, phone=${user.phone}, password=${user.password}");
         } else {
           debugPrint("DB에서 사용자 정보 없음");
         }
@@ -170,15 +120,12 @@ class LoginController {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('phone', updatedUser.phone);
         await prefs.setString('selectedArea', updatedUser.selectedArea ?? '');
-        await prefs.setString(
-            'division', updatedUser.divisions.firstOrNull ?? '');
-        await prefs.setString(
-            'startTime', _timeToString(updatedUser.startTime));
+        await prefs.setString('division', updatedUser.divisions.firstOrNull ?? '');
+        await prefs.setString('startTime', _timeToString(updatedUser.startTime));
         await prefs.setString('endTime', _timeToString(updatedUser.endTime));
         await prefs.setString('role', updatedUser.role);
         await prefs.setString('position', updatedUser.position ?? '');
-        await prefs.setStringList(
-            'fixedHolidays', updatedUser.fixedHolidays);
+        await prefs.setStringList('fixedHolidays', updatedUser.fixedHolidays);
 
         debugPrint("SharedPreferences 저장 완료: phone=${prefs.getString('phone')}");
 
@@ -218,8 +165,7 @@ class LoginController {
 
   void togglePassword() {
     obscurePassword = !obscurePassword;
-    LoginDebugFirestoreLogger()
-        .log('비밀번호 가시성 변경: $obscurePassword', level: 'info');
+    LoginDebugFirestoreLogger().log('비밀번호 가시성 변경: $obscurePassword', level: 'info');
   }
 
   void formatPhoneNumber(String value, StateSetter setState) {
@@ -227,11 +173,9 @@ class LoginController {
     String formatted = numbersOnly;
 
     if (numbersOnly.length >= 11) {
-      formatted =
-      '${numbersOnly.substring(0, 3)}-${numbersOnly.substring(3, 7)}-${numbersOnly.substring(7, 11)}';
+      formatted = '${numbersOnly.substring(0, 3)}-${numbersOnly.substring(3, 7)}-${numbersOnly.substring(7, 11)}';
     } else if (numbersOnly.length >= 10) {
-      formatted =
-      '${numbersOnly.substring(0, 3)}-${numbersOnly.substring(3, 6)}-${numbersOnly.substring(6, 10)}';
+      formatted = '${numbersOnly.substring(0, 3)}-${numbersOnly.substring(3, 6)}-${numbersOnly.substring(6, 10)}';
     }
 
     setState(() {
@@ -253,8 +197,7 @@ class LoginController {
       hintText: label,
       prefixIcon: icon != null ? Icon(icon) : null,
       suffixIcon: suffixIcon,
-      contentPadding:
-      const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
+      contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
       filled: true,
       fillColor: Colors.grey.shade100,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),

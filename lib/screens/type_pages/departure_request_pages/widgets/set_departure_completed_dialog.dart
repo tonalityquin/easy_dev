@@ -5,33 +5,6 @@ class SetDepartureCompletedBottomSheet extends StatelessWidget {
 
   const SetDepartureCompletedBottomSheet({super.key, required this.onConfirm});
 
-  static Future<void> show(BuildContext context, VoidCallback onConfirm) async {
-    await showGeneralDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: '닫기',
-      barrierColor: Colors.black54,
-      transitionDuration: const Duration(milliseconds: 400),
-      pageBuilder: (_, __, ___) => const SizedBox(),
-      transitionBuilder: (_, animation, __, ___) {
-        final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutQuint);
-        return SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0, 1),
-            end: Offset.zero,
-          ).animate(curved),
-          child: FadeTransition(
-            opacity: curved,
-            child: Align(
-              alignment: Alignment.bottomCenter,
-              child: SetDepartureCompletedBottomSheet(onConfirm: onConfirm),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return SafeArea(

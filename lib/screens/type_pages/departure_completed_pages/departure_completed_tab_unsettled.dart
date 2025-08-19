@@ -1,4 +1,3 @@
-// 동일 경로: departure_completed_tab_unsettled.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -8,7 +7,6 @@ import '../../../utils/snackbar_helper.dart';
 import '../../../widgets/container/plate_container.dart';
 import '../departure_completed_pages/field_calendar_inline.dart';
 
-// 상태 수정 바텀시트
 import '../departure_completed_pages/widgets/departure_completed_status_bottom_sheet.dart';
 import '../../../models/plate_model.dart';
 import 'departure_completed_control_buttons.dart';
@@ -28,7 +26,6 @@ class DepartureCompletedUnsettledTab extends StatefulWidget {
 }
 
 class _DepartureCompletedUnsettledTabState extends State<DepartureCompletedUnsettledTab> {
-  // 둘 중 하나만 열림. 다시 누르면 닫힘(둘 다 닫힌 상태 가능)
   bool _openCalendar = true;
   bool _openUnsettled = false;
 
@@ -67,7 +64,6 @@ class _DepartureCompletedUnsettledTabState extends State<DepartureCompletedUnset
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
         child: Column(
           children: [
-            // ── 달력 섹션 (헤더 탭 → 열림/닫힘)
             _SectionHeaderTile(
               title: '날짜 선택',
               subtitle: '선택한 날짜의 출차 데이터를 확인합니다.',
@@ -82,10 +78,7 @@ class _DepartureCompletedUnsettledTabState extends State<DepartureCompletedUnset
                 child: FieldCalendarInline(),
               ),
             ),
-
             const SizedBox(height: 12),
-
-            // ── 미정산 섹션 (헤더 탭 → 열림/닫힘)
             _SectionHeaderTile(
               title: '미정산',
               subtitle: '선택한 날짜 · 현재 지역 기준',
@@ -145,7 +138,6 @@ class _DepartureCompletedUnsettledTabState extends State<DepartureCompletedUnset
   }
 }
 
-/// 탭 가능한 섹션 헤더(최소 높이 보장 + 한 줄 고정)
 class _SectionHeaderTile extends StatelessWidget {
   const _SectionHeaderTile({
     required this.title,
@@ -217,7 +209,6 @@ class _SectionHeaderTile extends StatelessWidget {
   }
 }
 
-/// 접히는 카드(부드러운 열림/닫힘)
 class _CollapsibleCard extends StatelessWidget {
   const _CollapsibleCard({
     required this.isOpen,
@@ -243,7 +234,6 @@ class _CollapsibleCard extends StatelessWidget {
   }
 }
 
-/// 공통: 카운트 배지
 class _CountBadge extends StatelessWidget {
   const _CountBadge({required this.count});
 
@@ -265,7 +255,6 @@ class _CountBadge extends StatelessWidget {
   }
 }
 
-/// 공통: 빈 상태
 class _EmptyState extends StatelessWidget {
   const _EmptyState({
     required this.icon,

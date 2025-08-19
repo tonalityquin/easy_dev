@@ -54,12 +54,12 @@ class ParkingCompletedControlButtons extends StatelessWidget {
         final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
 
         return BottomNavigationBar(
-          type: BottomNavigationBarType.fixed, // 높이 고정
+          type: BottomNavigationBarType.fixed,
           backgroundColor: Colors.white,
           elevation: 0,
-          selectedFontSize: 12, // 텍스트 높이 통일
+          selectedFontSize: 12,
           unselectedFontSize: 12,
-          iconSize: 24, // 아이콘 크기 통일
+          iconSize: 24,
           selectedItemColor: Theme.of(context).primaryColor,
           unselectedItemColor: Colors.grey[700],
           items: isLocationPickerMode || isStatusMode

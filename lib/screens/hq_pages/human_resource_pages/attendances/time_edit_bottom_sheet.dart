@@ -28,7 +28,7 @@ class TimeEditBottomSheet extends StatelessWidget {
     final outMinController = TextEditingController(text: outTimeParts[1]);
 
     return Container(
-      color: Colors.white, // ✅ 배경 하얗게
+      color: Colors.white,
       padding: EdgeInsets.only(
         left: 20,
         right: 20,
@@ -40,20 +40,15 @@ class TimeEditBottomSheet extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            /// 날짜 표시
             Text(
               '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             const SizedBox(height: 16),
-
-            /// 출근/퇴근 시간 입력
             _TimeInputRow('출근 시간', inHourController, inMinController),
             const SizedBox(height: 12),
             _TimeInputRow('퇴근 시간', outHourController, outMinController),
             const SizedBox(height: 24),
-
-            /// 저장 버튼
             ElevatedButton.icon(
               icon: const Icon(Icons.save, size: 20),
               label: const Text(
@@ -76,8 +71,7 @@ class TimeEditBottomSheet extends StatelessWidget {
                 elevation: 0,
               ),
             ),
-
-            const SizedBox(height: 80), // ✅ 추가 여백
+            const SizedBox(height: 80),
           ],
         ),
       ),

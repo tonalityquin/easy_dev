@@ -17,13 +17,11 @@ class _ClockInFetchPlateCountWidgetState extends State<ClockInFetchPlateCountWid
   Future<Map<PlateType, int>>? _futureCounts;
   final _logger = ClockInDebugFirestoreLogger();
 
-  // 조회 대상 PlateType 정의
   static const List<PlateType> _relevantTypes = [
     PlateType.parkingRequests,
     PlateType.departureRequests,
   ];
 
-  /// 각 PlateType에 대해 해당 지역의 요청 수를 비동기 조회
   Future<Map<PlateType, int>> _clockInFetchCounts() async {
     _logger.log('🚀 현황 데이터 로드 시작', level: 'info');
 
@@ -57,7 +55,6 @@ class _ClockInFetchPlateCountWidgetState extends State<ClockInFetchPlateCountWid
 
   @override
   Widget build(BuildContext context) {
-    // 아직 데이터 요청이 안 된 경우: 버튼 표시
     if (_futureCounts == null) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 24),
@@ -94,11 +91,9 @@ class _ClockInFetchPlateCountWidgetState extends State<ClockInFetchPlateCountWid
       );
     }
 
-    // 데이터 로딩 이후 결과 표시
     return FutureBuilder<Map<PlateType, int>>(
       future: _futureCounts,
       builder: (context, snapshot) {
-        // 로딩 중: 로딩 인디케이터 표시
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Padding(
             padding: EdgeInsets.symmetric(vertical: 24),
@@ -106,7 +101,6 @@ class _ClockInFetchPlateCountWidgetState extends State<ClockInFetchPlateCountWid
           );
         }
 
-        // 에러 발생 시: 에러 메시지 표시
         if (snapshot.hasError) {
           _logger.log('🔥 FutureBuilder 에러: ${snapshot.error}', level: 'error');
           return Padding(
@@ -120,7 +114,6 @@ class _ClockInFetchPlateCountWidgetState extends State<ClockInFetchPlateCountWid
           );
         }
 
-        // 데이터 없음 처리
         if (!snapshot.hasData) {
           _logger.log('⚠️ FutureBuilder 데이터 없음 (null)', level: 'info');
           return const SizedBox();
@@ -129,7 +122,6 @@ class _ClockInFetchPlateCountWidgetState extends State<ClockInFetchPlateCountWid
         final counts = snapshot.data!;
         _logger.log('📊 UI에 현황 데이터 렌더링 시작', level: 'called');
 
-        // 각 PlateType에 대한 현황 UI 출력
         return Padding(
           padding: const EdgeInsets.only(top: 24.0),
           child: Column(

@@ -23,7 +23,7 @@ class HeadquarterPage extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   PageBottomNavigation(),
-                  DebugTriggerBar(), // ✅ 추가된 디버그 트리거 바
+                  DebugTriggerBar(),
                 ],
               ),
             ),

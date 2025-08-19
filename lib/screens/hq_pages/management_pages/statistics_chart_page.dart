@@ -67,7 +67,6 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // ✅ 그래프 종류 전환 (가운데 정렬된 스위치)
             Card(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               elevation: 2,
@@ -93,7 +92,6 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
             ),
             const SizedBox(height: 12),
 
-            // ✅ 입·출차 그래프 표시 항목 선택 (정산금 그래프일 땐 숨김)
             if (!showLockedFeeChart)
               Card(
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -138,7 +136,6 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
               ),
             const SizedBox(height: 16),
 
-            // ✅ 그래프 영역
             Expanded(
               child: Card(
                 elevation: 3,

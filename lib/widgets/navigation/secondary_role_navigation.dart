@@ -10,12 +10,12 @@ import '../../widgets/dialog/secondary_picker_bottom_sheet.dart';
 
 class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWidget {
   final double height;
-  final void Function(String selectedLabel)? onModeChanged; // ✅ 추가
+  final void Function(String selectedLabel)? onModeChanged;
 
   const SecondaryRoleNavigation({
     super.key,
     this.height = kToolbarHeight,
-    this.onModeChanged, // ✅ 생성자에 포함
+    this.onModeChanged,
   });
 
   @override
@@ -29,7 +29,6 @@ class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWi
     final RoleType userRole = RoleType.fromName(userState.role);
     final selectedModeLabel = manageState.currentStatus.label;
 
-    // 역할에 따라 드롭다운 가능 여부 결정
     final isSelectable = _isRoleSelectable(userRole);
 
     return AppBar(
@@ -45,7 +44,7 @@ class SecondaryRoleNavigation extends StatelessWidget implements PreferredSizeWi
                   onConfirm: (newLabel) {
                     final newMode = ModeStatusExtension.fromLabel(newLabel);
                     if (newMode != null) {
-                      manageState.changeStatus(newMode); // ✅ 새로 추가된 메서드 사용
+                      manageState.changeStatus(newMode);
                       final userState = context.read<UserState>();
                       final pages = SecondaryPage.getUpdatedPages(userState.role, manageState);
                       Provider.of<SecondaryState>(context, listen: false).updatePages(pages);

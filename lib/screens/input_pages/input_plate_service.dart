@@ -85,7 +85,7 @@ class InputPlateService {
     required String location,
     required bool isLocationSelected,
     required List<String> imageUrls,
-    required String? selectedBill, // countType or 선택된 요금명
+    required String? selectedBill,
     required List<String> selectedStatuses,
     required int basicStandard,
     required int basicAmount,
@@ -93,15 +93,12 @@ class InputPlateService {
     required int addAmount,
     required String region,
     String? customStatus,
-
-    /// ✅ 추가: 변동/고정/정기 타입 전달
     required String selectedBillType,
   }) async {
     final inputState = context.read<InputPlate>();
     final areaState = context.read<AreaState>();
     final userState = context.read<UserState>();
 
-    // ✅ 정기면 bill 조회/검증 스킵: 금액/기준 0으로 강제
     int finalBasicStandard = basicStandard;
     int finalBasicAmount = basicAmount;
     int finalAddStandard = addStandard;
@@ -130,13 +127,10 @@ class InputPlateService {
       region: region,
       imageUrls: imageUrls,
       customStatus: customStatus ?? '',
-
-      // ✅ 이 줄 추가!
       selectedBillType: selectedBillType,
     );
   }
 
-  /// ✅ GCS에 저장된 동일 번호판 이미지 목록 가져오기
   static Future<List<String>> listPlateImages({
     required BuildContext context,
     required String plateNumber,

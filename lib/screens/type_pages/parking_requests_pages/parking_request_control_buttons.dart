@@ -40,7 +40,7 @@ class ParkingRequestControlButtons extends StatelessWidget {
         final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
 
         return BottomNavigationBar(
-          type: BottomNavigationBarType.fixed, // 높이 통일 핵심
+          type: BottomNavigationBarType.fixed,
           backgroundColor: Colors.white,
           elevation: 0,
           selectedFontSize: 12,

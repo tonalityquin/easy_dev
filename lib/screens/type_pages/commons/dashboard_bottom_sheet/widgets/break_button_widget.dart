@@ -16,7 +16,7 @@ class _BreakButtonWidgetState extends State<BreakButtonWidget> {
   bool _submitting = false;
 
   Future<void> _onTap() async {
-    if (_submitting) return; // ✅ 중복 탭 방지
+    if (_submitting) return;
     setState(() => _submitting = true);
     HapticFeedback.lightImpact();
 
@@ -25,7 +25,6 @@ class _BreakButtonWidgetState extends State<BreakButtonWidget> {
         context: context,
         message: '휴게 사용 기록 중입니다...',
         task: () async {
-          // ⚠️ 컨트롤러 내부 네트워크/DB 호출은 반드시 await
           await widget.controller.recordBreakTime(context);
         },
       );

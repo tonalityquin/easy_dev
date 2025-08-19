@@ -6,24 +6,21 @@ import '../../screens/type_pages/debugs/firestore_logger.dart';
 class BillReadService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  /// 특정 지역의 정산 데이터를 단발성으로 조회합니다.
-  Future<({
-  List<BillModel> generalBills,
-  List<RegularBillModel> regularBills,
-  })> getBillOnce(String area) async {
+  Future<
+      ({
+        List<BillModel> generalBills,
+        List<RegularBillModel> regularBills,
+      })> getBillOnce(String area) async {
     await FirestoreLogger().log('getBillOnce called (area=$area)');
     try {
-      final snapshot = await _firestore
-          .collection('bill')
-          .where('area', isEqualTo: area)
-          .get();
+      final snapshot = await _firestore.collection('bill').where('area', isEqualTo: area).get();
 
       List<BillModel> generalBills = [];
       List<RegularBillModel> regularBills = [];
 
       for (var doc in snapshot.docs) {
         final data = doc.data();
-        final type = data['type'] ?? '변동'; // 기본값은 '변동'
+        final type = data['type'] ?? '변동';
 
         if (type == '고정') {
           try {

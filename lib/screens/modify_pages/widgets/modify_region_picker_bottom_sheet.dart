@@ -27,7 +27,6 @@ Future<void> modifyRegionPickerBottomSheet({
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
             child: Column(
               children: [
-                // 드래그 핸들
                 Container(
                   width: 40,
                   height: 4,
@@ -38,7 +37,6 @@ Future<void> modifyRegionPickerBottomSheet({
                   ),
                 ),
 
-                // 제목
                 const Text(
                   '지역 선택',
                   style: TextStyle(
@@ -50,7 +48,6 @@ Future<void> modifyRegionPickerBottomSheet({
 
                 const SizedBox(height: 16),
 
-                // Picker
                 Expanded(
                   child: CupertinoPicker(
                     scrollController: FixedExtentScrollController(
@@ -78,7 +75,6 @@ Future<void> modifyRegionPickerBottomSheet({
 
                 const SizedBox(height: 12),
 
-                // 확인 버튼
                 CupertinoButton.filled(
                   padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
                   onPressed: () {

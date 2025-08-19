@@ -13,7 +13,6 @@ const String kBucketName = 'easydev-image';
 const String kServiceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
 
 class EndWorkReportContent extends StatefulWidget {
-  // ✅ 콜백을 Future<void>로 변경해 상위 onReport의 async 작업을 대기할 수 있게 함
   final Future<void> Function(String reportType, String content) onReport;
 
   const EndWorkReportContent({super.key, required this.onReport});
@@ -117,7 +116,6 @@ class _EndWorkReportContentState extends State<EndWorkReportContent> {
       return;
     }
 
-    // Firestore 정산 요약이 없다면 새로 생성
     final dateStr = DateTime.now().toIso8601String().split('T').first;
     final summaryRef = FirebaseFirestore.instance.collection('fee_summaries').doc('${division}_$area\_$dateStr');
 
@@ -137,12 +135,10 @@ class _EndWorkReportContentState extends State<EndWorkReportContent> {
 
     final content = jsonEncode(reportMap);
 
-    // ✅ 상위 onReport의 async 작업(업로드/정리 등)을 완전히 대기
     await widget.onReport('end', content);
   }
 }
 
-// 🔄 Firestore 정산 요약 작성
 Future<void> updateLockedFeeSummary(String division, String area) async {
   final firestore = FirebaseFirestore.instance;
   final date = DateTime.now();
@@ -180,7 +176,6 @@ Future<void> updateLockedFeeSummary(String division, String area) async {
   });
 }
 
-// ☁️ GCS 업로드
 Future<String?> uploadEndWorkReportJson({
   required Map<String, dynamic> report,
   required String division,
@@ -226,7 +221,6 @@ Future<String?> uploadEndWorkReportJson({
   return 'https://storage.googleapis.com/$kBucketName/${object.name}';
 }
 
-// 🔥 Firestore plates 정리
 Future<void> deleteLockedDepartureDocs(String area) async {
   final firestore = FirebaseFirestore.instance;
   final snapshot = await firestore

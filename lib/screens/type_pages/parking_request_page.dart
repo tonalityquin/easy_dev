@@ -26,7 +26,7 @@ class ParkingRequestPage extends StatefulWidget {
 class _ParkingRequestPageState extends State<ParkingRequestPage> {
   bool _isSorted = true;
   bool _showReportDialog = false;
-  bool _isLocked = false; // ✅ 잠금 상태 추가
+  bool _isLocked = false;
 
   void _toggleSortIcon() {
     setState(() {
@@ -34,9 +34,9 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
     });
 
     context.read<PlateState>().updateSortOrder(
-      PlateType.parkingRequests,
-      _isSorted,
-    );
+          PlateType.parkingRequests,
+          _isSorted,
+        );
   }
 
   void _toggleLock() {
@@ -62,13 +62,13 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
   void _handlePlateTap(BuildContext context, String plateNumber, String area) {
     final userName = context.read<UserState>().name;
     context.read<PlateState>().togglePlateIsSelected(
-      collection: PlateType.parkingRequests,
-      plateNumber: plateNumber,
-      userName: userName,
-      onError: (errorMessage) {
-        showFailedSnackbar(context, errorMessage);
-      },
-    );
+          collection: PlateType.parkingRequests,
+          plateNumber: plateNumber,
+          userName: userName,
+          onError: (errorMessage) {
+            showFailedSnackbar(context, errorMessage);
+          },
+        );
   }
 
   Future<void> _handleParkingCompleted(BuildContext context) async {
@@ -203,7 +203,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                   Positioned.fill(
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
-                      onTap: () {}, // 터치 막기
+                      onTap: () {},
                       child: const SizedBox.expand(),
                     ),
                   ),
@@ -213,8 +213,8 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
         ),
         bottomNavigationBar: ParkingRequestControlButtons(
           isSorted: _isSorted,
-          isLocked: _isLocked, // ✅ 전달
-          onToggleLock: _toggleLock, // ✅ 전달
+          isLocked: _isLocked,
+          onToggleLock: _toggleLock,
           onSearchPressed: () => _showSearchDialog(context),
           onSortToggle: _toggleSortIcon,
           onParkingCompleted: () => _handleParkingCompleted(context),

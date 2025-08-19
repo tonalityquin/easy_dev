@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // HapticFeedback을 위해 필요
+import 'package:flutter/services.dart';
 
 class NumKeypad extends StatefulWidget {
   final TextEditingController controller;
@@ -90,7 +90,7 @@ class _NumKeypadState extends State<NumKeypad> with TickerProviderStateMixin {
     _controllers.putIfAbsent(
       key,
           () => AnimationController(
-        duration: const Duration(milliseconds: 80), // 더 빠르게 축소
+        duration: const Duration(milliseconds: 80),
         vsync: this,
         lowerBound: 0.0,
         upperBound: 0.1,
@@ -99,7 +99,7 @@ class _NumKeypadState extends State<NumKeypad> with TickerProviderStateMixin {
     _isPressed.putIfAbsent(key, () => false);
 
     final controller = _controllers[key]!;
-    final animation = Tween(begin: 1.0, end: 0.85).animate( // 더 크게 축소
+    final animation = Tween(begin: 1.0, end: 0.85).animate(
       CurvedAnimation(parent: controller, curve: Curves.easeOut),
     );
 
@@ -108,7 +108,7 @@ class _NumKeypadState extends State<NumKeypad> with TickerProviderStateMixin {
         padding: const EdgeInsets.all(4.0),
         child: GestureDetector(
           onTapDown: (_) {
-            HapticFeedback.selectionClick(); // ✅ 진동
+            HapticFeedback.selectionClick();
             setState(() => _isPressed[key] = true);
             controller.forward();
           },

@@ -12,7 +12,6 @@ class ClockInLogUploader {
   static const _sheetName = '출퇴근기록';
   static const _serviceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
 
-  /// 🔁 area에 따라 스프레드시트 ID 선택
   static String _getSpreadsheetId(String area) {
     switch (area.toLowerCase()) {
       case 'pelican':
@@ -23,7 +22,6 @@ class ClockInLogUploader {
     }
   }
 
-  /// ✅ 출근 기록 업로드
   static Future<bool> uploadAttendanceJson({
     required BuildContext context,
     required Map<String, dynamic> data,
@@ -43,7 +41,6 @@ class ClockInLogUploader {
       final recordedTime = data['recordedTime'] ?? '';
       final status = '출근';
 
-      // ✅ 중복 확인
       final existingRows = await _loadAllRecords(spreadsheetId);
       final isDuplicate = existingRows.any((row) =>
       row.length >= 7 &&
@@ -57,7 +54,6 @@ class ClockInLogUploader {
         return false;
       }
 
-      // ✅ 업로드할 행 구성
       final row = [
         dateStr,
         recordedTime,
@@ -88,7 +84,6 @@ class ClockInLogUploader {
     }
   }
 
-  /// 🔐 인증 클라이언트 생성
   static Future<AuthClient> _getSheetsClient() async {
     final jsonStr = await rootBundle.loadString(_serviceAccountPath);
     final credentials = ServiceAccountCredentials.fromJson(jsonStr);
@@ -98,7 +93,6 @@ class ClockInLogUploader {
     );
   }
 
-  /// 📥 시트 데이터 로드 (중복 체크용)
   static Future<List<List<String>>> _loadAllRecords(String spreadsheetId) async {
     final client = await _getSheetsClient();
     final sheetsApi = SheetsApi(client);
@@ -115,7 +109,6 @@ class ClockInLogUploader {
     ).toList() ?? [];
   }
 
-  /// 시트 URL 반환
   static String getDownloadPath({
     required String area,
   }) {

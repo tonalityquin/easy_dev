@@ -21,7 +21,7 @@ class BreakEditBottomSheet extends StatelessWidget {
     final minController = TextEditingController(text: parts[1]);
 
     return Container(
-      color: Colors.white, // ✅ 배경색 흰색 지정
+      color: Colors.white,
       padding: EdgeInsets.only(
         left: 20,
         right: 20,
@@ -39,11 +39,9 @@ class BreakEditBottomSheet extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
-          /// 시간 입력 필드
           _TimeInputRow('휴게 시간', hourController, minController),
           const SizedBox(height: 24),
 
-          /// 저장 버튼
           ElevatedButton.icon(
             icon: const Icon(Icons.save, size: 20),
             label: const Text(

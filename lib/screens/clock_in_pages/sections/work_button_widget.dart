@@ -40,25 +40,24 @@ class WorkButtonWidget extends StatelessWidget {
       onPressed: isWorking
           ? () => logger.log('🚫 출근 버튼 클릭 무시: 이미 출근 상태', level: 'warn')
           : () async {
-        logger.log('🧲 [UI] 출근 버튼 클릭됨', level: 'called');
-        onLoadingChanged(true);
-        try {
-          await runWithBlockingDialog(
-            context: context,
-            message: '출근 처리 중입니다...',
-            task: () async {
-              // ⚠️ controller 내부 비동기 작업은 반드시 await
-              await controller.handleWorkStatus(
-                context,
-                context.read<UserState>(),
-                    () => onLoadingChanged(false), // (기존 시그니처 유지 시)
-              );
+              logger.log('🧲 [UI] 출근 버튼 클릭됨', level: 'called');
+              onLoadingChanged(true);
+              try {
+                await runWithBlockingDialog(
+                  context: context,
+                  message: '출근 처리 중입니다...',
+                  task: () async {
+                    await controller.handleWorkStatus(
+                      context,
+                      context.read<UserState>(),
+                      () => onLoadingChanged(false), // (기존 시그니처 유지 시)
+                    );
+                  },
+                );
+              } finally {
+                onLoadingChanged(false);
+              }
             },
-          );
-        } finally {
-          onLoadingChanged(false);
-        }
-      },
     );
   }
 }

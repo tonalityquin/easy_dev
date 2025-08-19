@@ -22,7 +22,7 @@ class _WorkButtonWidgetState extends State<WorkButtonWidget> {
   bool _submitting = false;
 
   Future<void> _onTap() async {
-    if (_submitting) return; // ✅ 중복 탭 방지
+    if (_submitting) return;
     setState(() => _submitting = true);
     HapticFeedback.lightImpact();
 

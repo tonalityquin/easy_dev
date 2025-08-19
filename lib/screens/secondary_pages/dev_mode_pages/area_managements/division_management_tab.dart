@@ -32,7 +32,6 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
 
     await widget.onDivisionAdded(input);
 
-// 🔽 본사 지역 자동 생성
     final areaId = '$input-$input';
     await FirebaseFirestore.instance.collection('areas').doc(areaId).set({
       'name': input,

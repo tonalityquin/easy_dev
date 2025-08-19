@@ -23,7 +23,6 @@ class _InputCameraPreviewDialogState extends State<InputCameraPreviewDialog> {
   final List<XFile> _capturedImages = [];
   bool _isCameraReady = false;
 
-  // ⬇️ 추가: 초기화 Future 저장 + 종료 재진입 방지
   Future<void>? _initFuture;
   bool _closing = false;
 
@@ -53,7 +52,6 @@ class _InputCameraPreviewDialogState extends State<InputCameraPreviewDialog> {
     debugPrint('🧹 CameraHelper: dispose() 호출');
     widget.onCaptureComplete?.call(_capturedImages);
 
-    // ⬇️ 초기화 진행 중이면 완료 후 안전하게 정리
     final f = _initFuture;
     Future(() async {
       if (f != null) { try { await f; } catch (_) {} }
@@ -107,7 +105,6 @@ class _InputCameraPreviewDialogState extends State<InputCameraPreviewDialog> {
 
     return WillPopScope(
       onWillPop: () async {
-        // ⬇️ 뒤로가기 시 미리보기 먼저 내리고 한 프레임 대기(플랫폼 뷰가 안전히 내려가도록)
         if (_closing) return true;
         _closing = true;
         if (mounted) setState(() => _isCameraReady = false);
@@ -186,7 +183,6 @@ class _InputCameraPreviewDialogState extends State<InputCameraPreviewDialog> {
   }
 }
 
-// ✅ 전체 미리보기 갤러리
 class GalleryView extends StatelessWidget {
   final List<XFile> images;
   final void Function(int index) onDelete;
@@ -237,7 +233,6 @@ class GalleryView extends StatelessWidget {
   }
 }
 
-// ✅ 전체 화면 뷰 (스와이프 + 삭제 + 확대)
 class FullScreenGalleryView extends StatefulWidget {
   final List<XFile> images;
   final int initialIndex;

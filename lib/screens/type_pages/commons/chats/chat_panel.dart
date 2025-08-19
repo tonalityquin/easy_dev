@@ -22,7 +22,6 @@ class _ChatPanelState extends State<ChatPanel> {
   String latestMessage = '';
   Timestamp? latestTimestamp;
 
-  // ▼ 쇼트컷
   List<String> _shortcuts = [];
 
   String get _prefsKey => 'chat_shortcuts_${widget.roomId}';
@@ -55,11 +54,11 @@ class _ChatPanelState extends State<ChatPanel> {
       final data = docSnapshot.data();
       if (data == null) return;
 
-      if (!mounted) return; // ✅ 추가
+      if (!mounted) return;
       setState(() {
         latestMessage = (data['message'] as String?) ?? '';
         final ts = data['timestamp'];
-        latestTimestamp = ts is Timestamp ? ts : null; // ✅ 안전 가드
+        latestTimestamp = ts is Timestamp ? ts : null;
       });
     });
   }
@@ -89,7 +88,6 @@ class _ChatPanelState extends State<ChatPanel> {
     }
   }
 
-  // ▼ 쇼트컷 로드/저장/추가/삭제
   Future<void> _loadShortcuts() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
@@ -203,9 +201,8 @@ class _ChatPanelState extends State<ChatPanel> {
     }
 
     return Column(
-      mainAxisSize: MainAxisSize.max, // ✅ 꽉 채우기
+      mainAxisSize: MainAxisSize.max,
       children: [
-        // 상단 타이틀 (가운데) + 우측 '쇼트컷 추가'
         Stack(
           children: [
             Align(
@@ -223,15 +220,12 @@ class _ChatPanelState extends State<ChatPanel> {
           ],
         ),
         const SizedBox(height: 8),
-
-        // ===== 가운데 가변(스크롤) 영역 =====
         Expanded(
           child: SingleChildScrollView(
             padding: const EdgeInsets.only(bottom: 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // 최신 메시지 박스 (maxHeight 제거)
                 Container(
                   width: double.infinity,
                   margin: const EdgeInsets.all(12),
@@ -254,8 +248,6 @@ class _ChatPanelState extends State<ChatPanel> {
                     ],
                   ),
                 ),
-
-                // ▼ 쇼트컷 가로 리스트
                 if (_shortcuts.isNotEmpty) ...[
                   SizedBox(
                     height: 40,
@@ -297,8 +289,6 @@ class _ChatPanelState extends State<ChatPanel> {
             ),
           ),
         ),
-
-        // ===== 하단 고정 입력 행 =====
         Row(
           children: [
             Expanded(
@@ -330,8 +320,7 @@ class _ChatPanelState extends State<ChatPanel> {
             ),
           ],
         ),
-
-        const SizedBox(height: 8), // ⬅️ 80 → 8로 축소
+        const SizedBox(height: 8),
       ],
     );
   }

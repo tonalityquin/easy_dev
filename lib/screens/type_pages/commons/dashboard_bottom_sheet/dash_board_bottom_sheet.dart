@@ -48,14 +48,10 @@ class DashBoardBottomSheet extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 24),
-
                     const ClockOutFetchPlateCountWidget(),
                     const SizedBox(height: 16),
-
                     UserInfoCard(),
                     const SizedBox(height: 16),
-
-                    // 1) 로그아웃 버튼 (개별 스타일)
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
@@ -65,15 +61,11 @@ class DashBoardBottomSheet extends StatelessWidget {
                         onPressed: () => controller.logout(context),
                       ),
                     ),
-
                     const SizedBox(height: 32),
-
                     BreakButtonWidget(controller: controller),
                     const SizedBox(height: 16),
-
                     Row(
                       children: [
-                        // 2) 보고 작성 버튼 (개별 스타일)
                         Expanded(
                           child: ElevatedButton.icon(
                             icon: const Icon(Icons.assignment),
@@ -83,8 +75,6 @@ class DashBoardBottomSheet extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 12),
-
-                        // WorkButtonWidget은 자체 위젯 내부 스타일 사용
                         Expanded(
                           child: WorkButtonWidget(
                             controller: controller,
@@ -93,10 +83,7 @@ class DashBoardBottomSheet extends StatelessWidget {
                         ),
                       ],
                     ),
-
                     const SizedBox(height: 16),
-
-                    // 3) Gmail 열기 버튼 (개별 스타일)
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
@@ -129,10 +116,7 @@ class DashBoardBottomSheet extends StatelessWidget {
                         },
                       ),
                     ),
-
                     const SizedBox(height: 16),
-
-                    // 4) 주차 구역 수동 새로고침 버튼 (개별 스타일)
                     Consumer<LocationState>(
                       builder: (context, locationState, _) {
                         bool isRefreshing = false;
@@ -181,7 +165,6 @@ class DashBoardBottomSheet extends StatelessWidget {
   }
 }
 
-/// ───────────── 버튼별 “개별 스타일” 정의 ─────────────
 ButtonStyle _logoutBtnStyle() {
   return ElevatedButton.styleFrom(
     backgroundColor: Colors.white,

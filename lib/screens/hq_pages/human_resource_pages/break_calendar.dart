@@ -27,8 +27,8 @@ class _BreakCalendarState extends State<BreakCalendar> {
 
   Map<int, String> _breakTimeMap = {};
 
-  final Map<String, List<UserModel>> _userCache = {}; // 지역별 사용자 목록 캐시
-  final Map<String, Map<int, String>> _breakTimeCache = {}; // 유저-월별 휴게기록 캐시
+  final Map<String, List<UserModel>> _userCache = {};
+  final Map<String, Map<int, String>> _breakTimeCache = {};
 
   @override
   void initState() {
@@ -127,7 +127,6 @@ class _BreakCalendarState extends State<BreakCalendar> {
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  // ✅ 지역 & 사용자 선택 드롭다운
                   Row(
                     children: [
                       Expanded(
@@ -177,12 +176,9 @@ class _BreakCalendarState extends State<BreakCalendar> {
                           },
                         ),
                       ),
-                      // 👉 cloud 아이콘 버튼 및 SizedBox 제거됨
                     ],
                   ),
                   const SizedBox(height: 8),
-
-                  /// ✅ 캘린더
                   TableCalendar(
                     firstDay: DateTime.utc(2025, 1, 1),
                     lastDay: DateTime.utc(2025, 12, 31),
@@ -209,7 +205,6 @@ class _BreakCalendarState extends State<BreakCalendar> {
                       }
                     },
                     availableGestures: AvailableGestures.none,
-                    // ✅ 핵심 추가
                     calendarStyle: const CalendarStyle(
                       outsideDaysVisible: true,
                       isTodayHighlighted: false,
@@ -225,10 +220,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
                       selectedBuilder: _buildCell,
                     ),
                   ),
-
                   const SizedBox(height: 20),
-
-                  /// ✅ 저장 버튼
                   ElevatedButton.icon(
                     onPressed: _selectedUser == null || _selectedArea == null ? null : _saveAllChangesToSheets,
                     icon: const Icon(Icons.save, size: 20),

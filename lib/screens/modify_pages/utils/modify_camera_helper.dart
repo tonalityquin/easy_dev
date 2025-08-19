@@ -37,7 +37,6 @@ class ModifyCameraHelper {
       final XFile image = await cameraController!.takePicture();
       debugPrint('✅ CameraHelper: 사진 촬영 성공 - ${image.path}');
 
-      // JPEG 압축 적용
       final originalFile = File(image.path);
       final bytes = await originalFile.readAsBytes();
       final decodedImage = img.decodeImage(bytes);

@@ -61,7 +61,6 @@ class _TypePageState extends State<TypePage> {
                     padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
                     child: Row(
                       children: [
-                        // 📩 채팅 버튼
                         Expanded(
                           child: StreamBuilder<String>(
                             stream: latestMessageStream(
@@ -101,7 +100,6 @@ class _TypePageState extends State<TypePage> {
 
                         const SizedBox(width: 8),
 
-                        // 📊 대시보드 버튼
                         Expanded(
                           child: ElevatedButton(
                             onPressed: () {
@@ -265,7 +263,6 @@ class PageBottomNavigation extends StatelessWidget {
                 color: isSelected ? selectedColor : unselectedColor,
               );
 
-              // ✅ "홈" 탭 (카운팅 없음, 홈 아이콘 + 라벨)
               if (pageInfo.title == '홈') {
                 return BottomNavigationBarItem(
                   icon: Column(
@@ -273,7 +270,7 @@ class PageBottomNavigation extends StatelessWidget {
                     children: [
                       Icon(
                         Icons.home,
-                        size: isSelected ? 32 : 28, // ✅ 크기 조정
+                        size: isSelected ? 32 : 28,
                         color: isSelected ? selectedColor : unselectedColor,
                       ),
                       const SizedBox(height: 2),

@@ -30,7 +30,9 @@ class PlateWriteService {
     await FirestoreLogger().log('addOrUpdatePlate success: $documentId');
   }
 
-  Future<void> updatePlate(String documentId, Map<String, dynamic> updatedFields, {
+  Future<void> updatePlate(
+    String documentId,
+    Map<String, dynamic> updatedFields, {
     PlateLogModel? log,
   }) async {
     await FirestoreLogger().log('updatePlate called: $documentId, fields=$updatedFields');
@@ -51,7 +53,6 @@ class PlateWriteService {
       rethrow;
     }
   }
-
 
   Future<void> deletePlate(String documentId) async {
     await FirestoreLogger().log('deletePlate called: $documentId');
@@ -74,10 +75,10 @@ class PlateWriteService {
   }
 
   Future<void> recordWhoPlateClick(
-      String id,
-      bool isSelected, {
-        String? selectedBy,
-      }) async {
+    String id,
+    bool isSelected, {
+    String? selectedBy,
+  }) async {
     await FirestoreLogger().log('recordWhoPlateClick called: $id, isSelected=$isSelected, selectedBy=$selectedBy');
     final docRef = _firestore.collection('plates').doc(id);
 
@@ -103,7 +104,6 @@ class PlateWriteService {
     }
   }
 
-  /// 내부 사용: 문서 데이터 비교 (깊은 비교 포함)
   bool _isSameData(Map<String, dynamic> oldData, Map<String, dynamic> newData) {
     if (oldData.length != newData.length) return false;
 

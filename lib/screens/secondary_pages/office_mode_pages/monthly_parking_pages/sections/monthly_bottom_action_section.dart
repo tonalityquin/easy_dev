@@ -7,7 +7,7 @@ class MonthlyBottomActionSection extends StatefulWidget {
   final MonthlyPlateController controller;
   final bool mountedContext;
   final VoidCallback onStateRefresh;
-  final bool isEditMode; // 🔹 수정 모드 여부 추가
+  final bool isEditMode;
 
   const MonthlyBottomActionSection({
     super.key,

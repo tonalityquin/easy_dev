@@ -59,8 +59,6 @@ Future<void> showParkingCompletedStatusBottomSheet({
                   ],
                 ),
                 const SizedBox(height: 24),
-
-                // ✅ 출차 요청으로 이동 버튼
                 ElevatedButton.icon(
                   icon: const Icon(Icons.exit_to_app),
                   label: const Text("출차 요청으로 이동"),
@@ -88,8 +86,6 @@ Future<void> showParkingCompletedStatusBottomSheet({
                   ),
                 ),
                 const SizedBox(height: 12),
-
-                // 🔍 로그 확인 버튼
                 ElevatedButton.icon(
                   icon: const Icon(Icons.history),
                   label: const Text("로그 확인"),
@@ -119,8 +115,6 @@ Future<void> showParkingCompletedStatusBottomSheet({
                   ),
                 ),
                 const SizedBox(height: 12),
-
-                // ✏️ 정보 수정
                 ElevatedButton.icon(
                   icon: const Icon(Icons.edit_note_outlined),
                   label: const Text("정보 수정"),
@@ -148,9 +142,6 @@ Future<void> showParkingCompletedStatusBottomSheet({
                   ),
                 ),
                 const SizedBox(height: 12),
-
-                // ⬅️ 입차 요청으로 되돌리기
-                // ⬅️ 입차 요청으로 되돌리기
                 ElevatedButton.icon(
                   icon: const Icon(Icons.assignment_return),
                   label: const Text("입차 요청으로 되돌리기"),
@@ -178,10 +169,7 @@ Future<void> showParkingCompletedStatusBottomSheet({
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 12),
-
-                // 🗑️ 삭제
                 TextButton.icon(
                   icon: const Icon(Icons.delete_forever, color: Colors.red),
                   label: const Text("삭제", style: TextStyle(color: Colors.red)),

@@ -35,12 +35,10 @@ class InputBottomNavigation extends StatelessWidget {
   Widget _buildContent() {
     return Stack(
       children: [
-        // 액션 버튼은 키패드가 보일 때 숨김
         Offstage(
           offstage: showKeypad,
           child: actionButton,
         ),
-        // 키패드는 항상 위젯 트리에 있고 표시 여부만 조절
         Offstage(
           offstage: !showKeypad,
           child: keypad,

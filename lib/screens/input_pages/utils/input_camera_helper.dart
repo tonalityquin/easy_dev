@@ -17,7 +17,6 @@ class InputCameraHelper {
 
   bool _isDisposing = false;
 
-  // ── 초기화: 중복 호출/경합 방지 (idempotent)
   Future<void> initializeInputCamera() async {
     if (isCameraInitialized && _controller != null) {
       debugPrint('📸 CameraHelper: 이미 초기화됨(재사용)');
@@ -95,7 +94,6 @@ class InputCameraHelper {
     }
   }
 
-  // ── 안전한 dispose: 초기화 중 대기 + 모든 경로에서 PlatformException 무시 처리
   Future<void> dispose() async {
     debugPrint('🧹 CameraHelper: dispose() 호출');
 
@@ -106,7 +104,6 @@ class InputCameraHelper {
     _isDisposing = true;
 
     try {
-      // 초기화 중이면 완료까지 대기
       try {
         await _initFuture?.catchError((_) {});
       } catch (_) {}
@@ -117,7 +114,6 @@ class InputCameraHelper {
         return;
       }
 
-      // 초기화 여부와 무관하게 동일한 예외 무시 로직 적용
       try {
         if (c.value.isInitialized) {
           debugPrint('🧹 CameraController 초기화됨 → dispose 시작');
@@ -126,16 +122,13 @@ class InputCameraHelper {
         debugPrint('✅ CameraController dispose 완료');
       } on PlatformException catch (e) {
         final msg = e.message ?? '';
-        // CameraX가 프리뷰 SurfaceTexture가 없을 때 내는 예외 → 무시
         if (e.code == 'IllegalStateException' &&
             msg.contains('releaseFlutterSurfaceTexture')) {
           debugPrint('! CameraController dispose 중 예외(무시): $e');
         } else {
-          // 그 외 PlatformException은 로깅만 하고 진행
           debugPrint('! CameraController dispose 중 PlatformException(기록만): $e');
         }
       } catch (e) {
-        // 기타 예외도 앱 크래시 방지를 위해 로깅만
         debugPrint('! CameraController dispose 중 기타 예외(기록만): $e');
       } finally {
         _controller = null;

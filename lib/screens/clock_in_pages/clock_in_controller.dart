@@ -13,7 +13,6 @@ import 'debugs/clock_in_debug_firestore_logger.dart';
 class ClockInController {
   final _localLogger = ClockInDebugFirestoreLogger();
 
-  /// 초기화 수행: 사용자의 지역 정보 기반으로 areaState 초기화
   void initialize(BuildContext context) {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final userState = context.read<UserState>();
@@ -31,7 +30,6 @@ class ClockInController {
     });
   }
 
-  /// 이미 근무 중이면 적절한 페이지로 리디렉션
   void redirectIfWorking(BuildContext context, UserState userState) {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final division = userState.user?.divisions.first ?? '';
@@ -61,12 +59,11 @@ class ClockInController {
     });
   }
 
-  /// 출근 상태 확인 및 근무 중이면 자동 이동 처리
   Future<void> handleWorkStatus(
-      BuildContext context,
-      UserState userState,
-      VoidCallback onLoadingChanged,
-      ) async {
+    BuildContext context,
+    UserState userState,
+    VoidCallback onLoadingChanged,
+  ) async {
     _localLogger.log('handleWorkStatus() 시작', level: 'called');
     onLoadingChanged.call();
 
@@ -88,11 +85,10 @@ class ClockInController {
     }
   }
 
-  /// 근무 중일 경우 적절한 페이지로 이동
   Future<void> _navigateToProperPageIfWorking(
-      BuildContext context,
-      UserState userState,
-      ) async {
+    BuildContext context,
+    UserState userState,
+  ) async {
     if (!userState.isWorking || !context.mounted) return;
 
     final division = userState.user?.divisions.first ?? '';
@@ -106,7 +102,8 @@ class ClockInController {
       final doc = await FirebaseFirestore.instance.collection('areas').doc(docId).get();
 
       _localLogger.log('_navigateToProperPageIfWorking() success: doc.exists=${doc.exists}', level: 'success');
-      await FirestoreLogger().log('_navigateToProperPageIfWorking() success: doc.exists=${doc.exists}', level: 'success');
+      await FirestoreLogger()
+          .log('_navigateToProperPageIfWorking() success: doc.exists=${doc.exists}', level: 'success');
 
       if (!context.mounted) return;
 
@@ -118,7 +115,6 @@ class ClockInController {
     }
   }
 
-  /// 오류 발생 시 스낵바 알림 표시
   void _showWorkError(BuildContext context) {
     if (!context.mounted) return;
 
@@ -133,7 +129,6 @@ class ClockInController {
     );
   }
 
-  /// 출근 기록을 백그라운드에서 업로드
   Future<void> _uploadAttendanceSilently(BuildContext context) async {
     final userState = Provider.of<UserState>(context, listen: false);
     final area = userState.area;

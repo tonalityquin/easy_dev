@@ -166,12 +166,12 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
               selectedBillType: _controller.selectedBillType,
               onChanged: (bill) {
                 setState(() {
-                  _controller.applyBillDefaults(bill); // ✅ 모델 전체 전달
+                  _controller.applyBillDefaults(bill);
                 });
               },
               onTypeChanged: (type) {
                 setState(() {
-                  _controller.onBillTypeChanged(type); // ✅ controller에서 처리
+                  _controller.onBillTypeChanged(type);
                 });
               },
             ),

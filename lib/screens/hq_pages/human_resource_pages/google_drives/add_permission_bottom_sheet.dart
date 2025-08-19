@@ -3,10 +3,9 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:googleapis_auth/auth_io.dart';
 
-/// 구글 드라이브에서 특정 파일/폴더에 편집자 권한을 부여하는 Bottom Sheet
 Future<void> showAddPermissionBottomSheet({
   required BuildContext context,
-  required String selectedArea, // ✅ 선택된 회사 영역
+  required String selectedArea,
 }) async {
   final emailController = TextEditingController();
 
@@ -14,7 +13,7 @@ Future<void> showAddPermissionBottomSheet({
     'belivus': '1VohUN819zjkbqYBkDofca8fmLKx3MuIO',
     'pelican': '1ZB0UQoDbuhrEsEqsfCZhEsX5PMfOKGiD',
   };
-  final fileId = folderMap[selectedArea] ?? folderMap['belivus']!; // 기본 fallback
+  final fileId = folderMap[selectedArea] ?? folderMap['belivus']!;
 
   showModalBottomSheet(
     context: context,

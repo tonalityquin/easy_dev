@@ -28,7 +28,6 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
   Map<int, String> _clockInMap = {};
   Map<int, String> _clockOutMap = {};
 
-  // ✅ 캐싱용 메모리 저장소
   final Map<String, List<UserModel>> _userCache = {};
   final Map<String, Map<int, String>> _inCache = {};
   final Map<String, Map<int, String>> _outCache = {};
@@ -154,7 +153,6 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
 
     showSuccessSnackbar(context, 'Google Sheets에 저장 완료');
 
-    // ✅ 저장 후 캐시도 최신값으로 반영
     final cacheKey = '$userId-${_focusedDay.year}-${_focusedDay.month}';
     _inCache[cacheKey] = {..._clockInMap};
     _outCache[cacheKey] = {..._clockOutMap};
@@ -182,7 +180,6 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  // ✅ 상단 드롭다운
                   Row(
                     children: [
                       Expanded(
@@ -218,7 +215,8 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
                           items: _users.map((user) {
                             return DropdownMenuItem(
                               value: user,
-                              child: Text(user.name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14)),
+                              child: Text(user.name,
+                                  overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14)),
                             );
                           }).toList(),
                           onChanged: (value) {
@@ -234,8 +232,6 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
                     ],
                   ),
                   const SizedBox(height: 8),
-
-                  // ✅ 캘린더
                   TableCalendar(
                     firstDay: DateTime.utc(2025, 1, 1),
                     lastDay: DateTime.utc(2025, 12, 31),
@@ -257,7 +253,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
                         _loadAttendanceTimes(_selectedUser!);
                       }
                     },
-                    availableGestures: AvailableGestures.none, // ✅ 핵심: 스크롤 방해 제거
+                    availableGestures: AvailableGestures.none,
                     calendarStyle: const CalendarStyle(
                       outsideDaysVisible: true,
                       isTodayHighlighted: false,
@@ -274,8 +270,6 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
                     ),
                   ),
                   const SizedBox(height: 20),
-
-                  // ✅ 저장 버튼
                   ElevatedButton.icon(
                     onPressed: _selectedUser == null || _selectedArea == null ? null : _saveAllChangesToSheets,
                     icon: const Icon(Icons.save, size: 20),
@@ -302,7 +296,6 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
       ),
     );
   }
-
 
   Widget _buildCell(BuildContext context, DateTime day, DateTime focusedDay) {
     final isSelected = isSameDay(day, _selectedDay);

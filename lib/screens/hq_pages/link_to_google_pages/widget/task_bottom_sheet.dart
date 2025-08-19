@@ -97,7 +97,7 @@ Future<bool?> showEditTaskBottomSheet({
                             );
                             if (deleted) {
                               await reloadEvents();
-                              Navigator.pop(context, true); // ✅ 변경됨
+                              Navigator.pop(context, true);
                             }
                           },
                           icon: const Icon(Icons.delete, color: Colors.red),
@@ -136,7 +136,7 @@ Future<bool?> showEditTaskBottomSheet({
                               final calendarApi = calendar.CalendarApi(client);
                               await calendarApi.events.update(updatedEvent, calendarId, event.id!);
                               await reloadEvents();
-                              Navigator.pop(context, true); // ✅ 변경됨
+                              Navigator.pop(context, true);
                             } catch (e) {
                               print('이벤트 수정 실패: $e');
                             }

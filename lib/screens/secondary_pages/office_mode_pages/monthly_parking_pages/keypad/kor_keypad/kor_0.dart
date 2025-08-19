@@ -33,7 +33,7 @@ class _Kor0State extends State<Kor0> with TickerProviderStateMixin {
     return KorKeypadUtils.buildSubLayout(
       keyRows,
       widget.onKeyTap,
-      state: this, // ✅ 여기만 넘김
+      state: this,
       controllers: _controllers,
       isPressed: _isPressed,
     );
