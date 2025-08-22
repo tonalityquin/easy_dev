@@ -109,6 +109,7 @@ class PlateModel {
     this.feeMode,
   });
 
+  /// getPlate, _queryPlates, streamToCurrentArea, subscribeType
   factory PlateModel.fromDocument(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data() ?? {};
     final timestamp = data[PlateFields.requestTime];
@@ -149,6 +150,7 @@ class PlateModel {
     );
   }
 
+  /// addPlate, addOrUpdatePlate,
   Map<String, dynamic> toMap({bool removeNullOrEmpty = false}) {
     final map = {
       PlateFields.addAmount: addAmount,
@@ -279,6 +281,7 @@ class PlateModel {
     return copyWith(logs: updatedLogs);
   }
 
+  /// updatePlateInfo
   Map<String, dynamic> diff(PlateModel other) {
     final changes = <String, dynamic>{};
     if (addAmount != other.addAmount) {

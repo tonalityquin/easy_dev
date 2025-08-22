@@ -1,16 +1,13 @@
-import 'dart:convert';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:googleapis/storage/v1.dart';
-import 'package:googleapis_auth/auth_io.dart';
 
 import '../../models/plate_log_model.dart';
 
 class PlateLogViewerBottomSheet extends StatefulWidget {
-  final String? initialPlateNumber;
-  final String division;
-  final String area;
-  final DateTime requestTime;
+  final String? initialPlateNumber; // 문서 ID를 만들 plateNumber로 사용
+  final String division; // (호환성 유지용) 현재는 Firestore 조회에 사용하지 않음
+  final String area; // 문서 ID를 만들 때 사용
+  final DateTime requestTime; // (호환성 유지용) 현재는 Firestore 조회에 사용하지 않음
 
   const PlateLogViewerBottomSheet({
     super.key,
@@ -21,12 +18,12 @@ class PlateLogViewerBottomSheet extends StatefulWidget {
   });
 
   static Future<void> show(
-      BuildContext context, {
-        required String division,
-        required String area,
-        required DateTime requestTime,
-        String? initialPlateNumber,
-      }) async {
+    BuildContext context, {
+    required String division,
+    required String area,
+    required DateTime requestTime,
+    String? initialPlateNumber,
+  }) async {
     if (Navigator.canPop(context)) {
       Navigator.pop(context);
       await Future.delayed(const Duration(milliseconds: 250));
@@ -71,14 +68,10 @@ class PlateLogViewerBottomSheet extends StatefulWidget {
   }
 
   @override
-  State<PlateLogViewerBottomSheet> createState() =>
-      _PlateLogViewerBottomSheetState();
+  State<PlateLogViewerBottomSheet> createState() => _PlateLogViewerBottomSheetState();
 }
 
 class _PlateLogViewerBottomSheetState extends State<PlateLogViewerBottomSheet> {
-  final String bucketName = 'easydev-image';
-  final String serviceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
-
   List<PlateLogModel> _logs = [];
   bool _isLoading = true;
 
@@ -88,69 +81,66 @@ class _PlateLogViewerBottomSheetState extends State<PlateLogViewerBottomSheet> {
     _loadLogs();
   }
 
-  String _normalize(String? input) =>
-      (input ?? '').replaceAll(RegExp(r'[\s\-]'), '').trim();
+  String _normalize(String? input) => (input ?? '').replaceAll(RegExp(r'[\s\-]'), '').trim();
 
   Future<void> _loadLogs() async {
     setState(() => _isLoading = true);
     try {
-      final credentialsJson = await rootBundle.loadString(serviceAccountPath);
-      final accountCredentials =
-      ServiceAccountCredentials.fromJson(credentialsJson);
-      final scopes = [StorageApi.devstorageReadOnlyScope];
-      final client = await clientViaServiceAccount(accountCredentials, scopes);
-      final storage = StorageApi(client);
+      final plate = widget.initialPlateNumber;
+      if (plate == null || plate.trim().isEmpty) {
+        debugPrint('❗ plateNumber가 없어 Firestore 문서 조회 불가');
+        if (mounted) {
+          setState(() {
+            _logs = [];
+            _isLoading = false;
+          });
+        }
+        return;
+      }
 
-      final year = widget.requestTime.year.toString();
-      final month = widget.requestTime.month.toString().padLeft(2, '0');
-      final day = widget.requestTime.day.toString().padLeft(2, '0');
-      final prefix = '${widget.division}/${widget.area}/$year/$month/$day/logs/';
+      final docId = '${plate}_${widget.area}';
+      final snap = await FirebaseFirestore.instance.collection('plates').doc(docId).get();
 
-      final objects = await storage.objects.list(bucketName, prefix: prefix);
-      final logFiles = objects.items
-          ?.where((o) => o.name?.endsWith('.json') ?? false)
-          .toList() ??
-          [];
+      if (!snap.exists) {
+        debugPrint('📭 문서 없음: $docId');
+        if (mounted) {
+          setState(() {
+            _logs = [];
+            _isLoading = false;
+          });
+        }
+        return;
+      }
+
+      final data = snap.data() ?? {};
+      final rawLogs = (data['logs'] as List?) ?? const [];
 
       final logs = <PlateLogModel>[];
-      for (final file in logFiles) {
-        final uri =
-        Uri.parse('https://storage.googleapis.com/$bucketName/${file.name}');
-        final response = await NetworkAssetBundle(uri).load('');
-        final jsonString = utf8.decode(response.buffer.asUint8List());
-
-        final decoded = jsonDecode(jsonString);
-        if (decoded is List) {
-          for (final item in decoded) {
-            if (item is Map<String, dynamic>) {
-              logs.add(PlateLogModel.fromMap(item));
-            }
+      for (final e in rawLogs) {
+        if (e is Map) {
+          try {
+            logs.add(PlateLogModel.fromMap(Map<String, dynamic>.from(e)));
+          } catch (err) {
+            debugPrint('⚠️ 로그 파싱 실패: $err');
           }
-        } else {
-          debugPrint('⚠️ 예상치 못한 JSON 포맷: ${file.name}');
         }
       }
 
-      logs.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-
-      final filtered = widget.initialPlateNumber != null
-          ? logs
-          .where((log) =>
-      _normalize(log.plateNumber) ==
-          _normalize(widget.initialPlateNumber))
-          .toList()
-          : logs;
+      // 최신순
+      logs.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      // (옵션) initialPlateNumber로 한 번 더 필터링 — 문서 ID로 이미 특정 plate지만, 안전하게 유지
+      final filtered = logs.where((log) {
+        if (widget.initialPlateNumber == null) return true;
+        return _normalize(log.plateNumber) == _normalize(widget.initialPlateNumber);
+      }).toList();
 
       if (!mounted) return;
-
       setState(() {
         _logs = filtered;
         _isLoading = false;
       });
-
-      client.close();
     } catch (e) {
-      debugPrint("❌ 로그 불러오기 실패: $e");
+      debugPrint("❌ Firestore 로그 불러오기 실패: $e");
       if (mounted) {
         setState(() => _isLoading = false);
       }
@@ -159,9 +149,7 @@ class _PlateLogViewerBottomSheetState extends State<PlateLogViewerBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final plateTitle = widget.initialPlateNumber != null
-        ? '${widget.initialPlateNumber} 로그'
-        : '번호판 로그';
+    final plateTitle = widget.initialPlateNumber != null ? '${widget.initialPlateNumber} 로그' : '번호판 로그';
 
     return SafeArea(
       child: Material(
@@ -214,38 +202,34 @@ class _PlateLogViewerBottomSheetState extends State<PlateLogViewerBottomSheet> {
                     child: _isLoading
                         ? const Center(child: CircularProgressIndicator())
                         : _logs.isEmpty
-                        ? const Center(child: Text("📭 로그가 없습니다."))
-                        : ListView.separated(
-                      controller: scrollController,
-                      itemCount: _logs.length,
-                      separatorBuilder: (_, __) =>
-                      const Divider(height: 1),
-                      itemBuilder: (_, index) {
-                        final log = _logs[index];
-                        return ListTile(
-                          leading: const Icon(Icons.directions_car),
-                          title: Text(log.action),
-                          subtitle: Column(
-                            crossAxisAlignment:
-                            CrossAxisAlignment.start,
-                            children: [
-                              Text('${log.from} → ${log.to}'),
-                              Text(
-                                '담당자: ${log.performedBy}',
-                                style: const TextStyle(fontSize: 12),
+                            ? const Center(child: Text("📭 로그가 없습니다."))
+                            : ListView.separated(
+                                controller: scrollController,
+                                itemCount: _logs.length,
+                                separatorBuilder: (_, __) => const Divider(height: 1),
+                                itemBuilder: (_, index) {
+                                  final log = _logs[index];
+                                  return ListTile(
+                                    leading: const Icon(Icons.directions_car),
+                                    title: Text(log.action),
+                                    subtitle: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('${log.from} → ${log.to}'),
+                                        Text(
+                                          '담당자: ${log.performedBy}',
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                      ],
+                                    ),
+                                    trailing: Text(
+                                      log.timestamp.toString().substring(0, 19),
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                    isThreeLine: true,
+                                  );
+                                },
                               ),
-                            ],
-                          ),
-                          trailing: Text(
-                            log.timestamp
-                                .toString()
-                                .substring(0, 19),
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                          isThreeLine: true,
-                        );
-                      },
-                    ),
                   ),
                   Padding(
                     padding: const EdgeInsets.all(16.0),
