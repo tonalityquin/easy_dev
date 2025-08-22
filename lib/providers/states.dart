@@ -68,7 +68,6 @@ final List<SingleChildWidget> stateProviders = [
   Provider(
     create: (context) => MovementPlate(
       context.read<PlateRepository>(),
-      context.read<AreaState>(),
     ),
   ),
   ChangeNotifierProvider(

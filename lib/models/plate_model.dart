@@ -261,7 +261,7 @@ class PlateModel {
   }) {
     final newLog = PlateLogModel(
       plateNumber: plateNumber,
-      division: type,
+      type: type,
       area: area,
       from: from,
       to: to,

@@ -105,13 +105,14 @@ class ModifyPlate with ChangeNotifier {
 
         final log = PlateLogModel(
           plateNumber: newPlateNumber,
-          division: areaState.currentDivision,
+          type: (updatedPlate.type),
           area: plate.area,
           from: collectionKey,
           to: collectionKey,
-          action: 'modify',
+          action: '정보 수정',
           performedBy: userState.name,
           timestamp: DateTime.now(),
+          billingType: updatedPlate.billingType,
           updatedFields: updatedFields,
         );
 

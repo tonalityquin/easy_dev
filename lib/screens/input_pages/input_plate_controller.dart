@@ -187,14 +187,13 @@ class InputPlateController {
     final area = areaState.currentArea;
     final division = areaState.currentDivision;
     final userName = context.read<UserState>().name;
+    final billState = context.read<BillState>();
+    final hasAnyBill = billState.generalBills.isNotEmpty || billState.regularBills.isNotEmpty;
 
     if (selectedBillType == '정기' && (_selectedBill == null || _selectedBill!.trim().isEmpty)) {
       final ct = countTypeController.text.trim();
       if (ct.isNotEmpty) _selectedBill = ct;
     }
-
-    final billState = context.read<BillState>();
-    final hasAnyBill = billState.generalBills.isNotEmpty || billState.regularBills.isNotEmpty;
 
     if (hasAnyBill && _selectedBill == null && selectedBillType != '정기') {
       showFailedSnackbar(context, '정산 유형을 선택해주세요');

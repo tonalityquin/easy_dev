@@ -6,7 +6,6 @@ class InputLogPlate with ChangeNotifier {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   Future<void> saveLog(PlateLogModel log, {
-    required String division,
     required String area,
   }) async {
     try {

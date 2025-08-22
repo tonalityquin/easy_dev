@@ -121,7 +121,7 @@ class PlateCreationService {
     );
 
     final plateWithLog = plate.addLog(
-      action: 'create',
+      action: '생성',
       performedBy: userName,
       from: '',
       to: location.isNotEmpty ? location : '미지정',

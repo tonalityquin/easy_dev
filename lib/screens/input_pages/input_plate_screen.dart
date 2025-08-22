@@ -86,7 +86,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     await FirestoreLogger().log('🔍 번호판 상태 조회 시도: $docId', level: 'called');
     final doc = await FirebaseFirestore.instance.collection('plate_status').doc(docId).get();
     if (doc.exists) {
-      await FirestoreLogger().log('✅ 상태 조회 성공: $docId', level: 'success');
+      await FirestoreLogger().log('✅ 상태 조회 성공: $docId', level: 'success ');
       return doc.data();
     }
     await FirestoreLogger().log('📭 상태 데이터 없음: $docId', level: 'info');

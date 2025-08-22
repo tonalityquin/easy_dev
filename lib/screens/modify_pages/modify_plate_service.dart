@@ -141,7 +141,7 @@ class ModifyPlateService {
     if (changes.isNotEmpty) {
       final log = PlateLogModel(
         plateNumber: updatedPlate.plateNumber,
-        division: areaState.currentDivision,
+        type: updatedPlate.type,
         area: areaState.currentArea,
         from: originalPlate.type,
         to: updatedPlate.type,

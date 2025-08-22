@@ -1,6 +1,6 @@
 class PlateLogModel {
   final String plateNumber;
-  final String division;
+  final String type;
   final String area;
   final String from;
   final String to;
@@ -12,7 +12,7 @@ class PlateLogModel {
 
   PlateLogModel({
     required this.plateNumber,
-    required this.division,
+    required this.type,
     required this.area,
     required this.from,
     required this.to,
@@ -26,7 +26,7 @@ class PlateLogModel {
   Map<String, dynamic> toMap() {
     final Map<String, dynamic> map = {
       'plateNumber': plateNumber,
-      'division': division,
+      'type': type,
       'area': area,
       'from': from,
       'to': to,
@@ -77,7 +77,7 @@ class PlateLogModel {
 
     return PlateLogModel(
       plateNumber: map['plateNumber'] ?? '',
-      division: map['division'] ?? '',
+      type: map['type'] ?? '',
       area: map['area'] ?? '',
       from: map['from'] ?? '',
       to: map['to'] ?? '',

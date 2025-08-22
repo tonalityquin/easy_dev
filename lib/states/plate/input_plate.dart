@@ -77,15 +77,15 @@ class InputPlate with ChangeNotifier {
       await _logState.saveLog(
         PlateLogModel(
           plateNumber: plateNumber,
+          type: plateType.firestoreValue,
           area: areaState.currentArea,
-          division: areaState.currentDivision,
           from: '-',
           to: plateType.label,
           action: plateType.label,
           performedBy: userState.name,
           timestamp: DateTime.now(),
+          billingType: billingType,
         ),
-        division: areaState.currentDivision,
         area: areaState.currentArea,
       );
 

@@ -5,14 +5,12 @@ import '../../repositories/plate/plate_repository.dart';
 import '../../screens/type_pages/debugs/firestore_logger.dart';
 import '../../enums/plate_type.dart';
 import '../../models/plate_log_model.dart';
-import '../area/area_state.dart';
 
 class MovementPlate {
   final PlateRepository _repository;
-  final AreaState _areaState;
   final _logger = FirestoreLogger();
 
-  MovementPlate(this._repository, this._areaState);
+  MovementPlate(this._repository);
 
   Future<void> setParkingCompleted(
     String plateNumber,
@@ -51,23 +49,25 @@ class MovementPlate {
     await _logger.log('[MovementPlate] setDepartureCompleted 시작: $documentId', level: 'called');
 
     try {
-      // 출차 완료 상태로 필드 업데이트
+      final now = DateTime.now();
+
       final updateFields = {
-        'type': PlateType.departureCompleted.firestoreValue,
-        'location': plate.location,
-        'endTime': DateTime.now(),
-        'updatedAt': Timestamp.now(),
+        PlateFields.type: PlateType.departureCompleted.firestoreValue,
+        PlateFields.location: plate.location,
+        PlateFields.endTime: now,
+        PlateFields.updatedAt: Timestamp.now(),
       };
 
       final log = PlateLogModel(
         plateNumber: plate.plateNumber,
-        division: _areaState.currentDivision,
+        type: PlateType.departureCompleted.firestoreValue,
         area: plate.area,
-        from: PlateType.departureRequests.name,
-        to: PlateType.departureCompleted.name,
+        from: PlateType.departureRequests.label,
+        to: PlateType.departureCompleted.label,
         action: '출차 요청 → 출차 완료',
         performedBy: plate.userName,
-        timestamp: DateTime.now(),
+        timestamp: now,
+        billingType: plate.billingType,
       );
 
       await _repository.updatePlate(documentId, updateFields, log: log);
@@ -87,7 +87,7 @@ class MovementPlate {
     try {
       final log = PlateLogModel(
         plateNumber: plate.plateNumber,
-        division: _areaState.currentDivision,
+        type: PlateType.departureCompleted.firestoreValue,
         area: plate.area,
         from: PlateType.parkingCompleted.name,
         to: PlateType.departureCompleted.name,
@@ -177,15 +177,20 @@ class MovementPlate {
 
       final selectedBy = document.selectedBy ?? performedBy;
 
+      // ✅ 수정: division 제거, type 필수 인자 추가
       final log = PlateLogModel(
         plateNumber: plateNumber,
-        division: _areaState.currentDivision,
+        type: toType.firestoreValue,
+        // e.g. 'parking_completed' / 'departure_completed'
         area: area,
-        from: fromType.name,
-        to: toType.name,
+        from: fromType.label,
+        // 사람이 읽는 전 상태
+        to: toType.label,
+        // 사람이 읽는 후 상태
         action: '${fromType.label} → ${toType.label}',
         performedBy: selectedBy,
         timestamp: DateTime.now(),
+        // billingType: document.billingType, // 있으면 남겨도 좋음 (선택)
       );
 
       await _repository.transitionPlateState(
@@ -198,7 +203,6 @@ class MovementPlate {
       );
 
       await _logger.log('문서 상태 이동 완료: $fromType → $toType ($plateNumber)', level: 'success');
-
       return true;
     } catch (e) {
       await _logger.log('상태 이동 오류: $e', level: 'error');
