@@ -1,38 +1,38 @@
 class PlateLogModel {
-  final String plateNumber;
-  final String type;
-  final String area;
-  final String from;
-  final String to;
   final String action;
-  final String performedBy;
-  final DateTime timestamp;
+  final String area;
   final String? billingType;
+  final String from;
+  final String performedBy;
+  final String plateNumber;
+  final DateTime timestamp;
+  final String to;
+  final String type;
   final Map<String, dynamic>? updatedFields;
 
   PlateLogModel({
-    required this.plateNumber,
-    required this.type,
-    required this.area,
-    required this.from,
-    required this.to,
     required this.action,
-    required this.performedBy,
-    required this.timestamp,
+    required this.area,
     this.billingType,
+    required this.from,
+    required this.performedBy,
+    required this.plateNumber,
+    required this.timestamp,
+    required this.to,
+    required this.type,
     this.updatedFields,
   });
 
   Map<String, dynamic> toMap() {
     final Map<String, dynamic> map = {
-      'plateNumber': plateNumber,
-      'type': type,
+      'action': action,
       'area': area,
       'from': from,
-      'to': to,
-      'action': action,
       'performedBy': performedBy,
+      'plateNumber': plateNumber,
       'timestamp': timestamp.toIso8601String(),
+      'to': to,
+      'type': type,
     };
 
     final cleanBillingType = billingType?.trim();
@@ -76,15 +76,15 @@ class PlateLogModel {
     }
 
     return PlateLogModel(
-      plateNumber: map['plateNumber'] ?? '',
-      type: map['type'] ?? '',
-      area: map['area'] ?? '',
-      from: map['from'] ?? '',
-      to: map['to'] ?? '',
       action: map['action'] ?? '',
-      performedBy: map['performedBy'] ?? '',
-      timestamp: parsedTime,
+      area: map['area'] ?? '',
       billingType: map['billingType'] as String?,
+      from: map['from'] ?? '',
+      performedBy: map['performedBy'] ?? '',
+      plateNumber: map['plateNumber'] ?? '',
+      timestamp: parsedTime,
+      to: map['to'] ?? '',
+      type: map['type'] ?? '',
       updatedFields: parsedUpdatedFields,
     );
   }
