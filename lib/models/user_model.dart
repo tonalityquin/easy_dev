@@ -2,179 +2,179 @@ import 'package:flutter/material.dart';
 
 class UserModel {
   final String id;
-  final String name;
-  final String phone;
-  final String email;
-  final String role;
-  final String password;
-  final String? position;
-
   final List<String> areas;
-  final List<String> divisions;
-
   final String? currentArea;
-  final String? selectedArea;
+  final List<String> divisions;
+  final String email;
+  final TimeOfDay? endTime;
   final String? englishSelectedAreaName;
-
+  final List<String> fixedHolidays;
+  final bool isSaved;
   final bool isSelected;
   final bool isWorking;
-  final bool isSaved;
+  final String name;
+  final String password;
+  final String phone;
+  final String? position;
+  final String role;
+  final String? selectedArea;
 
   final TimeOfDay? startTime;
-  final TimeOfDay? endTime;
-  final List<String> fixedHolidays;
+
 
   const UserModel({
     required this.id,
-    required this.name,
-    required this.phone,
-    required this.email,
-    required this.role,
-    required this.password,
-    this.position,
     required this.areas,
-    required this.divisions,
     this.currentArea,
-    this.selectedArea,
+    required this.divisions,
+    required this.email,
+    this.endTime,
     this.englishSelectedAreaName,
+    this.fixedHolidays = const [],
+    required this.isSaved,
     required this.isSelected,
     required this.isWorking,
-    required this.isSaved,
+    required this.name,
+    required this.password,
+    required this.phone,
+    this.position,
+    required this.role,
+    this.selectedArea,
     this.startTime,
-    this.endTime,
-    this.fixedHolidays = const [],
+
   });
 
   UserModel copyWith({
     String? id,
-    String? name,
-    String? phone,
-    String? email,
-    String? role,
-    String? password,
-    String? position,
     List<String>? areas,
-    List<String>? divisions,
     String? currentArea,
-    String? selectedArea,
+    List<String>? divisions,
+    String? email,
+    TimeOfDay? endTime,
     String? englishSelectedAreaName,
+    List<String>? fixedHolidays,
+    bool? isSaved,
     bool? isSelected,
     bool? isWorking,
-    bool? isSaved,
+    String? name,
+    String? password,
+    String? phone,
+    String? position,
+    String? role,
+    String? selectedArea,
     TimeOfDay? startTime,
-    TimeOfDay? endTime,
-    List<String>? fixedHolidays,
+
   }) {
     return UserModel(
       id: id ?? this.id,
-      name: name ?? this.name,
-      phone: phone ?? this.phone,
-      email: email ?? this.email,
-      role: role ?? this.role,
-      password: password ?? this.password,
-      position: position ?? this.position,
       areas: areas ?? this.areas,
-      divisions: divisions ?? this.divisions,
       currentArea: currentArea ?? this.currentArea,
-      selectedArea: selectedArea ?? this.selectedArea,
+      divisions: divisions ?? this.divisions,
+      email: email ?? this.email,
+      endTime: endTime ?? this.endTime,
       englishSelectedAreaName: englishSelectedAreaName ?? this.englishSelectedAreaName,
+      fixedHolidays: fixedHolidays ?? this.fixedHolidays,
+      isSaved: isSaved ?? this.isSaved,
       isSelected: isSelected ?? this.isSelected,
       isWorking: isWorking ?? this.isWorking,
-      isSaved: isSaved ?? this.isSaved,
+      name: name ?? this.name,
+      password: password ?? this.password,
+      phone: phone ?? this.phone,
+      position: position ?? this.position,
+      role: role ?? this.role,
+      selectedArea: selectedArea ?? this.selectedArea,
       startTime: startTime ?? this.startTime,
-      endTime: endTime ?? this.endTime,
-      fixedHolidays: fixedHolidays ?? this.fixedHolidays,
     );
   }
 
   factory UserModel.fromMap(String id, Map<String, dynamic> data) {
     return UserModel(
       id: id,
-      name: data['name'] ?? '',
-      phone: data['phone'] ?? '',
-      email: data['email'] ?? '',
-      role: data['role'] ?? '',
-      password: data['password'] ?? '',
-      position: data['position'],
       areas: List<String>.from(data['areas'] ?? []),
-      divisions: List<String>.from(data['divisions'] ?? []),
       currentArea: data['currentArea'],
-      selectedArea: data['selectedArea'],
+      divisions: List<String>.from(data['divisions'] ?? []),
+      email: data['email'] ?? '',
+      endTime: _parseTime(data['endTime']),
       englishSelectedAreaName: data['englishSelectedAreaName'],
+      fixedHolidays: List<String>.from(data['fixedHolidays'] ?? []),
+      isSaved: data['isSaved'] ?? false,
       isSelected: data['isSelected'] ?? false,
       isWorking: data['isWorking'] ?? false,
-      isSaved: data['isSaved'] ?? false,
+      name: data['name'] ?? '',
+      password: data['password'] ?? '',
+      phone: data['phone'] ?? '',
+      position: data['position'],
+      role: data['role'] ?? '',
+      selectedArea: data['selectedArea'],
       startTime: _parseTime(data['startTime']),
-      endTime: _parseTime(data['endTime']),
-      fixedHolidays: List<String>.from(data['fixedHolidays'] ?? []),
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
-      'name': name,
-      'phone': phone,
-      'email': email,
-      'role': role,
-      'password': password,
-      'position': position,
       'areas': areas,
-      'divisions': divisions,
       'currentArea': currentArea,
-      'selectedArea': selectedArea,
+      'divisions': divisions,
+      'email': email,
+      'endTime': _timeToMap(endTime),
       'englishSelectedAreaName': englishSelectedAreaName,
+      'fixedHolidays': fixedHolidays,
+      'isSaved': isSaved,
       'isSelected': isSelected,
       'isWorking': isWorking,
-      'isSaved': isSaved,
+      'name': name,
+      'password': password,
+      'phone': phone,
+      'position': position,
+      'role': role,
+      'selectedArea': selectedArea,
       'startTime': _timeToMap(startTime),
-      'endTime': _timeToMap(endTime),
-      'fixedHolidays': fixedHolidays,
     };
   }
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
       id: json['id'] ?? '',
-      name: json['name'] ?? '',
-      phone: json['phone'] ?? '',
-      email: json['email'] ?? '',
-      role: json['role'] ?? '',
-      password: json['password'] ?? '',
-      position: json['position'],
       areas: List<String>.from(json['areas'] ?? []),
-      divisions: List<String>.from(json['divisions'] ?? []),
       currentArea: json['currentArea'],
-      selectedArea: json['selectedArea'],
+      divisions: List<String>.from(json['divisions'] ?? []),
+      email: json['email'] ?? '',
+      endTime: _parseTime(json['endTime']),
       englishSelectedAreaName: json['englishSelectedAreaName'],
+      fixedHolidays: List<String>.from(json['fixedHolidays'] ?? []),
+      isSaved: json['isSaved'] ?? false,
       isSelected: json['isSelected'] ?? false,
       isWorking: json['isWorking'] ?? false,
-      isSaved: json['isSaved'] ?? false,
+      name: json['name'] ?? '',
+      password: json['password'] ?? '',
+      phone: json['phone'] ?? '',
+      position: json['position'],
+      role: json['role'] ?? '',
+      selectedArea: json['selectedArea'],
       startTime: _parseTime(json['startTime']),
-      endTime: _parseTime(json['endTime']),
-      fixedHolidays: List<String>.from(json['fixedHolidays'] ?? []),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'name': name,
-      'phone': phone,
-      'email': email,
-      'role': role,
-      'password': password,
-      'position': position,
       'areas': areas,
-      'divisions': divisions,
       'currentArea': currentArea,
-      'selectedArea': selectedArea,
+      'divisions': divisions,
+      'email': email,
+      'endTime': _timeToMap(endTime),
       'englishSelectedAreaName': englishSelectedAreaName,
+      'fixedHolidays': fixedHolidays,
+      'isSaved': isSaved,
       'isSelected': isSelected,
       'isWorking': isWorking,
-      'isSaved': isSaved,
+      'name': name,
+      'password': password,
+      'phone': phone,
+      'position': position,
+      'role': role,
+      'selectedArea': selectedArea,
       'startTime': _timeToMap(startTime),
-      'endTime': _timeToMap(endTime),
-      'fixedHolidays': fixedHolidays,
     };
   }
 
