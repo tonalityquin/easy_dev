@@ -29,13 +29,13 @@ class PlateLogViewerBottomSheet extends StatefulWidget {
   });
 
   static Future<void> show(
-    BuildContext context, {
-    required String division,
-    required String area,
-    required DateTime requestTime,
-    String? initialPlateNumber,
-    String? plateId,
-  }) async {
+      BuildContext context, {
+        required String division,
+        required String area,
+        required DateTime requestTime,
+        String? initialPlateNumber,
+        String? plateId,
+      }) async {
     if (Navigator.canPop(context)) {
       Navigator.pop(context);
       await Future.delayed(const Duration(milliseconds: 150));
@@ -78,8 +78,18 @@ class PlateLogViewerBottomSheet extends StatefulWidget {
 }
 
 class _PlateLogViewerBottomSheetState extends State<PlateLogViewerBottomSheet> {
-  /// true: 최신순, false: 오래된순
+  /// true: 최신순, false: 오래된순 (기본: 오래된순)
   bool _desc = false;
+
+  bool _isLoading = true;
+  String? _errorMessage;
+  List<PlateLogModel> _logs = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLogs();
+  }
 
   String _buildDocId() {
     // 1순위: plateId 직접 제공
@@ -92,11 +102,59 @@ class _PlateLogViewerBottomSheetState extends State<PlateLogViewerBottomSheet> {
     return '${p}_$a';
   }
 
-  Stream<DocumentSnapshot<Map<String, dynamic>>> _docStream(String docId) {
-    return FirebaseFirestore.instance.collection('plates').doc(docId).snapshots();
+  Future<void> _loadLogs() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final docId = _buildDocId();
+      final snap = await FirebaseFirestore.instance.collection('plates').doc(docId).get();
+
+      if (!snap.exists) {
+        setState(() {
+          _logs = [];
+          _isLoading = false;
+          _errorMessage = '문서를 찾을 수 없습니다.';
+        });
+        return;
+      }
+
+      final data = snap.data() ?? {};
+      final rawLogs = (data['logs'] as List?) ?? const [];
+
+      final logs = <PlateLogModel>[];
+      for (final e in rawLogs) {
+        if (e is Map) {
+          try {
+            logs.add(PlateLogModel.fromMap(Map<String, dynamic>.from(e)));
+          } catch (err) {
+            debugPrint('⚠️ 로그 파싱 실패: $err');
+          }
+        }
+      }
+
+      // 정렬 적용
+      _applySort(logs);
+
+      setState(() {
+        _logs = logs;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = '로그를 불러오는 중 오류가 발생했습니다.';
+      });
+    }
   }
 
-  // ✅ intl 없이 직접 포맷팅 (KST 등 로컬 타임존으로 표시)
+  void _applySort(List<PlateLogModel> logs) {
+    logs.sort((a, b) => _desc ? b.timestamp.compareTo(a.timestamp) : a.timestamp.compareTo(b.timestamp));
+  }
+
+  // intl 없이 직접 포맷팅(로컬 타임존)
   String _formatTs(dynamic ts) {
     DateTime? dt;
     if (ts is Timestamp) {
@@ -129,28 +187,9 @@ class _PlateLogViewerBottomSheetState extends State<PlateLogViewerBottomSheet> {
     return Colors.blueGrey;
   }
 
-  List<PlateLogModel> _parseLogs(List raw) {
-    final logs = <PlateLogModel>[];
-    for (final e in raw) {
-      if (e is Map) {
-        try {
-          logs.add(PlateLogModel.fromMap(Map<String, dynamic>.from(e)));
-        } catch (err) {
-          debugPrint('⚠️ 로그 파싱 실패: $err');
-        }
-      }
-    }
-    return logs;
-  }
-
-  void _applySort(List<PlateLogModel> logs) {
-    logs.sort((a, b) => _desc ? b.timestamp.compareTo(a.timestamp) : a.timestamp.compareTo(b.timestamp));
-  }
-
   @override
   Widget build(BuildContext context) {
     final plateTitle = widget.initialPlateNumber != null ? '${widget.initialPlateNumber} 로그' : '번호판 로그';
-    final docId = _buildDocId();
 
     return SafeArea(
       child: Material(
@@ -193,7 +232,12 @@ class _PlateLogViewerBottomSheetState extends State<PlateLogViewerBottomSheet> {
                           ),
                           // 정렬 토글
                           TextButton.icon(
-                            onPressed: () => setState(() => _desc = !_desc),
+                            onPressed: () {
+                              setState(() {
+                                _desc = !_desc;
+                                _applySort(_logs);
+                              });
+                            },
                             icon: Icon(_desc ? Icons.south : Icons.north, size: 18),
                             label: Text(_desc ? '최신순' : '오래된순'),
                             style: TextButton.styleFrom(
@@ -210,56 +254,52 @@ class _PlateLogViewerBottomSheetState extends State<PlateLogViewerBottomSheet> {
                     ),
                     const Divider(height: 1),
                     Expanded(
-                      child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                        stream: _docStream(docId),
-                        builder: (_, snap) {
-                          if (snap.connectionState == ConnectionState.waiting) {
-                            return const Center(child: CircularProgressIndicator());
-                          }
-                          if (snap.hasError) {
-                            return const _ErrorState(
-                              message: '로그를 불러오는 중 오류가 발생했습니다.',
-                            );
-                          }
-                          final doc = snap.data;
-                          if (doc == null || !doc.exists) {
-                            return const _EmptyState(text: '📭 문서를 찾을 수 없습니다.');
-                          }
-                          final data = doc.data() ?? {};
-                          final rawLogs = (data['logs'] as List?) ?? const [];
-                          final logs = _parseLogs(rawLogs);
-                          if (logs.isEmpty) {
-                            return const _EmptyState(text: '📭 로그가 없습니다.');
-                          }
-                          _applySort(logs);
-
-                          return ListView.separated(
-                            controller: scrollController,
-                            itemCount: logs.length,
-                            separatorBuilder: (_, __) => const Divider(height: 1),
-                            itemBuilder: (_, index) {
-                              final log = logs[index];
-                              final tsText = _formatTs(log.timestamp);
-                              final color = _actionColor(log.action);
-                              return ListTile(
-                                leading: Icon(_actionIcon(log.action), color: color),
-                                title: Text(log.action, style: TextStyle(color: color)),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    if (log.from.isNotEmpty || log.to.isNotEmpty) Text('${log.from} → ${log.to}'),
-                                    if (log.performedBy.isNotEmpty) const SizedBox(height: 2),
-                                    if (log.performedBy.isNotEmpty)
-                                      Text('담당자: ${log.performedBy}', style: const TextStyle(fontSize: 12)),
-                                  ],
-                                ),
-                                trailing: Text(tsText, style: const TextStyle(fontSize: 12)),
-                                isThreeLine: true,
-                                dense: true,
-                              );
-                            },
+                      child: _isLoading
+                          ? const Center(child: CircularProgressIndicator())
+                          : (_errorMessage != null)
+                          ? _ErrorState(message: _errorMessage!)
+                          : (_logs.isEmpty)
+                          ? const _EmptyState(text: '📭 로그가 없습니다.')
+                          : ListView.separated(
+                        controller: scrollController,
+                        itemCount: _logs.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (_, index) {
+                          final log = _logs[index];
+                          final tsText = _formatTs(log.timestamp);
+                          final color = _actionColor(log.action);
+                          return ListTile(
+                            leading: Icon(_actionIcon(log.action), color: color),
+                            title: Text(log.action, style: TextStyle(color: color)),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (log.from.isNotEmpty || log.to.isNotEmpty)
+                                  Text('${log.from} → ${log.to}'),
+                                if (log.performedBy.isNotEmpty) const SizedBox(height: 2),
+                                if (log.performedBy.isNotEmpty)
+                                  Text('담당자: ${log.performedBy}', style: const TextStyle(fontSize: 12)),
+                              ],
+                            ),
+                            trailing: Text(tsText, style: const TextStyle(fontSize: 12)),
+                            isThreeLine: true,
+                            dense: true,
                           );
                         },
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: ElevatedButton.icon(
+                        onPressed: _loadLogs, // 필요할 때만 네트워크 읽기
+                        icon: const Icon(Icons.refresh),
+                        label: const Text("새로고침"),
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(48),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -275,7 +315,6 @@ class _PlateLogViewerBottomSheetState extends State<PlateLogViewerBottomSheet> {
 
 class _EmptyState extends StatelessWidget {
   final String text;
-
   const _EmptyState({required this.text});
 
   @override
@@ -291,7 +330,6 @@ class _EmptyState extends StatelessWidget {
 
 class _ErrorState extends StatelessWidget {
   final String message;
-
   const _ErrorState({required this.message});
 
   @override
