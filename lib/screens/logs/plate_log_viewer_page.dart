@@ -287,12 +287,15 @@ class _PlateLogViewerBottomSheetState extends State<PlateLogViewerBottomSheet> {
                           final tsText = _formatTs(log.timestamp);
                           final color = _actionColor(log.action);
 
-                          // 확정요금 / 결제수단 표시 텍스트
                           final String? feeText =
                           (log.lockedFee != null) ? _formatWon(log.lockedFee) : null;
                           final String? payText = (log.paymentMethod != null &&
                               log.paymentMethod!.trim().isNotEmpty)
                               ? log.paymentMethod
+                              : null;
+                          final String? reasonText = (log.reason != null &&
+                              log.reason!.trim().isNotEmpty)
+                              ? log.reason
                               : null;
 
                           return ListTile(
@@ -308,12 +311,15 @@ class _PlateLogViewerBottomSheetState extends State<PlateLogViewerBottomSheet> {
                                   Text('담당자: ${log.performedBy}',
                                       style: const TextStyle(fontSize: 12)),
 
-                                // ▼ 사전 정산 관련 정보 (있을 때만 표시)
-                                if (feeText != null || payText != null) const SizedBox(height: 2),
+                                // 사전 정산 관련 정보 (있을 때만 표시)
+                                if (feeText != null || payText != null || reasonText != null)
+                                  const SizedBox(height: 2),
                                 if (feeText != null)
                                   Text('확정요금: $feeText', style: const TextStyle(fontSize: 12)),
                                 if (payText != null)
                                   Text('결제수단: $payText', style: const TextStyle(fontSize: 12)),
+                                if (reasonText != null)
+                                  Text('사유: $reasonText', style: const TextStyle(fontSize: 12)),
                               ],
                             ),
                             trailing: Text(tsText, style: const TextStyle(fontSize: 12)),

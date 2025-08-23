@@ -50,6 +50,29 @@ class TodayLogSection extends StatelessWidget {
     return '${dt.year}-${two(dt.month)}-${two(dt.day)} ${two(dt.hour)}:${two(dt.minute)}:${two(dt.second)}';
   }
 
+  // ===== 원화 포맷 (intl 없이 콤마만) =====
+  int? _asInt(dynamic v) {
+    if (v == null) return null;
+    if (v is num) return v.toInt();
+    return int.tryParse(v.toString());
+  }
+
+  String _formatIntWithComma(int n) {
+    final s = n.toString();
+    final buf = StringBuffer();
+    for (int i = 0; i < s.length; i++) {
+      if (i != 0 && (s.length - i) % 3 == 0) buf.write(',');
+      buf.write(s[i]);
+    }
+    return buf.toString();
+  }
+
+  String _formatWon(dynamic value) {
+    final n = _asInt(value);
+    if (n == null) return '-';
+    return '₩${_formatIntWithComma(n)}';
+  }
+
   // ===== 공통 로직: 액션에 따른 아이콘/색상 매핑 =====
   IconData _actionIcon(String action) {
     if (action.contains('사전 정산')) return Icons.receipt_long;
@@ -115,7 +138,7 @@ class TodayLogSection extends StatelessWidget {
         ),
         const Divider(height: 1),
 
-        // 본문 리스트 (PlateLogViewerBottomSheet와 동일한 타일 구성)
+        // 본문 리스트 (PlateLogViewerBottomSheet와 동일한 타일 구성 + 결제/요금/사유 표시)
         Expanded(
           child: logs.isEmpty
               ? const Center(child: Text('📭 로그가 없습니다.'))
@@ -133,6 +156,17 @@ class TodayLogSection extends StatelessWidget {
                 final performedBy = (e['performedBy'] ?? '').toString();
                 final tsText = _formatTs(e['timestamp']);
 
+                // 추가: 확정요금/결제수단/사유
+                final String? feeText = (e.containsKey('lockedFee') || e.containsKey('lockedFeeAmount'))
+                    ? _formatWon(e['lockedFee'] ?? e['lockedFeeAmount'])
+                    : null;
+                final String? payText = (e['paymentMethod']?.toString().trim().isNotEmpty ?? false)
+                    ? e['paymentMethod'].toString()
+                    : null;
+                final String? reasonText = (e['reason']?.toString().trim().isNotEmpty ?? false)
+                    ? e['reason'].toString()
+                    : null;
+
                 final color = _actionColor(action);
 
                 return ListTile(
@@ -147,6 +181,15 @@ class TodayLogSection extends StatelessWidget {
                       if (performedBy.isNotEmpty) const SizedBox(height: 2),
                       if (performedBy.isNotEmpty)
                         Text('담당자: $performedBy', style: const TextStyle(fontSize: 12)),
+
+                      // 사전 정산 정보 (존재할 때만)
+                      if (feeText != null || payText != null || reasonText != null) const SizedBox(height: 2),
+                      if (feeText != null)
+                        Text('확정요금: $feeText', style: const TextStyle(fontSize: 12)),
+                      if (payText != null)
+                        Text('결제수단: $payText', style: const TextStyle(fontSize: 12)),
+                      if (reasonText != null)
+                        Text('사유: $reasonText', style: const TextStyle(fontSize: 12)),
                     ],
                   ),
                   trailing: Text(tsText, style: const TextStyle(fontSize: 12)),

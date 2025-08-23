@@ -12,9 +12,10 @@ class PlateLogModel {
   final String type;
   final Map<String, dynamic>? updatedFields;
 
-  // ▼ 추가: 선택 필드들
-  final String? paymentMethod; // 결제 수단 (예: 계좌/카드/현금)
-  final int? lockedFee;        // 확정 요금 (로그 항목에 'lockedFee' 또는 별칭 'lockedFeeAmount')
+  // 추가: 선택 필드들
+  final String? paymentMethod; // 결제 수단 (계좌/카드/현금)
+  final int? lockedFee;        // 확정 요금 (로그 항목: lockedFee, 루트: lockedFeeAmount)
+  final String? reason;        // 할증/할인 사유
 
   PlateLogModel({
     required this.action,
@@ -29,6 +30,7 @@ class PlateLogModel {
     this.updatedFields,
     this.paymentMethod,
     this.lockedFee,
+    this.reason,
   });
 
   Map<String, dynamic> toMap() {
@@ -49,26 +51,27 @@ class PlateLogModel {
       map['updatedFields'] = updatedFields;
     }
 
-    // ▼ 추가 필드 직렬화 (있을 때만)
     if (paymentMethod != null && paymentMethod!.trim().isNotEmpty) {
       map['paymentMethod'] = paymentMethod;
     }
     if (lockedFee != null) {
       map['lockedFee'] = lockedFee;
     }
+    if (reason != null && reason!.trim().isNotEmpty) {
+      map['reason'] = reason!.trim();
+    }
 
     return map;
   }
 
   static DateTime _parseTimestamp(dynamic ts) {
-    if (ts is Timestamp) {
-      return ts.toDate();
-    } else if (ts is DateTime) {
-      return ts;
-    } else if (ts is int) {
-      // int가 들어오면 밀리초로 가정 (기존 로직 유지해도 됨)
+    if (ts is Timestamp) return ts.toDate();
+    if (ts is DateTime) return ts;
+    if (ts is int) {
+      // 밀리초로 간주(프로젝트 컨벤션에 맞게 필요 시 조정)
       return DateTime.fromMillisecondsSinceEpoch(ts);
-    } else if (ts is String) {
+    }
+    if (ts is String) {
       return DateTime.tryParse(ts) ?? DateTime.now();
     }
     return DateTime.now();
@@ -110,11 +113,9 @@ class PlateLogModel {
       to: (map['to'] ?? '').toString(),
       type: (map['type'] ?? '').toString(),
       updatedFields: parsedUpdatedFields,
-
-      // ▼ 추가 필드 매핑
       paymentMethod: map['paymentMethod']?.toString(),
-      // 로그 항목엔 'lockedFee', 문서 루트엔 'lockedFeeAmount'가 있을 수 있어 둘 다 대응
       lockedFee: _asInt(map['lockedFee'] ?? map['lockedFeeAmount']),
+      reason: map['reason']?.toString(),
     );
   }
 
@@ -126,6 +127,7 @@ class PlateLogModel {
         '${billingType != null ? ', billingType: $billingType' : ''}'
         '${paymentMethod != null ? ', paymentMethod: $paymentMethod' : ''}'
         '${lockedFee != null ? ', lockedFee: $lockedFee' : ''}'
+        '${reason != null ? ', reason: $reason' : ''}'
         ')';
   }
 }

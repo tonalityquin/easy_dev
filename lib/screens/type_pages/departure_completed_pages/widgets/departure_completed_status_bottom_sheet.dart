@@ -124,6 +124,8 @@ Future<void> showDepartureCompletedStatusBottomSheet({
                         'timestamp': now.toIso8601String(),
                         'lockedFee': result.lockedFee,
                         'paymentMethod': result.paymentMethod,
+                        if (result.reason != null && result.reason!.trim().isNotEmpty)
+                          'reason': result.reason!.trim(), // ★ 사유 저장
                       };
                       await firestore.collection('plates').doc(plate.id).update({
                         'logs': FieldValue.arrayUnion([log])
