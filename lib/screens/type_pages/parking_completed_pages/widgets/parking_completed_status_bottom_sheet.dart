@@ -1,5 +1,7 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../../../models/plate_model.dart';
 import '../../../../screens/modify_pages/modify_plate_screen.dart';
 import '../../../../screens/logs/plate_log_viewer_page.dart';
@@ -7,6 +9,13 @@ import '../../../../states/area/area_state.dart';
 import '../../../../states/plate/movement_plate.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../../enums/plate_type.dart';
+
+// 추가된 의존성
+import '../../../../repositories/plate/plate_repository.dart';
+import '../../../../states/plate/plate_state.dart';
+import '../../../../utils/snackbar_helper.dart';
+import '../../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
+import '../../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 
 Future<void> showParkingCompletedStatusBottomSheet({
   required BuildContext context,
@@ -58,7 +67,154 @@ Future<void> showParkingCompletedStatusBottomSheet({
                     ),
                   ],
                 ),
+
                 const SizedBox(height: 24),
+
+                // =========================
+                // 정산(사전 정산) 버튼 추가
+                // =========================
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.receipt_long),
+                  label: const Text("정산(사전 정산)"),
+                  onPressed: () async {
+                    final userName = context.read<UserState>().name;
+                    final repo = context.read<PlateRepository>();
+                    final plateState = context.read<PlateState>();
+                    final firestore = FirebaseFirestore.instance;
+
+                    final billingType = (plate.billingType ?? '').trim();
+                    if (billingType.isEmpty) {
+                      showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
+                      return;
+                    }
+
+                    final now = DateTime.now();
+                    final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
+                    final entryTime = plate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
+
+                    final result = await showOnTapBillingBottomSheet(
+                      context: context,
+                      entryTimeInSeconds: entryTime,
+                      currentTimeInSeconds: currentTime,
+                      basicStandard: plate.basicStandard ?? 0,
+                      basicAmount: plate.basicAmount ?? 0,
+                      addStandard: plate.addStandard ?? 0,
+                      addAmount: plate.addAmount ?? 0,
+                      billingType: plate.billingType ?? '변동',
+                      regularAmount: plate.regularAmount,
+                      regularDurationHours: plate.regularDurationHours,
+                    );
+                    if (result == null) return;
+
+                    final updatedPlate = plate.copyWith(
+                      isLockedFee: true,
+                      lockedAtTimeInSeconds: currentTime,
+                      lockedFeeAmount: result.lockedFee,
+                      paymentMethod: result.paymentMethod,
+                    );
+
+                    try {
+                      await repo.addOrUpdatePlate(plate.id, updatedPlate);
+                      await plateState.updatePlateLocally(PlateType.parkingCompleted, updatedPlate);
+
+                      final log = {
+                        'action': '사전 정산',
+                        'performedBy': userName,
+                        'timestamp': now.toIso8601String(),
+                        'lockedFee': result.lockedFee,
+                        'paymentMethod': result.paymentMethod,
+                      };
+                      await firestore.collection('plates').doc(plate.id).update({
+                        'logs': FieldValue.arrayUnion([log])
+                      });
+
+                      if (!context.mounted) return;
+                      showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
+                    } catch (e) {
+                      if (!context.mounted) return;
+                      showFailedSnackbar(context, '사전 정산 중 오류가 발생했습니다: $e');
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 52),
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                // =========================
+                // 정산 취소(잠금 해제) 버튼 추가
+                // =========================
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.lock_open),
+                  label: const Text("정산 취소"),
+                  onPressed: () async {
+                    final userName = context.read<UserState>().name;
+                    final repo = context.read<PlateRepository>();
+                    final plateState = context.read<PlateState>();
+                    final firestore = FirebaseFirestore.instance;
+
+                    if (plate.isLockedFee != true) {
+                      showFailedSnackbar(context, '현재 사전 정산 상태가 아닙니다.');
+                      return;
+                    }
+
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (_) => const ConfirmCancelFeeDialog(),
+                    );
+                    if (confirm != true) return;
+
+                    final now = DateTime.now();
+                    final updatedPlate = plate.copyWith(
+                      isLockedFee: false,
+                      lockedAtTimeInSeconds: null,
+                      lockedFeeAmount: null,
+                      paymentMethod: null,
+                    );
+
+                    try {
+                      await repo.addOrUpdatePlate(plate.id, updatedPlate);
+                      await plateState.updatePlateLocally(PlateType.parkingCompleted, updatedPlate);
+
+                      final cancelLog = {
+                        'action': '사전 정산 취소',
+                        'performedBy': userName,
+                        'timestamp': now.toIso8601String(),
+                      };
+                      await firestore.collection('plates').doc(plate.id).update({
+                        'logs': FieldValue.arrayUnion([cancelLog])
+                      });
+
+                      if (!context.mounted) return;
+                      showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
+                    } catch (e) {
+                      if (!context.mounted) return;
+                      showFailedSnackbar(context, '정산 취소 중 오류가 발생했습니다: $e');
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 52),
+                    backgroundColor: Colors.grey.shade100,
+                    foregroundColor: Colors.black87,
+                    elevation: 0,
+                    side: const BorderSide(color: Colors.black12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+
+                // =========================
+                // 기존 버튼들
+                // =========================
                 ElevatedButton.icon(
                   icon: const Icon(Icons.exit_to_app),
                   label: const Text("출차 요청으로 이동"),
@@ -85,7 +241,9 @@ Future<void> showParkingCompletedStatusBottomSheet({
                     ),
                   ),
                 ),
+
                 const SizedBox(height: 12),
+
                 ElevatedButton.icon(
                   icon: const Icon(Icons.history),
                   label: const Text("로그 확인"),
@@ -114,7 +272,9 @@ Future<void> showParkingCompletedStatusBottomSheet({
                     ),
                   ),
                 ),
+
                 const SizedBox(height: 12),
+
                 ElevatedButton.icon(
                   icon: const Icon(Icons.edit_note_outlined),
                   label: const Text("정보 수정"),
@@ -141,7 +301,9 @@ Future<void> showParkingCompletedStatusBottomSheet({
                     ),
                   ),
                 ),
+
                 const SizedBox(height: 12),
+
                 ElevatedButton.icon(
                   icon: const Icon(Icons.assignment_return),
                   label: const Text("입차 요청으로 되돌리기"),
@@ -169,7 +331,9 @@ Future<void> showParkingCompletedStatusBottomSheet({
                     ),
                   ),
                 ),
+
                 const SizedBox(height: 12),
+
                 TextButton.icon(
                   icon: const Icon(Icons.delete_forever, color: Colors.red),
                   label: const Text("삭제", style: TextStyle(color: Colors.red)),

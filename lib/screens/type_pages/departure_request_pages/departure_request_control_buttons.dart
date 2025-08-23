@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 
 import '../../../enums/plate_type.dart';
 import '../../../repositories/plate/plate_repository.dart';
-import '../../../states/area/area_state.dart';
 import '../../../states/plate/delete_plate.dart';
 import '../../../states/plate/plate_state.dart';
 import '../../../states/user/user_state.dart';
@@ -101,8 +100,6 @@ class DepartureRequestControlButtons extends StatelessWidget {
           onTap: (index) async {
             final repo = context.read<PlateRepository>();
             final firestore = FirebaseFirestore.instance;
-            final division = context.read<AreaState>().currentDivision;
-            final area = context.read<AreaState>().currentArea.trim();
 
             if (!isPlateSelected) {
               if (index == 0) {
@@ -145,13 +142,9 @@ class DepartureRequestControlButtons extends StatelessWidget {
                 await plateState.updatePlateLocally(PlateType.departureRequests, updatedPlate);
 
                 final cancelLog = {
-                  'plateNumber': selectedPlate.plateNumber,
                   'action': '사전 정산 취소',
                   'performedBy': userName,
                   'timestamp': now.toIso8601String(),
-                  'billingType': billingType,
-                  'division': division,
-                  'area': area,
                 };
 
                 await firestore.collection('plates').doc(documentId).update({
@@ -185,15 +178,11 @@ class DepartureRequestControlButtons extends StatelessWidget {
                 await plateState.updatePlateLocally(PlateType.departureRequests, updatedPlate);
 
                 final log = {
-                  'plateNumber': selectedPlate.plateNumber,
                   'action': '사전 정산',
                   'performedBy': userName,
                   'timestamp': now.toIso8601String(),
                   'lockedFee': result.lockedFee,
                   'paymentMethod': result.paymentMethod,
-                  'billingType': billingType,
-                  'division': division,
-                  'area': area,
                 };
 
                 await firestore.collection('plates').doc(documentId).update({

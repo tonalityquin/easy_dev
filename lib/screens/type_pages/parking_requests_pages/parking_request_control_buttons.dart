@@ -171,11 +171,9 @@ class ParkingRequestControlButtons extends StatelessWidget {
       context.read<PlateState>().updatePlateLocally(PlateType.parkingRequests, updatedPlate);
 
       final cancelLog = {
-        'plateNumber': selectedPlate.plateNumber,
         'action': '사전 정산 취소',
         'performedBy': userName,
         'timestamp': now.toIso8601String(),
-        if (billingType.isNotEmpty) 'billingType': billingType,
       };
 
       await firestore.collection('plates').doc(documentId).update({
@@ -209,13 +207,11 @@ class ParkingRequestControlButtons extends StatelessWidget {
       context.read<PlateState>().updatePlateLocally(PlateType.parkingRequests, updatedPlate);
 
       final log = {
-        'plateNumber': selectedPlate.plateNumber,
         'action': '사전 정산',
         'performedBy': userName,
         'timestamp': now.toIso8601String(),
         'lockedFee': result.lockedFee,
         'paymentMethod': result.paymentMethod,
-        if (billingType.isNotEmpty) 'billingType': billingType,
       };
 
       await firestore.collection('plates').doc(documentId).update({

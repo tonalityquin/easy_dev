@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 
 import '../../../enums/plate_type.dart';
 import '../../../repositories/plate/plate_repository.dart';
-import '../../../states/area/area_state.dart';
 import '../../../states/plate/delete_plate.dart';
 import '../../../states/plate/plate_state.dart';
 import '../../../states/user/user_state.dart';
@@ -139,8 +138,6 @@ class ParkingCompletedControlButtons extends StatelessWidget {
             }
 
             final repo = context.read<PlateRepository>();
-            final division = context.read<AreaState>().currentDivision;
-            final area = context.read<AreaState>().currentArea.trim();
             final billingType = selectedPlate.billingType;
             final now = DateTime.now();
             final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
@@ -172,13 +169,9 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                 await plateState.updatePlateLocally(PlateType.parkingCompleted, updatedPlate);
 
                 final cancelLog = {
-                  'plateNumber': selectedPlate.plateNumber,
                   'action': '사전 정산 취소',
                   'performedBy': userName,
                   'timestamp': now.toIso8601String(),
-                  'division': division,
-                  'area': area,
-                  if (billingType != null && billingType.isNotEmpty) 'billingType': billingType,
                 };
 
                 await firestore.collection('plates').doc(documentId).update({
@@ -212,15 +205,11 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                 await plateState.updatePlateLocally(PlateType.parkingCompleted, updatedPlate);
 
                 final log = {
-                  'plateNumber': selectedPlate.plateNumber,
                   'action': '사전 정산',
                   'performedBy': userName,
                   'timestamp': now.toIso8601String(),
                   'lockedFee': result.lockedFee,
                   'paymentMethod': result.paymentMethod,
-                  'division': division,
-                  'area': area,
-                  if (billingType != null && billingType.isNotEmpty) 'billingType': billingType,
                 };
 
                 await firestore.collection('plates').doc(documentId).update({

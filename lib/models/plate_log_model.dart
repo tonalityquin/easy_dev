@@ -1,10 +1,10 @@
 class PlateLogModel {
   final String action;
-  final String area;
+  final String area; // 모델엔 유지(메모리 상 보관 용도)
   final String? billingType;
   final String from;
   final String performedBy;
-  final String plateNumber;
+  final String plateNumber; // 모델엔 유지(메모리 상 보관 용도)
   final DateTime timestamp;
   final String to;
   final String type;
@@ -26,13 +26,10 @@ class PlateLogModel {
   Map<String, dynamic> toMap() {
     final Map<String, dynamic> map = {
       'action': action,
-      'area': area,
       'from': from,
       'performedBy': performedBy,
-      'plateNumber': plateNumber,
       'timestamp': timestamp.toIso8601String(),
       'to': to,
-      'type': type,
     };
 
     final cleanBillingType = billingType?.trim();
@@ -49,7 +46,6 @@ class PlateLogModel {
 
   factory PlateLogModel.fromMap(Map<String, dynamic> map) {
     DateTime parsedTime;
-
     if (map['timestamp'] is String) {
       parsedTime = DateTime.tryParse(map['timestamp']) ?? DateTime.now();
     } else if (map['timestamp'] is int) {
@@ -60,7 +56,6 @@ class PlateLogModel {
 
     Map<String, dynamic>? parsedUpdatedFields;
     final rawUpdatedFields = map['updatedFields'];
-
     if (rawUpdatedFields is Map) {
       try {
         parsedUpdatedFields = rawUpdatedFields.map((key, value) {
@@ -91,7 +86,8 @@ class PlateLogModel {
 
   @override
   String toString() {
-    return '[$timestamp] $plateNumber moved from "$from" to "$to" '
+    final pn = plateNumber.isNotEmpty ? plateNumber : '(no-plate)';
+    return '[$timestamp] $pn moved from "$from" to "$to" '
         'by $performedBy (action: $action${billingType != null ? ', billingType: $billingType' : ''})';
   }
 }
