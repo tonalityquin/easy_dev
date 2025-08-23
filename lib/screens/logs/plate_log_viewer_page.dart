@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../models/plate_log_model.dart';
 
@@ -18,12 +19,12 @@ class PlateLogViewerBottomSheet extends StatefulWidget {
   });
 
   static Future<void> show(
-    BuildContext context, {
-    required String division,
-    required String area,
-    required DateTime requestTime,
-    String? initialPlateNumber,
-  }) async {
+      BuildContext context, {
+        required String division,
+        required String area,
+        required DateTime requestTime,
+        String? initialPlateNumber,
+      }) async {
     if (Navigator.canPop(context)) {
       Navigator.pop(context);
       await Future.delayed(const Duration(milliseconds: 250));
@@ -81,8 +82,6 @@ class _PlateLogViewerBottomSheetState extends State<PlateLogViewerBottomSheet> {
     _loadLogs();
   }
 
-  String _normalize(String? input) => (input ?? '').replaceAll(RegExp(r'[\s\-]'), '').trim();
-
   Future<void> _loadLogs() async {
     setState(() => _isLoading = true);
     try {
@@ -98,7 +97,7 @@ class _PlateLogViewerBottomSheetState extends State<PlateLogViewerBottomSheet> {
         return;
       }
 
-      final docId = '${plate}_${widget.area}';
+      final docId = '${plate.trim()}_${widget.area.trim()}';
       final snap = await FirebaseFirestore.instance.collection('plates').doc(docId).get();
 
       if (!snap.exists) {
@@ -115,28 +114,23 @@ class _PlateLogViewerBottomSheetState extends State<PlateLogViewerBottomSheet> {
       final data = snap.data() ?? {};
       final rawLogs = (data['logs'] as List?) ?? const [];
 
-      final logs = <PlateLogModel>[];
+      final parsed = <PlateLogModel>[];
       for (final e in rawLogs) {
         if (e is Map) {
           try {
-            logs.add(PlateLogModel.fromMap(Map<String, dynamic>.from(e)));
+            parsed.add(PlateLogModel.fromMap(Map<String, dynamic>.from(e)));
           } catch (err) {
             debugPrint('⚠️ 로그 파싱 실패: $err');
           }
         }
       }
 
-      // 최신순
-      logs.sort((a, b) => a.timestamp.compareTo(b.timestamp));
-      // (옵션) initialPlateNumber로 한 번 더 필터링 — 문서 ID로 이미 특정 plate지만, 안전하게 유지
-      final filtered = logs.where((log) {
-        if (widget.initialPlateNumber == null) return true;
-        return _normalize(log.plateNumber) == _normalize(widget.initialPlateNumber);
-      }).toList();
+      // ✅ 최신순 정렬(내림차순)
+      parsed.sort((a, b) => a.timestamp.compareTo(b.timestamp));
 
       if (!mounted) return;
       setState(() {
-        _logs = filtered;
+        _logs = parsed;      // ✅ 추가 필터 제거 (plateNumber로 다시 걸지 않음)
         _isLoading = false;
       });
     } catch (e) {
@@ -144,6 +138,20 @@ class _PlateLogViewerBottomSheetState extends State<PlateLogViewerBottomSheet> {
       if (mounted) {
         setState(() => _isLoading = false);
       }
+    }
+  }
+
+  String _formatTs(dynamic ts) {
+    // PlateLogModel.timestamp가 DateTime일 가능성 높음
+    if (ts is DateTime) {
+      return DateFormat('yyyy-MM-dd HH:mm:ss').format(ts);
+    }
+    // 혹시 문자열이면 파싱 시도
+    try {
+      final dt = DateTime.parse(ts.toString());
+      return DateFormat('yyyy-MM-dd HH:mm:ss').format(dt);
+    } catch (_) {
+      return ts.toString();
     }
   }
 
@@ -202,34 +210,36 @@ class _PlateLogViewerBottomSheetState extends State<PlateLogViewerBottomSheet> {
                     child: _isLoading
                         ? const Center(child: CircularProgressIndicator())
                         : _logs.isEmpty
-                            ? const Center(child: Text("📭 로그가 없습니다."))
-                            : ListView.separated(
-                                controller: scrollController,
-                                itemCount: _logs.length,
-                                separatorBuilder: (_, __) => const Divider(height: 1),
-                                itemBuilder: (_, index) {
-                                  final log = _logs[index];
-                                  return ListTile(
-                                    leading: const Icon(Icons.directions_car),
-                                    title: Text(log.action),
-                                    subtitle: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text('${log.from} → ${log.to}'),
-                                        Text(
-                                          '담당자: ${log.performedBy}',
-                                          style: const TextStyle(fontSize: 12),
-                                        ),
-                                      ],
-                                    ),
-                                    trailing: Text(
-                                      log.timestamp.toString().substring(0, 19),
-                                      style: const TextStyle(fontSize: 12),
-                                    ),
-                                    isThreeLine: true,
-                                  );
-                                },
-                              ),
+                        ? const Center(child: Text("📭 로그가 없습니다."))
+                        : ListView.separated(
+                      controller: scrollController,
+                      itemCount: _logs.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (_, index) {
+                        final log = _logs[index];
+                        final tsText = _formatTs(log.timestamp);
+                        return ListTile(
+                          leading: const Icon(Icons.directions_car),
+                          title: Text(log.action),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('${log.from} → ${log.to}'),
+                              if ((log.performedBy).toString().isNotEmpty)
+                                Text(
+                                  '담당자: ${log.performedBy}',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                            ],
+                          ),
+                          trailing: Text(
+                            tsText,
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          isThreeLine: true,
+                        );
+                      },
+                    ),
                   ),
                   Padding(
                     padding: const EdgeInsets.all(16.0),
