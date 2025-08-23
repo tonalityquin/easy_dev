@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'plate_image_dialog.dart';
 
@@ -11,31 +12,76 @@ class TodayLogSection extends StatelessWidget {
   final String plateNumber;
   final List<dynamic> logsRaw;
 
+  // ===== 공통 로직: 로그 정규화 =====
   List<Map<String, dynamic>> _normalizeLogs(List<dynamic> raw) {
-    return raw.where((e) => e is Map).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    return raw
+        .where((e) => e is Map)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
   }
 
-  String _fmtTime(String? iso) {
-    final dt = DateTime.tryParse(iso ?? '')?.toLocal();
-    if (dt == null) return '--:--:--';
-    final hh = dt.hour.toString().padLeft(2, '0');
-    final mm = dt.minute.toString().padLeft(2, '0');
-    final ss = dt.second.toString().padLeft(2, '0');
-    return '$hh:$mm:$ss';
+  // ===== 공통 로직: 타임스탬프 파싱 =====
+  DateTime? _parseTs(dynamic ts) {
+    if (ts == null) return null;
+
+    if (ts is Timestamp) return ts.toDate().toLocal();
+    if (ts is DateTime) return ts.toLocal();
+
+    if (ts is int) {
+      // 밀리초로 보이는 큰 값 처리
+      if (ts > 100000000000) return DateTime.fromMillisecondsSinceEpoch(ts).toLocal();
+      // 초 단위로 가정
+      return DateTime.fromMillisecondsSinceEpoch(ts * 1000).toLocal();
+    }
+
+    if (ts is String) {
+      final parsed = DateTime.tryParse(ts);
+      return parsed?.toLocal();
+    }
+
+    return null;
+  }
+
+  // ===== 공통 로직: 타임스탬프 포맷(로컬) =====
+  String _formatTs(dynamic ts) {
+    final dt = _parseTs(ts);
+    if (dt == null) return '--';
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${dt.year}-${two(dt.month)}-${two(dt.day)} ${two(dt.hour)}:${two(dt.minute)}:${two(dt.second)}';
+  }
+
+  // ===== 공통 로직: 액션에 따른 아이콘/색상 매핑 =====
+  IconData _actionIcon(String action) {
+    if (action.contains('사전 정산')) return Icons.receipt_long;
+    if (action.contains('입차 완료')) return Icons.local_parking;
+    if (action.contains('출차')) return Icons.exit_to_app;
+    if (action.contains('취소')) return Icons.undo;
+    if (action.contains('생성')) return Icons.add_circle_outline;
+    return Icons.history;
+  }
+
+  Color _actionColor(String action) {
+    if (action.contains('사전 정산')) return Colors.teal;
+    if (action.contains('출차')) return Colors.orange;
+    if (action.contains('취소')) return Colors.redAccent;
+    if (action.contains('생성')) return Colors.indigo;
+    return Colors.blueGrey;
   }
 
   @override
   Widget build(BuildContext context) {
+    // 정규화 + PlateLogViewerBottomSheet와 동일하게 "오래된순(오름차순)" 정렬
     final logs = _normalizeLogs(logsRaw)
       ..sort((a, b) {
-        final aT = DateTime.tryParse('${a['timestamp'] ?? ''}') ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final bT = DateTime.tryParse('${b['timestamp'] ?? ''}') ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final aT = _parseTs(a['timestamp']) ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bT = _parseTs(b['timestamp']) ?? DateTime.fromMillisecondsSinceEpoch(0);
         return aT.compareTo(bT);
       });
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // 헤더: 타이틀 + 사진 버튼
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
           child: Row(
@@ -58,7 +104,10 @@ class TodayLogSection extends StatelessWidget {
                     pageBuilder: (_, __, ___) => PlateImageDialog(plateNumber: plateNumber),
                   );
                 },
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.grey.shade100),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.grey.shade100,
+                  foregroundColor: Colors.black87,
+                ),
                 child: const Text('사진'),
               ),
             ],
@@ -66,46 +115,46 @@ class TodayLogSection extends StatelessWidget {
         ),
         const Divider(height: 1),
 
+        // 본문 리스트 (PlateLogViewerBottomSheet와 동일한 타일 구성)
         Expanded(
           child: logs.isEmpty
-              ? const Center(child: Text('표시할 로그가 없습니다.'))
+              ? const Center(child: Text('📭 로그가 없습니다.'))
               : Scrollbar(
-                  child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    itemCount: logs.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (context, index) {
-                      final e = logs[index];
-                      final action = (e['action'] ?? '-').toString();
-                      final timeText = _fmtTime(e['timestamp']?.toString());
-                      final from = (e['from'] ?? '').toString();
-                      final to = (e['to'] ?? '').toString();
-                      final area = (e['area'] ?? '').toString();
-                      final performedBy = (e['performedBy'] ?? '').toString();
-                      final billingType = e['billingType'];
-                      final paymentMethod = e['paymentMethod'];
-                      final lockedFee = e['lockedFee'];
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              itemCount: logs.length,
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (context, index) {
+                final e = logs[index];
 
-                      return ListTile(
-                        dense: true,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        title: Text(action, style: const TextStyle(fontWeight: FontWeight.w600)),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (from.isNotEmpty || to.isNotEmpty) Text('from: $from → to: $to'),
-                            if (area.isNotEmpty) Text('area: $area'),
-                            if (performedBy.isNotEmpty) Text('by: $performedBy'),
-                            if (billingType != null || paymentMethod != null || lockedFee != null)
-                              Text(
-                                  'billing: ${billingType ?? '-'}, pay: ${paymentMethod ?? '-'}, fee: ${lockedFee ?? '-'}'),
-                          ],
-                        ),
-                        trailing: Text(timeText, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                      );
-                    },
+                final action = (e['action'] ?? '-').toString();
+                final from = (e['from'] ?? '').toString();
+                final to = (e['to'] ?? '').toString();
+                final performedBy = (e['performedBy'] ?? '').toString();
+                final tsText = _formatTs(e['timestamp']);
+
+                final color = _actionColor(action);
+
+                return ListTile(
+                  dense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  leading: Icon(_actionIcon(action), color: color),
+                  title: Text(action, style: TextStyle(fontWeight: FontWeight.w600, color: color)),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (from.isNotEmpty || to.isNotEmpty) Text('$from → $to'),
+                      if (performedBy.isNotEmpty) const SizedBox(height: 2),
+                      if (performedBy.isNotEmpty)
+                        Text('담당자: $performedBy', style: const TextStyle(fontSize: 12)),
+                    ],
                   ),
-                ),
+                  trailing: Text(tsText, style: const TextStyle(fontSize: 12)),
+                  isThreeLine: true,
+                );
+              },
+            ),
+          ),
         ),
       ],
     );

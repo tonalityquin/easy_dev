@@ -54,7 +54,7 @@ class ParkingRequestControlButtons extends StatelessWidget {
                 message: isPlateSelected ? '정산 관리' : '화면 잠금',
                 child: Icon(
                   isPlateSelected
-                      ? Icons.lock
+                      ? Icons.payments
                       : (isLocked ? Icons.lock : Icons.lock_open),
                   color: Colors.grey[700],
                 ),

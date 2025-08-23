@@ -7,6 +7,13 @@ import 'package:easydev/screens/logs/plate_log_viewer_page.dart';
 import 'package:easydev/states/user/user_state.dart';
 import 'package:easydev/enums/plate_type.dart';
 
+// [추가] 사전 정산 로직/저장/피드백에 필요한 의존성
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:easydev/repositories/plate/plate_repository.dart';
+import 'package:easydev/states/plate/plate_state.dart';
+import 'package:easydev/utils/snackbar_helper.dart';
+import 'package:easydev/widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
+
 Future<void> showDepartureCompletedStatusBottomSheet({
   required BuildContext context,
   required PlateModel plate,
@@ -56,7 +63,92 @@ Future<void> showDepartureCompletedStatusBottomSheet({
                     ),
                   ],
                 ),
+
                 const SizedBox(height: 24),
+
+                // =========================
+                // [추가] 정산(사전 정산) 버튼
+                // =========================
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.receipt_long),
+                  label: const Text("정산(사전 정산)"),
+                  onPressed: () async {
+                    final userName = context.read<UserState>().name;
+                    final repo = context.read<PlateRepository>();
+                    final plateState = context.read<PlateState>();
+                    final firestore = FirebaseFirestore.instance;
+
+                    // 사전 조건: 정산 타입 확인
+                    final billingType = (plate.billingType ?? '').trim();
+                    if (billingType.isEmpty) {
+                      showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
+                      return;
+                    }
+
+                    final now = DateTime.now();
+                    final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
+                    final entryTime = plate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
+
+                    // 정산 바텀시트 호출 → 사용자 선택 결과 수집
+                    final result = await showOnTapBillingBottomSheet(
+                      context: context,
+                      entryTimeInSeconds: entryTime,
+                      currentTimeInSeconds: currentTime,
+                      basicStandard: plate.basicStandard ?? 0,
+                      basicAmount: plate.basicAmount ?? 0,
+                      addStandard: plate.addStandard ?? 0,
+                      addAmount: plate.addAmount ?? 0,
+                      billingType: plate.billingType ?? '변동',
+                      regularAmount: plate.regularAmount,
+                      regularDurationHours: plate.regularDurationHours,
+                    );
+                    if (result == null) return;
+
+                    // Plate 업데이트(잠금/금액/결제수단)
+                    final updatedPlate = plate.copyWith(
+                      isLockedFee: true,
+                      lockedAtTimeInSeconds: currentTime,
+                      lockedFeeAmount: result.lockedFee,
+                      paymentMethod: result.paymentMethod,
+                    );
+
+                    try {
+                      await repo.addOrUpdatePlate(plate.id, updatedPlate);
+                      // 출차 완료 컬렉션에 맞게 로컬 상태 갱신
+                      await plateState.updatePlateLocally(PlateType.departureCompleted, updatedPlate);
+
+                      // 로그 기록
+                      final log = {
+                        'action': '사전 정산',
+                        'performedBy': userName,
+                        'timestamp': now.toIso8601String(),
+                        'lockedFee': result.lockedFee,
+                        'paymentMethod': result.paymentMethod,
+                      };
+                      await firestore.collection('plates').doc(plate.id).update({
+                        'logs': FieldValue.arrayUnion([log])
+                      });
+
+                      if (!context.mounted) return;
+                      showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
+                    } catch (e) {
+                      if (!context.mounted) return;
+                      showFailedSnackbar(context, '사전 정산 중 오류가 발생했습니다: $e');
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 52),
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                // ===== 기존 버튼들 =====
                 ElevatedButton.icon(
                   icon: const Icon(Icons.edit_note_outlined),
                   label: const Text("정보 수정"),
@@ -83,7 +175,9 @@ Future<void> showDepartureCompletedStatusBottomSheet({
                     ),
                   ),
                 ),
+
                 const SizedBox(height: 12),
+
                 ElevatedButton.icon(
                   icon: const Icon(Icons.history),
                   label: const Text("로그 확인"),

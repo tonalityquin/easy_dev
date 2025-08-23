@@ -62,7 +62,7 @@ class DepartureRequestControlButtons extends StatelessWidget {
                 message: isPlateSelected ? '정산 관리' : '화면 잠금',
                 child: Icon(
                   isPlateSelected
-                      ? (selectedPlate.isLockedFee ? Icons.lock_open : Icons.lock)
+                      ? Icons.payments  // 🔄 여기서 변경
                       : (isLocked ? Icons.lock : Icons.lock_open),
                   color: Colors.grey[700],
                 ),
