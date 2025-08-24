@@ -14,8 +14,15 @@ class PlateWriteService {
 
     final docRef = _firestore.collection('plates').doc(documentId);
     final docSnapshot = await docRef.get();
-    final newData = plate.toMap();
 
+    // NOTE: 쓰기 데이터 생성
+    var newData = plate.toMap();
+
+    // === [중요] 0/0이면 isLockedFee 강제 ===
+    // 기존 문서 값(existing)과 합쳐서 유효 값을 산출한 뒤 보정합니다.
+    newData = _enforceZeroFeeLock(newData, existing: docSnapshot.data());
+
+    // 변경 없음 최적화 (보정 후 비교해야 의미가 있습니다)
     if (docSnapshot.exists) {
       final existingData = docSnapshot.data();
       if (existingData != null && _isSameData(existingData, newData)) {
@@ -31,20 +38,24 @@ class PlateWriteService {
   }
 
   Future<void> updatePlate(
-    String documentId,
-    Map<String, dynamic> updatedFields, {
-    PlateLogModel? log,
-  }) async {
+      String documentId,
+      Map<String, dynamic> updatedFields, {
+        PlateLogModel? log,
+      }) async {
     await FirestoreLogger().log('updatePlate called: $documentId, fields=$updatedFields');
 
     final docRef = _firestore.collection('plates').doc(documentId);
 
+    // 기존 문서 + 변경 필드 기준으로 0/0 잠금 규칙 적용
+    final current = (await docRef.get()).data();
+    final fields = _enforceZeroFeeLock(Map<String, dynamic>.from(updatedFields), existing: current);
+
     if (log != null) {
-      updatedFields['logs'] = FieldValue.arrayUnion([log.toMap()]);
+      fields['logs'] = FieldValue.arrayUnion([log.toMap()]);
     }
 
     try {
-      await docRef.update(updatedFields);
+      await docRef.update(fields);
       dev.log("✅ 문서 업데이트 완료: $documentId", name: "Firestore");
       await FirestoreLogger().log('updatePlate success: $documentId');
     } catch (e) {
@@ -75,10 +86,10 @@ class PlateWriteService {
   }
 
   Future<void> recordWhoPlateClick(
-    String id,
-    bool isSelected, {
-    String? selectedBy,
-  }) async {
+      String id,
+      bool isSelected, {
+        String? selectedBy,
+      }) async {
     await FirestoreLogger().log('recordWhoPlateClick called: $id, isSelected=$isSelected, selectedBy=$selectedBy');
     final docRef = _firestore.collection('plates').doc(id);
 
@@ -102,6 +113,46 @@ class PlateWriteService {
       await FirestoreLogger().log('recordWhoPlateClick error: $e');
       throw Exception("DB 업데이트 실패: $e");
     }
+  }
+
+  // -------------------------
+  // 유틸: 0/0 잠금 규칙 강제
+  // -------------------------
+  Map<String, dynamic> _enforceZeroFeeLock(
+      Map<String, dynamic> data, {
+        Map<String, dynamic>? existing,
+      }) {
+    // data(이번 변경)에 없으면 existing(현재 문서)의 값을 사용해 '유효값'을 계산
+    int _effInt(String key) {
+      if (data.containsKey(key)) return _toInt(data[key]);
+      if (existing != null && existing.containsKey(key)) return _toInt(existing[key]);
+      return 0;
+    }
+
+    final int basic = _effInt(PlateFields.basicAmount);
+    final int add   = _effInt(PlateFields.addAmount);
+
+    final bool shouldLock = (basic == 0 && add == 0);
+
+    if (shouldLock) {
+      data[PlateFields.isLockedFee] = true;
+
+      // 선택: 잠금 정보 기본값 세팅(없을 때만)
+      data.putIfAbsent(
+        PlateFields.lockedAtTimeInSeconds,
+            () => DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000,
+      );
+      data.putIfAbsent(PlateFields.lockedFeeAmount, () => 0);
+    }
+
+    return data;
+  }
+
+  int _toInt(dynamic v) {
+    if (v is int) return v;
+    if (v is String) return int.tryParse(v) ?? 0;
+    if (v is num) return v.toInt();
+    return 0;
   }
 
   bool _isSameData(Map<String, dynamic> oldData, Map<String, dynamic> newData) {

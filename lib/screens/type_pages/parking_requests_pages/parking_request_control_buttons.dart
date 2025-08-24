@@ -140,18 +140,55 @@ class ParkingRequestControlButtons extends StatelessWidget {
       String division,
       String area,
       ) async {
-    final billingType = selectedPlate.billingType;
-    if (billingType == null || billingType.trim().isEmpty) {
-      showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
-      return;
-    }
-
+    final firestore = FirebaseFirestore.instance;
     final now = DateTime.now();
     final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
     final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
     final documentId = selectedPlate.id;
 
-    final firestore = FirebaseFirestore.instance;
+    // === [추가] 0원 규칙: basicAmount==0 && addAmount==0
+    final bool isZeroZero = ((selectedPlate.basicAmount ?? 0) == 0) &&
+        ((selectedPlate.addAmount ?? 0) == 0);
+
+    // 0원인데 이미 잠금이면: 해제도 금지 (친절 안내)
+    if (isZeroZero && selectedPlate.isLockedFee) {
+      showFailedSnackbar(context, '이 차량은 0원 규칙으로 잠금 상태이며 해제할 수 없습니다.');
+      return;
+    }
+
+    // 0원인데 아직 잠금이 아니면: 바텀시트 생략하고 자동 잠금
+    if (isZeroZero && !selectedPlate.isLockedFee) {
+      final updatedPlate = selectedPlate.copyWith(
+        isLockedFee: true,
+        lockedAtTimeInSeconds: currentTime,
+        lockedFeeAmount: 0,
+        paymentMethod: null,
+      );
+
+      await repo.addOrUpdatePlate(documentId, updatedPlate);
+      context.read<PlateState>().updatePlateLocally(PlateType.parkingRequests, updatedPlate);
+
+      final autoLog = {
+        'action': '사전 정산(자동 잠금: 0원)',
+        'performedBy': userName,
+        'timestamp': now.toIso8601String(),
+        'lockedFee': 0,
+        'auto': true,
+      };
+      await firestore.collection('plates').doc(documentId).update({
+        'logs': FieldValue.arrayUnion([autoLog])
+      });
+
+      showSuccessSnackbar(context, '0원 유형이라 자동으로 잠금되었습니다.');
+      return;
+    }
+
+    // === 일반 흐름 (0원 규칙이 아닌 경우에만)
+    final billingType = selectedPlate.billingType;
+    if (billingType == null || billingType.trim().isEmpty) {
+      showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
+      return;
+    }
 
     if (selectedPlate.isLockedFee) {
       final confirm = await showDialog<bool>(

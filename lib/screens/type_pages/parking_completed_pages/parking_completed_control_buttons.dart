@@ -146,6 +146,45 @@ class ParkingCompletedControlButtons extends StatelessWidget {
             final documentId = selectedPlate.id;
 
             if (index == 0) {
+              // === [추가] 0원 규칙: basicAmount==0 && addAmount==0
+              final bool isZeroZero =
+                  ((selectedPlate.basicAmount ?? 0) == 0) && ((selectedPlate.addAmount ?? 0) == 0);
+
+              // 0원 + 이미 잠금 -> 해제 금지 (안내 후 종료)
+              if (isZeroZero && selectedPlate.isLockedFee) {
+                showFailedSnackbar(context, '이 차량은 0원 규칙으로 잠금 상태이며 해제할 수 없습니다.');
+                return;
+              }
+
+              // 0원 + 아직 잠금 아님 -> 바텀시트 생략, 자동 잠금 처리
+              if (isZeroZero && !selectedPlate.isLockedFee) {
+                final updatedPlate = selectedPlate.copyWith(
+                  isLockedFee: true,
+                  lockedAtTimeInSeconds: currentTime,
+                  lockedFeeAmount: 0,
+                  paymentMethod: null,
+                );
+
+                await repo.addOrUpdatePlate(documentId, updatedPlate);
+                await plateState.updatePlateLocally(PlateType.parkingCompleted, updatedPlate);
+
+                final autoLog = {
+                  'action': '사전 정산(자동 잠금: 0원)',
+                  'performedBy': userName,
+                  'timestamp': now.toIso8601String(),
+                  'lockedFee': 0,
+                  'auto': true,
+                };
+
+                await firestore.collection('plates').doc(documentId).update({
+                  'logs': FieldValue.arrayUnion([autoLog])
+                });
+
+                showSuccessSnackbar(context, '0원 유형이라 자동으로 잠금되었습니다.');
+                return;
+              }
+              // === [추가 끝]
+
               if ((billingType ?? '').trim().isEmpty) {
                 showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
                 return;
