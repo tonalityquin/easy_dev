@@ -108,6 +108,32 @@ class MonthlyPlateController {
     _addInputListeners();
   }
 
+  // ---------------------------
+  // ✅ UI 강제용: 메모/상태 유효성 헬퍼
+  // ---------------------------
+  bool get hasStatusOrMemo =>
+      customStatusController.text.trim().isNotEmpty || selectedStatuses.isNotEmpty;
+
+  bool _validateBeforeWrite(BuildContext context) {
+    // 번호판 유효성
+    if (!isInputValid()) {
+      showFailedSnackbar(context, '번호판을 올바르게 입력해주세요.');
+      return false;
+    }
+    // 기간 필수
+    if ((startDateController?.text.trim().isEmpty ?? true) ||
+        (durationController?.text.trim().isEmpty ?? true)) {
+      showFailedSnackbar(context, '기간 정보를 입력해주세요.');
+      return false;
+    }
+    // 메모 or 상태 필수
+    if (!hasStatusOrMemo) {
+      showFailedSnackbar(context, '상태를 선택하거나 메모를 입력해주세요.');
+      return false;
+    }
+    return true;
+  }
+
   void _addInputListeners() {
     controllerFrontDigit.addListener(_handleInputChange);
     controllerMidDigit.addListener(_handleInputChange);
@@ -328,6 +354,9 @@ class MonthlyPlateController {
 
   // 수정 메서드
   Future<void> updatePlateEntry(BuildContext context, bool mounted, VoidCallback refreshUI) async {
+    // ✅ UI 강제: 제출 가드
+    if (!_validateBeforeWrite(context)) return;
+
     final plateNumber = buildPlateNumber();
     final area = context.read<AreaState>().currentArea;
     final userName = context.read<UserState>().name;
@@ -394,6 +423,9 @@ class MonthlyPlateController {
 
   // 등록 메서드
   Future<void> submitPlateEntry(BuildContext context, bool mounted, VoidCallback refreshUI) async {
+    // ✅ UI 강제: 제출 가드
+    if (!_validateBeforeWrite(context)) return;
+
     final plateNumber = buildPlateNumber();
     final area = context.read<AreaState>().currentArea;
     final userName = context.read<UserState>().name;
