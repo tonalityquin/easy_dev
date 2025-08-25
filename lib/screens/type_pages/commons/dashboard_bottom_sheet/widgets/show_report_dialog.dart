@@ -8,9 +8,47 @@ import '../../../../../../states/area/area_state.dart';
 import '../../../../../../states/user/user_state.dart';
 import '../../../../../../utils/snackbar_helper.dart';
 import '../../../../../../utils/blocking_dialog.dart';
+
+import '../../../../../repositories/plate/plate_count_service.dart';
+
 import 'end_work_report_content.dart';
 
-Future<void> showReportDialog(BuildContext context) {
+int _extractLockedFeeAmount(Map<String, dynamic> data) {
+  final top = data['lockedFeeAmount'];
+  if (top is num) return top.round();
+
+  final logs = data['logs'];
+  if (logs is List) {
+    for (int i = logs.length - 1; i >= 0; i--) {
+      final item = logs[i];
+      if (item is Map<String, dynamic>) {
+        final lf = item['lockedFee'];
+        if (lf is num) return lf.round();
+      }
+    }
+  }
+  return 0;
+}
+
+Future<void> showReportDialog(BuildContext context) async {
+  // 다이얼로그 열기 전에 현재 지역 읽고 자동 집계값 미리 구하기
+  final area = context.read<AreaState>().currentArea;
+
+  int prefilledVehicleOutput = 0; // 출차 차량 수(전체): departure_completed && isLockedFee
+  int prefilledVehicleInput  = 0; // 입차 차량 수(전체): parking_completed
+
+  try {
+    if (area.isNotEmpty) {
+      prefilledVehicleOutput =
+      await PlateCountService().getLockedDepartureCountAll(area);
+      prefilledVehicleInput =
+      await PlateCountService().getParkingCompletedCountAll(area);
+    }
+  } catch (_) {
+    prefilledVehicleOutput = 0;
+    prefilledVehicleInput = 0;
+  }
+
   return showModalBottomSheet(
     context: context,
     isScrollControlled: true,
@@ -27,6 +65,9 @@ Future<void> showReportDialog(BuildContext context) {
           ),
           padding: const EdgeInsets.all(20),
           child: EndWorkReportContent(
+            // ✅ 초기값 주입
+            initialVehicleInput: prefilledVehicleInput,
+            initialVehicleOutput: prefilledVehicleOutput,
             onReport: (type, content) async {
               if (type == 'cancel') {
                 if (Navigator.canPop(context)) Navigator.pop(context);
@@ -42,30 +83,73 @@ Future<void> showReportDialog(BuildContext context) {
                   final userName = context.read<UserState>().name;
 
                   if (type == 'end') {
-                    final parsed = jsonDecode(content);
-
-                    final dateStr = DateTime.now().toIso8601String().split('T').first;
-                    final summaryRef = FirebaseFirestore.instance
-                        .collection('fee_summaries')
-                        .doc('${division}_$area\_$dateStr');
-
-                    final doc = await summaryRef.get();
-                    if (!doc.exists) {
-                      await _updateLockedFeeSummary(division, area);
+                    Map<String, dynamic> parsed;
+                    try {
+                      final decoded = jsonDecode(content);
+                      if (decoded is Map<String, dynamic>) {
+                        parsed = decoded;
+                      } else {
+                        throw const FormatException('JSON은 객체 형태여야 합니다.');
+                      }
+                    } on FormatException {
+                      if (context.mounted) {
+                        showFailedSnackbar(context, '보고 데이터 형식이 올바르지 않습니다.');
+                      }
+                      return;
+                    } catch (_) {
+                      if (context.mounted) {
+                        showFailedSnackbar(context, '보고 데이터 파싱 중 오류가 발생했습니다.');
+                      }
+                      return;
                     }
 
-                    final latest = await summaryRef.get();
-                    final totalLockedFee = latest['totalLockedFee'] ?? 0;
+                    // 전체 누적 요약 갱신 (기존 로직 유지)
+                    final summaryRef = FirebaseFirestore.instance
+                        .collection('fee_summaries')
+                        .doc('${division}_${area}_all');
+
+                    final platesSnap = await FirebaseFirestore.instance
+                        .collection('plates')
+                        .where('type', isEqualTo: 'departure_completed')
+                        .where('area', isEqualTo: area)
+                        .where('isLockedFee', isEqualTo: true)
+                        .get();
+
+                    int total = 0;
+                    for (final d in platesSnap.docs) {
+                      total += _extractLockedFeeAmount(d.data());
+                    }
+
+                    await summaryRef.set({
+                      'division': division,
+                      'area': area,
+                      'scope': 'all',
+                      'totalLockedFee': total,
+                      'lockedVehicleCount': platesSnap.size,
+                      'lastUpdated': FieldValue.serverTimestamp(),
+                    }, SetOptions(merge: true));
+
+                    final latestSnap = await summaryRef.get();
+                    final latestData = latestSnap.data();
+                    final totalLockedFee =
+                    (latestData?['totalLockedFee'] ?? 0) is num
+                        ? (latestData?['totalLockedFee'] as num).round()
+                        : 0;
+
+                    // 제출 시점에도 최신 개수로 보정하고 싶다면 다시 호출
+                    final vehicleOutputAuto =
+                    await PlateCountService().getLockedDepartureCountAll(area);
 
                     final reportLog = {
                       'division': division,
                       'area': area,
                       'vehicleCount': {
-                        'vehicleInput': int.tryParse(parsed['vehicleInput'].toString()) ?? 0,
-                        'vehicleOutput': int.tryParse(parsed['vehicleOutput'].toString()) ?? 0,
+                        'vehicleInput':
+                        int.tryParse('${parsed['vehicleInput']}') ?? 0,
+                        'vehicleOutput': vehicleOutputAuto, // 자동 집계
                       },
                       'totalLockedFee': totalLockedFee,
-                      'timestamp': DateTime.now().toIso8601String(),
+                      'timestamp': FieldValue.serverTimestamp(),
                     };
 
                     await uploadEndWorkReportJson(
@@ -82,7 +166,7 @@ Future<void> showReportDialog(BuildContext context) {
                       showSuccessSnackbar(
                         context,
                         "업무 종료 보고 업로드 및 출차 초기화 "
-                            "(입차: ${parsed['vehicleInput']}, 출차: ${parsed['vehicleOutput']})",
+                            "(입차: ${parsed['vehicleInput']}, 출차: $vehicleOutputAuto • 전체집계)",
                       );
                     }
                   } else if (type == 'start') {
@@ -101,7 +185,7 @@ Future<void> showReportDialog(BuildContext context) {
                       'creator': user.id,
                       'division': user.divisions.first,
                       'answer': content,
-                      'createdAt': DateTime.now().toIso8601String(),
+                      'createdAt': FieldValue.serverTimestamp(),
                     });
 
                     if (context.mounted) {
@@ -117,42 +201,4 @@ Future<void> showReportDialog(BuildContext context) {
       );
     },
   );
-}
-
-Future<void> _updateLockedFeeSummary(String division, String area) async {
-  final firestore = FirebaseFirestore.instance;
-  final date = DateTime.now();
-  final dateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
-
-  final snapshot = await firestore
-      .collection('plates')
-      .where('type', isEqualTo: 'departure_completed')
-      .where('area', isEqualTo: area)
-      .where('isLockedFee', isEqualTo: true)
-      .get();
-
-  int total = 0;
-  int count = 0;
-
-  for (final doc in snapshot.docs) {
-    final data = doc.data();
-    final fee = data['lockedFeeAmount'];
-    if (fee is int) {
-      total += fee;
-      count++;
-    } else if (fee is double) {
-      total += fee.round();
-      count++;
-    }
-  }
-
-  final summaryRef = firestore.collection('fee_summaries').doc('${division}_$area\_$dateStr');
-  await summaryRef.set({
-    'division': division,
-    'area': area,
-    'date': dateStr,
-    'totalLockedFee': total,
-    'vehicleCount': count,
-    'lastUpdated': DateTime.now().toIso8601String(),
-  });
 }

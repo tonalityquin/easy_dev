@@ -15,15 +15,24 @@ const String kServiceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json'
 class EndWorkReportContent extends StatefulWidget {
   final Future<void> Function(String reportType, String content) onReport;
 
-  const EndWorkReportContent({super.key, required this.onReport});
+  // ✅ 입차/출차 차량 수 초기값을 외부에서 주입받아 TextField에 표시
+  final int? initialVehicleInput;   // 입차 차량 수
+  final int? initialVehicleOutput;  // 출차 차량 수
+
+  const EndWorkReportContent({
+    super.key,
+    required this.onReport,
+    this.initialVehicleInput,
+    this.initialVehicleOutput,
+  });
 
   @override
   State<EndWorkReportContent> createState() => _EndWorkReportContentState();
 }
 
 class _EndWorkReportContentState extends State<EndWorkReportContent> {
-  final TextEditingController _vehicleCountController = TextEditingController();
-  final TextEditingController _exitVehicleCountController = TextEditingController();
+  final TextEditingController _vehicleCountController = TextEditingController();       // 입차
+  final TextEditingController _exitVehicleCountController = TextEditingController();   // 출차
 
   void _update() {
     setState(() {});
@@ -32,6 +41,13 @@ class _EndWorkReportContentState extends State<EndWorkReportContent> {
   @override
   void initState() {
     super.initState();
+    // ✅ 다이얼로그 오픈 전에 계산된 초기값 주입
+    if (widget.initialVehicleInput != null) {
+      _vehicleCountController.text = widget.initialVehicleInput.toString();
+    }
+    if (widget.initialVehicleOutput != null) {
+      _exitVehicleCountController.text = widget.initialVehicleOutput.toString();
+    }
     _vehicleCountController.addListener(_update);
     _exitVehicleCountController.addListener(_update);
   }
@@ -46,7 +62,8 @@ class _EndWorkReportContentState extends State<EndWorkReportContent> {
   @override
   Widget build(BuildContext context) {
     final canSubmit =
-        _vehicleCountController.text.trim().isNotEmpty && _exitVehicleCountController.text.trim().isNotEmpty;
+        _vehicleCountController.text.trim().isNotEmpty &&
+            _exitVehicleCountController.text.trim().isNotEmpty;
 
     return Padding(
       padding: EdgeInsets.only(
@@ -66,7 +83,7 @@ class _EndWorkReportContentState extends State<EndWorkReportContent> {
               SizedBox(
                 width: 140,
                 child: TextField(
-                  controller: _vehicleCountController,
+                  controller: _vehicleCountController, // 입차 차량 수
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
                     labelText: '입차 차량 수',
@@ -78,7 +95,7 @@ class _EndWorkReportContentState extends State<EndWorkReportContent> {
               SizedBox(
                 width: 140,
                 child: TextField(
-                  controller: _exitVehicleCountController,
+                  controller: _exitVehicleCountController, // 출차 차량 수
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
                     labelText: '출차 차량 수',
@@ -116,16 +133,19 @@ class _EndWorkReportContentState extends State<EndWorkReportContent> {
       return;
     }
 
-    final dateStr = DateTime.now().toIso8601String().split('T').first;
-    final summaryRef = FirebaseFirestore.instance.collection('fee_summaries').doc('${division}_$area\_$dateStr');
+    // ✅ 요약 문서는 “전체 누적” 키를 사용(날짜 대신 _all)
+    final summaryRef = FirebaseFirestore.instance
+        .collection('fee_summaries')
+        .doc('${division}_${area}_all');
 
-    final doc = await summaryRef.get();
-    if (!doc.exists) {
-      await updateLockedFeeSummary(division, area);
-    }
+    // ✅ 보고 직전 최신 상태로 전체 누적 요약 갱신
+    await updateLockedFeeSummary(division, area);
 
     final summary = await summaryRef.get();
-    final lockedFee = summary['totalLockedFee'] ?? 0;
+    final data = summary.data();
+    final lockedFee = (data?['totalLockedFee'] ?? 0) is num
+        ? (data?['totalLockedFee'] as num).round()
+        : 0;
 
     final reportMap = {
       "vehicleInput": entry,
@@ -139,10 +159,15 @@ class _EndWorkReportContentState extends State<EndWorkReportContent> {
   }
 }
 
+/// ✅ “시간 제한 없이” 전체 누적 기준으로 요약을 작성/갱신.
+/// 조건:
+/// - type == 'departure_completed'
+/// - isLockedFee == true
+/// - area == 전달 인자
+/// 합계 산출:
+/// - lockedFeeAmount 우선, 없으면 logs 마지막 lockedFee 사용
 Future<void> updateLockedFeeSummary(String division, String area) async {
   final firestore = FirebaseFirestore.instance;
-  final date = DateTime.now();
-  final dateStr = "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
 
   final snapshot = await firestore
       .collection('plates')
@@ -155,25 +180,41 @@ Future<void> updateLockedFeeSummary(String division, String area) async {
   int count = 0;
 
   for (final doc in snapshot.docs) {
-    final fee = doc.data()['lockedFeeAmount'];
-    if (fee is int) {
-      total += fee;
-      count++;
-    } else if (fee is double) {
-      total += fee.round();
-      count++;
-    }
+    final data = doc.data();
+    final fee = _extractLockedFeeAmount(data);
+    total += fee;
+    count++;
   }
 
-  final summaryRef = firestore.collection('fee_summaries').doc('${division}_$area\_$dateStr');
+  final summaryRef =
+  firestore.collection('fee_summaries').doc('${division}_${area}_all'); // ✅ 전체 집계 키
+
   await summaryRef.set({
     'division': division,
     'area': area,
-    'date': dateStr,
-    'totalLockedFee': total,
-    'vehicleCount': count,
-    'lastUpdated': DateTime.now().toIso8601String(),
-  });
+    'scope': 'all',                           // 전체 누적임을 명시
+    'totalLockedFee': total,                  // 전체 잠금요금 합계
+    'lockedVehicleCount': count,              // 전체 잠금요금 발생 차량 수
+    'lastUpdated': FieldValue.serverTimestamp(), // 서버 시각
+  }, SetOptions(merge: true));
+}
+
+/// 내부 헬퍼: 문서에서 잠금요금을 안전 추출
+int _extractLockedFeeAmount(Map<String, dynamic> data) {
+  final top = data['lockedFeeAmount'];
+  if (top is num) return top.round();
+
+  final logs = data['logs'];
+  if (logs is List) {
+    for (int i = logs.length - 1; i >= 0; i--) {
+      final item = logs[i];
+      if (item is Map<String, dynamic>) {
+        final lf = item['lockedFee'];
+        if (lf is num) return lf.round();
+      }
+    }
+  }
+  return 0;
 }
 
 Future<String?> uploadEndWorkReportJson({
@@ -194,7 +235,10 @@ Future<String?> uploadEndWorkReportJson({
 
   final credentialsJson = await rootBundle.loadString(kServiceAccountPath);
   final accountCredentials = ServiceAccountCredentials.fromJson(credentialsJson);
-  final client = await clientViaServiceAccount(accountCredentials, [StorageApi.devstorageFullControlScope]);
+  final client = await clientViaServiceAccount(
+    accountCredentials,
+    [StorageApi.devstorageFullControlScope],
+  );
   final storage = StorageApi(client);
 
   final media = Media(
