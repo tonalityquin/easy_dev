@@ -82,15 +82,15 @@ class DashBoardBottomSheet extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.email),
-                      label: const Text('Gmail 열기'),
-                      style: _gmailBtnStyle(),
-                      onPressed: () => openGmailInbox(context), // ← 헬퍼 호출
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.email),
+                        label: const Text('Gmail 열기'),
+                        style: _gmailBtnStyle(),
+                        onPressed: () => openGmailInbox(context), // ← 헬퍼 호출
+                      ),
                     ),
-                  ),
                     const SizedBox(height: 16),
                     Consumer<LocationState>(
                       builder: (context, locationState, _) {

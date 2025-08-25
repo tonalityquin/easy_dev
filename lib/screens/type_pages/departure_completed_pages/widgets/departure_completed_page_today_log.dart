@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'plate_image_dialog.dart';
 
-class TodayLogSection extends StatelessWidget {
+class TodayLogSection extends StatefulWidget {
   const TodayLogSection({
     super.key,
     required this.plateNumber,
@@ -11,6 +11,13 @@ class TodayLogSection extends StatelessWidget {
 
   final String plateNumber;
   final List<dynamic> logsRaw;
+
+  @override
+  State<TodayLogSection> createState() => _TodayLogSectionState();
+}
+
+class _TodayLogSectionState extends State<TodayLogSection> {
+  bool _expanded = false;
 
   // ===== 공통 로직: 로그 정규화 =====
   List<Map<String, dynamic>> _normalizeLogs(List<dynamic> raw) {
@@ -93,8 +100,8 @@ class TodayLogSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 정규화 + PlateLogViewerBottomSheet와 동일하게 "오래된순(오름차순)" 정렬
-    final logs = _normalizeLogs(logsRaw)
+    // 정규화 + "오래된순(오름차순)" 정렬
+    final logs = _normalizeLogs(widget.logsRaw)
       ..sort((a, b) {
         final aT = _parseTs(a['timestamp']) ?? DateTime.fromMillisecondsSinceEpoch(0);
         final bT = _parseTs(b['timestamp']) ?? DateTime.fromMillisecondsSinceEpoch(0);
@@ -104,19 +111,33 @@ class TodayLogSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 헤더: 타이틀 + 사진 버튼
+        // 헤더: 번호판 영역(탭→펼치기/접기) + 사진 버튼
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
           child: Row(
             children: [
+              // 번호판 영역 전체를 탭 가능하게
               Expanded(
-                child: Text(
-                  '$plateNumber 로그',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                child: InkWell(
+                  onTap: () => setState(() => _expanded = !_expanded),
+                  borderRadius: BorderRadius.circular(6),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${widget.plateNumber} 로그',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Icon(_expanded ? Icons.expand_less : Icons.expand_more, size: 20),
+                    ],
+                  ),
                 ),
               ),
+              const SizedBox(width: 8),
               ElevatedButton(
                 onPressed: () {
                   showGeneralDialog(
@@ -124,7 +145,7 @@ class TodayLogSection extends StatelessWidget {
                     barrierDismissible: true,
                     barrierLabel: "사진 보기",
                     transitionDuration: const Duration(milliseconds: 300),
-                    pageBuilder: (_, __, ___) => PlateImageDialog(plateNumber: plateNumber),
+                    pageBuilder: (_, __, ___) => PlateImageDialog(plateNumber: widget.plateNumber),
                   );
                 },
                 style: ElevatedButton.styleFrom(
@@ -138,65 +159,79 @@ class TodayLogSection extends StatelessWidget {
         ),
         const Divider(height: 1),
 
-        // 본문 리스트 (PlateLogViewerBottomSheet와 동일한 타일 구성 + 결제/요금/사유 표시)
+        // 본문 리스트: 번호판 영역을 눌러야 펼쳐짐
         Expanded(
-          child: logs.isEmpty
-              ? const Center(child: Text('📭 로그가 없습니다.'))
-              : Scrollbar(
-            child: ListView.separated(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: logs.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (context, index) {
-                final e = logs[index];
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            switchInCurve: Curves.easeOut,
+            switchOutCurve: Curves.easeIn,
+            child: !_expanded
+                ? const Center(
+              key: ValueKey('collapsed'),
+              child: Text('번호판 영역을 눌러 로그를 펼치세요.'),
+            )
+                : (logs.isEmpty
+                ? const Center(
+              key: ValueKey('empty'),
+              child: Text('📭 로그가 없습니다.'),
+            )
+                : Scrollbar(
+              key: const ValueKey('list'),
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                itemCount: logs.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final e = logs[index];
 
-                final action = (e['action'] ?? '-').toString();
-                final from = (e['from'] ?? '').toString();
-                final to = (e['to'] ?? '').toString();
-                final performedBy = (e['performedBy'] ?? '').toString();
-                final tsText = _formatTs(e['timestamp']);
+                  final action = (e['action'] ?? '-').toString();
+                  final from = (e['from'] ?? '').toString();
+                  final to = (e['to'] ?? '').toString();
+                  final performedBy = (e['performedBy'] ?? '').toString();
+                  final tsText = _formatTs(e['timestamp']);
 
-                // 추가: 확정요금/결제수단/사유
-                final String? feeText = (e.containsKey('lockedFee') || e.containsKey('lockedFeeAmount'))
-                    ? _formatWon(e['lockedFee'] ?? e['lockedFeeAmount'])
-                    : null;
-                final String? payText = (e['paymentMethod']?.toString().trim().isNotEmpty ?? false)
-                    ? e['paymentMethod'].toString()
-                    : null;
-                final String? reasonText = (e['reason']?.toString().trim().isNotEmpty ?? false)
-                    ? e['reason'].toString()
-                    : null;
+                  // 추가: 확정요금/결제수단/사유
+                  final String? feeText = (e.containsKey('lockedFee') || e.containsKey('lockedFeeAmount'))
+                      ? _formatWon(e['lockedFee'] ?? e['lockedFeeAmount'])
+                      : null;
+                  final String? payText = (e['paymentMethod']?.toString().trim().isNotEmpty ?? false)
+                      ? e['paymentMethod'].toString()
+                      : null;
+                  final String? reasonText = (e['reason']?.toString().trim().isNotEmpty ?? false)
+                      ? e['reason'].toString()
+                      : null;
 
-                final color = _actionColor(action);
+                  final color = _actionColor(action);
 
-                return ListTile(
-                  dense: true,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  leading: Icon(_actionIcon(action), color: color),
-                  title: Text(action, style: TextStyle(fontWeight: FontWeight.w600, color: color)),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (from.isNotEmpty || to.isNotEmpty) Text('$from → $to'),
-                      if (performedBy.isNotEmpty) const SizedBox(height: 2),
-                      if (performedBy.isNotEmpty)
-                        Text('담당자: $performedBy', style: const TextStyle(fontSize: 12)),
-
-                      // 사전 정산 정보 (존재할 때만)
-                      if (feeText != null || payText != null || reasonText != null) const SizedBox(height: 2),
-                      if (feeText != null)
-                        Text('확정요금: $feeText', style: const TextStyle(fontSize: 12)),
-                      if (payText != null)
-                        Text('결제수단: $payText', style: const TextStyle(fontSize: 12)),
-                      if (reasonText != null)
-                        Text('사유: $reasonText', style: const TextStyle(fontSize: 12)),
-                    ],
-                  ),
-                  trailing: Text(tsText, style: const TextStyle(fontSize: 12)),
-                  isThreeLine: true,
-                );
-              },
-            ),
+                  return ListTile(
+                    dense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    leading: Icon(_actionIcon(action), color: color),
+                    title: Text(action, style: TextStyle(fontWeight: FontWeight.w600, color: color)),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (from.isNotEmpty || to.isNotEmpty) Text('$from → $to'),
+                        if (performedBy.isNotEmpty) const SizedBox(height: 2),
+                        if (performedBy.isNotEmpty)
+                          const Text('담당자:', style: TextStyle(fontSize: 12)),
+                        if (performedBy.isNotEmpty)
+                          Text(performedBy, style: const TextStyle(fontSize: 12)),
+                        if (feeText != null || payText != null || reasonText != null) const SizedBox(height: 2),
+                        if (feeText != null)
+                          Text('확정요금: $feeText', style: const TextStyle(fontSize: 12)),
+                        if (payText != null)
+                          Text('결제수단: $payText', style: const TextStyle(fontSize: 12)),
+                        if (reasonText != null)
+                          Text('사유: $reasonText', style: const TextStyle(fontSize: 12)),
+                      ],
+                    ),
+                    trailing: Text(tsText, style: const TextStyle(fontSize: 12)),
+                    isThreeLine: true,
+                  );
+                },
+              ),
+            )),
           ),
         ),
       ],

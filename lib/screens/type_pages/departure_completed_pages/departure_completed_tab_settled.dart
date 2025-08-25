@@ -31,10 +31,17 @@ class _DepartureCompletedSettledTabState extends State<DepartureCompletedSettled
   bool _hasSearched = false;
   List<PlateModel> _results = [];
 
+  int _selectedResultIndex = 0;
+
   TabController? _tabController;
   static const int _settledTabIndex = 1;
 
   bool _isValidFourDigit(String v) => RegExp(r'^\d{4}$').hasMatch(v);
+
+  String _shortPlateLabel(String plate) {
+    final idx = plate.indexOf('_');
+    return idx == -1 ? plate : plate.substring(0, idx);
+  }
 
   void _onTextChanged() {
     if (mounted) setState(() {});
@@ -58,6 +65,7 @@ class _DepartureCompletedSettledTabState extends State<DepartureCompletedSettled
       _results = [];
       _hasSearched = false;
       _isLoading = false;
+      _selectedResultIndex = 0;
     });
   }
 
@@ -74,10 +82,21 @@ class _DepartureCompletedSettledTabState extends State<DepartureCompletedSettled
         area: widget.area,
       );
       if (!mounted) return;
+
+      int initialIndex = 0;
+      for (int i = 0; i < items.length; i++) {
+        final l = items[i].logs ?? const <PlateLogModel>[];
+        if (l.isNotEmpty) {
+          initialIndex = i;
+          break;
+        }
+      }
+
       setState(() {
         _results = items;
         _hasSearched = true;
         _isLoading = false;
+        _selectedResultIndex = initialIndex;
       });
     } catch (e) {
       if (!mounted) return;
@@ -119,6 +138,8 @@ class _DepartureCompletedSettledTabState extends State<DepartureCompletedSettled
             trailing: '',
           ),
           const SizedBox(height: 6),
+
+          // ===== 상단: 오늘 로그 영역 =====
           Expanded(
             child: Builder(
               builder: (context) {
@@ -136,27 +157,57 @@ class _DepartureCompletedSettledTabState extends State<DepartureCompletedSettled
                   );
                 }
 
-                PlateModel target = _results.first;
-                for (final p in _results) {
-                  final l = p.logs ?? const <PlateLogModel>[];
-                  if (l.isNotEmpty) {
-                    target = p;
-                    break;
-                  }
-                }
+                // ✅ 다건 결과 선택 UI (칩)
+                final chips = _results.asMap().entries.map((entry) {
+                  final i = entry.key;
+                  final p = entry.value;
+                  final selected = _selectedResultIndex == i;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 6.0),
+                    child: ChoiceChip(
+                      label: Text(_shortPlateLabel(p.plateNumber)),
+                      selected: selected,
+                      onSelected: (v) {
+                        if (v) setState(() => _selectedResultIndex = i);
+                      },
+                    ),
+                  );
+                }).toList();
+
+                // ✅ 선택된 결과(target)로 TodayLogSection 렌더
+                final safeIndex = _selectedResultIndex.clamp(0, _results.length - 1);
+                final target = _results[safeIndex];
 
                 final String plate = target.plateNumber;
-
                 final List<dynamic> logsRaw = (target.logs?.map((e) => e.toMap()).toList()) ?? const <dynamic>[];
 
-                return TodayLogSection(
-                  plateNumber: plate,
-                  logsRaw: logsRaw,
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (_results.length > 1)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(children: chips),
+                        ),
+                      ),
+                    // TodayLogSection은 내부에 Expanded가 있으므로, 감싸는 쪽은 Expanded로 감싸야 함
+                    Expanded(
+                      child: TodayLogSection(
+                        plateNumber: plate,
+                        logsRaw: logsRaw,
+                      ),
+                    ),
+                  ],
                 );
               },
             ),
           ),
+
           const SizedBox(height: 8),
+
+          // ===== 하단: 과거(병합) 로그 영역 =====
           _SectionHeader(
             key: const ValueKey('merged-header'),
             icon: Icons.merge_type,
@@ -197,7 +248,10 @@ class _DepartureCompletedSettledTabState extends State<DepartureCompletedSettled
               },
             ),
           ),
+
           const SizedBox(height: 8),
+
+          // ===== 검색 입력 =====
           SafeArea(
             top: false,
             child: Row(

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:android_intent_plus/android_intent.dart';
 
 import '../../../../../../states/user/user_state.dart';
 
+import '../../../../utils/external_openers.dart';
 import 'common_dash_board_controller.dart';
 import 'widgets/user_info_card.dart';
 import 'widgets/break_button_widget.dart';
@@ -17,7 +17,6 @@ class DashBoardPage extends StatelessWidget {
     final controller = CommonDashBoardController();
 
     return Scaffold(
-
       backgroundColor: Colors.white,
       body: Consumer<UserState>(
         builder: (context, userState, _) {
@@ -49,42 +48,14 @@ class DashBoardPage extends StatelessWidget {
                   userState: userState,
                 ),
                 const SizedBox(height: 16),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.email),
-                  label: const Text('Gmail 열기'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.black,
-                    side: const BorderSide(color: Colors.grey),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.email),
+                    label: const Text('Gmail 열기'),
+                    style: _gmailBtnStyle(),
+                    onPressed: () => openGmailInbox(context), // ← 헬퍼 호출
                   ),
-                  onPressed: () async {
-                    try {
-                      final intent = AndroidIntent(
-                        action: 'android.intent.action.MAIN',
-                        package: 'com.google.android.gm',
-                        componentName: 'com.google.android.gm.ConversationListActivityGmail',
-                      );
-                      await intent.launch();
-                    } catch (e) {
-                      try {
-                        final fallbackIntent = AndroidIntent(
-                          action: 'android.intent.action.VIEW',
-                          data: 'https://mail.google.com',
-                        );
-                        await fallbackIntent.launch();
-                      } catch (e2) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Gmail 실행 실패: $e2')),
-                          );
-                        }
-                      }
-                    }
-                  },
                 ),
                 const SizedBox(height: 32),
               ],
@@ -94,4 +65,15 @@ class DashBoardPage extends StatelessWidget {
       ),
     );
   }
+}
+
+ButtonStyle _gmailBtnStyle() {
+  return ElevatedButton.styleFrom(
+    backgroundColor: Colors.white,
+    foregroundColor: Colors.black,
+    minimumSize: const Size.fromHeight(55),
+    padding: EdgeInsets.zero,
+    side: const BorderSide(color: Colors.grey, width: 1.0),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+  );
 }
