@@ -3,7 +3,7 @@
     package="com.example.easydev">
 
 
-<!-- ✅ TTS 음성 재생을 위한 네트워크 권한 -->
+    <!-- ✅ TTS 음성 재생을 위한 네트워크 권한 -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- ✅ 포그라운드 서비스 -->
@@ -28,11 +28,13 @@
 
     <!-- ✅ 외부 저장소 접근 (Android 10 이하) -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
 
     <!-- ✅ Android 11+ 파일 접근 권한 (사용 시 필요) -->
-    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+    <uses-permission
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
 
     <!-- ✅ Android 13 알림 권한 (선택 사항) -->
@@ -40,22 +42,22 @@
 
     <application
         android:name="${applicationName}"
-        android:label="easydev"
-        android:icon="@mipmap/ic_launcher"
         android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="easydev"
         android:theme="@style/LaunchTheme">
 
         <activity
             android:name=".MainActivity"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:enableOnBackInvokedCallback="true"
             android:exported="true"
+            android:hardwareAccelerated="true"
             android:launchMode="singleTop"
+            android:requestLegacyExternalStorage="true"
             android:taskAffinity=""
             android:theme="@style/LaunchTheme"
-            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
-            android:hardwareAccelerated="true"
-            android:windowSoftInputMode="adjustResize"
-            android:requestLegacyExternalStorage="true"
-            android:enableOnBackInvokedCallback="true">
+            android:windowSoftInputMode="adjustResize">
 
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
@@ -81,9 +83,26 @@
 
     <!-- ProcessText Plugin (다른 앱 텍스트 접근용) -->
     <queries>
+        <!-- Gmail 패키지 조회 허용 -->
+        <package android:name="com.google.android.gm" />
+
+        <!-- 메일앱으로 보내기(mailto:) 인텐트 조회 허용 -->
+        <intent>
+            <action android:name="android.intent.action.SENDTO" />
+            <data android:scheme="mailto" />
+        </intent>
+
+        <!-- 외부 브라우저로 보기(https) 인텐트 조회 허용 -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+
+        <!-- (기존) 다른 앱 텍스트 접근 -->
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT" />
             <data android:mimeType="text/plain" />
         </intent>
     </queries>
+
 </manifest>
