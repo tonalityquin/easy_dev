@@ -10,7 +10,6 @@ import '../../../../../../utils/snackbar_helper.dart';
 import '../../../../../../utils/blocking_dialog.dart';
 
 import '../../../../../repositories/plate/plate_count_service.dart';
-
 import 'end_work_report_content.dart';
 
 int _extractLockedFeeAmount(Map<String, dynamic> data) {
@@ -34,8 +33,8 @@ Future<void> showReportDialog(BuildContext context) async {
   // 다이얼로그 열기 전에 현재 지역 읽고 자동 집계값 미리 구하기
   final area = context.read<AreaState>().currentArea;
 
-  int prefilledVehicleOutput = 0; // 출차 차량 수(전체): departure_completed && isLockedFee
-  int prefilledVehicleInput  = 0; // 입차 차량 수(전체): parking_completed
+  int prefilledVehicleOutput = 0; // 출차(전체): departure_completed && isLockedFee
+  int prefilledVehicleInput  = 0; // 입차(전체): parking_completed
 
   try {
     if (area.isNotEmpty) {
@@ -52,7 +51,9 @@ Future<void> showReportDialog(BuildContext context) async {
   return showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    backgroundColor: Colors.transparent,
+    useSafeArea: true,                        // ✅ 키보드/노치 안전 영역
+    barrierColor: Colors.black54,             // ✅ 살짝 어둡게
+    backgroundColor: Colors.transparent,      // ✅ 둥근 모서리 표현용
     builder: (context) {
       return Padding(
         padding: EdgeInsets.only(
@@ -61,9 +62,9 @@ Future<void> showReportDialog(BuildContext context) async {
         child: Container(
           decoration: const BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
           child: EndWorkReportContent(
             // ✅ 초기값 주입
             initialVehicleInput: prefilledVehicleInput,
@@ -103,7 +104,7 @@ Future<void> showReportDialog(BuildContext context) async {
                       return;
                     }
 
-                    // 전체 누적 요약 갱신 (기존 로직 유지)
+                    // 전체 누적 요약 갱신
                     final summaryRef = FirebaseFirestore.instance
                         .collection('fee_summaries')
                         .doc('${division}_${area}_all');
@@ -159,6 +160,7 @@ Future<void> showReportDialog(BuildContext context) async {
                       userName: userName,
                     );
 
+                    // ✅ 보고 완료 후 잠금요금 출차 문서 정리
                     await deleteLockedDepartureDocs(area);
 
                     if (context.mounted) {
@@ -201,4 +203,25 @@ Future<void> showReportDialog(BuildContext context) async {
       );
     },
   );
+}
+
+/// ✅ 잠금요금 출차 문서 일괄 삭제(batch)
+Future<void> deleteLockedDepartureDocs(String area) async {
+  final firestore = FirebaseFirestore.instance;
+
+  final snap = await firestore
+      .collection('plates')
+      .where('type', isEqualTo: 'departure_completed')
+      .where('area', isEqualTo: area)
+      .where('isLockedFee', isEqualTo: true)
+      .get();
+
+  if (snap.docs.isEmpty) return;
+
+  // 대량 삭제 시 배치 사용
+  final batch = firestore.batch();
+  for (final d in snap.docs) {
+    batch.delete(d.reference);
+  }
+  await batch.commit();
 }
