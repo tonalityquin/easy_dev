@@ -30,15 +30,6 @@ int _extractLockedFeeAmount(Map<String, dynamic> data) {
   return 0;
 }
 
-/// Timestamp/DateTime/String -> ISO8601 문자열 변환(그 외 타입은 toString)
-String? _toIsoString(dynamic v) {
-  if (v == null) return null;
-  if (v is Timestamp) return v.toDate().toIso8601String();
-  if (v is DateTime) return v.toIso8601String();
-  if (v is String) return v;
-  return v.toString();
-}
-
 /// JSON 인코딩 가능한 값으로 변환(Logs 내부에 Timestamp 등이 있어도 안전하게)
 dynamic _jsonSafe(dynamic v) {
   if (v is Timestamp) return v.toDate().toIso8601String();
@@ -57,14 +48,12 @@ Future<void> showReportDialog(BuildContext context) async {
   final area = context.read<AreaState>().currentArea;
 
   int prefilledVehicleOutput = 0; // 출차(전체): departure_completed && isLockedFee
-  int prefilledVehicleInput  = 0; // 입차(전체): parking_completed
+  int prefilledVehicleInput = 0; // 입차(전체): parking_completed
 
   try {
     if (area.isNotEmpty) {
-      prefilledVehicleOutput =
-      await PlateCountService().getLockedDepartureCountAll(area);
-      prefilledVehicleInput =
-      await PlateCountService().getParkingCompletedCountAll(area);
+      prefilledVehicleOutput = await PlateCountService().getLockedDepartureCountAll(area);
+      prefilledVehicleInput = await PlateCountService().getParkingCompletedCountAll(area);
     }
   } catch (_) {
     prefilledVehicleOutput = 0;
@@ -142,9 +131,8 @@ Future<void> showReportDialog(BuildContext context) async {
                     }
 
                     // 3) 요약 문서 upsert
-                    final summaryRef = FirebaseFirestore.instance
-                        .collection('fee_summaries')
-                        .doc('${division}_${area}_all');
+                    final summaryRef =
+                        FirebaseFirestore.instance.collection('fee_summaries').doc('${division}_${area}_all');
 
                     await summaryRef.set({
                       'division': division,
@@ -163,8 +151,7 @@ Future<void> showReportDialog(BuildContext context) async {
                         : 0;
 
                     // 5) 출차 차량 수 자동 집계(전체)로 보정하고 보고 JSON 구성
-                    final vehicleOutputAuto =
-                    await PlateCountService().getLockedDepartureCountAll(area);
+                    final vehicleOutputAuto = await PlateCountService().getLockedDepartureCountAll(area);
 
                     final reportLog = {
                       'division': division,
@@ -191,13 +178,6 @@ Future<void> showReportDialog(BuildContext context) async {
                       final data = doc.data();
                       items.add({
                         'docId': doc.id,
-                        'plate_number': data['plate_number'] ?? '',
-                        'plate_four_digit': data['plate_four_digit'] ?? '',
-                        'end_time': _toIsoString(data['end_time']),
-                        'updatedAt': _toIsoString(data['updatedAt']),
-                        'isLockedFee': data['isLockedFee'] == true,
-                        'lockedFeeAmount': _extractLockedFeeAmount(data),
-                        'billingType': data['billingType'],
                         'logs': _jsonSafe(data['logs'] ?? []),
                       });
                     }
@@ -205,8 +185,6 @@ Future<void> showReportDialog(BuildContext context) async {
                     final logsPayload = {
                       'division': division,
                       'area': area,
-                      'generatedAt': DateTime.now().toIso8601String(),
-                      'count': items.length,
                       'items': items,
                     };
 
@@ -218,7 +196,7 @@ Future<void> showReportDialog(BuildContext context) async {
                     );
 
                     // 8) 필요 시 문서 삭제(보고·백업 완료 후)
-                    await deleteLockedDepartureDocs(area);
+                    // await deleteLockedDepartureDocs(area);
 
                     // 9) UI 피드백
                     if (context.mounted) {
@@ -226,7 +204,7 @@ Future<void> showReportDialog(BuildContext context) async {
                       showSuccessSnackbar(
                         context,
                         "업무 종료 보고 업로드 및 출차 초기화 "
-                            "(입차: ${parsed['vehicleInput']}, 출차: $vehicleOutputAuto • 전체집계)",
+                        "(입차: ${parsed['vehicleInput']}, 출차: $vehicleOutputAuto • 전체집계)",
                       );
                     }
                   } else if (type == 'start') {
@@ -240,13 +218,6 @@ Future<void> showReportDialog(BuildContext context) async {
                       showFailedSnackbar(context, '사용자 정보가 없어 보고를 저장할 수 없습니다.');
                       return;
                     }
-
-                    await FirebaseFirestore.instance.collection('tasks').add({
-                      'creator': user.id,
-                      'division': user.divisions.first,
-                      'answer': content,
-                      'createdAt': FieldValue.serverTimestamp(),
-                    });
 
                     if (context.mounted) {
                       Navigator.pop(context);
