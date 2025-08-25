@@ -12,6 +12,7 @@ import '../../../../../../utils/blocking_dialog.dart';
 import '../../../../../repositories/plate/plate_count_service.dart';
 import 'end_work_report_content.dart';
 
+/// 잠금 요금 안전 추출
 int _extractLockedFeeAmount(Map<String, dynamic> data) {
   final top = data['lockedFeeAmount'];
   if (top is num) return top.round();
@@ -27,6 +28,28 @@ int _extractLockedFeeAmount(Map<String, dynamic> data) {
     }
   }
   return 0;
+}
+
+/// Timestamp/DateTime/String -> ISO8601 문자열 변환(그 외 타입은 toString)
+String? _toIsoString(dynamic v) {
+  if (v == null) return null;
+  if (v is Timestamp) return v.toDate().toIso8601String();
+  if (v is DateTime) return v.toIso8601String();
+  if (v is String) return v;
+  return v.toString();
+}
+
+/// JSON 인코딩 가능한 값으로 변환(Logs 내부에 Timestamp 등이 있어도 안전하게)
+dynamic _jsonSafe(dynamic v) {
+  if (v is Timestamp) return v.toDate().toIso8601String();
+  if (v is DateTime) return v.toIso8601String();
+  if (v is Map) {
+    return v.map((k, val) => MapEntry(k.toString(), _jsonSafe(val)));
+  }
+  if (v is List) {
+    return v.map(_jsonSafe).toList();
+  }
+  return v;
 }
 
 Future<void> showReportDialog(BuildContext context) async {
@@ -51,9 +74,9 @@ Future<void> showReportDialog(BuildContext context) async {
   return showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    useSafeArea: true,                        // ✅ 키보드/노치 안전 영역
-    barrierColor: Colors.black54,             // ✅ 살짝 어둡게
-    backgroundColor: Colors.transparent,      // ✅ 둥근 모서리 표현용
+    useSafeArea: true,
+    barrierColor: Colors.black54,
+    backgroundColor: Colors.transparent,
     builder: (context) {
       return Padding(
         padding: EdgeInsets.only(
@@ -84,6 +107,7 @@ Future<void> showReportDialog(BuildContext context) async {
                   final userName = context.read<UserState>().name;
 
                   if (type == 'end') {
+                    // 1) 입력 파싱
                     Map<String, dynamic> parsed;
                     try {
                       final decoded = jsonDecode(content);
@@ -104,11 +128,7 @@ Future<void> showReportDialog(BuildContext context) async {
                       return;
                     }
 
-                    // 전체 누적 요약 갱신
-                    final summaryRef = FirebaseFirestore.instance
-                        .collection('fee_summaries')
-                        .doc('${division}_${area}_all');
-
+                    // 2) 전체 누적 요약을 갱신하기 위한 스냅샷 확보(이 스냅샷을 logs 추출에도 재사용)
                     final platesSnap = await FirebaseFirestore.instance
                         .collection('plates')
                         .where('type', isEqualTo: 'departure_completed')
@@ -121,6 +141,11 @@ Future<void> showReportDialog(BuildContext context) async {
                       total += _extractLockedFeeAmount(d.data());
                     }
 
+                    // 3) 요약 문서 upsert
+                    final summaryRef = FirebaseFirestore.instance
+                        .collection('fee_summaries')
+                        .doc('${division}_${area}_all');
+
                     await summaryRef.set({
                       'division': division,
                       'area': area,
@@ -130,14 +155,14 @@ Future<void> showReportDialog(BuildContext context) async {
                       'lastUpdated': FieldValue.serverTimestamp(),
                     }, SetOptions(merge: true));
 
+                    // 4) 최신 합계 읽기
                     final latestSnap = await summaryRef.get();
                     final latestData = latestSnap.data();
-                    final totalLockedFee =
-                    (latestData?['totalLockedFee'] ?? 0) is num
+                    final totalLockedFee = (latestData?['totalLockedFee'] ?? 0) is num
                         ? (latestData?['totalLockedFee'] as num).round()
                         : 0;
 
-                    // 제출 시점에도 최신 개수로 보정하고 싶다면 다시 호출
+                    // 5) 출차 차량 수 자동 집계(전체)로 보정하고 보고 JSON 구성
                     final vehicleOutputAuto =
                     await PlateCountService().getLockedDepartureCountAll(area);
 
@@ -145,14 +170,14 @@ Future<void> showReportDialog(BuildContext context) async {
                       'division': division,
                       'area': area,
                       'vehicleCount': {
-                        'vehicleInput':
-                        int.tryParse('${parsed['vehicleInput']}') ?? 0,
-                        'vehicleOutput': vehicleOutputAuto, // 자동 집계
+                        'vehicleInput': int.tryParse('${parsed['vehicleInput']}') ?? 0,
+                        'vehicleOutput': vehicleOutputAuto,
                       },
                       'totalLockedFee': totalLockedFee,
                       'timestamp': FieldValue.serverTimestamp(),
                     };
 
+                    // 6) 보고 JSON 업로드(GCS)
                     await uploadEndWorkReportJson(
                       report: reportLog,
                       division: division,
@@ -160,9 +185,42 @@ Future<void> showReportDialog(BuildContext context) async {
                       userName: userName,
                     );
 
-                    // ✅ 보고 완료 후 잠금요금 출차 문서 정리
+                    // 7) 🔥 logs 집계 JSON 생성 → 업로드(GCS)
+                    final List<Map<String, dynamic>> items = [];
+                    for (final doc in platesSnap.docs) {
+                      final data = doc.data();
+                      items.add({
+                        'docId': doc.id,
+                        'plate_number': data['plate_number'] ?? '',
+                        'plate_four_digit': data['plate_four_digit'] ?? '',
+                        'end_time': _toIsoString(data['end_time']),
+                        'updatedAt': _toIsoString(data['updatedAt']),
+                        'isLockedFee': data['isLockedFee'] == true,
+                        'lockedFeeAmount': _extractLockedFeeAmount(data),
+                        'billingType': data['billingType'],
+                        'logs': _jsonSafe(data['logs'] ?? []),
+                      });
+                    }
+
+                    final logsPayload = {
+                      'division': division,
+                      'area': area,
+                      'generatedAt': DateTime.now().toIso8601String(),
+                      'count': items.length,
+                      'items': items,
+                    };
+
+                    await uploadEndLogJson(
+                      report: logsPayload,
+                      division: division,
+                      area: area,
+                      userName: userName,
+                    );
+
+                    // 8) 필요 시 문서 삭제(보고·백업 완료 후)
                     await deleteLockedDepartureDocs(area);
 
+                    // 9) UI 피드백
                     if (context.mounted) {
                       Navigator.pop(context);
                       showSuccessSnackbar(
@@ -205,7 +263,7 @@ Future<void> showReportDialog(BuildContext context) async {
   );
 }
 
-/// ✅ 잠금요금 출차 문서 일괄 삭제(batch)
+/// 🔧 보고 후 정리: departure_completed & isLockedFee=true 문서 일괄 삭제
 Future<void> deleteLockedDepartureDocs(String area) async {
   final firestore = FirebaseFirestore.instance;
 
@@ -218,7 +276,6 @@ Future<void> deleteLockedDepartureDocs(String area) async {
 
   if (snap.docs.isEmpty) return;
 
-  // 대량 삭제 시 배치 사용
   final batch = firestore.batch();
   for (final d in snap.docs) {
     batch.delete(d.reference);

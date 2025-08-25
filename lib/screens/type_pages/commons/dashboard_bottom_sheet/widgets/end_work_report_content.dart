@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math'; // ✅ 고유 ID 생성을 위해 추가
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -136,8 +137,7 @@ class _EndWorkReportContentState extends State<EndWorkReportContent> {
                 ),
               ),
               child: Wrap(
-                alignment: WrapAlignment.center,
-                // 중앙 정렬
+                alignment: WrapAlignment.center, // 중앙 정렬
                 runAlignment: WrapAlignment.center,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 spacing: 8,
@@ -171,15 +171,15 @@ class _EndWorkReportContentState extends State<EndWorkReportContent> {
                         validator: _numberValidator,
                         suffix: _reloadingInput
                             ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
                             : IconButton(
-                                tooltip: '입차 수 재계산',
-                                icon: const Icon(Icons.refresh),
-                                onPressed: _refetchInput,
-                              ),
+                          tooltip: '입차 수 재계산',
+                          icon: const Icon(Icons.refresh),
+                          onPressed: _refetchInput,
+                        ),
                         helper: '현재 지역의 parking_completed 전체 문서 기준 자동 집계',
                       ),
                     ),
@@ -194,15 +194,15 @@ class _EndWorkReportContentState extends State<EndWorkReportContent> {
                         validator: _numberValidator,
                         suffix: _reloadingOutput
                             ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
                             : IconButton(
-                                tooltip: '출차 수 재계산',
-                                icon: const Icon(Icons.refresh),
-                                onPressed: _refetchOutput,
-                              ),
+                          tooltip: '출차 수 재계산',
+                          icon: const Icon(Icons.refresh),
+                          onPressed: _refetchOutput,
+                        ),
                         helper: '현재 지역의 departure_completed & 잠금요금(true) 전체 문서 기준',
                       ),
                     ),
@@ -216,21 +216,21 @@ class _EndWorkReportContentState extends State<EndWorkReportContent> {
                   child: FilledButton.icon(
                     icon: _submitting
                         ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
                         : const Icon(Icons.send),
                     label: Text(_submitting ? '제출 중…' : '제출'),
                     onPressed: _submitting
                         ? null
                         : () async {
-                            if (!(_formKey.currentState?.validate() ?? false)) {
-                              HapticFeedback.lightImpact();
-                              return;
-                            }
-                            await _handleSubmit();
-                          },
+                      if (!(_formKey.currentState?.validate() ?? false)) {
+                        HapticFeedback.lightImpact();
+                        return;
+                      }
+                      await _handleSubmit();
+                    },
                   ),
                 ),
               ],
@@ -400,7 +400,14 @@ int _extractLockedFeeAmount(Map<String, dynamic> data) {
   return 0;
 }
 
-// (아래 업로드/삭제 유틸은 기존 로직 유지 시 필요 시에만 포함하세요)
+// ✅ 랜덤 ID 생성 헬퍼 (영문소문자+숫자)
+String _randomId([int length = 10]) {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  final rnd = Random.secure();
+  return List.generate(length, (_) => chars[rnd.nextInt(chars.length)]).join();
+}
+
+// GCS 업로드
 Future<String?> uploadEndWorkReportJson({
   required Map<String, dynamic> report,
   required String division,
@@ -408,7 +415,10 @@ Future<String?> uploadEndWorkReportJson({
   required String userName,
 }) async {
   final dateStr = DateTime.now().toIso8601String().split('T').first;
-  final fileName = 'ToDoReports_$dateStr.json';
+
+  // ✅ 파일명 앞에 고유 번호(prefix) 부여 → 캐시/덮어쓰기 이슈 방지
+  final uid = _randomId(10);
+  final fileName = '${uid}_ToDoReports_$dateStr.json';
   final destinationPath = '$division/$area/reports/$fileName';
 
   report['timestamp'] = dateStr;
@@ -435,6 +445,8 @@ Future<String?> uploadEndWorkReportJson({
     Object()
       ..name = destinationPath
       ..contentDisposition = 'attachment'
+    // (선택) 캐시 억제 필요 시 주석 해제
+    // ..cacheControl = 'no-cache, no-store, max-age=0, must-revalidate'
       ..acl = [
         ObjectAccessControl()
           ..entity = 'allUsers'
@@ -445,6 +457,61 @@ Future<String?> uploadEndWorkReportJson({
   );
 
   client.close();
+  // (선택) 임시 파일 삭제: await tempFile.delete();
+
+  return 'https://storage.googleapis.com/$kBucketName/${object.name}';
+}
+
+Future<String?> uploadEndLogJson({
+  required Map<String, dynamic> report,
+  required String division,
+  required String area,
+  required String userName,
+}) async {
+  final dateStr = DateTime.now().toIso8601String().split('T').first;
+
+  // ✅ 파일명 앞에 고유 번호(prefix) 부여 → 캐시/덮어쓰기 이슈 방지
+  final uid = _randomId(10);
+  final fileName = '${uid}_ToDoLogs_$dateStr.json';
+  final destinationPath = '$division/$area/logs/$fileName';
+
+  report['timestamp'] = dateStr;
+  final jsonString = jsonEncode(report);
+
+  final tempFile = File('${Directory.systemTemp.path}/temp_upload.json');
+  await tempFile.writeAsString(jsonString, encoding: utf8);
+
+  final credentialsJson = await rootBundle.loadString(kServiceAccountPath);
+  final accountCredentials = ServiceAccountCredentials.fromJson(credentialsJson);
+  final client = await clientViaServiceAccount(
+    accountCredentials,
+    [StorageApi.devstorageFullControlScope],
+  );
+  final storage = StorageApi(client);
+
+  final media = Media(
+    tempFile.openRead(),
+    tempFile.lengthSync(),
+    contentType: 'application/json',
+  );
+
+  final object = await storage.objects.insert(
+    Object()
+      ..name = destinationPath
+      ..contentDisposition = 'attachment'
+    // (선택) 캐시 억제 필요 시 주석 해제
+    // ..cacheControl = 'no-cache, no-store, max-age=0, must-revalidate'
+      ..acl = [
+        ObjectAccessControl()
+          ..entity = 'allUsers'
+          ..role = 'READER'
+      ],
+    kBucketName,
+    uploadMedia: media,
+  );
+
+  client.close();
+  // (선택) 임시 파일 삭제: await tempFile.delete();
 
   return 'https://storage.googleapis.com/$kBucketName/${object.name}';
 }

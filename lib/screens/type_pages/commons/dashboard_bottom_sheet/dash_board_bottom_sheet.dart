@@ -11,7 +11,6 @@ import 'widgets/user_info_card.dart';
 import 'widgets/break_button_widget.dart';
 import 'widgets/work_button_widget.dart';
 import 'widgets/show_report_dialog.dart';
-import './clock_out_fetch_plate_count_widget.dart';
 
 class DashBoardBottomSheet extends StatelessWidget {
   const DashBoardBottomSheet({super.key});
@@ -48,7 +47,6 @@ class DashBoardBottomSheet extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    const ClockOutFetchPlateCountWidget(),
                     const SizedBox(height: 16),
                     UserInfoCard(),
                     const SizedBox(height: 16),

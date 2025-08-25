@@ -150,9 +150,41 @@ class PlateCountService {
       return 0;
     }
   }
+  // ---------------------------------------------------------------------------
+  // type == parking_completed && area == currentArea
+  // 시간 필터 없음. count() → get().size 폴백.
+  // ---------------------------------------------------------------------------
+  Future<int> getParkingCompletedCountAll(String area) async {
+    await FirestoreLogger().log(
+        'getParkingCompletedCountAll called: area=$area (parking_completed)');
+
+    final baseQuery = _firestore
+        .collection('plates')
+        .where('type', isEqualTo: PlateType.parkingCompleted.firestoreValue)
+        .where('area', isEqualTo: area);
+
+    try {
+      final agg = await baseQuery.count().get();
+      final int? serverCount = agg.count;
+      if (serverCount != null) {
+        await FirestoreLogger().log(
+            'getParkingCompletedCountAll success (aggregate): $serverCount');
+        return serverCount;
+      }
+    } catch (e) {
+      await FirestoreLogger().log(
+          'getParkingCompletedCountAll aggregate failed: $e → fallback to get().size');
+    }
+
+    final snap = await baseQuery.get();
+    final count = snap.size;
+    await FirestoreLogger()
+        .log('getParkingCompletedCountAll success (fallback): $count');
+    return count;
+  }
+
 
   // ---------------------------------------------------------------------------
-  // ✅ 기존: 출차 차량 수(전체)
   // type == departure_completed && isLockedFee == true && area == currentArea
   // 시간 필터 없음. count() → get().size 폴백.
   // ---------------------------------------------------------------------------
@@ -183,40 +215,6 @@ class PlateCountService {
     final count = snap.size;
     await FirestoreLogger()
         .log('getLockedDepartureCountAll success (fallback): $count');
-    return count;
-  }
-
-  // ---------------------------------------------------------------------------
-  // ✅ 신규: 주차 완료 차량 수(전체)
-  // type == parking_completed && area == currentArea
-  // 시간 필터 없음. count() → get().size 폴백.
-  // ---------------------------------------------------------------------------
-  Future<int> getParkingCompletedCountAll(String area) async {
-    await FirestoreLogger().log(
-        'getParkingCompletedCountAll called: area=$area (parking_completed)');
-
-    final baseQuery = _firestore
-        .collection('plates')
-        .where('type', isEqualTo: PlateType.parkingCompleted.firestoreValue)
-        .where('area', isEqualTo: area);
-
-    try {
-      final agg = await baseQuery.count().get();
-      final int? serverCount = agg.count;
-      if (serverCount != null) {
-        await FirestoreLogger().log(
-            'getParkingCompletedCountAll success (aggregate): $serverCount');
-        return serverCount;
-      }
-    } catch (e) {
-      await FirestoreLogger().log(
-          'getParkingCompletedCountAll aggregate failed: $e → fallback to get().size');
-    }
-
-    final snap = await baseQuery.get();
-    final count = snap.size;
-    await FirestoreLogger()
-        .log('getParkingCompletedCountAll success (fallback): $count');
     return count;
   }
 }
