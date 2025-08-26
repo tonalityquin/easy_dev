@@ -2,9 +2,39 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
+
+// GCS 목록 조회용
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:googleapis/storage/v1.dart' as gcs;
+import 'package:googleapis_auth/auth_io.dart';
+
 import '../../../states/area/area_state.dart';
 import '../../../states/user/user_state.dart';
 import 'statistics_chart_page.dart';
+
+/// ===== GCS 설정 (업로드와 동일) =====
+const String _kBucketName = 'easydev-image';
+const String _kServiceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
+
+/// 간단 GCS 헬퍼: prefix 하위 객체 목록 조회
+class _GcsHelper {
+  Future<List<gcs.Object>> listObjects(String prefix) async {
+    final credentialsJson = await rootBundle.loadString(_kServiceAccountPath);
+    final accountCredentials = ServiceAccountCredentials.fromJson(credentialsJson);
+    final client = await clientViaServiceAccount(
+      accountCredentials,
+      [gcs.StorageApi.devstorageFullControlScope],
+    );
+
+    try {
+      final storage = gcs.StorageApi(client);
+      final res = await storage.objects.list(_kBucketName, prefix: prefix);
+      return res.items ?? const <gcs.Object>[];
+    } finally {
+      client.close();
+    }
+  }
+}
 
 class Statistics extends StatefulWidget {
   const Statistics({super.key});
@@ -161,10 +191,22 @@ class _StatisticsState extends State<Statistics> {
   }
 
   Widget _buildReportCard(Map<String, dynamic> report) {
-    final vehicleCount = report['vehicleCount'] as Map<String, dynamic>?;
-    final inCount = vehicleCount?['vehicleInput']?.toString() ?? '정보 없음';
-    final outCount = vehicleCount?['vehicleOutput']?.toString() ?? '정보 없음';
-    final lockedFee = report['totalLockedFee']?.toString() ?? '정보 없음';
+    // 업로드 평면 스키마 + 하위호환(중첩 vehicleCount) 모두 지원
+    int? _asInt(dynamic v) {
+      if (v is num) return v.toInt();
+      if (v is String) return int.tryParse(v);
+      return null;
+    }
+
+    final vc = (report['vehicleCount'] is Map) ? (report['vehicleCount'] as Map).cast<String, dynamic>() : null;
+    final inCount = _asInt(report['vehicleInput'] ?? vc?['vehicleInput']);
+    final outCount = _asInt(report['vehicleOutput'] ?? vc?['vehicleOutput']);
+    final lockedFee = _asInt(report['totalLockedFee'] ?? vc?['totalLockedFee']);
+
+    final inText = inCount?.toString() ?? '정보 없음';
+    final outText = outCount?.toString() ?? '정보 없음';
+    final feeText = lockedFee?.toString() ?? '정보 없음';
+
     final dateStr = _selectedDate?.toIso8601String().split('T').first ?? '날짜 없음';
 
     return Card(
@@ -183,7 +225,7 @@ class _StatisticsState extends State<Statistics> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text('🚗 입차 차량 수', style: TextStyle(fontSize: 15)),
-                Text(inCount, style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text(inText, style: const TextStyle(fontWeight: FontWeight.bold)),
               ],
             ),
             const SizedBox(height: 8),
@@ -191,7 +233,7 @@ class _StatisticsState extends State<Statistics> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text('🚙 출차 차량 수', style: TextStyle(fontSize: 15)),
-                Text(outCount, style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text(outText, style: const TextStyle(fontWeight: FontWeight.bold)),
               ],
             ),
             const SizedBox(height: 8),
@@ -199,7 +241,7 @@ class _StatisticsState extends State<Statistics> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text('🔒 정산 금액', style: TextStyle(fontSize: 15)),
-                Text('₩$lockedFee', style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text('₩$feeText', style: const TextStyle(fontWeight: FontWeight.bold)),
               ],
             ),
             const SizedBox(height: 16),
@@ -211,12 +253,19 @@ class _StatisticsState extends State<Statistics> {
                 onPressed: () {
                   if (_selectedDate != null) {
                     final dateStr = _selectedDate!.toIso8601String().split('T').first;
+                    final already = _savedReports.any((r) => r['date'] == dateStr);
+                    if (already) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("ℹ️ 이미 보관된 날짜입니다.")),
+                      );
+                      return;
+                    }
                     setState(() {
                       _savedReports.add({
                         'date': dateStr,
-                        '입차': int.tryParse(inCount) ?? 0,
-                        '출차': int.tryParse(outCount) ?? 0,
-                        '정산금': int.tryParse(lockedFee) ?? 0,
+                        '입차': inCount ?? 0,
+                        '출차': outCount ?? 0,
+                        '정산금': lockedFee ?? 0,
                       });
                     });
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -249,41 +298,60 @@ class _StatisticsState extends State<Statistics> {
 
       await _fetchReportData(picked);
 
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
+  /// 업로드 포맷(랜덤 prefix + `_ToDoReports_YYYY-MM-DD.json`)에 맞춰
+  /// 해당 날짜 파일명을 GCS 목록에서 찾아 공개 URL로 GET
   Future<void> _fetchReportData(DateTime date) async {
     final dateStr = date.toIso8601String().split('T').first;
     final division = context.read<AreaState>().currentDivision;
     final area = _selectedArea ?? context.read<AreaState>().currentArea;
 
-    final url = 'https://storage.googleapis.com/easydev-image/$division/$area/reports/ToDoReports_$dateStr.json';
-
+    final prefix = '$division/$area/reports/';
     try {
-      final response = await http.get(Uri.parse(url));
+      // 1) GCS 리스트에서 날짜 매칭 파일 찾기
+      final helper = _GcsHelper();
+      final items = await helper.listObjects(prefix);
 
-      debugPrint('🌐 요청 URL: $url');
-      debugPrint('📦 응답 상태: ${response.statusCode}');
-      debugPrint('📅 응답 본문: ${response.body}');
+      // `_ToDoReports_YYYY-MM-DD.json`으로 끝나는 항목 필터
+      final suffix = '_ToDoReports_$dateStr.json';
+      final candidates = items.where((o) => (o.name ?? '').endsWith(suffix)).toList();
+
+      if (candidates.isEmpty) {
+        setState(() => _reportData = null);
+        return;
+      }
+
+      // 최신(updated) 기준으로 정렬 후 마지막 선택
+      candidates.sort((a, b) {
+        final au = a.updated ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bu = b.updated ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return au.compareTo(bu);
+      });
+      final target = candidates.last.name!;
+
+      // 2) 공개 URL로 JSON 다운로드 (캐시 버스터 부착)
+      final bust = DateTime.now().millisecondsSinceEpoch;
+      final url = 'https://storage.googleapis.com/$_kBucketName/$target?ts=$bust';
+
+      final response = await http.get(Uri.parse(url));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         setState(() {
-          _reportData = data;
+          _reportData = (data is Map<String, dynamic>) ? data : <String, dynamic>{};
         });
       } else {
-        setState(() {
-          _reportData = null;
-        });
+        setState(() => _reportData = null);
       }
     } catch (e) {
-      debugPrint("❌ 오류: $e");
-      setState(() {
-        _reportData = null;
-      });
+      setState(() => _reportData = null);
     }
   }
 
@@ -293,9 +361,9 @@ class _StatisticsState extends State<Statistics> {
       final date = DateTime.tryParse(report['date']);
       if (date != null) {
         parsedData[date] = {
-          'vehicleInput': report['입차'],
-          'vehicleOutput': report['출차'],
-          'totalLockedFee': report['정산금'],
+          'vehicleInput': (report['입차'] as int),
+          'vehicleOutput': (report['출차'] as int),
+          'totalLockedFee': (report['정산금'] as int),
         };
       }
     }

@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:ui' show FontFeature; // 숫자 고정폭(탭형)
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
