@@ -17,8 +17,8 @@ const String kServiceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json'
 
 /// === 내부 레이아웃 상수 ===
 const double _kRowHeight = 56.0;
-const double _kTimeColWidth = 84.0;  // HH:mm:ss 고정폭
-const double _kChevronWidth = 28.0;  // 펼침 아이콘
+const double _kTimeColWidth = 84.0; // HH:mm:ss 고정폭
+const double _kChevronWidth = 28.0; // 펼침 아이콘
 
 /// === GCS 헬퍼 ===
 class _GcsHelper {
@@ -50,6 +50,81 @@ class _GcsHelper {
     } finally {
       httpClient.close(force: true);
     }
+  }
+}
+
+/// === 상단 컨트롤: 안 A) 날짜 범위 한 개 버튼 + 불러오기 ===
+/// - showDateRangePicker로 시작/종료를 한 번에 선택
+/// - 한 줄 고정(높이 44)
+class RangeControls extends StatelessWidget {
+  const RangeControls({
+    super.key,
+    required this.start,
+    required this.end,
+    required this.loading,
+    required this.onRangePicked,
+    required this.onLoad,
+  });
+
+  final DateTime start;
+  final DateTime end;
+  final bool loading;
+  final ValueChanged<DateTimeRange> onRangePicked;
+  final VoidCallback onLoad;
+
+  String _two(int n) => n.toString().padLeft(2, '0');
+
+  String _ymd(DateTime d) => '${d.year}-${_two(d.month)}-${_two(d.day)}';
+
+  Future<void> _pickRange(BuildContext context) async {
+    final initial = DateTimeRange(start: start, end: end);
+    final picked = await showDateRangePicker(
+      context: context,
+      initialDateRange: initial,
+      firstDate: DateTime(2023, 1, 1),
+      lastDate: DateTime.now().add(const Duration(days: 1)),
+      helpText: '날짜 범위 선택',
+    );
+    if (picked != null) onRangePicked(picked);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 44, // ⬅️ 고정 높이로 버튼 늘어짐 방지
+      child: Row(
+        children: [
+          // 날짜 범위 버튼
+          Expanded(
+            flex: 5,
+            child: OutlinedButton.icon(
+              onPressed: () => _pickRange(context),
+              icon: const Icon(Icons.calendar_month, size: 18),
+              label: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text('${_ymd(start)}  ~  ${_ymd(end)}', maxLines: 1),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // 불러오기 버튼
+          Expanded(
+            flex: 3,
+            child: FilledButton.icon(
+              onPressed: loading ? null : onLoad,
+              icon: loading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.download),
+              label: const FittedBox(child: Text('불러오기', maxLines: 1)),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -99,11 +174,12 @@ class _MergedLogSectionState extends State<MergedLogSection> {
   }
 
   // ===== 유틸 =====
-  DateTime _asDateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
   String _two(int n) => n.toString().padLeft(2, '0');
+
   String _yyyymmdd(DateTime d) => '${d.year}-${_two(d.month)}-${_two(d.day)}';
-  String _mmdd(DateTime d) => '${_two(d.month)}-${_two(d.day)}';
+
   bool _validTail(String s) => RegExp(r'^\d{4}$').hasMatch(s);
+
   String _digitsOnly(String s) => s.replaceAll(RegExp(r'\D'), '');
 
   DateTime? _parseTs(dynamic ts) {
@@ -156,27 +232,6 @@ class _MergedLogSectionState extends State<MergedLogSection> {
     return Colors.blueGrey;
   }
 
-  // ===== 날짜 선택 =====
-  Future<void> _pickStart() async {
-    final d = await showDatePicker(
-      context: context,
-      initialDate: _asDateOnly(_start),
-      firstDate: DateTime(2023, 1, 1),
-      lastDate: DateTime.now().add(const Duration(days: 1)),
-    );
-    if (d != null && !d.isAfter(_end)) setState(() => _start = _asDateOnly(d));
-  }
-
-  Future<void> _pickEnd() async {
-    final d = await showDatePicker(
-      context: context,
-      initialDate: _asDateOnly(_end),
-      firstDate: DateTime(2023, 1, 1),
-      lastDate: DateTime.now().add(const Duration(days: 1)),
-    );
-    if (d != null && !d.isBefore(_start)) setState(() => _end = _asDateOnly(d));
-  }
-
   // ===== 사진 다이얼로그 열기 =====
   void _openPlateImageDialog(String plateNumber) {
     showGeneralDialog(
@@ -226,7 +281,7 @@ class _MergedLogSectionState extends State<MergedLogSection> {
           final plate = (map['plateNumber'] ?? docId.split('_').first).toString();
 
           final logs =
-          ((map['logs'] as List?) ?? const []).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+              ((map['logs'] as List?) ?? const []).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
 
           // 로그는 오름차순(과거->최근)으로
           logs.sort((a, b) {
@@ -242,8 +297,7 @@ class _MergedLogSectionState extends State<MergedLogSection> {
         docs.sort((a, b) {
           final at = a.logs.isNotEmpty ? _parseTs(a.logs.last['timestamp']) : null;
           final bt = b.logs.isNotEmpty ? _parseTs(b.logs.last['timestamp']) : null;
-          return (at ?? DateTime.fromMillisecondsSinceEpoch(0))
-              .compareTo(bt ?? DateTime.fromMillisecondsSinceEpoch(0));
+          return (at ?? DateTime.fromMillisecondsSinceEpoch(0)).compareTo(bt ?? DateTime.fromMillisecondsSinceEpoch(0));
         });
 
         _days.add(_DayBundle(dateStr: dateStr, docs: docs));
@@ -300,65 +354,38 @@ class _MergedLogSectionState extends State<MergedLogSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 상단 컨트롤: 한 줄 고정
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final narrow = constraints.maxWidth < 420;
-            final startLabel = narrow ? '시작 ${_mmdd(_start)}' : '시작: ${_yyyymmdd(_start)}';
-            final endLabel   = narrow ? '종료 ${_mmdd(_end)}'   : '종료: ${_yyyymmdd(_end)}';
-
-            return SizedBox(
-              height: 44,
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: OutlinedButton(
-                      onPressed: _pickStart,
-                      child: FittedBox(child: Text(startLabel, maxLines: 1)),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    flex: 3,
-                    child: OutlinedButton(
-                      onPressed: _pickEnd,
-                      child: FittedBox(child: Text(endLabel, maxLines: 1)),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    flex: 2,
-                    child: FilledButton.icon(
-                      onPressed: _loading ? null : _load,
-                      icon: _loading
-                          ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                          : const Icon(Icons.download),
-                      label: const FittedBox(child: Text('불러오기', maxLines: 1)),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  SizedBox(
-                    width: 44,
-                    child: IconButton(
-                      tooltip: _currentPage == 0 ? '검색 화면으로' : '목록 화면으로',
-                      onPressed: () {
-                        final next = (_currentPage == 0) ? 1 : 0;
-                        _pageController.animateToPage(next,
-                            duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
-                      },
-                      icon: Icon(_currentPage == 0 ? Icons.search : Icons.list),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  ),
-                ],
+        // 상단 컨트롤: 한 줄 고정(안 A 적용)
+        Row(
+          children: [
+            Expanded(
+              child: RangeControls(
+                start: _start,
+                end: _end,
+                loading: _loading,
+                onRangePicked: (range) {
+                  setState(() {
+                    _start = DateTime(range.start.year, range.start.month, range.start.day);
+                    _end = DateTime(range.end.year, range.end.month, range.end.day);
+                  });
+                },
+                onLoad: _load,
               ),
-            );
-          },
+            ),
+            const SizedBox(width: 6),
+            SizedBox(
+              width: 44,
+              child: IconButton(
+                tooltip: _currentPage == 0 ? '검색 화면으로' : '목록 화면으로',
+                onPressed: () {
+                  final next = (_currentPage == 0) ? 1 : 0;
+                  _pageController.animateToPage(next,
+                      duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+                },
+                icon: Icon(_currentPage == 0 ? Icons.search : Icons.list),
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+          ],
         ),
 
         if (_error != null) ...[
@@ -371,148 +398,144 @@ class _MergedLogSectionState extends State<MergedLogSection> {
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : !hasData
-              ? const Center(child: Text('기간을 설정하고 불러오기를 눌러주세요.'))
-              : PageView(
-            controller: _pageController,
-            onPageChanged: (i) => setState(() => _currentPage = i),
-            children: [
-              // 페이지 0: 날짜/문서 목록 (시간 + 번호판만)
-              Scrollbar(
-                child: ListView.builder(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  itemCount: _days.length,
-                  itemBuilder: (_, i) {
-                    final day = _days[i];
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  ? const Center(child: Text('기간을 설정하고 불러오기를 눌러주세요.'))
+                  : PageView(
+                      controller: _pageController,
+                      onPageChanged: (i) => setState(() => _currentPage = i),
                       children: [
-                        // 날짜 헤더 + 컬럼 헤더
-                        Container(
-                          color: Colors.grey.shade200,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(day.dateStr,
-                                  style: const TextStyle(fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 8),
-                              // 컬럼 라벨 (시간 | 번호판)
-                              SizedBox(
-                                height: 24,
-                                child: Row(
-                                  children: const [
-                                    SizedBox(
-                                      width: _kTimeColWidth,
-                                      child: Text(
-                                        '시간',
-                                        style: TextStyle(fontSize: 12, color: Colors.black54),
-                                      ),
+                        // 페이지 0: 날짜/문서 목록 (시간 + 번호판만)
+                        Scrollbar(
+                          child: ListView.builder(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            itemCount: _days.length,
+                            itemBuilder: (_, i) {
+                              final day = _days[i];
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // 날짜 헤더 + 컬럼 헤더
+                                  Container(
+                                    color: Colors.grey.shade200,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(day.dateStr, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                        const SizedBox(height: 8),
+                                        // 컬럼 라벨 (시간 | 번호판)
+                                        SizedBox(
+                                          height: 24,
+                                          child: Row(
+                                            children: const [
+                                              SizedBox(
+                                                width: _kTimeColWidth,
+                                                child: Text(
+                                                  '시간',
+                                                  style: TextStyle(fontSize: 12, color: Colors.black54),
+                                                ),
+                                              ),
+                                              SizedBox(width: 8),
+                                              Expanded(
+                                                child: Text(
+                                                  '번호판',
+                                                  style: TextStyle(fontSize: 12, color: Colors.black54),
+                                                  textAlign: TextAlign.center,
+                                                ),
+                                              ),
+                                              SizedBox(width: _kChevronWidth),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        '번호판',
-                                        style: TextStyle(fontSize: 12, color: Colors.black54),
-                                        textAlign: TextAlign.center,
-                                      ),
-                                    ),
-                                    SizedBox(width: _kChevronWidth),
-                                  ],
-                                ),
-                              ),
-                            ],
+                                  ),
+
+                                  // 데이터 행들 (시간 + 번호판)
+                                  ...day.docs.map((doc) {
+                                    final expanded = _expandedDocIds.contains(doc.docId);
+                                    final lastTs = doc.logs.isNotEmpty ? _parseTs(doc.logs.last['timestamp']) : null;
+
+                                    return Column(
+                                      children: [
+                                        InkWell(
+                                          onTap: () {
+                                            setState(() {
+                                              if (expanded) {
+                                                _expandedDocIds.remove(doc.docId);
+                                              } else {
+                                                _expandedDocIds.add(doc.docId);
+                                              }
+                                            });
+                                          },
+                                          child: Container(
+                                            height: _kRowHeight,
+                                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                                            decoration: const BoxDecoration(
+                                              border: Border(
+                                                bottom: BorderSide(color: Color(0xFFE0E0E0)),
+                                              ),
+                                            ),
+                                            child: Row(
+                                              crossAxisAlignment: CrossAxisAlignment.center,
+                                              children: [
+                                                // 시간(고정폭)
+                                                SizedBox(
+                                                  width: _kTimeColWidth,
+                                                  child: Text(
+                                                    _fmtTime(lastTs),
+                                                    maxLines: 1,
+                                                    softWrap: false,
+                                                    overflow: TextOverflow.clip,
+                                                    textAlign: TextAlign.center,
+                                                    style: mono.copyWith(fontSize: 15),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                // 번호판
+                                                Expanded(
+                                                  child: Text(
+                                                    doc.plateNumber.isNotEmpty ? doc.plateNumber : doc.docId,
+                                                    maxLines: 1,
+                                                    softWrap: false,
+                                                    overflow: TextOverflow.ellipsis,
+                                                    textAlign: TextAlign.center,
+                                                    style: const TextStyle(fontSize: 16),
+                                                  ),
+                                                ),
+                                                // 펼침 아이콘(상태 반영)
+                                                SizedBox(
+                                                  width: _kChevronWidth,
+                                                  child: Icon(
+                                                    expanded ? Icons.expand_less : Icons.expand_more,
+                                                    size: 20,
+                                                    color: Colors.black54,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+
+                                        // 펼침부: 로그 상세(중첩 스크롤 방지 위해 비스크롤)
+                                        if (expanded)
+                                          _buildLogsDetail(
+                                            doc.logs,
+                                            plateNumber: doc.plateNumber,
+                                            scrollable: false,
+                                          ),
+                                      ],
+                                    );
+                                  }),
+                                ],
+                              );
+                            },
                           ),
                         ),
 
-                        // 데이터 행들 (시간 + 번호판)
-                        ...day.docs.map((doc) {
-                          final expanded = _expandedDocIds.contains(doc.docId);
-                          final lastTs =
-                          doc.logs.isNotEmpty ? _parseTs(doc.logs.last['timestamp']) : null;
-
-                          return Column(
-                            children: [
-                              InkWell(
-                                onTap: () {
-                                  setState(() {
-                                    if (expanded) {
-                                      _expandedDocIds.remove(doc.docId);
-                                    } else {
-                                      _expandedDocIds.add(doc.docId);
-                                    }
-                                  });
-                                },
-                                child: Container(
-                                  height: _kRowHeight,
-                                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                                  decoration: const BoxDecoration(
-                                    border: Border(
-                                      bottom: BorderSide(color: Color(0xFFE0E0E0)),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.center,
-                                    children: [
-                                      // 시간(고정폭)
-                                      SizedBox(
-                                        width: _kTimeColWidth,
-                                        child: Text(
-                                          _fmtTime(lastTs),
-                                          maxLines: 1,
-                                          softWrap: false,
-                                          overflow: TextOverflow.clip,
-                                          textAlign: TextAlign.center,
-                                          style: mono.copyWith(fontSize: 15),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      // 번호판
-                                      Expanded(
-                                        child: Text(
-                                          doc.plateNumber.isNotEmpty
-                                              ? doc.plateNumber
-                                              : doc.docId,
-                                          maxLines: 1,
-                                          softWrap: false,
-                                          overflow: TextOverflow.ellipsis,
-                                          textAlign: TextAlign.center,
-                                          style: const TextStyle(fontSize: 16),
-                                        ),
-                                      ),
-                                      // 펼침 아이콘(상태 반영)
-                                      SizedBox(
-                                        width: _kChevronWidth,
-                                        child: Icon(
-                                          expanded ? Icons.expand_less : Icons.expand_more,
-                                          size: 20,
-                                          color: Colors.black54,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-
-                              // 펼침부: 로그 상세(중첩 스크롤 방지 위해 비스크롤)
-                              if (expanded)
-                                _buildLogsDetail(
-                                  doc.logs,
-                                  plateNumber: doc.plateNumber,
-                                  scrollable: false,
-                                ),
-                            ],
-                          );
-                        }),
+                        // 페이지 1: 검색
+                        _buildSearchPage(),
                       ],
-                    );
-                  },
-                ),
-              ),
-
-              // 페이지 1: 검색
-              _buildSearchPage(),
-            ],
-          ),
+                    ),
         ),
 
         // 페이지 인디케이터
@@ -568,87 +591,87 @@ class _MergedLogSectionState extends State<MergedLogSection> {
           child: _hits.isEmpty
               ? const Center(child: Text('검색 결과가 없습니다.'))
               : (_selectedHit == null
-          // 결과 리스트 화면
-              ? ListView.separated(
-            itemCount: _hits.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (_, i) {
-              final h = _hits[i];
-              final lastTs = h.doc.logs.isNotEmpty ? _parseTs(h.doc.logs.last['timestamp']) : null;
-              return ListTile(
-                dense: true,
-                title: Text(h.doc.docId),
-                subtitle: Text('${h.dateStr} • ${h.doc.plateNumber}'),
-                trailing: Text(_fmtTime(lastTs), style: const TextStyle(fontSize: 12)),
-                onTap: () => setState(() => _selectedHit = h),
-              );
-            },
-          )
-          // 선택된 문서 상세 화면(전체 높이, 스크롤 가능, 해제 + 사진 버튼)
-              : Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                color: Colors.grey.shade100,
-                child: Row(
-                  children: [
-                    IconButton(
-                      tooltip: '선택 해제',
-                      onPressed: () => setState(() => _selectedHit = null),
-                      icon: const Icon(Icons.close),
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _selectedHit!.doc.docId,
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${_selectedHit!.dateStr} • ${_selectedHit!.doc.plateNumber}',
-                            style: const TextStyle(fontSize: 12, color: Colors.black54),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    // ⬇️ 사진 버튼 추가: 선택된 번호판의 사진 보기
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        final plate = _selectedHit!.doc.plateNumber.isNotEmpty
-                            ? _selectedHit!.doc.plateNumber
-                            : _selectedHit!.doc.docId.split('_').first;
-                        _openPlateImageDialog(plate);
+                  // 결과 리스트 화면
+                  ? ListView.separated(
+                      itemCount: _hits.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (_, i) {
+                        final h = _hits[i];
+                        final lastTs = h.doc.logs.isNotEmpty ? _parseTs(h.doc.logs.last['timestamp']) : null;
+                        return ListTile(
+                          dense: true,
+                          title: Text(h.doc.docId),
+                          subtitle: Text('${h.dateStr} • ${h.doc.plateNumber}'),
+                          trailing: Text(_fmtTime(lastTs), style: const TextStyle(fontSize: 12)),
+                          onTap: () => setState(() => _selectedHit = h),
+                        );
                       },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.grey.shade100,
-                        foregroundColor: Colors.black87,
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      ),
-                      icon: const Icon(Icons.photo, size: 18),
-                      label: const Text('사진', style: TextStyle(fontSize: 13)),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 6),
-              // 전체 영역을 차지하면서 세로 스크롤 가능
-              Expanded(
-                child: _buildLogsDetail(
-                  _selectedHit!.doc.logs,
-                  plateNumber: _selectedHit!.doc.plateNumber,
-                  scrollable: true, // ⬅️ 스크롤 활성화
-                ),
-              ),
-            ],
-          )),
+                    )
+                  // 선택된 문서 상세 화면(전체 높이, 스크롤 가능, 해제 + 사진 버튼)
+                  : Column(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          color: Colors.grey.shade100,
+                          child: Row(
+                            children: [
+                              IconButton(
+                                tooltip: '선택 해제',
+                                onPressed: () => setState(() => _selectedHit = null),
+                                icon: const Icon(Icons.close),
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _selectedHit!.doc.docId,
+                                      style: const TextStyle(fontWeight: FontWeight.w700),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '${_selectedHit!.dateStr} • ${_selectedHit!.doc.plateNumber}',
+                                      style: const TextStyle(fontSize: 12, color: Colors.black54),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              // ⬇️ 사진 버튼: 선택된 번호판의 사진 보기
+                              ElevatedButton.icon(
+                                onPressed: () {
+                                  final plate = _selectedHit!.doc.plateNumber.isNotEmpty
+                                      ? _selectedHit!.doc.plateNumber
+                                      : _selectedHit!.doc.docId.split('_').first;
+                                  _openPlateImageDialog(plate);
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.grey.shade100,
+                                  foregroundColor: Colors.black87,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                ),
+                                icon: const Icon(Icons.photo, size: 18),
+                                label: const Text('사진', style: TextStyle(fontSize: 13)),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        // 전체 영역을 차지하면서 세로 스크롤 가능
+                        Expanded(
+                          child: _buildLogsDetail(
+                            _selectedHit!.doc.logs,
+                            plateNumber: _selectedHit!.doc.plateNumber,
+                            scrollable: true, // ⬅️ 스크롤 활성화
+                          ),
+                        ),
+                      ],
+                    )),
         ),
       ],
     );
@@ -658,10 +681,10 @@ class _MergedLogSectionState extends State<MergedLogSection> {
   ///  - 일반 목록의 펼침부에서는 scrollable=false (중첩 스크롤 방지)
   ///  - 검색 상세 화면에서는 scrollable=true (세로 스크롤 허용)
   Widget _buildLogsDetail(
-      List<Map<String, dynamic>> logs, {
-        required String plateNumber,
-        bool scrollable = false,
-      }) {
+    List<Map<String, dynamic>> logs, {
+    required String plateNumber,
+    bool scrollable = false,
+  }) {
     if (logs.isEmpty) {
       return const Padding(
         padding: EdgeInsets.all(12),
@@ -686,10 +709,8 @@ class _MergedLogSectionState extends State<MergedLogSection> {
 
         final feeNum = (e['lockedFee'] ?? e['lockedFeeAmount']);
         final fee = (feeNum is num) ? _fmtWon(feeNum) : null;
-        final pay =
-        (e['paymentMethod']?.toString().trim().isNotEmpty ?? false) ? e['paymentMethod'].toString() : null;
-        final reason =
-        (e['reason']?.toString().trim().isNotEmpty ?? false) ? e['reason'].toString() : null;
+        final pay = (e['paymentMethod']?.toString().trim().isNotEmpty ?? false) ? e['paymentMethod'].toString() : null;
+        final reason = (e['reason']?.toString().trim().isNotEmpty ?? false) ? e['reason'].toString() : null;
 
         final color = _actionColor(action);
 
@@ -729,6 +750,7 @@ class _MergedLogSectionState extends State<MergedLogSection> {
 class _DayBundle {
   final String dateStr;
   final List<_DocBundle> docs;
+
   _DayBundle({required this.dateStr, required this.docs});
 }
 
@@ -742,11 +764,13 @@ class _DocBundle {
 class _SearchHit {
   final String dateStr;
   final _DocBundle doc;
+
   _SearchHit({required this.dateStr, required this.doc});
 }
 
 class _Dot extends StatelessWidget {
   final bool active;
+
   const _Dot({required this.active});
 
   @override
