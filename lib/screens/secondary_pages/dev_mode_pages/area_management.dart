@@ -72,7 +72,7 @@ class _AreaManagementState extends State<AreaManagement> with SingleTickerProvid
       await FirebaseFirestore.instance.collection('divisions').doc(name).delete();
 
       final areaSnapshot =
-          await FirebaseFirestore.instance.collection('areas').where('division', isEqualTo: name).get();
+      await FirebaseFirestore.instance.collection('areas').where('division', isEqualTo: name).get();
       for (var doc in areaSnapshot.docs) {
         await doc.reference.delete();
       }

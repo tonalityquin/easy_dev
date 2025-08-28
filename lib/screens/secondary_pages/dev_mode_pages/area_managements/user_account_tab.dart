@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -22,8 +23,23 @@ class UserAccountsTab extends StatefulWidget {
 class _UserAccountsTabState extends State<UserAccountsTab> {
   final List<String> roles = ['dev', 'officer', 'fieldLeader', 'fielder'];
   final Map<String, Map<String, dynamic>> _editedUsers = {};
+  final Set<String> _savingIds = {}; // 저장 이중 클릭 방지
+
+  // 깊은 복사 유틸(리스트 참조 공유 방지)
+  Map<String, dynamic> _copyUser(Map<String, dynamic> d) => {
+    'name': d['name'],
+    'phone': d['phone'],
+    'email': d['email'],
+    'password': d['password'],
+    'divisions': List<String>.from(d['divisions'] ?? const []),
+    'areas': List<String>.from(d['areas'] ?? const []),
+    'role': d['role'] ?? 'fielder',
+    'isWorking': d['isWorking'] ?? false,
+    'createdAt': d['createdAt'],
+  };
 
   Future<List<String>> fetchDivisions() async {
+    // 기존 로직 유지: areas에서 division을 파생 (정렬 추가)
     final snapshot = await FirebaseFirestore.instance
         .collection('areas')
         .get(const GetOptions(source: Source.server));
@@ -31,45 +47,76 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
     return snapshot.docs
         .map((doc) => doc['division'] as String)
         .toSet()
-        .toList();
+        .toList()
+      ..sort();
   }
 
+  // whereIn(<=10 제한) 대비: 10개 단위 청크 + 정렬
   Future<List<String>> getAreasByDivisions(List<String> divisions) async {
     if (divisions.isEmpty) return [];
+    final fs = FirebaseFirestore.instance;
+    final set = <String>{};
 
-    final areaQuery = await FirebaseFirestore.instance
-        .collection('areas')
-        .where('division', whereIn: divisions)
-        .get(const GetOptions(source: Source.server));
-
-    return areaQuery.docs
-        .map((doc) => doc['name'] as String)
-        .toSet()
-        .toList();
+    for (var i = 0; i < divisions.length; i += 10) {
+      final end = math.min(i + 10, divisions.length);
+      final chunk = divisions.sublist(i, end);
+      final qs = await fs
+          .collection('areas')
+          .where('division', whereIn: chunk)
+          .get(const GetOptions(source: Source.server));
+      for (final d in qs.docs) {
+        set.add(d['name'] as String);
+      }
+    }
+    return set.toList()..sort();
   }
 
-  Future<void> _saveChanges(String oldId, Map<String, dynamic> oldData, Map<String, dynamic> newData) async {
-    final phone = oldData['phone'];
-    final newArea = (newData['areas'] as List).isNotEmpty ? newData['areas'][0] : 'default';
-    final newId = '$phone-$newArea';
+  // 비즈니스 로직 유지: newId = '${oldData.phone}-${newData.areas[0] or default}'
+  Future<void> _saveChanges(
+      String oldId, Map<String, dynamic> oldData, Map<String, dynamic> newData) async {
+    final phone = (oldData['phone'] as String); // 기존 로직 유지(여기서 phone 사용)
+    final List areas = List.from(newData['areas'] ?? const []);
+    final String newArea = areas.isNotEmpty ? areas.first as String : 'default';
+    final String newId = '$phone-$newArea';
 
+    final fs = FirebaseFirestore.instance;
     try {
-      if (newId != oldId) {
-        await FirebaseFirestore.instance.collection('user_accounts').doc(newId).set(newData);
-        await FirebaseFirestore.instance.collection('user_accounts').doc(oldId).delete();
-      } else {
-        await FirebaseFirestore.instance.collection('user_accounts').doc(oldId).update(newData);
-      }
+      await fs.runTransaction((tx) async {
+        final oldRef = fs.collection('user_accounts').doc(oldId);
+        final newRef = fs.collection('user_accounts').doc(newId);
 
+        final oldSnap = await tx.get(oldRef);
+        if (!oldSnap.exists) {
+          throw Exception('원본 계정이 존재하지 않습니다.');
+        }
+
+        final payload = Map<String, dynamic>.from(newData)
+          ..['createdAt'] =
+              oldSnap.data()?['createdAt'] ?? FieldValue.serverTimestamp()
+          ..['updatedAt'] = FieldValue.serverTimestamp();
+
+        if (newId == oldId) {
+          tx.update(oldRef, payload);
+        } else {
+          final newSnap = await tx.get(newRef);
+          if (newSnap.exists) {
+            throw Exception('동일 ID가 이미 존재합니다: $newId');
+          }
+          tx.set(newRef, payload);
+          tx.delete(oldRef);
+        }
+      });
+
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('✅ ${newData['name']} 정보 저장 완료')),
       );
-
       setState(() {
         _editedUsers.remove(oldId);
       });
     } catch (e) {
       debugPrint('❌ 계정 저장 실패: $e');
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('❌ 저장 실패: $e')),
       );
@@ -102,17 +149,10 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
                 items: divisionList
                     .map((div) => DropdownMenuItem(value: div, child: Text(div)))
                     .toList(),
-                onChanged: (value) async {
-                  widget.onDivisionChanged(value);
-                  if (value != null) {
-                    final areas = await getAreasByDivisions([value]);
-                    if (areas.isNotEmpty) {
-                      widget.onAreaChanged(areas.first);
-                    } else {
-                      widget.onAreaChanged(null);
-                    }
-                  }
-                },
+              onChanged: (value) async {
+                widget.onDivisionChanged(value);
+                widget.onAreaChanged(null);  // 자동 첫 선택 제거 → 중복 쿼리 줄임
+              },
                 decoration: const InputDecoration(labelText: '회사 선택'),
               ),
               const SizedBox(height: 12),
@@ -134,12 +174,16 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
                   final areas = snapshot.data!.docs
                       .map((e) => e['name'] as String)
                       .toSet()
-                      .toList();
+                      .toList()
+                    ..sort();
 
                   return DropdownButtonFormField<String>(
-                    value: areas.contains(widget.selectedArea) ? widget.selectedArea : null,
+                    value: areas.contains(widget.selectedArea)
+                        ? widget.selectedArea
+                        : null,
                     items: areas
-                        .map((area) => DropdownMenuItem(value: area, child: Text(area)))
+                        .map((area) =>
+                        DropdownMenuItem(value: area, child: Text(area)))
                         .toList(),
                     onChanged: widget.onAreaChanged,
                     decoration: const InputDecoration(labelText: '지역 선택'),
@@ -165,43 +209,47 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
 
                     final docs = snapshot.data!.docs;
 
-                    return ListView(
-                      children: docs.map((doc) {
+                    return ListView.builder(
+                      itemCount: docs.length,
+                      itemBuilder: (context, index) {
+                        final doc = docs[index];
                         final data = doc.data() as Map<String, dynamic>;
                         final id = doc.id;
 
-                        final updated = _editedUsers[id] ?? {
-                          'name': data['name'],
-                          'phone': data['phone'],
-                          'email': data['email'],
-                          'password': data['password'],
-                          'divisions': List<String>.from(data['divisions'] ?? []),
-                          'areas': List<String>.from(data['areas'] ?? []),
-                          'role': data['role'] ?? 'fielder',
-                          'isWorking': data['isWorking'] ?? false,
-                          'createdAt': data['createdAt'],
-                        };
+                        // 깊은 복사 기반 로컬 편집 상태
+                        final base = _editedUsers[id] ?? _copyUser(data);
+                        final updated = _copyUser(base);
 
                         return Card(
-                          margin: const EdgeInsets.symmetric(vertical: 8),
+                          margin:
+                          const EdgeInsets.symmetric(vertical: 8),
                           child: Padding(
                             padding: const EdgeInsets.all(12),
                             child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              crossAxisAlignment:
+                              CrossAxisAlignment.start,
                               children: [
                                 Text('${updated['name']} ($id)',
-                                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold)),
                                 const SizedBox(height: 8),
+                                // divisions 칩
                                 Wrap(
                                   spacing: 8,
                                   children: [
-                                    ...(updated['divisions'] as List<String>).map((division) {
+                                    ...(updated['divisions']
+                                    as List<String>)
+                                        .map((division) {
                                       return InputChip(
                                         label: Text(division),
                                         onDeleted: () {
                                           setState(() {
-                                            updated['divisions'].remove(division);
-                                            _editedUsers[id] = Map.from(updated);
+                                            final list = List<String>.from(
+                                                updated['divisions']);
+                                            list.remove(division);
+                                            updated['divisions'] = list;
+                                            _editedUsers[id] =
+                                                _copyUser(updated);
                                           });
                                         },
                                       );
@@ -209,32 +257,40 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
                                     ActionChip(
                                       label: const Text('+ 추가'),
                                       onPressed: () async {
-                                        final snapshot = await FirebaseFirestore.instance
-                                            .collection('areas')
-                                            .get(const GetOptions(source: Source.server));
-                                        final allDivisions = snapshot.docs
-                                            .map((doc) => doc['division'] as String)
-                                            .toSet()
-                                            .toList();
+                                        // 🔽 재조회 제거: 상단에서 로드한 divisionList 재사용
+                                        final allDivisions = divisionList;
 
-                                        final toAdd = await showDialog<String>(
+                                        final toAdd =
+                                        await showDialog<String>(
                                           context: context,
                                           builder: (_) => SimpleDialog(
-                                            title: const Text('Division 추가'),
+                                            title:
+                                            const Text('Division 추가'),
                                             children: allDivisions
-                                                .where((d) => !(updated['divisions'] as List).contains(d))
-                                                .map((d) => SimpleDialogOption(
-                                              onPressed: () => Navigator.pop(context, d),
-                                              child: Text(d),
-                                            ))
+                                                .where((d) => !(updated[
+                                            'divisions']
+                                            as List)
+                                                .contains(d))
+                                                .map((d) =>
+                                                SimpleDialogOption(
+                                                  onPressed: () =>
+                                                      Navigator.pop(
+                                                          context, d),
+                                                  child: Text(d),
+                                                ))
                                                 .toList(),
                                           ),
                                         );
 
                                         if (toAdd != null) {
                                           setState(() {
-                                            updated['divisions'].add(toAdd);
-                                            _editedUsers[id] = Map.from(updated);
+                                            final list =
+                                            List<String>.from(
+                                                updated['divisions']);
+                                            list.add(toAdd);
+                                            updated['divisions'] = list;
+                                            _editedUsers[id] =
+                                                _copyUser(updated);
                                           });
                                         }
                                       },
@@ -242,16 +298,23 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
                                   ],
                                 ),
                                 const SizedBox(height: 8),
+                                // areas 칩
                                 Wrap(
                                   spacing: 8,
                                   children: [
-                                    ...(updated['areas'] as List<String>).map((area) {
+                                    ...(updated['areas']
+                                    as List<String>)
+                                        .map((area) {
                                       return InputChip(
                                         label: Text(area),
                                         onDeleted: () {
                                           setState(() {
-                                            updated['areas'].remove(area);
-                                            _editedUsers[id] = Map.from(updated);
+                                            final list = List<String>.from(
+                                                updated['areas']);
+                                            list.remove(area);
+                                            updated['areas'] = list;
+                                            _editedUsers[id] =
+                                                _copyUser(updated);
                                           });
                                         },
                                       );
@@ -259,27 +322,41 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
                                     ActionChip(
                                       label: const Text('+ 추가'),
                                       onPressed: () async {
-                                        final areas = await getAreasByDivisions(
-                                          List<String>.from(updated['divisions']),
+                                        final areas =
+                                        await getAreasByDivisions(
+                                          List<String>.from(
+                                              updated['divisions']),
                                         );
-                                        final toAdd = await showDialog<String>(
+                                        final toAdd =
+                                        await showDialog<String>(
                                           context: context,
                                           builder: (_) => SimpleDialog(
                                             title: const Text('Area 추가'),
                                             children: areas
-                                                .where((a) => !(updated['areas'] as List).contains(a))
-                                                .map((a) => SimpleDialogOption(
-                                              onPressed: () => Navigator.pop(context, a),
-                                              child: Text(a),
-                                            ))
+                                                .where((a) => !(updated[
+                                            'areas']
+                                            as List)
+                                                .contains(a))
+                                                .map((a) =>
+                                                SimpleDialogOption(
+                                                  onPressed: () =>
+                                                      Navigator.pop(
+                                                          context, a),
+                                                  child: Text(a),
+                                                ))
                                                 .toList(),
                                           ),
                                         );
 
                                         if (toAdd != null) {
                                           setState(() {
-                                            updated['areas'].add(toAdd);
-                                            _editedUsers[id] = Map.from(updated);
+                                            final list =
+                                            List<String>.from(
+                                                updated['areas']);
+                                            list.add(toAdd);
+                                            updated['areas'] = list;
+                                            _editedUsers[id] =
+                                                _copyUser(updated);
                                           });
                                         }
                                       },
@@ -294,18 +371,23 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
                                     Expanded(
                                       child: DropdownButton<String>(
                                         isExpanded: true,
-                                        value: roles.contains(updated['role']) ? updated['role'] : roles.first,
+                                        value: roles.contains(
+                                            updated['role'])
+                                            ? updated['role']
+                                            : roles.first,
                                         items: roles
-                                            .map((role) => DropdownMenuItem(
-                                          value: role,
-                                          child: Text(role),
-                                        ))
+                                            .map((role) =>
+                                            DropdownMenuItem(
+                                              value: role,
+                                              child: Text(role),
+                                            ))
                                             .toList(),
                                         onChanged: (val) {
                                           if (val != null) {
                                             setState(() {
                                               updated['role'] = val;
-                                              _editedUsers[id] = Map.from(updated);
+                                              _editedUsers[id] =
+                                                  _copyUser(updated);
                                             });
                                           }
                                         },
@@ -315,7 +397,17 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
                                 ),
                                 const SizedBox(height: 12),
                                 ElevatedButton.icon(
-                                  onPressed: () => _saveChanges(id, data, updated),
+                                  onPressed: _savingIds.contains(id)
+                                      ? null
+                                      : () async {
+                                    setState(() =>
+                                        _savingIds.add(id));
+                                    await _saveChanges(
+                                        id, data, updated);
+                                    if (!mounted) return;
+                                    setState(() =>
+                                        _savingIds.remove(id));
+                                  },
                                   icon: const Icon(Icons.save),
                                   label: const Text('저장'),
                                 ),
@@ -323,7 +415,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
                             ),
                           ),
                         );
-                      }).toList(),
+                      },
                     );
                   },
                 ),
