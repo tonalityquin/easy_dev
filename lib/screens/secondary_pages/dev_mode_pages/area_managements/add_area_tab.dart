@@ -21,8 +21,25 @@ class _AddAreaTabState extends State<AddAreaTab> {
   final TextEditingController _areaController = TextEditingController();
   final TextEditingController _englishAreaController = TextEditingController();
 
-  bool _adding = false;                 // 추가 이중 클릭 방지
-  String? _deletingAreaName;            // 동시에 하나만 삭제
+  bool _adding = false; // 추가 이중 클릭 방지
+  String? _deletingAreaName; // 동시에 하나만 삭제
+
+  Future<List<String>>? _areasFuture; // FutureBuilder 재호출 최소화
+
+  @override
+  void initState() {
+    super.initState();
+    _areasFuture = _loadAreas(); // 초기 캐시
+  }
+
+  @override
+  void didUpdateWidget(covariant AddAreaTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 부모에서 selectedDivision이 바뀐 경우에만 갱신
+    if (oldWidget.selectedDivision != widget.selectedDivision) {
+      _areasFuture = _loadAreas();
+    }
+  }
 
   @override
   void dispose() {
@@ -31,10 +48,15 @@ class _AddAreaTabState extends State<AddAreaTab> {
     super.dispose();
   }
 
+  // 입력 정규화: 선후 공백 제거, '/' → '-', 다중 공백 1개로
+  String _norm(String s) =>
+      s.trim().replaceAll('/', '-').replaceAll(RegExp(r'\s+'), ' ');
+
   Future<void> _addArea() async {
     if (_adding) return;
 
-    final areaName = _areaController.text.trim();
+    final rawKr = _areaController.text;
+    final areaName = _norm(rawKr);
     final englishAreaName = _englishAreaController.text.trim();
     final division = widget.selectedDivision;
 
@@ -50,31 +72,37 @@ class _AddAreaTabState extends State<AddAreaTab> {
       );
       return;
     }
-    // Firestore 문서 ID에는 '/' 불가
-    if (areaName.contains('/')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('지역 이름에 "/" 문자는 사용할 수 없습니다.')),
-      );
-      return;
-    }
 
     final areaId = '$division-$areaName';
 
     setState(() => _adding = true);
     try {
-      final areaDoc = FirebaseFirestore.instance.collection('areas').doc(areaId);
-      await areaDoc.set({
-        'name': areaName,
-        'englishName': englishAreaName,
-        'division': division,
-        'createdAt': FieldValue.serverTimestamp(),
+      final fs = FirebaseFirestore.instance;
+      final ref = fs.collection('areas').doc(areaId);
+
+      // 중복 생성/경합 방지: 트랜잭션으로 존재 확인 후 생성
+      await fs.runTransaction((tx) async {
+        final snap = await tx.get(ref);
+        if (snap.exists) {
+          throw Exception('이미 존재하는 지역입니다.');
+        }
+        tx.set(ref, {
+          'name': areaName,
+          'englishName': englishAreaName,
+          'division': division,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
       });
 
       if (!mounted) return;
+
       _areaController.clear();
       _englishAreaController.clear();
       FocusScope.of(context).unfocus();
-      setState(() {}); // 목록 갱신 트리거
+
+      setState(() {
+        _areasFuture = _loadAreas(); // 목록 재로딩 (Future 캐시 갱신)
+      });
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('✅ "$areaName" 지역이 추가되었습니다')),
@@ -91,12 +119,17 @@ class _AddAreaTabState extends State<AddAreaTab> {
   }
 
   Future<List<String>> _loadAreas() async {
-    if (widget.selectedDivision == null) return [];
+    final division = widget.selectedDivision;
+    if (division == null || division.isEmpty) return [];
     final snapshot = await FirebaseFirestore.instance
         .collection('areas')
-        .where('division', isEqualTo: widget.selectedDivision)
-        .get();
-    return snapshot.docs.map((e) => e['name'] as String).toList();
+        .where('division', isEqualTo: division)
+        .get(const GetOptions(source: Source.serverAndCache));
+    final list = snapshot.docs.map((e) => (e['name'] as String?)?.trim())
+        .whereType<String>()
+        .toList()
+      ..sort((a, b) => a.compareTo(b)); // 정렬 일관성
+    return list;
   }
 
   Future<void> _deleteArea(String areaName) async {
@@ -108,7 +141,7 @@ class _AddAreaTabState extends State<AddAreaTab> {
     }
 
     final division = widget.selectedDivision;
-    if (division == null) return;
+    if (division == null || division.isEmpty) return;
 
     final confirm = await showDialog<bool>(
       context: context,
@@ -130,7 +163,9 @@ class _AddAreaTabState extends State<AddAreaTab> {
       await FirebaseFirestore.instance.collection('areas').doc(areaId).delete();
 
       if (!mounted) return;
-      setState(() {}); // 목록 갱신 트리거
+      setState(() {
+        _areasFuture = _loadAreas(); // 목록 재로딩 (Future 캐시 갱신)
+      });
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('🗑️ "$areaName" 지역이 삭제되었습니다')),
@@ -159,12 +194,21 @@ class _AddAreaTabState extends State<AddAreaTab> {
             items: widget.divisionList
                 .map((div) => DropdownMenuItem(value: div, child: Text(div)))
                 .toList(),
-            onChanged: busy ? null : widget.onDivisionChanged,
+            onChanged: busy
+                ? null
+                : (val) {
+              // 부모 콜백 호출 + 로컬 Future 캐시 갱신
+              widget.onDivisionChanged(val);
+              setState(() {
+                _areasFuture = _loadAreas();
+              });
+            },
             decoration: const InputDecoration(labelText: '회사 선택'),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _areaController,
+            textInputAction: TextInputAction.done,
             decoration: const InputDecoration(labelText: '새 지역 이름(한글)'),
             onSubmitted: (_) => _addArea(),
             enabled: !busy,
@@ -172,6 +216,7 @@ class _AddAreaTabState extends State<AddAreaTab> {
           const SizedBox(height: 12),
           TextField(
             controller: _englishAreaController,
+            textInputAction: TextInputAction.done,
             decoration: const InputDecoration(labelText: '새 지역 이름 (영어)'),
             onSubmitted: (_) => _addArea(),
             enabled: !busy,
@@ -191,13 +236,13 @@ class _AddAreaTabState extends State<AddAreaTab> {
             child: widget.selectedDivision == null
                 ? const Center(child: Text('📌 회사를 먼저 선택하세요.'))
                 : FutureBuilder<List<String>>(
-              future: _loadAreas(),
+              future: _areasFuture,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                final areas = snapshot.data ?? [];
+                final areas = snapshot.data ?? const <String>[];
                 if (areas.isEmpty) {
                   return const Center(child: Text('등록된 지역이 없습니다.'));
                 }
@@ -208,11 +253,16 @@ class _AddAreaTabState extends State<AddAreaTab> {
                     final areaName = areas[index];
                     final deleting = _deletingAreaName == areaName;
                     return ListTile(
+                      key: ValueKey(areaName), // 리빌드 안정성
                       title: Text(areaName),
                       trailing: deleting
                           ? const SizedBox(
-                          height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
                           : IconButton(
+                        tooltip: '지역 삭제',
                         icon: const Icon(Icons.delete_outline),
                         onPressed: busy ? null : () => _deleteArea(areaName),
                       ),
