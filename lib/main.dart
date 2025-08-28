@@ -11,7 +11,7 @@ import 'screens/logins/debugs/login_debug_firestore_logger.dart';
 import 'theme.dart';
 import 'utils/init/dev_initializer.dart';
 import 'utils/foreground_task_handler.dart';
-import 'screens/type_pages/debugs/firestore_logger.dart'; // ✅ FirestoreLogger import
+import 'screens/type_pages/debugs/firestore_logger.dart';
 
 @pragma('vm:entry-point')
 void myForegroundCallback() {
@@ -34,7 +34,7 @@ void main() async {
       playSound: false,
     ),
     foregroundTaskOptions: ForegroundTaskOptions(
-      eventAction: ForegroundTaskEventAction.repeat(5000), // 5초마다 호출
+      eventAction: ForegroundTaskEventAction.repeat(5000),
       autoRunOnBoot: true,
       allowWakeLock: true,
       allowWifiLock: true,
