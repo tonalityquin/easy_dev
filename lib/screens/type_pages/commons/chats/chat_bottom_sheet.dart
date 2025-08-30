@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../../../states/user/user_state.dart';
 import 'chat_panel.dart';
+import '../../../../utils/snackbar_helper.dart'; // ✅ 경로 확인
 
 Stream<String> latestMessageStream(String roomId) {
   return FirebaseFirestore.instance
@@ -26,9 +27,8 @@ void chatBottomSheet(BuildContext context) {
   final String? roomId = currentUser?.currentArea?.trim();
 
   if (roomId == null || roomId.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('⚠️ 채팅을 위해 currentArea가 설정되어야 합니다.')),
-    );
+    // 🔄 SnackBar → snackbar_helper
+    showSelectedSnackbar(context, '채팅을 위해 currentArea가 설정되어야 합니다.');
     return;
   }
 

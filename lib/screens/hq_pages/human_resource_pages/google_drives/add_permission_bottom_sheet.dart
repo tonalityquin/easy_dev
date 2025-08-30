@@ -3,6 +3,8 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:googleapis_auth/auth_io.dart';
 
+import '../../../../utils/snackbar_helper.dart';
+
 Future<void> showAddPermissionBottomSheet({
   required BuildContext context,
   required String selectedArea,
@@ -51,18 +53,20 @@ Future<void> showAddPermissionBottomSheet({
               child: ElevatedButton.icon(
                 onPressed: () async {
                   final email = emailController.text.trim();
-                  if (email.isEmpty) return;
+                  if (email.isEmpty) {
+                    // ✅ 안내 스낵바
+                    showSelectedSnackbar(context, '이메일을 입력하세요');
+                    return;
+                  }
 
                   try {
                     await _addEditorPermission(fileId, email);
                     Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('$email 사용자에게 편집자 권한을 부여했습니다')),
-                    );
+                    // ✅ 성공 스낵바
+                    showSuccessSnackbar(context, '$email 사용자에게 편집자 권한을 부여했습니다');
                   } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('권한 추가 실패: $e')),
-                    );
+                    // ✅ 실패 스낵바
+                    showFailedSnackbar(context, '권한 추가 실패: $e');
                   }
                 },
                 icon: const Icon(Icons.person_add, size: 20),

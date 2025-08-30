@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter/services.dart';
+import '../../../utils/snackbar_helper.dart';
 import 'hq_debug_firestore_logger.dart';
 
 class HqDebugBottomSheet extends StatefulWidget {
@@ -31,13 +32,7 @@ class _HqDebugBottomSheetState extends State<HqDebugBottomSheet> {
       if (text.isEmpty) {
         _logLines = ['🚫 저장된 로그가 없습니다.'];
       } else {
-        _logLines = text
-            .trim()
-            .split('\n')
-            .where((line) => line.trim().isNotEmpty)
-            .toList()
-            .reversed
-            .toList();
+        _logLines = text.trim().split('\n').where((line) => line.trim().isNotEmpty).toList().reversed.toList();
       }
       _filteredLines = List.from(_logLines);
     });
@@ -48,9 +43,7 @@ class _HqDebugBottomSheetState extends State<HqDebugBottomSheet> {
       if (query.isEmpty) {
         _filteredLines = List.from(_logLines);
       } else {
-        _filteredLines = _logLines
-            .where((line) => line.toLowerCase().contains(query.toLowerCase()))
-            .toList();
+        _filteredLines = _logLines.where((line) => line.toLowerCase().contains(query.toLowerCase())).toList();
       }
     });
   }
@@ -59,9 +52,8 @@ class _HqDebugBottomSheetState extends State<HqDebugBottomSheet> {
     await HqDebugFirestoreLogger().clearLog();
     await _loadLog();
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('로그가 삭제되었습니다.')),
-      );
+      // ✅ 교체: 기본 SnackBar → 커스텀 스낵바
+      showSuccessSnackbar(context, '로그가 삭제되었습니다.');
     }
   }
 
@@ -69,9 +61,8 @@ class _HqDebugBottomSheetState extends State<HqDebugBottomSheet> {
     final file = HqDebugFirestoreLogger().getLogFile();
     if (file == null || !await file.exists()) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('내보낼 로그 파일이 없습니다.')),
-        );
+        // ✅ 교체: 실패 알림
+        showFailedSnackbar(context, '내보낼 로그 파일이 없습니다.');
       }
       return;
     }
@@ -81,15 +72,18 @@ class _HqDebugBottomSheetState extends State<HqDebugBottomSheet> {
       text: 'Firestore 로그 파일',
       subject: 'Firestore 로그',
     );
+    // (선택) 공유 시트 열림 안내가 필요하면 아래 주석 해제
+    // if (context.mounted) {
+    //   showSelectedSnackbar(context, '공유 시트를 열었습니다.');
+    // }
   }
 
   Future<void> _copyLogsToClipboard() async {
     final allLogs = _filteredLines.reversed.join('\n');
     await Clipboard.setData(ClipboardData(text: allLogs));
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('로그가 클립보드에 복사되었습니다.')),
-      );
+      // ✅ 교체: 성공 알림
+      showSuccessSnackbar(context, '로그가 클립보드에 복사되었습니다.');
     }
   }
 
@@ -152,9 +146,7 @@ class _HqDebugBottomSheetState extends State<HqDebugBottomSheet> {
             ),
             const Divider(height: 1),
             Expanded(
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _buildLogList(),
+              child: _isLoading ? const Center(child: CircularProgressIndicator()) : _buildLogList(),
             ),
           ],
         ),

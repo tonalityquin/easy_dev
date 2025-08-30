@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../../states/user/user_state.dart';
 import '../../../widgets/navigation/secondary_mini_navigation.dart';
 import 'monthly_parking_pages/monthly_plate_bottom_sheet.dart';
+import '../../../utils/snackbar_helper.dart'; // ✅ 커스텀 스낵바
 
 class MonthlyParkingManagement extends StatefulWidget {
   const MonthlyParkingManagement({super.key});
@@ -53,37 +54,32 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                 ),
               );
             } else {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('선택한 문서를 찾을 수 없습니다.')),
-              );
+              // ❌ 기존 SnackBar → 커스텀 스낵바
+              showFailedSnackbar(context, '선택한 문서를 찾을 수 없습니다.');
             }
           });
         }
         break;
 
       case 1:
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('수정 기능은 준비 중입니다.')),
-        );
+      // ℹ️ 안내용
+        showSelectedSnackbar(context, '수정 기능은 준비 중입니다.');
         break;
 
       case 2:
         if (_selectedDocId == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('삭제할 항목을 선택해주세요.')),
-          );
+          // ⚠️ 선택 필요
+          showSelectedSnackbar(context, '삭제할 항목을 선택해주세요.');
           return;
         }
 
         FirebaseFirestore.instance.collection('plate_status').doc(_selectedDocId).delete().then((_) {
           setState(() => _selectedDocId = null);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('삭제되었습니다.')),
-          );
+          // ✅ 성공 메시지
+          showSuccessSnackbar(context, '삭제되었습니다.');
         }).catchError((e) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('삭제 실패: $e')),
-          );
+          // ❌ 실패 메시지
+          showFailedSnackbar(context, '삭제 실패: $e');
         });
         break;
     }
@@ -243,86 +239,86 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                                     const Text('💳 결제 내역', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                                     const SizedBox(height: 8),
                                     ...List.generate(List<Map<String, dynamic>>.from(data['payment_history']).length,
-                                        (i) {
-                                      final payments = List<Map<String, dynamic>>.from(data['payment_history']);
-                                      final payment = payments.reversed.toList()[i];
-                                      final paidAtRaw = payment['paidAt'] ?? '';
-                                      String paidAt = '';
-                                      try {
-                                        paidAt = DateFormat('yyyy.MM.dd HH:mm').format(DateTime.parse(paidAtRaw));
-                                      } catch (_) {
-                                        paidAt = paidAtRaw;
-                                      }
+                                            (i) {
+                                          final payments = List<Map<String, dynamic>>.from(data['payment_history']);
+                                          final payment = payments.reversed.toList()[i];
+                                          final paidAtRaw = payment['paidAt'] ?? '';
+                                          String paidAt = '';
+                                          try {
+                                            paidAt = DateFormat('yyyy.MM.dd HH:mm').format(DateTime.parse(paidAtRaw));
+                                          } catch (_) {
+                                            paidAt = paidAtRaw;
+                                          }
 
-                                      final amount = payment['amount'] ?? 0;
-                                      final paidBy = payment['paidBy'] ?? '';
-                                      final note = payment['note'] ?? '';
-                                      final extended = payment['extended'] == true;
+                                          final amount = payment['amount'] ?? 0;
+                                          final paidBy = payment['paidBy'] ?? '';
+                                          final note = payment['note'] ?? '';
+                                          final extended = payment['extended'] == true;
 
-                                      return Container(
-                                        margin: const EdgeInsets.only(bottom: 8),
-                                        padding: const EdgeInsets.all(12),
-                                        decoration: BoxDecoration(
-                                          color: Colors.grey.shade100,
-                                          borderRadius: BorderRadius.circular(8),
-                                          border: Border.all(color: Colors.grey.shade300),
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Row(
-                                              children: [
-                                                const Icon(Icons.calendar_today, size: 16, color: Colors.blueGrey),
-                                                const SizedBox(width: 6),
-                                                Text(paidAt,
-                                                    style: const TextStyle(fontSize: 13, color: Colors.black54)),
-                                              ],
+                                          return Container(
+                                            margin: const EdgeInsets.only(bottom: 8),
+                                            padding: const EdgeInsets.all(12),
+                                            decoration: BoxDecoration(
+                                              color: Colors.grey.shade100,
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: Border.all(color: Colors.grey.shade300),
                                             ),
-                                            const SizedBox(height: 4),
-                                            Row(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
-                                                const Icon(Icons.person, size: 16, color: Colors.teal),
-                                                const SizedBox(width: 6),
-                                                Text('결제자: $paidBy', style: const TextStyle(fontSize: 14)),
-                                                if (extended)
-                                                  Container(
-                                                    margin: const EdgeInsets.only(left: 8),
-                                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                                    decoration: BoxDecoration(
-                                                      color: Colors.orange.shade100,
-                                                      borderRadius: BorderRadius.circular(12),
-                                                    ),
-                                                    child: const Text('연장',
-                                                        style: TextStyle(fontSize: 12, color: Colors.orange)),
-                                                  ),
-                                              ],
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Row(
-                                              children: [
-                                                const Icon(Icons.attach_money, size: 16, color: Colors.green),
-                                                const SizedBox(width: 6),
-                                                Text('₩${amount.toString()}',
-                                                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-                                              ],
-                                            ),
-                                            if (note.isNotEmpty) ...[
-                                              const SizedBox(height: 4),
-                                              Row(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  const Icon(Icons.note, size: 16, color: Colors.deepPurple),
-                                                  const SizedBox(width: 6),
-                                                  Expanded(
-                                                    child: Text(note, style: const TextStyle(fontSize: 14)),
+                                                Row(
+                                                  children: [
+                                                    const Icon(Icons.calendar_today, size: 16, color: Colors.blueGrey),
+                                                    const SizedBox(width: 6),
+                                                    Text(paidAt,
+                                                        style: const TextStyle(fontSize: 13, color: Colors.black54)),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Row(
+                                                  children: [
+                                                    const Icon(Icons.person, size: 16, color: Colors.teal),
+                                                    const SizedBox(width: 6),
+                                                    Text('결제자: $paidBy', style: const TextStyle(fontSize: 14)),
+                                                    if (extended)
+                                                      Container(
+                                                        margin: const EdgeInsets.only(left: 8),
+                                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                                        decoration: BoxDecoration(
+                                                          color: Colors.orange.shade100,
+                                                          borderRadius: BorderRadius.circular(12),
+                                                        ),
+                                                        child: const Text('연장',
+                                                            style: TextStyle(fontSize: 12, color: Colors.orange)),
+                                                      ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Row(
+                                                  children: [
+                                                    const Icon(Icons.attach_money, size: 16, color: Colors.green),
+                                                    const SizedBox(width: 6),
+                                                    Text('₩${amount.toString()}',
+                                                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                                                  ],
+                                                ),
+                                                if (note.isNotEmpty) ...[
+                                                  const SizedBox(height: 4),
+                                                  Row(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      const Icon(Icons.note, size: 16, color: Colors.deepPurple),
+                                                      const SizedBox(width: 6),
+                                                      Expanded(
+                                                        child: Text(note, style: const TextStyle(fontSize: 14)),
+                                                      ),
+                                                    ],
                                                   ),
                                                 ],
-                                              ),
-                                            ],
-                                          ],
-                                        ),
-                                      );
-                                    }),
+                                              ],
+                                            ),
+                                          );
+                                        }),
                                   ],
                                 ),
                             ],

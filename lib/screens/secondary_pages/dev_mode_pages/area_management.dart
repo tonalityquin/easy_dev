@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../utils/snackbar_helper.dart';
 import 'area_managements/add_area_tab.dart';
 import 'area_managements/division_management_tab.dart';
 import 'area_managements/user_account_tab.dart';
@@ -69,9 +70,7 @@ class _AreaManagementState extends State<AreaManagement> with SingleTickerProvid
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('회사 목록 로드 실패: $e')),
-      );
+      showFailedSnackbar(context, '회사 목록 로드 실패: $e');
     }
   }
 
@@ -88,14 +87,10 @@ class _AreaManagementState extends State<AreaManagement> with SingleTickerProvid
       await _loadDivisions();
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('✅ 회사 "$trimmed" 추가됨')),
-      );
+      showSuccessSnackbar(context, '✅ 회사 "$trimmed" 추가됨');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('❌ 추가 실패: $e')),
-      );
+      showFailedSnackbar(context, '❌ 추가 실패: $e');
     }
   }
 
@@ -103,9 +98,7 @@ class _AreaManagementState extends State<AreaManagement> with SingleTickerProvid
     // ✅ 동시 재진입 차단: 이미 삭제 중이면 즉시 반환
     if (_isDeletingDivision) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('다른 삭제 작업이 진행 중입니다. 잠시만 기다려주세요.')),
-      );
+      showSelectedSnackbar(context, '다른 삭제 작업이 진행 중입니다. 잠시만 기다려주세요.');
       return;
     }
 
@@ -152,14 +145,10 @@ class _AreaManagementState extends State<AreaManagement> with SingleTickerProvid
         }
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('🗑️ "$name" 회사 및 소속 지역 삭제됨')),
-      );
+      showSuccessSnackbar(context, '🗑️ "$name" 회사 및 소속 지역 삭제됨');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('❌ 삭제 실패: $e')),
-      );
+      showFailedSnackbar(context, '❌ 삭제 실패: $e');
     } finally {
       if (!mounted) return;
       setState(() {

@@ -11,6 +11,7 @@ import 'package:googleapis_auth/auth_io.dart';
 import '../../../states/area/area_state.dart';
 import '../../../states/user/user_state.dart';
 import 'statistics_chart_page.dart';
+import '../../../utils/snackbar_helper.dart'; // ✅ 추가
 
 /// ===== GCS 설정 (업로드와 동일) =====
 const String _kBucketName = 'easydev-image';
@@ -118,13 +119,12 @@ class _StatisticsState extends State<Statistics> {
                     ),
                     onPressed: _savedReports.isNotEmpty
                         ? () {
-                            setState(() {
-                              _savedReports.clear();
-                            });
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text("🗑️ 보관된 통계가 초기화되었습니다.")),
-                            );
-                          }
+                      setState(() {
+                        _savedReports.clear();
+                      });
+                      // ✅ 기본 SnackBar → 커스텀 스낵바
+                      showSuccessSnackbar(context, "🗑️ 보관된 통계가 초기화되었습니다.");
+                    }
                         : null,
                   ),
                   const SizedBox(width: 8),
@@ -182,7 +182,7 @@ class _StatisticsState extends State<Statistics> {
               else if (_reportData != null)
                 _buildReportCard(_reportData!)
               else if (_selectedDate != null)
-                const Text('👭 해당 날짜의 보고 내용이 없습니다.', style: TextStyle(color: Colors.grey)),
+                  const Text('👭 해당 날짜의 보고 내용이 없습니다.', style: TextStyle(color: Colors.grey)),
             ],
           ),
         ),
@@ -255,9 +255,8 @@ class _StatisticsState extends State<Statistics> {
                     final dateStr = _selectedDate!.toIso8601String().split('T').first;
                     final already = _savedReports.any((r) => r['date'] == dateStr);
                     if (already) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("ℹ️ 이미 보관된 날짜입니다.")),
-                      );
+                      // ✅ 정보성 → 선택 스낵바
+                      showSelectedSnackbar(context, "ℹ️ 이미 보관된 날짜입니다.");
                       return;
                     }
                     setState(() {
@@ -268,9 +267,8 @@ class _StatisticsState extends State<Statistics> {
                         '정산금': lockedFee ?? 0,
                       });
                     });
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("✅ 통계가 보관되었습니다.")),
-                    );
+                    // ✅ 성공 스낵바
+                    showSuccessSnackbar(context, "✅ 통계가 보관되었습니다.");
                   }
                 },
               ),

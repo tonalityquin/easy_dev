@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:googleapis/calendar/v3.dart' as calendar;
+import '../../../../utils/snackbar_helper.dart';
 import '../utils/calendar_logic.dart';
 
 /// 완료된 이벤트(진행률 100%)를 보여주는 바텀시트를 표시하고,
@@ -24,9 +25,8 @@ Future<void> showCompletedEventSheet({
 
   // 완료된 항목이 없을 경우 안내 메시지 표시
   if (completedEvents.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('완료된 할 일이 없습니다.')),
-    );
+    // 🔄 SnackBar → snackbar_helper
+    showSelectedSnackbar(context, '완료된 할 일이 없습니다.');
     return;
   }
 
@@ -92,29 +92,32 @@ Future<void> showCompletedEventSheet({
 
                     if (confirm != true) return;
 
-                    // Google Calendar API를 통해 이벤트 삭제 수행
-                    final client = await getAuthClient(write: true);
-                    final calendarApi = calendar.CalendarApi(client);
-                    for (var e in completedEvents) {
-                      if (e.id != null) {
-                        await calendarApi.events.delete(calendarId, e.id!);
+                    try {
+                      // Google Calendar API를 통해 이벤트 삭제 수행
+                      final client = await getAuthClient(write: true);
+                      final calendarApi = calendar.CalendarApi(client);
+                      for (var e in completedEvents) {
+                        if (e.id != null) {
+                          await calendarApi.events.delete(calendarId, e.id!);
+                        }
                       }
+
+                      // 삭제 후 최신 이벤트 목록 불러와서 UI 갱신
+                      final updated = await loadEventsForMonth(
+                        month: DateTime.now(),
+                        filterStates: {},
+                      );
+                      onEventsDeleted(updated);
+
+                      // 바텀시트 닫기
+                      Navigator.pop(context);
+
+                      // 🔄 SnackBar → snackbar_helper (성공)
+                      showSuccessSnackbar(context, '완료된 할 일을 모두 삭제했습니다.');
+                    } catch (e) {
+                      // 🔄 SnackBar → snackbar_helper (실패)
+                      showFailedSnackbar(context, '삭제 중 오류가 발생했습니다: $e');
                     }
-
-                    // 삭제 후 최신 이벤트 목록 불러와서 UI 갱신
-                    final updated = await loadEventsForMonth(
-                      month: DateTime.now(),
-                      filterStates: {},
-                    );
-                    onEventsDeleted(updated);
-
-                    // 바텀시트 닫기
-                    Navigator.pop(context);
-
-                    // 삭제 완료 안내
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('완료된 할 일을 모두 삭제했습니다.')),
-                    );
                   },
                 ),
               ),

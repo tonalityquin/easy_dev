@@ -7,6 +7,7 @@ import '../../../repositories/plate/firestore_plate_repository.dart';
 // ⛔️ GCS 직접 로드는 MergedLogSection 내부에서 처리
 import '../departure_completed_pages/widgets/departure_completed_page_merge_log.dart';
 import '../departure_completed_pages/widgets/departure_completed_page_today_log.dart';
+import '../../../utils/snackbar_helper.dart'; // ✅ 커스텀 스낵바 헬퍼 추가
 
 class DepartureCompletedSettledTab extends StatefulWidget {
   const DepartureCompletedSettledTab({
@@ -137,9 +138,8 @@ class _DepartureCompletedSettledTabState extends State<DepartureCompletedSettled
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('검색 중 오류가 발생했습니다: $e')),
-      );
+      // ✅ 기본 SnackBar → 커스텀 스낵바
+      showFailedSnackbar(context, '검색 중 오류가 발생했습니다: $e');
     }
   }
 

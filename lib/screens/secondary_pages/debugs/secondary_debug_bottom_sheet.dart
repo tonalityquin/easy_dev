@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter/services.dart';
+import '../../../utils/snackbar_helper.dart';
 import 'secondary_debug_firestore_logger.dart';
 
 class SecondaryDebugBottomSheet extends StatefulWidget {
@@ -59,9 +60,8 @@ class _SecondaryDebugBottomSheetState extends State<SecondaryDebugBottomSheet> {
     await SecondaryDebugFirestoreLogger().clearLog();
     await _loadLog();
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('로그가 삭제되었습니다.')),
-      );
+      // ✅ 기본 SnackBar → 커스텀 스낵바
+      showSuccessSnackbar(context, '로그가 삭제되었습니다.');
     }
   }
 
@@ -69,9 +69,8 @@ class _SecondaryDebugBottomSheetState extends State<SecondaryDebugBottomSheet> {
     final file = SecondaryDebugFirestoreLogger().getLogFile();
     if (file == null || !await file.exists()) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('내보낼 로그 파일이 없습니다.')),
-        );
+        // ✅ 실패 시 커스텀 스낵바
+        showFailedSnackbar(context, '내보낼 로그 파일이 없습니다.');
       }
       return;
     }
@@ -87,9 +86,8 @@ class _SecondaryDebugBottomSheetState extends State<SecondaryDebugBottomSheet> {
     final allLogs = _filteredLines.reversed.join('\n');
     await Clipboard.setData(ClipboardData(text: allLogs));
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('로그가 클립보드에 복사되었습니다.')),
-      );
+      // ✅ 성공 시 커스텀 스낵바
+      showSuccessSnackbar(context, '로그가 클립보드에 복사되었습니다.');
     }
   }
 

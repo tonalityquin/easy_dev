@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../../utils/snackbar_helper.dart';
 import '../../../../type_pages/debugs/firestore_logger.dart';
 import '../monthly_plate_controller.dart';
 
@@ -84,14 +85,14 @@ class _MonthlyCustomStatusSectionState extends State<MonthlyCustomStatusSection>
 
                         widget.onDeleted();
                         widget.onStatusCleared();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('자동 메모가 삭제되었습니다')),
-                        );
+
+                        // ✅ snackbar_helper 사용
+                        showSuccessSnackbar(context, '자동 메모가 삭제되었습니다');
                       } catch (e) {
                         await FirestoreLogger().log('❌ 상태 메모 삭제 실패: $e', level: 'error');
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('삭제 실패. 다시 시도해주세요')),
-                        );
+
+                        // ✅ snackbar_helper 사용
+                        showFailedSnackbar(context, '삭제 실패. 다시 시도해주세요');
                       }
                     },
                   )

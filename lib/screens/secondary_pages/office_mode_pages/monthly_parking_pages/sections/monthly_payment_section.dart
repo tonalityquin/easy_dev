@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../../utils/snackbar_helper.dart';
 import '../monthly_plate_controller.dart';
 
 class MonthlyPaymentSection extends StatefulWidget {
@@ -39,7 +40,7 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
         _paymentHistoryLog.insert(
           0,
           '${DateTime.now().toLocal().toString().substring(0, 16)} - 결제 완료'
-          '${_noteController.text.isNotEmpty ? ' | 메모: ${_noteController.text}' : ''}',
+              '${_noteController.text.isNotEmpty ? ' | 메모: ${_noteController.text}' : ''}',
         );
       });
 
@@ -48,14 +49,12 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
       widget.controller.isExtended = false;
       widget.onExtendedChanged(false);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('결제 내역이 저장되었습니다.')),
-      );
+      // ✅ 성공 스낵바 헬퍼
+      showSuccessSnackbar(context, '결제 내역이 저장되었습니다.');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('결제 실패: $e')),
-      );
+      // ✅ 실패 스낵바 헬퍼
+      showFailedSnackbar(context, '결제 실패: $e');
     } finally {
       if (mounted) {
         setState(() => _isPaying = false);
@@ -85,13 +84,13 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
               onPressed: _isPaying ? null : _handlePayment,
               icon: _isPaying
                   ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
                   : const Icon(Icons.payment),
               label: Text(_isPaying ? '처리 중...' : '결제'),
             ),
@@ -112,11 +111,14 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
-        if (_paymentHistoryLog.isEmpty) const Text('결제 내역이 없습니다.', style: TextStyle(color: Colors.grey)),
-        ..._paymentHistoryLog.map((entry) => Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Text('• $entry'),
-            )),
+        if (_paymentHistoryLog.isEmpty)
+          const Text('결제 내역이 없습니다.', style: TextStyle(color: Colors.grey)),
+        ..._paymentHistoryLog.map(
+              (entry) => Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Text('• $entry'),
+          ),
+        ),
       ],
     );
   }

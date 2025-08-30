@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../../../utils/snackbar_helper.dart';
+
 class AddAreaTab extends StatefulWidget {
   final String? selectedDivision;
   final List<String> divisionList;
@@ -61,15 +63,11 @@ class _AddAreaTabState extends State<AddAreaTab> {
     final division = widget.selectedDivision;
 
     if (division == null || division.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('먼저 회사를 선택하세요.')),
-      );
+      showFailedSnackbar(context, '먼저 회사를 선택하세요.');
       return;
     }
     if (areaName.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('새 지역 이름(한글)을 입력하세요.')),
-      );
+      showFailedSnackbar(context, '새 지역 이름(한글)을 입력하세요.');
       return;
     }
 
@@ -104,14 +102,10 @@ class _AddAreaTabState extends State<AddAreaTab> {
         _areasFuture = _loadAreas(); // 목록 재로딩 (Future 캐시 갱신)
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('✅ "$areaName" 지역이 추가되었습니다')),
-      );
+      showSuccessSnackbar(context, '✅ "$areaName" 지역이 추가되었습니다');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('❌ 지역 추가 실패: $e')),
-      );
+      showFailedSnackbar(context, '❌ 지역 추가 실패: $e');
     } finally {
       if (!mounted) return;
       setState(() => _adding = false);
@@ -125,7 +119,8 @@ class _AddAreaTabState extends State<AddAreaTab> {
         .collection('areas')
         .where('division', isEqualTo: division)
         .get(const GetOptions(source: Source.serverAndCache));
-    final list = snapshot.docs.map((e) => (e['name'] as String?)?.trim())
+    final list = snapshot.docs
+        .map((e) => (e['name'] as String?)?.trim())
         .whereType<String>()
         .toList()
       ..sort((a, b) => a.compareTo(b)); // 정렬 일관성
@@ -134,9 +129,7 @@ class _AddAreaTabState extends State<AddAreaTab> {
 
   Future<void> _deleteArea(String areaName) async {
     if (_deletingAreaName != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('다른 삭제 작업이 진행 중입니다. 잠시만 기다려주세요.')),
-      );
+      showFailedSnackbar(context, '다른 삭제 작업이 진행 중입니다. 잠시만 기다려주세요.');
       return;
     }
 
@@ -167,14 +160,10 @@ class _AddAreaTabState extends State<AddAreaTab> {
         _areasFuture = _loadAreas(); // 목록 재로딩 (Future 캐시 갱신)
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('🗑️ "$areaName" 지역이 삭제되었습니다')),
-      );
+      showSuccessSnackbar(context, '🗑️ "$areaName" 지역이 삭제되었습니다');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('❌ 삭제 실패: $e')),
-      );
+      showFailedSnackbar(context, '❌ 삭제 실패: $e');
     } finally {
       if (!mounted) return;
       setState(() => _deletingAreaName = null);

@@ -15,6 +15,7 @@ import '../screens/input_pages/input_plate_screen.dart';
 import '../screens/type_pages/commons/dashboard_bottom_sheet/dash_board_bottom_sheet.dart';
 import 'type_pages/commons/chats/chat_bottom_sheet.dart';
 import 'secondary_page.dart';
+import '../utils/snackbar_helper.dart';
 
 class TypePage extends StatefulWidget {
   const TypePage({super.key});
@@ -239,9 +240,7 @@ class PageBottomNavigation extends StatelessWidget {
               context,
               index,
               onError: (msg) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(msg)),
-                );
+                showFailedSnackbar(context, msg);
               },
             );
           },
@@ -253,7 +252,7 @@ class PageBottomNavigation extends StatelessWidget {
           // PageBottomNavigation 위젯 안 BottomNavigationBarItem 생성 부분
           items: List.generate(
             pageState.pages.length,
-            (index) {
+                (index) {
               final pageInfo = pageState.pages[index];
               final isSelected = pageState.selectedIndex == index;
 

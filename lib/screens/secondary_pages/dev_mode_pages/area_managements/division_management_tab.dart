@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../utils/snackbar_helper.dart';
+
 class DivisionManagementTab extends StatefulWidget {
   final List<String> divisionList;
   final Future<void> Function(String) onDivisionAdded;
@@ -35,17 +37,13 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
     final input = _controller.text.trim();
     if (input.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('회사 이름을 입력해주세요.')),
-      );
+      showSelectedSnackbar(context, '회사 이름을 입력해주세요.');
       return;
     }
     // 파이어스토어 문서 ID에서 '/'는 허용되지 않음
     if (input.contains('/')) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('회사 이름에 "/" 문자는 사용할 수 없습니다.')),
-      );
+      showSelectedSnackbar(context, '회사 이름에 "/" 문자는 사용할 수 없습니다.');
       return;
     }
 
@@ -67,14 +65,10 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
       setState(() => _controller.clear());
       FocusScope.of(context).unfocus();
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('✅ 회사 "$input" 이(가) 추가되었습니다.')),
-      );
+      showSuccessSnackbar(context, '회사 "$input" 이(가) 추가되었습니다.');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('❌ 회사 추가 실패: $e')),
-      );
+      showFailedSnackbar(context, '회사 추가 실패: $e');
     } finally {
       if (!mounted) return;
       setState(() => _adding = false);
@@ -85,9 +79,7 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
     if (_deletingDivisionName != null) {
       // 이미 다른 삭제가 진행 중
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('다른 삭제 작업이 진행 중입니다. 잠시만 기다려주세요.')),
-      );
+      showSelectedSnackbar(context, '다른 삭제 작업이 진행 중입니다. 잠시만 기다려주세요.');
       return;
     }
 
@@ -112,17 +104,11 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
       // 부모 콜백: divisions/{division} 삭제 및 소속 areas 일괄 삭제(부모에서 배치 처리)
       await widget.onDivisionDeleted(division);
 
-      // ✅ 중복 삭제 제거: 부모에서 이미 areas 전체 삭제하므로 아래 코드는 제거
-      // final areaId = '$division-$division';
-      // await FirebaseFirestore.instance.collection('areas').doc(areaId).delete();
-
       if (!mounted) return;
-      // 삭제 성공 Snackbar는 부모에서 띄우므로 여기서는 생략(중복 방지). 필요 시 보강 가능.
+      // 성공 알림은 부모에서 표시(중복 방지)
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('❌ 삭제 실패: $e')),
-      );
+      showFailedSnackbar(context, '삭제 실패: $e');
     } finally {
       if (!mounted) return;
       setState(() => _deletingDivisionName = null);

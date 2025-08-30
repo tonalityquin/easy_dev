@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../utils/snackbar_helper.dart';
 import '../../type_pages/debugs/firestore_logger.dart';
 import '../input_plate_controller.dart';
 
@@ -70,14 +71,14 @@ class InputCustomStatusSection extends StatelessWidget {
 
                         onDeleted();
                         onStatusCleared();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('자동 메모가 삭제되었습니다')),
-                        );
+
+                        // ✅ 성공 스낵바
+                        showSuccessSnackbar(context, '자동 메모가 삭제되었습니다');
                       } catch (e) {
                         await FirestoreLogger().log('❌ 상태 메모 삭제 실패: $e', level: 'error');
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('삭제 실패. 다시 시도해주세요')),
-                        );
+
+                        // ✅ 실패 스낵바
+                        showFailedSnackbar(context, '삭제 실패. 다시 시도해주세요');
                       }
                     },
                   )

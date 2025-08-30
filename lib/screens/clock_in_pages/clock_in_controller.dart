@@ -60,10 +60,10 @@ class ClockInController {
   }
 
   Future<void> handleWorkStatus(
-    BuildContext context,
-    UserState userState,
-    VoidCallback onLoadingChanged,
-  ) async {
+      BuildContext context,
+      UserState userState,
+      VoidCallback onLoadingChanged,
+      ) async {
     _localLogger.log('handleWorkStatus() 시작', level: 'called');
     onLoadingChanged.call();
 
@@ -86,9 +86,9 @@ class ClockInController {
   }
 
   Future<void> _navigateToProperPageIfWorking(
-    BuildContext context,
-    UserState userState,
-  ) async {
+      BuildContext context,
+      UserState userState,
+      ) async {
     if (!userState.isWorking || !context.mounted) return;
 
     final division = userState.user?.divisions.first ?? '';
@@ -120,13 +120,8 @@ class ClockInController {
 
     _localLogger.log('_showWorkError() called', level: 'warn');
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('작업 처리 중 오류가 발생했습니다. 다시 시도해주세요.'),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: Colors.redAccent,
-      ),
-    );
+    // ✅ snackbar_helper 사용
+    showFailedSnackbar(context, '작업 처리 중 오류가 발생했습니다. 다시 시도해주세요.');
   }
 
   Future<void> _uploadAttendanceSilently(BuildContext context) async {

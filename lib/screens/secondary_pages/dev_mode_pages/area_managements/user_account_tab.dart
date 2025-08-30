@@ -2,6 +2,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../../../utils/snackbar_helper.dart';
+
 class UserAccountsTab extends StatefulWidget {
   final String? selectedDivision;
   final String? selectedArea;
@@ -108,18 +110,14 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       });
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('✅ ${newData['name']} 정보 저장 완료')),
-      );
+      showSuccessSnackbar(context, '✅ ${newData['name']} 정보 저장 완료'); // ✅ 커스텀 스낵바
       setState(() {
         _editedUsers.remove(oldId);
       });
     } catch (e) {
       debugPrint('❌ 계정 저장 실패: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('❌ 저장 실패: $e')),
-      );
+      showFailedSnackbar(context, '❌ 저장 실패: $e'); // ✅ 커스텀 스낵바
     }
   }
 
@@ -149,10 +147,10 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
                 items: divisionList
                     .map((div) => DropdownMenuItem(value: div, child: Text(div)))
                     .toList(),
-              onChanged: (value) async {
-                widget.onDivisionChanged(value);
-                widget.onAreaChanged(null);  // 자동 첫 선택 제거 → 중복 쿼리 줄임
-              },
+                onChanged: (value) async {
+                  widget.onDivisionChanged(value);
+                  widget.onAreaChanged(null); // 자동 첫 선택 제거 → 중복 쿼리 줄임
+                },
                 decoration: const InputDecoration(labelText: '회사 선택'),
               ),
               const SizedBox(height: 12),
@@ -221,13 +219,11 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
                         final updated = _copyUser(base);
 
                         return Card(
-                          margin:
-                          const EdgeInsets.symmetric(vertical: 8),
+                          margin: const EdgeInsets.symmetric(vertical: 8),
                           child: Padding(
                             padding: const EdgeInsets.all(12),
                             child: Column(
-                              crossAxisAlignment:
-                              CrossAxisAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text('${updated['name']} ($id)',
                                     style: const TextStyle(
@@ -237,8 +233,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
                                 Wrap(
                                   spacing: 8,
                                   children: [
-                                    ...(updated['divisions']
-                                    as List<String>)
+                                    ...(updated['divisions'] as List<String>)
                                         .map((division) {
                                       return InputChip(
                                         label: Text(division),
@@ -284,8 +279,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
 
                                         if (toAdd != null) {
                                           setState(() {
-                                            final list =
-                                            List<String>.from(
+                                            final list = List<String>.from(
                                                 updated['divisions']);
                                             list.add(toAdd);
                                             updated['divisions'] = list;
@@ -302,8 +296,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
                                 Wrap(
                                   spacing: 8,
                                   children: [
-                                    ...(updated['areas']
-                                    as List<String>)
+                                    ...(updated['areas'] as List<String>)
                                         .map((area) {
                                       return InputChip(
                                         label: Text(area),
@@ -350,8 +343,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
 
                                         if (toAdd != null) {
                                           setState(() {
-                                            final list =
-                                            List<String>.from(
+                                            final list = List<String>.from(
                                                 updated['areas']);
                                             list.add(toAdd);
                                             updated['areas'] = list;
@@ -400,8 +392,8 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
                                   onPressed: _savingIds.contains(id)
                                       ? null
                                       : () async {
-                                    setState(() =>
-                                        _savingIds.add(id));
+                                    setState(
+                                            () => _savingIds.add(id));
                                     await _saveChanges(
                                         id, data, updated);
                                     if (!mounted) return;

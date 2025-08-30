@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../../utils/snackbar_helper.dart';
+
 class ChatPanel extends StatefulWidget {
   final String roomId;
 
@@ -82,9 +84,8 @@ class _ChatPanelState extends State<ChatPanel> {
       _focusNode.requestFocus();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('전송 실패: $e')),
-      );
+      // ✅ 기본 SnackBar → 커스텀 스낵바
+      showFailedSnackbar(context, '전송 실패: $e');
     }
   }
 
@@ -143,9 +144,8 @@ class _ChatPanelState extends State<ChatPanel> {
 
     if (_shortcuts.contains(value)) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('이미 같은 쇼트컷이 있습니다.')),
-      );
+      // ✅ 기본 SnackBar → 커스텀 스낵바
+      showFailedSnackbar(context, '이미 같은 쇼트컷이 있습니다.');
       return;
     }
 

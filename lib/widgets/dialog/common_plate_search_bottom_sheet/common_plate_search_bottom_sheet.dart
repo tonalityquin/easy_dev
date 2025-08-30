@@ -8,6 +8,7 @@ import 'widgets/search_button.dart';
 
 // FirestorePlateRepository import
 import '../../../repositories/plate/firestore_plate_repository.dart';
+import '../../../utils/snackbar_helper.dart'; // ✅ 커스텀 스낵바
 
 class CommonPlateSearchBottomSheet extends StatefulWidget {
   final void Function(String) onSearch;
@@ -23,10 +24,10 @@ class CommonPlateSearchBottomSheet extends StatefulWidget {
   State<CommonPlateSearchBottomSheet> createState() => _CommonPlateSearchBottomSheetState();
 
   static Future<void> show(
-    BuildContext context,
-    void Function(String) onSearch,
-    String area,
-  ) async {
+      BuildContext context,
+      void Function(String) onSearch,
+      String area,
+      ) async {
     await showGeneralDialog(
       context: context,
       barrierDismissible: true,
@@ -153,23 +154,23 @@ class _CommonPlateSearchBottomSheetState extends State<CommonPlateSearchBottomSh
                     if (_hasSearched)
                       _results.isEmpty
                           ? Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 24),
-                              child: Center(
-                                child: Text(
-                                  '유효하지 않은 번호입니다.',
-                                  style: TextStyle(
-                                    color: Colors.redAccent,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                              ),
-                            )
-                          : PlateSearchResults(
-                              results: _results,
-                              onSelect: (selected) {
-                                Navigator.pop(context);
-                              },
+                        padding: const EdgeInsets.symmetric(vertical: 24),
+                        child: Center(
+                          child: Text(
+                            '유효하지 않은 번호입니다.',
+                            style: TextStyle(
+                              color: Colors.redAccent,
+                              fontSize: 16,
                             ),
+                          ),
+                        ),
+                      )
+                          : PlateSearchResults(
+                        results: _results,
+                        onSelect: (selected) {
+                          Navigator.pop(context);
+                        },
+                      ),
                     Center(
                       child: TextButton(
                         onPressed: () => Navigator.pop(context),
@@ -186,36 +187,33 @@ class _CommonPlateSearchBottomSheetState extends State<CommonPlateSearchBottomSh
                           isLoading: _isLoading,
                           onPressed: valid
                               ? () async {
-                                  setState(() {
-                                    _isLoading = true;
-                                  });
+                            setState(() {
+                              _isLoading = true;
+                            });
 
-                                  try {
-                                    final repository = FirestorePlateRepository();
+                            try {
+                              final repository = FirestorePlateRepository();
 
-                                    final results = await repository.fourDigitCommonQuery(
-                                      plateFourDigit: value.text,
-                                      area: widget.area,
-                                    );
+                              final results = await repository.fourDigitCommonQuery(
+                                plateFourDigit: value.text,
+                                area: widget.area,
+                              );
 
-                                    setState(() {
-                                      _results = results;
-                                      _hasSearched = true;
-                                      _isLoading = false;
-                                    });
+                              setState(() {
+                                _results = results;
+                                _hasSearched = true;
+                                _isLoading = false;
+                              });
 
-                                    widget.onSearch(value.text);
-                                  } catch (e) {
-                                    setState(() {
-                                      _isLoading = false;
-                                    });
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('검색 중 오류가 발생했습니다: $e'),
-                                      ),
-                                    );
-                                  }
-                                }
+                              widget.onSearch(value.text);
+                            } catch (e) {
+                              setState(() {
+                                _isLoading = false;
+                              });
+                              // ❌ 기본 SnackBar → 커스텀 스낵바
+                              showFailedSnackbar(context, '검색 중 오류가 발생했습니다: $e');
+                            }
+                          }
                               : null,
                         );
                       },
@@ -230,22 +228,22 @@ class _CommonPlateSearchBottomSheetState extends State<CommonPlateSearchBottomSh
         bottomNavigationBar: _hasSearched
             ? const SizedBox.shrink()
             : AnimatedKeypad(
-                slideAnimation: _slideAnimation,
-                fadeAnimation: _fadeAnimation,
-                controller: _controller,
-                maxLength: 4,
-                enableDigitModeSwitch: false,
-                onComplete: () {
-                  setState(() {});
-                },
-                onReset: () {
-                  setState(() {
-                    _controller.clear();
-                    _hasSearched = false;
-                    _results.clear();
-                  });
-                },
-              ),
+          slideAnimation: _slideAnimation,
+          fadeAnimation: _fadeAnimation,
+          controller: _controller,
+          maxLength: 4,
+          enableDigitModeSwitch: false,
+          onComplete: () {
+            setState(() {});
+          },
+          onReset: () {
+            setState(() {
+              _controller.clear();
+              _hasSearched = false;
+              _results.clear();
+            });
+          },
+        ),
       ),
     );
   }

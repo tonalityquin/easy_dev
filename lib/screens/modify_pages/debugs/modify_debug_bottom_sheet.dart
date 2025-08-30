@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter/services.dart';
+import '../../../utils/snackbar_helper.dart';
 import 'modify_debug_firestore_logger.dart';
 
 class ModifyDebugBottomSheet extends StatefulWidget {
@@ -31,7 +32,13 @@ class _ModifyDebugBottomSheetState extends State<ModifyDebugBottomSheet> {
       if (text.isEmpty) {
         _logLines = ['🚫 저장된 로그가 없습니다.'];
       } else {
-        _logLines = text.trim().split('\n').where((line) => line.trim().isNotEmpty).toList().reversed.toList();
+        _logLines = text
+            .trim()
+            .split('\n')
+            .where((line) => line.trim().isNotEmpty)
+            .toList()
+            .reversed
+            .toList();
       }
       _filteredLines = List.from(_logLines);
     });
@@ -42,7 +49,8 @@ class _ModifyDebugBottomSheetState extends State<ModifyDebugBottomSheet> {
       if (query.isEmpty) {
         _filteredLines = List.from(_logLines);
       } else {
-        _filteredLines = _logLines.where((line) => line.toLowerCase().contains(query.toLowerCase())).toList();
+        _filteredLines =
+            _logLines.where((line) => line.toLowerCase().contains(query.toLowerCase())).toList();
       }
     });
   }
@@ -51,9 +59,8 @@ class _ModifyDebugBottomSheetState extends State<ModifyDebugBottomSheet> {
     await ModifyDebugFirestoreLogger().clearLog();
     await _loadLog();
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('로그가 삭제되었습니다.')),
-      );
+      // ✅ 기본 SnackBar → 커스텀 스낵바
+      showSuccessSnackbar(context, '로그가 삭제되었습니다.');
     }
   }
 
@@ -61,9 +68,8 @@ class _ModifyDebugBottomSheetState extends State<ModifyDebugBottomSheet> {
     final file = ModifyDebugFirestoreLogger().getLogFile();
     if (file == null || !await file.exists()) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('내보낼 로그 파일이 없습니다.')),
-        );
+        // ✅ 실패 스낵바
+        showFailedSnackbar(context, '내보낼 로그 파일이 없습니다.');
       }
       return;
     }
@@ -79,9 +85,8 @@ class _ModifyDebugBottomSheetState extends State<ModifyDebugBottomSheet> {
     final allLogs = _filteredLines.reversed.join('\n');
     await Clipboard.setData(ClipboardData(text: allLogs));
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('로그가 클립보드에 복사되었습니다.')),
-      );
+      // ✅ 성공 스낵바
+      showSuccessSnackbar(context, '로그가 클립보드에 복사되었습니다.');
     }
   }
 
@@ -144,7 +149,9 @@ class _ModifyDebugBottomSheetState extends State<ModifyDebugBottomSheet> {
             ),
             const Divider(height: 1),
             Expanded(
-              child: _isLoading ? const Center(child: CircularProgressIndicator()) : _buildLogList(),
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _buildLogList(),
             ),
           ],
         ),

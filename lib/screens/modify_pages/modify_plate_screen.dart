@@ -186,7 +186,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
             ),
             const SizedBox(height: 32.0),
             const Text(
-              '추가 상태 메모 (최대 10자)',
+              '추가 상태 메모 (최대 10자)', // ← 안내 문구와 maxLength(20) 불일치 주의
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
@@ -210,13 +210,11 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                       _controller.customStatusController.clear();
                       selectedStatusNames = [];
                     });
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('자동 메모가 삭제되었습니다')),
-                    );
+                    // ✅ 커스텀 스낵바 사용(성공)
+                    showSuccessSnackbar(context, '자동 메모가 삭제되었습니다');
                   } catch (_) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('삭제 실패. 다시 시도해주세요')),
-                    );
+                    // ✅ 커스텀 스낵바 사용(실패)
+                    showFailedSnackbar(context, '삭제 실패. 다시 시도해주세요');
                   }
                 },
               ),

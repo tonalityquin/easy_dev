@@ -4,6 +4,7 @@ import 'package:flutter/services.dart' show Clipboard, ClipboardData, rootBundle
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:googleapis_auth/auth_io.dart';
 
+import '../../../utils/snackbar_helper.dart';
 import '../../../widgets/navigation/secondary_mini_navigation.dart';
 import 'google_drives/add_permission_bottom_sheet.dart';
 
@@ -128,9 +129,7 @@ class _GoogleDriveState extends State<GoogleDrive> {
                     final url = 'https://drive.google.com/file/d/${file.id}/view';
                     Clipboard.setData(ClipboardData(text: url));
                     Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('링크가 복사되었습니다: ${file.name}')),
-                    );
+                    showSuccessSnackbar(context, '링크가 복사되었습니다: ${file.name}');
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Theme.of(context).primaryColor,

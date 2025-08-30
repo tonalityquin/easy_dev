@@ -12,6 +12,7 @@ import 'package:provider/provider.dart';
 import '../../../../../../states/area/area_state.dart';
 import '../../../../../../states/user/user_state.dart';
 import '../../../../../repositories/plate/plate_count_service.dart';
+import '../../../../../../utils/snackbar_helper.dart'; // ✅ SnackbarHelper 사용
 
 const String kBucketName = 'easydev-image';
 const String kServiceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
@@ -268,15 +269,16 @@ class _EndWorkReportContentState extends State<EndWorkReportContent> {
       final division = user?.divisions.first;
       final area = context.read<AreaState>().currentArea;
 
-      if (division == null || area.isEmpty) return;
+      if (division == null || area.isEmpty) {
+        showFailedSnackbar(context, '지역/부서 정보가 없습니다.');
+        return;
+      }
 
       final entry = int.tryParse(_inputCtrl.text.trim());
       final exit = int.tryParse(_outputCtrl.text.trim());
 
       if (entry == null || exit == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('입차/출차 차량 수는 숫자만 입력 가능합니다.')),
-        );
+        showFailedSnackbar(context, '입차/출차 차량 수는 숫자만 입력 가능합니다.');
         return;
       }
 
@@ -297,6 +299,9 @@ class _EndWorkReportContentState extends State<EndWorkReportContent> {
 
       await widget.onReport('end', jsonEncode(reportMap));
       HapticFeedback.mediumImpact();
+      showSuccessSnackbar(context, '업무 종료 보고를 제출했습니다.');
+    } catch (e) {
+      showFailedSnackbar(context, '보고 제출 실패: $e');
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -445,8 +450,6 @@ Future<String?> uploadEndWorkReportJson({
     Object()
       ..name = destinationPath
       ..contentDisposition = 'attachment'
-    // (선택) 캐시 억제 필요 시 주석 해제
-    // ..cacheControl = 'no-cache, no-store, max-age=0, must-revalidate'
       ..acl = [
         ObjectAccessControl()
           ..entity = 'allUsers'
@@ -499,8 +502,6 @@ Future<String?> uploadEndLogJson({
     Object()
       ..name = destinationPath
       ..contentDisposition = 'attachment'
-    // (선택) 캐시 억제 필요 시 주석 해제
-    // ..cacheControl = 'no-cache, no-store, max-age=0, must-revalidate'
       ..acl = [
         ObjectAccessControl()
           ..entity = 'allUsers'

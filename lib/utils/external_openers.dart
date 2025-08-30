@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:android_intent_plus/android_intent.dart';
 import 'package:android_intent_plus/flag.dart';
+import 'snackbar_helper.dart'; // ✅ 커스텀 스낵바 헬퍼
 
 /// Gmail 수신함을 '외부 앱'으로 연다.
 /// - ANDROID: Gmail 앱의 이메일 카테고리 인텐트로 수신함(앱 홈) 열기
@@ -68,8 +69,7 @@ Future<void> openGmailInbox(BuildContext context) async {
   }
 
   if (context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Gmail 수신함을 열 수 없습니다.')),
-    );
+    // ✅ 기본 SnackBar → 커스텀 스낵바
+    showFailedSnackbar(context, 'Gmail 수신함을 열 수 없습니다.');
   }
 }

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../states/area/area_state.dart';
 import '../../../states/location/location_state.dart';
 import '../../../repositories/location/location_repository.dart';
+import '../../../utils/snackbar_helper.dart'; // ✅ 커스텀 스낵바 헬퍼 추가
 
 class ParkingCompletedLocationPicker extends StatefulWidget {
   final Function(String locationName) onLocationSelected;
@@ -33,9 +34,8 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
     final now = DateTime.now();
     if (_lastRefreshedAt != null && now.difference(_lastRefreshedAt!) < _cooldown) {
       final remaining = _cooldown - now.difference(_lastRefreshedAt!);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${remaining.inSeconds}초 후 다시 시도해주세요')),
-      );
+      // ✅ 정보성 안내 → 선택 스낵바
+      showSelectedSnackbar(context, '${remaining.inSeconds}초 후 다시 시도해주세요');
       return;
     }
 
@@ -46,9 +46,8 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
     } catch (e) {
       debugPrint('🚨 새로고침 중 오류: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("새로고침 중 오류가 발생했습니다")),
-        );
+        // ✅ 실패 스낵바
+        showFailedSnackbar(context, '새로고침 중 오류가 발생했습니다');
       }
     } finally {
       if (mounted) setState(() => _isRefreshing = false);
