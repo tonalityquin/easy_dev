@@ -10,10 +10,29 @@ class LocationSettingBottomSheet extends StatefulWidget {
   State<LocationSettingBottomSheet> createState() => _LocationSettingBottomSheetState();
 }
 
+/// 하위 구역 입력 컨트롤러를 타입 안전하게 보관
+class _SubFieldCtrls {
+  final TextEditingController name;
+  final TextEditingController capacity;
+
+  _SubFieldCtrls(this.name, this.capacity);
+
+  void dispose() {
+    name.dispose();
+    capacity.dispose();
+  }
+}
+
 class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet> {
+  // 상위(단일/복합 공통)
   final TextEditingController _locationController = TextEditingController();
+
+  // 단일 모드용
   final TextEditingController _capacityController = TextEditingController();
-  final List<Map<String, TextEditingController>> _subControllers = [];
+
+  // 복합 모드용
+  final List<_SubFieldCtrls> _subControllers = <_SubFieldCtrls>[];
+
   String? _errorMessage;
   bool _isSingle = true;
 
@@ -21,58 +40,83 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
   void dispose() {
     _locationController.dispose();
     _capacityController.dispose();
-    for (var pair in _subControllers) {
-      pair['name']?.dispose();
-      pair['capacity']?.dispose();
+    for (final s in _subControllers) {
+      s.dispose();
     }
     super.dispose();
   }
 
-  bool _validateInput() {
-    bool isValid = _locationController.text.trim().isNotEmpty;
+  // ---------- 검증/계산 ----------
 
-    if (_isSingle) {
-      final capacityText = _capacityController.text.trim();
-      final parsed = int.tryParse(capacityText);
-      isValid = isValid && capacityText.isNotEmpty && parsed != null && parsed > 0;
-    } else {
-      bool hasValidSub = _subControllers.any(
-        (map) => map['name']!.text.trim().isNotEmpty,
-      );
-      isValid = isValid && hasValidSub;
+  bool _validateInput() {
+    final parent = _locationController.text.trim();
+    if (parent.isEmpty) {
+      _setError('구역명을 입력하세요.');
+      return false;
     }
 
-    setState(() {
-      _errorMessage =
-          !isValid ? (_isSingle ? '주차 구역명과 1 이상의 유효한 수용 대수를 입력하세요.' : '상위 구역명과 하나 이상의 하위 구역이 필요합니다.') : null;
-    });
+    if (_isSingle) {
+      final capText = _capacityController.text.trim();
+      final cap = int.tryParse(capText);
+      if (cap == null || cap <= 0) {
+        _setError('1 이상의 유효한 수용 대수를 입력하세요.');
+        return false;
+      }
+      _clearError();
+      return true;
+    } else {
+      // 최소 한 개의 하위 구역: 이름 있고, 수용대수 > 0
+      final hasValidSub = _subControllers.any((c) {
+        final nameOk = c.name.text.trim().isNotEmpty;
+        final cap = int.tryParse(c.capacity.text.trim());
+        final capOk = (cap != null && cap > 0);
+        return nameOk && capOk;
+      });
 
-    return isValid;
+      if (!hasValidSub) {
+        _setError('상위 구역명과 1개 이상 유효한 하위 구역이 필요합니다.');
+        return false;
+      }
+      _clearError();
+      return true;
+    }
   }
 
+  int _calculateTotalSubCapacity() {
+    int total = 0;
+    for (final s in _subControllers) {
+      final cap = int.tryParse(s.capacity.text.trim()) ?? 0;
+      total += cap;
+    }
+    return total;
+  }
+
+  void _setError(String msg) => setState(() => _errorMessage = msg);
+
+  void _clearError() => setState(() => _errorMessage = null);
+
+  // ---------- 하위 구역 편집 ----------
+
   void _addSubLocation() {
+    final name = TextEditingController();
+    final capacity = TextEditingController();
+
+    // 입력 시 합계 텍스트 실시간 갱신
+    capacity.addListener(() => setState(() {}));
+
     setState(() {
-      _subControllers.add({
-        'name': TextEditingController(),
-        'capacity': TextEditingController(),
-      });
+      _subControllers.add(_SubFieldCtrls(name, capacity));
     });
   }
 
   void _removeSubLocation(int index) {
     setState(() {
-      _subControllers[index]['name']?.dispose();
-      _subControllers[index]['capacity']?.dispose();
+      _subControllers[index].dispose();
       _subControllers.removeAt(index);
     });
   }
 
-  int _calculateTotalSubCapacity() {
-    return _subControllers.fold(0, (total, map) {
-      final cap = int.tryParse(map['capacity']!.text.trim()) ?? 0;
-      return total + cap;
-    });
-  }
+  // ---------- 저장 ----------
 
   void _handleSave() {
     FocusScope.of(context).unfocus();
@@ -85,10 +129,10 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
         'capacity': int.parse(_capacityController.text.trim()),
       });
     } else {
-      final subs = _subControllers.where((map) => map['name']!.text.trim().isNotEmpty).map((map) {
-        final cap = int.tryParse(map['capacity']!.text.trim()) ?? 0;
+      final subs = _subControllers.where((c) => c.name.text.trim().isNotEmpty).map((c) {
+        final cap = int.tryParse(c.capacity.text.trim()) ?? 0;
         return {
-          'name': map['name']!.text.trim(),
+          'name': c.name.text.trim(),
           'capacity': cap,
         };
       }).toList();
@@ -104,8 +148,25 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
     Navigator.pop(context);
   }
 
+  // ---------- UI ----------
+
+  InputDecoration _inputDecoration(BuildContext context, String label) {
+    final cs = Theme.of(context).colorScheme;
+    return InputDecoration(
+      labelText: label,
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      focusedBorder: OutlineInputBorder(
+        borderSide: BorderSide(color: cs.primary),
+        borderRadius: BorderRadius.circular(8),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
 
     return Padding(
@@ -114,12 +175,13 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
         child: Container(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
           decoration: const BoxDecoration(
-            color: Colors.white,
+            color: Colors.white, // 바텀시트 배경 고정(요구사항에 따라 surface로 변경 가능)
             borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Drag handle
               Center(
                 child: Container(
                   width: 40,
@@ -131,21 +193,24 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
                   ),
                 ),
               ),
+
               const Text(
                 '주차 구역 설정',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
 
+              // 모드 선택
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   ChoiceChip(
                     label: const Text('단일'),
                     selected: _isSingle,
-                    selectedColor: Colors.green,
-                    backgroundColor: Colors.purple.withOpacity(0.2),
-                    labelStyle: TextStyle(color: _isSingle ? Colors.white : Colors.black),
+                    selectedColor: cs.primary,
+                    backgroundColor: cs.surfaceVariant,
+                    labelStyle: TextStyle(color: _isSingle ? cs.onPrimary : cs.onSurface),
+                    showCheckmark: false,
                     onSelected: (selected) {
                       if (selected) setState(() => _isSingle = true);
                     },
@@ -154,9 +219,10 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
                   ChoiceChip(
                     label: const Text('복합'),
                     selected: !_isSingle,
-                    selectedColor: Colors.green,
-                    backgroundColor: Colors.purple.withOpacity(0.2),
-                    labelStyle: TextStyle(color: !_isSingle ? Colors.white : Colors.black),
+                    selectedColor: cs.primary,
+                    backgroundColor: cs.surfaceVariant,
+                    labelStyle: TextStyle(color: !_isSingle ? cs.onPrimary : cs.onSurface),
+                    showCheckmark: false,
                     onSelected: (selected) {
                       if (selected) {
                         setState(() {
@@ -170,20 +236,36 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
               ),
               const SizedBox(height: 20),
 
+              // 상위 구역명
               TextField(
                 controller: _locationController,
-                decoration: _inputDecoration(_isSingle ? '구역명' : '상위 구역명'),
+                onTapOutside: (_) => FocusScope.of(context).unfocus(),
+                textInputAction: TextInputAction.next,
+                decoration: _inputDecoration(context, _isSingle ? '구역명' : '상위 구역명'),
+                onSubmitted: (_) {
+                  if (_isSingle) {
+                    // 단일 모드일 때 수용대수로 이동
+                    FocusScope.of(context).nextFocus();
+                  }
+                },
               ),
               const SizedBox(height: 16),
 
+              // 단일 모드: 수용대수
               if (_isSingle)
                 TextField(
                   controller: _capacityController,
+                  onTapOutside: (_) => FocusScope.of(context).unfocus(),
                   keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: _inputDecoration('수용 가능 차량 수'),
+                  textInputAction: TextInputAction.done,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(4),
+                  ],
+                  decoration: _inputDecoration(context, '수용 가능 차량 수'),
                 ),
 
+              // 복합 모드: 하위 구역 목록
               if (!_isSingle)
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -192,30 +274,39 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
                     const SizedBox(height: 8),
                     ..._subControllers.asMap().entries.map((entry) {
                       final index = entry.key;
-                      final map = entry.value;
+                      final sub = entry.value;
                       return Padding(
+                        key: ValueKey(sub), // 안정 키
                         padding: const EdgeInsets.symmetric(vertical: 6),
                         child: Row(
                           children: [
                             Expanded(
                               child: TextField(
-                                controller: map['name'],
-                                decoration: _inputDecoration('하위 ${index + 1}'),
+                                controller: sub.name,
+                                onTapOutside: (_) => FocusScope.of(context).unfocus(),
+                                textInputAction: TextInputAction.next,
+                                decoration: _inputDecoration(context, '하위 ${index + 1}'),
                               ),
                             ),
                             const SizedBox(width: 8),
                             SizedBox(
-                              width: 80,
+                              width: 100,
                               child: TextField(
-                                controller: map['capacity'],
+                                controller: sub.capacity,
+                                onTapOutside: (_) => FocusScope.of(context).unfocus(),
                                 keyboardType: TextInputType.number,
-                                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                                decoration: _inputDecoration('수용'),
+                                textInputAction: TextInputAction.next,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                  LengthLimitingTextInputFormatter(4),
+                                ],
+                                decoration: _inputDecoration(context, '수용'),
                               ),
                             ),
                             IconButton(
                               onPressed: () => _removeSubLocation(index),
                               icon: const Icon(Icons.delete, color: Colors.red),
+                              tooltip: '하위 구역 삭제',
                             ),
                           ],
                         ),
@@ -236,10 +327,12 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
 
               if (_errorMessage != null) ...[
                 const SizedBox(height: 12),
-                Text(_errorMessage!, style: const TextStyle(color: Colors.red)),
+                Text(_errorMessage!, style: TextStyle(color: cs.error)),
               ],
 
               const SizedBox(height: 24),
+
+              // 하단 액션
               Row(
                 children: [
                   Expanded(
@@ -253,8 +346,8 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
                     child: ElevatedButton(
                       onPressed: _handleSave,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
+                        backgroundColor: cs.primary,
+                        foregroundColor: cs.onPrimary,
                       ),
                       child: const Text('저장'),
                     ),
@@ -264,17 +357,6 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  InputDecoration _inputDecoration(String label) {
-    return InputDecoration(
-      labelText: label,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-      focusedBorder: OutlineInputBorder(
-        borderSide: const BorderSide(color: Colors.green),
-        borderRadius: BorderRadius.circular(8),
       ),
     );
   }
