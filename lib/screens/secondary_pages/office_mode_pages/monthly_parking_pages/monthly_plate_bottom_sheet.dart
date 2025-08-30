@@ -31,18 +31,19 @@ class MonthlyPlateBottomSheet extends StatefulWidget {
 
 class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
   late final MonthlyPlateController controller;
-  List<String> selectedStatusNames = [];
   Key statusSectionKey = UniqueKey();
 
   final TextEditingController _regularNameController = TextEditingController();
   final TextEditingController _regularAmountController = TextEditingController();
   final TextEditingController _regularDurationController = TextEditingController();
   String? _selectedRegularType;
-  String _selectedBillingType = '정기';
   String _selectedPeriodUnit = '월';
 
   final TextEditingController _startDateController = TextEditingController();
   final TextEditingController _endDateController = TextEditingController();
+
+  // 명시적으로 해제할 리스너 참조
+  late VoidCallback _backListener;
 
   @override
   void initState() {
@@ -59,7 +60,8 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
       selectedRegularType: _selectedRegularType,
     );
 
-    // ✅ 수정 모드일 경우 키패드 비활성화
+    // 수정 모드 시 컨트롤러도 상태 반영 + 키패드 숨김
+    controller.isEditMode = widget.isEditMode;
     if (widget.isEditMode) {
       controller.showKeypad = false;
     }
@@ -69,11 +71,13 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
       _populateFields(widget.initialData!);
     }
 
-    controller.controllerBackDigit.addListener(() {
+    // 뒤 4자리 입력 완료 감지 리스너 (필요 시 동작 추가)
+    _backListener = () {
       if (controller.controllerBackDigit.text.length == 4 && controller.isInputValid()) {
-        // 필요 시 동작 추가
+        // 필요 시 후처리
       }
-    });
+    };
+    controller.controllerBackDigit.addListener(_backListener);
   }
 
   void _populateFields(Map<String, dynamic> data) {
@@ -91,15 +95,20 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
     _regularDurationController.text = (data['regularDurationHours'] ?? '').toString();
     _startDateController.text = data['startDate'] ?? '';
     _endDateController.text = data['endDate'] ?? '';
+
     _selectedPeriodUnit = data['periodUnit'] ?? '월';
     _selectedRegularType = data['regularType'];
     controller.selectedPeriodUnit = _selectedPeriodUnit;
+
     controller.customStatusController.text = data['customStatus'] ?? '';
     controller.selectedStatuses = List<String>.from(data['statusList'] ?? []);
   }
 
   @override
   void dispose() {
+    // 명시적으로 리스너 제거(안전)
+    controller.controllerBackDigit.removeListener(_backListener);
+
     controller.dispose();
     _regularNameController.dispose();
     _regularAmountController.dispose();
@@ -152,6 +161,9 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
+    // 컨트롤러의 단위를 신뢰원천으로 동기화
+    _selectedPeriodUnit = controller.selectedPeriodUnit;
+
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return SafeArea(
@@ -175,7 +187,10 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
                   ),
                   IconButton(
                     icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed: () {
+                      final nav = Navigator.of(context, rootNavigator: true);
+                      if (nav.canPop()) nav.pop();
+                    },
                   ),
                 ],
               ),
@@ -187,16 +202,14 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
                     children: [
                       MonthlyPlateSection(
                         dropdownValue: controller.dropdownValue,
-                        regions: controller.regions,
+                        regions: MonthlyPlateController.regions,
                         controllerFrontDigit: controller.controllerFrontDigit,
                         controllerMidDigit: controller.controllerMidDigit,
                         controllerBackDigit: controller.controllerBackDigit,
                         activeController: controller.activeController,
-                        onKeypadStateChanged: (_) {
-                          setState(() {
-                            controller.clearInput();
-                            controller.setActiveController(controller.controllerFrontDigit);
-                          });
+                        onKeypadStateChanged: (tc) {
+                          // 값 초기화 없이 활성 필드 전환만
+                          setState(() => controller.setActiveController(tc));
                         },
                         onRegionChanged: (region) {
                           setState(() {
@@ -207,26 +220,18 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
                         isEditMode: widget.isEditMode,
                       ),
                       const SizedBox(height: 32),
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: DropdownButtonFormField<String>(
-                          value: _selectedBillingType,
-                          decoration: const InputDecoration(
-                            labelText: '정산 유형',
-                            border: OutlineInputBorder(),
-                          ),
-                          items: const [
-                            DropdownMenuItem(value: '정기', child: Text('정기')),
-                          ],
-                          onChanged: (value) {
-                            setState(() {
-                              _selectedBillingType = value!;
-                              controller.selectedBillType = value;
-                            });
-                          },
+
+                      // 정산 유형(단일 옵션인 경우 읽기 전용 표시가 자연스러움)
+                      InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: '정산 유형',
+                          border: OutlineInputBorder(),
                         ),
+                        child: const Text('정기'),
                       ),
-                      if (widget.isEditMode)
+
+                      if (widget.isEditMode) ...[
+                        const SizedBox(height: 16),
                         MonthlyPaymentSection(
                           controller: controller,
                           onExtendedChanged: (val) {
@@ -235,6 +240,8 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
                             });
                           },
                         ),
+                      ],
+
                       const SizedBox(height: 32),
                       MonthlyBillSection(
                         nameController: _regularNameController,
@@ -245,12 +252,13 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
                         selectedPeriodUnit: _selectedPeriodUnit,
                         onPeriodUnitChanged: (val) {
                           setState(() {
-                            _selectedPeriodUnit = val!;
-                            controller.selectedPeriodUnit = val;
+                            controller.selectedPeriodUnit = val!;
+                            _selectedPeriodUnit = val;
                           });
                         },
                       ),
                       const SizedBox(height: 32),
+
                       MonthlyCustomStatusSection(
                         controller: controller,
                         fetchedCustomStatus: controller.fetchedCustomStatus,
@@ -262,12 +270,13 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
                           });
                         },
                         onStatusCleared: () {
+                          // 섹션 강제 리빌드용 키 재생성만
                           setState(() {
-                            selectedStatusNames = [];
                             statusSectionKey = UniqueKey();
                           });
                         },
                       ),
+
                       const SizedBox(height: 16),
                       DateRangePickerSection(
                         startDateController: _startDateController,

@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
 import '../utils/monthly_plate_field.dart';
 import '../widgets/monthly_region_bottom_sheet.dart';
+
 class MonthlyPlateSection extends StatelessWidget {
   final String dropdownValue;
   final List<String> regions;
+
   final TextEditingController controllerFrontDigit;
   final TextEditingController controllerMidDigit;
   final TextEditingController controllerBackDigit;
+
   final TextEditingController activeController;
   final ValueChanged<TextEditingController> onKeypadStateChanged;
   final ValueChanged<String> onRegionChanged;
+
   final bool isThreeDigit;
   final bool isEditMode;
 
@@ -29,6 +33,8 @@ class MonthlyPlateSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -37,35 +43,50 @@ class MonthlyPlateSection extends StatelessWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            GestureDetector(
-              onTap: isEditMode
-                  ? null
-                  : () {
-                monthlyRegionPickerBottomSheet(
-                  context: context,
-                  selectedRegion: dropdownValue,
-                  regions: regions,
-                  onConfirm: onRegionChanged,
-                );
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.transparent),
-                  borderRadius: BorderRadius.circular(8),
+            // 지역 선택: 접근성/피드백/비활성화 반영
+            Semantics(
+              button: true,
+              enabled: !isEditMode,
+              label: '지역 선택: $dropdownValue',
+              child: OutlinedButton(
+                onPressed: isEditMode
+                    ? null
+                    : () {
+                  monthlyRegionPickerBottomSheet(
+                    context: context,
+                    selectedRegion: dropdownValue,
+                    regions: regions,
+                    onConfirm: onRegionChanged,
+                  );
+                },
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: cs.primary,
+                  side: BorderSide(color: cs.primary, width: 1),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      dropdownValue,
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                  ],
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 140),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          dropdownValue,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      const Icon(Icons.expand_more, size: 18),
+                    ],
+                  ),
                 ),
               ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 12),
+            // 번호판 입력 필드
             Expanded(
               child: MonthlyPlateField(
                 frontDigitCount: isThreeDigit ? 3 : 2,
@@ -85,4 +106,3 @@ class MonthlyPlateSection extends StatelessWidget {
     );
   }
 }
-
