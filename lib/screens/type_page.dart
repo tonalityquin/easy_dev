@@ -65,7 +65,7 @@ class _TypePageState extends State<TypePage> {
                         Expanded(
                           child: StreamBuilder<String>(
                             stream: latestMessageStream(
-                              context.read<UserState>().user?.currentArea?.trim() ?? '',
+                              context.read<AreaState>().currentArea.trim(),
                             ),
                             builder: (context, snapshot) {
                               final latestMessage = snapshot.data ?? '채팅 열기';
@@ -98,9 +98,7 @@ class _TypePageState extends State<TypePage> {
                             },
                           ),
                         ),
-
                         const SizedBox(width: 8),
-
                         Expanded(
                           child: ElevatedButton(
                             onPressed: () {
@@ -249,7 +247,6 @@ class PageBottomNavigation extends StatelessWidget {
           showUnselectedLabels: true,
           type: BottomNavigationBarType.fixed,
           backgroundColor: Colors.white,
-          // PageBottomNavigation 위젯 안 BottomNavigationBarItem 생성 부분
           items: List.generate(
             pageState.pages.length,
                 (index) {
