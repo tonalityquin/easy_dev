@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -35,9 +36,9 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
     });
 
     context.read<PlateState>().updateSortOrder(
-          PlateType.departureRequests,
-          _isSorted,
-        );
+      PlateType.departureRequests,
+      _isSorted,
+    );
   }
 
   void _toggleLock() {
@@ -49,38 +50,46 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
   void _showSearchDialog(BuildContext context) {
     final currentArea = context.read<AreaState>().currentArea;
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => CommonPlateSearchBottomSheet(
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => CommonPlateSearchBottomSheet(
         onSearch: (query) {},
         area: currentArea,
       ),
     );
   }
 
-  void _handleDepartureCompleted(BuildContext context) async {
+  Future<void> _handleDepartureCompleted(BuildContext context) async {
     final movementPlate = context.read<MovementPlate>();
     final plateState = context.read<PlateState>();
-    final userState = context.read<UserState>();
-    final userName = userState.name;
-    final selectedPlate = plateState.getSelectedPlate(PlateType.departureRequests, userName);
+    final userName = context.read<UserState>().name;
+
+    final selectedPlate =
+    plateState.getSelectedPlate(PlateType.departureRequests, userName);
 
     if (selectedPlate == null) return;
 
     try {
-      plateState.togglePlateIsSelected(
+      // 1) 먼저 출차 완료 처리
+      await movementPlate.setDepartureCompleted(selectedPlate);
+
+      if (!context.mounted) return;
+
+      // 2) 성공 후 선택 해제 (await 보장)
+      await plateState.togglePlateIsSelected(
         collection: PlateType.departureRequests,
         plateNumber: selectedPlate.plateNumber,
         userName: userName,
         onError: (_) {},
       );
 
-      await movementPlate.setDepartureCompleted(selectedPlate);
-
-      if (!context.mounted) return;
       showSuccessSnackbar(context, '출차 완료 처리되었습니다.');
     } catch (e) {
-      debugPrint("출차 완료 처리 실패: $e");
+      if (kDebugMode) {
+        debugPrint("출차 완료 처리 실패: $e");
+      }
       if (context.mounted) {
         showFailedSnackbar(context, "출차 완료 중 오류 발생: $e");
       }
@@ -104,7 +113,9 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
             collection: PlateType.departureRequests,
             plateNumber: selectedPlate.plateNumber,
             userName: userName,
-            onError: (msg) => debugPrint(msg),
+            onError: (msg) {
+              if (kDebugMode) debugPrint(msg);
+            },
           );
           return false;
         }
@@ -121,43 +132,60 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
         ),
         body: Consumer<PlateState>(
           builder: (context, plateState, child) {
-            List<PlateModel> departureRequests = plateState.getPlatesByCollection(PlateType.departureRequests);
+            List<PlateModel> departureRequests =
+            plateState.getPlatesByCollection(PlateType.departureRequests);
 
-            debugPrint('📦 전체 출차 요청 plate 수: ${departureRequests.length}');
-            if (departureRequests.isNotEmpty) {
-              debugPrint('🔍 첫 번째 plate: ${departureRequests.first.plateNumber} @ ${departureRequests.first.location}');
+            if (kDebugMode) {
+              debugPrint('📦 전체 출차 요청 plate 수: ${departureRequests.length}');
+              if (departureRequests.isNotEmpty) {
+                debugPrint(
+                    '🔍 첫 번째 plate: ${departureRequests.first.plateNumber} @ ${departureRequests.first.location}');
+              }
             }
 
-            departureRequests.sort((a, b) {
-              final aTime = a.requestTime;
-              final bTime = b.requestTime;
-              return _isSorted ? bTime.compareTo(aTime) : aTime.compareTo(bTime);
-            });
+            // null-safe 정렬 (requestTime이 null일 가능성 방어)
+            departureRequests.sort((a, b) =>
+            _isSorted
+                ? b.requestTime.compareTo(a.requestTime) // 최신순
+                : a.requestTime.compareTo(b.requestTime) // 오래된순
+            );
+
+            final isEmpty = departureRequests.isEmpty;
 
             return Stack(
               children: [
-                ListView(
-                  padding: const EdgeInsets.all(8.0),
-                  children: [
-                    PlateContainer(
-                      data: departureRequests,
-                      collection: PlateType.departureRequests,
-                      filterCondition: (request) => request.type == PlateType.departureRequests.firestoreValue,
-                      onPlateTap: (plateNumber, area) {
-                        if (_isLocked) return;
-
-                        plateState.togglePlateIsSelected(
-                          collection: PlateType.departureRequests,
-                          plateNumber: plateNumber,
-                          userName: userName,
-                          onError: (errorMessage) {
-                            showFailedSnackbar(context, errorMessage);
-                          },
-                        );
-                      },
+                if (isEmpty)
+                  const Center(
+                    child: Text(
+                      '출차 요청이 없습니다.',
+                      style: TextStyle(color: Colors.grey),
                     ),
-                  ],
-                ),
+                  )
+                else
+                  ListView(
+                    padding: const EdgeInsets.all(8.0),
+                    children: [
+                      PlateContainer(
+                        data: departureRequests,
+                        collection: PlateType.departureRequests,
+                        filterCondition: (request) =>
+                        request.type ==
+                            PlateType.departureRequests.firestoreValue,
+                        onPlateTap: (plateNumber, area) {
+                          if (_isLocked) return;
+
+                          plateState.togglePlateIsSelected(
+                            collection: PlateType.departureRequests,
+                            plateNumber: plateNumber,
+                            userName: userName,
+                            onError: (errorMessage) {
+                              showFailedSnackbar(context, errorMessage);
+                            },
+                          );
+                        },
+                      ),
+                    ],
+                  ),
                 if (_isLocked)
                   Positioned.fill(
                     child: GestureDetector(
@@ -177,12 +205,9 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
           toggleSortIcon: _toggleSortIcon,
           toggleLock: _toggleLock,
           handleDepartureCompleted: () => _handleDepartureCompleted(context),
-          handleEntryParkingRequest: (ctx, plateNumber, area) {
-            handleEntryParkingRequest(ctx, plateNumber, area);
-          },
-          handleEntryParkingCompleted: (ctx, plateNumber, area, location) {
-            handleEntryParkingCompleted(ctx, plateNumber, area, location);
-          },
+          // 불필요한 래핑 제거: 함수 레퍼런스 직접 전달
+          handleEntryParkingRequest: handleEntryParkingRequest,
+          handleEntryParkingCompleted: handleEntryParkingCompleted,
         ),
       ),
     );

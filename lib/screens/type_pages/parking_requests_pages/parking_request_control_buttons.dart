@@ -1,10 +1,12 @@
+// lib/screens/type_pages/parking_requests_pages/parking_request_control_buttons.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // HapticFeedback
 import 'package:provider/provider.dart';
 
 import '../../../enums/plate_type.dart';
+import '../../../models/plate_model.dart';
 import '../../../repositories/plate/plate_repository.dart';
-import '../../../states/area/area_state.dart';
 import '../../../states/plate/delete_plate.dart';
 import '../../../states/plate/plate_state.dart';
 import '../../../states/user/user_state.dart';
@@ -33,131 +35,145 @@ class ParkingRequestControlButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<PlateState>(
-      builder: (context, plateState, _) {
-        final userName = context.read<UserState>().name;
-        final selectedPlate = plateState.getSelectedPlate(PlateType.parkingRequests, userName);
-        final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
+    final theme = Theme.of(context);
+    final onSurface = theme.colorScheme.onSurface;
+    final muted = theme.colorScheme.onSurfaceVariant;
 
-        return BottomNavigationBar(
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: Colors.white,
-          elevation: 0,
-          selectedFontSize: 12,
-          unselectedFontSize: 12,
-          iconSize: 24,
-          selectedItemColor: Colors.black,
-          unselectedItemColor: Colors.grey[700],
-          items: [
-            BottomNavigationBarItem(
-              icon: Tooltip(
-                message: isPlateSelected ? '정산 관리' : '화면 잠금',
+    // userName은 변경 가능성이 낮으므로 read
+    final userName = context.read<UserState>().name;
+
+    // 선택된 차량만 추출 → 리빌드 최소화
+    final selectedPlate = context.select<PlateState, PlateModel?>(
+          (s) => s.getSelectedPlate(PlateType.parkingRequests, userName),
+    );
+    final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
+
+    return BottomNavigationBar(
+      // 액션용으로 사용하므로 시각적 선택 고정이 중요하지 않아 currentIndex 생략
+      type: BottomNavigationBarType.fixed,
+      backgroundColor: Colors.white,
+      elevation: 0,
+      selectedFontSize: 12,
+      unselectedFontSize: 12,
+      iconSize: 24,
+      selectedItemColor: onSurface,
+      unselectedItemColor: muted,
+      items: [
+        BottomNavigationBarItem(
+          icon: Tooltip(
+            message: isPlateSelected ? '정산 관리' : '화면 잠금',
+            child: Icon(
+              isPlateSelected ? Icons.payments : (isLocked ? Icons.lock : Icons.lock_open),
+              color: muted,
+            ),
+          ),
+          label: isPlateSelected ? '정산 관리' : '화면 잠금',
+        ),
+        BottomNavigationBarItem(
+          icon: Tooltip(
+            message: isPlateSelected ? '입차 완료' : '번호판 검색',
+            child: isPlateSelected
+                ? Icon(Icons.check_circle, color: theme.colorScheme.primary)
+                : Icon(Icons.search, color: muted),
+          ),
+          label: isPlateSelected ? '입차' : '번호판 검색',
+        ),
+        BottomNavigationBarItem(
+          icon: Tooltip(
+            message: isPlateSelected ? '상태 수정' : '정렬 변경',
+            child: AnimatedRotation(
+              turns: isSorted ? 0.5 : 0.0,
+              duration: const Duration(milliseconds: 300),
+              child: Transform.scale(
+                scaleX: isSorted ? -1 : 1,
                 child: Icon(
-                  isPlateSelected
-                      ? Icons.payments
-                      : (isLocked ? Icons.lock : Icons.lock_open),
-                  color: Colors.grey[700],
+                  isPlateSelected ? Icons.settings : Icons.sort,
+                  color: muted,
                 ),
               ),
-              label: isPlateSelected ? '정산 관리' : '화면 잠금',
             ),
-            BottomNavigationBarItem(
-              icon: Tooltip(
-                message: isPlateSelected ? '입차 완료' : '번호판 검색',
-                child: isPlateSelected
-                    ? Icon(Icons.check_circle, color: Colors.green[600])
-                    : Icon(Icons.search, color: Colors.grey[700]),
-              ),
-              label: isPlateSelected ? '입차' : '번호판 검색',
-            ),
-            BottomNavigationBarItem(
-              icon: Tooltip(
-                message: isPlateSelected ? '상태 수정' : '정렬 변경',
-                child: AnimatedRotation(
-                  turns: isSorted ? 0.5 : 0.0,
-                  duration: const Duration(milliseconds: 300),
-                  child: Transform.scale(
-                    scaleX: isSorted ? -1 : 1,
-                    child: Icon(
-                      isPlateSelected ? Icons.settings : Icons.sort,
-                      color: Colors.grey[700],
-                    ),
-                  ),
-                ),
-              ),
-              label: isPlateSelected ? '상태 수정' : (isSorted ? '최신순' : '오래된순'),
-            ),
-          ],
-          onTap: (index) async {
-            final repo = context.read<PlateRepository>();
-            final division = context.read<AreaState>().currentDivision;
-            final area = context.read<AreaState>().currentArea.trim();
+          ),
+          label: isPlateSelected ? '상태 수정' : (isSorted ? '최신순' : '오래된순'),
+        ),
+      ],
+      onTap: (index) async {
+        final repo = context.read<PlateRepository>();
+        final plate = selectedPlate; // ✨ 로컬 변수로 고정
 
-            if (index == 0) {
-              if (isPlateSelected) {
-                await _handleBillingAction(
-                  context,
-                  selectedPlate,
-                  userName,
-                  repo,
-                  division,
-                  area,
-                );
-              } else {
-                onToggleLock();
-              }
-            } else if (index == 1) {
-              isPlateSelected ? onParkingCompleted() : onSearchPressed();
-            } else if (index == 2) {
-              if (isPlateSelected) {
-                await showParkingRequestStatusBottomSheet(
-                  context: context,
-                  plate: selectedPlate,
-                  onCancelEntryRequest: () {
-                    context.read<DeletePlate>().deleteFromParkingRequest(
-                      selectedPlate.plateNumber,
-                      selectedPlate.area,
-                    );
-                    showSuccessSnackbar(context, "입차 요청이 취소되었습니다: ${selectedPlate.plateNumber}");
-                  },
-                  onDelete: () {},
-                );
-              } else {
-                onSortToggle();
-              }
-            }
-          },
-        );
+        // 액션 공통: 가벼운 햅틱
+        HapticFeedback.selectionClick();
+
+        if (index == 0) {
+          if (plate != null && plate.isSelected) {
+            await _handleBillingAction(
+              context,
+              plate, // ✅ PlateModel로 타입 고정
+              userName,
+              repo,
+            );
+          } else {
+            onToggleLock();
+          }
+        } else if (index == 1) {
+          (plate != null && plate.isSelected) ? onParkingCompleted() : onSearchPressed();
+        } else if (index == 2) {
+          if (plate != null && plate.isSelected) {
+            await showParkingRequestStatusBottomSheet(
+              context: context,
+              plate: plate,
+              onCancelEntryRequest: () async {
+                try {
+                  await context.read<DeletePlate>().deleteFromParkingRequest(
+                    plate.plateNumber,
+                    plate.area,
+                  );
+                  HapticFeedback.mediumImpact();
+                  showSuccessSnackbar(context, "입차 요청이 취소되었습니다: ${plate.plateNumber}");
+                } catch (e, st) {
+                  debugPrint('cancel entry request error: $e\n$st');
+                  showFailedSnackbar(context, "입차 요청 취소 중 오류가 발생했습니다.");
+                }
+              },
+            );
+          } else {
+            onSortToggle();
+          }
+        }
       },
     );
   }
 
   Future<void> _handleBillingAction(
       BuildContext context,
-      dynamic selectedPlate,
+      PlateModel selectedPlate, // ✅ 명시 타입
       String userName,
       PlateRepository repo,
-      String division,
-      String area,
       ) async {
     final firestore = FirebaseFirestore.instance;
     final now = DateTime.now();
-    final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
-    final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
-    final documentId = selectedPlate.id;
 
-    // === [추가] 0원 규칙: basicAmount==0 && addAmount==0
-    final bool isZeroZero = ((selectedPlate.basicAmount ?? 0) == 0) &&
-        ((selectedPlate.addAmount ?? 0) == 0);
+    // 키 스냅샷(레이스 대비)
+    final String documentId = selectedPlate.id;
+    final int entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
+    final int currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
 
-    // 0원인데 이미 잠금이면: 해제도 금지 (친절 안내)
-    if (isZeroZero && selectedPlate.isLockedFee) {
+    // ✅ “0원 자동 잠금” 조건(변동 + 정기 모두 명시):
+    // - 변동: basicAmount==0 && addAmount==0
+    // - 정기: billingType == '고정' && regularAmount == 0
+    final type = (selectedPlate.billingType ?? '').trim();
+    final isFixed = type == '고정';
+    final bool isZeroAutoLock =
+        (((selectedPlate.basicAmount ?? 0) == 0) && ((selectedPlate.addAmount ?? 0) == 0)) ||
+            (isFixed && (selectedPlate.regularAmount ?? 0) == 0);
+
+    // 0원 + 이미 잠금 → 해제 금지
+    if (isZeroAutoLock && selectedPlate.isLockedFee) {
       showFailedSnackbar(context, '이 차량은 0원 규칙으로 잠금 상태이며 해제할 수 없습니다.');
       return;
     }
 
-    // 0원인데 아직 잠금이 아니면: 바텀시트 생략하고 자동 잠금
-    if (isZeroZero && !selectedPlate.isLockedFee) {
+    // 0원 + 아직 잠금 아님 → 자동 잠금(바텀시트 생략)
+    if (isZeroAutoLock && !selectedPlate.isLockedFee) {
       final updatedPlate = selectedPlate.copyWith(
         isLockedFee: true,
         lockedAtTimeInSeconds: currentTime,
@@ -165,31 +181,38 @@ class ParkingRequestControlButtons extends StatelessWidget {
         paymentMethod: null,
       );
 
-      await repo.addOrUpdatePlate(documentId, updatedPlate);
-      context.read<PlateState>().updatePlateLocally(PlateType.parkingRequests, updatedPlate);
+      try {
+        await repo.addOrUpdatePlate(documentId, updatedPlate);
+        context.read<PlateState>().updatePlateLocally(PlateType.parkingRequests, updatedPlate);
 
-      final autoLog = {
-        'action': '사전 정산(자동 잠금: 0원)',
-        'performedBy': userName,
-        'timestamp': now.toIso8601String(),
-        'lockedFee': 0,
-        'auto': true,
-      };
-      await firestore.collection('plates').doc(documentId).update({
-        'logs': FieldValue.arrayUnion([autoLog])
-      });
+        final autoLog = {
+          'action': '사전 정산(자동 잠금: 0원)',
+          'performedBy': userName,
+          'timestamp': now.toIso8601String(),
+          'lockedFee': 0,
+          'auto': true,
+        };
+        await firestore.collection('plates').doc(documentId).update({
+          'logs': FieldValue.arrayUnion([autoLog])
+        });
 
-      showSuccessSnackbar(context, '0원 유형이라 자동으로 잠금되었습니다.');
+        HapticFeedback.mediumImpact();
+        showSuccessSnackbar(context, '0원 유형이라 자동으로 잠금되었습니다.');
+      } catch (e, st) {
+        debugPrint('auto-lock(0원) error: $e\n$st');
+        showFailedSnackbar(context, '자동 잠금 처리에 실패했습니다. 다시 시도해 주세요.');
+      }
       return;
     }
 
-    // === 일반 흐름 (0원 규칙이 아닌 경우에만)
+    // 일반 흐름: 정산 타입 확인
     final billingType = selectedPlate.billingType;
     if (billingType == null || billingType.trim().isEmpty) {
       showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
       return;
     }
 
+    // 이미 잠금 → 해제 확인 후 취소 처리
     if (selectedPlate.isLockedFee) {
       final confirm = await showDialog<bool>(
         context: context,
@@ -204,42 +227,51 @@ class ParkingRequestControlButtons extends StatelessWidget {
         paymentMethod: null,
       );
 
-      await repo.addOrUpdatePlate(documentId, updatedPlate);
-      context.read<PlateState>().updatePlateLocally(PlateType.parkingRequests, updatedPlate);
+      try {
+        await repo.addOrUpdatePlate(documentId, updatedPlate);
+        context.read<PlateState>().updatePlateLocally(PlateType.parkingRequests, updatedPlate);
 
-      final cancelLog = {
-        'action': '사전 정산 취소',
-        'performedBy': userName,
-        'timestamp': now.toIso8601String(),
-      };
+        final cancelLog = {
+          'action': '사전 정산 취소',
+          'performedBy': userName,
+          'timestamp': now.toIso8601String(),
+        };
+        await firestore.collection('plates').doc(documentId).update({
+          'logs': FieldValue.arrayUnion([cancelLog])
+        });
 
-      await firestore.collection('plates').doc(documentId).update({
-        'logs': FieldValue.arrayUnion([cancelLog])
-      });
+        HapticFeedback.mediumImpact();
+        showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
+      } catch (e, st) {
+        debugPrint('unlock(cancel fee) error: $e\n$st');
+        showFailedSnackbar(context, '사전 정산 취소 중 오류가 발생했습니다.');
+      }
+      return;
+    }
 
-      showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
-    } else {
-      final result = await showOnTapBillingBottomSheet(
-        context: context,
-        entryTimeInSeconds: entryTime,
-        currentTimeInSeconds: currentTime,
-        basicStandard: selectedPlate.basicStandard ?? 0,
-        basicAmount: selectedPlate.basicAmount ?? 0,
-        addStandard: selectedPlate.addStandard ?? 0,
-        addAmount: selectedPlate.addAmount ?? 0,
-        billingType: selectedPlate.billingType ?? '변동',
-        regularAmount: selectedPlate.regularAmount,
-        regularDurationHours: selectedPlate.regularDurationHours,
-      );
-      if (result == null) return;
+    // 잠금 아님 → 바텀시트 열어 사전 정산
+    final result = await showOnTapBillingBottomSheet(
+      context: context,
+      entryTimeInSeconds: entryTime,
+      currentTimeInSeconds: currentTime,
+      basicStandard: selectedPlate.basicStandard ?? 0,
+      basicAmount: selectedPlate.basicAmount ?? 0,
+      addStandard: selectedPlate.addStandard ?? 0,
+      addAmount: selectedPlate.addAmount ?? 0,
+      billingType: selectedPlate.billingType ?? '변동',
+      regularAmount: selectedPlate.regularAmount,
+      regularDurationHours: selectedPlate.regularDurationHours,
+    );
+    if (result == null) return;
 
-      final updatedPlate = selectedPlate.copyWith(
-        isLockedFee: true,
-        lockedAtTimeInSeconds: currentTime,
-        lockedFeeAmount: result.lockedFee,
-        paymentMethod: result.paymentMethod,
-      );
+    final updatedPlate = selectedPlate.copyWith(
+      isLockedFee: true,
+      lockedAtTimeInSeconds: currentTime,
+      lockedFeeAmount: result.lockedFee,
+      paymentMethod: result.paymentMethod,
+    );
 
+    try {
       await repo.addOrUpdatePlate(documentId, updatedPlate);
       context.read<PlateState>().updatePlateLocally(PlateType.parkingRequests, updatedPlate);
 
@@ -250,14 +282,21 @@ class ParkingRequestControlButtons extends StatelessWidget {
         'lockedFee': result.lockedFee,
         'paymentMethod': result.paymentMethod,
         if (result.reason != null && result.reason!.trim().isNotEmpty)
-          'reason': result.reason!.trim(), // ★ 사유 저장
+          'reason': result.reason!.trim(), // 사유 저장
       };
 
-      await firestore.collection('plates').doc(documentId).update({
+      await FirebaseFirestore.instance.collection('plates').doc(documentId).update({
         'logs': FieldValue.arrayUnion([log])
       });
 
-      showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
+      HapticFeedback.mediumImpact();
+      showSuccessSnackbar(
+        context,
+        '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})',
+      );
+    } catch (e, st) {
+      debugPrint('lock(fee) error: $e\n$st');
+      showFailedSnackbar(context, '사전 정산 처리 중 오류가 발생했습니다.');
     }
   }
 }

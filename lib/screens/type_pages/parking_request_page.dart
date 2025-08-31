@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -24,19 +25,14 @@ class ParkingRequestPage extends StatefulWidget {
 }
 
 class _ParkingRequestPageState extends State<ParkingRequestPage> {
-  bool _isSorted = true;
-  bool _showReportDialog = false;
-  bool _isLocked = false;
+  bool _isSorted = true; // 최신순(true) / 오래된순(false)
+  bool _isLocked = false; // 화면 잠금
 
   void _toggleSortIcon() {
     setState(() {
       _isSorted = !_isSorted;
     });
-
-    context.read<PlateState>().updateSortOrder(
-          PlateType.parkingRequests,
-          _isSorted,
-        );
+    // 간단 패치: 로컬 정렬만 사용 (PlateState.updateSortOrder 호출 제거)
   }
 
   void _toggleLock() {
@@ -46,7 +42,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
   }
 
   void _showSearchDialog(BuildContext context) {
-    final currentArea = context.read<AreaState>().currentArea;
+    final currentArea = context.read<AreaState>().currentArea.trim();
 
     showDialog(
       context: context,
@@ -62,13 +58,13 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
   void _handlePlateTap(BuildContext context, String plateNumber, String area) {
     final userName = context.read<UserState>().name;
     context.read<PlateState>().togglePlateIsSelected(
-          collection: PlateType.parkingRequests,
-          plateNumber: plateNumber,
-          userName: userName,
-          onError: (errorMessage) {
-            showFailedSnackbar(context, errorMessage);
-          },
-        );
+      collection: PlateType.parkingRequests,
+      plateNumber: plateNumber,
+      userName: userName,
+      onError: (errorMessage) {
+        showFailedSnackbar(context, errorMessage);
+      },
+    );
   }
 
   Future<void> _handleParkingCompleted(BuildContext context) async {
@@ -94,7 +90,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
           },
         );
 
-        if (selectedLocation == null) break;
+        if (selectedLocation == null) break; // 닫힘
         if (selectedLocation == 'refresh') continue;
 
         if (selectedLocation.isNotEmpty) {
@@ -126,37 +122,34 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
         showSuccessSnackbar(context, "입차 완료: $plateNumber ($location)");
       }
     } catch (e) {
-      debugPrint('입차 완료 처리 실패: $e');
+      if (kDebugMode) {
+        debugPrint('입차 완료 처리 실패: $e');
+      }
       if (mounted) {
-        showFailedSnackbar(context, "입차 완료 처리 중 오류 발생: $e");
+        showFailedSnackbar(context, "입차 완료 처리 중 오류 발생: 다시 시도해 주세요.");
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final plateState = context.read<PlateState>();
     final userName = context.read<UserState>().name;
 
     return WillPopScope(
       onWillPop: () async {
-        final selectedPlate = plateState.getSelectedPlate(
-          PlateType.parkingRequests,
-          userName,
-        );
+        final selectedPlate = context
+            .read<PlateState>()
+            .getSelectedPlate(PlateType.parkingRequests, userName);
 
         if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
-          await plateState.togglePlateIsSelected(
+          await context.read<PlateState>().togglePlateIsSelected(
             collection: PlateType.parkingRequests,
             plateNumber: selectedPlate.plateNumber,
             userName: userName,
-            onError: (msg) => debugPrint(msg),
+            onError: (msg) {
+              if (kDebugMode) debugPrint(msg);
+            },
           );
-          return false;
-        }
-
-        if (_showReportDialog) {
-          setState(() => _showReportDialog = false);
           return false;
         }
 
@@ -172,11 +165,22 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
         ),
         body: Consumer<PlateState>(
           builder: (context, plateState, child) {
-            final plates = [...plateState.getPlatesByCollection(PlateType.parkingRequests)];
+            final plates = [
+              ...plateState.getPlatesByCollection(PlateType.parkingRequests)
+            ];
 
-            debugPrint('📦 PlateState: parkingRequests 총 개수 → ${plates.length}');
-            final selectedPlate = plateState.getSelectedPlate(PlateType.parkingRequests, userName);
-            debugPrint('✅ 선택된 Plate → ${selectedPlate?.plateNumber ?? "없음"}');
+            if (kDebugMode) {
+              debugPrint('📦 PlateState: parkingRequests 총 개수 → ${plates.length}');
+              final selectedPlate =
+              plateState.getSelectedPlate(PlateType.parkingRequests, userName);
+              debugPrint('✅ 선택된 Plate → ${selectedPlate?.plateNumber ?? "없음"}');
+            }
+
+            if (plates.isEmpty) {
+              return const Center(
+                child: Text('입차 요청 내역이 없습니다.'),
+              );
+            }
 
             plates.sort((a, b) {
               final aTime = a.requestTime;
@@ -192,7 +196,8 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                     PlateContainer(
                       data: plates,
                       collection: PlateType.parkingRequests,
-                      filterCondition: (request) => request.type == PlateType.parkingRequests.firestoreValue,
+                      filterCondition: (request) =>
+                      request.type == PlateType.parkingRequests.firestoreValue,
                       onPlateTap: (plateNumber, area) {
                         _handlePlateTap(context, plateNumber, area);
                       },
@@ -203,7 +208,9 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                   Positioned.fill(
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
-                      onTap: () {},
+                      onTap: () {
+                        showSelectedSnackbar(context, '화면이 잠금 상태입니다.');
+                      },
                       child: const SizedBox.expand(),
                     ),
                   ),

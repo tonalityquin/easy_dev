@@ -1,5 +1,7 @@
+// lib/screens/type_pages/departure_request_pages/departure_request_control_buttons.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // HapticFeedback
 import 'package:provider/provider.dart';
 
 import '../../../enums/plate_type.dart';
@@ -24,8 +26,14 @@ class DepartureRequestControlButtons extends StatelessWidget {
   final VoidCallback handleDepartureCompleted;
   final VoidCallback toggleLock;
 
-  final Function(BuildContext context, String plateNumber, String area) handleEntryParkingRequest;
-  final Function(BuildContext context, String plateNumber, String area, String location) handleEntryParkingCompleted;
+  final Function(BuildContext context, String plateNumber, String area)
+  handleEntryParkingRequest;
+  final Function(
+      BuildContext context,
+      String plateNumber,
+      String area,
+      String location,
+      ) handleEntryParkingCompleted;
 
   const DepartureRequestControlButtons({
     super.key,
@@ -41,18 +49,26 @@ class DepartureRequestControlButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Consumer<PlateState>(
       builder: (context, plateState, _) {
         final userName = context.read<UserState>().name;
-        final selectedPlate = plateState.getSelectedPlate(PlateType.departureRequests, userName);
-        final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
+
+        // 선택된 Plate만 구독해 불필요한 리빌드 최소화
+        final selectedPlate = plateState.getSelectedPlate(
+          PlateType.departureRequests,
+          userName,
+        );
+        final isPlateSelected =
+            selectedPlate != null && selectedPlate.isSelected;
 
         return BottomNavigationBar(
           backgroundColor: Colors.white,
           elevation: 0,
           type: BottomNavigationBarType.fixed,
-          selectedItemColor: Theme.of(context).primaryColor,
-          unselectedItemColor: Colors.grey[700],
+          selectedItemColor: cs.primary,
+          unselectedItemColor: cs.onSurfaceVariant,
           selectedFontSize: 12,
           unselectedFontSize: 12,
           iconSize: 24,
@@ -62,9 +78,9 @@ class DepartureRequestControlButtons extends StatelessWidget {
                 message: isPlateSelected ? '정산 관리' : '화면 잠금',
                 child: Icon(
                   isPlateSelected
-                      ? Icons.payments  // 🔄 여기서 변경
+                      ? Icons.payments
                       : (isLocked ? Icons.lock : Icons.lock_open),
-                  color: Colors.grey[700],
+                  color: cs.onSurfaceVariant,
                 ),
               ),
               label: isPlateSelected ? '정산 관리' : '화면 잠금',
@@ -74,7 +90,7 @@ class DepartureRequestControlButtons extends StatelessWidget {
                 message: isPlateSelected ? '출차 완료' : '번호판 검색',
                 child: Icon(
                   isPlateSelected ? Icons.check_circle : Icons.search,
-                  color: isPlateSelected ? Colors.green[600] : Colors.grey[700],
+                  color: isPlateSelected ? cs.primary : cs.onSurfaceVariant,
                 ),
               ),
               label: isPlateSelected ? '출차' : '검색',
@@ -89,7 +105,7 @@ class DepartureRequestControlButtons extends StatelessWidget {
                     scaleX: isSorted ? -1 : 1,
                     child: Icon(
                       isPlateSelected ? Icons.settings : Icons.sort,
-                      color: Colors.grey[700],
+                      color: cs.onSurfaceVariant,
                     ),
                   ),
                 ),
@@ -101,7 +117,9 @@ class DepartureRequestControlButtons extends StatelessWidget {
             final repo = context.read<PlateRepository>();
             final firestore = FirebaseFirestore.instance;
 
+            // 비선택 상태: 각 탭 별 기본 액션
             if (!isPlateSelected) {
+              HapticFeedback.selectionClick();
               if (index == 0) {
                 toggleLock();
               } else if (index == 1) {
@@ -112,127 +130,168 @@ class DepartureRequestControlButtons extends StatelessWidget {
               return;
             }
 
-            final billingType = selectedPlate.billingType ?? '';
+            // 선택 상태: plate 스냅샷 고정(레이스 방지)
+            final plate = selectedPlate;
             final now = DateTime.now();
-            final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
-            final entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
-            final documentId = selectedPlate.id;
+            final currentTime =
+                now.toUtc().millisecondsSinceEpoch ~/ 1000;
+            final entryTime =
+                plate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
+            final documentId = plate.id;
 
             if (index == 0) {
-              // === [추가] 0원 규칙: basicAmount==0 && addAmount==0
-              final bool isZeroZero =
-                  ((selectedPlate.basicAmount ?? 0) == 0) && ((selectedPlate.addAmount ?? 0) == 0);
+              // ✅ “0원 자동 잠금” 조건(변동 + 정기 모두)
+              final type = (plate.billingType ?? '').trim();
+              final isFixed = type == '고정';
+              final isZeroAutoLock = (((plate.basicAmount ?? 0) == 0) &&
+                  ((plate.addAmount ?? 0) == 0)) ||
+                  (isFixed && (plate.regularAmount ?? 0) == 0);
 
-              // 0원 + 이미 잠금 -> 해제 금지 (안내 후 종료)
-              if (isZeroZero && selectedPlate.isLockedFee) {
-                showFailedSnackbar(context, '이 차량은 0원 규칙으로 잠금 상태이며 해제할 수 없습니다.');
+              // 0원 + 이미 잠금 -> 해제 금지
+              if (isZeroAutoLock && plate.isLockedFee) {
+                showFailedSnackbar(
+                    context, '이 차량은 0원 규칙으로 잠금 상태이며 해제할 수 없습니다.');
                 return;
               }
 
-              // 0원 + 아직 잠금 아님 -> 바텀시트 생략, 자동 잠금 처리
-              if (isZeroZero && !selectedPlate.isLockedFee) {
-                final updatedPlate = selectedPlate.copyWith(
+              // 0원 + 아직 잠금 아님 -> 자동 잠금
+              if (isZeroAutoLock && !plate.isLockedFee) {
+                final updatedPlate = plate.copyWith(
                   isLockedFee: true,
                   lockedAtTimeInSeconds: currentTime,
                   lockedFeeAmount: 0,
                   paymentMethod: null,
                 );
+                try {
+                  await repo.addOrUpdatePlate(documentId, updatedPlate);
+                  await plateState.updatePlateLocally(
+                    PlateType.departureRequests,
+                    updatedPlate,
+                  );
 
-                await repo.addOrUpdatePlate(documentId, updatedPlate);
-                await plateState.updatePlateLocally(PlateType.departureRequests, updatedPlate);
+                  final autoLog = {
+                    'action': '사전 정산(자동 잠금: 0원)',
+                    'performedBy': userName,
+                    'timestamp': now.toIso8601String(),
+                    'lockedFee': 0,
+                    'auto': true,
+                  };
+                  await firestore.collection('plates').doc(documentId).update({
+                    'logs': FieldValue.arrayUnion([autoLog])
+                  });
 
-                final autoLog = {
-                  'action': '사전 정산(자동 잠금: 0원)',
-                  'performedBy': userName,
-                  'timestamp': now.toIso8601String(),
-                  'lockedFee': 0,
-                  'auto': true,
-                };
-
-                await firestore.collection('plates').doc(documentId).update({
-                  'logs': FieldValue.arrayUnion([autoLog])
-                });
-
-                showSuccessSnackbar(context, '0원 유형이라 자동으로 잠금되었습니다.');
+                  HapticFeedback.mediumImpact();
+                  showSuccessSnackbar(context, '0원 유형이라 자동으로 잠금되었습니다.');
+                } catch (e, st) {
+                  debugPrint('auto-lock(0원) error: $e\n$st');
+                  showFailedSnackbar(context, '자동 잠금 처리에 실패했습니다. 다시 시도해 주세요.');
+                }
                 return;
               }
-              // === [추가 끝]
 
+              // 일반 흐름: 정산 타입 필요
+              final billingType = plate.billingType ?? '';
               if (billingType.trim().isEmpty) {
-                showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
+                showFailedSnackbar(
+                    context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
                 return;
               }
 
-              if (selectedPlate.isLockedFee) {
+              // 이미 잠금 → 해제 흐름
+              if (plate.isLockedFee) {
                 final confirm = await showDialog<bool>(
                   context: context,
                   builder: (_) => const ConfirmCancelFeeDialog(),
                 );
                 if (confirm != true) return;
 
-                final updatedPlate = selectedPlate.copyWith(
+                final updatedPlate = plate.copyWith(
                   isLockedFee: false,
                   lockedAtTimeInSeconds: null,
                   lockedFeeAmount: null,
                   paymentMethod: null,
                 );
 
-                await repo.addOrUpdatePlate(documentId, updatedPlate);
-                await plateState.updatePlateLocally(PlateType.departureRequests, updatedPlate);
+                try {
+                  await repo.addOrUpdatePlate(documentId, updatedPlate);
+                  await plateState.updatePlateLocally(
+                    PlateType.departureRequests,
+                    updatedPlate,
+                  );
 
-                final cancelLog = {
-                  'action': '사전 정산 취소',
-                  'performedBy': userName,
-                  'timestamp': now.toIso8601String(),
-                };
+                  final cancelLog = {
+                    'action': '사전 정산 취소',
+                    'performedBy': userName,
+                    'timestamp': now.toIso8601String(),
+                  };
+                  await firestore.collection('plates').doc(documentId).update({
+                    'logs': FieldValue.arrayUnion([cancelLog])
+                  });
 
-                await firestore.collection('plates').doc(documentId).update({
-                  'logs': FieldValue.arrayUnion([cancelLog])
-                });
-
-                showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
+                  HapticFeedback.mediumImpact();
+                  showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
+                } catch (e, st) {
+                  debugPrint('unlock(cancel fee) error: $e\n$st');
+                  showFailedSnackbar(context, '사전 정산 취소 중 오류가 발생했습니다.');
+                }
               } else {
+                // 잠금 아님 → 바텀시트 열어 사전 정산
                 final result = await showOnTapBillingBottomSheet(
                   context: context,
                   entryTimeInSeconds: entryTime,
                   currentTimeInSeconds: currentTime,
-                  basicStandard: selectedPlate.basicStandard ?? 0,
-                  basicAmount: selectedPlate.basicAmount ?? 0,
-                  addStandard: selectedPlate.addStandard ?? 0,
-                  addAmount: selectedPlate.addAmount ?? 0,
-                  billingType: selectedPlate.billingType ?? '변동',
-                  regularAmount: selectedPlate.regularAmount,
-                  regularDurationHours: selectedPlate.regularDurationHours,
+                  basicStandard: plate.basicStandard ?? 0,
+                  basicAmount: plate.basicAmount ?? 0,
+                  addStandard: plate.addStandard ?? 0,
+                  addAmount: plate.addAmount ?? 0,
+                  billingType: plate.billingType ?? '변동',
+                  regularAmount: plate.regularAmount,
+                  regularDurationHours: plate.regularDurationHours,
                 );
                 if (result == null) return;
 
-                final updatedPlate = selectedPlate.copyWith(
+                final updatedPlate = plate.copyWith(
                   isLockedFee: true,
                   lockedAtTimeInSeconds: currentTime,
                   lockedFeeAmount: result.lockedFee,
                   paymentMethod: result.paymentMethod,
                 );
 
-                await repo.addOrUpdatePlate(documentId, updatedPlate);
-                await plateState.updatePlateLocally(PlateType.departureRequests, updatedPlate);
+                try {
+                  await repo.addOrUpdatePlate(documentId, updatedPlate);
+                  await plateState.updatePlateLocally(
+                    PlateType.departureRequests,
+                    updatedPlate,
+                  );
 
-                final log = {
-                  'action': '사전 정산',
-                  'performedBy': userName,
-                  'timestamp': now.toIso8601String(),
-                  'lockedFee': result.lockedFee,
-                  'paymentMethod': result.paymentMethod,
-                  if (result.reason != null && result.reason!.trim().isNotEmpty)
-                    'reason': result.reason!.trim(), // ★ 사유 저장
-                };
+                  final log = {
+                    'action': '사전 정산',
+                    'performedBy': userName,
+                    'timestamp': now.toIso8601String(),
+                    'lockedFee': result.lockedFee,
+                    'paymentMethod': result.paymentMethod,
+                    if (result.reason != null &&
+                        result.reason!.trim().isNotEmpty)
+                      'reason': result.reason!.trim(),
+                  };
 
-                await firestore.collection('plates').doc(documentId).update({
-                  'logs': FieldValue.arrayUnion([log])
-                });
+                  await firestore.collection('plates').doc(documentId).update({
+                    'logs': FieldValue.arrayUnion([log])
+                  });
 
-                showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
+                  HapticFeedback.mediumImpact();
+                  showSuccessSnackbar(
+                    context,
+                    '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})',
+                  );
+                } catch (e, st) {
+                  debugPrint('lock(fee) error: $e\n$st');
+                  showFailedSnackbar(context, '사전 정산 처리 중 오류가 발생했습니다.');
+                }
               }
             } else if (index == 1) {
+              // 출차 완료 확인 다이얼로그
+              HapticFeedback.selectionClick();
               showDialog(
                 context: context,
                 builder: (_) => SetDepartureCompletedBottomSheet(
@@ -240,19 +299,21 @@ class DepartureRequestControlButtons extends StatelessWidget {
                 ),
               );
             } else if (index == 2) {
+              // 상태 수정 시트
+              HapticFeedback.selectionClick();
               await showDepartureRequestStatusBottomSheet(
                 context: context,
-                plate: selectedPlate,
+                plate: plate,
                 onRequestEntry: () => handleEntryParkingRequest(
                   context,
-                  selectedPlate.plateNumber,
-                  selectedPlate.area,
+                  plate.plateNumber,
+                  plate.area,
                 ),
                 onCompleteEntry: () => handleEntryParkingCompleted(
                   context,
-                  selectedPlate.plateNumber,
-                  selectedPlate.area,
-                  selectedPlate.location,
+                  plate.plateNumber,
+                  plate.area,
+                  plate.location,
                 ),
                 onDelete: () {
                   showDialog(
@@ -260,10 +321,13 @@ class DepartureRequestControlButtons extends StatelessWidget {
                     builder: (_) => PlateRemoveDialog(
                       onConfirm: () {
                         context.read<DeletePlate>().deleteFromDepartureRequest(
-                          selectedPlate.plateNumber,
-                          selectedPlate.area,
+                          plate.plateNumber,
+                          plate.area,
                         );
-                        showSuccessSnackbar(context, "삭제 완료: ${selectedPlate.plateNumber}");
+                        showSuccessSnackbar(
+                          context,
+                          "삭제 완료: ${plate.plateNumber}",
+                        );
                       },
                     ),
                   );

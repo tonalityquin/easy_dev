@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class SetDepartureCompletedBottomSheet extends StatelessWidget {
   final VoidCallback onConfirm;
 
-  const SetDepartureCompletedBottomSheet({super.key, required this.onConfirm});
+  const SetDepartureCompletedBottomSheet({
+    super.key,
+    required this.onConfirm,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return SafeArea(
       child: Material(
         color: Colors.transparent,
@@ -18,12 +24,13 @@ class SetDepartureCompletedBottomSheet extends StatelessWidget {
             return Container(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               decoration: const BoxDecoration(
-                color: Colors.white,
+                color: Colors.white, // 요구사항: 흰색 배경 유지
                 borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
               ),
               child: ListView(
                 controller: scrollController,
                 children: [
+                  // 상단 그립
                   Center(
                     child: Container(
                       width: 40,
@@ -34,37 +41,65 @@ class SetDepartureCompletedBottomSheet extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
+
+                  // 타이틀
                   Row(
-                    children: const [
-                      Icon(Icons.check_circle_outline, color: Colors.redAccent, size: 28),
-                      SizedBox(width: 8),
+                    children: [
+                      const Icon(Icons.check_circle_outline, color: Colors.redAccent, size: 28),
+                      const SizedBox(width: 8),
                       Text(
                         '출차 완료 확인',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
+
+                  // 설명
                   const Text(
                     '정말로 출차 완료 처리를 하시겠습니까?',
                     style: TextStyle(fontSize: 16),
                   ),
-                  const SizedBox(height: 32),
-                  Center(
-                    child: FilledButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        Future.microtask(onConfirm);
-                      },
-                      style: FilledButton.styleFrom(
-                        backgroundColor: Colors.redAccent,
-                        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  const SizedBox(height: 24),
+
+                  // 액션 버튼 (취소 / 확인)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: const Text('취소'),
+                        ),
                       ),
-                      child: const Text('확인'),
-                    ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Semantics(
+                          button: true,
+                          label: '출차 완료 처리 확인',
+                          child: FilledButton(
+                            onPressed: () {
+                              HapticFeedback.mediumImpact();
+                              Navigator.pop(context);
+                              Future.microtask(onConfirm);
+                            },
+                            style: FilledButton.styleFrom(
+                              backgroundColor: Colors.redAccent,
+                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                              textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: const Text('확인'),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
