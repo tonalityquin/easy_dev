@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class StandardAndAmountRow extends StatelessWidget {
   final String? selectedValue;
   final List<String> options;
   final Function(String?) onChanged;
+
   final TextEditingController amountController;
   final String standardLabel;
   final String amountLabel;
+
+  /// 숫자 입력 제한 등 포맷터 주입 (미지정 시 기본으로 digitsOnly 적용)
+  final List<TextInputFormatter>? amountInputFormatters;
 
   const StandardAndAmountRow({
     super.key,
@@ -16,6 +21,7 @@ class StandardAndAmountRow extends StatelessWidget {
     required this.amountController,
     required this.standardLabel,
     required this.amountLabel,
+    this.amountInputFormatters,
   });
 
   @override
@@ -25,8 +31,13 @@ class StandardAndAmountRow extends StatelessWidget {
         Expanded(
           child: DropdownButtonFormField<String>(
             value: selectedValue,
-            decoration: InputDecoration(labelText: standardLabel, border: OutlineInputBorder()),
-            items: options.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+            decoration: InputDecoration(
+              labelText: standardLabel,
+              border: const OutlineInputBorder(),
+            ),
+            items: options
+                .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                .toList(),
             onChanged: onChanged,
           ),
         ),
@@ -35,7 +46,13 @@ class StandardAndAmountRow extends StatelessWidget {
           child: TextField(
             controller: amountController,
             keyboardType: TextInputType.number,
-            decoration: InputDecoration(labelText: amountLabel, border: OutlineInputBorder()),
+            // 기본값: digitsOnly
+            inputFormatters:
+            amountInputFormatters ?? [FilteringTextInputFormatter.digitsOnly],
+            decoration: InputDecoration(
+              labelText: amountLabel,
+              border: const OutlineInputBorder(),
+            ),
           ),
         ),
       ],
