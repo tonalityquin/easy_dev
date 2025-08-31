@@ -17,14 +17,22 @@ class ChatPanel extends StatefulWidget {
 }
 
 class _ChatPanelState extends State<ChatPanel> {
+  static const int _maxShortcuts = 20;
+
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   StreamSubscription<DocumentSnapshot>? _chatSubscription;
 
   String latestMessage = '';
   Timestamp? latestTimestamp;
+  bool _hasPendingWrites = false;
 
   List<String> _shortcuts = [];
+  bool _canSend = false;
+
+  // 멀티선택
+  bool _isMultiSelect = false;
+  final Set<int> _selectedShortcutIdx = {};
 
   String get _prefsKey => 'chat_shortcuts_${widget.roomId}';
 
@@ -33,6 +41,7 @@ class _ChatPanelState extends State<ChatPanel> {
     super.initState();
     _listenToLatestMessage();
     _loadShortcuts();
+    _controller.addListener(_handleTextChanged);
   }
 
   @override
@@ -42,6 +51,15 @@ class _ChatPanelState extends State<ChatPanel> {
       _chatSubscription?.cancel();
       _listenToLatestMessage();
       _loadShortcuts();
+      _controller.clear(); // 방 변경 시 혼동 방지
+      _exitMultiSelectIfNeeded();
+    }
+  }
+
+  void _handleTextChanged() {
+    final enabled = _controller.text.trim().isNotEmpty;
+    if (_canSend != enabled) {
+      setState(() => _canSend = enabled);
     }
   }
 
@@ -51,14 +69,20 @@ class _ChatPanelState extends State<ChatPanel> {
         .doc(widget.roomId)
         .collection('state')
         .doc('latest_message')
-        .snapshots()
+        .snapshots(includeMetadataChanges: true)
         .listen((docSnapshot) {
       final data = docSnapshot.data();
-      if (data == null) return;
-
       if (!mounted) return;
+
       setState(() {
-        latestMessage = (data['message'] as String?) ?? '';
+        _hasPendingWrites = docSnapshot.metadata.hasPendingWrites;
+        if (data == null) {
+          latestMessage = '';
+          latestTimestamp = null;
+          return;
+        }
+        final msg = data['message'];
+        latestMessage = (msg is String) ? msg : '';
         final ts = data['timestamp'];
         latestTimestamp = ts is Timestamp ? ts : null;
       });
@@ -77,20 +101,21 @@ class _ChatPanelState extends State<ChatPanel> {
           .doc('latest_message')
           .set({
         'message': text,
-        'timestamp': FieldValue.serverTimestamp(), // 서버시간 권장
+        'timestamp': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
       _controller.clear();
       _focusNode.requestFocus();
-    } catch (e) {
+    } catch (e, st) {
       if (!mounted) return;
-      // ✅ 기본 SnackBar → 커스텀 스낵바
+      debugPrint('sendMessage error: $e\n$st');
       showFailedSnackbar(context, '전송 실패: $e');
     }
   }
 
   Future<void> _loadShortcuts() async {
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     setState(() {
       _shortcuts = prefs.getStringList(_prefsKey) ?? [];
     });
@@ -108,10 +133,11 @@ class _ChatPanelState extends State<ChatPanel> {
       builder: (_) => CupertinoAlertDialog(
         title: const Text('쇼트컷 추가'),
         content: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 8),
             SizedBox(
-              width: double.infinity, // 폭 확장
+              width: double.infinity,
               child: CupertinoTextField(
                 controller: textCtrl,
                 placeholder: '자주 쓰는 문구를 입력하세요',
@@ -144,12 +170,16 @@ class _ChatPanelState extends State<ChatPanel> {
 
     if (_shortcuts.contains(value)) {
       if (!mounted) return;
-      // ✅ 기본 SnackBar → 커스텀 스낵바
       showFailedSnackbar(context, '이미 같은 쇼트컷이 있습니다.');
       return;
     }
 
-    setState(() => _shortcuts.add(value));
+    setState(() {
+      _shortcuts.add(value);
+      if (_shortcuts.length > _maxShortcuts) {
+        _shortcuts.removeAt(0); // FIFO
+      }
+    });
     await _saveShortcuts();
   }
 
@@ -179,9 +209,82 @@ class _ChatPanelState extends State<ChatPanel> {
     await _saveShortcuts();
   }
 
+  // ── 커서 위치/선택영역 삽입 & 공백 보정
+  void _insertAtCursor(String insert) {
+    final text = _controller.text;
+    final sel = _controller.selection;
+
+    final hasSel = sel.isValid;
+    final start = hasSel ? sel.start : text.length;
+    final end = hasSel ? sel.end : text.length;
+
+    final before = text.substring(0, start);
+    final after = text.substring(end);
+
+    final needsSpaceBefore = before.isNotEmpty && !before.endsWith(' ');
+    final needsSpaceAfter = after.isNotEmpty && !insert.endsWith(' ');
+
+    final toInsert =
+        '${needsSpaceBefore ? ' ' : ''}$insert${needsSpaceAfter ? ' ' : ''}';
+
+    final newText = '$before$toInsert$after';
+    final newOffset = before.length + toInsert.length;
+
+    _controller.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: newOffset),
+      composing: TextRange.empty,
+    );
+    _focusNode.requestFocus();
+  }
+
+  // 입력창 한 번에 지우기
+  void _clearInput() {
+    if (_controller.text.isEmpty) return;
+    _controller.clear();
+    // listener에서 _canSend=false로 반영됨
+    _focusNode.requestFocus();
+  }
+
+  // 멀티선택 모드 토글
+  void _toggleMultiSelect() {
+    setState(() {
+      _isMultiSelect = !_isMultiSelect;
+      if (!_isMultiSelect) _selectedShortcutIdx.clear();
+    });
+  }
+
+  void _exitMultiSelectIfNeeded() {
+    if (_isMultiSelect) {
+      setState(() {
+        _isMultiSelect = false;
+        _selectedShortcutIdx.clear();
+      });
+    }
+  }
+
+  void _toggleShortcutSelection(int idx) {
+    setState(() {
+      if (_selectedShortcutIdx.contains(idx)) {
+        _selectedShortcutIdx.remove(idx);
+      } else {
+        _selectedShortcutIdx.add(idx);
+      }
+    });
+  }
+
+  void _insertSelectedShortcuts() {
+    if (_selectedShortcutIdx.isEmpty) return;
+    final parts = _selectedShortcutIdx.toList()..sort();
+    final text = parts.map((i) => _shortcuts[i]).join(' ');
+    _insertAtCursor(text);
+    _toggleMultiSelect(); // 삽입 후 종료
+  }
+
   @override
   void dispose() {
     _chatSubscription?.cancel();
+    _controller.removeListener(_handleTextChanged);
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -200,26 +303,48 @@ class _ChatPanelState extends State<ChatPanel> {
       } catch (_) {}
     }
 
+    final subtitle =
+    _hasPendingWrites || ts == null ? '동기화 중...' : (timeText.isNotEmpty ? '🕒 $timeText' : '');
+
     return Column(
       mainAxisSize: MainAxisSize.max,
       children: [
-        Stack(
+        // 상단 액션 바
+        Row(
           children: [
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: _addShortcut,
-                icon: const Icon(Icons.add),
-                label: const Text('쇼트컷 추가'),
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  foregroundColor: Colors.blue,
+            if (_shortcuts.isNotEmpty) ...[
+              if (!_isMultiSelect)
+                TextButton.icon(
+                  onPressed: _toggleMultiSelect,
+                  icon: const Icon(Icons.select_all),
+                  label: const Text('선택'),
+                )
+              else ...[
+                FilledButton.icon(
+                  onPressed:
+                  _selectedShortcutIdx.isNotEmpty ? _insertSelectedShortcuts : null,
+                  icon: const Icon(Icons.input),
+                  label: Text('삽입(${_selectedShortcutIdx.length})'),
                 ),
-              ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: _toggleMultiSelect,
+                  child: const Text('취소'),
+                ),
+              ],
+              const Spacer(),
+            ] else
+              const Spacer(),
+            TextButton.icon(
+              onPressed: _addShortcut,
+              icon: const Icon(Icons.add),
+              label: const Text('쇼트컷 추가'),
             ),
           ],
         ),
         const SizedBox(height: 8),
+
+        // 최근 메시지 + 쇼트컷
         Expanded(
           child: SingleChildScrollView(
             padding: const EdgeInsets.only(bottom: 8),
@@ -241,13 +366,15 @@ class _ChatPanelState extends State<ChatPanel> {
                       const SizedBox(height: 6),
                       Text(latestMessage),
                       const SizedBox(height: 8),
-                      Text(
-                        timeText.isNotEmpty ? '🕒 $timeText' : '',
-                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                      ),
+                      if (subtitle.isNotEmpty)
+                        Text(
+                          subtitle,
+                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        ),
                     ],
                   ),
                 ),
+
                 if (_shortcuts.isNotEmpty) ...[
                   SizedBox(
                     height: 40,
@@ -255,31 +382,31 @@ class _ChatPanelState extends State<ChatPanel> {
                       scrollDirection: Axis.horizontal,
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       child: Row(
-                        children: _shortcuts.map((s) {
+                        children: List.generate(_shortcuts.length, (i) {
+                          final s = _shortcuts[i];
+                          final selected = _selectedShortcutIdx.contains(i);
+
                           return Padding(
                             padding: const EdgeInsets.only(right: 8),
                             child: GestureDetector(
-                              onLongPress: () => _removeShortcut(s),
-                              child: OutlinedButton.icon(
-                                onPressed: () {
-                                  _controller.text = s;
-                                  _controller.selection = TextSelection.fromPosition(
-                                    TextPosition(offset: _controller.text.length),
-                                  );
-                                  _focusNode.requestFocus();
-                                },
-                                icon: const Icon(Icons.bolt, size: 16),
+                              onLongPress: !_isMultiSelect ? () => _removeShortcut(s) : null,
+                              child: FilterChip(
+                                selected: selected,
                                 label: Text(s, overflow: TextOverflow.ellipsis),
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                  minimumSize: const Size(0, 36),
-                                  side: const BorderSide(color: Colors.grey),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                onSelected: (val) {
+                                  if (_isMultiSelect) {
+                                    _toggleShortcutSelection(i);
+                                  } else {
+                                    _insertAtCursor(s); // 즉시 삽입
+                                  }
+                                },
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
                                 ),
                               ),
                             ),
                           );
-                        }).toList(),
+                        }),
                       ),
                     ),
                   ),
@@ -289,6 +416,8 @@ class _ChatPanelState extends State<ChatPanel> {
             ),
           ),
         ),
+
+        // 입력 + 지우기 + 전송
         Row(
           children: [
             Expanded(
@@ -296,7 +425,7 @@ class _ChatPanelState extends State<ChatPanel> {
                 controller: _controller,
                 focusNode: _focusNode,
                 textInputAction: TextInputAction.send,
-                onSubmitted: (_) => _sendMessage(),
+                onSubmitted: (_) => _canSend ? _sendMessage() : null,
                 decoration: InputDecoration(
                   hintText: '메시지를 입력하세요...',
                   filled: true,
@@ -306,16 +435,29 @@ class _ChatPanelState extends State<ChatPanel> {
                     borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide.none,
                   ),
+                  // ✅ 입력 전체 지우기 버튼
+                  suffixIcon: IconButton(
+                    tooltip: '입력 지우기',
+                    icon: const Icon(Icons.clear),
+                    onPressed: _controller.text.isNotEmpty ? _clearInput : null,
+                  ),
                 ),
               ),
             ),
             const SizedBox(width: 8),
-            Container(
-              decoration: const BoxDecoration(color: Colors.blue, shape: BoxShape.circle),
-              child: IconButton(
-                icon: const Icon(Icons.send, color: Colors.white),
-                onPressed: _sendMessage,
-                tooltip: '보내기',
+            Semantics(
+              button: true,
+              label: '메시지 보내기',
+              child: Container(
+                decoration: BoxDecoration(
+                  color: _canSend ? Colors.blue : Colors.blue.withOpacity(0.4),
+                  shape: BoxShape.circle,
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.send, color: Colors.white),
+                  onPressed: _canSend ? _sendMessage : null,
+                  tooltip: '보내기',
+                ),
               ),
             ),
           ],
