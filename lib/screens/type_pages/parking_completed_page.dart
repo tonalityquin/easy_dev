@@ -1,3 +1,4 @@
+// lib/screens/type_pages/parking_completed_page.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -45,6 +46,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
       _mode = ParkingViewMode.status;
       _selectedParkingArea = null;
       _isSorted = true;
+      _isLocked = true; // ✅ 홈 재탭/진입 시 화면 잠금 활성화
     });
   }
 
@@ -190,7 +192,10 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
           plates = plates.where((p) => p.location == _selectedParkingArea).toList();
         }
         plates.sort(
-            (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime));
+              (a, b) => _isSorted
+              ? b.requestTime.compareTo(a.requestTime)
+              : a.requestTime.compareTo(b.requestTime),
+        );
 
         return ListView(
           padding: const EdgeInsets.all(8.0),
@@ -198,14 +203,15 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
             PlateContainer(
               data: plates,
               collection: PlateType.parkingCompleted,
-              filterCondition: (request) => request.type == PlateType.parkingCompleted.firestoreValue,
+              filterCondition: (request) =>
+              request.type == PlateType.parkingCompleted.firestoreValue,
               onPlateTap: (plateNumber, area) {
                 context.read<PlateState>().togglePlateIsSelected(
-                      collection: PlateType.parkingCompleted,
-                      plateNumber: plateNumber,
-                      userName: userName,
-                      onError: (msg) => showFailedSnackbar(context, msg),
-                    );
+                  collection: PlateType.parkingCompleted,
+                  plateNumber: plateNumber,
+                  userName: userName,
+                  onError: (msg) => showFailedSnackbar(context, msg),
+                );
               },
             ),
           ],

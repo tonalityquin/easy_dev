@@ -48,8 +48,16 @@ class PageState with ChangeNotifier {
       return;
     }
 
-    // 같은 탭 재선택이면 아무 작업도 하지 않음(불필요한 rebuild 방지)
-    if (_selectedIndex == index) return;
+    // ✅ 같은 탭 재선택 처리
+    // - 홈(인덱스 1) 재탭 시 ParkingCompletedPage를 리셋하여
+    //   ParkingStatusPage부터 다시 시작하고, 화면 잠금(isLocked)을 true로 설정
+    if (_selectedIndex == index) {
+      if (index == 1) {
+        ParkingCompletedPage.reset(parkingCompletedKey);
+        notifyListeners(); // 리셋 반영을 위해 리스너 알림
+      }
+      return; // 다른 탭은 기존대로 무시
+    }
 
     final plateState = context.read<PlateState>();
 
@@ -75,7 +83,7 @@ class PageState with ChangeNotifier {
       }
     }
 
-    // 홈 탭 진입 시 완료 페이지 상태 리셋
+    // 홈 탭 최초/일반 진입 시 완료 페이지 상태 리셋
     if (index == 1) {
       ParkingCompletedPage.reset(parkingCompletedKey);
     }
