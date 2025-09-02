@@ -7,23 +7,22 @@ plugins {
 
 android {
     namespace = "com.example.easydev"
-    compileSdk = 35 // 컴파일 SDK 버전 설정
+    compileSdk = 36 // ✅ 35 → 36 으로 올림
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17 // Java 17 적용
-        targetCompatibility = JavaVersion.VERSION_17 // Java 17 적용
-
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
         coreLibraryDesugaringEnabled true
     }
 
     kotlinOptions {
-        jvmTarget = "17" // Kotlin JVM 대상 버전 설정
+        jvmTarget = "17"
     }
 
     defaultConfig {
         applicationId = "com.example.easydev"
-        minSdk = 23 // 최소 SDK 버전
-        targetSdk = 35 // 대상 SDK 버전
+        minSdkVersion = flutter.minSdkVersion
+        targetSdk = 35 // 그대로 OK (추후 필요 시 36으로 올려도 됨)
         versionCode = 1
         versionName = "1.0"
     }
@@ -35,7 +34,6 @@ android {
             if (keystorePropertiesFile.exists()) {
                 keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
             }
-
             keyAlias keystoreProperties['keyAlias']
             keyPassword keystoreProperties['keyPassword']
             storeFile file(keystoreProperties['storeFile'])
@@ -45,7 +43,7 @@ android {
 
     buildTypes {
         release {
-            signingConfig signingConfigs.release // 릴리스 서명 설정
+            signingConfig signingConfigs.release
             minifyEnabled false
             shrinkResources false
         }
@@ -57,14 +55,8 @@ flutter {
 }
 
 dependencies {
-    // Firebase BoM 추가
     implementation platform('com.google.firebase:firebase-bom:33.12.0')
-
-    // Firebase 의존성 추가
-    implementation 'com.google.firebase:firebase-auth' // Firebase Authentication
-    implementation 'com.google.firebase:firebase-firestore' // Firebase Firestore
-
+    implementation 'com.google.firebase:firebase-auth'
+    implementation 'com.google.firebase:firebase-firestore'
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
-
-    // 필요한 추가 Firebase 기능을 여기에 작성
 }

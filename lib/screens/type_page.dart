@@ -55,100 +55,126 @@ class _TypePageState extends State<TypePage> {
               }
             },
             child: Scaffold(
-              body: const RefreshableBody(),
-              // ✅ HeadquarterPage 기준으로 정렬: 외부 SafeArea 제거, 이미지 블록만 SafeArea(top:false)
-              bottomNavigationBar: Column(
-                mainAxisSize: MainAxisSize.min,
+              // ✅ body를 Stack으로 바꿔 채팅/대시보드 행을 "겹쳐 배치" (네비 레이아웃에 영향 X)
+              body: Stack(
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: StreamBuilder<String>(
-                            stream: latestMessageStream(
-                              context.read<AreaState>().currentArea.trim(),
-                            ),
-                            builder: (context, snapshot) {
-                              final latestMessage = snapshot.data ?? '채팅 열기';
-
-                              return ElevatedButton(
-                                onPressed: () {
-                                  chatBottomSheet(context);
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.white,
-                                  foregroundColor: Colors.black,
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Icon(Icons.message, color: Colors.black, size: 20),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      latestMessage.length > 20
-                                          ? '${latestMessage.substring(0, 20)}...'
-                                          : latestMessage,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(color: Colors.black),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () {
-                              showModalBottomSheet(
-                                context: context,
-                                isScrollControlled: true,
-                                useSafeArea: true,
-                                backgroundColor: Colors.transparent,
-                                builder: (_) => const DashBoardBottomSheet(),
-                              );
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.black87,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            ),
-                            child: const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.dashboard, size: 20),
-                                SizedBox(width: 6),
-                                Text('대시보드'),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                  const RefreshableBody(),
+                  // ====== ⬇️ 채팅/대시보드 버튼 행을 Positioned로 이동 (이전엔 bottomNavigationBar에 있었음)
+                  Positioned(
+                    left: 16,
+                    right: 16,
+                    // 네비(기본 높이) + 펠리컨(48) + 안전영역 + 여백만큼 위에 띄우기
+                    bottom: _bottomOverlayOffset(context),
+                    child: const _ChatDashboardBar(),
                   ),
-                  const PageBottomNavigation(),
-                  // ✅ HeadquarterPage와 동일 구조/크기: Padding(8) + SafeArea(top:false) + SizedBox(height:48)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: SafeArea(
-                      top: false,
+                ],
+              ),
+
+              // ✅ SecondaryPage 방식으로: bottomNavigationBar에 네비 + 펠리컨만 배치
+              bottomNavigationBar: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const PageBottomNavigation(), // 네비게이션 바 (최하단에 고정)
+                    // ⬇️ Pelican 행: 네비 아래 (기존 요구 유지)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
                       child: SizedBox(
                         height: 48,
                         child: Image.asset('assets/images/pelican.png'),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           );
         },
       ),
+    );
+  }
+
+  // 네비 위에 겹쳐 띄울 버튼행의 하단 오프셋 계산
+  double _bottomOverlayOffset(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    const pelicanHeight = 48.0;
+    const pelicanVertical = 8.0 * 2; // 위아래 8씩
+    const spacing = 8.0; // 네비와 버튼행 사이 여유
+
+    // kBottomNavigationBarHeight(56) + Pelican(48+16) + 안전영역 + 여유
+    return kBottomNavigationBarHeight + pelicanHeight + pelicanVertical + bottomInset + spacing;
+  }
+}
+
+class _ChatDashboardBar extends StatelessWidget {
+  const _ChatDashboardBar();
+
+  @override
+  Widget build(BuildContext context) {
+    final area = context.read<AreaState>().currentArea.trim();
+    return Row(
+      children: [
+        Expanded(
+          child: StreamBuilder<String>(
+            stream: latestMessageStream(area),
+            builder: (context, snapshot) {
+              final latestMessage = snapshot.data ?? '채팅 열기';
+              return ElevatedButton(
+                onPressed: () => chatBottomSheet(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.message, color: Colors.black, size: 20),
+                    const SizedBox(width: 6),
+                    Text(
+                      latestMessage.length > 20
+                          ? '${latestMessage.substring(0, 20)}...'
+                          : latestMessage,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.black),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: ElevatedButton(
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                useSafeArea: true,
+                backgroundColor: Colors.transparent,
+                builder: (_) => const DashBoardBottomSheet(),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.black87,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.dashboard, size: 20),
+                SizedBox(width: 6),
+                Text('대시보드'),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -240,7 +266,6 @@ class PageBottomNavigation extends StatefulWidget {
 
 class _PageBottomNavigationState extends State<PageBottomNavigation> {
   String? _area; // 현재 area 캐시
-  // ✅ PlateType으로 명시: Object 금지
   final Map<PlateType, Future<int>> _countFutures = {};
 
   void _ensureFuturesForCurrentAreaAndPages() {
@@ -248,31 +273,24 @@ class _PageBottomNavigationState extends State<PageBottomNavigation> {
     final repo = context.read<PlateRepository>();
     final pages = context.read<PageState>().pages;
 
-    // ✅ 홈 제외한 탭들의 type 집합을 PlateType으로 명시
     final desiredTypes = <PlateType>{
       for (final p in pages)
-        if (p.title != '홈') p.collectionKey, // collectionKey가 PlateType
+        if (p.title != '홈') p.collectionKey,
     };
 
-    // area가 바뀌면 캐시 무효화
     final areaChanged = _area != areaNow;
     if (areaChanged) {
       _area = areaNow;
       _countFutures.clear();
     }
 
-    // 페이지에서 사라진 타입의 캐시 제거
     final removeKeys = _countFutures.keys.where((k) => !desiredTypes.contains(k)).toList();
     for (final k in removeKeys) {
       _countFutures.remove(k);
     }
 
-    // 필요한 타입의 Future 생성(없으면 생성, 있으면 재사용)
     for (final type in desiredTypes) {
-      _countFutures.putIfAbsent(type, () {
-        // 반드시 _area가 세팅된 이후 호출됨(didChangeDependencies/build에서 보장)
-        return repo.getPlateCountForTypePage(type, _area!);
-      });
+      _countFutures.putIfAbsent(type, () => repo.getPlateCountForTypePage(type, _area!));
     }
   }
 
@@ -284,16 +302,15 @@ class _PageBottomNavigationState extends State<PageBottomNavigation> {
 
   @override
   Widget build(BuildContext context) {
-    // 상위 상태 변화로 build가 잦더라도 동일 Future 재사용 보장
     _ensureFuturesForCurrentAreaAndPages();
+
+    final selectedColor = AppColors.selectedItemColor;
+    final unselectedColor = Colors.grey;
 
     return Consumer2<PageState, FieldSelectedDateState>(
       builder: (context, pageState, selectedDateState, child) {
-        final selectedColor = AppColors.selectedItemColor;
-        final unselectedColor = Colors.grey;
-
         return BottomNavigationBar(
-          elevation: 0, // 그림자 제거로 하단 이미지 그늘 방지(HeadquarterPage와 동일)
+          elevation: 0, // 그림자 제거(펠리컨 위 그늘 방지)
           currentIndex: pageState.selectedIndex,
           onTap: (index) {
             pageState.onItemTapped(
@@ -337,9 +354,8 @@ class _PageBottomNavigationState extends State<PageBottomNavigation> {
                 );
               }
 
-              // ✅ (type, area) 조합의 동일 Future 재사용
-              final PlateType type = pageInfo.collectionKey; // 타입 명시
-              final future = _countFutures[type]; // _ensure에서 putIfAbsent 완료
+              final PlateType type = pageInfo.collectionKey;
+              final future = _countFutures[type];
 
               return BottomNavigationBarItem(
                 icon: FutureBuilder<int>(
