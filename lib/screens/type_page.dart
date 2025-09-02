@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../enums/plate_type.dart';
 import '../repositories/plate/plate_repository.dart';
 import '../states/calendar/field_calendar_state.dart';
 import '../states/page/page_state.dart';
@@ -55,83 +56,100 @@ class _TypePageState extends State<TypePage> {
             },
             child: Scaffold(
               body: const RefreshableBody(),
-              bottomNavigationBar: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: StreamBuilder<String>(
-                            stream: latestMessageStream(
-                              context.read<AreaState>().currentArea.trim(),
-                            ),
-                            builder: (context, snapshot) {
-                              final latestMessage = snapshot.data ?? '채팅 열기';
+              bottomNavigationBar: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: StreamBuilder<String>(
+                              stream: latestMessageStream(
+                                context.read<AreaState>().currentArea.trim(),
+                              ),
+                              builder: (context, snapshot) {
+                                final latestMessage = snapshot.data ?? '채팅 열기';
 
-                              return ElevatedButton(
-                                onPressed: () {
-                                  chatBottomSheet(context);
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.white,
-                                  foregroundColor: Colors.black,
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Icon(Icons.message, color: Colors.black, size: 20),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      latestMessage.length > 20
-                                          ? '${latestMessage.substring(0, 20)}...'
-                                          : latestMessage,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(color: Colors.black),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () {
-                              showModalBottomSheet(
-                                context: context,
-                                isScrollControlled: true,
-                                useSafeArea: true,
-                                backgroundColor: Colors.transparent,
-                                builder: (_) => const DashBoardBottomSheet(),
-                              );
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.black87,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            ),
-                            child: const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.dashboard, size: 20),
-                                SizedBox(width: 6),
-                                Text('대시보드'),
-                              ],
+                                return ElevatedButton(
+                                  onPressed: () {
+                                    chatBottomSheet(context);
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.white,
+                                    foregroundColor: Colors.black,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(Icons.message, color: Colors.black, size: 20),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        latestMessage.length > 20
+                                            ? '${latestMessage.substring(0, 20)}...'
+                                            : latestMessage,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(color: Colors.black),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
                             ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () {
+                                showModalBottomSheet(
+                                  context: context,
+                                  isScrollControlled: true,
+                                  useSafeArea: true,
+                                  backgroundColor: Colors.transparent,
+                                  builder: (_) => const DashBoardBottomSheet(),
+                                );
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.black87,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              child: const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.dashboard, size: 20),
+                                  SizedBox(width: 6),
+                                  Text('대시보드'),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const PageBottomNavigation(),
-                  const DebugTriggerBar(),
-                ],
+                    const PageBottomNavigation(),
+                    // Pelican 이미지 행 (그늘 방지용 흰 배경 + 안전 영역 여백)
+                    Builder(
+                      builder: (context) {
+                        final bottomInset = MediaQuery.of(context).padding.bottom;
+                        return Container(
+                          color: Colors.white,
+                          padding: EdgeInsets.only(top: 8, bottom: bottomInset + 8),
+                          alignment: Alignment.center,
+                          child: SizedBox(
+                            height: 80,
+                            child: Image.asset('assets/images/pelican.png'),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
             ),
           );
@@ -218,28 +236,77 @@ class _RefreshableBodyState extends State<RefreshableBody> {
   }
 }
 
-class PageBottomNavigation extends StatelessWidget {
+/// 하단 네비게이션: (type, area)별 Future<int> 캐싱으로 중복 쿼리 방지
+class PageBottomNavigation extends StatefulWidget {
   const PageBottomNavigation({super.key});
 
   @override
+  State<PageBottomNavigation> createState() => _PageBottomNavigationState();
+}
+
+class _PageBottomNavigationState extends State<PageBottomNavigation> {
+  String? _area; // 현재 area 캐시
+  // ✅ PlateType으로 명시: Object 금지
+  final Map<PlateType, Future<int>> _countFutures = {};
+
+  void _ensureFuturesForCurrentAreaAndPages() {
+    final areaNow = context.read<AreaState>().currentArea.trim();
+    final repo = context.read<PlateRepository>();
+    final pages = context.read<PageState>().pages;
+
+    // ✅ 홈 제외한 탭들의 type 집합을 PlateType으로 명시
+    final desiredTypes = <PlateType>{
+      for (final p in pages)
+        if (p.title != '홈') p.collectionKey, // collectionKey가 PlateType
+    };
+
+    // area가 바뀌면 캐시 무효화
+    final areaChanged = _area != areaNow;
+    if (areaChanged) {
+      _area = areaNow;
+      _countFutures.clear();
+    }
+
+    // 페이지에서 사라진 타입의 캐시 제거
+    final removeKeys = _countFutures.keys.where((k) => !desiredTypes.contains(k)).toList();
+    for (final k in removeKeys) {
+      _countFutures.remove(k);
+    }
+
+    // 필요한 타입의 Future 생성(없으면 생성, 있으면 재사용)
+    for (final type in desiredTypes) {
+      _countFutures.putIfAbsent(type, () {
+        // 반드시 _area가 세팅된 이후 호출됨(didChangeDependencies/build에서 보장)
+        return repo.getPlateCountForTypePage(type, _area!);
+      });
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _ensureFuturesForCurrentAreaAndPages();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    // 상위 상태 변화로 build가 잦더라도 동일 Future 재사용 보장
+    _ensureFuturesForCurrentAreaAndPages();
+
     return Consumer2<PageState, FieldSelectedDateState>(
       builder: (context, pageState, selectedDateState, child) {
         final selectedColor = AppColors.selectedItemColor;
         final unselectedColor = Colors.grey;
 
-        final currentArea = context.read<AreaState>().currentArea;
-        final plateRepository = context.read<PlateRepository>();
-
         return BottomNavigationBar(
+          elevation: 0,
+          // 그림자 제거로 하단 이미지 그늘 방지
           currentIndex: pageState.selectedIndex,
           onTap: (index) {
             pageState.onItemTapped(
               context,
               index,
-              onError: (msg) {
-                showFailedSnackbar(context, msg);
-              },
+              onError: (msg) => showFailedSnackbar(context, msg),
             );
           },
           selectedItemColor: selectedColor,
@@ -249,7 +316,7 @@ class PageBottomNavigation extends StatelessWidget {
           backgroundColor: Colors.white,
           items: List.generate(
             pageState.pages.length,
-                (index) {
+            (index) {
               final pageInfo = pageState.pages[index];
               final isSelected = pageState.selectedIndex == index;
 
@@ -277,12 +344,13 @@ class PageBottomNavigation extends StatelessWidget {
                 );
               }
 
+              // ✅ (type, area) 조합의 동일 Future 재사용
+              final PlateType type = pageInfo.collectionKey; // 타입 명시
+              final future = _countFutures[type]; // _ensure에서 putIfAbsent 완료
+
               return BottomNavigationBarItem(
                 icon: FutureBuilder<int>(
-                  future: plateRepository.getPlateCountForTypePage(
-                    pageInfo.collectionKey,
-                    currentArea,
-                  ),
+                  future: future,
                   builder: (context, snapshot) {
                     final count = snapshot.data ?? 0;
                     return Column(
@@ -308,21 +376,6 @@ class PageBottomNavigation extends StatelessWidget {
           ),
         );
       },
-    );
-  }
-}
-
-class DebugTriggerBar extends StatelessWidget {
-  const DebugTriggerBar({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        alignment: Alignment.center,
-        color: Colors.transparent,
-      ),
     );
   }
 }
