@@ -56,100 +56,94 @@ class _TypePageState extends State<TypePage> {
             },
             child: Scaffold(
               body: const RefreshableBody(),
-              bottomNavigationBar: SafeArea(
-                top: false,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: StreamBuilder<String>(
-                              stream: latestMessageStream(
-                                context.read<AreaState>().currentArea.trim(),
-                              ),
-                              builder: (context, snapshot) {
-                                final latestMessage = snapshot.data ?? '채팅 열기';
+              // ✅ HeadquarterPage 기준으로 정렬: 외부 SafeArea 제거, 이미지 블록만 SafeArea(top:false)
+              bottomNavigationBar: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: StreamBuilder<String>(
+                            stream: latestMessageStream(
+                              context.read<AreaState>().currentArea.trim(),
+                            ),
+                            builder: (context, snapshot) {
+                              final latestMessage = snapshot.data ?? '채팅 열기';
 
-                                return ElevatedButton(
-                                  onPressed: () {
-                                    chatBottomSheet(context);
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.white,
-                                    foregroundColor: Colors.black,
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      const Icon(Icons.message, color: Colors.black, size: 20),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        latestMessage.length > 20
-                                            ? '${latestMessage.substring(0, 20)}...'
-                                            : latestMessage,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(color: Colors.black),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
+                              return ElevatedButton(
+                                onPressed: () {
+                                  chatBottomSheet(context);
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.white,
+                                  foregroundColor: Colors.black,
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const Icon(Icons.message, color: Colors.black, size: 20),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      latestMessage.length > 20
+                                          ? '${latestMessage.substring(0, 20)}...'
+                                          : latestMessage,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(color: Colors.black),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () {
+                              showModalBottomSheet(
+                                context: context,
+                                isScrollControlled: true,
+                                useSafeArea: true,
+                                backgroundColor: Colors.transparent,
+                                builder: (_) => const DashBoardBottomSheet(),
+                              );
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.black87,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.dashboard, size: 20),
+                                SizedBox(width: 6),
+                                Text('대시보드'),
+                              ],
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: () {
-                                showModalBottomSheet(
-                                  context: context,
-                                  isScrollControlled: true,
-                                  useSafeArea: true,
-                                  backgroundColor: Colors.transparent,
-                                  builder: (_) => const DashBoardBottomSheet(),
-                                );
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.black87,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              ),
-                              child: const Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.dashboard, size: 20),
-                                  SizedBox(width: 6),
-                                  Text('대시보드'),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const PageBottomNavigation(),
+                  // ✅ HeadquarterPage와 동일 구조/크기: Padding(8) + SafeArea(top:false) + SizedBox(height:48)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: SafeArea(
+                      top: false,
+                      child: SizedBox(
+                        height: 48,
+                        child: Image.asset('assets/images/pelican.png'),
                       ),
                     ),
-                    const PageBottomNavigation(),
-                    // Pelican 이미지 행 (그늘 방지용 흰 배경 + 안전 영역 여백)
-                    Builder(
-                      builder: (context) {
-                        final bottomInset = MediaQuery.of(context).padding.bottom;
-                        return Container(
-                          color: Colors.white,
-                          padding: EdgeInsets.only(top: 8, bottom: bottomInset + 8),
-                          alignment: Alignment.center,
-                          child: SizedBox(
-                            height: 80,
-                            child: Image.asset('assets/images/pelican.png'),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           );
@@ -299,8 +293,7 @@ class _PageBottomNavigationState extends State<PageBottomNavigation> {
         final unselectedColor = Colors.grey;
 
         return BottomNavigationBar(
-          elevation: 0,
-          // 그림자 제거로 하단 이미지 그늘 방지
+          elevation: 0, // 그림자 제거로 하단 이미지 그늘 방지(HeadquarterPage와 동일)
           currentIndex: pageState.selectedIndex,
           onTap: (index) {
             pageState.onItemTapped(
@@ -316,7 +309,7 @@ class _PageBottomNavigationState extends State<PageBottomNavigation> {
           backgroundColor: Colors.white,
           items: List.generate(
             pageState.pages.length,
-            (index) {
+                (index) {
               final pageInfo = pageState.pages[index];
               final isSelected = pageState.selectedIndex == index;
 

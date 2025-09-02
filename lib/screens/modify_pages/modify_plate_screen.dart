@@ -4,7 +4,7 @@ import 'package:camera/camera.dart';
 import '../../models/plate_model.dart';
 import '../../enums/plate_type.dart';
 
-import 'debugs/modify_debug_bottom_sheet.dart';
+// import 'debugs/modify_debug_bottom_sheet.dart'; // ⛔️ 디버그 시트 제거
 import 'modify_plate_controller.dart';
 import 'sections/modify_bill_section.dart';
 import 'sections/modify_location_section.dart';
@@ -262,35 +262,18 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
               ],
             ),
           ),
-          const ModifyDebugTriggerBar(),
+          // ⬇️ DebugTriggerBar 대신 펠리컨 이미지 삽입 (ModifyBottomNavigation 아래)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: SafeArea(
+              top: false,
+              child: SizedBox(
+                height: 48,
+                child: Image.asset('assets/images/pelican.png'),
+              ),
+            ),
+          ),
         ],
-      ),
-    );
-  }
-}
-
-class ModifyDebugTriggerBar extends StatelessWidget {
-  const ModifyDebugTriggerBar({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          builder: (_) => const ModifyDebugBottomSheet(),
-        );
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        alignment: Alignment.center,
-        color: Colors.transparent,
-        child: const Icon(
-          Icons.bug_report,
-          size: 20,
-          color: Colors.grey,
-        ),
       ),
     );
   }

@@ -19,11 +19,21 @@ class HeadquarterPage extends StatelessWidget {
             canPop: true,
             child: Scaffold(
               body: const RefreshableBody(),
-              bottomNavigationBar: const Column(
+              bottomNavigationBar: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  PageBottomNavigation(),
-                  DebugTriggerBar(),
+                  const PageBottomNavigation(), // ↑ 네비게이션 바 먼저
+                  // ↓ 그 아래에 이미지 (SafeArea로 하단 제스처 영역 피함)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: SafeArea(
+                      top: false,
+                      child: SizedBox(
+                        height: 48,
+                        child: Image.asset('assets/images/pelican.png'),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -104,23 +114,9 @@ class PageBottomNavigation extends StatelessWidget {
           selectedItemColor: Colors.green,
           unselectedItemColor: Colors.purple,
           backgroundColor: Colors.white,
+          elevation: 0, // 그림자 제거 → 아래 이미지가 그늘지지 않음
         );
       },
-    );
-  }
-}
-
-class DebugTriggerBar extends StatelessWidget {
-  const DebugTriggerBar({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        alignment: Alignment.center,
-        color: Colors.transparent,
-      ),
     );
   }
 }
