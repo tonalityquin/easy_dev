@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../service/login_controller.dart';
-import '../../service/sections/login_form.dart';
+import '../../service/service_login_controller.dart';
+import '../../service/sections/service_login_form.dart';
 import '../belivus/tablet_cooperation_calendar.dart';
 import '../tablet_login_controller.dart';
 
@@ -110,16 +110,19 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
               const SizedBox(height: 16),
 
               TextField(
-                controller: _controller.phoneController,
+                controller: _controller.phoneController,       // 핸들 입력용 컨트롤러 유지
                 focusNode: _controller.phoneFocus,
-                keyboardType: TextInputType.name,
-                // 영어 아이디/이름 입력
+                keyboardType: TextInputType.text,               // ← name → text 로
+                textCapitalization: TextCapitalization.none,    // ← 자동 대문자 방지
+                autocorrect: false,                             // ← 자동 교정 끔
+                enableSuggestions: false,                       // ← 추천 끔
                 textInputAction: TextInputAction.next,
                 onChanged: (value) => _controller.formatPhoneNumber(value, setState),
-                onSubmitted: (_) => FocusScope.of(context).requestFocus(_controller.passwordFocus),
+                onSubmitted: (_) => FocusScope.of(context)
+                    .requestFocus(_controller.passwordFocus),
                 decoration: _controller.inputDecoration(
-                  label: "영어 이름",
-                  icon: Icons.translate,
+                  label: "영어 아이디(핸들)",                    // ← 라벨 명확화
+                  icon: Icons.alternate_email,                  // ← 아이콘도 핸들 느낌으로
                 ),
               ),
               const SizedBox(height: 16),

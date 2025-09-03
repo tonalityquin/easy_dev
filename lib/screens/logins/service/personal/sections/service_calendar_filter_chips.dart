@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:googleapis/calendar/v3.dart' as calendar;
-import '../utils/calendar_logic.dart';
+import '../utils/service_calendar_logic.dart';
 
 class CalendarFilterChips extends StatelessWidget {
   final Map<String, bool> filterStates;

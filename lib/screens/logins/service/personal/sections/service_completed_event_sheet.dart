@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:googleapis/calendar/v3.dart' as calendar;
 import '../../../../../utils/snackbar_helper.dart';
-import '../utils/calendar_logic.dart';
+import '../utils/service_calendar_logic.dart';
 
 /// 완료된 이벤트(진행률 100%)를 보여주는 바텀시트를 표시하고,
 /// 사용자가 요청 시 해당 이벤트들을 삭제함

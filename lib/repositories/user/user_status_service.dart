@@ -13,6 +13,31 @@ class UserStatusService {
     return _firestore.collection('tablet_accounts');
   }
 
+  // ---- safe update helper (update → if NOT_FOUND then set(merge)) ----
+  Future<void> _safeUpdate(
+      CollectionReference<Map<String, dynamic>> col,
+      String docId,
+      Map<String, dynamic> updates, {
+        String opName = '',
+      }) async {
+    try {
+      await col.doc(docId).update(updates);
+      await FirestoreLogger().log('$opName success: $docId (update)');
+    } on FirebaseException catch (e) {
+      // 문서가 없으면 set(merge)로 업서트 처리
+      if (e.code == 'not-found') {
+        await col.doc(docId).set(updates, SetOptions(merge: true));
+        await FirestoreLogger().log('$opName success: $docId (set/merge)');
+      } else {
+        await FirestoreLogger().log('$opName error($docId): ${e.code} - ${e.message}');
+        rethrow;
+      }
+    } catch (e) {
+      await FirestoreLogger().log('$opName error($docId): $e');
+      rethrow;
+    }
+  }
+
   // =========================================================
   // =============== user_accounts (phone 기반) ===============
   // =========================================================
@@ -30,8 +55,12 @@ class UserStatusService {
     if (isSaved != null) updates['isSaved'] = isSaved;
 
     await FirestoreLogger().log('updateLogOutUserStatus called: $userId → $updates');
-    await _getUserCollectionRef().doc(userId).update(updates);
-    await FirestoreLogger().log('updateLogOutUserStatus success: $userId');
+    await _safeUpdate(
+      _getUserCollectionRef(),
+      userId,
+      updates,
+      opName: 'updateLogOutUserStatus',
+    );
   }
 
   /// 근무 상태 전용 업데이트 (user_accounts)
@@ -47,8 +76,12 @@ class UserStatusService {
     if (isSaved != null) updates['isSaved'] = isSaved;
 
     await FirestoreLogger().log('updateWorkingUserStatus called: $userId → $updates');
-    await _getUserCollectionRef().doc(userId).update(updates);
-    await FirestoreLogger().log('updateWorkingUserStatus success: $userId');
+    await _safeUpdate(
+      _getUserCollectionRef(),
+      userId,
+      updates,
+      opName: 'updateWorkingUserStatus',
+    );
   }
 
   /// 앱 로드시 currentArea 설정 (user_accounts)
@@ -60,8 +93,12 @@ class UserStatusService {
     final userId = '$phone-$area';
     await FirestoreLogger().log('updateLoadCurrentArea called: $userId → $currentArea');
 
-    await _getUserCollectionRef().doc(userId).update({'currentArea': currentArea});
-    await FirestoreLogger().log('updateLoadCurrentArea success: $userId');
+    await _safeUpdate(
+      _getUserCollectionRef(),
+      userId,
+      {'currentArea': currentArea},
+      opName: 'updateLoadCurrentArea',
+    );
   }
 
   /// AreaPicker에서 currentArea 설정 (user_accounts)
@@ -73,13 +110,19 @@ class UserStatusService {
     final userId = '$phone-$area';
     await FirestoreLogger().log('areaPickerCurrentArea called: $userId → $currentArea');
 
-    await _getUserCollectionRef().doc(userId).update({'currentArea': currentArea});
-    await FirestoreLogger().log('areaPickerCurrentArea success: $userId');
+    await _safeUpdate(
+      _getUserCollectionRef(),
+      userId,
+      {'currentArea': currentArea},
+      opName: 'areaPickerCurrentArea',
+    );
   }
 
   // =========================================================
   // ============= tablet_accounts (handle 기반) =============
   // =========================================================
+  // ⚠️ tablet_accounts 문서 ID 규칙:
+  //    `$handle-$areaName(한글 지역명 A안)`
 
   /// 로그아웃 시 태블릿 계정 상태 업데이트 (tablet_accounts)
   Future<void> updateLogOutTabletStatus(
@@ -94,8 +137,12 @@ class UserStatusService {
     if (isSaved != null) updates['isSaved'] = isSaved;
 
     await FirestoreLogger().log('updateLogOutTabletStatus called: $tabletId → $updates');
-    await _getTabletCollectionRef().doc(tabletId).update(updates);
-    await FirestoreLogger().log('updateLogOutTabletStatus success: $tabletId');
+    await _safeUpdate(
+      _getTabletCollectionRef(),
+      tabletId,
+      updates,
+      opName: 'updateLogOutTabletStatus',
+    );
   }
 
   /// 근무 상태 전용 업데이트 (tablet_accounts)
@@ -111,8 +158,12 @@ class UserStatusService {
     if (isSaved != null) updates['isSaved'] = isSaved;
 
     await FirestoreLogger().log('updateWorkingTabletStatus called: $tabletId → $updates');
-    await _getTabletCollectionRef().doc(tabletId).update(updates);
-    await FirestoreLogger().log('updateWorkingTabletStatus success: $tabletId');
+    await _safeUpdate(
+      _getTabletCollectionRef(),
+      tabletId,
+      updates,
+      opName: 'updateWorkingTabletStatus',
+    );
   }
 
   /// 앱 로드시 currentArea 설정 (tablet_accounts)
@@ -124,8 +175,12 @@ class UserStatusService {
     final tabletId = '$handle-$area';
     await FirestoreLogger().log('updateLoadCurrentAreaTablet called: $tabletId → $currentArea');
 
-    await _getTabletCollectionRef().doc(tabletId).update({'currentArea': currentArea});
-    await FirestoreLogger().log('updateLoadCurrentAreaTablet success: $tabletId');
+    await _safeUpdate(
+      _getTabletCollectionRef(),
+      tabletId,
+      {'currentArea': currentArea},
+      opName: 'updateLoadCurrentAreaTablet',
+    );
   }
 
   /// AreaPicker에서 currentArea 설정 (tablet_accounts)
@@ -137,7 +192,11 @@ class UserStatusService {
     final tabletId = '$handle-$area';
     await FirestoreLogger().log('areaPickerCurrentAreaTablet called: $tabletId → $currentArea');
 
-    await _getTabletCollectionRef().doc(tabletId).update({'currentArea': currentArea});
-    await FirestoreLogger().log('areaPickerCurrentAreaTablet success: $tabletId');
+    await _safeUpdate(
+      _getTabletCollectionRef(),
+      tabletId,
+      {'currentArea': currentArea},
+      opName: 'areaPickerCurrentAreaTablet',
+    );
   }
 }

@@ -29,7 +29,7 @@ abstract class UserRepository {
   ///    (docId = "$handle-$areaName")
   Future<TabletModel?> getTabletByHandleAndAreaName(String handle, String areaName);
 
-  // ===== 상태 업데이트 =====
+  // ===== 상태 업데이트 (일반 user_accounts) =====
 
   /// 📝 앱 시작 시 현재 지역(currentArea) 동기화
   Future<void> updateLoadCurrentArea(
@@ -57,6 +57,40 @@ abstract class UserRepository {
   Future<void> updateWorkingUserStatus(
       String phone,
       String area, {
+        bool? isWorking,
+        bool? isSaved,
+      });
+
+  // ===== 상태 업데이트 (태블릿 전용 tablet_accounts) =====
+  /// ⚠️ 태블릿 문서 ID는 `$handle-$areaName(한글)` 규칙을 사용합니다.
+  ///    여기서 areaName은 사람이 보는 한글 지역명이며, englishSelectedAreaName은 **ID에 사용하지 않습니다**.
+
+  /// 📝 앱 시작 시 현재 지역(currentArea) 동기화 (tablet_accounts)
+  Future<void> updateLoadCurrentAreaTablet(
+      String handle,
+      String areaName,
+      String currentArea,
+      );
+
+  /// 📝 지역 피커로 currentArea 변경 (tablet_accounts)
+  Future<void> areaPickerCurrentAreaTablet(
+      String handle,
+      String areaName,
+      String currentArea,
+      );
+
+  /// 🔄 로그아웃 시 상태 업데이트 (tablet_accounts)
+  Future<void> updateLogOutTabletStatus(
+      String handle,
+      String areaName, {
+        bool? isWorking,
+        bool? isSaved,
+      });
+
+  /// 🔄 근무 상태 토글/업데이트 (tablet_accounts)
+  Future<void> updateWorkingTabletStatus(
+      String handle,
+      String areaName, {
         bool? isWorking,
         bool? isSaved,
       });

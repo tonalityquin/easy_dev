@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:googleapis/calendar/v3.dart' as calendar;
-import 'completed_task_page.dart';
-import 'cooperation_Calendar_pages/sections/calendar_filter_chips.dart';
-import 'cooperation_Calendar_pages/sections/calendar_event_card.dart';
-import 'cooperation_Calendar_pages/utils/calendar_logic.dart';
-import 'cooperation_Calendar_pages/utils/calendar_utils.dart';
+import 'service_completed_task_page.dart';
+import 'cooperation_Calendar_pages/sections/service_calendar_filter_chips.dart';
+import 'cooperation_Calendar_pages/sections/service_calendar_event_card.dart';
+import 'cooperation_Calendar_pages/utils/service_calendar_logic.dart';
+import 'cooperation_Calendar_pages/utils/service_calendar_utils.dart';
 
 /// 개인용 Google Calendar 연동 월간 캘린더 화면
 class CooperationCalendar extends StatefulWidget {

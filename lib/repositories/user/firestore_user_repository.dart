@@ -89,7 +89,7 @@ class FirestoreUserRepository implements UserRepository {
     return _writeService.deleteTablets(ids);
   }
 
-  // ===== 상태 업데이트 =====
+  // ===== 상태 업데이트: user_accounts =====
   @override
   Future<void> updateLogOutUserStatus(
       String phone,
@@ -136,5 +136,54 @@ class FirestoreUserRepository implements UserRepository {
       String currentArea,
       ) {
     return _statusService.areaPickerCurrentArea(phone, area, currentArea);
+  }
+
+  // ===== 상태 업데이트: tablet_accounts (handle 기반) =====
+  @override
+  Future<void> updateLogOutTabletStatus(
+      String handle,
+      String area, {
+        bool? isWorking,
+        bool? isSaved,
+      }) {
+    return _statusService.updateLogOutTabletStatus(
+      handle,
+      area,
+      isWorking: isWorking,
+      isSaved: isSaved,
+    );
+  }
+
+  @override
+  Future<void> updateWorkingTabletStatus(
+      String handle,
+      String area, {
+        bool? isWorking,
+        bool? isSaved,
+      }) {
+    return _statusService.updateWorkingTabletStatus(
+      handle,
+      area,
+      isWorking: isWorking,
+      isSaved: isSaved,
+    );
+  }
+
+  @override
+  Future<void> updateLoadCurrentAreaTablet(
+      String handle,
+      String area,
+      String currentArea,
+      ) {
+    return _statusService.updateLoadCurrentAreaTablet(handle, area, currentArea);
+  }
+
+  @override
+  Future<void> areaPickerCurrentAreaTablet(
+      String handle,
+      String area,
+      String currentArea,
+      ) {
+    return _statusService.areaPickerCurrentAreaTablet(handle, area, currentArea);
   }
 }

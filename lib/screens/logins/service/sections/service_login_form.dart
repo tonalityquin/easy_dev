@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../tablet/sections/tablet_login_form.dart';
 import '../../tablet/tablet_login_controller.dart';
-import '../belivus/cooperation_calendar.dart';
-import '../login_controller.dart';
+import '../belivus/service_cooperation_calendar.dart';
+import '../service_login_controller.dart';
 
 class LoginForm extends StatefulWidget {
   final LoginController controller;

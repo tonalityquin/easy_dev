@@ -3,7 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter/services.dart';
 import '../../../../utils/snackbar_helper.dart';
-import 'login_debug_firestore_logger.dart';
+import 'service_login_debug_firestore_logger.dart';
 
 class LoginDebugBottomSheet extends StatefulWidget {
   const LoginDebugBottomSheet({super.key});
