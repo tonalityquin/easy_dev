@@ -7,9 +7,9 @@ class PlateCountService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   Future<int> getPlateCountForTypePage(
-    PlateType type,
-    String area,
-  ) async {
+      PlateType type,
+      String area,
+      ) async {
     await FirestoreLogger().log('getPlateCountForTypePage called: type=${type.name}, area=$area');
 
     final aggregateQuerySnapshot = await _firestore
