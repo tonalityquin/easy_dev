@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../models/tablet_model.dart';
 import '../../models/user_model.dart';
 import '../../screens/type_pages/debugs/firestore_logger.dart';
 
@@ -13,11 +14,46 @@ class UserReadService {
     return _firestore.collection('user_accounts');
   }
 
+  CollectionReference<Map<String, dynamic>> _getTabletCollectionRef() {
+    return _firestore.collection('tablet_accounts');
+  }
+
   CollectionReference<Map<String, dynamic>> _getAreasCollectionRef() {
     return _firestore.collection('areas');
   }
 
-  /// 사용자 ID로 조회
+  // ----- Helpers -----
+
+  // handle 정규화 (소문자/trim)
+  String _normalizeHandle(String h) => h.trim().toLowerCase();
+
+  // TabletModel -> UserModel 매핑 (phone <= handle)
+  UserModel _tabletToUser(TabletModel t) {
+    return UserModel(
+      id: t.id,
+      areas: t.areas,
+      currentArea: t.currentArea,
+      divisions: t.divisions,
+      email: t.email,
+      endTime: t.endTime,
+      englishSelectedAreaName: t.englishSelectedAreaName,
+      fixedHolidays: t.fixedHolidays,
+      isSaved: t.isSaved,
+      isSelected: t.isSelected,
+      isWorking: t.isWorking,
+      name: t.name,
+      password: t.password,
+      phone: t.handle, // 🔑 handle을 phone 슬롯에 매핑(현 UI/State 호환)
+      position: t.position,
+      role: t.role,
+      selectedArea: t.selectedArea,
+      startTime: t.startTime,
+    );
+  }
+
+  // ----- Reads -----
+
+  /// 사용자 ID로 조회 (user_accounts)
   Future<UserModel?> getUserById(String userId) async {
     debugPrint("getUserById 호출 → ID: $userId");
     await FirestoreLogger().log('getUserById called: $userId');
@@ -35,15 +71,14 @@ class UserReadService {
     return UserModel.fromMap(doc.id, data);
   }
 
-  /// 전화번호로 사용자 조회
+  /// 전화번호로 사용자 조회 (user_accounts)
   Future<UserModel?> getUserByPhone(String phone) async {
     debugPrint("getUserByPhone, 조회 시작 - phone: $phone");
     await FirestoreLogger().log('getUserByPhone called: $phone');
 
     try {
-      final querySnapshot = await _getUserCollectionRef()
-          .where('phone', isEqualTo: phone)
-          .get();
+      final querySnapshot =
+      await _getUserCollectionRef().where('phone', isEqualTo: phone).limit(1).get();
 
       debugPrint("조회 완료 - 결과 개수: ${querySnapshot.docs.length}");
 
@@ -64,7 +99,94 @@ class UserReadService {
     return null;
   }
 
-  /// 캐시에서 사용자 리스트 조회
+  /// (옵션) handle로 사용자 조회 (user_accounts) - 호환용
+  /// 1) 'handle' 필드가 있으면 우선 검색
+  /// 2) 없던 시절 호환: 'phone' == handle 로도 검색
+  Future<UserModel?> getUserByHandle(String handle) async {
+    final h = _normalizeHandle(handle);
+    debugPrint("getUserByHandle, 조회 시작 - handle: $h");
+    await FirestoreLogger().log('getUserByHandle called: $h');
+
+    try {
+      var qs = await _getUserCollectionRef()
+          .where('handle', isEqualTo: h)
+          .limit(1)
+          .get();
+
+      if (qs.docs.isEmpty) {
+        qs = await _getUserCollectionRef()
+            .where('phone', isEqualTo: h)
+            .limit(1)
+            .get();
+      }
+
+      if (qs.docs.isNotEmpty) {
+        final doc = qs.docs.first;
+        await FirestoreLogger().log('getUserByHandle success: ${doc.id}');
+        return UserModel.fromMap(doc.id, doc.data());
+      } else {
+        await FirestoreLogger().log('getUserByHandle not found: $h');
+      }
+    } catch (e) {
+      debugPrint("DB 조회 중 예외 발생: $e");
+      await FirestoreLogger().log('getUserByHandle error: $e');
+    }
+    return null;
+  }
+
+  /// (A안) handle + areaName(한글 지역명)으로 문서 ID 직조회 (tablet_accounts)
+  Future<TabletModel?> getTabletByHandleAndAreaName(String handle, String areaName) async {
+    final h = _normalizeHandle(handle);
+    final name = areaName.trim(); // 한글 지역명 그대로 사용
+    final docId = '$h-$name';
+
+    debugPrint("getTabletByHandleAndAreaName, docId: $docId");
+    await FirestoreLogger().log('getTabletByHandleAndAreaName called: $docId');
+
+    try {
+      final snap = await _getTabletCollectionRef().doc(docId).get();
+      if (snap.exists && snap.data() != null) {
+        await FirestoreLogger().log('getTabletByHandleAndAreaName success: $docId');
+        return TabletModel.fromMap(snap.id, snap.data()!);
+      } else {
+        await FirestoreLogger().log('getTabletByHandleAndAreaName not found: $docId');
+      }
+    } catch (e) {
+      debugPrint("DB 조회 중 예외 발생: $e");
+      await FirestoreLogger().log('getTabletByHandleAndAreaName error: $e');
+    }
+    return null;
+  }
+
+  /// (옵션) handle로 단건 조회 (tablet_accounts)
+  Future<TabletModel?> getTabletByHandle(String handle) async {
+    final h = _normalizeHandle(handle);
+    debugPrint("getTabletByHandle, 조회 시작 - handle: $h");
+    await FirestoreLogger().log('getTabletByHandle called: $h');
+
+    try {
+      final qs = await _getTabletCollectionRef()
+          .where('handle', isEqualTo: h)
+          .limit(1)
+          .get();
+
+      if (qs.docs.isNotEmpty) {
+        final doc = qs.docs.first;
+        await FirestoreLogger().log('getTabletByHandle success: ${doc.id}');
+        return TabletModel.fromMap(doc.id, doc.data());
+      } else {
+        await FirestoreLogger().log('getTabletByHandle not found: $h');
+      }
+    } catch (e) {
+      debugPrint("DB 조회 중 예외 발생: $e");
+      await FirestoreLogger().log('getTabletByHandle error: $e');
+    }
+    return null;
+  }
+
+  // ----- Cache-first list reads -----
+
+  /// 캐시에서 사용자 리스트 조회 (area 기준)
   Future<List<UserModel>> getUsersByAreaOnceWithCache(String selectedArea) async {
     final cacheKey = 'users_$selectedArea';
     final prefs = await SharedPreferences.getInstance();
@@ -83,23 +205,46 @@ class UserReadService {
     return [];
   }
 
-  /// Firestore에서 사용자 새로 조회 후 캐시 갱신
+  /// Firestore에서 사용자 새로 조회 후 캐시 갱신 (user_accounts)
   Future<List<UserModel>> refreshUsersBySelectedArea(String selectedArea) async {
     debugPrint('🔥 Firestore 호출 시작 → $selectedArea');
     await FirestoreLogger().log('refreshUsersBySelectedArea called: $selectedArea');
 
-    final querySnapshot = await _getUserCollectionRef()
-        .where('areas', arrayContains: selectedArea)
-        .get();
+    final querySnapshot =
+    await _getUserCollectionRef().where('areas', arrayContains: selectedArea).get();
 
-    final users = querySnapshot.docs
-        .map((doc) => UserModel.fromMap(doc.id, doc.data()))
-        .toList();
+    final users =
+    querySnapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
 
     await _updateCacheWithUsers(selectedArea, users);
-    await FirestoreLogger().log('refreshUsersBySelectedArea success: ${users.length} users loaded');
+    await FirestoreLogger()
+        .log('refreshUsersBySelectedArea success: ${users.length} users loaded');
     return users;
   }
+
+  /// Firestore에서 태블릿 새로 조회 후 (UserModel로 변환하여) 캐시 갱신 (tablet_accounts)
+  Future<List<UserModel>> refreshTabletsBySelectedArea(String selectedArea) async {
+    debugPrint('🔥 Firestore 호출 시작 (tablet) → $selectedArea');
+    await FirestoreLogger().log('refreshTabletsBySelectedArea called: $selectedArea');
+
+    final querySnapshot =
+    await _getTabletCollectionRef().where('areas', arrayContains: selectedArea).get();
+
+    // 1) TabletModel로 파싱
+    final tablets =
+    querySnapshot.docs.map((doc) => TabletModel.fromMap(doc.id, doc.data())).toList();
+
+    // 2) UserModel로 변환
+    final users = tablets.map(_tabletToUser).toList();
+
+    // 3) 캐시 업데이트 및 반환
+    await _updateCacheWithUsers(selectedArea, users);
+    await FirestoreLogger()
+        .log('refreshTabletsBySelectedArea success: ${users.length} users loaded');
+    return users;
+  }
+
+  // ----- areas helpers -----
 
   /// areas 컬렉션에서 영어 이름 조회
   Future<String?> getEnglishNameByArea(String area, String division) async {
@@ -119,6 +264,8 @@ class UserReadService {
 
     return null;
   }
+
+  // ----- Cache ops -----
 
   /// 캐시 제거
   Future<void> clearUserCache(String selectedArea) async {

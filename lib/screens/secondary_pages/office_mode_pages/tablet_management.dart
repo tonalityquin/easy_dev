@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../models/user_model.dart';
+import '../../../models/tablet_model.dart';
 import '../../../repositories/user/user_repository.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../widgets/navigation/secondary_mini_navigation.dart';
-import 'user_management_pages/user_setting.dart';
+import 'tablet_management_pages/tablet_setting.dart';
 import '../../../states/user/user_state.dart';
 import '../../../states/area/area_state.dart';
 
@@ -20,7 +21,7 @@ extension IterableX<T> on Iterable<T> {
 }
 
 class TabletManagement extends StatefulWidget {
-  const TabletManagement ({super.key});
+  const TabletManagement({super.key});
 
   @override
   State<TabletManagement> createState() => _TabletManagementState();
@@ -31,19 +32,9 @@ class _TabletManagementState extends State<TabletManagement> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<UserState>().loadUsersOnly();
+      // ✅ 태블릿 전용 초기 로드
+      context.read<UserState>().loadTabletsOnly();
     });
-  }
-
-  TimeOfDay? _stringToTimeOfDay(String? timeString) {
-    if (timeString == null) return null;
-    final parts = timeString.split(':');
-    if (parts.length != 2) return null;
-    final hour = int.tryParse(parts[0]);
-    final minute = int.tryParse(parts[1]);
-    if (hour == null || minute == null) return null;
-    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
-    return TimeOfDay(hour: hour, minute: minute);
   }
 
   String formatTime(TimeOfDay? time) {
@@ -53,25 +44,42 @@ class _TabletManagementState extends State<TabletManagement> {
     return '$hour:$minute';
   }
 
+  // UserModel ↔ TabletModel 변환 헬퍼 (UI는 Tablet*, 저장은 기존 UserState/UserModel 사용)
+  TabletModel _toTabletModel(UserModel u) {
+    return TabletModel(
+      id: u.id,
+      areas: List<String>.from(u.areas),
+      currentArea: u.currentArea,
+      divisions: List<String>.from(u.divisions),
+      email: u.email,
+      endTime: u.endTime,
+      englishSelectedAreaName: u.englishSelectedAreaName,
+      fixedHolidays: List<String>.from(u.fixedHolidays),
+      isSaved: u.isSaved,
+      isSelected: u.isSelected,
+      isWorking: u.isWorking,
+      name: u.name,
+      password: u.password,
+      handle: u.phone, // 기존 phone 값을 handle로 매핑
+      position: u.position,
+      role: u.role,
+      selectedArea: u.selectedArea,
+      startTime: u.startTime,
+    );
+  }
+
   void buildUserBottomSheet({
     required BuildContext context,
     required void Function(
-      String name,
-      String phone,
-      String email,
-      String role,
-      String password,
-      String area,
-      String division,
-      bool isWorking,
-      bool isSaved,
-      String selectedArea,
-      String? startTime,
-      String? endTime,
-      List<String> fixedHolidays,
-      String position,
-    ) onSave,
-    UserModel? initialUser,
+        String name,
+        String handle, // phone → handle
+        String email,
+        String role,
+        String password,
+        String area,
+        String division,
+        ) onSave,
+    TabletModel? initialUser, // 하단시트는 TabletModel 사용
   }) {
     final areaState = context.read<AreaState>();
     final currentArea = areaState.currentArea;
@@ -86,7 +94,7 @@ class _TabletManagementState extends State<TabletManagement> {
       ),
       builder: (sheetCtx) => Padding(
         padding: MediaQuery.of(sheetCtx).viewInsets, // ✅ sheetCtx 사용
-        child: UserSettingBottomSheet(
+        child: TabletSettingBottomSheet(
           onSave: onSave,
           areaValue: currentArea,
           division: currentDivision,
@@ -103,22 +111,22 @@ class _TabletManagementState extends State<TabletManagement> {
 
   Future<bool> _confirmDelete(BuildContext context) async {
     return await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text('삭제 확인'),
-            content: const Text('선택한 계정을 삭제하시겠습니까?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('취소'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('삭제'),
-              ),
-            ],
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('삭제 확인'),
+        content: const Text('선택한 계정을 삭제하시겠습니까?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
           ),
-        ) ??
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    ) ??
         false;
   }
 
@@ -130,47 +138,42 @@ class _TabletManagementState extends State<TabletManagement> {
       buildUserBottomSheet(
         context: context,
         onSave: (
-          name,
-          phone,
-          email,
-          role,
-          password,
-          area,
-          division,
-          isWorking,
-          isSaved,
-          selectedArea,
-          startTime,
-          endTime,
-          fixedHolidays,
-          position,
-        ) async {
+            name,
+            handle,
+            email,
+            role,
+            password,
+            area,
+            division,
+            ) async {
           try {
-            final englishName = await context.read<UserRepository>().getEnglishNameByArea(selectedArea, division);
+            final englishName = await context.read<UserRepository>().getEnglishNameByArea(area, division);
 
-            final newUser = UserModel(
-              id: '$phone-$area',
+            // 🔁 UserModel → TabletModel 로 생성
+            final newTablet = TabletModel(
+              id: '$handle-$area', // 문서 ID 관례: handle-한글지역
               name: name,
-              phone: phone,
+              handle: handle,
               email: email,
               role: role,
               password: password,
-              position: position,
+              position: null,      // 축소안: 직책 미사용
               areas: [area],
               divisions: [division],
               currentArea: area,
-              selectedArea: selectedArea,
+              selectedArea: area,  // 축소안: selectedArea = area
               englishSelectedAreaName: englishName ?? area,
               isSelected: false,
-              isWorking: isWorking,
-              isSaved: isSaved,
-              startTime: _stringToTimeOfDay(startTime),
-              endTime: _stringToTimeOfDay(endTime),
-              fixedHolidays: fixedHolidays,
+              isWorking: false,    // 기본값
+              isSaved: false,      // 기본값
+              startTime: null,     // 축소안
+              endTime: null,       // 축소안
+              fixedHolidays: const [], // 축소안
             );
 
-            userState.addUserCard(
-              newUser,
+            // ✅ tablet_accounts에 추가
+            await userState.addTabletCard(
+              newTablet,
               onError: (msg) => showFailedSnackbar(context, msg),
             );
           } catch (e) {
@@ -190,45 +193,37 @@ class _TabletManagementState extends State<TabletManagement> {
         return;
       }
 
+      // 하단시트는 TabletModel을 사용하므로 변환하여 전달
+      final tabletInitial = _toTabletModel(selectedUser);
+
       buildUserBottomSheet(
         context: context,
-        initialUser: selectedUser,
+        initialUser: tabletInitial,
         onSave: (
-          name,
-          phone,
-          email,
-          role,
-          password,
-          area,
-          division,
-          isWorking,
-          isSaved,
-          selectedArea,
-          startTime,
-          endTime,
-          fixedHolidays,
-          position,
-        ) async {
+            name,
+            handle,
+            email,
+            role,
+            password,
+            area,
+            division,
+            ) async {
           try {
-            final englishName = await context.read<UserRepository>().getEnglishNameByArea(selectedArea, division);
+            final englishName = await context.read<UserRepository>().getEnglishNameByArea(area, division);
 
+            // ⚠️ 현재 예제에서는 UserModel로 업데이트(기존 로직 유지).
+            // tablet_accounts 쪽으로도 업데이트하려면 userState에 updateTabletCard 추가 후 호출 권장.
             final updatedUser = selectedUser.copyWith(
               name: name,
-              phone: phone,
+              phone: handle, // handle을 phone 필드에 저장(호환)
               email: email,
               role: role,
               password: password,
-              position: position,
               areas: [area],
               divisions: [division],
               currentArea: area,
-              selectedArea: selectedArea,
+              selectedArea: area,
               englishSelectedAreaName: englishName ?? area,
-              isWorking: isWorking,
-              isSaved: isSaved,
-              startTime: _stringToTimeOfDay(startTime),
-              endTime: _stringToTimeOfDay(endTime),
-              fixedHolidays: fixedHolidays,
             );
 
             await userState.updateLoginUser(updatedUser);
@@ -248,7 +243,8 @@ class _TabletManagementState extends State<TabletManagement> {
       final ok = await _confirmDelete(context);
       if (!ok) return;
 
-      userState.deleteUserCard(
+      // ✅ tablet_accounts에서 삭제
+      await userState.deleteTabletCard(
         [selectedId],
         onError: (msg) => showFailedSnackbar(context, msg),
       );
@@ -267,11 +263,8 @@ class _TabletManagementState extends State<TabletManagement> {
     final currentDivision = areaState.currentDivision; // non-nullable 가정
 
     bool matches(UserModel u) {
-      // non-nullable 가정: dead_null_aware_expression 경고 제거
       final areas = u.areas;
       final divisions = u.divisions;
-
-      // unnecessary_null_comparison 경고 제거
       final areaOk = currentArea.isEmpty || areas.contains(currentArea);
       final divisionOk = currentDivision.isEmpty || divisions.contains(currentDivision);
       return areaOk && divisionOk;
@@ -293,7 +286,8 @@ class _TabletManagementState extends State<TabletManagement> {
             tooltip: '새로고침',
             onPressed: () async {
               try {
-                await userState.refreshUsersBySelectedAreaAndCache();
+                // ✅ tablet_accounts 기준 새로고침
+                await userState.refreshTabletsBySelectedAreaAndCache();
                 if (!context.mounted) return;
                 showSuccessSnackbar(context, '목록이 새로고침되었습니다.');
               } catch (e) {
@@ -307,37 +301,38 @@ class _TabletManagementState extends State<TabletManagement> {
       body: userState.isLoading
           ? const Center(child: CircularProgressIndicator())
           : filteredUsers.isEmpty
-              ? Center(
-                  child:
-                      userState.users.isEmpty ? const Text('전체 계정 데이터가 없습니다') : const Text('현재 지역/사업소에 해당하는 계정이 없습니다'),
-                )
-              : ListView.builder(
-                  itemCount: filteredUsers.length,
-                  itemBuilder: (context, index) {
-                    final user = filteredUsers[index];
-                    final isSelected = userState.selectedUserId == user.id;
+          ? Center(
+        child: userState.users.isEmpty
+            ? const Text('전체 계정 데이터가 없습니다')
+            : const Text('현재 지역/사업소에 해당하는 계정이 없습니다'),
+      )
+          : ListView.builder(
+        itemCount: filteredUsers.length,
+        itemBuilder: (context, index) {
+          final user = filteredUsers[index];
+          final isSelected = userState.selectedUserId == user.id;
 
-                    return ListTile(
-                      key: ValueKey(user.id),
-                      title: Text(
-                        user.name,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('이메일: ${user.email}'),
-                          Text('출근: ${formatTime(user.startTime)} / 퇴근: ${formatTime(user.endTime)}'),
-                          Text('역할: ${user.role}'),
-                          if (user.position?.isNotEmpty == true) Text('직책: ${user.position!}'),
-                        ],
-                      ),
-                      trailing: isSelected ? const Icon(Icons.check_circle, color: Colors.green) : null,
-                      selected: isSelected,
-                      onTap: () => userState.toggleUserCard(user.id),
-                    );
-                  },
-                ),
+          return ListTile(
+            key: ValueKey(user.id),
+            title: Text(
+              user.name,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('이메일: ${user.email}'),
+                Text('출근: ${formatTime(user.startTime)} / 퇴근: ${formatTime(user.endTime)}'),
+                Text('역할: ${user.role}'),
+                if (user.position?.isNotEmpty == true) Text('직책: ${user.position!}'),
+              ],
+            ),
+            trailing: isSelected ? const Icon(Icons.check_circle, color: Colors.green) : null,
+            selected: isSelected,
+            onTap: () => userState.toggleUserCard(user.id),
+          );
+        },
+      ),
       bottomNavigationBar: SecondaryMiniNavigation(
         icons: getNavigationIcons(userState.selectedUserId != null),
         onIconTapped: (index) => onIconTapped(context, index, userState),
