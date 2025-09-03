@@ -6,70 +6,60 @@ import '../../models/plate_model.dart';
 abstract class PlateRepository {
   // ========= Streams =========
   Stream<List<PlateModel>> streamToCurrentArea(
-      PlateType type,
-      String area, {
-        bool descending = true,
-        String? location,
-      });
+    PlateType type,
+    String area, {
+    bool descending = true,
+    String? location,
+  });
 
   /// 출차 완료(미정산) 원본 스냅샷 스트림 (docChanges 사용용)
   Stream<QuerySnapshot<Map<String, dynamic>>> departureUnpaidSnapshots(
-      String area, {
-        bool descending,
-      });
+    String area, {
+    bool descending,
+  });
 
   // ========= Counts =========
   Future<int> getPlateCountForTypePage(PlateType type, String area);
-  Future<int> getPlateCountToCurrentArea(String area);
-  Future<int> getPlateCountForClockInPage(
-      PlateType type, {
-        DateTime? selectedDate,
-        required String area,
-      });
-  Future<int> getPlateCountForClockOutPage(
-      PlateType type, {
-        DateTime? selectedDate,
-        required String area,
-      });
 
   // ========= Queries =========
   Future<List<PlateModel>> fourDigitCommonQuery({
     required String plateFourDigit,
     required String area,
   });
+
   Future<List<PlateModel>> fourDigitSignatureQuery({
     required String plateFourDigit,
     required String area,
   });
+
   Future<List<PlateModel>> fourDigitDepartureCompletedQuery({
     required String plateFourDigit,
     required String area,
   });
-  Future<List<PlateModel>> getPlatesByLocation({
-    required PlateType type,
-    required String area,
-    required String location,
-  });
+
   Future<bool> checkDuplicatePlate({
     required String plateNumber,
     required String area,
   });
+
   Future<PlateModel?> getPlate(String documentId);
 
   // ========= Writes =========
   Future<void> addOrUpdatePlate(String documentId, PlateModel plate);
+
   Future<void> updatePlate(
-      String documentId,
-      Map<String, dynamic> updatedFields, {
-        PlateLogModel? log,
-      });
+    String documentId,
+    Map<String, dynamic> updatedFields, {
+    PlateLogModel? log,
+  });
+
   Future<void> deletePlate(String documentId);
 
   Future<void> recordWhoPlateClick(
-      String id,
-      bool isSelected, {
-        String? selectedBy,
-      });
+    String id,
+    bool isSelected, {
+    String? selectedBy,
+  });
 
   Future<void> addPlate({
     required String plateNumber,
@@ -86,7 +76,7 @@ abstract class PlateRepository {
     required String region,
     required String selectedBillType,
     List<String>? imageUrls,
-    bool isLockedFee = false,           // ✅ 구현과 일치
+    bool isLockedFee = false, // ✅ 구현과 일치
     int? lockedAtTimeInSeconds,
     int? lockedFeeAmount,
     DateTime? endTime,
@@ -95,7 +85,6 @@ abstract class PlateRepository {
   });
 
   // ========= Plate Status =========
-  Future<Map<String, dynamic>?> getPlateStatus(String plateNumber, String area);
 
   Future<void> setPlateStatus({
     required String plateNumber,
@@ -138,7 +127,4 @@ abstract class PlateRepository {
     int? lockedFeeAmount,
     PlateLogModel? log,
   });
-
-  /// 출차 완료 전용 업데이트(헬퍼)
-  Future<void> updateToDepartureCompleted(String documentId, PlateModel plate);
 }

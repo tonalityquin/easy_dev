@@ -122,19 +122,6 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
-  Future<List<PlateModel>> getPlatesByLocation({
-    required PlateType type,
-    required String area,
-    required String location,
-  }) {
-    return _queryService.getPlatesByLocation(
-      type: type,
-      area: area,
-      location: location,
-    );
-  }
-
-  @override
   Future<List<PlateModel>> fourDigitCommonQuery({
     required String plateFourDigit,
     required String area,
@@ -184,42 +171,6 @@ class FirestorePlateRepository implements PlateRepository {
     String area,
   ) {
     return _countService.getPlateCountForTypePage(type, area);
-  }
-
-  @override
-  Future<int> getPlateCountToCurrentArea(String area) {
-    return _countService.getPlateCountToCurrentArea(area);
-  }
-
-  @override
-  Future<int> getPlateCountForClockInPage(
-    PlateType type, {
-    DateTime? selectedDate,
-    required String area,
-  }) {
-    return _countService.getPlateCountForClockInPage(
-      type,
-      selectedDate: selectedDate,
-      area: area,
-    );
-  }
-
-  @override
-  Future<int> getPlateCountForClockOutPage(
-    PlateType type, {
-    DateTime? selectedDate,
-    required String area,
-  }) {
-    return _countService.getPlateCountForClockOutPage(
-      type,
-      selectedDate: selectedDate,
-      area: area,
-    );
-  }
-
-  @override
-  Future<Map<String, dynamic>?> getPlateStatus(String plateNumber, String area) {
-    return _statusService.getPlateStatus(plateNumber, area);
   }
 
   @override
@@ -309,19 +260,5 @@ class FirestorePlateRepository implements PlateRepository {
     };
 
     await updatePlate(documentId, updateData);
-  }
-
-  @override
-  Future<void> updateToDepartureCompleted(String documentId, PlateModel plate) async {
-    await transitionPlateState(
-      documentId: documentId,
-      toType: PlateType.departureCompleted,
-      location: plate.location,
-      userName: plate.userName,
-      includeEndTime: true,
-      isLockedFee: plate.isLockedFee,
-      lockedAtTimeInSeconds: plate.lockedAtTimeInSeconds,
-      lockedFeeAmount: plate.lockedFeeAmount,
-    );
   }
 }

@@ -8,7 +8,6 @@ import '../../../states/user/user_state.dart';
 import '../../utils/snackbar_helper.dart';
 import 'debugs/clock_in_debug_firestore_logger.dart';
 import 'clock_in_controller.dart';
-import 'sections/clock_in_fetch_plate_count_widget.dart';
 import 'sections/report_button_widget.dart';
 import 'sections/work_button_widget.dart';
 import 'sections/user_info_card.dart';
@@ -137,7 +136,6 @@ class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
                       child: Column(
                         children: [
                           const HeaderWidget(),
-                          const ClockInFetchPlateCountWidget(),
                           const UserInfoCard(),
                           const SizedBox(height: 6),
                           Row(

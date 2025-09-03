@@ -52,7 +52,7 @@ Future<void> showReportDialog(BuildContext context) async {
 
   try {
     if (area.isNotEmpty) {
-      prefilledVehicleOutput = await PlateCountService().getLockedDepartureCountAll(area);
+      prefilledVehicleOutput = await PlateCountService().getDepartureCompletedCountAll(area);
       prefilledVehicleInput = await PlateCountService().getParkingCompletedCountAll(area);
     }
   } catch (_) {
@@ -151,7 +151,7 @@ Future<void> showReportDialog(BuildContext context) async {
                         : 0;
 
                     // 5) 출차 차량 수 자동 집계(전체)로 보정하고 보고 JSON 구성
-                    final vehicleOutputAuto = await PlateCountService().getLockedDepartureCountAll(area);
+                    final vehicleOutputAuto = await PlateCountService().getDepartureCompletedCountAll(area);
 
                     final reportLog = {
                       'division': division,

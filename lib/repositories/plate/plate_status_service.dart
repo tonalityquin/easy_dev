@@ -9,25 +9,6 @@ class PlateStatusService {
 
   bool _isEmptyInput(String customStatus, List<String> statusList) => customStatus.trim().isEmpty && statusList.isEmpty;
 
-  Future<Map<String, dynamic>?> getPlateStatus(String plateNumber, String area) async {
-    final docId = '${plateNumber}_$area';
-    await FirestoreLogger().log('getPlateStatus called: $docId');
-
-    try {
-      final doc = await _docRef(plateNumber, area).get();
-      if (doc.exists) {
-        await FirestoreLogger().log('getPlateStatus success: $docId');
-        return doc.data();
-      } else {
-        await FirestoreLogger().log('getPlateStatus not found: $docId');
-        return null;
-      }
-    } catch (e) {
-      await FirestoreLogger().log('getPlateStatus error: $e');
-      rethrow;
-    }
-  }
-
   Future<void> setPlateStatus({
     required String plateNumber,
     required String area,

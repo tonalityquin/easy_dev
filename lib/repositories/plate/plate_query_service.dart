@@ -14,27 +14,6 @@ class PlateQueryService {
     return PlateModel.fromDocument(doc);
   }
 
-  Future<List<PlateModel>> getPlatesByLocation({
-    required PlateType type,
-    required String area,
-    required String location,
-  }) async {
-    await FirestoreLogger().log(
-      'getPlatesByLocation called: type=${type.name}, area=$area, location=$location',
-    );
-
-    final query = _firestore
-        .collection('plates')
-        .where('type', isEqualTo: type.firestoreValue)
-        .where('area', isEqualTo: area)
-        .where('location', isEqualTo: location);
-
-    final result = await _queryPlates(query);
-
-    await FirestoreLogger().log('getPlatesByLocation success: ${result.length} items loaded');
-    return result;
-  }
-
   Future<List<PlateModel>> fourDigitCommonQuery({
     required String plateFourDigit,
     required String area,

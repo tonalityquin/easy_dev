@@ -84,7 +84,7 @@ class _EndWorkReportContentState extends State<EndWorkReportContent> {
     final area = context.read<AreaState>().currentArea;
     setState(() => _reloadingOutput = true);
     try {
-      final v = await PlateCountService().getLockedDepartureCountAll(area);
+      final v = await PlateCountService().getDepartureCompletedCountAll(area);
       _outputCtrl.text = v.toString();
       HapticFeedback.selectionClick();
     } catch (_) {
