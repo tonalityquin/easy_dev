@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../screens/type_pages/debugs/firestore_logger.dart';
 
@@ -23,11 +24,12 @@ class PlateStatusService {
     await FirestoreLogger().log('setPlateStatus called: $docId');
 
     try {
+      // ── 빈 입력 처리 ─────────────────────────────────────────
       if (_isEmptyInput(customStatus, statusList)) {
         if (deleteWhenEmpty) {
-          final snap = await ref.get();
+          final snap = await ref.get().timeout(const Duration(seconds: 10));
           if (snap.exists) {
-            await ref.delete();
+            await ref.delete().timeout(const Duration(seconds: 10));
             await FirestoreLogger().log('setPlateStatus deleted (empty input): $docId');
           } else {
             await FirestoreLogger().log('setPlateStatus skipped (empty input, not exists): $docId');
@@ -38,27 +40,36 @@ class PlateStatusService {
         return;
       }
 
+      // ── upsert payload (extra 먼저 전개 → 보호 필드가 최종 우선권) ──
       final data = <String, dynamic>{
+        ...?extra, // extra가 보호 필드를 덮지 않도록 먼저 두고,
         'customStatus': customStatus.trim(),
         'statusList': statusList,
         'updatedAt': FieldValue.serverTimestamp(),
-        'expireAt': Timestamp.fromDate(DateTime.now().add(const Duration(days: 1))), // 유지 시 로컬 계산
         'createdBy': createdBy,
         'area': area,
-        ...?extra,
+        // ⚠️ expireAt는 클라이언트에서 설정하지 않음.
+        //    Cloud Functions가 updatedAt 기준 +1일로 세팅(옵션 A).
       };
 
+      // ── 트랜잭션 upsert + 타임아웃 ───────────────────────────
       await _firestore.runTransaction((tx) async {
-        final snap = await tx.get(ref);
+        final snap = await tx.get(ref).timeout(const Duration(seconds: 10));
         if (!snap.exists) {
           data['createdAt'] = FieldValue.serverTimestamp();
         }
         tx.set(ref, data, SetOptions(merge: true));
-      });
+      }).timeout(const Duration(seconds: 10));
 
       await FirestoreLogger().log('setPlateStatus success: $docId');
-    } catch (e) {
-      await FirestoreLogger().log('setPlateStatus error: $e');
+    } on FirebaseException catch (e, st) {
+      await FirestoreLogger().log('setPlateStatus firebase error: ${e.code} ${e.message}\n$st');
+      rethrow;
+    } on TimeoutException catch (e, st) {
+      await FirestoreLogger().log('setPlateStatus timeout: $docId\n$st');
+      rethrow;
+    } catch (e, st) {
+      await FirestoreLogger().log('setPlateStatus error: $e\n$st');
       rethrow;
     }
   }
@@ -85,11 +96,12 @@ class PlateStatusService {
     await FirestoreLogger().log('📥 setMonthlyPlateStatus called: $docId');
 
     try {
+      // ── 빈 입력 처리 ─────────────────────────────────────────
       if (_isEmptyInput(customStatus, statusList)) {
         if (deleteWhenEmpty) {
-          final snap = await ref.get();
+          final snap = await ref.get().timeout(const Duration(seconds: 10));
           if (snap.exists) {
-            await ref.delete();
+            await ref.delete().timeout(const Duration(seconds: 10));
             await FirestoreLogger().log('setMonthlyPlateStatus deleted (empty input): $docId');
           } else {
             await FirestoreLogger().log('setMonthlyPlateStatus skipped (empty input, not exists): $docId');
@@ -100,11 +112,13 @@ class PlateStatusService {
         return;
       }
 
+      // ── 업서트 payload ───────────────────────────────────────
+      // ⚠️ expireAt는 클라이언트에서 설정하지 않습니다.
+      //    Cloud Functions가 updatedAt 기준 +1일로 세팅(서버 시각원).
       final base = <String, dynamic>{
         'customStatus': customStatus.trim(),
         'statusList': statusList,
         'updatedAt': FieldValue.serverTimestamp(),
-        'expireAt': Timestamp.fromDate(DateTime.now().add(const Duration(days: 1))),
         'createdBy': createdBy,
         'type': '정기',
         'countType': countType,
@@ -119,17 +133,24 @@ class PlateStatusService {
         if (isExtended != null) 'isExtended': isExtended,
       };
 
+      // ── 트랜잭션 upsert + 타임아웃 ───────────────────────────
       await _firestore.runTransaction((tx) async {
-        final snap = await tx.get(ref);
+        final snap = await tx.get(ref).timeout(const Duration(seconds: 10));
         if (!snap.exists) {
           base['createdAt'] = FieldValue.serverTimestamp();
         }
         tx.set(ref, base, SetOptions(merge: true));
-      });
+      }).timeout(const Duration(seconds: 10));
 
       await FirestoreLogger().log('✅ setMonthlyPlateStatus success: $docId');
-    } catch (e) {
-      await FirestoreLogger().log('❌ setMonthlyPlateStatus error: $e');
+    } on FirebaseException catch (e, st) {
+      await FirestoreLogger().log('❌ setMonthlyPlateStatus firebase error: ${e.code} ${e.message}\n$st');
+      rethrow;
+    } on TimeoutException catch (e, st) {
+      await FirestoreLogger().log('⏱ setMonthlyPlateStatus timeout: $docId\n$st');
+      rethrow;
+    } catch (e, st) {
+      await FirestoreLogger().log('❌ setMonthlyPlateStatus error: $e\n$st');
       rethrow;
     }
   }
