@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:developer' as dev;
@@ -10,38 +12,53 @@ class PlateWriteService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   Future<void> addOrUpdatePlate(String documentId, PlateModel plate) async {
-    await FirestoreLogger().log('addOrUpdatePlate called: $documentId, data=${plate.toMap()}');
+    try {
+      await FirestoreLogger().log('addOrUpdatePlate called: $documentId');
 
-    final docRef = _firestore.collection('plates').doc(documentId);
-    final docSnapshot = await docRef.get();
+      final docRef = _firestore.collection('plates').doc(documentId);
+      final docSnapshot = await docRef.get().timeout(const Duration(seconds: 10));
 
-    // NOTE: 쓰기 데이터 생성
-    var newData = plate.toMap();
+      // 쓰기 데이터 생성 + 0원 잠금 규칙 보정
+      var newData = plate.toMap();
+      newData = _enforceZeroFeeLock(newData, existing: docSnapshot.data());
 
-    // === [중요] 0/0이면 isLockedFee 강제 ===
-    // 기존 문서 값(existing)과 합쳐서 유효 값을 산출한 뒤 보정합니다.
-    newData = _enforceZeroFeeLock(newData, existing: docSnapshot.data());
+      final exists = docSnapshot.exists;
+      if (exists) {
+        final existingData = docSnapshot.data() ?? const <String, dynamic>{};
 
-    // 변경 없음 최적화 (보정 후 비교해야 의미가 있습니다)
-    if (docSnapshot.exists) {
-      final existingData = docSnapshot.data();
-      if (existingData != null && _isSameData(existingData, newData)) {
-        dev.log("📦 데이터 변경 없음 → 쓰기 생략: $documentId", name: "Firestore");
-        await FirestoreLogger().log('addOrUpdatePlate skipped (no changes)');
-        return;
+        // 비교시 logs 제외(로그 차이로 인한 불필요한 쓰기 방지)
+        final compOld = Map<String, dynamic>.from(existingData)..remove(PlateFields.logs);
+        final compNew = Map<String, dynamic>.from(newData)..remove(PlateFields.logs);
+
+        if (_isSameData(compOld, compNew)) {
+          await FirestoreLogger().log('addOrUpdatePlate skipped (no changes)');
+          return;
+        }
+
+        // ✅ 기존 문서 업데이트 시 logs 덮어쓰기 방지
+        newData.remove(PlateFields.logs);
       }
-    }
+      // exists == false(신규 생성)일 때는 logs 포함 저장 허용
 
-    await docRef.set(newData, SetOptions(merge: true));
-    dev.log("✅ 문서 저장 완료: $documentId", name: "Firestore");
-    await FirestoreLogger().log('addOrUpdatePlate success: $documentId');
+      await docRef.set(newData, SetOptions(merge: true)).timeout(const Duration(seconds: 10));
+      await FirestoreLogger().log('addOrUpdatePlate success: $documentId');
+    } on TimeoutException {
+      await FirestoreLogger().log('addOrUpdatePlate timeout: $documentId');
+      rethrow;
+    } on FirebaseException catch (e) {
+      await FirestoreLogger().log('addOrUpdatePlate firebase error: ${e.code} ${e.message}');
+      rethrow;
+    } catch (e, st) {
+      await FirestoreLogger().log('addOrUpdatePlate error: $e\n$st');
+      rethrow;
+    }
   }
 
   Future<void> updatePlate(
-      String documentId,
-      Map<String, dynamic> updatedFields, {
-        PlateLogModel? log,
-      }) async {
+    String documentId,
+    Map<String, dynamic> updatedFields, {
+    PlateLogModel? log,
+  }) async {
     await FirestoreLogger().log('updatePlate called: $documentId, fields=$updatedFields');
 
     final docRef = _firestore.collection('plates').doc(documentId);
@@ -86,10 +103,10 @@ class PlateWriteService {
   }
 
   Future<void> recordWhoPlateClick(
-      String id,
-      bool isSelected, {
-        String? selectedBy,
-      }) async {
+    String id,
+    bool isSelected, {
+    String? selectedBy,
+  }) async {
     await FirestoreLogger().log('recordWhoPlateClick called: $id, isSelected=$isSelected, selectedBy=$selectedBy');
     final docRef = _firestore.collection('plates').doc(id);
 
@@ -119,9 +136,9 @@ class PlateWriteService {
   // 유틸: 0/0 잠금 규칙 강제
   // -------------------------
   Map<String, dynamic> _enforceZeroFeeLock(
-      Map<String, dynamic> data, {
-        Map<String, dynamic>? existing,
-      }) {
+    Map<String, dynamic> data, {
+    Map<String, dynamic>? existing,
+  }) {
     // data(이번 변경)에 없으면 existing(현재 문서)의 값을 사용해 '유효값'을 계산
     int _effInt(String key) {
       if (data.containsKey(key)) return _toInt(data[key]);
@@ -130,7 +147,7 @@ class PlateWriteService {
     }
 
     final int basic = _effInt(PlateFields.basicAmount);
-    final int add   = _effInt(PlateFields.addAmount);
+    final int add = _effInt(PlateFields.addAmount);
 
     final bool shouldLock = (basic == 0 && add == 0);
 
@@ -140,7 +157,7 @@ class PlateWriteService {
       // 선택: 잠금 정보 기본값 세팅(없을 때만)
       data.putIfAbsent(
         PlateFields.lockedAtTimeInSeconds,
-            () => DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000,
+        () => DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000,
       );
       data.putIfAbsent(PlateFields.lockedFeeAmount, () => 0);
     }
