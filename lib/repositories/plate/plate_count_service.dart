@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../enums/plate_type.dart';
 import '../../screens/type_pages/debugs/firestore_logger.dart';
@@ -32,25 +33,19 @@ class PlateCountService {
         .where('area', isEqualTo: area);
 
     try {
-      final agg = await baseQuery.count().get();
-      final int? serverCount = agg.count;
-      if (serverCount != null) {
-        await FirestoreLogger().log('getParkingCompletedCountAll success (aggregate): $serverCount');
-        return serverCount;
-      }
+      final agg = await baseQuery.count().get().timeout(const Duration(seconds: 10));
+      final int count = agg.count ?? 0; // ← int로 정제
+      await FirestoreLogger().log('getParkingCompletedCountAll success (aggregate): $count');
+      return count;
     } catch (e) {
-      await FirestoreLogger().log('getParkingCompletedCountAll aggregate failed: $e → fallback to get().size');
+      await FirestoreLogger().log('getParkingCompletedCountAll aggregate failed: $e');
+      rethrow;
     }
-
-    final snap = await baseQuery.get();
-    final count = snap.size;
-    await FirestoreLogger().log('getParkingCompletedCountAll success (fallback): $count');
-    return count;
   }
 
   Future<int> getDepartureCompletedCountAll(String area) async {
     await FirestoreLogger()
-        .log('getLockedDepartureCountAll called: area=$area (departure_completed && isLockedFee == true)');
+        .log('getDepartureCompletedCountAll called: area=$area (departure_completed && isLockedFee == true)');
 
     final baseQuery = _firestore
         .collection('plates')
@@ -59,19 +54,13 @@ class PlateCountService {
         .where('isLockedFee', isEqualTo: true);
 
     try {
-      final agg = await baseQuery.count().get();
-      final int? serverCount = agg.count;
-      if (serverCount != null) {
-        await FirestoreLogger().log('getLockedDepartureCountAll success (aggregate): $serverCount');
-        return serverCount;
-      }
+      final agg = await baseQuery.count().get().timeout(const Duration(seconds: 10));
+      final int count = agg.count ?? 0; // ← int로 정제
+      await FirestoreLogger().log('getDepartureCompletedCountAll success (aggregate): $count');
+      return count;
     } catch (e) {
-      await FirestoreLogger().log('getLockedDepartureCountAll aggregate failed: $e → fallback to get().size');
+      await FirestoreLogger().log('getDepartureCompletedCountAll aggregate failed: $e');
+      rethrow;
     }
-
-    final snap = await baseQuery.get();
-    final count = snap.size;
-    await FirestoreLogger().log('getLockedDepartureCountAll success (fallback): $count');
-    return count;
   }
 }
