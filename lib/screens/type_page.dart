@@ -55,29 +55,18 @@ class _TypePageState extends State<TypePage> {
               }
             },
             child: Scaffold(
-              // ✅ body를 Stack으로 바꿔 채팅/대시보드 행을 "겹쳐 배치" (네비 레이아웃에 영향 X)
-              body: Stack(
-                children: [
-                  const RefreshableBody(),
-                  // ====== ⬇️ 채팅/대시보드 버튼 행을 Positioned로 이동 (이전엔 bottomNavigationBar에 있었음)
-                  Positioned(
-                    left: 16,
-                    right: 16,
-                    // 네비(기본 높이) + 펠리컨(48) + 안전영역 + 여백만큼 위에 띄우기
-                    bottom: _bottomOverlayOffset(context),
-                    child: const _ChatDashboardBar(),
-                  ),
-                ],
-              ),
+              // ✅ 본문은 그대로
+              body: const RefreshableBody(),
 
-              // ✅ SecondaryPage 방식으로: bottomNavigationBar에 네비 + 펠리컨만 배치
+              // ✅ bottomNavigationBar 내부에
+              // [채팅/대시보드 행] → [네비게이션 바] → [펠리컨 이미지] 순서로 배치
               bottomNavigationBar: SafeArea(
                 top: false,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const PageBottomNavigation(), // 네비게이션 바 (최하단에 고정)
-                    // ⬇️ Pelican 행: 네비 아래 (기존 요구 유지)
+                    const _ChatDashboardBar(),
+                    const PageBottomNavigation(),
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       child: SizedBox(
@@ -94,17 +83,6 @@ class _TypePageState extends State<TypePage> {
       ),
     );
   }
-
-  // 네비 위에 겹쳐 띄울 버튼행의 하단 오프셋 계산
-  double _bottomOverlayOffset(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).padding.bottom;
-    const pelicanHeight = 48.0;
-    const pelicanVertical = 8.0 * 2; // 위아래 8씩
-    const spacing = 8.0; // 네비와 버튼행 사이 여유
-
-    // kBottomNavigationBarHeight(56) + Pelican(48+16) + 안전영역 + 여유
-    return kBottomNavigationBarHeight + pelicanHeight + pelicanVertical + bottomInset + spacing;
-  }
 }
 
 class _ChatDashboardBar extends StatelessWidget {
@@ -113,68 +91,71 @@ class _ChatDashboardBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final area = context.read<AreaState>().currentArea.trim();
-    return Row(
-      children: [
-        Expanded(
-          child: StreamBuilder<String>(
-            stream: latestMessageStream(area),
-            builder: (context, snapshot) {
-              final latestMessage = snapshot.data ?? '채팅 열기';
-              return ElevatedButton(
-                onPressed: () => chatBottomSheet(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.message, color: Colors.black, size: 20),
-                    const SizedBox(width: 6),
-                    Text(
-                      latestMessage.length > 20
-                          ? '${latestMessage.substring(0, 20)}...'
-                          : latestMessage,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.black),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: ElevatedButton(
-            onPressed: () {
-              showModalBottomSheet(
-                context: context,
-                isScrollControlled: true,
-                useSafeArea: true,
-                backgroundColor: Colors.transparent,
-                builder: (_) => const DashBoardBottomSheet(),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.black87,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.dashboard, size: 20),
-                SizedBox(width: 6),
-                Text('대시보드'),
-              ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: StreamBuilder<String>(
+              stream: latestMessageStream(area),
+              builder: (context, snapshot) {
+                final latestMessage = snapshot.data ?? '채팅 열기';
+                return ElevatedButton(
+                  onPressed: () => chatBottomSheet(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.message, color: Colors.black, size: 20),
+                      const SizedBox(width: 6),
+                      Text(
+                        latestMessage.length > 20
+                            ? '${latestMessage.substring(0, 20)}...'
+                            : latestMessage,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.black),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
-        ),
-      ],
+          const SizedBox(width: 8),
+          Expanded(
+            child: ElevatedButton(
+              onPressed: () {
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  useSafeArea: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => const DashBoardBottomSheet(),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.black87,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.dashboard, size: 20),
+                  SizedBox(width: 6),
+                  Text('대시보드'),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
