@@ -4,13 +4,9 @@ import 'package:flutter/foundation.dart';
 import '../../models/plate_model.dart';
 import '../../enums/plate_type.dart';
 import '../../screens/type_pages/debugs/firestore_logger.dart';
-import 'plate_write_service.dart';
-import 'plate_query_service.dart';
 
 class PlateCreationService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final PlateWriteService _writeService = PlateWriteService();
-  final PlateQueryService _queryService = PlateQueryService();
 
   Future<void> addPlate({
     required String plateNumber,
@@ -37,23 +33,7 @@ class PlateCreationService {
     final documentId = '${plateNumber}_$area';
     await FirestoreLogger().log('addPlate called: $documentId, plateNumber=$plateNumber');
 
-    final existingPlate = await _queryService.getPlate(documentId);
-    if (existingPlate != null) {
-      final existingType = PlateType.values.firstWhere(
-        (type) => type.firestoreValue == existingPlate.type,
-        orElse: () => PlateType.parkingRequests,
-      );
-
-      if (!_isAllowedDuplicate(existingType)) {
-        debugPrint("🚨 중복된 번호판 등록 시도: $plateNumber (${existingType.name})");
-        await FirestoreLogger().log('addPlate error: duplicate plate - $plateNumber');
-        throw Exception("이미 등록된 번호판입니다: $plateNumber");
-      } else {
-        debugPrint("⚠️ ${existingType.name} 상태 중복 등록 허용: $plateNumber");
-        await FirestoreLogger().log('addPlate allowed duplicate: $plateNumber (${existingType.name})');
-      }
-    }
-
+    // (기존) 정산 정보 로딩/세팅 로직 그대로 유지
     int? regularAmount;
     int? regularDurationHours;
 
@@ -89,6 +69,7 @@ class PlateCreationService {
 
     final plateFourDigit = plateNumber.length >= 4 ? plateNumber.substring(plateNumber.length - 4) : plateNumber;
 
+    // 도메인 의도: billingType 비어 있으면 잠금요금으로 간주
     final effectiveIsLockedFee = isLockedFee || (billingType == null || billingType.trim().isEmpty);
 
     final plate = PlateModel(
@@ -127,9 +108,36 @@ class PlateCreationService {
       to: location.isNotEmpty ? location : '미지정',
     );
 
-    debugPrint("🔥 저장할 plate: ${plateWithLog.toMap()}");
-    await _writeService.addOrUpdatePlate(documentId, plateWithLog);
+    // 🔒 트랜잭션으로 중복 불가 보장 (레이스 컨디션 방지)
+    final docRef = _firestore.collection('plates').doc(documentId);
+    await _firestore.runTransaction((tx) async {
+      final snap = await tx.get(docRef);
 
+      if (snap.exists) {
+        final data = snap.data();
+        final existingTypeStr = (data?['type'] as String?) ?? '';
+        final existingType = PlateType.values.firstWhere(
+          (t) => t.firestoreValue == existingTypeStr,
+          orElse: () => PlateType.parkingRequests,
+        );
+
+        if (!_isAllowedDuplicate(existingType)) {
+          debugPrint("🚨 중복된 번호판 등록 시도: $plateNumber (${existingType.name})");
+          await FirestoreLogger().log('addPlate error: duplicate plate - $plateNumber');
+          throw Exception("이미 등록된 번호판입니다: $plateNumber");
+        } else {
+          debugPrint("⚠️ ${existingType.name} 상태 중복 등록 허용(트랜잭션): $plateNumber");
+          await FirestoreLogger().log('addPlate allowed duplicate (tx): $plateNumber (${existingType.name})');
+          // 허용 시 업데이트(merge)
+          tx.set(docRef, plateWithLog.toMap(), SetOptions(merge: true));
+        }
+      } else {
+        // 신규 생성
+        tx.set(docRef, plateWithLog.toMap());
+      }
+    });
+
+    // (기존) 커스텀 상태 업서트 로직 그대로 유지
     if (customStatus != null && customStatus.trim().isNotEmpty) {
       final statusDocRef = _firestore.collection('plate_status').doc(documentId);
       final now = Timestamp.now();
