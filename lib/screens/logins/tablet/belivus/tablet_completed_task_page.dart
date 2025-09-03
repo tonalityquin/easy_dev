@@ -4,19 +4,19 @@ import 'package:googleapis/sheets/v4.dart' as sheets;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'cooperation_Calendar_pages/utils/calendar_logic.dart';
-import '../../../utils/snackbar_helper.dart';
+import 'cooperation_Calendar_pages/utils/tablet_calendar_logic.dart';
+import '../../../../utils/snackbar_helper.dart';
 
-class CompletedTaskPage extends StatefulWidget {
+class TabletCompletedTaskPage extends StatefulWidget {
   final String calendarId;
 
-  const CompletedTaskPage({super.key, required this.calendarId});
+  const TabletCompletedTaskPage({super.key, required this.calendarId});
 
   @override
-  State<CompletedTaskPage> createState() => _CompletedTaskPageState();
+  State<TabletCompletedTaskPage> createState() => _TabletCompletedTaskPageState();
 }
 
-class _CompletedTaskPageState extends State<CompletedTaskPage> {
+class _TabletCompletedTaskPageState extends State<TabletCompletedTaskPage> {
   List<calendar.Event> _completedEvents = [];
   bool _isLoading = true;
 
