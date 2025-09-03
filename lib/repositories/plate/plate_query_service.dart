@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
@@ -8,10 +9,27 @@ class PlateQueryService {
 
   Future<PlateModel?> getPlate(String documentId) async {
     await FirestoreLogger().log('getPlate called: $documentId');
-    final doc = await _firestore.collection('plates').doc(documentId).get();
-    if (!doc.exists) return null;
-    await FirestoreLogger().log('getPlate success: $documentId');
-    return PlateModel.fromDocument(doc);
+    try {
+      final doc =
+          await _firestore.collection('plates').doc(documentId).get().timeout(const Duration(seconds: 10)); // ⏱ 타임아웃
+
+      if (!doc.exists) {
+        await FirestoreLogger().log('getPlate not found: $documentId'); // 📄 미존재 로그
+        return null;
+      }
+
+      await FirestoreLogger().log('getPlate success: $documentId');
+      return PlateModel.fromDocument(doc);
+    } on FirebaseException catch (e) {
+      await FirestoreLogger().log('getPlate firebase error: ${e.code} ${e.message}');
+      rethrow; // 기존과 동일하게 예외 전파
+    } on TimeoutException {
+      await FirestoreLogger().log('getPlate timeout: $documentId');
+      rethrow; // 기존과 동일하게 예외 전파
+    } catch (e) {
+      await FirestoreLogger().log('getPlate error: $e');
+      rethrow; // 기존과 동일하게 예외 전파
+    }
   }
 
   Future<List<PlateModel>> fourDigitCommonQuery({
@@ -58,7 +76,7 @@ class PlateQueryService {
     required String area,
   }) async {
     await FirestoreLogger().log(
-      'fourDigitSignatureQuery called: plateFourDigit=$plateFourDigit, area=$area',
+      'fourDigitDepartureCompletedQuery called: plateFourDigit=$plateFourDigit, area=$area',
     );
 
     final query = _firestore
@@ -69,7 +87,7 @@ class PlateQueryService {
 
     final result = await _queryPlates(query);
 
-    await FirestoreLogger().log('fourDigitSignatureQuery success: ${result.length} items loaded');
+    await FirestoreLogger().log('fourDigitDepartureCompletedQuery success: ${result.length} items loaded');
     return result;
   }
 
@@ -79,22 +97,34 @@ class PlateQueryService {
   }) async {
     await FirestoreLogger().log('checkDuplicatePlate called: plateNumber=$plateNumber, area=$area');
 
-    final querySnapshot = await _firestore
-        .collection('plates')
-        .where('plate_number', isEqualTo: plateNumber)
-        .where('area', isEqualTo: area)
-        .where('type', whereIn: [
-          PlateType.parkingRequests.firestoreValue,
-          PlateType.parkingCompleted.firestoreValue,
-          PlateType.departureRequests.firestoreValue,
-        ])
-        .limit(1)
-        .get();
+    try {
+      final querySnapshot = await _firestore
+          .collection('plates')
+          .where('plate_number', isEqualTo: plateNumber)
+          .where('area', isEqualTo: area)
+          .where('type', whereIn: [
+        PlateType.parkingRequests.firestoreValue,
+        PlateType.parkingCompleted.firestoreValue,
+        PlateType.departureRequests.firestoreValue,
+      ])
+          .limit(1)
+          .get()
+          .timeout(const Duration(seconds: 10)); // ⏱ 타임아웃
 
-    final isDuplicate = querySnapshot.docs.isNotEmpty;
+      final isDuplicate = querySnapshot.docs.isNotEmpty;
 
-    await FirestoreLogger().log('checkDuplicatePlate result: $isDuplicate');
-    return isDuplicate;
+      await FirestoreLogger().log('checkDuplicatePlate result: $isDuplicate');
+      return isDuplicate;
+    } on FirebaseException catch (e) {
+      await FirestoreLogger().log('checkDuplicatePlate firebase error: ${e.code} ${e.message}');
+      rethrow; // 기존 동작 유지: 예외 전파
+    } on TimeoutException {
+      await FirestoreLogger().log('checkDuplicatePlate timeout: plateNumber=$plateNumber, area=$area');
+      rethrow; // 기존 동작 유지: 예외 전파
+    } catch (e) {
+      await FirestoreLogger().log('checkDuplicatePlate error: $e');
+      rethrow; // 기존 동작 유지: 예외 전파
+    }
   }
 
   Future<List<PlateModel>> _queryPlates(Query<Map<String, dynamic>> query) async {

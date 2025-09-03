@@ -73,8 +73,6 @@ class _SignaturePlateSearchBottomSheetState extends State<SignaturePlateSearchBo
     });
 
     try {
-      // 필요 시 Provider 주입으로 교체 가능:
-      // final repository = context.read<FirestorePlateRepository>();
       final repository = FirestorePlateRepository();
 
       final results = await repository.fourDigitSignatureQuery(
