@@ -1,3 +1,4 @@
+import 'package:easydev/screens/secondary_pages/office_mode_pages/tablet_management%20.dart';
 import 'package:flutter/material.dart';
 
 import '../../screens/secondary_pages/dev_mode_pages/local_data.dart';
@@ -21,6 +22,7 @@ const _easterEgg = SecondaryInfo('이스터 에그', EasterEgg(), Icon(Icons.bad
 const _backendController = SecondaryInfo('백엔드 컨트롤러', BackEndController(), Icon(Icons.free_breakfast));
 const _localData = SecondaryInfo('로컬 데이터 관리', LocalData(), Icon(Icons.tab));
 const _userManagement = SecondaryInfo('유저 관리', UserManagement(), Icon(Icons.people));
+const _tabletManagement = SecondaryInfo('태블릿 관리', TabletManagement(), Icon(Icons.military_tech));
 const _locationManagement = SecondaryInfo('구역 관리', LocationManagement(), Icon(Icons.location_on));
 const _billManagement = SecondaryInfo('정산 관리', BillManagement(), Icon(Icons.adjust));
 const _monthlyParking = SecondaryInfo('월 주차 관리', MonthlyParkingManagement(), Icon(Icons.local_parking));
@@ -66,12 +68,14 @@ final List<SecondaryInfo> managerFieldModePages = [
 final List<SecondaryInfo> lowMiddleManagePages = [
   _backendController,
   _userManagement,
+  _tabletManagement,
   _billManagement,
 ];
 
 final List<SecondaryInfo> highManagePages = [
   _backendController,
   _userManagement,
+  _tabletManagement,
   _billManagement,
 ];
 
