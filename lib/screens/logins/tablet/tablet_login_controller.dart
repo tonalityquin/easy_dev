@@ -10,6 +10,7 @@ import '../../../repositories/user/user_repository.dart';
 import '../../../states/area/area_state.dart';
 import '../../../states/user/user_state.dart';
 import '../../../utils/snackbar_helper.dart';
+import '../../../routes.dart'; // ✅ 라우트 상수 사용 (TabletPage로 이동)
 
 class TabletLoginController {
   final BuildContext context;
@@ -49,7 +50,7 @@ class TabletLoginController {
   void initState() {
     TabletLoginDebugFirestoreLogger().log('TabletLoginController 초기화 시작', level: 'info');
 
-    // ✅ 태블릿 자동로그인 진입점으로 교체
+    // ✅ 태블릿 자동로그인 진입점
     Provider.of<UserState>(context, listen: false).loadTabletToLogIn().then((_) {
       final isLoggedIn = Provider.of<UserState>(context, listen: false).isLoggedIn;
 
@@ -60,8 +61,8 @@ class TabletLoginController {
 
       if (isLoggedIn && context.mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          TabletLoginDebugFirestoreLogger().log('자동 로그인(태블릿): 홈 화면으로 이동', level: 'info');
-          Navigator.pushReplacementNamed(context, '/home');
+          TabletLoginDebugFirestoreLogger().log('자동 로그인(태블릿): TabletPage로 이동', level: 'info');
+          Navigator.pushReplacementNamed(context, AppRoutes.tablePage); // ✅ 변경: /tablet_page 로 이동
         });
       }
     });
@@ -195,7 +196,7 @@ class TabletLoginController {
 
         if (context.mounted) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            Navigator.pushReplacementNamed(context, '/home');
+            Navigator.pushReplacementNamed(context, AppRoutes.tablePage); // ✅ 변경: TabletPage로 이동
           });
         }
       } else {
