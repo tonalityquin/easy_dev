@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../tablet/sections/tablet_login_form.dart';
-import '../../tablet/tablet_login_controller.dart';
+import '../../../../routes.dart'; // ✅ AppRoutes 사용 (경로는 현재 파일 위치 기준)
 import '../belivus/service_cooperation_calendar.dart';
 import '../service_login_controller.dart';
 
@@ -64,22 +63,18 @@ class _LoginFormState extends State<LoginForm> {
 
               const SizedBox(height: 48),
 
-              // ▼ 추가: 태블릿 로그인으로 전환 버튼 (기존 화면을 대체)
+              // ▼ 태블릿 로그인으로 전환 (현재 화면을 완전히 대체)
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
                   onPressed: () {
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(
-                        builder: (ctx) => Scaffold(
-                          body: TabletLoginForm(
-                            controller: TabletLoginController(ctx),
-                          ),
-                        ),
-                      ),
+                    // ✅ named route 사용: LoginScreen(mode: 'tablet')로 진입
+                    Navigator.pushReplacementNamed(
+                      context,
+                      AppRoutes.loginTablet,
                     );
                   },
-                  icon: const Icon(Icons.tablet, size: 22), // ✅ 이미지 → 아이콘
+                  icon: const Icon(Icons.tablet, size: 22),
                   label: const Text('태블릿 로그인으로 전환'),
                   style: OutlinedButton.styleFrom(
                     backgroundColor: Colors.white,
@@ -87,7 +82,9 @@ class _LoginFormState extends State<LoginForm> {
                     minimumSize: const Size.fromHeight(55),
                     padding: EdgeInsets.zero,
                     side: const BorderSide(color: Colors.grey, width: 1.0),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                 ),
               ),
@@ -98,8 +95,12 @@ class _LoginFormState extends State<LoginForm> {
                 controller: _controller.nameController,
                 focusNode: _controller.nameFocus,
                 textInputAction: TextInputAction.next,
-                onSubmitted: (_) => FocusScope.of(context).requestFocus(_controller.phoneFocus),
-                decoration: _controller.inputDecoration(label: "이름", icon: Icons.person),
+                onSubmitted: (_) =>
+                    FocusScope.of(context).requestFocus(_controller.phoneFocus),
+                decoration: _controller.inputDecoration(
+                  label: "이름",
+                  icon: Icons.person,
+                ),
               ),
               const SizedBox(height: 16),
 
@@ -108,9 +109,14 @@ class _LoginFormState extends State<LoginForm> {
                 focusNode: _controller.phoneFocus,
                 keyboardType: TextInputType.phone,
                 textInputAction: TextInputAction.next,
-                onChanged: (value) => _controller.formatPhoneNumber(value, setState),
-                onSubmitted: (_) => FocusScope.of(context).requestFocus(_controller.passwordFocus),
-                decoration: _controller.inputDecoration(label: "전화번호", icon: Icons.phone),
+                onChanged: (value) =>
+                    _controller.formatPhoneNumber(value, setState),
+                onSubmitted: (_) =>
+                    FocusScope.of(context).requestFocus(_controller.passwordFocus),
+                decoration: _controller.inputDecoration(
+                  label: "전화번호",
+                  icon: Icons.phone,
+                ),
               ),
               const SizedBox(height: 16),
 
@@ -125,9 +131,12 @@ class _LoginFormState extends State<LoginForm> {
                   icon: Icons.lock,
                   suffixIcon: IconButton(
                     icon: Icon(
-                      _controller.obscurePassword ? Icons.visibility_off : Icons.visibility,
+                      _controller.obscurePassword
+                          ? Icons.visibility_off
+                          : Icons.visibility,
                     ),
-                    onPressed: () => setState(() => _controller.togglePassword()),
+                    onPressed: () =>
+                        setState(() => _controller.togglePassword()),
                   ),
                 ),
               ),
@@ -155,7 +164,8 @@ class _LoginFormState extends State<LoginForm> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  onPressed: _controller.isLoading ? null : _onLoginButtonPressed,
+                  onPressed:
+                  _controller.isLoading ? null : _onLoginButtonPressed,
                 ),
               ),
 

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../service/service_login_controller.dart';
-import '../../service/sections/service_login_form.dart';
+import '../../../../routes.dart'; // ✅ AppRoutes 사용 (경로는 현재 파일 위치 기준)
 import '../belivus/tablet_cooperation_calendar.dart';
 import '../tablet_login_controller.dart';
 
@@ -64,21 +63,13 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
 
               const SizedBox(height: 48),
 
-              // ▼ 일반 로그인으로 전환 (현재 화면을 완전히 대체)
+              // ▼ 서비스 로그인으로 전환 (현재 화면을 완전히 대체)
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
                   onPressed: () {
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(
-                        builder: (ctx) => Scaffold(
-                          // ✅ 새 Route에 Scaffold 포함
-                          body: LoginForm(
-                            controller: LoginController(ctx), // ✅ 새 Route context 주입
-                          ),
-                        ),
-                      ),
-                    );
+                    // ✅ named route 사용: LoginScreen(mode: 'service')로 진입
+                    Navigator.pushReplacementNamed(context, AppRoutes.login);
                   },
                   icon: const Icon(Icons.manage_accounts, size: 22),
                   label: const Text('서비스 로그인으로 전환'),
@@ -101,7 +92,8 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
                 controller: _controller.nameController,
                 focusNode: _controller.nameFocus,
                 textInputAction: TextInputAction.next,
-                onSubmitted: (_) => FocusScope.of(context).requestFocus(_controller.phoneFocus),
+                onSubmitted: (_) =>
+                    FocusScope.of(context).requestFocus(_controller.phoneFocus),
                 decoration: _controller.inputDecoration(
                   label: "이름",
                   icon: Icons.person,
@@ -112,17 +104,18 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
               TextField(
                 controller: _controller.phoneController,       // 핸들 입력용 컨트롤러 유지
                 focusNode: _controller.phoneFocus,
-                keyboardType: TextInputType.text,               // ← name → text 로
+                keyboardType: TextInputType.text,               // ← 텍스트(핸들)
                 textCapitalization: TextCapitalization.none,    // ← 자동 대문자 방지
                 autocorrect: false,                             // ← 자동 교정 끔
                 enableSuggestions: false,                       // ← 추천 끔
                 textInputAction: TextInputAction.next,
-                onChanged: (value) => _controller.formatPhoneNumber(value, setState),
+                onChanged: (value) =>
+                    _controller.formatPhoneNumber(value, setState),
                 onSubmitted: (_) => FocusScope.of(context)
                     .requestFocus(_controller.passwordFocus),
                 decoration: _controller.inputDecoration(
                   label: "영어 아이디(핸들)",                    // ← 라벨 명확화
-                  icon: Icons.alternate_email,                  // ← 아이콘도 핸들 느낌으로
+                  icon: Icons.alternate_email,                  // ← 핸들 느낌 아이콘
                 ),
               ),
               const SizedBox(height: 16),
@@ -138,9 +131,12 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
                   icon: Icons.lock,
                   suffixIcon: IconButton(
                     icon: Icon(
-                      _controller.obscurePassword ? Icons.visibility_off : Icons.visibility,
+                      _controller.obscurePassword
+                          ? Icons.visibility_off
+                          : Icons.visibility,
                     ),
-                    onPressed: () => setState(() => _controller.togglePassword()),
+                    onPressed: () =>
+                        setState(() => _controller.togglePassword()),
                   ),
                 ),
               ),
@@ -169,7 +165,8 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  onPressed: _controller.isLoading ? null : _onLoginButtonPressed,
+                  onPressed:
+                  _controller.isLoading ? null : _onLoginButtonPressed,
                 ),
               ),
 

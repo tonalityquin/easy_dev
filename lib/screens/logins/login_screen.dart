@@ -3,15 +3,24 @@ import 'service/service_login_controller.dart';
 import 'service/debugs/service_login_debug_firestore_logger.dart';
 import 'service/sections/service_login_form.dart';
 
+// ✅ 추가: 태블릿용 컨트롤러/폼 import
+import 'tablet/tablet_login_controller.dart';
+import 'tablet/sections/tablet_login_form.dart';
+
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  // ✅ 추가: 모드 파라미터 (기본 service)
+  const LoginScreen({super.key, this.mode = 'service'});
+  final String mode; // 'service' | 'tablet'
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
+  // ✅ 분기용 컨트롤러 2종(필요한 쪽만 초기화/dispose)
   late final LoginController _loginController;
+  late final TabletLoginController _tabletController;
+
   late final AnimationController _loginAnimationController;
   late final Animation<Offset> _offsetAnimation;
   late final Animation<double> _opacityAnimation;
@@ -21,14 +30,19 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     super.initState();
 
     LoginDebugFirestoreLogger().log(
-      '🔵 LoginScreen initState() - 로그인 화면 로딩 시작',
+      '🔵 LoginScreen initState() - 로그인 화면 로딩 시작 (mode=${widget.mode})',
       level: 'info',
     );
 
-    _loginController = LoginController(context);
+    // ✅ 모드에 따라 해당 컨트롤러만 초기화
+    if (widget.mode == 'tablet') {
+      _tabletController = TabletLoginController(context);
+    } else {
+      _loginController = LoginController(context);
+    }
 
     LoginDebugFirestoreLogger().log(
-      '✅ LoginScreen - LoginController 생성 완료',
+      '✅ LoginScreen - ${widget.mode == 'tablet' ? 'TabletLoginController' : 'LoginController'} 생성 완료',
       level: 'success',
     );
 
@@ -59,6 +73,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
   @override
   Widget build(BuildContext context) {
+    // ✅ 모드에 따라 폼 위젯 선택
+    final Widget loginForm = (widget.mode == 'tablet')
+        ? TabletLoginForm(controller: _tabletController)
+        : LoginForm(controller: _loginController);
+
     return Scaffold(
       body: Padding(
         padding: const EdgeInsets.all(20),
@@ -68,7 +87,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
               opacity: _opacityAnimation,
               child: SlideTransition(
                 position: _offsetAnimation,
-                child: LoginForm(controller: _loginController),
+                child: loginForm, // ✅ 교체 지점
               ),
             ),
           ),
@@ -80,7 +99,14 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   @override
   void dispose() {
     _loginAnimationController.dispose();
-    _loginController.dispose();
+
+    // ✅ 생성한 컨트롤러만 dispose
+    if (widget.mode == 'tablet') {
+      _tabletController.dispose();
+    } else {
+      _loginController.dispose();
+    }
+
     super.dispose();
   }
 }
