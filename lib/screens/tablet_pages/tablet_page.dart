@@ -20,15 +20,17 @@ class TabletPage extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: Colors.white,
+
+      // ✅ 기존 본문(2열) 그대로 유지
       body: SafeArea(
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // ⬅️ 왼쪽 패널: TabletPageController 사용(로그아웃 등)
-            Expanded(
-              child: Container(
-                color: const Color(0xFFF7F8FA),
-                child: const Padding(
+            const Expanded(
+              child: ColoredBox(
+                color: Color(0xFFF7F8FA),
+                child: Padding(
                   padding: EdgeInsets.all(24),
                   child: TabletPageController(),
                 ),
@@ -54,6 +56,28 @@ class TabletPage extends StatelessWidget {
           ],
         ),
       ),
+
+      // ✅ TypePage와 동일한 위치/로직으로 하단에 펠리컨 이미지를 배치
+      // [채팅/대시보드] → [네비게이션 바] → [펠리컨] 구조에서
+      // 이 페이지에는 상단 두 요소가 없으므로 '펠리컨'만 Column 마지막 요소로 둡니다.
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          // ⛔️ children: const [...]  → ✅ children: [...]
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: SizedBox(
+                height: 48,
+                // Image.asset 은 const 아님
+                child: Image.asset('assets/images/pelican.png'),
+              ),
+            ),
+          ],
+        ),
+      ),
+
     );
   }
 }
