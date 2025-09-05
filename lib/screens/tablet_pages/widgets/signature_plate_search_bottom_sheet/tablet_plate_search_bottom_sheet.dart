@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../../../models/plate_model.dart';
-import '../parking_completed_status_bottom_sheet.dart';
+import '../tablet_page_status_bottom_sheet.dart';
 import 'keypad/animated_keypad.dart';
 import 'widgets/plate_number_display.dart';
 import 'widgets/plate_search_header.dart';
@@ -13,23 +13,25 @@ import '../../../../../../states/plate/movement_plate.dart';
 import '../../../../../../states/plate/delete_plate.dart';
 import '../../../../../../states/user/user_state.dart';
 import '../../../../../../enums/plate_type.dart';
-import '../../../../../../utils/snackbar_helper.dart'; // ✅ snackbar_helper 사용
+import '../../../../../../utils/snackbar_helper.dart';
+// ⬇️ Provider에서 현재 area를 직접도 비교 로그 찍기 위해 import
+import '../../../../../../states/area/area_state.dart';
 
-class SignaturePlateSearchBottomSheet extends StatefulWidget {
+class TabletPlateSearchBottomSheet extends StatefulWidget {
   final void Function(String) onSearch;
   final String area;
 
-  const SignaturePlateSearchBottomSheet({
+  const TabletPlateSearchBottomSheet({
     super.key,
     required this.onSearch,
     required this.area,
   });
 
   @override
-  State<SignaturePlateSearchBottomSheet> createState() => _SignaturePlateSearchBottomSheetState();
+  State<TabletPlateSearchBottomSheet> createState() => _TabletPlateSearchBottomSheetState();
 }
 
-class _SignaturePlateSearchBottomSheetState extends State<SignaturePlateSearchBottomSheet>
+class _TabletPlateSearchBottomSheetState extends State<TabletPlateSearchBottomSheet>
     with SingleTickerProviderStateMixin {
   final TextEditingController _controller = TextEditingController();
 
@@ -42,6 +44,9 @@ class _SignaturePlateSearchBottomSheetState extends State<SignaturePlateSearchBo
   late AnimationController _keypadController;
   late Animation<Offset> _slideAnimation;
   late Animation<double> _fadeAnimation;
+
+  // 문자열 정규화(전각 괄호 → 반각, trim)
+  String _norm(String s) => s.replaceAll('（', '(').replaceAll('）', ')').trim();
 
   @override
   void initState() {
@@ -75,10 +80,31 @@ class _SignaturePlateSearchBottomSheetState extends State<SignaturePlateSearchBo
     try {
       final repository = FirestorePlateRepository();
 
-      final results = await repository.fourDigitSignatureQuery(
-        plateFourDigit: _controller.text,
-        area: widget.area,
+      // ⬇️⬇️⬇️  검색 직전 진단 로그 추가  ⬇️⬇️⬇️
+      final input = _controller.text;
+      final valid = isValidPlate(input);
+      final widgetArea = widget.area;
+      final providerArea = context.read<AreaState>().currentArea;
+      final normWidgetArea = _norm(widgetArea);
+      final normProviderArea = _norm(providerArea);
+
+      debugPrint(
+          '🔎 [TabletPlateSearch] BEFORE QUERY | '
+              'input="$input" valid=$valid | '
+              'widget.area="$widgetArea" codeUnits=${widgetArea.codeUnits} | '
+              'provider.area="$providerArea" codeUnits=${providerArea.codeUnits} | '
+              'norm.widget="$normWidgetArea" norm.provider="$normProviderArea" | '
+              'key=${widget.key} stateHash=${identityHashCode(this)}'
       );
+      // ⬆️⬆️⬆️  검색 직전 진단 로그 추가  ⬆️⬆️⬆️
+
+      final results = await repository.fourDigitSignatureQuery(
+        plateFourDigit: input,
+        area: widgetArea,
+      );
+
+      // 검색 결과 로그(개수)
+      debugPrint('✅ [TabletPlateSearch] AFTER QUERY | resultCount=${results.length}');
 
       if (!mounted) return; // 가드 2
       setState(() {
@@ -93,6 +119,7 @@ class _SignaturePlateSearchBottomSheetState extends State<SignaturePlateSearchBo
       });
       // 🔁 SnackbarHelper로 대체
       showFailedSnackbar(context, '검색 중 오류가 발생했습니다: $e');
+      debugPrint('❗ [TabletPlateSearch] QUERY ERROR: $e');
     }
   }
 
@@ -190,8 +217,6 @@ class _SignaturePlateSearchBottomSheetState extends State<SignaturePlateSearchBo
                                       newLocation: "미지정",
                                       performedBy: user,
                                     );
-                                    // 이 시트는 이미 닫혔으므로 갱신은 필요 없지만,
-                                    // 안전 가드가 있으니 호출되어도 부작용 없음
                                     await _refreshSearchResults();
                                   },
                                   onDelete: () async {

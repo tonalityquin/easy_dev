@@ -336,10 +336,12 @@ class UserState extends ChangeNotifier {
       _user = userData;
       notifyListeners();
 
-      Future.microtask(() {
-        PlateTtsListenerService.start(currentArea);
-        ChatTtsListenerService.start(currentArea);
-      });
+      // ✅ Provider의 AreaState 먼저 세팅 (검색/우측 패널이 빈 area로 시작하지 않도록)
+      await _areaState.initializeArea(trimmedArea);
+
+      // ✅ TTS는 area 세팅 이후 시작
+      PlateTtsListenerService.start(trimmedArea);
+      ChatTtsListenerService.start(trimmedArea);
     } catch (e) {
       debugPrint("loadUserToLogIn, 오류: $e");
     }
@@ -395,10 +397,12 @@ class UserState extends ChangeNotifier {
       // tablet_accounts의 currentArea를 세션 시작 시 동기화
       await _repository.updateLoadCurrentAreaTablet(handle, userData.areas.firstOrNull ?? '', selectedArea);
 
-      Future.microtask(() {
-        PlateTtsListenerService.start(currentArea);
-        ChatTtsListenerService.start(currentArea);
-      });
+      // ✅ Provider의 AreaState 먼저 세팅
+      await _areaState.initializeArea(selectedArea);
+
+      // ✅ area 세팅 이후에 TTS 시작(빈 area로 시작하는 문제 방지)
+      PlateTtsListenerService.start(selectedArea);
+      ChatTtsListenerService.start(selectedArea);
     } catch (e) {
       debugPrint("loadTabletToLogIn, 오류: $e");
     }
@@ -429,6 +433,9 @@ class UserState extends ChangeNotifier {
     } catch (e) {
       debugPrint("areaPickerCurrentArea 실패: $e");
     }
+
+    // ✅ Provider AreaState도 동기화 (루트/우측 패널 등 즉시 반영)
+    await _areaState.updateArea(newArea, isSyncing: true);
 
     PlateTtsListenerService.start(newArea);
     ChatTtsListenerService.start(newArea);

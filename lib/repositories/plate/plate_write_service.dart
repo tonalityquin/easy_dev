@@ -140,14 +140,14 @@ class PlateWriteService {
     Map<String, dynamic>? existing,
   }) {
     // data(이번 변경)에 없으면 existing(현재 문서)의 값을 사용해 '유효값'을 계산
-    int _effInt(String key) {
+    int effInt(String key) {
       if (data.containsKey(key)) return _toInt(data[key]);
       if (existing != null && existing.containsKey(key)) return _toInt(existing[key]);
       return 0;
     }
 
-    final int basic = _effInt(PlateFields.basicAmount);
-    final int add = _effInt(PlateFields.addAmount);
+    final int basic = effInt(PlateFields.basicAmount);
+    final int add = effInt(PlateFields.addAmount);
 
     final bool shouldLock = (basic == 0 && add == 0);
 

@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
-// 현재 선택된 에리어 값을 얻기 위해 (필요시 경로 조정)
 import '../../states/area/area_state.dart';
 
 // 🔗 왼쪽 패널: 로그아웃/컨트롤 UI
 import 'tablet_page_controller.dart';
+import 'widgets/signature_plate_search_bottom_sheet/tablet_plate_search_bottom_sheet.dart';
 
 // 오른쪽 패널: 번호판 검색 바텀시트 임베드
-import '../type_pages/parking_completed_pages/widgets/signature_plate_search_bottom_sheet/signature_plate_search_bottom_sheet.dart';
 
 class TabletPage extends StatelessWidget {
   const TabletPage({super.key});
@@ -46,7 +44,11 @@ class TabletPage extends StatelessWidget {
                   topLeft: Radius.circular(12),
                 ),
                 child: _RightPaneNavigator(
-                  child: SignaturePlateSearchBottomSheet(
+                  // 🔑 area가 바뀌면 우측 Navigator 자체가 재생성되도록 Key 부여
+                  key: ValueKey('right-pane-$area'),
+                  child: TabletPlateSearchBottomSheet(
+                    // 🔑 초기 라우트(검색 시트)도 area 기준으로 재생성
+                    key: ValueKey('sps-$area'),
                     onSearch: (_) {},
                     area: area,
                   ),
@@ -77,7 +79,6 @@ class TabletPage extends StatelessWidget {
           ],
         ),
       ),
-
     );
   }
 }
@@ -87,12 +88,14 @@ class TabletPage extends StatelessWidget {
 class _RightPaneNavigator extends StatelessWidget {
   final Widget child;
 
-  const _RightPaneNavigator({required this.child});
+  const _RightPaneNavigator({super.key, required this.child});
 
   @override
   Widget build(BuildContext context) {
     return Navigator(
       onGenerateRoute: (RouteSettings settings) {
+        // 최초 한 번 생성된 라우트가 고정되는 특성 때문에,
+        // 상위에서 key를 활용해 이 위젯 자체를 재생성하도록 처리함.
         return MaterialPageRoute(builder: (_) => child);
       },
     );
