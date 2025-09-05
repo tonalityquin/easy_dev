@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
-import '../../routes.dart'; // 라우트 상수(AppRoutes.login)
+import '../../routes.dart';
 import '../../states/user/user_state.dart';
 import '../../utils/blocking_dialog.dart';
 import '../../utils/snackbar_helper.dart';

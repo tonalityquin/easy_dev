@@ -3,17 +3,17 @@ import '../../../../routes.dart'; // ✅ AppRoutes 사용 (경로는 현재 파�
 import '../belivus/service_cooperation_calendar.dart';
 import '../service_login_controller.dart';
 
-class LoginForm extends StatefulWidget {
-  final LoginController controller;
+class ServiceLoginForm extends StatefulWidget {
+  final ServiceLoginController controller;
 
-  const LoginForm({super.key, required this.controller});
+  const ServiceLoginForm({super.key, required this.controller});
 
   @override
-  State<LoginForm> createState() => _LoginFormState();
+  State<ServiceLoginForm> createState() => _ServiceLoginFormState();
 }
 
-class _LoginFormState extends State<LoginForm> {
-  late final LoginController _controller;
+class _ServiceLoginFormState extends State<ServiceLoginForm> {
+  late final ServiceLoginController _controller;
 
   @override
   void initState() {

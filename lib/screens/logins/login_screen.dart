@@ -18,7 +18,7 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
   // ✅ 분기용 컨트롤러 2종(필요한 쪽만 초기화/dispose)
-  late final LoginController _loginController;
+  late final ServiceLoginController _loginController;
   late final TabletLoginController _tabletController;
 
   late final AnimationController _loginAnimationController;
@@ -38,7 +38,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     if (widget.mode == 'tablet') {
       _tabletController = TabletLoginController(context);
     } else {
-      _loginController = LoginController(context);
+      _loginController = ServiceLoginController(context);
     }
 
     LoginDebugFirestoreLogger().log(
@@ -76,7 +76,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     // ✅ 모드에 따라 폼 위젯 선택
     final Widget loginForm = (widget.mode == 'tablet')
         ? TabletLoginForm(controller: _tabletController)
-        : LoginForm(controller: _loginController);
+        : ServiceLoginForm(controller: _loginController);
 
     return Scaffold(
       body: Padding(

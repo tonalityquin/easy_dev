@@ -10,7 +10,7 @@ import '../../../states/area/area_state.dart';
 import '../../../states/user/user_state.dart';
 import '../../../utils/snackbar_helper.dart';
 
-class LoginController {
+class ServiceLoginController {
   final BuildContext context;
 
   final TextEditingController nameController = TextEditingController();
@@ -24,7 +24,7 @@ class LoginController {
   bool isLoading = false;
   bool obscurePassword = true;
 
-  LoginController(this.context);
+  ServiceLoginController(this.context);
 
   void initState() {
     LoginDebugFirestoreLogger().log('LoginController 초기화 시작', level: 'info');
@@ -83,7 +83,7 @@ class LoginController {
     setState(() => isLoading = true);
     LoginDebugFirestoreLogger().log('로그인 처리 중...', level: 'info');
 
-    if (!await LoginNetworkService().isConnected()) {
+    if (!await ServiceLoginNetworkService().isConnected()) {
       if (context.mounted) {
         showFailedSnackbar(context, '인터넷 연결이 필요합니다.');
       }
@@ -215,6 +215,6 @@ class LoginController {
     nameFocus.dispose();
     phoneFocus.dispose();
     passwordFocus.dispose();
-    LoginDebugFirestoreLogger().log('LoginController dispose() 호출됨', level: 'info');
+    LoginDebugFirestoreLogger().log('ServiceLoginController dispose() 호출됨', level: 'info');
   }
 }
