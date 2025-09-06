@@ -29,6 +29,20 @@ class PlateState extends ChangeNotifier {
 
   final Set<PlateType> _desiredSubscriptions = {};
 
+  // ─────────────────────────────────────────────────────────────
+  // (추가) departureRequests에서 "사라진" 항목 감지를 위한 캐시 & 이벤트
+  // ─────────────────────────────────────────────────────────────
+  final Map<PlateType, Map<String, PlateModel>> _lastByType = {
+    for (var c in PlateType.values) c: {},
+  };
+
+  final StreamController<PlateModel> _departureRemovedCtrl =
+  StreamController<PlateModel>.broadcast();
+
+  /// 출차요청 컬렉션에서 사라진 번호판(= 다른 타입으로 이동 추정) 이벤트 스트림
+  Stream<PlateModel> get onDepartureRequestRemoved =>
+      _departureRemovedCtrl.stream;
+
   PlateState(this._repository, this._areaState) {
     _areaState.addListener(_onAreaChanged);
     _initDefaultSubscriptions();
@@ -62,7 +76,8 @@ class PlateState extends ChangeNotifier {
       existing.cancel();
       _subscriptions.remove(type);
       _subscribedAreas.remove(type);
-      debugPrint('↺ [${_getTypeLabel(type)}] 지역 변경으로 재구독 준비 (이전: $existingArea → 현재: $area)');
+      debugPrint(
+          '↺ [${_getTypeLabel(type)}] 지역 변경으로 재구독 준비 (이전: $existingArea → 현재: $area)');
     }
 
     debugPrint('🔔 [${_getTypeLabel(type)}] 구독 시작 (지역: $area)');
@@ -70,17 +85,18 @@ class PlateState extends ChangeNotifier {
     notifyListeners();
 
     if (type == PlateType.departureCompleted) {
-      final sub = _repository.departureUnpaidSnapshots(area, descending: descending).listen(
-          (QuerySnapshot<Map<String, dynamic>> snapshot) async {
+      final sub = _repository
+          .departureUnpaidSnapshots(area, descending: descending)
+          .listen((QuerySnapshot<Map<String, dynamic>> snapshot) async {
         final results = snapshot.docs
             .map((doc) {
-              try {
-                return PlateModel.fromDocument(doc);
-              } catch (e) {
-                debugPrint('❌ departureCompleted parsing error: $e');
-                return null;
-              }
-            })
+          try {
+            return PlateModel.fromDocument(doc);
+          } catch (e) {
+            debugPrint('❌ departureCompleted parsing error: $e');
+            return null;
+          }
+        })
             .whereType<PlateModel>()
             .toList();
         _data[type] = results;
@@ -91,17 +107,20 @@ class PlateState extends ChangeNotifier {
           try {
             final ref = change.doc.reference;
 
-            final fresh = await ref.get(const GetOptions(source: Source.server));
+            final fresh =
+            await ref.get(const GetOptions(source: Source.server));
 
             final data = fresh.data();
             if (data == null) continue;
 
-            final isDepartureCompleted = data['type'] == PlateType.departureCompleted.firestoreValue;
+            final isDepartureCompleted =
+                data['type'] == PlateType.departureCompleted.firestoreValue;
             final sameArea = data['area'] == area;
             final isLockedFeeTrue = data['isLockedFee'] == true;
 
             if (isDepartureCompleted && sameArea && isLockedFeeTrue) {
-              debugPrint('✅ 정산 전이 감지: doc=${fresh.id}, plate=${data['plateNumber']}');
+              debugPrint(
+                  '✅ 정산 전이 감지: doc=${fresh.id}, plate=${data['plateNumber']}');
 
               final key = (data['id'] ?? fresh.id).toString();
               previousIsLockedFee[key] = true;
@@ -132,14 +151,40 @@ class PlateState extends ChangeNotifier {
     bool firstDataReceived = false;
 
     final subscription = stream.listen((filteredData) async {
+      // ─────────────────────────────────────────────────────────
+      // (추가) departureRequests에 대해 "사라진 항목" 감지 → 1회 이벤트 발행
+      // ─────────────────────────────────────────────────────────
+      if (type == PlateType.departureRequests) {
+        final lastMap = _lastByType[type] ?? {};
+        final currentMap = {for (final p in filteredData) p.id: p};
+
+        // last - current = 사라진 문서들
+        for (final removedId
+        in lastMap.keys.where((id) => !currentMap.containsKey(id))) {
+          final removed = lastMap[removedId];
+          if (removed != null) {
+            _departureRemovedCtrl.add(removed);
+          }
+        }
+
+        // 캐시 갱신
+        _lastByType[type] = currentMap;
+      } else {
+        // 다른 타입은 캐시만 갱신(필요 시 확장 가능)
+        _lastByType[type] = {for (final p in filteredData) p.id: p};
+      }
+      // ─────────────────────────────────────────────────────────
+
       _data[type] = filteredData;
       notifyListeners();
 
       if (!firstDataReceived) {
         firstDataReceived = true;
-        debugPrint('✅ [${_getTypeLabel(type)}] 초기 데이터 수신: ${filteredData.length}개');
+        debugPrint(
+            '✅ [${_getTypeLabel(type)}] 초기 데이터 수신: ${filteredData.length}개');
       } else {
-        debugPrint('📥 [${_getTypeLabel(type)}] 데이터 업데이트: ${filteredData.length}개');
+        debugPrint(
+            '📥 [${_getTypeLabel(type)}] 데이터 업데이트: ${filteredData.length}개');
       }
 
       _isLoading = false;
@@ -164,6 +209,7 @@ class PlateState extends ChangeNotifier {
       _subscriptions.remove(type);
       _subscribedAreas.remove(type);
       _data[type] = [];
+      _lastByType[type] = {}; // 캐시도 초기화
       notifyListeners();
       debugPrint('🛑 [${_getTypeLabel(type)}] 구독 해제됨 (지역: $area)');
     } else {
@@ -177,7 +223,7 @@ class PlateState extends ChangeNotifier {
 
     try {
       return plates.firstWhere(
-        (plate) => plate.isSelected && plate.selectedBy == userName,
+            (plate) => plate.isSelected && plate.selectedBy == userName,
       );
     } catch (_) {
       return null;
@@ -212,27 +258,31 @@ class PlateState extends ChangeNotifier {
         return;
       }
 
-      final alreadySelected = _data.entries.expand((entry) => entry.value).firstWhere(
-            (p) => p.isSelected && p.selectedBy == userName && p.id != plateId,
-            orElse: () => PlateModel(
-              id: '',
-              plateNumber: '',
-              plateFourDigit: '',
-              type: '',
-              requestTime: DateTime.now(),
-              location: '',
-              area: '',
-              userName: '',
-              isSelected: false,
-              statusList: [],
-            ),
-          );
+      final alreadySelected =
+      _data.entries.expand((entry) => entry.value).firstWhere(
+            (p) =>
+        p.isSelected &&
+            p.selectedBy == userName &&
+            p.id != plateId,
+        orElse: () => PlateModel(
+          id: '',
+          plateNumber: '',
+          plateFourDigit: '',
+          type: '',
+          requestTime: DateTime.now(),
+          location: '',
+          area: '',
+          userName: '',
+          isSelected: false,
+          statusList: [],
+        ),
+      );
 
       if (alreadySelected.id.isNotEmpty && !plate.isSelected) {
         onError(
           '⚠️ 이미 다른 번호판을 선택한 상태입니다.\n'
-          '• 선택된 번호판: ${alreadySelected.plateNumber}\n'
-          '선택을 해제한 후 다시 시도해 주세요.',
+              '• 선택된 번호판: ${alreadySelected.plateNumber}\n'
+              '선택을 해제한 후 다시 시도해 주세요.',
         );
         return;
       }
@@ -257,11 +307,13 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  List<PlateModel> getPlatesByCollection(PlateType collection, {DateTime? selectedDate}) {
+  List<PlateModel> getPlatesByCollection(PlateType collection,
+      {DateTime? selectedDate}) {
     var plates = _data[collection] ?? [];
 
     if (collection == PlateType.departureCompleted && selectedDate != null) {
-      final start = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+      final start = DateTime(
+          selectedDate.year, selectedDate.month, selectedDate.day);
       final end = start.add(const Duration(days: 1));
 
       plates = plates.where((p) {
@@ -278,7 +330,8 @@ class PlateState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> updatePlateLocally(PlateType collection, PlateModel updatedPlate) async {
+  Future<void> updatePlateLocally(
+      PlateType collection, PlateModel updatedPlate) async {
     final list = _data[collection];
     if (list == null) return;
 
@@ -323,6 +376,12 @@ class PlateState extends ChangeNotifier {
     _subscriptions.clear();
     _subscribedAreas.clear();
     _isLoading = false;
+
+    // 캐시 초기화
+    for (final k in _lastByType.keys) {
+      _lastByType[k] = {};
+    }
+
     notifyListeners();
   }
 
@@ -343,6 +402,7 @@ class PlateState extends ChangeNotifier {
   void dispose() {
     _cancelAllSubscriptions();
     _areaState.removeListener(_onAreaChanged);
+    _departureRemovedCtrl.close(); // 이벤트 스트림 종료
     super.dispose();
   }
 }
