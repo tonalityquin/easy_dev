@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import 'package:easydev/models/plate_model.dart';
 import 'package:easydev/repositories/plate/firestore_plate_repository.dart';
 import 'package:easydev/states/area/area_state.dart';
+import 'package:easydev/states/plate/plate_state.dart';
+import 'package:easydev/enums/plate_type.dart';
 import 'package:easydev/utils/snackbar_helper.dart';
 
 // 🔁 우측 패널에서 재사용할 하위 컴포넌트(기존 바텀시트 내 구성요소 그대로 재사용)
@@ -17,7 +19,7 @@ import 'tablet_pages/widgets/tablet_page_status_bottom_sheet.dart';
 import 'tablet_pages/widgets/tablet_top_navigation.dart';
 
 // ────────────────────────────────────────────────────────────────────────────
-// TabletPage: 우측 패널에 바텀시트를 '띄우지 않고' 직접 삽입하는 버전
+// TabletPage: 좌(출차요청 번호판만 리스트) + 우(키패드+검색)
 // ────────────────────────────────────────────────────────────────────────────
 
 class TabletPage extends StatelessWidget {
@@ -25,7 +27,7 @@ class TabletPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Area 변경 시 우측 패널도 반응하도록 select 사용 (null 방지)
+    // Area 변경 시 패널들이 반응하도록 select 사용 (null 방지)
     final area = context.select<AreaState, String?>((s) => s.currentArea) ?? '';
 
     return Scaffold(
@@ -48,17 +50,14 @@ class TabletPage extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // ⬅️ 왼쪽 패널: 로그아웃 로직 제거(단순 플레이스홀더)
-            const Expanded(
+            // ⬅️ 왼쪽 패널: plates 컬렉션에서 type=출차요청인 데이터만 번호판 표시
+            Expanded(
               child: ColoredBox(
-                color: Color(0xFFF7F8FA),
+                color: const Color(0xFFF7F8FA),
                 child: Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Center(
-                    child: Text(
-                      '왼쪽 패널',
-                      style: TextStyle(fontSize: 16, color: Colors.black54),
-                    ),
+                  padding: const EdgeInsets.all(24),
+                  child: _LeftPaneDeparturePlates(
+                    key: ValueKey('left-pane-$area'),
                   ),
                 ),
               ),
@@ -102,6 +101,86 @@ class TabletPage extends StatelessWidget {
   }
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// 왼쪽 패널: plates 컬렉션에서 type=출차 요청만 실시간으로 받아 "번호판만" 렌더링
+// PlateState의 구독 스트림(현재 지역 기준)에 의존
+// ────────────────────────────────────────────────────────────────────────────
+class _LeftPaneDeparturePlates extends StatelessWidget {
+  const _LeftPaneDeparturePlates({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final currentArea = context.select<AreaState, String?>((s) => s.currentArea) ?? '';
+    return Consumer<PlateState>(
+      builder: (context, plateState, _) {
+        // PlateState가 현재 지역(currentArea)로 구독 중인 출차 요청 목록
+        // (PlateState.streamToCurrentArea가 이미 지역 필터를 적용)
+        List<PlateModel> plates =
+        plateState.getPlatesByCollection(PlateType.departureRequests);
+
+        // 혹시 모를 안전장치로 type/area 재확인 (중복 필터라도 안전)
+        plates = plates
+            .where((p) =>
+        p.type == PlateType.departureRequests.firestoreValue &&
+            p.area == currentArea)
+            .toList();
+
+        // 최신순 기본 정렬(요청시간 내림차순)
+        plates.sort((a, b) => b.requestTime.compareTo(a.requestTime));
+
+        final isEmpty = plates.isEmpty;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '출차 요청 번호판',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: isEmpty
+                  ? const Center(
+                child: Text(
+                  '출차 요청이 없습니다.',
+                  style: TextStyle(color: Colors.black45),
+                ),
+              )
+                  : ListView.separated(
+                itemCount: plates.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (_, idx) {
+                  final p = plates[idx];
+                  return ListTile(
+                    dense: true,
+                    leading: const Icon(Icons.directions_car, color: Colors.blueAccent),
+                    title: Text(
+                      p.plateNumber,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    // "번호판만" 렌더링 요구사항: 부가 정보는 제외(원하면 주석 해제)
+                    // subtitle: Text('구역: ${p.area} / 위치: ${p.location.isEmpty ? "-" : p.location}',
+                    //   style: const TextStyle(fontSize: 12, color: Colors.black54),
+                    //   overflow: TextOverflow.ellipsis,
+                    // ),
+                    onTap: null, // 좌측 패널은 단순 표시만
+                    visualDensity: VisualDensity.compact,
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// 우측 패널: 키패드 + 4자리 검색 → 결과 다이얼로그 + 상태 바텀시트
 // ────────────────────────────────────────────────────────────────────────────
 class _RightPaneSearchPanel extends StatefulWidget {
   final String area;
@@ -262,10 +341,10 @@ class _RightPaneSearchPanelState extends State<_RightPaneSearchPanel> with Singl
                             context: rootContext,
                             plate: selected,
                             onRequestEntry: () async {}, // 시그니처 유지용(미사용)
-                            onDelete: () {}, // 시그니처 유지용(미사용)
+                            onDelete: () {},             // 시그니처 유지용(미사용)
                           );
 
-                          // 버튼으로 닫혔으면 초기화(다음 사용자 대비)
+                          // 버튼으로 닫혔으면 오른쪽 초기화 (좌측은 PlateState가 알아서 반영)
                           if (didConfirm != null) {
                             _resetToInitial();
                           } else {
