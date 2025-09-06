@@ -44,37 +44,47 @@ class TabletPage extends StatelessWidget {
         ),
       ),
 
-      // ✅ 본문(2열)
+      // ✅ 본문(상단 고정 안내 + 2열 레이아웃)
       body: SafeArea(
         top: false, // 상단 SafeArea는 appBar가 처리하므로 false
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        child: Column(
           children: [
-            // ⬅️ 왼쪽 패널: plates 컬렉션에서 type=출차요청인 데이터만 번호판 표시
+            // ⛳ 상시 노출 안내 배너 (앱바 아래 고정)
+            const _StickyNoticeBar(),
+
+            // 본문 2열
             Expanded(
-              child: ColoredBox(
-                color: const Color(0xFFF7F8FA),
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: _LeftPaneDeparturePlates(
-                    key: ValueKey('left-pane-$area'),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // ⬅️ 왼쪽 패널: plates 컬렉션에서 type=출차요청인 데이터만 번호판 표시
+                  Expanded(
+                    child: ColoredBox(
+                      color: const Color(0xFFF7F8FA),
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: _LeftPaneDeparturePlates(
+                          key: ValueKey('left-pane-$area'),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-            ),
 
-            const VerticalDivider(width: 1, thickness: 1, color: Color(0xFFEBEDF0)),
+                  const VerticalDivider(width: 1, thickness: 1, color: Color(0xFFEBEDF0)),
 
-            // ➡️ 오른쪽 패널: 키패드+검색 UI 직접 삽입
-            Expanded(
-              child: ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(12),
-                ),
-                child: _RightPaneSearchPanel(
-                  key: ValueKey('right-pane-$area'), // 🔑 area 변경 시 패널 자체 재생성
-                  area: area,
-                ),
+                  // ➡️ 오른쪽 패널: 키패드+검색 UI 직접 삽입
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(12),
+                      ),
+                      child: _RightPaneSearchPanel(
+                        key: ValueKey('right-pane-$area'), // 🔑 area 변경 시 패널 자체 재생성
+                        area: area,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -102,6 +112,44 @@ class TabletPage extends StatelessWidget {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// 앱바 아래 상시 노출 안내 배너
+// ────────────────────────────────────────────────────────────────────────────
+class _StickyNoticeBar extends StatelessWidget {
+  const _StickyNoticeBar();
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.amber.shade50,
+      borderOnForeground: false,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: Colors.amber.shade200),
+          ),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.info_outline, size: 18, color: Colors.amber),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                '출차 요청 목록에서 방금 누른 번호가 사라졌다면, 출차 완료 처리된 것입니다.',
+                style: TextStyle(fontSize: 13, color: Color(0xFF5D4037), fontWeight: FontWeight.w600),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 2,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // 왼쪽 패널: plates 컬렉션에서 type=출차 요청만 실시간으로 받아 "번호판만" 렌더링
 // PlateState의 구독 스트림(현재 지역 기준)에 의존
 // ────────────────────────────────────────────────────────────────────────────
@@ -114,14 +162,14 @@ class _LeftPaneDeparturePlates extends StatelessWidget {
     return Consumer<PlateState>(
       builder: (context, plateState, _) {
         // PlateState가 현재 지역(currentArea)로 구독 중인 출차 요청 목록
-        // (PlateState.streamToCurrentArea가 이미 지역 필터를 적용)
         List<PlateModel> plates = plateState.getPlatesByCollection(PlateType.departureRequests);
 
-        // 혹시 모를 안전장치로 type/area 재확인 (중복 필터라도 안전)
-        plates =
-            plates.where((p) => p.type == PlateType.departureRequests.firestoreValue && p.area == currentArea).toList();
+        // 혹시 모를 안전장치로 type/area 재확인
+        plates = plates
+            .where((p) => p.type == PlateType.departureRequests.firestoreValue && p.area == currentArea)
+            .toList();
 
-        // 최신순 기본 정렬(요청시간 내림차순)
+        // 최신순 정렬(요청시간 내림차순)
         plates.sort((a, b) => b.requestTime.compareTo(a.requestTime));
 
         final isEmpty = plates.isEmpty;
@@ -137,37 +185,31 @@ class _LeftPaneDeparturePlates extends StatelessWidget {
             Expanded(
               child: isEmpty
                   ? const Center(
-                      child: Text(
-                        '출차 요청이 없습니다.',
-                        style: TextStyle(color: Colors.black45),
-                      ),
-                    )
+                child: Text(
+                  '출차 요청이 없습니다.',
+                  style: TextStyle(color: Colors.black45),
+                ),
+              )
                   : ListView.separated(
-                      itemCount: plates.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (_, idx) {
-                        final p = plates[idx];
-                        return ListTile(
-                          dense: true,
-                          leading: const Icon(Icons.directions_car, color: Colors.blueAccent),
-                          title: Text(
-                            p.plateNumber,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          // "번호판만" 렌더링 요구사항: 부가 정보는 제외(원하면 주석 해제)
-                          // subtitle: Text('구역: ${p.area} / 위치: ${p.location.isEmpty ? "-" : p.location}',
-                          //   style: const TextStyle(fontSize: 12, color: Colors.black54),
-                          //   overflow: TextOverflow.ellipsis,
-                          // ),
-                          onTap: null,
-                          // 좌측 패널은 단순 표시만
-                          visualDensity: VisualDensity.compact,
-                        );
-                      },
+                itemCount: plates.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (_, idx) {
+                  final p = plates[idx];
+                  return ListTile(
+                    dense: true,
+                    leading: const Icon(Icons.directions_car, color: Colors.blueAccent),
+                    title: Text(
+                      p.plateNumber,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
+                    onTap: null, // 좌측 패널은 단순 표시만
+                    visualDensity: VisualDensity.compact,
+                  );
+                },
+              ),
             ),
           ],
         );
@@ -176,8 +218,6 @@ class _LeftPaneDeparturePlates extends StatelessWidget {
   }
 }
 
-// ────────────────────────────────────────────────────────────────────────────
-// 우측 패널: 키패드 + 4자리 검색 → 결과 다이얼로그 + 상태 바텀시트
 // ────────────────────────────────────────────────────────────────────────────
 class _RightPaneSearchPanel extends StatefulWidget {
   final String area;
@@ -324,32 +364,32 @@ class _RightPaneSearchPanelState extends State<_RightPaneSearchPanel> with Singl
                     child: results.isEmpty
                         ? const _InlineEmpty(text: '검색 결과가 없습니다.')
                         : SingleChildScrollView(
-                            child: PlateSearchResults(
-                              results: results,
-                              onSelect: (selected) async {
-                                if (_navigating) return;
-                                _navigating = true;
+                      child: PlateSearchResults(
+                        results: results,
+                        onSelect: (selected) async {
+                          if (_navigating) return;
+                          _navigating = true;
 
-                                // 결과 다이얼로그 먼저 닫기
-                                Navigator.of(dialogCtx).pop();
+                          // 결과 다이얼로그 먼저 닫기
+                          Navigator.of(dialogCtx).pop();
 
-                                // 상태 확인 바텀시트(네/아니요) → true/false/null
-                                final didConfirm = await showTabletPageStatusBottomSheet(
-                                  context: rootContext,
-                                  plate: selected,
-                                  onRequestEntry: () async {}, // 시그니처 유지용(미사용)
-                                  onDelete: () {}, // 시그니처 유지용(미사용)
-                                );
+                          // 상태 확인 바텀시트(네/아니요) → true/false/null
+                          final didConfirm = await showTabletPageStatusBottomSheet(
+                            context: rootContext,
+                            plate: selected,
+                            onRequestEntry: () async {}, // 시그니처 유지용(미사용)
+                            onDelete: () {}, // 시그니처 유지용(미사용)
+                          );
 
-                                // 버튼으로 닫혔으면 오른쪽 초기화 (좌측은 PlateState가 알아서 반영)
-                                if (didConfirm != null) {
-                                  _resetToInitial();
-                                } else {
-                                  _navigating = false;
-                                }
-                              },
-                            ),
-                          ),
+                          // 버튼으로 닫혔으면 오른쪽 초기화 (좌측은 PlateState가 알아서 반영)
+                          if (didConfirm != null) {
+                            _resetToInitial();
+                          } else {
+                            _navigating = false;
+                          }
+                        },
+                      ),
+                    ),
                   ),
 
                   const SizedBox(height: 8),
@@ -431,15 +471,14 @@ class _RightPaneSearchPanelState extends State<_RightPaneSearchPanel> with Singl
       // 🔻 숫자 키패드: 토글 상태(_keypadVisible)로 제어 (검색 후에도 유지)
       bottomNavigationBar: _keypadVisible
           ? AnimatedKeypad(
-              slideAnimation: _slideAnimation,
-              fadeAnimation: _fadeAnimation,
-              controller: _controller,
-              maxLength: 4,
-              enableDigitModeSwitch: false,
-              onComplete: () => setState(() {}),
-              // 입력 완료 시 버튼 활성화를 위해 리빌드
-              onReset: _resetToInitial,
-            )
+        slideAnimation: _slideAnimation,
+        fadeAnimation: _fadeAnimation,
+        controller: _controller,
+        maxLength: 4,
+        enableDigitModeSwitch: false,
+        onComplete: () => setState(() {}), // 입력 완료 시 버튼 활성화를 위해 리빌드
+        onReset: _resetToInitial,
+      )
           : const SizedBox.shrink(),
     );
   }
