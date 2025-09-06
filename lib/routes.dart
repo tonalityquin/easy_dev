@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'screens/clock_in_pages/clock_in_work_screen.dart';
 import 'screens/headquarter_page.dart';
 import 'screens/logins/login_screen.dart';
-import 'screens/tablet_pages/tablet_page.dart';
+import 'screens/tablet_page.dart';
 import 'screens/type_page.dart';
 import 'screens/secondary_pages/office_mode_pages/location_management.dart';
 

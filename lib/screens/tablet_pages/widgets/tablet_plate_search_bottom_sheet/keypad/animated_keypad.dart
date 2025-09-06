@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../keypad/num_keypad_for_plate_search.dart';
+import '../keypad/num_keypad_for_tablet_plate_search.dart';
 
 class AnimatedKeypad extends StatelessWidget {
   final Animation<Offset> slideAnimation;
@@ -43,7 +43,7 @@ class AnimatedKeypad extends StatelessWidget {
           constraints: BoxConstraints(
             maxHeight: MediaQuery.of(context).size.height * 0.45,
           ),
-          child: NumKeypadForPlateSearch(
+          child: NumKeypadForTabletPlateSearch(
             controller: controller,
             maxLength: maxLength,
             enableDigitModeSwitch: enableDigitModeSwitch,

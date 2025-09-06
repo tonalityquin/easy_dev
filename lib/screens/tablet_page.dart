@@ -3,8 +3,8 @@ import 'package:provider/provider.dart';
 import '../../states/area/area_state.dart';
 
 // 🔗 왼쪽 패널: 로그아웃/컨트롤 UI
-import 'tablet_page_controller.dart';
-import 'widgets/signature_plate_search_bottom_sheet/tablet_plate_search_bottom_sheet.dart';
+import 'tablet_pages/tablet_page_controller.dart';
+import 'tablet_pages/widgets/tablet_plate_search_bottom_sheet.dart';
 
 // 오른쪽 패널: 번호판 검색 바텀시트 임베드
 

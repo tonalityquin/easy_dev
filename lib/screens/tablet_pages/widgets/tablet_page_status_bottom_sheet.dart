@@ -17,7 +17,7 @@ import '../../../../utils/snackbar_helper.dart';
 import '../../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
 import '../../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 
-Future<void> showParkingCompletedStatusBottomSheet({
+Future<void> showTabletPageStatusBottomSheet({
   required BuildContext context,
   required PlateModel plate,
   required Future<void> Function() onRequestEntry,

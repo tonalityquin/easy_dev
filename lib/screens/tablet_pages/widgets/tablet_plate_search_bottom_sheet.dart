@@ -2,20 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../../../models/plate_model.dart';
-import '../tablet_page_status_bottom_sheet.dart';
-import 'keypad/animated_keypad.dart';
-import 'widgets/plate_number_display.dart';
-import 'widgets/plate_search_header.dart';
-import 'widgets/plate_search_results.dart';
-import 'widgets/search_button.dart';
 import '../../../../../../repositories/plate/firestore_plate_repository.dart';
 import '../../../../../../states/plate/movement_plate.dart';
 import '../../../../../../states/plate/delete_plate.dart';
 import '../../../../../../states/user/user_state.dart';
 import '../../../../../../enums/plate_type.dart';
 import '../../../../../../utils/snackbar_helper.dart';
+
 // ⬇️ Provider에서 현재 area를 직접도 비교 로그 찍기 위해 import
 import '../../../../../../states/area/area_state.dart';
+import 'tablet_page_status_bottom_sheet.dart';
+import 'tablet_plate_search_bottom_sheet/keypad/animated_keypad.dart';
+import 'tablet_plate_search_bottom_sheet/sections/plate_number_display.dart';
+import 'tablet_plate_search_bottom_sheet/sections/plate_search_header.dart';
+import 'tablet_plate_search_bottom_sheet/sections/plate_search_results.dart';
+import 'tablet_plate_search_bottom_sheet/sections/search_button.dart';
 
 class TabletPlateSearchBottomSheet extends StatefulWidget {
   final void Function(String) onSearch;
@@ -88,14 +89,12 @@ class _TabletPlateSearchBottomSheetState extends State<TabletPlateSearchBottomSh
       final normWidgetArea = _norm(widgetArea);
       final normProviderArea = _norm(providerArea);
 
-      debugPrint(
-          '🔎 [TabletPlateSearch] BEFORE QUERY | '
-              'input="$input" valid=$valid | '
-              'widget.area="$widgetArea" codeUnits=${widgetArea.codeUnits} | '
-              'provider.area="$providerArea" codeUnits=${providerArea.codeUnits} | '
-              'norm.widget="$normWidgetArea" norm.provider="$normProviderArea" | '
-              'key=${widget.key} stateHash=${identityHashCode(this)}'
-      );
+      debugPrint('🔎 [TabletPlateSearch] BEFORE QUERY | '
+          'input="$input" valid=$valid | '
+          'widget.area="$widgetArea" codeUnits=${widgetArea.codeUnits} | '
+          'provider.area="$providerArea" codeUnits=${providerArea.codeUnits} | '
+          'norm.widget="$normWidgetArea" norm.provider="$normProviderArea" | '
+          'key=${widget.key} stateHash=${identityHashCode(this)}');
       // ⬆️⬆️⬆️  검색 직전 진단 로그 추가  ⬆️⬆️⬆️
 
       final results = await repository.fourDigitSignatureQuery(
@@ -205,25 +204,25 @@ class _TabletPlateSearchBottomSheetState extends State<TabletPlateSearchBottomSh
                               // 다음 프레임에 안전하게 실행(바텀시트 컨텍스트 분리)
                               WidgetsBinding.instance.addPostFrameCallback((_) {
                                 // 이 시점에 본 위젯은 dispose 되었어도 rootContext는 유효
-                                showParkingCompletedStatusBottomSheet(
+                                showTabletPageStatusBottomSheet(
                                   context: rootContext,
                                   plate: selected,
                                   onRequestEntry: () async {
                                     final user = rootContext.read<UserState>().name;
                                     await rootContext.read<MovementPlate>().goBackToParkingRequest(
-                                      fromType: PlateType.parkingCompleted,
-                                      plateNumber: selected.plateNumber,
-                                      area: selected.area,
-                                      newLocation: "미지정",
-                                      performedBy: user,
-                                    );
+                                          fromType: PlateType.parkingCompleted,
+                                          plateNumber: selected.plateNumber,
+                                          area: selected.area,
+                                          newLocation: "미지정",
+                                          performedBy: user,
+                                        );
                                     await _refreshSearchResults();
                                   },
                                   onDelete: () async {
                                     await rootContext.read<DeletePlate>().deleteFromParkingCompleted(
-                                      selected.plateNumber,
-                                      selected.area,
-                                    );
+                                          selected.plateNumber,
+                                          selected.area,
+                                        );
                                     await _refreshSearchResults();
                                   },
                                 );
@@ -251,9 +250,9 @@ class _TabletPlateSearchBottomSheetState extends State<TabletPlateSearchBottomSh
                             isLoading: _isLoading,
                             onPressed: valid
                                 ? () async {
-                              await _refreshSearchResults();
-                              widget.onSearch(value.text);
-                            }
+                                    await _refreshSearchResults();
+                                    widget.onSearch(value.text);
+                                  }
                                 : null,
                           );
                         },
@@ -270,18 +269,18 @@ class _TabletPlateSearchBottomSheetState extends State<TabletPlateSearchBottomSh
         bottomNavigationBar: _hasSearched
             ? const SizedBox.shrink()
             : AnimatedKeypad(
-          slideAnimation: _slideAnimation,
-          fadeAnimation: _fadeAnimation,
-          controller: _controller,
-          maxLength: 4,
-          enableDigitModeSwitch: false,
-          onComplete: () => setState(() {}),
-          onReset: () => setState(() {
-            _controller.clear();
-            _hasSearched = false;
-            _results.clear();
-          }),
-        ),
+                slideAnimation: _slideAnimation,
+                fadeAnimation: _fadeAnimation,
+                controller: _controller,
+                maxLength: 4,
+                enableDigitModeSwitch: false,
+                onComplete: () => setState(() {}),
+                onReset: () => setState(() {
+                  _controller.clear();
+                  _hasSearched = false;
+                  _results.clear();
+                }),
+              ),
       ),
     );
   }
@@ -289,6 +288,7 @@ class _TabletPlateSearchBottomSheetState extends State<TabletPlateSearchBottomSh
 
 class _EmptyState extends StatelessWidget {
   final String text;
+
   const _EmptyState({required this.text});
 
   @override

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-class NumKeypadForPlateSearch extends StatefulWidget {
+class NumKeypadForTabletPlateSearch extends StatefulWidget {
   final TextEditingController controller;
   final int maxLength;
   final VoidCallback? onComplete;
@@ -11,7 +11,7 @@ class NumKeypadForPlateSearch extends StatefulWidget {
   final TextStyle? textStyle;
   final bool enableDigitModeSwitch;
 
-  const NumKeypadForPlateSearch({
+  const NumKeypadForTabletPlateSearch({
     super.key,
     required this.controller,
     required this.maxLength,
@@ -24,10 +24,10 @@ class NumKeypadForPlateSearch extends StatefulWidget {
   });
 
   @override
-  State<NumKeypadForPlateSearch> createState() => _NumKeypadForPlateSearchState();
+  State<NumKeypadForTabletPlateSearch> createState() => _NumKeypadForTabletPlateSearchState();
 }
 
-class _NumKeypadForPlateSearchState extends State<NumKeypadForPlateSearch> with TickerProviderStateMixin {
+class _NumKeypadForTabletPlateSearchState extends State<NumKeypadForTabletPlateSearch> with TickerProviderStateMixin {
   final Map<String, AnimationController> _controllers = {};
   final Map<String, bool> _isPressed = {};
 

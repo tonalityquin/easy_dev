@@ -25,20 +25,33 @@ class UserState extends ChangeNotifier {
   String _previousSelectedArea = '';
 
   UserModel? get user => _user;
+
   List<UserModel> get users => _users;
+
   String? get selectedUserId => _selectedUserId;
+
   bool get isLoggedIn => _user != null;
+
   bool get isWorking => _user?.isWorking ?? false;
+
   bool get isLoading => _isLoading;
+
   bool get isTablet => _isTablet;
 
   String get role => _user?.role ?? '';
+
   String get position => _user?.position ?? '';
+
   String get name => _user?.name ?? '';
+
   String get phone => _user?.phone ?? '';
+
   String get password => _user?.password ?? '';
+
   String get area => _user?.areas.firstOrNull ?? '';
+
   String get division => _user?.divisions.firstOrNull ?? '';
+
   String get currentArea => _user?.currentArea ?? area;
 
   UserState(this._repository, this._areaState) {
@@ -131,9 +144,9 @@ class UserState extends ChangeNotifier {
     // UserModel → TabletModel 매핑 (A안: docId = handle(=phone)-한글지역명)
     final handle = updatedUserAsTablet.phone.trim().toLowerCase();
     final areaName = (updatedUserAsTablet.selectedArea ??
-        updatedUserAsTablet.currentArea ??
-        updatedUserAsTablet.areas.firstOrNull ??
-        '')
+            updatedUserAsTablet.currentArea ??
+            updatedUserAsTablet.areas.firstOrNull ??
+            '')
         .trim();
 
     final tablet = TabletModel(
@@ -150,7 +163,8 @@ class UserState extends ChangeNotifier {
       isWorking: updatedUserAsTablet.isWorking,
       name: updatedUserAsTablet.name,
       password: updatedUserAsTablet.password,
-      handle: handle, // 핵심: phone을 handle로
+      handle: handle,
+      // 핵심: phone을 handle로
       position: updatedUserAsTablet.position,
       role: updatedUserAsTablet.role,
       selectedArea: updatedUserAsTablet.selectedArea,
@@ -277,8 +291,7 @@ class UserState extends ChangeNotifier {
   Future<void> _saveTabletPrefsFromUser(UserModel asUser) async {
     final prefs = await SharedPreferences.getInstance();
     final handle = asUser.phone.trim().toLowerCase();
-    final areaName =
-    (asUser.selectedArea ?? asUser.currentArea ?? asUser.areas.firstOrNull ?? '').trim();
+    final areaName = (asUser.selectedArea ?? asUser.currentArea ?? asUser.areas.firstOrNull ?? '').trim();
 
     await prefs.setString('handle', handle);
     await prefs.setString('selectedArea', areaName); // 한글 지역명
@@ -503,7 +516,8 @@ class UserState extends ChangeNotifier {
       isWorking: t.isWorking,
       name: t.name,
       password: t.password,
-      phone: t.handle, // UI 호환: handle → phone 슬롯
+      phone: t.handle,
+      // UI 호환: handle → phone 슬롯
       position: t.position,
       role: t.role,
       selectedArea: currentAreaOverride ?? t.selectedArea,
