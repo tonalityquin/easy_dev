@@ -7,9 +7,6 @@ import 'package:easydev/repositories/plate/firestore_plate_repository.dart';
 import 'package:easydev/states/area/area_state.dart';
 import 'package:easydev/utils/snackbar_helper.dart';
 
-// 🔗 왼쪽 패널: 로그아웃/컨트롤 UI
-import 'tablet_pages/tablet_page_controller.dart';
-
 // 🔁 우측 패널에서 재사용할 하위 컴포넌트(기존 바텀시트 내 구성요소 그대로 재사용)
 import 'tablet_pages/widgets/tablet_plate_search_bottom_sheet/keypad/animated_keypad.dart';
 import 'tablet_pages/widgets/tablet_plate_search_bottom_sheet/sections/plate_number_display.dart';
@@ -17,6 +14,7 @@ import 'tablet_pages/widgets/tablet_plate_search_bottom_sheet/sections/plate_sea
 import 'tablet_pages/widgets/tablet_plate_search_bottom_sheet/sections/plate_search_results.dart';
 import 'tablet_pages/widgets/tablet_plate_search_bottom_sheet/sections/search_button.dart';
 import 'tablet_pages/widgets/tablet_page_status_bottom_sheet.dart';
+import 'tablet_pages/widgets/tablet_top_navigation.dart';
 
 // ────────────────────────────────────────────────────────────────────────────
 // TabletPage: 우측 패널에 바텀시트를 '띄우지 않고' 직접 삽입하는 버전
@@ -33,25 +31,42 @@ class TabletPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.white,
 
-      // ✅ 기존 본문(2열) 그대로 유지
+      // ✅ 앱바에 TabletTopNavigation 삽입 (탭 시 다이얼로그 열림)
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight),
+        child: const SafeArea(
+          bottom: false,
+          child: TabletTopNavigation(
+            isAreaSelectable: true, // 탭 시 다이얼로그가 열리도록 활성화
+          ),
+        ),
+      ),
+
+      // ✅ 본문(2열)
       body: SafeArea(
+        top: false, // 상단 SafeArea는 appBar가 처리하므로 false
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // ⬅️ 왼쪽 패널: TabletPageController 사용(로그아웃 등)
+            // ⬅️ 왼쪽 패널: 로그아웃 로직 제거(단순 플레이스홀더)
             const Expanded(
               child: ColoredBox(
                 color: Color(0xFFF7F8FA),
                 child: Padding(
                   padding: EdgeInsets.all(24),
-                  child: TabletPageController(),
+                  child: Center(
+                    child: Text(
+                      '왼쪽 패널',
+                      style: TextStyle(fontSize: 16, color: Colors.black54),
+                    ),
+                  ),
                 ),
               ),
             ),
 
             const VerticalDivider(width: 1, thickness: 1, color: Color(0xFFEBEDF0)),
 
-            // ➡️ 오른쪽 패널: 키패드+검색 UI 직접 삽입 (중첩 네비게이터/바텀시트 제거)
+            // ➡️ 오른쪽 패널: 키패드+검색 UI 직접 삽입
             Expanded(
               child: ClipRRect(
                 borderRadius: const BorderRadius.only(
@@ -67,7 +82,7 @@ class TabletPage extends StatelessWidget {
         ),
       ),
 
-      // ✅ TypePage와 동일한 위치/로직으로 하단에 펠리컨 이미지를 배치
+      // ✅ 하단 펠리컨
       bottomNavigationBar: SafeArea(
         top: false,
         child: Column(
@@ -233,32 +248,32 @@ class _RightPaneSearchPanelState extends State<_RightPaneSearchPanel> with Singl
                     child: results.isEmpty
                         ? const _InlineEmpty(text: '검색 결과가 없습니다.')
                         : SingleChildScrollView(
-                            child: PlateSearchResults(
-                              results: results,
-                              onSelect: (selected) async {
-                                if (_navigating) return;
-                                _navigating = true;
+                      child: PlateSearchResults(
+                        results: results,
+                        onSelect: (selected) async {
+                          if (_navigating) return;
+                          _navigating = true;
 
-                                // 결과 다이얼로그 먼저 닫기
-                                Navigator.of(dialogCtx).pop();
+                          // 결과 다이얼로그 먼저 닫기
+                          Navigator.of(dialogCtx).pop();
 
-                                // 상태 확인 바텀시트(네/아니요) → true/false/null
-                                final didConfirm = await showTabletPageStatusBottomSheet(
-                                  context: rootContext,
-                                  plate: selected,
-                                  onRequestEntry: () async {}, // 시그니처 유지용(미사용)
-                                  onDelete: () {}, // 시그니처 유지용(미사용)
-                                );
+                          // 상태 확인 바텀시트(네/아니요) → true/false/null
+                          final didConfirm = await showTabletPageStatusBottomSheet(
+                            context: rootContext,
+                            plate: selected,
+                            onRequestEntry: () async {}, // 시그니처 유지용(미사용)
+                            onDelete: () {}, // 시그니처 유지용(미사용)
+                          );
 
-                                // 버튼으로 닫혔으면 초기화(다음 사용자 대비)
-                                if (didConfirm != null) {
-                                  _resetToInitial();
-                                } else {
-                                  _navigating = false;
-                                }
-                              },
-                            ),
-                          ),
+                          // 버튼으로 닫혔으면 초기화(다음 사용자 대비)
+                          if (didConfirm != null) {
+                            _resetToInitial();
+                          } else {
+                            _navigating = false;
+                          }
+                        },
+                      ),
+                    ),
                   ),
 
                   const SizedBox(height: 8),
@@ -283,6 +298,7 @@ class _RightPaneSearchPanelState extends State<_RightPaneSearchPanel> with Singl
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
+        top: false, // 상단 SafeArea는 상위 Scaffold(appBar)가 처리
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
@@ -339,15 +355,14 @@ class _RightPaneSearchPanelState extends State<_RightPaneSearchPanel> with Singl
       // 🔻 숫자 키패드: 토글 상태(_keypadVisible)로 제어 (검색 후에도 유지)
       bottomNavigationBar: _keypadVisible
           ? AnimatedKeypad(
-              slideAnimation: _slideAnimation,
-              fadeAnimation: _fadeAnimation,
-              controller: _controller,
-              maxLength: 4,
-              enableDigitModeSwitch: false,
-              onComplete: () => setState(() {}),
-              // 입력 완료 시 버튼 활성화를 위해 리빌드
-              onReset: _resetToInitial,
-            )
+        slideAnimation: _slideAnimation,
+        fadeAnimation: _fadeAnimation,
+        controller: _controller,
+        maxLength: 4,
+        enableDigitModeSwitch: false,
+        onComplete: () => setState(() {}), // 입력 완료 시 버튼 활성화를 위해 리빌드
+        onReset: _resetToInitial,
+      )
           : const SizedBox.shrink(),
     );
   }
