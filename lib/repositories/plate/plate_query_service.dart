@@ -71,6 +71,29 @@ class PlateQueryService {
     return result;
   }
 
+  Future<List<PlateModel>> fourDigitForTabletQuery({
+    required String plateFourDigit,
+    required String area,
+  }) async {
+    await FirestoreLogger().log(
+      'fourDigitForTabletQuery called: plateFourDigit=$plateFourDigit, area=$area',
+    );
+
+    final query = _firestore
+        .collection('plates')
+        .where('plate_four_digit', isEqualTo: plateFourDigit)
+        .where('area', isEqualTo: area)
+        .where('type', whereIn: [
+      PlateType.parkingCompleted.firestoreValue,
+      PlateType.departureCompleted.firestoreValue,
+    ]);
+
+    final result = await _queryPlates(query);
+
+    await FirestoreLogger().log('fourDigitForTabletQuery success: ${result.length} items loaded');
+    return result;
+  }
+
   Future<List<PlateModel>> fourDigitDepartureCompletedQuery({
     required String plateFourDigit,
     required String area,
@@ -103,10 +126,10 @@ class PlateQueryService {
           .where('plate_number', isEqualTo: plateNumber)
           .where('area', isEqualTo: area)
           .where('type', whereIn: [
-        PlateType.parkingRequests.firestoreValue,
-        PlateType.parkingCompleted.firestoreValue,
-        PlateType.departureRequests.firestoreValue,
-      ])
+            PlateType.parkingRequests.firestoreValue,
+            PlateType.parkingCompleted.firestoreValue,
+            PlateType.departureRequests.firestoreValue,
+          ])
           .limit(1)
           .get()
           .timeout(const Duration(seconds: 10)); // ⏱ 타임아웃

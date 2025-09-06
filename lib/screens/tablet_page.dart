@@ -1,12 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../states/area/area_state.dart';
+
+// 프로젝트 패키지 경로 (필요에 맞게 조정하세요)
+import 'package:easydev/models/plate_model.dart';
+import 'package:easydev/repositories/plate/firestore_plate_repository.dart';
+import 'package:easydev/states/area/area_state.dart';
+import 'package:easydev/utils/snackbar_helper.dart';
 
 // 🔗 왼쪽 패널: 로그아웃/컨트롤 UI
 import 'tablet_pages/tablet_page_controller.dart';
-import 'tablet_pages/widgets/tablet_plate_search_bottom_sheet.dart';
 
-// 오른쪽 패널: 번호판 검색 바텀시트 임베드
+// 🔁 우측 패널에서 재사용할 하위 컴포넌트(기존 바텀시트 내 구성요소 그대로 재사용)
+import 'tablet_pages/widgets/tablet_plate_search_bottom_sheet/keypad/animated_keypad.dart';
+import 'tablet_pages/widgets/tablet_plate_search_bottom_sheet/sections/plate_number_display.dart';
+import 'tablet_pages/widgets/tablet_plate_search_bottom_sheet/sections/plate_search_header.dart';
+import 'tablet_pages/widgets/tablet_plate_search_bottom_sheet/sections/plate_search_results.dart';
+import 'tablet_pages/widgets/tablet_plate_search_bottom_sheet/sections/search_button.dart';
+import 'tablet_pages/widgets/tablet_page_status_bottom_sheet.dart';
+
+// ────────────────────────────────────────────────────────────────────────────
+// TabletPage: 우측 패널에 바텀시트를 '띄우지 않고' 직접 삽입하는 버전
+// ────────────────────────────────────────────────────────────────────────────
 
 class TabletPage extends StatelessWidget {
   const TabletPage({super.key});
@@ -37,21 +51,15 @@ class TabletPage extends StatelessWidget {
 
             const VerticalDivider(width: 1, thickness: 1, color: Color(0xFFEBEDF0)),
 
-            // ➡️ 오른쪽 패널: SignaturePlateSearchBottomSheet 임베드
+            // ➡️ 오른쪽 패널: 키패드+검색 UI 직접 삽입 (중첩 네비게이터/바텀시트 제거)
             Expanded(
               child: ClipRRect(
                 borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(12),
                 ),
-                child: _RightPaneNavigator(
-                  // 🔑 area가 바뀌면 우측 Navigator 자체가 재생성되도록 Key 부여
-                  key: ValueKey('right-pane-$area'),
-                  child: TabletPlateSearchBottomSheet(
-                    // 🔑 초기 라우트(검색 시트)도 area 기준으로 재생성
-                    key: ValueKey('sps-$area'),
-                    onSearch: (_) {},
-                    area: area,
-                  ),
+                child: _RightPaneSearchPanel(
+                  key: ValueKey('right-pane-$area'), // 🔑 area 변경 시 패널 자체 재생성
+                  area: area,
                 ),
               ),
             ),
@@ -60,19 +68,15 @@ class TabletPage extends StatelessWidget {
       ),
 
       // ✅ TypePage와 동일한 위치/로직으로 하단에 펠리컨 이미지를 배치
-      // [채팅/대시보드] → [네비게이션 바] → [펠리컨] 구조에서
-      // 이 페이지에는 상단 두 요소가 없으므로 '펠리컨'만 Column 마지막 요소로 둡니다.
       bottomNavigationBar: SafeArea(
         top: false,
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          // ⛔️ children: const [...]  → ✅ children: [...]
           children: [
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: SizedBox(
                 height: 48,
-                // Image.asset 은 const 아님
                 child: Image.asset('assets/images/pelican.png'),
               ),
             ),
@@ -83,21 +87,292 @@ class TabletPage extends StatelessWidget {
   }
 }
 
-/// 우측 패널에 중첩 네비게이터를 두어, 내부 위젯에서 Navigator.pop(context) 호출 시
-/// 전체 라우트가 아닌 **우측 패널** 내에서만 pop 되도록 합니다.
-class _RightPaneNavigator extends StatelessWidget {
-  final Widget child;
+// ────────────────────────────────────────────────────────────────────────────
+class _RightPaneSearchPanel extends StatefulWidget {
+  final String area;
 
-  const _RightPaneNavigator({super.key, required this.child});
+  const _RightPaneSearchPanel({
+    super.key,
+    required this.area,
+  });
+
+  @override
+  State<_RightPaneSearchPanel> createState() => _RightPaneSearchPanelState();
+}
+
+class _RightPaneSearchPanelState extends State<_RightPaneSearchPanel> with SingleTickerProviderStateMixin {
+  final TextEditingController _controller = TextEditingController();
+
+  bool _isLoading = false;
+  bool _navigating = false; // 빠른 중복 탭 방지
+
+  // 🔥 검색 UI(키패드/입력)는 항상 유지
+  bool _keypadVisible = true;
+
+  late final AnimationController _keypadController;
+  late final Animation<Offset> _slideAnimation;
+  late final Animation<double> _fadeAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _keypadController = AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
+    _slideAnimation = Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _keypadController, curve: Curves.easeOut));
+    _fadeAnimation = CurvedAnimation(parent: _keypadController, curve: Curves.easeIn);
+    _keypadController.forward();
+  }
+
+  @override
+  void didUpdateWidget(covariant _RightPaneSearchPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // area가 변경되면 입력 초기화 + 키패드 유지
+    if (oldWidget.area != widget.area) {
+      _resetToInitial();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _keypadController.dispose();
+    super.dispose();
+  }
+
+  bool _isValidPlate(String value) => RegExp(r'^\d{4}$').hasMatch(value); // 숫자 4자리만 유효
+
+  Future<void> _refreshSearchResults() async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+
+    try {
+      final repository = FirestorePlateRepository();
+      final input = _controller.text;
+
+      final results = await repository.fourDigitForTabletQuery(
+        plateFourDigit: input,
+        area: widget.area,
+      );
+
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+
+      // ✅ 패널을 건드리지 않고, 결과는 Dialog로 표시
+      await _showResultsDialog(results);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      showFailedSnackbar(context, '검색 중 오류가 발생했습니다: $e');
+    }
+  }
+
+  void _toggleKeypad([bool? force]) {
+    setState(() {
+      _keypadVisible = force ?? !_keypadVisible;
+      if (_keypadVisible) {
+        _keypadController.forward(from: 0);
+      }
+    });
+  }
+
+  void _resetToInitial() {
+    setState(() {
+      _controller.clear();
+      _keypadVisible = true;
+      _isLoading = false;
+    });
+    _keypadController.forward(from: 0);
+    _navigating = false;
+  }
+
+  Future<void> _showResultsDialog(List<PlateModel> results) async {
+    final rootContext = Navigator.of(context, rootNavigator: true).context;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogCtx) {
+        return Dialog(
+          insetPadding: const EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: 640,
+              maxHeight: MediaQuery.of(dialogCtx).size.height * 0.8,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // 헤더
+                  Row(
+                    children: [
+                      const Icon(Icons.search, color: Colors.blueAccent),
+                      const SizedBox(width: 8),
+                      const Text(
+                        '검색 결과',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.of(dialogCtx).pop(),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '입력 번호: ${_controller.text}   /   구역: ${widget.area.isEmpty ? "-" : widget.area}',
+                    style: const TextStyle(fontSize: 12, color: Colors.black54),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // 본문
+                  Expanded(
+                    child: results.isEmpty
+                        ? const _InlineEmpty(text: '검색 결과가 없습니다.')
+                        : SingleChildScrollView(
+                            child: PlateSearchResults(
+                              results: results,
+                              onSelect: (selected) async {
+                                if (_navigating) return;
+                                _navigating = true;
+
+                                // 결과 다이얼로그 먼저 닫기
+                                Navigator.of(dialogCtx).pop();
+
+                                // 상태 확인 바텀시트(네/아니요) → true/false/null
+                                final didConfirm = await showTabletPageStatusBottomSheet(
+                                  context: rootContext,
+                                  plate: selected,
+                                  onRequestEntry: () async {}, // 시그니처 유지용(미사용)
+                                  onDelete: () {}, // 시그니처 유지용(미사용)
+                                );
+
+                                // 버튼으로 닫혔으면 초기화(다음 사용자 대비)
+                                if (didConfirm != null) {
+                                  _resetToInitial();
+                                } else {
+                                  _navigating = false;
+                                }
+                              },
+                            ),
+                          ),
+                  ),
+
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () => Navigator.of(dialogCtx).pop(),
+                      child: const Text('닫기'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Navigator(
-      onGenerateRoute: (RouteSettings settings) {
-        // 최초 한 번 생성된 라우트가 고정되는 특성 때문에,
-        // 상위에서 key를 활용해 이 위젯 자체를 재생성하도록 처리함.
-        return MaterialPageRoute(builder: (_) => child);
-      },
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const PlateSearchHeader(),
+              const SizedBox(height: 16),
+
+              // ✅ 키패드 열기/닫기 토글 버튼
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: _toggleKeypad,
+                  icon: Icon(_keypadVisible ? Icons.keyboard_hide : Icons.keyboard),
+                  label: Text(_keypadVisible ? '키패드 닫기' : '키패드 열기'),
+                ),
+              ),
+
+              // 현재 입력·유효성 표시 (탭하면 키패드 열기)
+              GestureDetector(
+                onTap: () {
+                  if (!_keypadVisible) _toggleKeypad(true); // 표시부 탭으로도 키패드 열기
+                },
+                child: PlateNumberDisplay(controller: _controller, isValidPlate: _isValidPlate),
+              ),
+              const SizedBox(height: 24),
+
+              // 🔎 결과는 다이얼로그로 보여주므로, 본문에는 로딩만 표시
+              if (_isLoading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: LinearProgressIndicator(minHeight: 3),
+                ),
+
+              const Spacer(),
+
+              // 검색 버튼 (키패드와 독립)
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: _controller,
+                builder: (context, value, _) {
+                  final valid = _isValidPlate(value.text);
+                  return SearchButton(
+                    isValid: valid,
+                    isLoading: _isLoading,
+                    onPressed: valid ? _refreshSearchResults : null,
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+
+      // 🔻 숫자 키패드: 토글 상태(_keypadVisible)로 제어 (검색 후에도 유지)
+      bottomNavigationBar: _keypadVisible
+          ? AnimatedKeypad(
+              slideAnimation: _slideAnimation,
+              fadeAnimation: _fadeAnimation,
+              controller: _controller,
+              maxLength: 4,
+              enableDigitModeSwitch: false,
+              onComplete: () => setState(() {}),
+              // 입력 완료 시 버튼 활성화를 위해 리빌드
+              onReset: _resetToInitial,
+            )
+          : const SizedBox.shrink(),
+    );
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// 공통: 빈 상태(인라인)
+// ────────────────────────────────────────────────────────────────────────────
+
+class _InlineEmpty extends StatelessWidget {
+  final String text;
+
+  const _InlineEmpty({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 24),
+      child: Center(
+        child: Text(
+          text,
+          style: const TextStyle(color: Colors.redAccent, fontSize: 16),
+          textAlign: TextAlign.center,
+        ),
+      ),
     );
   }
 }

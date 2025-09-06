@@ -63,21 +63,19 @@ class PlateSearchResults extends StatelessWidget {
 
             final settledChip = isLocked
                 ? _buildChip(
-              text: lockedFeeAmount != null
-                  ? '사전 정산 ₩${currency.format(lockedFeeAmount)}'
-                  : '사전 정산',
-              fg: Colors.teal,
-              bg: Colors.teal.shade50,
-              borderColor: Colors.teal,
-              icon: Icons.lock,
-            )
+                    text: lockedFeeAmount != null ? '사전 정산 ₩${currency.format(lockedFeeAmount)}' : '사전 정산',
+                    fg: Colors.teal,
+                    bg: Colors.teal.shade50,
+                    borderColor: Colors.teal,
+                    icon: Icons.lock,
+                  )
                 : _buildChip(
-              text: '미정산',
-              fg: Colors.grey.shade700,
-              bg: Colors.grey.shade200,
-              borderColor: Colors.grey.shade500,
-              icon: Icons.lock_open,
-            );
+                    text: '미정산',
+                    fg: Colors.grey.shade700,
+                    bg: Colors.grey.shade200,
+                    borderColor: Colors.grey.shade500,
+                    icon: Icons.lock_open,
+                  );
 
             // 상세 정보(선택/선택자/과금유형/커스텀상태/정산정보)
             final showDetailSection = plate.isSelected ||

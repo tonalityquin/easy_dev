@@ -32,6 +32,11 @@ abstract class PlateRepository {
     required String area,
   });
 
+  Future<List<PlateModel>> fourDigitForTabletQuery({
+    required String plateFourDigit,
+    required String area,
+  });
+
   Future<List<PlateModel>> fourDigitDepartureCompletedQuery({
     required String plateFourDigit,
     required String area,
