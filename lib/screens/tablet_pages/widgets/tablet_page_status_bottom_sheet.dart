@@ -8,8 +8,8 @@ import '../../../../states/user/user_state.dart';
 Future<bool?> showTabletPageStatusBottomSheet({
   required BuildContext context,
   required PlateModel plate,
-  required Future<void> Function() onRequestEntry, // 시그니처 호환성 유지를 위해 남겨둠(미사용)
-  required VoidCallback onDelete, // 시그니처 호환성 유지를 위해 남겨둠(미사용)
+  required Future<void> Function() onRequestEntry, // 시그니처 호환성을 위해 유지(미사용)
+  required VoidCallback onDelete,                  // 시그니처 호환성을 위해 유지(미사용)
 }) async {
   return showModalBottomSheet<bool>(
     context: context,
@@ -57,7 +57,7 @@ Future<bool?> showTabletPageStatusBottomSheet({
 
                 const SizedBox(height: 20),
 
-                // 선택된 번호판 강조 표시
+                // 선택된 번호판 강조 표시 (구역/위치/시간은 표시하지 않음)
                 Center(
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -87,27 +87,6 @@ Future<bool?> showTabletPageStatusBottomSheet({
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 14, color: Colors.black87),
                   ),
-                ),
-
-                const SizedBox(height: 20),
-
-                // 기본 정보 (구역/위치/요청시간)
-                _InfoRow(
-                  icon: Icons.map,
-                  label: '구역',
-                  value: plate.area.isNotEmpty ? plate.area : '-',
-                ),
-                const SizedBox(height: 8),
-                _InfoRow(
-                  icon: Icons.location_on_outlined,
-                  label: '위치',
-                  value: plate.location.trim().isNotEmpty ? plate.location.trim() : '-',
-                ),
-                const SizedBox(height: 8),
-                _InfoRow(
-                  icon: Icons.access_time,
-                  label: '요청 시간',
-                  value: _formatTime(plate.requestTime),
                 ),
 
                 const SizedBox(height: 28),
@@ -167,48 +146,4 @@ Future<bool?> showTabletPageStatusBottomSheet({
       );
     },
   );
-}
-
-class _InfoRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-
-  const _InfoRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: Colors.grey.shade700),
-        const SizedBox(width: 8),
-        Text(
-          '$label: ',
-          style: TextStyle(
-            fontSize: 14,
-            color: Colors.grey.shade800,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            style: const TextStyle(fontSize: 14),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-String _two(int n) => n.toString().padLeft(2, '0');
-
-String _formatTime(DateTime time) {
-  final t = time.toLocal();
-  return '${t.year}-${_two(t.month)}-${_two(t.day)} ${_two(t.hour)}:${_two(t.minute)}:${_two(t.second)}';
 }
