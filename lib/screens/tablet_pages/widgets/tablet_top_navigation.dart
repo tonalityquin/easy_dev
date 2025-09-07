@@ -1,3 +1,4 @@
+// lib/screens/tablet_pages/widgets/tablet_top_navigation.dart
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -8,6 +9,7 @@ import '../../../states/area/area_state.dart';
 import '../../../states/user/user_state.dart';
 import '../../../utils/blocking_dialog.dart';
 import '../../../utils/snackbar_helper.dart';
+import '../states/pad_mode_state.dart';
 
 class TabletTopNavigation extends StatelessWidget {
   final bool isAreaSelectable;
@@ -61,13 +63,15 @@ class TabletTopNavigation extends StatelessWidget {
       context: context,
       barrierDismissible: true,
       builder: (dialogCtx) {
+        final isSmallPad = dialogCtx.watch<PadModeState>().isSmall;
+
         return Dialog(
           insetPadding: const EdgeInsets.all(16),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           child: ConstrainedBox(
             constraints: BoxConstraints(
               maxWidth: 520,
-              maxHeight: MediaQuery.of(dialogCtx).size.height * 0.8,
+              maxHeight: MediaQuery.of(dialogCtx).size.height * 0.9,
             ),
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
@@ -116,7 +120,48 @@ class TabletTopNavigation extends StatelessWidget {
                     ),
                   ),
 
+                  const SizedBox(height: 16),
+                  // 패드 모드 섹션
+                  Row(
+                    children: const [
+                      Icon(Icons.dialpad, size: 18, color: Colors.indigo),
+                      SizedBox(width: 8),
+                      Text('패드 모드', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Big Pad 버튼 (기본값)
+                  _PadModeButton(
+                    label: 'Big Pad 모드',
+                    subtitle: '좌: 출차요청 목록  ·  우: 검색/키패드',
+                    icon: Icons.grid_view_rounded,
+                    selected: !isSmallPad,
+                    onPressed: () {
+                      dialogCtx.read<PadModeState>().setMode(PadMode.big);
+                      Navigator.of(dialogCtx).pop();
+                      showSuccessSnackbar(context, 'Big Pad 모드로 전환되었습니다.');
+                    },
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Small Pad 버튼 (키패드 100%)
+                  _PadModeButton(
+                    label: 'Small Pad 모드',
+                    subtitle: '키패드 화면 100%  ·  결과는 다이얼로그 표시',
+                    icon: Icons.dialpad_rounded,
+                    selected: isSmallPad,
+                    onPressed: () {
+                      dialogCtx.read<PadModeState>().setMode(PadMode.small);
+                      Navigator.of(dialogCtx).pop();
+                      showSuccessSnackbar(context, 'Small Pad 모드로 전환되었습니다.');
+                    },
+                  ),
+
                   const SizedBox(height: 20),
+                  const Divider(height: 1),
+
+                  const SizedBox(height: 16),
 
                   // 로그아웃 버튼
                   SizedBox(
@@ -190,5 +235,70 @@ class TabletTopNavigation extends StatelessWidget {
         showFailedSnackbar(context, '로그아웃 실패: $e');
       }
     }
+  }
+}
+
+class _PadModeButton extends StatelessWidget {
+  final String label;
+  final String? subtitle;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  const _PadModeButton({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onPressed,
+    this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final style = OutlinedButton.styleFrom(
+      minimumSize: const Size(double.infinity, 48),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+      backgroundColor: selected ? Colors.indigo.withOpacity(0.08) : Colors.white,
+      foregroundColor: Colors.black87,
+      side: BorderSide(color: selected ? Colors.indigo : Colors.grey.shade400, width: 1.2),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    );
+
+    return OutlinedButton(
+      style: style,
+      onPressed: onPressed,
+      child: Row(
+        children: [
+          Icon(icon, color: selected ? Colors.indigo : Colors.black54),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: selected ? Colors.indigo.shade700 : Colors.black87,
+                    )),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle!,
+                    style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Icon(
+            selected ? Icons.radio_button_checked : Icons.radio_button_off,
+            color: selected ? Colors.indigo : Colors.grey,
+            size: 20,
+          ),
+        ],
+      ),
+    );
   }
 }

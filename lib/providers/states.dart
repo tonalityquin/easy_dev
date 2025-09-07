@@ -6,6 +6,7 @@ import '../repositories/location/firestore_location_repository.dart';
 import '../repositories/plate/plate_repository.dart';
 import '../repositories/user/user_repository.dart';
 
+import '../screens/tablet_pages/states/pad_mode_state.dart';
 import '../states/area/area_state.dart';
 import '../states/bill/bill_state.dart';
 import '../states/calendar/field_calendar_state.dart';
@@ -32,6 +33,10 @@ final List<SingleChildWidget> stateProviders = [
   ),
   ChangeNotifierProvider(
     create: (_) => SecondaryMode(),
+  ),
+  // ✅ PadModeState 프로바이더 추가
+  ChangeNotifierProvider(
+    create: (_) => PadModeState(),
   ),
   ChangeNotifierProvider(
     create: (_) => InputLogPlate(),

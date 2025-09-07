@@ -1,6 +1,7 @@
-// lib/screens/tablet_right_panel.dart
+// lib/screens/tablet_pages/tablet_right_panel.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 // 재사용 UI 컴포넌트(기존 상대 경로 유지)
 import '../../models/plate_model.dart';
@@ -11,10 +12,10 @@ import 'widgets/tablet_plate_search_bottom_sheet/sections/plate_number_display.d
 import 'widgets/tablet_plate_search_bottom_sheet/sections/plate_search_header.dart';
 import 'widgets/tablet_plate_search_bottom_sheet/sections/plate_search_results.dart';
 import 'widgets/tablet_page_status_bottom_sheet.dart';
+import 'states/pad_mode_state.dart';
 
 /// 우측 패널: 키패드 + 4자리 검색 → 결과 다이얼로그 + 상태 바텀시트.
-/// 키패드는 항상 열려 있으며, '검색'은 키패드 마지막 행에서 실행합니다.
-/// ✅ 검색창과 키패드를 모두 body 안 같은 Column 트리에서 빌드(빌딩 방식 통일).
+/// 키패드는 항상 **오른쪽 패널 내부**에서만 렌더링됩니다.
 class RightPaneSearchPanel extends StatefulWidget {
   final String area;
 
@@ -50,7 +51,6 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel> with Single
   @override
   void didUpdateWidget(covariant RightPaneSearchPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // area가 변경되면 입력 초기화
     if (oldWidget.area != widget.area) {
       _resetToInitial();
     }
@@ -81,7 +81,6 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel> with Single
       if (!mounted) return;
       setState(() => _isLoading = false);
 
-      // ✅ 결과는 Dialog로 표시 (패널은 그대로 유지)
       await _showResultsDialog(results);
     } catch (e) {
       if (!mounted) return;
@@ -99,7 +98,6 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel> with Single
     _navigating = false;
   }
 
-  // 키패드에서 '검색' 키(또는 자동완료 트리거)를 통해 호출
   void _onKeypadComplete() {
     final input = _controller.text;
     if (_isValidPlate(input) && !_navigating) {
@@ -127,15 +125,11 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel> with Single
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // 헤더
                   Row(
                     children: [
                       const Icon(Icons.search, color: Colors.blueAccent),
                       const SizedBox(width: 8),
-                      const Text(
-                        '검색 결과',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
+                      const Text('검색 결과', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                       const Spacer(),
                       IconButton(
                         icon: const Icon(Icons.close),
@@ -149,8 +143,6 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel> with Single
                     style: const TextStyle(fontSize: 12, color: Colors.black54),
                   ),
                   const SizedBox(height: 12),
-
-                  // 본문
                   Expanded(
                     child: results.isEmpty
                         ? const _InlineEmpty(text: '검색 결과가 없습니다.')
@@ -161,18 +153,15 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel> with Single
                           if (_navigating) return;
                           _navigating = true;
 
-                          // 결과 다이얼로그 먼저 닫기
                           Navigator.of(dialogCtx).pop();
 
-                          // 상태 확인 바텀시트(네/아니요)
                           final didConfirm = await showTabletPageStatusBottomSheet(
                             context: rootContext,
                             plate: selected,
-                            onRequestEntry: () async {}, // 시그니처 유지용(미사용)
-                            onDelete: () {}, // 시그니처 유지용(미사용)
+                            onRequestEntry: () async {},
+                            onDelete: () {},
                           );
 
-                          // 버튼으로 닫혔으면 오른쪽 초기화 (좌측은 PlateState가 알아서 반영)
                           if (didConfirm != null) {
                             _resetToInitial();
                           } else {
@@ -182,7 +171,6 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel> with Single
                       ),
                     ),
                   ),
-
                   const SizedBox(height: 8),
                   Align(
                     alignment: Alignment.centerRight,
@@ -202,59 +190,71 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel> with Single
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
+    // pad 모드에 따라 우측 패널 내부 레이아웃 분기
+    final isSmallPad = context.select<PadModeState, bool>((s) => s.isSmall);
 
-      // ✅ 검색창과 키패드를 모두 body 안에서 같은 Column으로 빌드
-      body: SafeArea(
+    return Material(
+      color: Colors.white,
+      child: SafeArea(
         top: false,
         child: Column(
           children: [
-            // 상단 컨텐츠는 Padding으로 감싸고, 아래 키패드는 전체 폭으로 배치
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const PlateSearchHeader(),
-                    const SizedBox(height: 16),
-
-                    // (키패드 토글 버튼 없음)
-
-                    // 현재 입력·유효성 표시
-                    PlateNumberDisplay(controller: _controller, isValidPlate: _isValidPlate),
-                    const SizedBox(height: 24),
-
-                    // 🔎 결과는 다이얼로그로 보여주므로, 본문에는 로딩만 표시
-                    if (_isLoading)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 8),
-                        child: LinearProgressIndicator(minHeight: 3),
-                      ),
-
-                    // 본문 여백 채우기
-                    const Spacer(),
-                  ],
+            // big pad: 헤더/표시/로딩 노출
+            if (!isSmallPad)
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const PlateSearchHeader(),
+                      const SizedBox(height: 16),
+                      PlateNumberDisplay(controller: _controller, isValidPlate: _isValidPlate),
+                      const SizedBox(height: 24),
+                      if (_isLoading)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: LinearProgressIndicator(minHeight: 3),
+                        ),
+                      const Spacer(),
+                    ],
+                  ),
                 ),
               ),
-            ),
 
-            // 👇 동일한 빌딩 경로(body 내부)에서 키패드 배치
-            // SafeArea(bottom:true)로 하단 시스템 영역을 피하고, 전체 폭 사용
-            SafeArea(
-              top: false,
-              bottom: true,
-              child: AnimatedKeypad(
-                slideAnimation: _slideAnimation,
-                fadeAnimation: _fadeAnimation,
-                controller: _controller,
-                maxLength: 4,
-                enableDigitModeSwitch: false, // 마지막 행: ['처음','0','검색']
-                onComplete: _onKeypadComplete, // '검색' 또는 자동완료 시 검색 실행
-                onReset: _resetToInitial,
+            // 👇 키패드 영역 (오른쪽 패널 **내부**)
+            if (isSmallPad)
+              Expanded(
+                child: SafeArea(
+                  top: false,
+                  bottom: true,
+                  child: AnimatedKeypad(
+                    slideAnimation: _slideAnimation,
+                    fadeAnimation: _fadeAnimation,
+                    controller: _controller,
+                    maxLength: 4,
+                    enableDigitModeSwitch: false,
+                    onComplete: _onKeypadComplete,
+                    onReset: _resetToInitial,
+                    fullHeight: true, // ← small pad: 우측 패널 높이를 100% 사용
+                  ),
+                ),
+              )
+            else
+              SafeArea(
+                top: false,
+                bottom: true,
+                child: AnimatedKeypad(
+                  slideAnimation: _slideAnimation,
+                  fadeAnimation: _fadeAnimation,
+                  controller: _controller,
+                  maxLength: 4,
+                  enableDigitModeSwitch: false, // 마지막 행: ['처음','0','검색']
+                  onComplete: _onKeypadComplete,
+                  onReset: _resetToInitial,
+                  // fullHeight 기본 false → 높이 45% 제한
+                ),
               ),
-            ),
           ],
         ),
       ),

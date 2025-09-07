@@ -11,8 +11,6 @@ import 'tablet_pages/tablet_left_panel.dart';
 import 'tablet_pages/tablet_right_panel.dart';
 import 'tablet_pages/widgets/tablet_top_navigation.dart';
 
-// 상단 네비게이션
-
 class TabletPage extends StatefulWidget {
   const TabletPage({super.key});
 
@@ -71,7 +69,6 @@ class _TabletPageState extends State<TabletPage> {
   void initState() {
     super.initState();
     // 이벤트 기반 1회 토스트/스낵바(보조): 출차요청에서 사라진 번호판 알림
-    // departureCompleted 구독 없이도 PlateState가 departureRequests 스트림 변화로 감지함
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final plateState = context.read<PlateState>();
       final areaState = context.read<AreaState>();
@@ -81,7 +78,6 @@ class _TabletPageState extends State<TabletPage> {
         final currentArea = areaState.currentArea;
         if (!mounted || removed.area != currentArea) return;
 
-        // 스낵바 알림
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('출차 완료 처리됨: ${removed.plateNumber}'),
@@ -90,7 +86,6 @@ class _TabletPageState extends State<TabletPage> {
           ),
         );
 
-        // 상단 배너 칩에도 추가(중복 방지)
         _addCompletedChip(removed.plateNumber);
       });
     });
@@ -110,7 +105,6 @@ class _TabletPageState extends State<TabletPage> {
     // 지역이 바뀌면 배너 칩은 혼동 방지를 위해 초기화
     if (_areaCache != area) {
       _areaCache = area;
-      // build 중 setState는 피하려고 프레임 후 초기화
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _clearChipsForAreaChange();
       });
@@ -130,12 +124,11 @@ class _TabletPageState extends State<TabletPage> {
         ),
       ),
 
-      // ✅ 본문(상단 고정 안내/칩 + 2열 레이아웃)
+      // ✅ 본문(상단 고정 안내/칩 + 항상 2열 레이아웃 유지)
       body: SafeArea(
         top: false, // 상단 SafeArea는 appBar가 처리하므로 false
         child: Column(
           children: [
-            // ⛳ 상시 노출 안내/칩 배너 (앱바 아래 고정) — 칩 선택 시 X 노출, X로 삭제
             _StickyNoticeBar(
               plates: _completedChips,
               selectedPlates: _selectedChips,
@@ -143,12 +136,11 @@ class _TabletPageState extends State<TabletPage> {
               onRemove: _removeCompletedChip,
             ),
 
-            // 본문 2열
             Expanded(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // ⬅️ 왼쪽 패널: plates 컬렉션에서 type=출차요청인 데이터만 번호판 표시
+                  // ⬅️ 왼쪽 패널
                   Expanded(
                     child: ColoredBox(
                       color: const Color(0xFFF7F8FA),
@@ -163,14 +155,14 @@ class _TabletPageState extends State<TabletPage> {
 
                   const VerticalDivider(width: 1, thickness: 1, color: Color(0xFFEBEDF0)),
 
-                  // ➡️ 오른쪽 패널: 키패드+검색 UI 직접 삽입
+                  // ➡️ 오른쪽 패널
                   Expanded(
                     child: ClipRRect(
                       borderRadius: const BorderRadius.only(
                         topLeft: Radius.circular(12),
                       ),
                       child: RightPaneSearchPanel(
-                        key: ValueKey('right-pane-$area'), // 🔑 area 변경 시 패널 자체 재생성
+                        key: ValueKey('right-pane-$area'),
                         area: area,
                       ),
                     ),
@@ -203,12 +195,7 @@ class _TabletPageState extends State<TabletPage> {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-/* 앱바 아래 상시 노출 안내/칩 배너
-   - 칩 목록(plates)
-   - 선택된 칩 집합(selectedPlates) : 선택 시 X 표시, 선택 해제 시 X 숨김
-   - onToggleSelect: 칩을 탭할 때 선택/해제 토글
-   - onRemove: X를 눌러 칩을 삭제(숨김)
-*/
+/* 앱바 아래 상시 노출 안내/칩 배너 */
 class _StickyNoticeBar extends StatelessWidget {
   final List<String> plates;
   final Set<String> selectedPlates;
@@ -241,56 +228,50 @@ class _StickyNoticeBar extends StatelessWidget {
           children: [
             const Icon(Icons.info_outline, size: 18, color: Colors.amber),
             const SizedBox(width: 8),
-
-            // 칩이 없으면 안내 문구, 있으면 '출차 완료:' + 칩들 (가로 스크롤)
             Expanded(
               child: hasChips
                   ? Row(
-                      children: [
-                        const Text(
-                          '출차 완료: ',
-                          style: TextStyle(fontSize: 13, color: Color(0xFF5D4037), fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(width: 6),
-                        // 칩들만 스크롤
-                        Expanded(
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
-                              children: plates.map((p) {
-                                final selected = selectedPlates.contains(p);
-                                return Padding(
-                                  padding: const EdgeInsets.only(right: 6),
-                                  child: InputChip(
-                                    label: Text(p),
-                                    selected: selected,
-                                    showCheckmark: false,
-                                    // 체크 표시 대신 선택 배경만
-                                    onSelected: (_) => onToggleSelect(p),
-                                    // 탭 → 선택/해제
-                                    // 선택 상태일 때만 X(삭제) 노출
-                                    onDeleted: selected ? () => onRemove(p) : null,
-                                    deleteIcon: selected ? const Icon(Icons.close, size: 16) : null,
-                                    visualDensity: VisualDensity.compact,
-                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  ),
-                                );
-                              }).toList(),
+                children: [
+                  const Text(
+                    '출차 완료: ',
+                    style: TextStyle(fontSize: 13, color: Color(0xFF5D4037), fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: plates.map((p) {
+                          final selected = selectedPlates.contains(p);
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: InputChip(
+                              label: Text(p),
+                              selected: selected,
+                              showCheckmark: false,
+                              onSelected: (_) => onToggleSelect(p),
+                              onDeleted: selected ? () => onRemove(p) : null,
+                              deleteIcon: selected ? const Icon(Icons.close, size: 16) : null,
+                              visualDensity: VisualDensity.compact,
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
-                          ),
-                        ),
-                      ],
-                    )
-                  : const Text(
-                      '출차 요청 목록에서 방금 누른 번호가 사라졌다면, 출차 완료 처리된 것입니다.',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFF5D4037),
-                        fontWeight: FontWeight.w600,
+                          );
+                        }).toList(),
                       ),
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 2,
                     ),
+                  ),
+                ],
+              )
+                  : const Text(
+                '출차 요청 목록에서 방금 누른 번호가 사라졌다면, 출차 완료 처리된 것입니다.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFF5D4037),
+                  fontWeight: FontWeight.w600,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 2,
+              ),
             ),
           ],
         ),
