@@ -1,25 +1,31 @@
 import 'package:flutter/material.dart';
+import 'outside/outside_login_controller.dart';
+import 'outside/sections/outside_login_form.dart';
 import 'service/service_login_controller.dart';
 import 'service/debugs/service_login_debug_firestore_logger.dart';
 import 'service/sections/service_login_form.dart';
 
-// ✅ 추가: 태블릿용 컨트롤러/폼 import
+// tablet
 import 'tablet/tablet_login_controller.dart';
 import 'tablet/sections/tablet_login_form.dart';
 
+// ✅ outside
+
+
 class LoginScreen extends StatefulWidget {
-  // ✅ 추가: 모드 파라미터 (기본 service)
+  // ✅ mode: 'service' | 'tablet' | 'outside'
   const LoginScreen({super.key, this.mode = 'service'});
-  final String mode; // 'service' | 'tablet'
+  final String mode;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
-  // ✅ 분기용 컨트롤러 2종(필요한 쪽만 초기화/dispose)
+  // 필요한 것만 생성/폐기
   late final ServiceLoginController _loginController;
   late final TabletLoginController _tabletController;
+  late final OutsideLoginController _outsideController;
 
   late final AnimationController _loginAnimationController;
   late final Animation<Offset> _offsetAnimation;
@@ -37,14 +43,14 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     // ✅ 모드에 따라 해당 컨트롤러만 초기화
     if (widget.mode == 'tablet') {
       _tabletController = TabletLoginController(context);
+      LoginDebugFirestoreLogger().log('✅ LoginScreen - TabletLoginController 생성 완료', level: 'success');
+    } else if (widget.mode == 'outside') {
+      _outsideController = OutsideLoginController(context);
+      LoginDebugFirestoreLogger().log('✅ LoginScreen - OutsideLoginController 생성 완료', level: 'success');
     } else {
       _loginController = ServiceLoginController(context);
+      LoginDebugFirestoreLogger().log('✅ LoginScreen - ServiceLoginController 생성 완료', level: 'success');
     }
-
-    LoginDebugFirestoreLogger().log(
-      '✅ LoginScreen - ${widget.mode == 'tablet' ? 'TabletLoginController' : 'LoginController'} 생성 완료',
-      level: 'success',
-    );
 
     _loginAnimationController = AnimationController(
       duration: const Duration(milliseconds: 700),
@@ -64,18 +70,16 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     );
 
     _loginAnimationController.forward();
-
-    LoginDebugFirestoreLogger().log(
-      '✅ 로그인 화면 애니메이션 시작',
-      level: 'success',
-    );
+    LoginDebugFirestoreLogger().log('✅ 로그인 화면 애니메이션 시작', level: 'success');
   }
 
   @override
   Widget build(BuildContext context) {
-    // ✅ 모드에 따라 폼 위젯 선택
+    // ✅ 모드별 폼 선택
     final Widget loginForm = (widget.mode == 'tablet')
         ? TabletLoginForm(controller: _tabletController)
+        : (widget.mode == 'outside')
+        ? OutsideLoginForm(controller: _outsideController)
         : ServiceLoginForm(controller: _loginController);
 
     return Scaffold(
@@ -87,7 +91,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
               opacity: _opacityAnimation,
               child: SlideTransition(
                 position: _offsetAnimation,
-                child: loginForm, // ✅ 교체 지점
+                child: loginForm,
               ),
             ),
           ),
@@ -103,6 +107,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     // ✅ 생성한 컨트롤러만 dispose
     if (widget.mode == 'tablet') {
       _tabletController.dispose();
+    } else if (widget.mode == 'outside') {
+      _outsideController.dispose();
     } else {
       _loginController.dispose();
     }

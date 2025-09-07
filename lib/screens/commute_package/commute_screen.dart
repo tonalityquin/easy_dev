@@ -7,21 +7,21 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../states/user/user_state.dart';
 import '../../utils/snackbar_helper.dart';
 import 'debugs/clock_in_debug_firestore_logger.dart';
-import 'clock_in_controller.dart';
+import 'commute_controller.dart';
 import 'sections/report_button_section.dart';
 import 'sections/work_button_section.dart';
 import 'sections/user_info_card_section.dart';
 import 'sections/header_widget_section.dart';
 
-class ClockInWorkScreen extends StatefulWidget {
-  const ClockInWorkScreen({super.key});
+class CommuteScreen extends StatefulWidget {
+  const CommuteScreen({super.key});
 
   @override
-  State<ClockInWorkScreen> createState() => _ClockInWorkScreenState();
+  State<CommuteScreen> createState() => _CommuteScreenState();
 }
 
-class _ClockInWorkScreenState extends State<ClockInWorkScreen> {
-  final controller = ClockInController();
+class _CommuteScreenState extends State<CommuteScreen> {
+  final controller = CommuteController();
   final logger = ClockInDebugFirestoreLogger();
 
   String? kakaoUrl;

@@ -3,14 +3,17 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'debugs/service_login_debug_firestore_logger.dart';
 import 'personal/service_personal_calendar.dart';
-import 'utils/service_login_network_service.dart';
-import 'utils/service_login_validate.dart';
+import 'utils/outside_login_network_service.dart';
+import 'utils/outside_login_validate.dart';
 import '../../../repositories/user/user_repository.dart';
 import '../../../states/area/area_state.dart';
 import '../../../states/user/user_state.dart';
 import '../../../utils/snackbar_helper.dart';
 
-class ServiceLoginController {
+// ✅ 추가: 라우트 상수 사용
+import '../../../routes.dart';
+
+class OutsideLoginController {
   final BuildContext context;
 
   final TextEditingController nameController = TextEditingController();
@@ -24,7 +27,7 @@ class ServiceLoginController {
   bool isLoading = false;
   bool obscurePassword = true;
 
-  ServiceLoginController(this.context);
+  OutsideLoginController(this.context);
 
   void initState() {
     LoginDebugFirestoreLogger().log('LoginController 초기화 시작', level: 'info');
@@ -38,9 +41,13 @@ class ServiceLoginController {
       );
 
       if (isLoggedIn && context.mounted) {
+        // ✅ 자동 로그인 시 외부 출퇴근 화면으로 진입
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          LoginDebugFirestoreLogger().log('자동 로그인: 홈 화면으로 이동', level: 'info');
-          Navigator.pushReplacementNamed(context, '/commute');
+          LoginDebugFirestoreLogger().log('자동 로그인: 외부 출퇴근 화면으로 이동', level: 'info');
+          Navigator.of(context).pushNamedAndRemoveUntil(
+            AppRoutes.commuteShortcut, // ← CommuteOutsideScreen
+            (route) => false, // 스택 비우기
+          );
         });
       }
     });
@@ -61,8 +68,8 @@ class ServiceLoginController {
 
     LoginDebugFirestoreLogger().log('로그인 시도: name="$name", phone="$phone"', level: 'called');
 
-    final phoneError = ServiceLoginValidate.validatePhone(phone);
-    final passwordError = ServiceLoginValidate.validatePassword(password);
+    final phoneError = OutsideLoginValidate.validatePhone(phone);
+    final passwordError = OutsideLoginValidate.validatePassword(password);
 
     if (name.isEmpty) {
       showFailedSnackbar(context, '이름을 입력해주세요.');
@@ -83,7 +90,7 @@ class ServiceLoginController {
     setState(() => isLoading = true);
     LoginDebugFirestoreLogger().log('로그인 처리 중...', level: 'info');
 
-    if (!await ServiceLoginNetworkService().isConnected()) {
+    if (!await OutsideLoginNetworkService().isConnected()) {
       if (context.mounted) {
         showFailedSnackbar(context, '인터넷 연결이 필요합니다.');
       }
@@ -137,8 +144,12 @@ class ServiceLoginController {
         areaState.updateArea(updatedUser.areas.firstOrNull ?? '');
 
         if (context.mounted) {
+          // ✅ 로그인 성공 시 외부 출퇴근 전용 화면으로 전환
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            Navigator.pushReplacementNamed(context, '/commute');
+            Navigator.of(context).pushNamedAndRemoveUntil(
+              AppRoutes.commuteShortcut, // ← CommuteOutsideScreen
+              (route) => false, // 스택 비움
+            );
           });
         }
       } else {

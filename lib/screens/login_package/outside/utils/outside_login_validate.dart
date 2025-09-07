@@ -1,4 +1,4 @@
-class ServiceLoginValidate {
+class OutsideLoginValidate {
   /// 전화번호 유효성 검사
   /// - 공백 제거 후 숫자 10~11자리 형식인지 확인
   /// - 유효하지 않으면 오류 메시지 반환, 유효하면 null 반환

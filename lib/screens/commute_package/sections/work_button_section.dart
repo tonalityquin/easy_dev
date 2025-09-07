@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../states/user/user_state.dart';
 import '../../../utils/blocking_dialog.dart';
-import '../clock_in_controller.dart';
+import '../commute_controller.dart';
 import '../debugs/clock_in_debug_firestore_logger.dart';
 
 class WorkButtonSection extends StatelessWidget {
-  final ClockInController controller;
+  final CommuteController controller;
   final ValueChanged<bool> onLoadingChanged;
 
   const WorkButtonSection({

@@ -6,7 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import 'routes.dart';
 import 'providers/providers.dart';
-import 'screens/clock_in_package/debugs/clock_in_debug_firestore_logger.dart';
+import 'screens/commute_package/debugs/clock_in_debug_firestore_logger.dart';
 import 'screens/login_package/service/debugs/service_login_debug_firestore_logger.dart';
 import 'theme.dart';
 import 'utils/init/dev_initializer.dart';
@@ -102,7 +102,10 @@ class MyApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         title: 'easyvalet',
         theme: appTheme,
-        initialRoute: AppRoutes.login,
+
+        // ✅ 초기 라우트를 분기 페이지로 변경
+        initialRoute: AppRoutes.selector,
+
         routes: appRoutes,
         onUnknownRoute: (_) => MaterialPageRoute(
           builder: (_) => const NotFoundPage(),

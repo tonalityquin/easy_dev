@@ -10,7 +10,7 @@ import '../type_package/debugs/firestore_logger.dart';
 import 'utils/clock_in_log_uploader.dart';
 import 'debugs/clock_in_debug_firestore_logger.dart';
 
-class ClockInController {
+class CommuteController {
   final _localLogger = ClockInDebugFirestoreLogger();
 
   void initialize(BuildContext context) {

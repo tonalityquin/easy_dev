@@ -1,32 +1,33 @@
 import 'package:flutter/material.dart';
-import 'screens/clock_in_package/clock_in_work_screen.dart';
+import 'screens/commute_outside_package/commute_outside_screen.dart';
+import 'screens/commute_package/commute_screen.dart';
 import 'screens/headquarter_page.dart';
 import 'screens/login_package/login_screen.dart';
 import 'screens/tablet_page.dart';
 import 'screens/type_page.dart';
-import 'screens/secondary_package/office_mode_package/location_management.dart';
+import 'screens/login_selector_page.dart';
 
 class AppRoutes {
-  static const login = '/login';
-  static const home = '/home';
-  static const typePage = '/type_page';
-  static const locationManagement = '/location_management';
+  static const selector = '/selector';
+  static const serviceLogin = '/service_login';
+  static const tabletLogin = '/tablet_login';
+  static const outsideLogin = '/outside_login';
+  static const commute = '/commute';
+  static const commuteShortcut = '/commute_shortcut';
   static const headquarterPage = '/headquarter_page';
-  static const tablePage = '/tablet_page';
+  static const typePage = '/type_page';
+  static const tablet = '/tablet_page';
 
-  // ✅ 추가: 태블릿 전용 로그인 라우트
-  static const loginTablet = '/login_tablet';
 }
 
 final Map<String, WidgetBuilder> appRoutes = {
-  // 기본: 서비스 로그인
-  AppRoutes.login: (context) => const LoginScreen(),
-
-  // ✅ 추가: 같은 LoginScreen을 사용하되 tablet 모드로
-  AppRoutes.loginTablet: (context) => const LoginScreen(mode: 'tablet'),
-  AppRoutes.tablePage: (context) => const TabletPage(),
-  AppRoutes.home: (context) => const ClockInWorkScreen(),
+  AppRoutes.selector: (context) => const LoginSelectorPage(),
+  AppRoutes.serviceLogin: (context) => const LoginScreen(),
+  AppRoutes.tabletLogin: (context) => const LoginScreen(mode: 'tablet'),
+  AppRoutes.outsideLogin: (context) => const LoginScreen(mode: 'outside'),
+  AppRoutes.commute: (context) => const CommuteScreen(),
+  AppRoutes.commuteShortcut: (context) => const CommuteOutsideScreen(),
   AppRoutes.headquarterPage: (context) => const HeadquarterPage(),
   AppRoutes.typePage: (context) => const TypePage(),
-  AppRoutes.locationManagement: (context) => const LocationManagement(),
+  AppRoutes.tablet: (context) => const TabletPage(),
 };

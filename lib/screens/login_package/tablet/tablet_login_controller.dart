@@ -62,7 +62,7 @@ class TabletLoginController {
       if (isLoggedIn && context.mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           TabletLoginDebugFirestoreLogger().log('자동 로그인(태블릿): TabletPage로 이동', level: 'info');
-          Navigator.pushReplacementNamed(context, AppRoutes.tablePage); // ✅ 변경: /tablet_page 로 이동
+          Navigator.pushReplacementNamed(context, AppRoutes.tablet); // ✅ 변경: /tablet_page 로 이동
         });
       }
     });
@@ -196,7 +196,7 @@ class TabletLoginController {
 
         if (context.mounted) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            Navigator.pushReplacementNamed(context, AppRoutes.tablePage); // ✅ 변경: TabletPage로 이동
+            Navigator.pushReplacementNamed(context, AppRoutes.tablet); // ✅ 변경: TabletPage로 이동
           });
         }
       } else {

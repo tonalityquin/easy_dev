@@ -276,7 +276,7 @@ class TabletTopNavigation extends StatelessWidget {
       );
 
       if (!context.mounted) return;
-      Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
+      Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.serviceLogin, (route) => false);
       showSuccessSnackbar(context, '로그아웃 되었습니다.');
     } catch (e) {
       if (context.mounted) {

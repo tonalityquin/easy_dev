@@ -79,7 +79,7 @@ class TabletPageController extends StatelessWidget {
       if (!context.mounted) return;
 
       // 로그인 화면으로 안전하게 라우팅 (기존 스택 제거)
-      Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
+      Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.serviceLogin, (route) => false);
 
       showSuccessSnackbar(context, '로그아웃 되었습니다.');
     } catch (e) {

@@ -69,7 +69,7 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
                 child: OutlinedButton.icon(
                   onPressed: () {
                     // ✅ named route 사용: LoginScreen(mode: 'service')로 진입
-                    Navigator.pushReplacementNamed(context, AppRoutes.login);
+                    Navigator.pushReplacementNamed(context, AppRoutes.serviceLogin);
                   },
                   icon: const Icon(Icons.manage_accounts, size: 22),
                   label: const Text('서비스 로그인으로 전환'),

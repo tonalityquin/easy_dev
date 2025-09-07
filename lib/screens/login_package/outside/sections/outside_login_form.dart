@@ -1,19 +1,18 @@
 import 'package:flutter/material.dart';
-import '../../../../routes.dart'; // ✅ AppRoutes 사용 (경로는 현재 파일 위치 기준)
 import '../belivus/service_cooperation_calendar.dart';
-import '../service_login_controller.dart';
+import '../outside_login_controller.dart';
 
-class ServiceLoginForm extends StatefulWidget {
-  final ServiceLoginController controller;
+class OutsideLoginForm extends StatefulWidget {
+  final OutsideLoginController controller;
 
-  const ServiceLoginForm({super.key, required this.controller});
+  const OutsideLoginForm({super.key, required this.controller});
 
   @override
-  State<ServiceLoginForm> createState() => _ServiceLoginFormState();
+  State<OutsideLoginForm> createState() => _OutsideLoginFormState();
 }
 
-class _ServiceLoginFormState extends State<ServiceLoginForm> {
-  late final ServiceLoginController _controller;
+class _OutsideLoginFormState extends State<OutsideLoginForm> {
+  late final OutsideLoginController _controller;
 
   @override
   void initState() {
@@ -63,40 +62,14 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
 
               const SizedBox(height: 48),
 
-              // ▼ 태블릿 로그인으로 전환 (현재 화면을 완전히 대체)
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    // ✅ named route 사용: LoginScreen(mode: 'tablet')로 진입
-                    Navigator.pushReplacementNamed(
-                      context,
-                      AppRoutes.tabletLogin,
-                    );
-                  },
-                  icon: const Icon(Icons.tablet, size: 22),
-                  label: const Text('태블릿 로그인으로 전환'),
-                  style: OutlinedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.black,
-                    minimumSize: const Size.fromHeight(55),
-                    padding: EdgeInsets.zero,
-                    side: const BorderSide(color: Colors.grey, width: 1.0),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                ),
-              ),
-
+              // ▼ 입력 폼
               const SizedBox(height: 16),
 
               TextField(
                 controller: _controller.nameController,
                 focusNode: _controller.nameFocus,
                 textInputAction: TextInputAction.next,
-                onSubmitted: (_) =>
-                    FocusScope.of(context).requestFocus(_controller.phoneFocus),
+                onSubmitted: (_) => FocusScope.of(context).requestFocus(_controller.phoneFocus),
                 decoration: _controller.inputDecoration(
                   label: "이름",
                   icon: Icons.person,
@@ -109,10 +82,8 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
                 focusNode: _controller.phoneFocus,
                 keyboardType: TextInputType.phone,
                 textInputAction: TextInputAction.next,
-                onChanged: (value) =>
-                    _controller.formatPhoneNumber(value, setState),
-                onSubmitted: (_) =>
-                    FocusScope.of(context).requestFocus(_controller.passwordFocus),
+                onChanged: (value) => _controller.formatPhoneNumber(value, setState),
+                onSubmitted: (_) => FocusScope.of(context).requestFocus(_controller.passwordFocus),
                 decoration: _controller.inputDecoration(
                   label: "전화번호",
                   icon: Icons.phone,
@@ -131,12 +102,9 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
                   icon: Icons.lock,
                   suffixIcon: IconButton(
                     icon: Icon(
-                      _controller.obscurePassword
-                          ? Icons.visibility_off
-                          : Icons.visibility,
+                      _controller.obscurePassword ? Icons.visibility_off : Icons.visibility,
                     ),
-                    onPressed: () =>
-                        setState(() => _controller.togglePassword()),
+                    onPressed: () => setState(() => _controller.togglePassword()),
                   ),
                 ),
               ),
@@ -164,8 +132,7 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  onPressed:
-                  _controller.isLoading ? null : _onLoginButtonPressed,
+                  onPressed: _controller.isLoading ? null : _onLoginButtonPressed,
                 ),
               ),
 
