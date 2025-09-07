@@ -24,10 +24,13 @@ class NumKeypadForTabletPlateSearch extends StatefulWidget {
   });
 
   @override
-  State<NumKeypadForTabletPlateSearch> createState() => _NumKeypadForTabletPlateSearchState();
+  State<NumKeypadForTabletPlateSearch> createState() =>
+      _NumKeypadForTabletPlateSearchState();
 }
 
-class _NumKeypadForTabletPlateSearchState extends State<NumKeypadForTabletPlateSearch> with TickerProviderStateMixin {
+class _NumKeypadForTabletPlateSearchState
+    extends State<NumKeypadForTabletPlateSearch>
+    with TickerProviderStateMixin {
   final Map<String, AnimationController> _controllers = {};
   final Map<String, bool> _isPressed = {};
 
@@ -70,7 +73,7 @@ class _NumKeypadForTabletPlateSearchState extends State<NumKeypadForTabletPlateS
     if (widget.enableDigitModeSwitch) {
       return ['두자리', '0', '세자리'];
     } else if (widget.onReset != null) {
-      return ['처음', '0', '처음'];
+      return ['처음', '0', '검색'];
     } else {
       return ['', '0', ''];
     }
@@ -90,7 +93,7 @@ class _NumKeypadForTabletPlateSearchState extends State<NumKeypadForTabletPlateS
 
     _controllers.putIfAbsent(
       key,
-      () => AnimationController(
+          () => AnimationController(
         duration: const Duration(milliseconds: 80),
         vsync: this,
         lowerBound: 0.0,
@@ -140,10 +143,10 @@ class _NumKeypadForTabletPlateSearchState extends State<NumKeypadForTabletPlateS
                 child: Text(
                   key,
                   style: (widget.textStyle ??
-                          const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w500,
-                          ))
+                      const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w500,
+                      ))
                       .copyWith(color: Colors.black87),
                 ),
               ),
@@ -164,8 +167,15 @@ class _NumKeypadForTabletPlateSearchState extends State<NumKeypadForTabletPlateS
     } else if (key == '처음') {
       widget.onReset?.call();
       return;
+    } else if (key == '검색') {
+      // 길이가 유효할 때만 검색 실행
+      if (widget.controller.text.length == widget.maxLength) {
+        Future.microtask(() => widget.onComplete?.call());
+      }
+      return;
     }
 
+    // 숫자 입력 처리
     if (widget.controller.text.length < widget.maxLength) {
       widget.controller.text += key;
       if (widget.controller.text.length == widget.maxLength) {
