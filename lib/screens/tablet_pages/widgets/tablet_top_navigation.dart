@@ -24,11 +24,11 @@ class TabletTopNavigation extends StatelessWidget {
     final selectedArea = context.watch<AreaState>().currentArea;
 
     return Material(
-      color: Colors.transparent,
+      color: Colors.white, // 네비게이션 배경 흰색
       child: InkWell(
         onTap: isAreaSelectable ? () => _openTopNavDialog(context) : null,
-        splashColor: Colors.grey.withOpacity(0.2),
-        highlightColor: Colors.grey.withOpacity(0.1),
+        splashColor: Colors.grey.withOpacity(0.12),
+        highlightColor: Colors.grey.withOpacity(0.06),
         child: SizedBox(
           width: double.infinity,
           height: kToolbarHeight,
@@ -58,20 +58,79 @@ class TabletTopNavigation extends StatelessWidget {
 
   Future<void> _openTopNavDialog(BuildContext context) async {
     final area = context.read<AreaState>().currentArea;
+    final padMode = context.read<PadModeState>().mode;
+
+    Widget modeButton({
+      required PadMode target,
+      required String title,
+      required String subtitle,
+      required IconData icon,
+      required Color background, // 각 버튼 고유 배경색
+    }) {
+      final bool selected = padMode == target;
+      return SizedBox(
+        width: double.infinity,
+        child: OutlinedButton(
+          onPressed: () {
+            context.read<PadModeState>().setMode(target);
+            Navigator.of(context, rootNavigator: true).pop();
+          },
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size.fromHeight(56),
+            side: BorderSide(color: selected ? Colors.blue : Colors.grey.shade400, width: selected ? 1.5 : 1.0),
+            backgroundColor: background,
+            foregroundColor: Colors.black,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: Colors.blueAccent),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: Colors.black87,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              if (selected) ...[
+                const SizedBox(width: 8),
+                const Icon(Icons.check_circle, color: Colors.blue),
+              ],
+            ],
+          ),
+        ),
+      );
+    }
 
     await showDialog<void>(
       context: context,
       barrierDismissible: true,
       builder: (dialogCtx) {
-        final isSmallPad = dialogCtx.watch<PadModeState>().isSmall;
-
         return Dialog(
           insetPadding: const EdgeInsets.all(16),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          backgroundColor: Colors.white, // ✅ 다이얼로그 배경 흰색 고정
           child: ConstrainedBox(
             constraints: BoxConstraints(
               maxWidth: 520,
-              maxHeight: MediaQuery.of(dialogCtx).size.height * 0.9,
+              maxHeight: MediaQuery.of(dialogCtx).size.height * 0.85,
             ),
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
@@ -120,57 +179,56 @@ class TabletTopNavigation extends StatelessWidget {
                     ),
                   ),
 
-                  const SizedBox(height: 16),
-                  // 패드 모드 섹션
-                  Row(
-                    children: const [
-                      Icon(Icons.dialpad, size: 18, color: Colors.indigo),
-                      SizedBox(width: 8),
-                      Text('패드 모드', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 20),
 
-                  // Big Pad 버튼 (기본값)
-                  _PadModeButton(
-                    label: 'Big Pad 모드',
-                    subtitle: '좌: 출차요청 목록  ·  우: 검색/키패드',
-                    icon: Icons.grid_view_rounded,
-                    selected: !isSmallPad,
-                    onPressed: () {
-                      dialogCtx.read<PadModeState>().setMode(PadMode.big);
-                      Navigator.of(dialogCtx).pop();
-                      showSuccessSnackbar(context, 'Big Pad 모드로 전환되었습니다.');
-                    },
+                  // 화면 모드 섹션 타이틀
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '화면 모드',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey.shade700,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 8),
 
-                  // Small Pad 버튼 (키패드 100%)
-                  _PadModeButton(
-                    label: 'Small Pad 모드',
-                    subtitle: '키패드 화면 100%  ·  결과는 다이얼로그 표시',
-                    icon: Icons.dialpad_rounded,
-                    selected: isSmallPad,
-                    onPressed: () {
-                      dialogCtx.read<PadModeState>().setMode(PadMode.small);
-                      Navigator.of(dialogCtx).pop();
-                      showSuccessSnackbar(context, 'Small Pad 모드로 전환되었습니다.');
-                    },
+                  // ▶ 각 버튼 다른 배경색
+                  modeButton(
+                    target: PadMode.big,
+                    title: 'Big Pad (기본)',
+                    subtitle: '왼쪽: 출차 요청 / 오른쪽: 검색 + 키패드(하단 45%)',
+                    icon: Icons.dashboard_customize_outlined,
+                    background: Colors.blue.shade50,
+                  ),
+                  const SizedBox(height: 8),
+                  modeButton(
+                    target: PadMode.small,
+                    title: 'Small Pad',
+                    subtitle: '왼쪽 유지 / 오른쪽: 키패드가 패널 높이 100%',
+                    icon: Icons.keyboard_alt_outlined,
+                    background: Colors.green.shade50,
+                  ),
+                  const SizedBox(height: 8),
+                  modeButton(
+                    target: PadMode.show,
+                    title: 'Show',
+                    subtitle: '왼쪽 패널만 전체 화면(출차 요청 차량만 표시)',
+                    icon: Icons.view_list_outlined,
+                    background: Colors.amber.shade50,
                   ),
 
                   const SizedBox(height: 20),
-                  const Divider(height: 1),
 
-                  const SizedBox(height: 16),
-
-                  // 로그아웃 버튼
+                  // 로그아웃 버튼 (기존 스타일 유지)
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
                       icon: const Icon(Icons.logout),
                       label: const Text('로그아웃'),
                       onPressed: () async {
-                        // 다이얼로그 닫고 로그아웃 진행
                         Navigator.of(dialogCtx).pop();
                         await _logout(context);
                       },
@@ -187,7 +245,6 @@ class TabletTopNavigation extends StatelessWidget {
 
                   const SizedBox(height: 8),
 
-                  // 닫기
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton(
@@ -211,94 +268,20 @@ class TabletTopNavigation extends StatelessWidget {
         message: '로그아웃 중입니다...',
         task: () async {
           final userState = Provider.of<UserState>(context, listen: false);
-
-          // Foreground service 중지
           await FlutterForegroundTask.stopService();
-
-          // 근무 상태 갱신(필요 시)
           await userState.isHeWorking();
           await Future.delayed(const Duration(seconds: 1));
-
-          // 로컬 상태/저장소 초기화
           await userState.clearUserToPhone();
         },
       );
 
       if (!context.mounted) return;
-
-      // 로그인 화면으로 안전하게 라우팅 (기존 스택 제거)
       Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
-
       showSuccessSnackbar(context, '로그아웃 되었습니다.');
     } catch (e) {
       if (context.mounted) {
         showFailedSnackbar(context, '로그아웃 실패: $e');
       }
     }
-  }
-}
-
-class _PadModeButton extends StatelessWidget {
-  final String label;
-  final String? subtitle;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onPressed;
-
-  const _PadModeButton({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.onPressed,
-    this.subtitle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final style = OutlinedButton.styleFrom(
-      minimumSize: const Size(double.infinity, 48),
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
-      backgroundColor: selected ? Colors.indigo.withOpacity(0.08) : Colors.white,
-      foregroundColor: Colors.black87,
-      side: BorderSide(color: selected ? Colors.indigo : Colors.grey.shade400, width: 1.2),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    );
-
-    return OutlinedButton(
-      style: style,
-      onPressed: onPressed,
-      child: Row(
-        children: [
-          Icon(icon, color: selected ? Colors.indigo : Colors.black54),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: selected ? Colors.indigo.shade700 : Colors.black87,
-                    )),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle!,
-                    style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Icon(
-            selected ? Icons.radio_button_checked : Icons.radio_button_off,
-            color: selected ? Colors.indigo : Colors.grey,
-            size: 20,
-          ),
-        ],
-      ),
-    );
   }
 }

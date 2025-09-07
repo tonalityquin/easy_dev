@@ -10,6 +10,7 @@ import '../states/plate/plate_state.dart';
 import 'tablet_pages/tablet_left_panel.dart';
 import 'tablet_pages/tablet_right_panel.dart';
 import 'tablet_pages/widgets/tablet_top_navigation.dart';
+import 'tablet_pages/states/pad_mode_state.dart';
 
 class TabletPage extends StatefulWidget {
   const TabletPage({super.key});
@@ -21,20 +22,14 @@ class TabletPage extends StatefulWidget {
 class _TabletPageState extends State<TabletPage> {
   StreamSubscription<PlateModel>? _removedSub;
 
-  // 배너에 표시할 ‘출차 완료로 추정되는’ 번호판 칩(로컬, 중복 방지)
   final List<String> _completedChips = <String>[];
   final Set<String> _completedChipSet = <String>{};
-
-  // 칩의 선택 상태(선택 시 X가 보이고, 다시 선택 해제하면 X 숨김)
   final Set<String> _selectedChips = <String>{};
-
-  String? _areaCache; // 지역 변경 시 배너 칩 초기화를 위한 캐시
+  String? _areaCache;
 
   void _addCompletedChip(String plateNumber) {
     if (_completedChipSet.add(plateNumber)) {
-      setState(() {
-        _completedChips.insert(0, plateNumber); // 최신이 앞에 오도록
-      });
+      setState(() => _completedChips.insert(0, plateNumber));
     }
   }
 
@@ -42,7 +37,7 @@ class _TabletPageState extends State<TabletPage> {
     if (_completedChipSet.remove(plateNumber)) {
       setState(() {
         _completedChips.remove(plateNumber);
-        _selectedChips.remove(plateNumber); // 함께 정리
+        _selectedChips.remove(plateNumber);
       });
     }
   }
@@ -50,9 +45,9 @@ class _TabletPageState extends State<TabletPage> {
   void _toggleChipSelection(String plateNumber) {
     setState(() {
       if (_selectedChips.contains(plateNumber)) {
-        _selectedChips.remove(plateNumber); // 선택 해제 → X 숨김
+        _selectedChips.remove(plateNumber);
       } else {
-        _selectedChips.add(plateNumber); // 선택 → X 표시
+        _selectedChips.add(plateNumber);
       }
     });
   }
@@ -68,13 +63,11 @@ class _TabletPageState extends State<TabletPage> {
   @override
   void initState() {
     super.initState();
-    // 이벤트 기반 1회 토스트/스낵바(보조): 출차요청에서 사라진 번호판 알림
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final plateState = context.read<PlateState>();
       final areaState = context.read<AreaState>();
 
       _removedSub = plateState.onDepartureRequestRemoved.listen((removed) {
-        // 현재 화면의 지역과 동일한 경우에만 보조 알림 & 배너 반영
         final currentArea = areaState.currentArea;
         if (!mounted || removed.area != currentArea) return;
 
@@ -85,7 +78,6 @@ class _TabletPageState extends State<TabletPage> {
             duration: const Duration(seconds: 3),
           ),
         );
-
         _addCompletedChip(removed.plateNumber);
       });
     });
@@ -99,10 +91,9 @@ class _TabletPageState extends State<TabletPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Area 변경 시 패널들이 반응하도록 select 사용 (null 방지)
     final area = context.select<AreaState, String?>((s) => s.currentArea) ?? '';
+    final padMode = context.select<PadModeState, PadMode>((s) => s.mode);
 
-    // 지역이 바뀌면 배너 칩은 혼동 방지를 위해 초기화
     if (_areaCache != area) {
       _areaCache = area;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -113,20 +104,16 @@ class _TabletPageState extends State<TabletPage> {
     return Scaffold(
       backgroundColor: Colors.white,
 
-      // ✅ 앱바에 TabletTopNavigation 삽입 (탭 시 다이얼로그 열림)
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(kToolbarHeight),
         child: const SafeArea(
           bottom: false,
-          child: TabletTopNavigation(
-            isAreaSelectable: true, // 탭 시 다이얼로그가 열리도록 활성화
-          ),
+          child: TabletTopNavigation(isAreaSelectable: true),
         ),
       ),
 
-      // ✅ 본문(상단 고정 안내/칩 + 항상 2열 레이아웃 유지)
       body: SafeArea(
-        top: false, // 상단 SafeArea는 appBar가 처리하므로 false
+        top: false,
         child: Column(
           children: [
             _StickyNoticeBar(
@@ -137,7 +124,19 @@ class _TabletPageState extends State<TabletPage> {
             ),
 
             Expanded(
-              child: Row(
+              child: padMode == PadMode.show
+              // ▶ show 모드: 왼쪽 패널만 전체 화면
+                  ? ColoredBox(
+                color: const Color(0xFFF7F8FA),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: LeftPaneDeparturePlates(
+                    key: ValueKey('left-pane-$area-show'),
+                  ),
+                ),
+              )
+              // ▶ big/small: 2열 유지 (small은 우측 패널 내부에서 키패드 100%)
+                  : Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // ⬅️ 왼쪽 패널
@@ -158,9 +157,7 @@ class _TabletPageState extends State<TabletPage> {
                   // ➡️ 오른쪽 패널
                   Expanded(
                     child: ClipRRect(
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(12),
-                      ),
+                      borderRadius: const BorderRadius.only(topLeft: Radius.circular(12)),
                       child: RightPaneSearchPanel(
                         key: ValueKey('right-pane-$area'),
                         area: area,
@@ -174,7 +171,6 @@ class _TabletPageState extends State<TabletPage> {
         ),
       ),
 
-      // ✅ 하단 펠리컨
       bottomNavigationBar: SafeArea(
         top: false,
         child: Column(
@@ -195,7 +191,6 @@ class _TabletPageState extends State<TabletPage> {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-/* 앱바 아래 상시 노출 안내/칩 배너 */
 class _StickyNoticeBar extends StatelessWidget {
   final List<String> plates;
   final Set<String> selectedPlates;
@@ -220,9 +215,7 @@ class _StickyNoticeBar extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(color: Colors.amber.shade200),
-          ),
+          border: Border(bottom: BorderSide(color: Colors.amber.shade200)),
         ),
         child: Row(
           children: [
@@ -264,11 +257,7 @@ class _StickyNoticeBar extends StatelessWidget {
               )
                   : const Text(
                 '출차 요청 목록에서 방금 누른 번호가 사라졌다면, 출차 완료 처리된 것입니다.',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Color(0xFF5D4037),
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(fontSize: 13, color: Color(0xFF5D4037), fontWeight: FontWeight.w600),
                 overflow: TextOverflow.ellipsis,
                 maxLines: 2,
               ),
