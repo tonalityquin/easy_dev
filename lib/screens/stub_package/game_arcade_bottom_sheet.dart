@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'game_package/tetris.dart';
+import 'game_package/minesweeper.dart';
 
 class GameArcadeBottomSheet extends StatelessWidget {
   final BuildContext rootContext; // 바텀시트 밖으로 네비게이션할 때 사용
@@ -86,23 +87,27 @@ class GameArcadeBottomSheet extends StatelessWidget {
                       title: Text(g.title, style: const TextStyle(fontWeight: FontWeight.w600)),
                       subtitle: Text(g.subtitle),
                       onTap: () {
-                        if (g.route == _GameRoute.tetris) {
-                          // 바텀시트를 닫고 → 테트리스 화면으로 이동
-                          Navigator.of(context).pop();
-                          Future.microtask(() {
-                            Navigator.of(rootContext).push(
-                              MaterialPageRoute(builder: (_) => const Tetris()),
-                            );
-                            // ※ 네임드 라우트 사용 시:
-                            // Navigator.of(rootContext).pushNamed('/tetris');
-                          });
-                        } else {
-                          // 임의의 게임: 준비중 안내
-                          Navigator.of(context).pop();
-                          ScaffoldMessenger.of(rootContext).showSnackBar(
-                            SnackBar(content: Text('「${g.title}」는 준비 중입니다.')),
-                          );
-                        }
+                        // 바텀시트를 닫고 → 게임 화면으로 이동
+                        Navigator.of(context).pop();
+                        Future.microtask(() {
+                          switch (g.route) {
+                            case _GameRoute.tetris:
+                              Navigator.of(rootContext).push(
+                                MaterialPageRoute(builder: (_) => const Tetris()),
+                              );
+                              break;
+                            case _GameRoute.minesweeper:
+                              Navigator.of(rootContext).push(
+                                MaterialPageRoute(builder: (_) => const Minesweeper()),
+                              );
+                              break;
+                            case _GameRoute.comingSoon:
+                              ScaffoldMessenger.of(rootContext).showSnackBar(
+                                SnackBar(content: Text('「${g.title}」는 준비 중입니다.')),
+                              );
+                              break;
+                          }
+                        });
                       },
                     );
                   },
@@ -117,10 +122,10 @@ class GameArcadeBottomSheet extends StatelessWidget {
 }
 
 // ──────────────────────────────────────────────────────────────
-// 임의의 게임 목록 정의 (하나는 테트리스)
+// 임의의 게임 목록 정의 (테트리스 + 스네이크 실행 가능)
 // ──────────────────────────────────────────────────────────────
 
-enum _GameRoute { tetris, comingSoon }
+enum _GameRoute { tetris, minesweeper, comingSoon }
 
 class _GameItem {
   final String title;
@@ -144,41 +149,18 @@ const _games = <_GameItem>[
   _GameItem(
     title: '테트리스',
     subtitle: '클래식 드롭 퍼즐',
-    icon: Icons.extension, // 블록 느낌
+    icon: Icons.extension,
+    // 블록 느낌
     bg: Color(0xFFE0F7FA),
     fg: Color(0xFF006064),
     route: _GameRoute.tetris,
   ),
   _GameItem(
-    title: '스네이크',
-    subtitle: '아케이드 클래식',
-    icon: Icons.timeline_rounded,
-    bg: Color(0xFFE8F5E9),
-    fg: Color(0xFF1B5E20),
-    route: _GameRoute.comingSoon,
-  ),
-  _GameItem(
-    title: '2048',
-    subtitle: '숫자 합치기 퍼즐',
-    icon: Icons.calculate_rounded,
-    bg: Color(0xFFFFF3E0),
-    fg: Color(0xFFE65100),
-    route: _GameRoute.comingSoon,
-  ),
-  _GameItem(
-    title: '브릭 브레이커',
-    subtitle: '벽돌 깨기',
-    icon: Icons.sports_baseball_rounded,
-    bg: Color(0xFFEDE7F6),
-    fg: Color(0xFF4527A0),
-    route: _GameRoute.comingSoon,
-  ),
-  _GameItem(
-    title: '미로 탈출',
-    subtitle: '길을 찾아라',
-    icon: Icons.alt_route_rounded,
+    title: '지뢰찾기',
+    subtitle: '롱프레스 = 깃발, 첫칸 보호',
+    icon: Icons.grid_on,
     bg: Color(0xFFF3E5F5),
-    fg: Color(0xFF6A1B9A),
-    route: _GameRoute.comingSoon,
+    fg: Color(0xFF4A148C),
+    route: _GameRoute.minesweeper,
   ),
 ];
