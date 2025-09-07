@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'game_package/tetris.dart';
 import 'game_package/minesweeper.dart';
+import 'game_package/lights_out.dart';
+import 'game_package/netwalk.dart';
 
 class GameArcadeBottomSheet extends StatelessWidget {
   final BuildContext rootContext; // 바텀시트 밖으로 네비게이션할 때 사용
@@ -84,7 +86,10 @@ class GameArcadeBottomSheet extends StatelessWidget {
                         backgroundColor: g.bg,
                         child: Icon(g.icon, color: g.fg),
                       ),
-                      title: Text(g.title, style: const TextStyle(fontWeight: FontWeight.w600)),
+                      title: Text(
+                        g.title,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
                       subtitle: Text(g.subtitle),
                       onTap: () {
                         // 바텀시트를 닫고 → 게임 화면으로 이동
@@ -99,6 +104,16 @@ class GameArcadeBottomSheet extends StatelessWidget {
                             case _GameRoute.minesweeper:
                               Navigator.of(rootContext).push(
                                 MaterialPageRoute(builder: (_) => const Minesweeper()),
+                              );
+                              break;
+                            case _GameRoute.lightsOut:
+                              Navigator.of(rootContext).push(
+                                MaterialPageRoute(builder: (_) => const LightsOut()),
+                              );
+                              break;
+                            case _GameRoute.netwalk:
+                              Navigator.of(rootContext).push(
+                                MaterialPageRoute(builder: (_) => const Netwalk()),
                               );
                               break;
                             case _GameRoute.comingSoon:
@@ -122,10 +137,10 @@ class GameArcadeBottomSheet extends StatelessWidget {
 }
 
 // ──────────────────────────────────────────────────────────────
-// 임의의 게임 목록 정의 (테트리스 + 스네이크 실행 가능)
+// 게임 목록 정의 (테트리스 + 지뢰찾기 + 라이트아웃 + Netwalk)
 // ──────────────────────────────────────────────────────────────
 
-enum _GameRoute { tetris, minesweeper, comingSoon }
+enum _GameRoute { tetris, minesweeper, lightsOut, netwalk, comingSoon }
 
 class _GameItem {
   final String title;
@@ -149,8 +164,7 @@ const _games = <_GameItem>[
   _GameItem(
     title: '테트리스',
     subtitle: '클래식 드롭 퍼즐',
-    icon: Icons.extension,
-    // 블록 느낌
+    icon: Icons.extension, // 블록 느낌
     bg: Color(0xFFE0F7FA),
     fg: Color(0xFF006064),
     route: _GameRoute.tetris,
@@ -162,5 +176,21 @@ const _games = <_GameItem>[
     bg: Color(0xFFF3E5F5),
     fg: Color(0xFF4A148C),
     route: _GameRoute.minesweeper,
+  ),
+  _GameItem(
+    title: 'Lights Out',
+    subtitle: '불을 모두 꺼라 (논리 퍼즐)',
+    icon: Icons.lightbulb,
+    bg: Color(0xFFFFF9C4),
+    fg: Color(0xFFF57F17),
+    route: _GameRoute.lightsOut,
+  ),
+  _GameItem(
+    title: 'Netwalk',
+    subtitle: '회로 연결 퍼즐(난이도↑)',
+    icon: Icons.device_hub,
+    bg: Color(0xFFE8F5E9),
+    fg: Color(0xFF1B5E20),
+    route: _GameRoute.netwalk,
   ),
 ];

@@ -24,6 +24,37 @@ class RoadmapItem {
 
 const List<RoadmapItem> _roadmapData = [
   RoadmapItem(
+    load: RoadmapLoad.heavy,
+    title: '태블릿 모드 작업',
+    notes: [
+      '페이지 생성',
+      '모드 생성',
+      '라우트 연결',
+    ],
+    status: RoadmapStatus.done,
+  ),
+  RoadmapItem(
+    load: RoadmapLoad.heavy,
+    title: '출퇴근 모드 작업',
+    notes: [
+      '페이지 생성',
+      '모드 생성',
+      '라우트 연결',
+    ],
+    status: RoadmapStatus.done,
+  ),
+  RoadmapItem(
+    load: RoadmapLoad.heavy,
+    title: '종합 라우트 페이지 설계',
+    notes: [
+      '페이지 생성',
+      '모드 생성',
+      '라우트 연결',
+      '추가 기능 및 로직들 삽입',
+    ],
+    status: RoadmapStatus.done,
+  ),
+  RoadmapItem(
     load: RoadmapLoad.medium,
     title: 'API 외부 삽입 로직 강화',
     notes: [
@@ -41,7 +72,15 @@ const List<RoadmapItem> _roadmapData = [
       '페이지 별로 FAQ 키워드 단어 삽입',
       '사용자가 어려움 혹은 오류 발생 시 키워드를 검색해서 대처할 수 있도록',
     ],
-    status: RoadmapStatus.planned,
+    status: RoadmapStatus.inProgress,
+  ),
+  RoadmapItem(
+    load: RoadmapLoad.light,
+    title: '뒤로가기 앱 꺼짐 방지 로직 재삽입',
+    notes: [
+      '모든 화면에서 뒤로가기 시 앱 꺼짐 로직 방지 코드 점검 및 삽입',
+    ],
+    status: RoadmapStatus.inProgress,
   ),
   RoadmapItem(
     load: RoadmapLoad.light,
@@ -49,7 +88,7 @@ const List<RoadmapItem> _roadmapData = [
     notes: [
       'Goal.개발자 모드 페이지에서 각 지역 별로 limit 지정',
     ],
-    status: RoadmapStatus.planned,
+    status: RoadmapStatus.inProgress,
   ),
   RoadmapItem(
     load: RoadmapLoad.light,
@@ -57,7 +96,7 @@ const List<RoadmapItem> _roadmapData = [
     notes: [
       '번호판 생성 수정 등 실시간에 민감한 로직에 방어 코드 삽입',
     ],
-    status: RoadmapStatus.planned,
+    status: RoadmapStatus.inProgress,
   ),
   RoadmapItem(
     load: RoadmapLoad.light,
@@ -66,7 +105,7 @@ const List<RoadmapItem> _roadmapData = [
       '커뮤니티 내 디버그 액션 카드로 통일',
       '문제 발생 시에만 메서드 혹은 함수 알림',
     ],
-    status: RoadmapStatus.inProgress,
+    status: RoadmapStatus.planned,
   ),
   RoadmapItem(
     load: RoadmapLoad.heavy,
@@ -76,7 +115,7 @@ const List<RoadmapItem> _roadmapData = [
       '- 핸드폰에서 마이발렛을 기본 프로그램으로 인식하지 않음',
       'Goal.출퇴근 & 휴게시간 저장을 외부에서 할 수 있도록',
     ],
-    status: RoadmapStatus.inProgress,
+    status: RoadmapStatus.planned,
   ),
   RoadmapItem(
     load: RoadmapLoad.medium,

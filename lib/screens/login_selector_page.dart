@@ -64,7 +64,7 @@ class _LoginSelectorPageState extends State<LoginSelectorPage> {
           statusBarBrightness: Brightness.light,
         ),
         title: Text(
-          'Home',
+          'Pelican Hubs',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.2,
@@ -540,7 +540,7 @@ class _ParkingCard extends StatelessWidget {
         // 주차 아이콘
         bg: cs.primaryContainer,
         iconColor: cs.onPrimaryContainer,
-        titleWidget: Text('주차 관제 시스템', style: titleStyle, textAlign: TextAlign.center),
+        titleWidget: Text('주차 관제 시스템(공사중)', style: titleStyle, textAlign: TextAlign.center),
         onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.parking), // TODO: routes 등록
       ),
     );
