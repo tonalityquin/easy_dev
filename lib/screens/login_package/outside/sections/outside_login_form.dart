@@ -42,7 +42,7 @@ class _OutsideLoginFormState extends State<OutsideLoginForm> {
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Column(
             children: [
-              const SizedBox(height: 96),
+              const SizedBox(height: 12),
 
               GestureDetector(
                 onTap: () {
@@ -55,15 +55,12 @@ class _OutsideLoginFormState extends State<OutsideLoginForm> {
                   );
                 },
                 child: SizedBox(
-                  height: 240,
+                  height: 360,
                   child: Image.asset('assets/images/easyvalet_logo_car.png'),
                 ),
               ),
 
-              const SizedBox(height: 48),
-
-              // ▼ 입력 폼
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
 
               TextField(
                 controller: _controller.nameController,
@@ -115,7 +112,7 @@ class _OutsideLoginFormState extends State<OutsideLoginForm> {
                 child: ElevatedButton.icon(
                   icon: const Icon(Icons.login),
                   label: Text(
-                    _controller.isLoading ? '로딩 중...' : '로그인',
+                    _controller.isLoading ? '로딩 중...' : '출퇴근 로그인',
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -138,10 +135,18 @@ class _OutsideLoginFormState extends State<OutsideLoginForm> {
 
               const SizedBox(height: 1),
 
+              // ▼ 펠리컨: 탭하면 LoginSelectorPage로 복귀
               Center(
-                child: SizedBox(
-                  height: 80,
-                  child: Image.asset('assets/images/pelican.png'),
+                child: InkWell(
+                  onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
+                    '/selector', // AppRoutes.selector 사용 시 import 후 교체 가능
+                        (route) => false,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                  child: SizedBox(
+                    height: 80,
+                    child: Image.asset('assets/images/pelican.png'),
+                  ),
                 ),
               ),
             ],

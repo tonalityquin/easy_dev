@@ -177,11 +177,12 @@ class TabletLoginController {
           startTime: tablet.startTime,
         );
 
-        // SharedPreferences(핸들/지역키)도 직접 보존
+        // SharedPreferences(핸들/지역키/모드)도 직접 보존
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('handle', handle);
         await prefs.setString('selectedArea', areaName); // 한글 지역명
         await prefs.setString('englishSelectedAreaName', englishAreaName);
+        await prefs.setString('mode', 'tablet'); // ✅ 추가: 로그인 모드 저장
 
         // 상태 업데이트: tablet_accounts 기준으로 저장/업서트 + prefs 저장 + 목록 리로드
         await userState.updateLoginTablet(userAsTablet);

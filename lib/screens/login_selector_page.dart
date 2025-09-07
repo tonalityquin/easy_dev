@@ -3,35 +3,87 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../routes.dart';
 
-class LoginSelectorPage extends StatelessWidget {
+class LoginSelectorPage extends StatefulWidget {
   const LoginSelectorPage({super.key});
+
+  @override
+  State<LoginSelectorPage> createState() => _LoginSelectorPageState();
+}
+
+class _LoginSelectorPageState extends State<LoginSelectorPage> {
+  String? _savedMode; // 'service' | 'outside' | 'tablet' | null(미저장)
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreMode();
+  }
+
+  Future<void> _restoreMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _savedMode = prefs.getString('mode'); // service / outside / tablet / null
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    // ✅ 페이지(공간) 단위로 명시적 그룹 구성
-    // 1페이지: 서비스 + 출퇴근
-    // 2페이지: 태블릿 + 본사/관리자
-    final List<List<Widget>> pages = const [
-      [_ServiceCard(), _ClockCard()],
-      [_TabletCard(), _HeadquarterCard()],
+    // 저장된 모드가 있으면 해당 카드만 선택 가능
+    final serviceEnabled = _savedMode == null || _savedMode == 'service';
+    final outsideEnabled = _savedMode == null || _savedMode == 'outside';
+    final tabletEnabled = _savedMode == null || _savedMode == 'tablet';
+
+    final List<List<Widget>> pages = [
+      [
+        _ServiceCard(enabled: serviceEnabled),
+        _ClockCard(enabled: outsideEnabled),
+      ],
+      [
+        _TabletCard(enabled: tabletEnabled),
+        const _ParkingCard(), // ▼ 새 카드 2
+      ],
+      [
+        const _FaqCard(), // ▼ 새 카드 1
+        const _CommunityCard(), // 본사/관리자 카드는 항상 진입 가능
+      ],
     ];
 
     return Scaffold(
+      backgroundColor: Colors.white, // 전체 배경 화이트
       appBar: AppBar(
-        title: const Text('로그인 방식 선택'),
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
         centerTitle: true,
+        systemOverlayStyle: const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.dark,
+          statusBarBrightness: Brightness.light,
+        ),
+        title: Text(
+          'Home',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.2,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+        ),
+        iconTheme: IconThemeData(color: Theme.of(context).colorScheme.onSurface),
+        actionsIconTheme: IconThemeData(color: Theme.of(context).colorScheme.onSurface),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(
+            height: 1,
+            color: Colors.black.withOpacity(0.06),
+          ),
+        ),
       ),
       body: SafeArea(
         child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [cs.surface, cs.surfaceVariant.withOpacity(0.6)],
-            ),
-          ),
+          color: Colors.white, // 바디 배경 화이트
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 880),
@@ -42,7 +94,7 @@ class LoginSelectorPage extends StatelessWidget {
                   children: [
                     _Header(),
                     const SizedBox(height: 24),
-                    _CardsPager(pages: pages), // ← 두 장씩 스와이프(고정 크기, 페이지 기억)
+                    _CardsPager(pages: pages),
                     const SizedBox(height: 16),
                     _HintBanner(
                       color: cs.secondaryContainer,
@@ -52,6 +104,17 @@ class LoginSelectorPage extends StatelessWidget {
                 ),
               ),
             ),
+          ),
+        ),
+      ),
+      // ▼ 하단 펠리컨 이미지
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: SizedBox(
+            height: 120,
+            child: Image.asset('assets/images/pelican.png'),
           ),
         ),
       ),
@@ -71,7 +134,7 @@ class _CardsPager extends StatefulWidget {
 
 class _CardsPagerState extends State<_CardsPager> {
   static const double _gap = 16.0;
-  static const double _kCardHeight = 240.0; // ✅ 모든 카드 동일 높이
+  static const double _kCardHeight = 240.0; // 모든 카드 동일 높이
   static const String _prefsKey = 'login_selector_last_page';
 
   late final PageController _pageCtrl;
@@ -87,9 +150,7 @@ class _CardsPagerState extends State<_CardsPager> {
   Future<void> _restoreLastPage() async {
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getInt(_prefsKey) ?? 0;
-    // 현재 페이지 수에 맞춰 보정
     _initialPage = saved.clamp(0, (widget.pages.length - 1).clamp(0, 999)).toInt();
-    // 첫 프레임 이후 점프해 깜빡임 최소화
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _pageCtrl.jumpToPage(_initialPage);
@@ -148,36 +209,108 @@ class _CardsPagerState extends State<_CardsPager> {
   }
 }
 
-/// 상단 타이틀 + 서브텍스트
+/// 헤더 영역
 class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
 
     return Column(
       children: [
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: cs.primaryContainer.withOpacity(0.7),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(Icons.login_rounded, color: cs.onPrimaryContainer, size: 28),
-        ),
+        const _HeaderBadge(size: 64, ring: 3),
         const SizedBox(height: 12),
         Text(
-          '어떤 방식으로 로그인할까요?',
+          '환영합니다, 사용자님',
           style: text.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 6),
         Text(
-          '서비스용/태블릿용 화면 중에서 선택해 주세요.',
+          '화살표 버튼을 누르면 해당 페이지로 진입합니다.',
           style: text.bodyMedium?.copyWith(color: Theme.of(context).hintColor),
           textAlign: TextAlign.center,
         ),
       ],
+    );
+  }
+}
+
+/// 리팩토링된 헤더 배지: 검은 링 + 화이트 바디 + 글로시 + 살짝 튀어나오는 애니메이션
+class _HeaderBadge extends StatelessWidget {
+  const _HeaderBadge({this.size = 64, this.ring = 3});
+
+  final double size; // 배지 지름
+  final double ring; // 링(테두리) 두께
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      duration: const Duration(milliseconds: 600),
+      tween: Tween(begin: .92, end: 1),
+      curve: Curves.easeOutBack,
+      builder: (context, scale, child) => Transform.scale(scale: scale, child: child),
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: const DecoratedBox(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.black, // 검은색 링
+          ),
+          child: _HeaderBadgeInner(),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeaderBadgeInner extends StatelessWidget {
+  const _HeaderBadgeInner();
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, cons) {
+        return Padding(
+          padding: const EdgeInsets.all(3), // 링 두께
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: Colors.white, // 화이트 바디
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.06),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Stack(
+              children: [
+                const Center(
+                  child: Icon(
+                    Icons.dashboard_customize_rounded,
+                    color: Colors.black,
+                    size: 28,
+                  ),
+                ),
+                Positioned(
+                  top: cons.maxHeight * 0.12,
+                  left: cons.maxWidth * 0.22,
+                  right: cons.maxWidth * 0.22,
+                  child: Container(
+                    height: cons.maxHeight * 0.18,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.16),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -190,7 +323,9 @@ Widget _cardBody({
   required Color iconColor,
   String? title, // 기존과의 호환
   Widget? titleWidget, // 커스텀 타이틀 위젯
-  required VoidCallback onTap,
+  required VoidCallback? onTap,
+  bool enabled = true,
+  String? disabledHint,
 }) {
   assert(title != null || titleWidget != null, 'title 또는 titleWidget 중 하나는 제공되어야 합니다.');
   final text = Theme.of(context).textTheme;
@@ -201,7 +336,7 @@ Widget _cardBody({
     textAlign: TextAlign.center,
   );
 
-  return Padding(
+  final content = Padding(
     padding: const EdgeInsets.all(20),
     child: Column(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -210,28 +345,31 @@ Widget _cardBody({
         const SizedBox(height: 12),
         titleWidget ?? defaultTitle,
         const SizedBox(height: 12),
-        IconButton.filled(
-          onPressed: () {
-            HapticFeedback.selectionClick();
-            onTap();
-          },
-          icon: const Icon(Icons.arrow_forward_rounded),
-          tooltip: '이동',
+        Tooltip(
+          message: enabled ? '이동' : (disabledHint ?? '현재 저장된 모드에서만 선택할 수 있어요'),
+          child: IconButton.filled(
+            onPressed: enabled ? onTap : null,
+            icon: const Icon(Icons.arrow_forward_rounded),
+          ),
         ),
       ],
     ),
   );
+
+  return Opacity(opacity: enabled ? 1.0 : 0.48, child: content);
 }
 
 /// 서비스 로그인 카드 (배경 하양, 제목 검정색)
 class _ServiceCard extends StatelessWidget {
-  const _ServiceCard();
+  final bool enabled;
+
+  const _ServiceCard({this.enabled = true});
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final titleStyle =
-    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: Colors.black);
+        Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: Colors.black);
 
     return Card(
       color: Colors.white,
@@ -240,11 +378,13 @@ class _ServiceCard extends StatelessWidget {
       surfaceTintColor: cs.primary,
       child: _cardBody(
         context: context,
-        icon: Icons.build_rounded,
+        icon: Icons.local_parking,
         bg: cs.primaryContainer,
         iconColor: cs.onPrimaryContainer,
         titleWidget: Text('서비스 로그인', style: titleStyle, textAlign: TextAlign.center),
         onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.serviceLogin),
+        enabled: enabled,
+        disabledHint: '저장된 모드가 service일 때만 선택할 수 있어요',
       ),
     );
   }
@@ -252,7 +392,9 @@ class _ServiceCard extends StatelessWidget {
 
 /// 출퇴근 로그인 카드 (배경 #122232, '출퇴근' 흰색 + '로그인' 노란색)
 class _ClockCard extends StatelessWidget {
-  const _ClockCard();
+  final bool enabled;
+
+  const _ClockCard({this.enabled = true});
 
   static const Color _clockBg = Color(0xFF122232); // R=18, G=34, B=50
 
@@ -260,47 +402,33 @@ class _ClockCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final base = Theme.of(context).textTheme.titleMedium?.copyWith(
-      fontWeight: FontWeight.w700,
-      color: Colors.white,
-    );
+          fontWeight: FontWeight.w700,
+          color: Colors.white,
+        );
 
     return Card(
       color: _clockBg,
       elevation: 1,
       clipBehavior: Clip.antiAlias,
-      surfaceTintColor: Colors.transparent, // 정확한 색 유지
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _LeadingIcon(
-              bg: cs.secondaryContainer,
-              icon: Icons.access_time_filled_rounded,
-              iconColor: cs.onSecondaryContainer,
-            ),
-            const SizedBox(height: 12),
-            RichText(
-              textAlign: TextAlign.center,
-              text: TextSpan(
-                style: base,
-                children: const [
-                  TextSpan(text: '출퇴근 ', style: TextStyle(color: Colors.white)),
-                  TextSpan(text: '로그인', style: TextStyle(color: Colors.yellow)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            IconButton.filled(
-              onPressed: () {
-                HapticFeedback.selectionClick();
-                Navigator.of(context).pushReplacementNamed(AppRoutes.outsideLogin);
-                },
-              icon: const Icon(Icons.arrow_forward_rounded),
-              tooltip: '이동',
-            ),
-          ],
+      surfaceTintColor: Colors.transparent,
+      child: _cardBody(
+        context: context,
+        icon: Icons.access_time_filled_rounded,
+        bg: cs.secondaryContainer,
+        iconColor: cs.onSecondaryContainer,
+        titleWidget: RichText(
+          textAlign: TextAlign.center,
+          text: TextSpan(
+            style: base,
+            children: const [
+              TextSpan(text: '출퇴근 ', style: TextStyle(color: Colors.white)),
+              TextSpan(text: '로그인', style: TextStyle(color: Colors.yellow)),
+            ],
+          ),
         ),
+        onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.outsideLogin),
+        enabled: enabled,
+        disabledHint: '저장된 모드가 outside일 때만 선택할 수 있어요',
       ),
     );
   }
@@ -308,13 +436,15 @@ class _ClockCard extends StatelessWidget {
 
 /// 태블릿 로그인 카드 (서비스 카드와 동일 스타일)
 class _TabletCard extends StatelessWidget {
-  const _TabletCard();
+  final bool enabled;
+
+  const _TabletCard({this.enabled = true});
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final titleStyle =
-    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: Colors.black);
+        Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: Colors.black);
 
     return Card(
       color: Colors.white,
@@ -328,14 +458,16 @@ class _TabletCard extends StatelessWidget {
         iconColor: cs.onTertiaryContainer,
         titleWidget: Text('태블릿 로그인', style: titleStyle, textAlign: TextAlign.center),
         onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.tabletLogin),
+        enabled: enabled,
+        disabledHint: '저장된 모드가 tablet일 때만 선택할 수 있어요',
       ),
     );
   }
 }
 
-/// 본사/관리 카드 (기본 테마)
-class _HeadquarterCard extends StatelessWidget {
-  const _HeadquarterCard();
+/// 커뮤니티 카드 (커뮤니티/소통 허브)
+class _CommunityCard extends StatelessWidget {
+  const _CommunityCard();
 
   @override
   Widget build(BuildContext context) {
@@ -344,14 +476,72 @@ class _HeadquarterCard extends StatelessWidget {
     return Card(
       elevation: 1,
       clipBehavior: Clip.antiAlias,
+      surfaceTintColor: cs.tertiary, // 커뮤니티 느낌의 부드러운 톤
+      child: _cardBody(
+        context: context,
+        icon: Icons.groups_rounded,
+        // 👥 커뮤니티 아이콘
+        bg: cs.tertiaryContainer,
+        iconColor: cs.onTertiaryContainer,
+        title: '커뮤니티',
+        // 타이틀 변경
+        // 임시 연결: 이후 커뮤니티 실제 화면/게임 허브로 교체 가능
+        onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.communityStub),
+      ),
+    );
+  }
+}
+
+/// FAQ / 문의 카드 (항상 진입 가능)
+class _FaqCard extends StatelessWidget {
+  const _FaqCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final titleStyle =
+        Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: Colors.black);
+
+    return Card(
+      color: Colors.white,
+      elevation: 1,
+      clipBehavior: Clip.antiAlias,
       surfaceTintColor: cs.primary,
       child: _cardBody(
         context: context,
-        icon: Icons.business_rounded,
+        icon: Icons.help_center_rounded,
+        bg: cs.secondaryContainer,
+        iconColor: cs.onSecondaryContainer,
+        titleWidget: Text('FAQ / 문의', style: titleStyle, textAlign: TextAlign.center),
+        onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.faq), // TODO: routes 등록
+      ),
+    );
+  }
+}
+
+/// 주차 관제 시스템 카드 (항상 진입 가능)
+class _ParkingCard extends StatelessWidget {
+  const _ParkingCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final titleStyle =
+        Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: Colors.black);
+
+    return Card(
+      color: Colors.white,
+      elevation: 1,
+      clipBehavior: Clip.antiAlias,
+      surfaceTintColor: cs.primary,
+      child: _cardBody(
+        context: context,
+        icon: Icons.location_city,
+        // 주차 아이콘
         bg: cs.primaryContainer,
         iconColor: cs.onPrimaryContainer,
-        title: '본사 / 관리자',
-        onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.headquarterPage),
+        titleWidget: Text('주차 관제 시스템', style: titleStyle, textAlign: TextAlign.center),
+        onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.parking), // TODO: routes 등록
       ),
     );
   }
@@ -399,7 +589,7 @@ class _HintBanner extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              '언제든지 설정/메뉴에서 로그인 방식을 변경할 수 있어요.',
+              '저장된 로그인 모드가 있으면 해당 모드만 선택할 수 있어요. (로그아웃 후, 변경 가능)',
               style: text.bodySmall,
             ),
           ),

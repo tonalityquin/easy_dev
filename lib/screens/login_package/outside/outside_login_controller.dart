@@ -46,7 +46,7 @@ class OutsideLoginController {
           LoginDebugFirestoreLogger().log('자동 로그인: 외부 출퇴근 화면으로 이동', level: 'info');
           Navigator.of(context).pushNamedAndRemoveUntil(
             AppRoutes.commuteShortcut, // ← CommuteOutsideScreen
-            (route) => false, // 스택 비우기
+                (route) => false, // 스택 비우기
           );
         });
       }
@@ -133,6 +133,7 @@ class OutsideLoginController {
         await prefs.setString('role', updatedUser.role);
         await prefs.setString('position', updatedUser.position ?? '');
         await prefs.setStringList('fixedHolidays', updatedUser.fixedHolidays);
+        await prefs.setString('mode', 'outside'); // ✅ 추가: 로그인 모드 저장
 
         debugPrint("SharedPreferences 저장 완료: phone=${prefs.getString('phone')}");
 
@@ -148,7 +149,7 @@ class OutsideLoginController {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             Navigator.of(context).pushNamedAndRemoveUntil(
               AppRoutes.commuteShortcut, // ← CommuteOutsideScreen
-              (route) => false, // 스택 비움
+                  (route) => false, // 스택 비움
             );
           });
         }

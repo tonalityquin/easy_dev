@@ -126,6 +126,7 @@ class ServiceLoginController {
         await prefs.setString('role', updatedUser.role);
         await prefs.setString('position', updatedUser.position ?? '');
         await prefs.setStringList('fixedHolidays', updatedUser.fixedHolidays);
+        await prefs.setString('mode', 'service'); // ✅ 추가: 로그인 모드 저장
 
         debugPrint("SharedPreferences 저장 완료: phone=${prefs.getString('phone')}");
 

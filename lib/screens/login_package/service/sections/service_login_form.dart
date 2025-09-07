@@ -43,7 +43,7 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Column(
             children: [
-              const SizedBox(height: 96),
+              const SizedBox(height: 12),
 
               GestureDetector(
                 onTap: () {
@@ -56,47 +56,18 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
                   );
                 },
                 child: SizedBox(
-                  height: 240,
+                  height: 360,
                   child: Image.asset('assets/images/easyvalet_logo_car.png'),
                 ),
               ),
 
-              const SizedBox(height: 48),
-
-              // ▼ 태블릿 로그인으로 전환 (현재 화면을 완전히 대체)
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    // ✅ named route 사용: LoginScreen(mode: 'tablet')로 진입
-                    Navigator.pushReplacementNamed(
-                      context,
-                      AppRoutes.tabletLogin,
-                    );
-                  },
-                  icon: const Icon(Icons.tablet, size: 22),
-                  label: const Text('태블릿 로그인으로 전환'),
-                  style: OutlinedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.black,
-                    minimumSize: const Size.fromHeight(55),
-                    padding: EdgeInsets.zero,
-                    side: const BorderSide(color: Colors.grey, width: 1.0),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
 
               TextField(
                 controller: _controller.nameController,
                 focusNode: _controller.nameFocus,
                 textInputAction: TextInputAction.next,
-                onSubmitted: (_) =>
-                    FocusScope.of(context).requestFocus(_controller.phoneFocus),
+                onSubmitted: (_) => FocusScope.of(context).requestFocus(_controller.phoneFocus),
                 decoration: _controller.inputDecoration(
                   label: "이름",
                   icon: Icons.person,
@@ -109,10 +80,8 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
                 focusNode: _controller.phoneFocus,
                 keyboardType: TextInputType.phone,
                 textInputAction: TextInputAction.next,
-                onChanged: (value) =>
-                    _controller.formatPhoneNumber(value, setState),
-                onSubmitted: (_) =>
-                    FocusScope.of(context).requestFocus(_controller.passwordFocus),
+                onChanged: (value) => _controller.formatPhoneNumber(value, setState),
+                onSubmitted: (_) => FocusScope.of(context).requestFocus(_controller.passwordFocus),
                 decoration: _controller.inputDecoration(
                   label: "전화번호",
                   icon: Icons.phone,
@@ -131,12 +100,9 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
                   icon: Icons.lock,
                   suffixIcon: IconButton(
                     icon: Icon(
-                      _controller.obscurePassword
-                          ? Icons.visibility_off
-                          : Icons.visibility,
+                      _controller.obscurePassword ? Icons.visibility_off : Icons.visibility,
                     ),
-                    onPressed: () =>
-                        setState(() => _controller.togglePassword()),
+                    onPressed: () => setState(() => _controller.togglePassword()),
                   ),
                 ),
               ),
@@ -147,7 +113,7 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
                 child: ElevatedButton.icon(
                   icon: const Icon(Icons.login),
                   label: Text(
-                    _controller.isLoading ? '로딩 중...' : '로그인',
+                    _controller.isLoading ? '로딩 중...' : '서비스 로그인',
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -164,17 +130,24 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  onPressed:
-                  _controller.isLoading ? null : _onLoginButtonPressed,
+                  onPressed: _controller.isLoading ? null : _onLoginButtonPressed,
                 ),
               ),
 
               const SizedBox(height: 1),
 
+              // ▼ 펠리컨: 탭하면 LoginSelectorPage로 복귀
               Center(
-                child: SizedBox(
-                  height: 80,
-                  child: Image.asset('assets/images/pelican.png'),
+                child: InkWell(
+                  onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
+                    AppRoutes.selector,
+                    (route) => false,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                  child: SizedBox(
+                    height: 80,
+                    child: Image.asset('assets/images/pelican.png'),
+                  ),
                 ),
               ),
             ],
