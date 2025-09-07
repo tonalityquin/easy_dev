@@ -1,340 +1,252 @@
+// File: lib/screens/stub_package/debug_firestore_logger.dart
+//
+// - 싱글턴 파일 로거
+// - 빠른 tail 읽기(readTailLines)
+// - 로그 파일 회전(최대 3개: .txt, .1.txt, .2.txt)
+// - 전체 합본 읽기(readAllLinesCombined)
+// - 전체 삭제(clearLog)
+// - 다중 호출 동시성 안전(간단한 체이닝 큐)
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
-/// 로그 레벨
-enum DebugLogLevel { info, success, error, called, warn }
-
-/// 파일 기반 디버그 로거 (싱글턴)
-/// - JSON Lines 포맷 권장(라인별 {"ts","level","message","tags":[...]})
-/// - 기존 "ISO: [LEVEL] message" 문자열 라인도 읽기 호환
-/// - 파일이 커지면 회전(분할 저장): base + .1 ~ .N
-/// - tail-only 읽기 제공: 아주 큰 파일에서도 초고속 진입
 class DebugFirestoreLogger {
+  // ---- Singleton ----
   static final DebugFirestoreLogger _instance = DebugFirestoreLogger._internal();
+
   factory DebugFirestoreLogger() => _instance;
+
   DebugFirestoreLogger._internal();
 
-  // ---------- 설정 ----------
-  // 회전 기준 크기(바이트)
-  static const int _maxFileBytes = 5 * 1024 * 1024; // 5MB
-  // 회전 파일 개수 (base + 1.._maxRotations)
-  static const int _maxRotations = 5;
-  // 테일 읽기 기본 바이트 윈도(대략 최근 1MB 근처)
-  static const int _defaultTailBytes = 1024 * 1024;
+  // ---- Config ----
+  static const String _baseName = 'firestore_log.txt';
+  static const int _maxFileBytes = 2 * 1024 * 1024; // 2MB 넘으면 회전
+  static const int _maxTailBytes = 1024 * 1024; // tail 읽기 1MB
+  static const int _maxTailLines = 1500;
+  static const int _rotateKeep = 2; // .1, .2 까지 유지
 
-  File? _baseFile; // firestore_log.txt
-  bool _initialized = false;
+  File? _logFile;
+  Directory? _dir;
 
-  // I/O 직렬화 큐
-  Future<void> _op = Future.value();
-  bool _rotating = false;
+  // 간단한 쓰기 체이닝(동시성 제어)
+  Future<void> _pending = Future.value();
 
-  /// 앱 시작 시 호출 권장
+  // ---- Init ----
   Future<void> init() async {
-    if (_initialized) return;
-    if (kIsWeb) {
-      debugPrint('⚠️ DebugFirestoreLogger: Web에서는 파일 기반 로깅 비활성화.');
-      _initialized = true;
-      return;
-    }
     try {
-      final dir = await getApplicationDocumentsDirectory();
-      _baseFile = File('${dir.path}/firestore_log.txt');
-      if (!await _baseFile!.exists()) {
-        await _baseFile!.create(recursive: true);
+      _dir ??= await getApplicationDocumentsDirectory();
+      _logFile ??= File('${_dir!.path}/$_baseName');
+
+      if (!await _logFile!.exists()) {
+        await _logFile!.create(recursive: true);
       }
-      _initialized = true;
-      await info('Logger initialized at ${_baseFile!.path}');
+      await log({
+        'ts': DateTime.now().toIso8601String(),
+        'level': 'info',
+        'message': 'logger initialized',
+        'tags': ['init']
+      });
     } catch (e) {
-      debugPrint('❌ FirestoreLogger init 실패: $e');
-      _initialized = true;
+      debugPrint('❌ DebugFirestoreLogger init 실패: $e');
     }
   }
 
-  File? getLogFile() => _baseFile;
+  File? getLogFile() => _logFile;
 
-  // ---------- 편의 메서드 ----------
-  Future<void> info(Object? m, {Iterable<String>? tags}) =>
-      log(m, level: DebugLogLevel.info, tags: tags);
-  Future<void> success(Object? m, {Iterable<String>? tags}) =>
-      log(m, level: DebugLogLevel.success, tags: tags);
-  Future<void> error(Object? m, {Iterable<String>? tags}) =>
-      log(m, level: DebugLogLevel.error, tags: tags);
-  Future<void> called(Object? m, {Iterable<String>? tags}) =>
-      log(m, level: DebugLogLevel.called, tags: tags);
-  Future<void> warn(Object? m, {Iterable<String>? tags}) =>
-      log(m, level: DebugLogLevel.warn, tags: tags);
-
-  /// 로그 기록 (JSONL 권장)
-  Future<void> log(
-      Object? message, {
-        DebugLogLevel level = DebugLogLevel.info,
-        Iterable<String>? tags,
-      }) async {
-    if (!_initialized) await init();
-    if (kIsWeb || _baseFile == null) {
-      debugPrint('[${DateTime.now().toIso8601String()}] [${level.name}] $message');
-      return;
-    }
-
-    final ts = DateTime.now().toIso8601String();
-    final map = <String, dynamic>{
-      'ts': ts,
-      'level': level.name,
-      'message': _safeToString(message),
-    };
-    if (tags != null && tags.isNotEmpty) {
-      map['tags'] = tags.toList();
-    }
-    final line = jsonEncode(map) + '\n';
-
-    _op = _op.then((_) async {
-      try {
-        await _baseFile!.writeAsString(line, mode: FileMode.append, encoding: utf8);
-        await _rotateIfNeeded();
-      } catch (e) {
-        debugPrint('❌ 로그 기록 실패: $e');
-      }
-    });
-    await _op;
+  // ---- Public: Logging ----
+  Future<void> log(Object? message, {String level = 'info', List<String>? tags}) async {
+    // 체이닝: 직전 작업 뒤에 이어서 실행(쓰기 순서 보장)
+    _pending = _pending.then((_) => _doLog(message, level: level, tags: tags));
+    return _pending;
   }
 
-  String _safeToString(Object? message) {
-    if (message == null) return 'null';
-    if (message is String) return message;
+  Future<void> _doLog(Object? message, {required String level, List<String>? tags}) async {
     try {
-      return const JsonEncoder.withIndent('  ').convert(message);
+      if (_logFile == null) {
+        await init();
+        if (_logFile == null) return;
+      }
+
+      final now = DateTime.now().toIso8601String();
+      final entry = _toLine(message, level: level, ts: now, tags: tags);
+      await _rotateIfNeeded();
+      await _logFile!.writeAsString(entry, mode: FileMode.append, encoding: utf8);
+    } catch (e) {
+      debugPrint('❌ 로그 기록 실패: $e');
+    }
+  }
+
+  String _toLine(Object? message, {required String level, required String ts, List<String>? tags}) {
+    // JSON 라인으로 통일(파서가 JSON 우선)
+    String safeMessage;
+    try {
+      if (message == null) {
+        safeMessage = 'null';
+      } else if (message is String) {
+        safeMessage = message;
+      } else {
+        safeMessage = const JsonEncoder.withIndent('  ').convert(message);
+      }
     } catch (_) {
-      return message.toString();
+      safeMessage = message.toString();
     }
+
+    final m = <String, Object?>{
+      'ts': ts,
+      'level': level,
+      'message': safeMessage,
+      if (tags != null && tags.isNotEmpty) 'tags': tags,
+    };
+    return '${jsonEncode(m)}\n';
   }
 
-  /// 파일 크기가 임계값 초과 시 회전
+  // ---- Rotation ----
   Future<void> _rotateIfNeeded() async {
-    if (_rotating) return;
-    if (_baseFile == null || !await _baseFile!.exists()) return;
-
-    final size = await _baseFile!.length();
-    if (size <= _maxFileBytes) return;
-
-    _rotating = true;
+    if (_logFile == null || _dir == null) return;
     try {
-      final dir = _baseFile!.parent.path;
-      final base = _baseFile!.path;
+      final size = await _logFile!.length();
+      if (size < _maxFileBytes) return;
 
-      // .(max-1) -> .max, ..., .1 -> .2
-      for (int i = _maxRotations - 1; i >= 1; i--) {
-        final src = File('$dir/firestore_log.$i.txt');
-        final dst = File('$dir/firestore_log.${i + 1}.txt');
-        if (await src.exists()) {
-          try {
-            if (await dst.exists()) await dst.delete();
-            await src.rename(dst.path);
-          } catch (e) {
-            debugPrint('⚠️ 회전 rename 실패: ${src.path} -> ${dst.path} ($e)');
+      final f0 = _logFile!;
+      final f1 = File('${_dir!.path}/firestore_log.1.txt');
+      final f2 = File('${_dir!.path}/firestore_log.2.txt');
+
+      // 오래된 순서로 삭제/이동
+      if (_rotateKeep >= 2) {
+        try {
+          if (await f2.exists()) {
+            await f2.delete();
           }
-        }
+        } catch (_) {}
+        try {
+          if (await f1.exists()) {
+            await f1.rename(f2.path);
+          }
+        } catch (_) {}
       }
-
-      // base -> .1
-      final one = File('$dir/firestore_log.1.txt');
       try {
-        if (await one.exists()) await one.delete();
-        await _baseFile!.rename(one.path);
-      } catch (e) {
-        debugPrint('⚠️ base 회전 실패: $e');
-      }
+        if (await f0.exists()) {
+          await f0.rename(f1.path);
+        }
+      } catch (_) {}
 
-      // 새 base 파일 생성
-      _baseFile = File(base);
-      await _baseFile!.create(recursive: true);
-      await info('log rotated'); // 회전 로그 남김(새 파일)
-
+      // 새 로그 파일 생성
+      _logFile = File('${_dir!.path}/$_baseName');
+      await _logFile!.create(recursive: true);
+      await _logFile!.writeAsString(
+        '${jsonEncode({'ts': DateTime.now().toIso8601String(), 'level': 'info', 'message': 'log rotated'})}\n',
+        mode: FileMode.append,
+        encoding: utf8,
+      );
     } catch (e) {
-      debugPrint('❌ rotate 실패: $e');
-    } finally {
-      _rotating = false;
+      debugPrint('❌ rotateIfNeeded 실패: $e');
     }
   }
 
-  /// 전체 텍스트 읽기(현재 base만)
-  Future<String> readLog() async {
-    if (!_initialized) await init();
-    if (kIsWeb) return '⚠️ Web 빌드에서는 파일 로그를 사용할 수 없습니다.';
-    if (_baseFile == null || !await _baseFile!.exists()) return '';
+  // ---- Read: Tail only (빠름) ----
+  Future<List<String>> readTailLines({int maxLines = _maxTailLines, int maxBytes = _maxTailBytes}) async {
     try {
-      final stream = _baseFile!
-          .openRead()
-          .transform(const Utf8Decoder(allowMalformed: true));
-      final buf = StringBuffer();
-      await for (final chunk in stream) {
-        buf.write(chunk);
+      if (_logFile == null) await init();
+      if (_logFile == null || !await _logFile!.exists()) return const [];
+
+      final length = await _logFile!.length();
+      final start = length > maxBytes ? length - maxBytes : 0;
+
+      final raf = await _logFile!.open();
+      try {
+        await raf.setPosition(start);
+        final bytes = await raf.read(length - start);
+        final text = const Utf8Decoder(allowMalformed: true).convert(bytes);
+        var lines = const LineSplitter().convert(text);
+        // start > 0 이면 첫 줄은 중간에서 잘린 라인일 수 있으니 버림(옵션)
+        if (start > 0 && lines.isNotEmpty) {
+          lines = lines.sublist(1);
+        }
+        if (lines.length > maxLines) {
+          lines = lines.sublist(lines.length - maxLines);
+        }
+        return lines;
+      } finally {
+        await raf.close();
       }
-      return buf.toString();
     } catch (e) {
-      debugPrint('❌ 로그 읽기 실패: $e');
-      return '';
+      debugPrint('❌ readTailLines 실패: $e');
+      return const [];
     }
   }
 
-  /// 전체 라인(현재 base만)
-  Future<List<String>> readLines() async {
-    final text = await readLog();
-    if (text.isEmpty) return const [];
-    return const LineSplitter()
-        .convert(text)
-        .where((e) => e.trim().isNotEmpty)
-        .toList();
-  }
-
-  /// 테일 텍스트(마지막 maxBytes 근처만)
-  Future<String> readTail({int maxBytes = _defaultTailBytes}) async {
-    if (!_initialized) await init();
-    if (kIsWeb || _baseFile == null || !await _baseFile!.exists()) return '';
-    try {
-      final raf = await _baseFile!.open();
-      final len = await raf.length();
-      final start = (len > maxBytes) ? (len - maxBytes) : 0;
-      await raf.setPosition(start);
-      final bytes = await raf.read(len - start);
-      await raf.close();
-      return const Utf8Decoder(allowMalformed: true).convert(bytes);
-    } catch (e) {
-      debugPrint('❌ tail 읽기 실패: $e');
-      return '';
-    }
-  }
-
-  /// 테일 라인(기본: 최대 1500줄 / ~1MB 범위)
-  Future<List<String>> readTailLines({
-    int maxLines = 1500,
-    int maxBytes = _defaultTailBytes,
-  }) async {
-    final text = await readTail(maxBytes: maxBytes);
-    if (text.isEmpty) return const [];
-    final lines = const LineSplitter()
-        .convert(text)
-        .where((e) => e.trim().isNotEmpty)
-        .toList();
-    // 끝에서부터 maxLines만 취함
-    if (lines.length <= maxLines) return lines;
-    return lines.sublist(lines.length - maxLines);
-  }
-
-  /// 회전 포함 전체 라인 읽기(오래 걸릴 수 있음)
+  // ---- Read: 전체(회전 포함) ----
   Future<List<String>> readAllLinesCombined() async {
-    if (!_initialized) await init();
-    if (kIsWeb) return const [];
-
-    final files = await getAllLogFilesExisting(); // oldest..newest 순서로 반환
-    final out = <String>[];
-
-    for (final f in files) {
-      try {
-        final text = await f
-            .openRead()
-            .transform(const Utf8Decoder(allowMalformed: true))
-            .join();
-        if (text.isEmpty) continue;
-        out.addAll(const LineSplitter()
-            .convert(text)
-            .where((e) => e.trim().isNotEmpty));
-      } catch (e) {
-        debugPrint('⚠️ 읽기 실패: ${f.path} ($e)');
-      }
-    }
-    return out;
-  }
-
-  /// 회전 파일 포함 존재하는 파일 목록을 "오래된 것 → 최신(base)" 순으로 반환
-  Future<List<File>> getAllLogFilesExisting() async {
-    if (_baseFile == null) return const [];
-    final dir = _baseFile!.parent.path;
-    final files = <File>[];
-
-    // oldest..newest: .$_maxRotations ↓ .1 ↓ base
-    for (int i = _maxRotations; i >= 1; i--) {
-      final f = File('$dir/firestore_log.$i.txt');
-      if (await f.exists()) files.add(f);
-    }
-    if (await _baseFile!.exists()) files.add(_baseFile!);
-    return files;
-  }
-
-  /// 로그 초기화
-  Future<void> clearLog() async {
-    if (!_initialized) await init();
-    if (kIsWeb || _baseFile == null) return;
-
-    _op = _op.then((_) async {
-      try {
-        // 회전 파일도 함께 제거
-        for (final f in await getAllLogFilesExisting()) {
-          if (await f.exists()) await f.delete();
-        }
-        await _baseFile!.create(recursive: true);
-        await info('로그 파일 초기화됨');
-      } catch (e) {
-        debugPrint('❌ 로그 초기화 실패: $e');
-      }
-    });
-    await _op;
-  }
-
-  /// 특정 시각 이전 로그 삭제 (회전 포함)
-  Future<void> deleteLogsBefore(DateTime cutoff) async {
-    if (!_initialized) await init();
-    if (kIsWeb || _baseFile == null) return;
-
-    Future<void> _filterFile(File f) async {
-      if (!await f.exists()) return;
-      try {
-        final text = await f
-            .openRead()
-            .transform(const Utf8Decoder(allowMalformed: true))
-            .join();
-        if (text.isEmpty) return;
-        final lines = const LineSplitter().convert(text);
-        final retained = <String>[];
-
-        for (final line in lines) {
-          final ts = _extractTimestamp(line);
-          if (ts == null || ts.isAfter(cutoff)) {
-            if (line.trim().isNotEmpty) retained.add(line);
-          }
-        }
-        await f.writeAsString(retained.join('\n') + '\n', encoding: utf8);
-      } catch (e) {
-        debugPrint('❌ 로그 삭제 실패(${f.path}): $e');
-      }
-    }
-
-    _op = _op.then((_) async {
-      for (final f in await getAllLogFilesExisting()) {
-        await _filterFile(f);
-      }
-    });
-    await _op;
-  }
-
-  /// 타임스탬프 추출(JSON 우선 → 레거시)
-  DateTime? _extractTimestamp(String line) {
     try {
-      final m = jsonDecode(line);
-      if (m is Map && m['ts'] is String) {
-        return DateTime.tryParse(m['ts'] as String);
+      if (_logFile == null) await init();
+      final files = await getAllLogFilesExisting(orderedOldestFirst: true);
+      final all = <String>[];
+
+      for (final f in files) {
+        final lines = await f
+            .openRead()
+            .transform(const Utf8Decoder(allowMalformed: true))
+            .transform(const LineSplitter())
+            .toList();
+        all.addAll(lines);
       }
-    } catch (_) {}
-    final idx = line.indexOf(': ');
-    if (idx > 0) {
-      final tsStr = line.substring(0, idx);
-      return DateTime.tryParse(tsStr);
+      return all;
+    } catch (e) {
+      debugPrint('❌ readAllLinesCombined 실패: $e');
+      return const [];
     }
-    return null;
+  }
+
+  // ---- Export용: 존재하는 모든 로그 파일 반환 ----
+  Future<List<File>> getAllLogFilesExisting({bool orderedOldestFirst = false}) async {
+    if (_dir == null) await init();
+    if (_dir == null) return const [];
+
+    final f0 = File('${_dir!.path}/$_baseName');
+    final f1 = File('${_dir!.path}/firestore_log.1.txt');
+    final f2 = File('${_dir!.path}/firestore_log.2.txt');
+
+    final list = <File>[];
+    if (orderedOldestFirst) {
+      if (await f2.exists()) list.add(f2);
+      if (await f1.exists()) list.add(f1);
+      if (await f0.exists()) list.add(f0);
+    } else {
+      if (await f0.exists()) list.add(f0);
+      if (await f1.exists()) list.add(f1);
+      if (await f2.exists()) list.add(f2);
+    }
+    return list;
+  }
+
+  // ---- Clear: 전체 삭제 후 재생성 ----
+  Future<void> clearLog() async {
+    try {
+      if (_dir == null) await init();
+      if (_dir == null) return;
+
+      final files = await getAllLogFilesExisting();
+      for (final f in files) {
+        try {
+          if (await f.exists()) {
+            await f.delete();
+          }
+        } catch (_) {}
+      }
+
+      _logFile = File('${_dir!.path}/$_baseName');
+      await _logFile!.create(recursive: true);
+      await _logFile!.writeAsString(
+        '${jsonEncode({'ts': DateTime.now().toIso8601String(), 'level': 'info', 'message': 'log cleared'})}\n',
+        mode: FileMode.append,
+        encoding: utf8,
+      );
+    } catch (e) {
+      debugPrint('❌ clearLog 실패: $e');
+    }
   }
 }

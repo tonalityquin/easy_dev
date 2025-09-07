@@ -225,7 +225,7 @@ class _HeaderBanner extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              '커뮤니티 허브(임시)\n도구를 여기서 확장합니다.',
+              '커뮤니티 허브 입니다.',
               style: text.bodyMedium?.copyWith(
                 color: cs.onPrimaryContainer,
                 fontWeight: FontWeight.w600,

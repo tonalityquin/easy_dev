@@ -1,3 +1,11 @@
+// File: lib/screens/stub_package/debug_bottom_sheet.dart
+//
+// - tail/전체 로드 토글
+// - 레벨 칩/태그 칩 필터 (가로 스크롤, 줄바꿈 없음)
+// - 검색(레벨/메시지/시간)
+// - 내보내기/복사/전체삭제(회전 포함)
+// - 리스트 스크롤 성능 및 예외 처리
+
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -68,20 +76,18 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
       _fullLoaded = true;
     });
     final lines = await DebugFirestoreLogger().readAllLinesCombined();
-    _ingestLines(lines, newestFirst: false); // oldest..newest → newestFirst로 정렬
+    _ingestLines(lines, newestFirst: false); // oldest..newest → 최신 우선 정렬
   }
 
   void _ingestLines(List<String> lines, {required bool newestFirst}) {
-    // 파싱
     final entries = lines.map(_parseLine).whereType<_LogEntry>().toList();
-    // 최신이 위로 오도록 역정렬
+    // 최신이 위로 오도록
     entries.sort((a, b) {
       final at = a.ts?.millisecondsSinceEpoch ?? 0;
       final bt = b.ts?.millisecondsSinceEpoch ?? 0;
       return bt.compareTo(at);
     });
 
-    // 태그 수집
     _allTags
       ..clear()
       ..addAll(entries.expand((e) => e.tags));
@@ -130,8 +136,7 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
         _selectedLevels.add(lv);
       }
       if (_selectedLevels.isEmpty) {
-        // 최소 1개는 유지(UX 보호)
-        _selectedLevels.add(lv);
+        _selectedLevels.add(lv); // 최소 1개는 유지
       }
       _applyFilter();
     });
@@ -190,20 +195,18 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
     });
 
     try {
-      // 로거 확실히 초기화 (안전장치)
-      await DebugFirestoreLogger().init();
-      await DebugFirestoreLogger().clearLog();
+      await DebugFirestoreLogger().init();     // 안전장치
+      await DebugFirestoreLogger().clearLog(); // 실제 삭제
 
       // 필터/검색 초기화 + info 보이게
       _searchCtrl.clear();
       _selectedTags.clear();
-      _selectAllLevels(); // 모든 레벨 켜기 (info 포함)
+      _selectAllLevels();
 
-      // 현재 화면을 즉시 비우고
       _all.clear();
       _filtered.clear();
 
-      // 최신만(빠름) 다시 로드
+      // 최신만(빠름) 재로드
       await _loadTail();
 
       if (!mounted) return;
@@ -322,12 +325,12 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
                             suffixIcon: _searchCtrl.text.isEmpty
                                 ? null
                                 : IconButton(
-                                    onPressed: () {
-                                      _searchCtrl.clear();
-                                      _onSearchChanged('');
-                                    },
-                                    icon: const Icon(Icons.clear_rounded),
-                                  ),
+                              onPressed: () {
+                                _searchCtrl.clear();
+                                _onSearchChanged('');
+                              },
+                              icon: const Icon(Icons.clear_rounded),
+                            ),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(10),
                             ),
@@ -355,37 +358,43 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
                 ),
                 const SizedBox(height: 8),
 
-                // 레벨 칩
+                // 레벨 칩 (가로 스크롤, 줄바꿈 없음)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      _chipButton(
-                        label: '모두',
-                        selected: _selectedLevels.length == _levels.length,
-                        onTap: _selectAllLevels,
-                        color: Colors.black87,
-                      ),
-                      _chipButton(
-                        label: '없음',
-                        selected: _selectedLevels.isEmpty,
-                        onTap: _selectNoLevels,
-                        color: Colors.black54,
-                      ),
-                      _levelChip('success', Colors.green),
-                      _levelChip('error', Colors.redAccent),
-                      _levelChip('called', Colors.blueAccent),
-                      _levelChip('warn', Colors.orange),
-                      _levelChip('info', cs.onSurface),
-                    ],
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _chipButton(
+                          label: '모두',
+                          selected: _selectedLevels.length == _levels.length,
+                          onTap: _selectAllLevels,
+                          color: Colors.black87,
+                        ),
+                        const SizedBox(width: 8),
+                        _chipButton(
+                          label: '없음',
+                          selected: _selectedLevels.isEmpty,
+                          onTap: _selectNoLevels,
+                          color: Colors.black54,
+                        ),
+                        const SizedBox(width: 8),
+                        _levelChip('success', Colors.green),
+                        const SizedBox(width: 8),
+                        _levelChip('error', Colors.redAccent),
+                        const SizedBox(width: 8),
+                        _levelChip('called', Colors.blueAccent),
+                        const SizedBox(width: 8),
+                        _levelChip('warn', Colors.orange),
+                        const SizedBox(width: 8),
+                        _levelChip('info', cs.onSurface),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 6),
 
-                // 태그 칩
+                // 태그 칩(이미 가로 스크롤)
                 if (_allTags.isNotEmpty) ...[
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -405,14 +414,16 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
                                   onSelected: (_) => _clearTagFilter(),
                                 ),
                                 const SizedBox(width: 6),
-                                ..._allTags.map((t) => Padding(
-                                      padding: const EdgeInsets.only(right: 6),
-                                      child: FilterChip(
-                                        label: Text('#$t'),
-                                        selected: _selectedTags.contains(t),
-                                        onSelected: (_) => _toggleTag(t),
-                                      ),
-                                    )),
+                                ..._allTags.map(
+                                      (t) => Padding(
+                                    padding: const EdgeInsets.only(right: 6),
+                                    child: FilterChip(
+                                      label: Text('#$t'),
+                                      selected: _selectedTags.contains(t),
+                                      onSelected: (_) => _toggleTag(t),
+                                    ),
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -429,15 +440,15 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
                   child: _loading
                       ? const Center(child: CircularProgressIndicator())
                       : Scrollbar(
-                          controller: _listCtrl,
-                          thumbVisibility: true,
-                          child: ListView.builder(
-                            controller: _listCtrl,
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                            itemCount: _filtered.length,
-                            itemBuilder: (_, i) => _LogTile(entry: _filtered[i], fmt: _fmt),
-                          ),
-                        ),
+                    controller: _listCtrl,
+                    thumbVisibility: true,
+                    child: ListView.builder(
+                      controller: _listCtrl,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      itemCount: _filtered.length,
+                      itemBuilder: (_, i) => _LogTile(entry: _filtered[i], fmt: _fmt),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -520,12 +531,12 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
     level ??= low.contains('🔥') || low.contains('[error]')
         ? 'error'
         : low.contains('✅') || low.contains('[success]')
-            ? 'success'
-            : low.contains('[called]')
-                ? 'called'
-                : low.contains('warn')
-                    ? 'warn'
-                    : 'info';
+        ? 'success'
+        : low.contains('[called]')
+        ? 'called'
+        : low.contains('warn')
+        ? 'warn'
+        : 'info';
 
     final tags = _extractHashTags(msg);
 
@@ -586,10 +597,16 @@ class _LogTile extends StatelessWidget {
                 if (entry.tags.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 4),
-                    child: Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: entry.tags.map((t) => _tagPill(t)).toList(),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          ...entry.tags.map((t) => Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: _tagPill(t),
+                          )),
+                        ],
+                      ),
                     ),
                   ),
                 Text(

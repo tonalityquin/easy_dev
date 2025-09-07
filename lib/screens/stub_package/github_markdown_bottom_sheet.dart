@@ -61,7 +61,7 @@ class _GithubMarkdownBottomSheetState extends State<GithubMarkdownBottomSheet> {
   String? _currentSha; // required for updates (PUT)
   bool _loading = false;
   bool _saving = false;
-  bool _preview = false;
+  bool _preview = true;
   bool _hasToken = false; // 토큰 저장 여부 표시용
 
   // secure storage (플랫폼 옵션 명시)

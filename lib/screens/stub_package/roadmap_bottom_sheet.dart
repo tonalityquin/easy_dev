@@ -5,14 +5,12 @@ enum RoadmapStatus { planned, inProgress, done }
 enum RoadmapLoad { light, medium, heavy }
 
 class RoadmapItem {
-  /// e.g. '2025-09' (nullable: 날짜 없이 과중도만 표기 가능)
   final String? date;
 
-  /// 업무 과중도(여유/보통/과중). 날짜 대신 쓰거나 함께 쓸 수 있음.
   final RoadmapLoad? load;
 
-  final String title; // e.g. '출퇴근 외부 개선'
-  final List<String> notes; // 상세 포인트
+  final String title;
+  final List<String> notes;
   final RoadmapStatus status;
 
   const RoadmapItem({
@@ -24,7 +22,6 @@ class RoadmapItem {
   });
 }
 
-/// 내부 코드로만 수정/추가/삭제: 실시간성 없음
 const List<RoadmapItem> _roadmapData = [
   RoadmapItem(
     load: RoadmapLoad.medium,
@@ -177,11 +174,11 @@ class RoadmapBottomSheet extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     switch (l) {
       case RoadmapLoad.light:
-        return cs.tertiary; // 여유
+        return cs.tertiary;
       case RoadmapLoad.medium:
-        return cs.secondary; // 보통
+        return cs.secondary;
       case RoadmapLoad.heavy:
-        return cs.error; // 과중
+        return cs.error;
     }
   }
 
@@ -237,7 +234,7 @@ class RoadmapBottomSheet extends StatelessWidget {
                       ),
                       const Spacer(),
                       Text(
-                        '내부 계획(실시간 아님)',
+                        '실시간 갱신 X',
                         style: text.labelMedium?.copyWith(color: Colors.grey[600]),
                       ),
                     ],
@@ -265,7 +262,6 @@ class RoadmapBottomSheet extends StatelessWidget {
                 const SizedBox(height: 8),
                 const Divider(height: 1),
 
-                // 타임라인 리스트
                 Expanded(
                   child: ListView.builder(
                     controller: controller,
@@ -325,7 +321,6 @@ class _TimelineTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 타임라인 바 & 점
           SizedBox(
             width: 28,
             child: Column(
@@ -356,8 +351,6 @@ class _TimelineTile extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-
-          // 내용
           Expanded(
             child: Container(
               padding: const EdgeInsets.all(12),

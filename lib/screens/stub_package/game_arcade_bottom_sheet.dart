@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'tetris.dart';
+import 'game_package/tetris.dart';
 
 class GameArcadeBottomSheet extends StatelessWidget {
   final BuildContext rootContext; // 바텀시트 밖으로 네비게이션할 때 사용
