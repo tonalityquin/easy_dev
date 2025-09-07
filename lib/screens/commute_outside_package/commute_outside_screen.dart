@@ -28,6 +28,12 @@ class _CommuteOutsideScreenState extends State<CommuteOutsideScreen> {
   bool loadingUrl = true;
   bool _isLoading = false;
 
+  void _toggleLoading() {
+    setState(() {
+      _isLoading = !_isLoading;
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -122,9 +128,10 @@ class _CommuteOutsideScreenState extends State<CommuteOutsideScreen> {
     return Scaffold(
       body: Consumer<UserState>(
         builder: (context, userState, _) {
-          if (userState.isWorking) {
-            controller.redirectIfWorking(context, userState);
-          }
+          // 화면 유지 요구사항에 따라 자동 리다이렉트 제거
+          // if (userState.isWorking) {
+          //   controller.redirectIfWorking(context, userState);
+          // }
 
           return SafeArea(
             child: Stack(
@@ -159,7 +166,71 @@ class _CommuteOutsideScreenState extends State<CommuteOutsideScreen> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 1),
+                          const SizedBox(height: 12),
+                          // ▼ 휴식해요 / 퇴근해요 버튼
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  icon: const Icon(Icons.free_breakfast),
+                                  label: const Text(
+                                    '휴식해요',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 1.1,
+                                    ),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.white,
+                                    foregroundColor: Colors.black,
+                                    minimumSize: const Size.fromHeight(55),
+                                    padding: EdgeInsets.zero,
+                                    side: const BorderSide(color: Colors.grey, width: 1.0),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  ),
+                                  onPressed: () async {
+                                    await controller.handleBreakPressed(
+                                      context,
+                                      context.read<UserState>(),
+                                      _toggleLoading,
+                                    );
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  icon: const Icon(Icons.exit_to_app),
+                                  label: const Text(
+                                    '퇴근해요',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 1.1,
+                                    ),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.white,
+                                    foregroundColor: Colors.black,
+                                    minimumSize: const Size.fromHeight(55),
+                                    padding: EdgeInsets.zero,
+                                    side: const BorderSide(color: Colors.grey, width: 1.0),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  ),
+                                  onPressed: () async {
+                                    await controller.handleLeavePressed(
+                                      context,
+                                      context.read<UserState>(),
+                                      _toggleLoading,
+                                      exitAppAfter: true, // 필요시 false로 바꾸고 네비게이션 처리
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
                           Center(
                             child: SizedBox(
                               height: 80,
@@ -171,6 +242,7 @@ class _CommuteOutsideScreenState extends State<CommuteOutsideScreen> {
                     ),
                   ),
                 ),
+                // ▼ 옵션 A: 메뉴 복구 (두 핸들러가 실제로 참조됨)
                 Positioned(
                   top: 16,
                   right: 16,
@@ -210,7 +282,8 @@ class _CommuteOutsideScreenState extends State<CommuteOutsideScreen> {
                     icon: const Icon(Icons.more_vert),
                   ),
                 ),
-                if (_isLoading || userState.isWorking)
+                // 화면 유지 요구사항에 맞게 isWorking에 따른 전역 오버레이 제거, 로딩일 때만 표시
+                if (_isLoading)
                   Positioned.fill(
                     child: AbsorbPointer(
                       absorbing: true,
