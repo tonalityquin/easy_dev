@@ -6,7 +6,7 @@ import '../repositories/location/firestore_location_repository.dart';
 import '../repositories/plate/plate_repository.dart';
 import '../repositories/user/user_repository.dart';
 
-import '../screens/tablet_pages/states/pad_mode_state.dart';
+import '../screens/tablet_package/states/pad_mode_state.dart';
 import '../states/area/area_state.dart';
 import '../states/bill/bill_state.dart';
 import '../states/calendar/field_calendar_state.dart';

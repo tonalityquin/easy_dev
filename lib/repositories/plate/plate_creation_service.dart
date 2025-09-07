@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../models/plate_model.dart';
 import '../../enums/plate_type.dart';
-import '../../screens/type_pages/debugs/firestore_logger.dart';
+import '../../screens/type_package/debugs/firestore_logger.dart';
 
 class PlateCreationService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;

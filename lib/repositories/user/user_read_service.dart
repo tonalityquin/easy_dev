@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/tablet_model.dart';
 import '../../models/user_model.dart';
-import '../../screens/type_pages/debugs/firestore_logger.dart';
+import '../../screens/type_package/debugs/firestore_logger.dart';
 
 class UserReadService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;

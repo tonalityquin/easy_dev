@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../screens/type_pages/parking_completed_page.dart';
+import '../../screens/type_package/parking_completed_page.dart';
 import 'page_info.dart';
 import '../../states/plate/plate_state.dart';
 import '../../enums/plate_type.dart';

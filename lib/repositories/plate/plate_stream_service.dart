@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
-import '../../screens/type_pages/debugs/firestore_logger.dart';
+import '../../screens/type_package/debugs/firestore_logger.dart';
 
 class PlateStreamService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;

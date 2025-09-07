@@ -12,9 +12,9 @@ import '../states/user/user_state.dart';
 
 import '../utils/app_colors.dart';
 
-import '../screens/input_pages/input_plate_screen.dart';
-import '../screens/type_pages/commons/dashboard_bottom_sheet/dash_board_bottom_sheet.dart';
-import 'type_pages/commons/chats/chat_bottom_sheet.dart';
+import '../screens/input_package/input_plate_screen.dart';
+import '../screens/type_package/common_widgets/dashboard_bottom_sheet/dash_board_bottom_sheet.dart';
+import 'type_package/common_widgets/chats/chat_bottom_sheet.dart';
 import 'secondary_page.dart';
 import '../utils/snackbar_helper.dart';
 

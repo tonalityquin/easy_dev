@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../screens/type_pages/parking_request_page.dart';
-import '../../screens/type_pages/parking_completed_page.dart';
-import '../../screens/type_pages/departure_request_page.dart';
+import '../../screens/type_package/parking_request_page.dart';
+import '../../screens/type_package/parking_completed_page.dart';
+import '../../screens/type_package/departure_request_page.dart';
 
-import '../../screens/hq_pages/management.dart';
-import '../../screens/hq_pages/human_resource.dart';
-import '../../screens/hq_pages/link_to_google.dart';
+import '../../screens/hq_package/management.dart';
+import '../../screens/hq_package/human_resource.dart';
+import '../../screens/hq_package/link_to_google.dart';
 
 import '../../enums/plate_type.dart';
 import 'page_state.dart';

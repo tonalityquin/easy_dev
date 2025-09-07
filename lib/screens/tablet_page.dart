@@ -7,10 +7,10 @@ import 'package:provider/provider.dart';
 import '../models/plate_model.dart';
 import '../states/area/area_state.dart';
 import '../states/plate/plate_state.dart';
-import 'tablet_pages/tablet_left_panel.dart';
-import 'tablet_pages/tablet_right_panel.dart';
-import 'tablet_pages/widgets/tablet_top_navigation.dart';
-import 'tablet_pages/states/pad_mode_state.dart';
+import 'tablet_package/body_panels/tablet_left_panel.dart';
+import 'tablet_package/body_panels/tablet_right_panel.dart';
+import 'tablet_package/widgets/tablet_top_navigation.dart';
+import 'tablet_package/states/pad_mode_state.dart';
 
 class TabletPage extends StatefulWidget {
   const TabletPage({super.key});

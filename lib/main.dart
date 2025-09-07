@@ -6,12 +6,12 @@ import 'package:permission_handler/permission_handler.dart';
 
 import 'routes.dart';
 import 'providers/providers.dart';
-import 'screens/clock_in_pages/debugs/clock_in_debug_firestore_logger.dart';
-import 'screens/logins/service/debugs/service_login_debug_firestore_logger.dart';
+import 'screens/clock_in_package/debugs/clock_in_debug_firestore_logger.dart';
+import 'screens/login_package/service/debugs/service_login_debug_firestore_logger.dart';
 import 'theme.dart';
 import 'utils/init/dev_initializer.dart';
 import 'utils/foreground_task_handler.dart';
-import 'screens/type_pages/debugs/firestore_logger.dart';
+import 'screens/type_package/debugs/firestore_logger.dart';
 
 @pragma('vm:entry-point')
 void myForegroundCallback() {

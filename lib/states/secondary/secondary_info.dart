@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 
-import '../../screens/secondary_pages/dev_mode_pages/local_data.dart';
-import '../../screens/secondary_pages/office_mode_pages/bill_management.dart';
-import '../../screens/secondary_pages/office_mode_pages/location_management.dart';
-import '../../screens/secondary_pages/office_mode_pages/monthly_parking_management.dart';
-import '../../screens/secondary_pages/office_mode_pages/tablet_management.dart';
-import '../../screens/secondary_pages/office_mode_pages/user_management.dart';
-import '../../screens/secondary_pages/dev_mode_pages/easter_egg.dart';
-import '../../screens/secondary_pages/dev_mode_pages/back_end_controller.dart';
-import '../../screens/secondary_pages/dev_mode_pages/area_management.dart';
+import '../../screens/secondary_package/office_mode_package/bill_management.dart';
+import '../../screens/secondary_package/office_mode_package/location_management.dart';
+import '../../screens/secondary_package/office_mode_package/monthly_parking_management.dart';
+import '../../screens/secondary_package/office_mode_package/tablet_management.dart';
+import '../../screens/secondary_package/office_mode_package/user_management.dart';
+import '../../screens/secondary_package/dev_mode_package/easter_egg.dart';
+import '../../screens/secondary_package/dev_mode_package/back_end_controller.dart';
+import '../../screens/secondary_package/dev_mode_package/area_management.dart';
+import '../../screens/secondary_package/dev_mode_package/local_data.dart';
 
 class SecondaryInfo {
   final String title;

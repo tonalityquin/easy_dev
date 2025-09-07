@@ -6,7 +6,7 @@ import 'dart:developer' as dev;
 
 import '../../models/plate_log_model.dart';
 import '../../models/plate_model.dart';
-import '../../screens/type_pages/debugs/firestore_logger.dart';
+import '../../screens/type_package/debugs/firestore_logger.dart';
 
 class PlateWriteService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
