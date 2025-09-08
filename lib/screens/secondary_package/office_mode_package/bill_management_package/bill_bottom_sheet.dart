@@ -3,10 +3,10 @@ import 'package:flutter/services.dart'; // ← 추가!
 import 'package:provider/provider.dart';
 
 import '../../../../states/area/area_state.dart';
-import 'sections/bill_type_input.dart';
-import 'sections/standard_and_amount_row.dart';
-import 'sections/error_message_text.dart';
-import 'sections/bottom_buttons.dart';
+import 'sections/bill_type_input_section.dart';
+import 'sections/bill_standard_and_amount_row_section.dart';
+import 'sections/bill_error_message_text_section.dart';
+import 'sections/bill_bottom_buttons_section.dart';
 
 class BillSettingBottomSheet extends StatefulWidget {
   final Function(Map<String, dynamic> billData) onSave;
@@ -187,9 +187,9 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
                   ),
                   const SizedBox(height: 24),
                   if (_selectedMode == '변동') ...[
-                    BillTypeInput(controller: _billController),
+                    BillTypeInputSection(controller: _billController),
                     const SizedBox(height: 16),
-                    StandardAndAmountRow(
+                    BillStandardAndAmountRowSection(
                       selectedValue: _basicStandardValue,
                       options: _basicStandardOptions,
                       onChanged: (val) => setState(() => _basicStandardValue = val),
@@ -200,7 +200,7 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
                       amountInputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     ),
                     const SizedBox(height: 16),
-                    StandardAndAmountRow(
+                    BillStandardAndAmountRowSection(
                       selectedValue: _addStandardValue,
                       options: _addStandardOptions,
                       onChanged: (val) => setState(() => _addStandardValue = val),
@@ -255,9 +255,9 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
                     ),
                   ],
                   const SizedBox(height: 16),
-                  ErrorMessageText(message: _errorMessage),
+                  BillErrorMessageTextSection(message: _errorMessage),
                   const SizedBox(height: 24),
-                  BottomButtons(
+                  BillBottomButtonsSection(
                     onCancel: () => Navigator.pop(context),
                     onSave: _handleSave,
                   ),

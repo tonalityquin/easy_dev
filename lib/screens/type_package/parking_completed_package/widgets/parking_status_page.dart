@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../states/location/location_state.dart';
-import '../../../../repositories/location/location_repository.dart';
+import '../../../../repositories/location_repo_services/location_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart'; // ✅ 한도 저장/로딩
 
 class ParkingStatusPage extends StatefulWidget {

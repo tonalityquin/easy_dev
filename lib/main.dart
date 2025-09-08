@@ -6,7 +6,6 @@ import 'package:permission_handler/permission_handler.dart';
 
 import 'routes.dart';
 import 'providers/providers.dart';
-import 'screens/login_package/service/debugs/service_login_debug_firestore_logger.dart';
 import 'theme.dart';
 import 'utils/init/dev_initializer.dart';
 import 'utils/foreground_task_handler.dart';
@@ -67,9 +66,6 @@ class AppBootstrapper extends StatelessWidget {
 
   Future<void> _initializeApp() async {
     await Firebase.initializeApp();
-
-
-    await LoginDebugFirestoreLogger().init();
 
     await registerDevResources();
 

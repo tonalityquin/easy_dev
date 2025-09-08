@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../repositories/plate/plate_repository.dart';
+import '../../repositories/plate_repo_services/plate_repository.dart';
 import '../../models/plate_model.dart';
 import '../../enums/plate_type.dart';
 

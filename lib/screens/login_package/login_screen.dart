@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'outside/outside_login_controller.dart';
 import 'outside/sections/outside_login_form.dart';
 import 'service/service_login_controller.dart';
-import 'service/debugs/service_login_debug_firestore_logger.dart';
 import 'service/sections/service_login_form.dart';
 
 // tablet
@@ -11,10 +10,10 @@ import 'tablet/sections/tablet_login_form.dart';
 
 // ✅ outside
 
-
 class LoginScreen extends StatefulWidget {
   // ✅ mode: 'service' | 'tablet' | 'outside'
   const LoginScreen({super.key, this.mode = 'service'});
+
   final String mode;
 
   @override
@@ -35,21 +34,13 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   void initState() {
     super.initState();
 
-    LoginDebugFirestoreLogger().log(
-      '🔵 LoginScreen initState() - 로그인 화면 로딩 시작 (mode=${widget.mode})',
-      level: 'info',
-    );
-
     // ✅ 모드에 따라 해당 컨트롤러만 초기화
     if (widget.mode == 'tablet') {
       _tabletController = TabletLoginController(context);
-      LoginDebugFirestoreLogger().log('✅ LoginScreen - TabletLoginController 생성 완료', level: 'success');
     } else if (widget.mode == 'outside') {
       _outsideController = OutsideLoginController(context);
-      LoginDebugFirestoreLogger().log('✅ LoginScreen - OutsideLoginController 생성 완료', level: 'success');
     } else {
       _loginController = ServiceLoginController(context);
-      LoginDebugFirestoreLogger().log('✅ LoginScreen - ServiceLoginController 생성 완료', level: 'success');
     }
 
     _loginAnimationController = AnimationController(
@@ -70,7 +61,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     );
 
     _loginAnimationController.forward();
-    LoginDebugFirestoreLogger().log('✅ 로그인 화면 애니메이션 시작', level: 'success');
   }
 
   @override
@@ -79,8 +69,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     final Widget loginForm = (widget.mode == 'tablet')
         ? TabletLoginForm(controller: _tabletController)
         : (widget.mode == 'outside')
-        ? OutsideLoginForm(controller: _outsideController)
-        : ServiceLoginForm(controller: _loginController);
+            ? OutsideLoginForm(controller: _outsideController)
+            : ServiceLoginForm(controller: _loginController);
 
     return Scaffold(
       body: Padding(

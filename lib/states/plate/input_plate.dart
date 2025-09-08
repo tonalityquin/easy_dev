@@ -3,7 +3,7 @@ import '../../enums/plate_type.dart';
 import '../../utils/snackbar_helper.dart';
 import '../area/area_state.dart';
 import '../user/user_state.dart';
-import '../../repositories/plate/plate_repository.dart';
+import '../../repositories/plate_repo_services/plate_repository.dart';
 import 'input_log_plate.dart';
 import '../../models/plate_log_model.dart';
 

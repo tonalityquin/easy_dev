@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/tablet_model.dart';
-import '../../repositories/user/user_repository.dart';
+import '../../repositories/user_repo_services/user_repository.dart';
 import '../../models/user_model.dart';
 import '../../utils/plate_tts_listener_service.dart';
 import '../../utils/chat_tts_listener_service.dart';

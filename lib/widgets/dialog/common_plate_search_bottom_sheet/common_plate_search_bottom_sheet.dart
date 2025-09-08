@@ -7,7 +7,7 @@ import 'widgets/plate_search_results.dart';
 import 'widgets/search_button.dart';
 
 // FirestorePlateRepository import
-import '../../../repositories/plate/firestore_plate_repository.dart';
+import '../../../repositories/plate_repo_services/firestore_plate_repository.dart';
 import '../../../utils/snackbar_helper.dart'; // ✅ 커스텀 스낵바
 
 class CommonPlateSearchBottomSheet extends StatefulWidget {

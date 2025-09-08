@@ -1,17 +1,15 @@
 import 'package:flutter/material.dart';
-import 'screens/commute_outside_package/commute_outside_screen.dart';
-import 'screens/commute_package/commute_screen.dart';
+import 'screens/commute_package/commute_outside_screen.dart';
+import 'screens/commute_package/commute_inside_screen.dart';
 import 'screens/headquarter_page.dart';
 import 'screens/login_package/login_screen.dart';
-import 'screens/tablet_page.dart';
+import 'screens/tablet_package/tablet_page.dart';
 import 'screens/type_page.dart';
-import 'screens/login_selector_page.dart';
+import 'selector_hubs_page.dart';
 
-// ▼ 추가된 페이지들 (LoginSelectorPage와 같은 경로)
 import 'screens/faq_page.dart';
 import 'screens/parking_page.dart';
 
-// ▼ 새로 만든 본사/관리 임시 페이지
 import 'screens/community_stub_page.dart';
 
 class AppRoutes {
@@ -34,11 +32,11 @@ class AppRoutes {
 }
 
 final Map<String, WidgetBuilder> appRoutes = {
-  AppRoutes.selector: (context) => const LoginSelectorPage(),
+  AppRoutes.selector: (context) => const SelectorHubsPage(),
   AppRoutes.serviceLogin: (context) => const LoginScreen(),
   AppRoutes.tabletLogin: (context) => const LoginScreen(mode: 'tablet'),
   AppRoutes.outsideLogin: (context) => const LoginScreen(mode: 'outside'),
-  AppRoutes.commute: (context) => const CommuteScreen(),
+  AppRoutes.commute: (context) => const CommuteInsideScreen(),
   AppRoutes.commuteShortcut: (context) => const CommuteOutsideScreen(),
   AppRoutes.headquarterPage: (context) => const HeadquarterPage(),
   AppRoutes.typePage: (context) => const TypePage(),

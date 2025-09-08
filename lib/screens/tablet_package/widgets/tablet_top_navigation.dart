@@ -9,7 +9,7 @@ import '../../../states/area/area_state.dart';
 import '../../../states/user/user_state.dart';
 import '../../../utils/blocking_dialog.dart';
 import '../../../utils/snackbar_helper.dart';
-import '../states/pad_mode_state.dart';
+import '../states/tablet_pad_mode_state.dart';
 
 class TabletTopNavigation extends StatelessWidget {
   final bool isAreaSelectable;
@@ -58,7 +58,7 @@ class TabletTopNavigation extends StatelessWidget {
 
   Future<void> _openTopNavDialog(BuildContext context) async {
     final area = context.read<AreaState>().currentArea;
-    final padMode = context.read<PadModeState>().mode;
+    final padMode = context.read<TabletPadModeState>().mode;
 
     Widget modeButton({
       required PadMode target,
@@ -72,7 +72,7 @@ class TabletTopNavigation extends StatelessWidget {
         width: double.infinity,
         child: OutlinedButton(
           onPressed: () {
-            context.read<PadModeState>().setMode(target);
+            context.read<TabletPadModeState>().setMode(target);
             Navigator.of(context, rootNavigator: true).pop();
           },
           style: OutlinedButton.styleFrom(

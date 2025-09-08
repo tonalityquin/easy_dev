@@ -5,14 +5,14 @@ import 'package:provider/provider.dart';
 
 // 재사용 UI 컴포넌트(기존 상대 경로 유지)
 import '../../../models/plate_model.dart';
-import '../../../repositories/plate/firestore_plate_repository.dart';
+import '../../../repositories/plate_repo_services/firestore_plate_repository.dart';
 import '../../../utils/snackbar_helper.dart';
-import '../widgets/keypad/animated_keypad.dart';
-import '../sections/plate_number_display_section.dart';
-import '../sections/plate_search_header_section.dart';
-import '../sections/plate_search_result_section.dart';
+import '../widgets/keypad/tablet_animated_keypad.dart';
+import '../sections/tablet_plate_number_display_section.dart';
+import '../sections/tablet_plate_search_header_section.dart';
+import '../sections/tablet_plate_search_result_section.dart';
 import '../widgets/tablet_page_status_bottom_sheet.dart';
-import '../states/pad_mode_state.dart';
+import '../states/tablet_pad_mode_state.dart';
 
 /// 우측 패널: 키패드 + 4자리 검색 → 결과 다이얼로그 + 상태 바텀시트.
 /// 키패드는 항상 **오른쪽 패널 내부**에서만 렌더링됩니다.
@@ -147,7 +147,7 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel> with Single
                     child: results.isEmpty
                         ? const _InlineEmpty(text: '검색 결과가 없습니다.')
                         : SingleChildScrollView(
-                      child: PlateSearchResultSection(
+                      child: TabletPlateSearchResultSection(
                         results: results,
                         onSelect: (selected) async {
                           if (_navigating) return;
@@ -191,7 +191,7 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel> with Single
   @override
   Widget build(BuildContext context) {
     // pad 모드에 따라 우측 패널 내부 레이아웃 분기
-    final isSmallPad = context.select<PadModeState, bool>((s) => s.isSmall);
+    final isSmallPad = context.select<TabletPadModeState, bool>((s) => s.isSmall);
 
     return Material(
       color: Colors.white,
@@ -207,9 +207,9 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel> with Single
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const PlateSearchHeaderSection(),
+                      const TabletPlateSearchHeaderSection(),
                       const SizedBox(height: 16),
-                      PlateNumberDisplaySection(controller: _controller, isValidPlate: _isValidPlate),
+                      TabletPlateNumberDisplaySection(controller: _controller, isValidPlate: _isValidPlate),
                       const SizedBox(height: 24),
                       if (_isLoading)
                         const Padding(
@@ -228,7 +228,7 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel> with Single
                 child: SafeArea(
                   top: false,
                   bottom: true,
-                  child: AnimatedKeypad(
+                  child: TabletAnimatedKeypad(
                     slideAnimation: _slideAnimation,
                     fadeAnimation: _fadeAnimation,
                     controller: _controller,
@@ -244,7 +244,7 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel> with Single
               SafeArea(
                 top: false,
                 bottom: true,
-                child: AnimatedKeypad(
+                child: TabletAnimatedKeypad(
                   slideAnimation: _slideAnimation,
                   fadeAnimation: _fadeAnimation,
                   controller: _controller,

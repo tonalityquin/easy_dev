@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../../states/area/area_state.dart';
 import '../../../states/location/location_state.dart';
-import '../../../repositories/location/location_repository.dart';
+import '../../../repositories/location_repo_services/location_repository.dart';
 import '../../../utils/snackbar_helper.dart'; // ✅ 커스텀 스낵바 헬퍼 추가
 
 class ParkingCompletedLocationPicker extends StatefulWidget {

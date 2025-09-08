@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'plate_image_dialog.dart';
+import 'departure_completed_plate_image_dialog.dart';
 
 class TodayLogSection extends StatefulWidget {
   const TodayLogSection({
@@ -21,10 +21,7 @@ class _TodayLogSectionState extends State<TodayLogSection> {
 
   // ===== 공통 로직: 로그 정규화 =====
   List<Map<String, dynamic>> _normalizeLogs(List<dynamic> raw) {
-    return raw
-        .whereType<Map>()
-        .map((e) => Map<String, dynamic>.from(e as Map))
-        .toList();
+    return raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
   }
 
   // ===== 공통 로직: 타임스탬프 파싱 =====
@@ -145,7 +142,7 @@ class _TodayLogSectionState extends State<TodayLogSection> {
                     barrierDismissible: true,
                     barrierLabel: "사진 보기",
                     transitionDuration: const Duration(milliseconds: 300),
-                    pageBuilder: (_, __, ___) => PlateImageDialog(plateNumber: widget.plateNumber),
+                    pageBuilder: (_, __, ___) => DepartureCompletedPlateImageDialog(plateNumber: widget.plateNumber),
                   );
                 },
                 style: ElevatedButton.styleFrom(
@@ -167,71 +164,66 @@ class _TodayLogSectionState extends State<TodayLogSection> {
             switchOutCurve: Curves.easeIn,
             child: !_expanded
                 ? const Center(
-              key: ValueKey('collapsed'),
-              child: Text('번호판 영역을 눌러 로그를 펼치세요.'),
-            )
+                    key: ValueKey('collapsed'),
+                    child: Text('번호판 영역을 눌러 로그를 펼치세요.'),
+                  )
                 : (logs.isEmpty
-                ? const Center(
-              key: ValueKey('empty'),
-              child: Text('📭 로그가 없습니다.'),
-            )
-                : Scrollbar(
-              key: const ValueKey('list'),
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                itemCount: logs.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
-                itemBuilder: (context, index) {
-                  final e = logs[index];
+                    ? const Center(
+                        key: ValueKey('empty'),
+                        child: Text('📭 로그가 없습니다.'),
+                      )
+                    : Scrollbar(
+                        key: const ValueKey('list'),
+                        child: ListView.separated(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          itemCount: logs.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (context, index) {
+                            final e = logs[index];
 
-                  final action = (e['action'] ?? '-').toString();
-                  final from = (e['from'] ?? '').toString();
-                  final to = (e['to'] ?? '').toString();
-                  final performedBy = (e['performedBy'] ?? '').toString();
-                  final tsText = _formatTs(e['timestamp']);
+                            final action = (e['action'] ?? '-').toString();
+                            final from = (e['from'] ?? '').toString();
+                            final to = (e['to'] ?? '').toString();
+                            final performedBy = (e['performedBy'] ?? '').toString();
+                            final tsText = _formatTs(e['timestamp']);
 
-                  // 추가: 확정요금/결제수단/사유
-                  final String? feeText = (e.containsKey('lockedFee') || e.containsKey('lockedFeeAmount'))
-                      ? _formatWon(e['lockedFee'] ?? e['lockedFeeAmount'])
-                      : null;
-                  final String? payText = (e['paymentMethod']?.toString().trim().isNotEmpty ?? false)
-                      ? e['paymentMethod'].toString()
-                      : null;
-                  final String? reasonText = (e['reason']?.toString().trim().isNotEmpty ?? false)
-                      ? e['reason'].toString()
-                      : null;
+                            // 추가: 확정요금/결제수단/사유
+                            final String? feeText = (e.containsKey('lockedFee') || e.containsKey('lockedFeeAmount'))
+                                ? _formatWon(e['lockedFee'] ?? e['lockedFeeAmount'])
+                                : null;
+                            final String? payText = (e['paymentMethod']?.toString().trim().isNotEmpty ?? false)
+                                ? e['paymentMethod'].toString()
+                                : null;
+                            final String? reasonText =
+                                (e['reason']?.toString().trim().isNotEmpty ?? false) ? e['reason'].toString() : null;
 
-                  final color = _actionColor(action);
+                            final color = _actionColor(action);
 
-                  return ListTile(
-                    dense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    leading: Icon(_actionIcon(action), color: color),
-                    title: Text(action, style: TextStyle(fontWeight: FontWeight.w600, color: color)),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (from.isNotEmpty || to.isNotEmpty) Text('$from → $to'),
-                        if (performedBy.isNotEmpty) const SizedBox(height: 2),
-                        if (performedBy.isNotEmpty)
-                          const Text('담당자:', style: TextStyle(fontSize: 12)),
-                        if (performedBy.isNotEmpty)
-                          Text(performedBy, style: const TextStyle(fontSize: 12)),
-                        if (feeText != null || payText != null || reasonText != null) const SizedBox(height: 2),
-                        if (feeText != null)
-                          Text('확정요금: $feeText', style: const TextStyle(fontSize: 12)),
-                        if (payText != null)
-                          Text('결제수단: $payText', style: const TextStyle(fontSize: 12)),
-                        if (reasonText != null)
-                          Text('사유: $reasonText', style: const TextStyle(fontSize: 12)),
-                      ],
-                    ),
-                    trailing: Text(tsText, style: const TextStyle(fontSize: 12)),
-                    isThreeLine: true,
-                  );
-                },
-              ),
-            )),
+                            return ListTile(
+                              dense: true,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              leading: Icon(_actionIcon(action), color: color),
+                              title: Text(action, style: TextStyle(fontWeight: FontWeight.w600, color: color)),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (from.isNotEmpty || to.isNotEmpty) Text('$from → $to'),
+                                  if (performedBy.isNotEmpty) const SizedBox(height: 2),
+                                  if (performedBy.isNotEmpty) const Text('담당자:', style: TextStyle(fontSize: 12)),
+                                  if (performedBy.isNotEmpty) Text(performedBy, style: const TextStyle(fontSize: 12)),
+                                  if (feeText != null || payText != null || reasonText != null)
+                                    const SizedBox(height: 2),
+                                  if (feeText != null) Text('확정요금: $feeText', style: const TextStyle(fontSize: 12)),
+                                  if (payText != null) Text('결제수단: $payText', style: const TextStyle(fontSize: 12)),
+                                  if (reasonText != null) Text('사유: $reasonText', style: const TextStyle(fontSize: 12)),
+                                ],
+                              ),
+                              trailing: Text(tsText, style: const TextStyle(fontSize: 12)),
+                              isThreeLine: true,
+                            );
+                          },
+                        ),
+                      )),
           ),
         ),
       ],

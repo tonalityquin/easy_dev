@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../models/plate_model.dart';
-import '../../repositories/plate/plate_repository.dart';
+import '../../repositories/plate_repo_services/plate_repository.dart';
 import '../../enums/plate_type.dart';
 import '../../models/plate_log_model.dart';
 

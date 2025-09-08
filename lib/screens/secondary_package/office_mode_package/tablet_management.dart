@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../../models/user_model.dart';
 import '../../../models/tablet_model.dart';
-import '../../../repositories/user/user_repository.dart';
+import '../../../repositories/user_repo_services/user_repository.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../widgets/navigation/secondary_mini_navigation.dart';
 import 'tablet_management_package/tablet_setting.dart';

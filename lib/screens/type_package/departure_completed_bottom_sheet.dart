@@ -10,7 +10,7 @@ import '../../states/user/user_state.dart';
 
 import 'departure_completed_package/departure_completed_tab_settled.dart';
 import 'departure_completed_package/departure_completed_tab_unsettled.dart';
-import 'departure_completed_package/widgets/selected_date_bar.dart';
+import 'departure_completed_package/widgets/departure_completed_selected_date_bar.dart';
 
 class DepartureCompletedBottomSheet extends StatefulWidget {
   const DepartureCompletedBottomSheet({super.key});
@@ -111,7 +111,7 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
                             ),
                           ),
                           const SizedBox(height: 8),
-                          SelectedDateBar(visible: !isSettled),
+                          DepartureCompletedSelectedDateBar(visible: !isSettled),
                           const SizedBox(height: 8),
                           Expanded(
                             child: TabBarView(

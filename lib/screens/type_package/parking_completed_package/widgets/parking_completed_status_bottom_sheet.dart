@@ -11,7 +11,7 @@ import '../../../../states/user/user_state.dart';
 import '../../../../enums/plate_type.dart';
 
 // 추가된 의존성
-import '../../../../repositories/plate/plate_repository.dart';
+import '../../../../repositories/plate_repo_services/plate_repository.dart';
 import '../../../../states/plate/plate_state.dart';
 import '../../../../utils/snackbar_helper.dart';
 import '../../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';

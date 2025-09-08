@@ -8,7 +8,7 @@ import 'package:googleapis_auth/auth_io.dart';
 import 'package:flutter/services.dart';
 
 import '../../../models/plate_model.dart';
-import '../../../repositories/plate/plate_repository.dart';
+import '../../../repositories/plate_repo_services/plate_repository.dart';
 import '../../../states/plate/modify_plate.dart';
 import '../../../states/area/area_state.dart';
 import '../../../states/user/user_state.dart';

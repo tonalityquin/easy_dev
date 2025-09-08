@@ -28,7 +28,7 @@ import '../../states/user/user_state.dart';
 
 import '../../utils/snackbar_helper.dart';
 
-import 'parking_completed_package/widgets/signature_plate_search_bottom_sheet/signature_plate_search_bottom_sheet.dart';
+import 'parking_completed_package/widgets/signature_plate_search_bottom_sheet/parking_completed_search_bottom_sheet.dart';
 import '../../widgets/navigation/top_navigation.dart';
 import '../../widgets/container/plate_container.dart';
 
@@ -78,7 +78,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
     showDialog(
       context: context,
       builder: (context) {
-        return SignaturePlateSearchBottomSheet(
+        return ParkingCompletedSearchBottomSheet(
           onSearch: (_) {},
           area: currentArea,
         );

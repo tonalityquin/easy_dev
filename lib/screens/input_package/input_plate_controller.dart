@@ -8,7 +8,7 @@ import 'utils/input_plate_service.dart';
 import '../../states/bill/bill_state.dart';
 import '../../states/user/user_state.dart';
 import '../../states/area/area_state.dart';
-import '../../repositories/plate/firestore_plate_repository.dart';
+import '../../repositories/plate_repo_services/firestore_plate_repository.dart';
 
 class InputPlateController {
   final TextEditingController controllerFrontDigit = TextEditingController();

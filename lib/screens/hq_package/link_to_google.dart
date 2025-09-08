@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../widgets/navigation/navigation_hq_mini.dart';
 import '../../widgets/navigation/top_navigation.dart';
-import '../type_package/common_widgets/dashboard_bottom_sheet/dash_board_page.dart';
+import '../type_package/common_widgets/dashboard_bottom_sheet/hq_dash_board_page.dart';
 import 'link_to_google_package/cooperation_calendar.dart';
 import 'link_to_google_package/completed_event_page.dart';
 
@@ -61,7 +61,7 @@ class _LinkToGoogleState extends State<LinkToGoogle> {
         body: _selectedIndex == 0
             ? CooperationCalendar(calendarId: calendarId)
             : _selectedIndex == 1
-                ? const DashBoardPage()
+                ? const HqDashBoardPage()
                 : _selectedIndex == 2
                     ? CompletedEventPage(calendarId: calendarId)
                     : const Center(child: Text('해당 탭의 콘텐츠는 준비 중입니다.')),

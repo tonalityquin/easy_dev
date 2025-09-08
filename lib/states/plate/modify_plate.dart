@@ -5,7 +5,7 @@ import '../../models/plate_log_model.dart';
 import '../../utils/snackbar_helper.dart';
 import '../area/area_state.dart';
 import '../user/user_state.dart';
-import '../../repositories/plate/plate_repository.dart';
+import '../../repositories/plate_repo_services/plate_repository.dart';
 
 class ModifyPlate with ChangeNotifier {
   final PlateRepository _plateRepository;

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../models/user_model.dart';
-import '../../../repositories/user/user_repository.dart';
+import '../../../repositories/user_repo_services/user_repository.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../widgets/navigation/secondary_mini_navigation.dart';
 import 'user_management_package/user_setting.dart';

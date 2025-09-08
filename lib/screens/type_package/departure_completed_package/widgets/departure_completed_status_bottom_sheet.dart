@@ -1,18 +1,16 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'package:easydev/models/plate_model.dart';
-import 'package:easydev/screens/modify_package/modify_plate_screen.dart';
-import 'package:easydev/screens/log_package/log_viewer_bottom_sheet.dart';
-import 'package:easydev/states/user/user_state.dart';
-import 'package:easydev/enums/plate_type.dart';
-
-// [추가] 사전 정산 로직/저장/피드백에 필요한 의존성
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:easydev/repositories/plate/plate_repository.dart';
-import 'package:easydev/states/plate/plate_state.dart';
-import 'package:easydev/utils/snackbar_helper.dart';
-import 'package:easydev/widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
+import '../../../../enums/plate_type.dart';
+import '../../../../models/plate_model.dart';
+import '../../../../repositories/plate_repo_services/plate_repository.dart';
+import '../../../../states/plate/plate_state.dart';
+import '../../../../states/user/user_state.dart';
+import '../../../../utils/snackbar_helper.dart';
+import '../../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
+import '../../../log_package/log_viewer_bottom_sheet.dart';
+import '../../../modify_package/modify_plate_screen.dart';
 
 Future<void> showDepartureCompletedStatusBottomSheet({
   required BuildContext context,
@@ -75,6 +73,7 @@ Future<void> showDepartureCompletedStatusBottomSheet({
                   onPressed: () async {
                     final userName = context.read<UserState>().name;
                     final repo = context.read<PlateRepository>();
+
                     final plateState = context.read<PlateState>();
                     final firestore = FirebaseFirestore.instance;
 

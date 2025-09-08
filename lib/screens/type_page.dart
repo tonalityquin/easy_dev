@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../enums/plate_type.dart';
-import '../repositories/plate/plate_repository.dart';
+import '../repositories/plate_repo_services/plate_repository.dart';
 import '../states/calendar/field_calendar_state.dart';
 import '../states/page/page_state.dart';
 import '../states/page/page_info.dart';
@@ -13,7 +13,7 @@ import '../states/user/user_state.dart';
 import '../utils/app_colors.dart';
 
 import '../screens/input_package/input_plate_screen.dart';
-import '../screens/type_package/common_widgets/dashboard_bottom_sheet/dash_board_bottom_sheet.dart';
+import '../screens/type_package/common_widgets/dashboard_bottom_sheet/home_dash_board_bottom_sheet.dart';
 import 'type_package/common_widgets/chats/chat_bottom_sheet.dart';
 import 'secondary_page.dart';
 import '../utils/snackbar_helper.dart';
@@ -135,7 +135,7 @@ class _ChatDashboardBar extends StatelessWidget {
                   isScrollControlled: true,
                   useSafeArea: true,
                   backgroundColor: Colors.transparent,
-                  builder: (_) => const DashBoardBottomSheet(),
+                  builder: (_) => const HomeDashBoardBottomSheet(),
                 );
               },
               style: ElevatedButton.styleFrom(

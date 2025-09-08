@@ -15,7 +15,7 @@ import '../../states/area/area_state.dart';
 import '../../utils/snackbar_helper.dart';
 import 'utils/modify_plate_service.dart';
 
-import '../../repositories/plate/firestore_plate_repository.dart';
+import '../../repositories/plate_repo_services/firestore_plate_repository.dart';
 
 class ModifyPlateController {
   final BuildContext context;

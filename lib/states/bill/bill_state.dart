@@ -4,7 +4,7 @@ import 'dart:convert';
 
 import '../../models/bill_model.dart';
 import '../../models/regular_bill_model.dart';
-import '../../repositories/bill_repo/bill_repository.dart';
+import '../../repositories/bill_repo_services/bill_repository.dart';
 import '../area/area_state.dart';
 
 class BillState extends ChangeNotifier {

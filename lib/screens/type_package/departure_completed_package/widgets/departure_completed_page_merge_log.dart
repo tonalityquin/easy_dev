@@ -8,7 +8,7 @@ import 'package:googleapis/storage/v1.dart';
 import 'package:googleapis_auth/auth_io.dart';
 
 // ⬇️ 사진 다이얼로그(경로는 프로젝트 구조에 맞게 조정하세요)
-import 'plate_image_dialog.dart';
+import 'departure_completed_plate_image_dialog.dart';
 
 /// === GCS 설정 ===
 const String kBucketName = 'easydev-image';
@@ -238,7 +238,7 @@ class _MergedLogSectionState extends State<MergedLogSection> {
       barrierDismissible: true,
       barrierLabel: "사진 보기",
       transitionDuration: const Duration(milliseconds: 300),
-      pageBuilder: (_, __, ___) => PlateImageDialog(plateNumber: plateNumber),
+      pageBuilder: (_, __, ___) => DepartureCompletedPlateImageDialog(plateNumber: plateNumber),
     );
   }
 

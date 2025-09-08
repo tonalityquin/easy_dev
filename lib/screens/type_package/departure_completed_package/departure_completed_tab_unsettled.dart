@@ -5,7 +5,7 @@ import '../../../enums/plate_type.dart';
 import '../../../states/plate/plate_state.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../widgets/container/plate_container.dart';
-import '../departure_completed_package/field_calendar_inline.dart';
+import '../departure_completed_package/departure_completed_field_calendar_inline.dart';
 
 import '../departure_completed_package/widgets/departure_completed_status_bottom_sheet.dart';
 import '../../../models/plate_model.dart';
@@ -75,7 +75,7 @@ class _DepartureCompletedUnsettledTabState extends State<DepartureCompletedUnset
               isOpen: _openCalendar,
               child: const Padding(
                 padding: EdgeInsets.fromLTRB(8, 12, 8, 8),
-                child: FieldCalendarInline(),
+                child: DepartureCompletedFieldCalendarInline(),
               ),
             ),
             const SizedBox(height: 12),

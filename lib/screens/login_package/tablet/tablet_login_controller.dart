@@ -2,11 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../models/user_model.dart';
-import 'debugs/tablet_login_debug_firestore_logger.dart';
 import 'personal/tablet_personal_calendar.dart';
 import 'utils/tablet_login_network_service.dart';
 import 'utils/tablet_login_validate.dart'; // 비밀번호 검증만 사용
-import '../../../repositories/user/user_repository.dart';
+import '../../../repositories/user_repo_services/user_repository.dart';
 import '../../../states/area/area_state.dart';
 import '../../../states/user/user_state.dart';
 import '../../../utils/snackbar_helper.dart';
@@ -48,20 +47,12 @@ class TabletLoginController {
   }
 
   void initState() {
-    TabletLoginDebugFirestoreLogger().log('TabletLoginController 초기화 시작', level: 'info');
-
     // ✅ 태블릿 자동로그인 진입점
     Provider.of<UserState>(context, listen: false).loadTabletToLogIn().then((_) {
       final isLoggedIn = Provider.of<UserState>(context, listen: false).isLoggedIn;
 
-      TabletLoginDebugFirestoreLogger().log(
-        '이전 로그인 정보 로드 완료(태블릿): isLoggedIn=$isLoggedIn',
-        level: 'success',
-      );
-
       if (isLoggedIn && context.mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          TabletLoginDebugFirestoreLogger().log('자동 로그인(태블릿): TabletPage로 이동', level: 'info');
           Navigator.pushReplacementNamed(context, AppRoutes.tablet); // ✅ 변경: /tablet_page 로 이동
         });
       }
@@ -76,14 +67,11 @@ class TabletLoginController {
 
     // 백도어: 개인 캘린더
     if (name.isEmpty && handle.isEmpty && password == '00000') {
-      TabletLoginDebugFirestoreLogger().log('비밀번호 00000으로 TabletPersonalCalendar 진입', level: 'info');
       Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const TabletPersonalCalendar()),
       );
       return;
     }
-
-    TabletLoginDebugFirestoreLogger().log('로그인 시도(태블릿): name="$name", handle="$handle"', level: 'called');
 
     // ===== 입력 검증 =====
     final handleError = _validateHandle(handle);
@@ -91,29 +79,24 @@ class TabletLoginController {
 
     if (name.isEmpty) {
       showFailedSnackbar(context, '이름을 입력해주세요.');
-      TabletLoginDebugFirestoreLogger().log('이름 미입력', level: 'error');
       return;
     }
     if (handleError != null) {
       showFailedSnackbar(context, handleError);
-      TabletLoginDebugFirestoreLogger().log('핸들 오류: $handleError', level: 'error');
       return;
     }
     if (passwordError != null) {
       showFailedSnackbar(context, passwordError);
-      TabletLoginDebugFirestoreLogger().log('비밀번호 오류: $passwordError', level: 'error');
       return;
     }
 
     setState(() => isLoading = true);
-    TabletLoginDebugFirestoreLogger().log('로그인 처리 중(태블릿)...', level: 'info');
 
     // 네트워크 체크
     if (!await TabletLoginNetworkService().isConnected()) {
       if (context.mounted) {
         showFailedSnackbar(context, '인터넷 연결이 필요합니다.');
       }
-      TabletLoginDebugFirestoreLogger().log('네트워크 연결 실패', level: 'error');
       setState(() => isLoading = false);
       return;
     }
@@ -123,10 +106,7 @@ class TabletLoginController {
       final tablet = await repo.getTabletByHandle(handle);
 
       if (tablet != null) {
-        TabletLoginDebugFirestoreLogger().log('태블릿 계정 조회 성공: ${tablet.id}', level: 'success');
-      } else {
-        TabletLoginDebugFirestoreLogger().log('태블릿 계정 조회 실패(handle 미일치)', level: 'error');
-      }
+      } else {}
 
       if (context.mounted) {
         debugPrint('입력값: name=$name, handle=$handle, password=$password');
@@ -143,13 +123,10 @@ class TabletLoginController {
         final areaState = context.read<AreaState>();
 
         // 표시/저장용 지역명 결정(한글 지역명 우선)
-        final areaName = (tablet.selectedArea ??
-            tablet.currentArea ??
-            (tablet.areas.isNotEmpty ? tablet.areas.first : ''))
-            .trim();
+        final areaName =
+            (tablet.selectedArea ?? tablet.currentArea ?? (tablet.areas.isNotEmpty ? tablet.areas.first : '')).trim();
         if (areaName.isEmpty) {
           showFailedSnackbar(context, '해당 계정에 등록된 지역이 없습니다.');
-          TabletLoginDebugFirestoreLogger().log('인증 실패: areaName 비어있음', level: 'error');
           setState(() => isLoading = false);
           return;
         }
@@ -165,15 +142,18 @@ class TabletLoginController {
           endTime: tablet.endTime,
           englishSelectedAreaName: tablet.englishSelectedAreaName,
           fixedHolidays: List<String>.from(tablet.fixedHolidays),
-          isSaved: true, // 로그인 성공 시 저장됨
+          isSaved: true,
+          // 로그인 성공 시 저장됨
           isSelected: tablet.isSelected,
           isWorking: tablet.isWorking,
           name: tablet.name,
           password: tablet.password,
-          phone: tablet.handle, // 중요: handle을 phone 슬롯에 넣어 상태/UI 호환
+          phone: tablet.handle,
+          // 중요: handle을 phone 슬롯에 넣어 상태/UI 호환
           position: tablet.position,
           role: tablet.role,
-          selectedArea: areaName, // 한글 지역명
+          selectedArea: areaName,
+          // 한글 지역명
           startTime: tablet.startTime,
         );
 
@@ -187,11 +167,6 @@ class TabletLoginController {
         // 상태 업데이트: tablet_accounts 기준으로 저장/업서트 + prefs 저장 + 목록 리로드
         await userState.updateLoginTablet(userAsTablet);
 
-        TabletLoginDebugFirestoreLogger().log(
-          '로그인 성공(태블릿): user=${tablet.name}, area=$areaName',
-          level: 'success',
-        );
-
         // 현재 앱의 지역 컨텍스트 업데이트
         areaState.updateArea(areaName);
 
@@ -204,22 +179,18 @@ class TabletLoginController {
         if (context.mounted) {
           showFailedSnackbar(context, '이름 또는 비밀번호가 올바르지 않습니다.');
         }
-        TabletLoginDebugFirestoreLogger().log('로그인 인증 실패(태블릿)', level: 'error');
       }
     } catch (e) {
       if (context.mounted) {
         showFailedSnackbar(context, '로그인 실패: $e');
       }
-      TabletLoginDebugFirestoreLogger().log('예외 발생: $e', level: 'error');
     } finally {
       setState(() => isLoading = false);
-      TabletLoginDebugFirestoreLogger().log('로그인 프로세스 종료(태블릿)', level: 'info');
     }
   }
 
   void togglePassword() {
     obscurePassword = !obscurePassword;
-    TabletLoginDebugFirestoreLogger().log('비밀번호 가시성 변경: $obscurePassword', level: 'info');
   }
 
   /// UI에서 호출 중인 메서드명을 유지하면서 핸들 정규화로 동작 변경
@@ -231,7 +202,6 @@ class TabletLoginController {
         selection: TextSelection.collapsed(offset: normalized.length),
       );
     });
-    TabletLoginDebugFirestoreLogger().log('핸들 포맷팅: $normalized', level: 'info');
   }
 
   InputDecoration inputDecoration({
@@ -262,6 +232,5 @@ class TabletLoginController {
     nameFocus.dispose();
     phoneFocus.dispose();
     passwordFocus.dispose();
-    TabletLoginDebugFirestoreLogger().log('TabletLoginDebugFirestoreLogger dispose() 호출됨', level: 'info');
   }
 }

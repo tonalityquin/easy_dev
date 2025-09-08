@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../models/plate_log_model.dart';
 import '../../../models/plate_model.dart';
-import '../../../repositories/plate/firestore_plate_repository.dart';
+import '../../../repositories/plate_repo_services/firestore_plate_repository.dart';
 
 // ⛔️ GCS 직접 로드는 MergedLogSection 내부에서 처리
 import '../departure_completed_package/widgets/departure_completed_page_merge_log.dart';

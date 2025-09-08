@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
-import '../../repositories/location/location_repository.dart';
+import '../../repositories/location_repo_services/location_repository.dart';
 import '../../models/location_model.dart';
 import '../area/area_state.dart';
 

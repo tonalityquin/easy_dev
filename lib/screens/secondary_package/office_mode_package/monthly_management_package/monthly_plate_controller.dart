@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../../../utils/snackbar_helper.dart';
 
-import '../../../../repositories/plate/firestore_plate_repository.dart';
+import '../../../../repositories/plate_repo_services/firestore_plate_repository.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../../states/area/area_state.dart';
 

@@ -4,7 +4,7 @@ import 'game_package/pelican_sorter_game.dart';
 import 'game_package/tetris.dart';
 import 'game_package/minesweeper.dart';
 import 'game_package/lights_out.dart';
-import 'game_package/netwalk.dart';
+import 'game_package/video_poker.dart';
 
 class GameArcadeBottomSheet extends StatelessWidget {
   final BuildContext rootContext; // 바텀시트 밖으로 네비게이션할 때 사용
@@ -112,12 +112,12 @@ class GameArcadeBottomSheet extends StatelessWidget {
                                 MaterialPageRoute(builder: (_) => const LightsOut()),
                               );
                               break;
-                            case _GameRoute.netwalk:
+                            case _GameRoute.videoPokerPlus:
                               Navigator.of(rootContext).push(
-                                MaterialPageRoute(builder: (_) => const Netwalk()),
+                                MaterialPageRoute(builder: (_) => const VideoPokerPlusPage()),
                               );
                               break;
-                            case _GameRoute.pelicanSorter: // ⬅ 추가: 펠리컨 소터
+                            case _GameRoute.pelicanSorter: // ⬅ 펠리컨 소터
                               Navigator.of(rootContext).push(
                                 MaterialPageRoute(builder: (_) => const PelicanSorterPage()),
                               );
@@ -143,10 +143,10 @@ class GameArcadeBottomSheet extends StatelessWidget {
 }
 
 // ──────────────────────────────────────────────────────────────
-// 게임 목록 정의 (테트리스 + 지뢰찾기 + 라이트아웃 + Netwalk + 펠리컨 소터)
+// 게임 목록 정의 (테트리스 + 지뢰찾기 + 라이트아웃 + 비디오 포커+ + 펠리컨 소터)
 // ──────────────────────────────────────────────────────────────
 
-enum _GameRoute { tetris, minesweeper, lightsOut, netwalk, pelicanSorter, comingSoon }
+enum _GameRoute { tetris, minesweeper, lightsOut, videoPokerPlus, pelicanSorter, comingSoon }
 
 class _GameItem {
   final String title;
@@ -171,7 +171,6 @@ const _games = <_GameItem>[
     title: '테트리스',
     subtitle: '클래식 드롭 퍼즐',
     icon: Icons.extension,
-    // 블록 느낌
     bg: Color(0xFFE0F7FA),
     fg: Color(0xFF006064),
     route: _GameRoute.tetris,
@@ -193,14 +192,14 @@ const _games = <_GameItem>[
     route: _GameRoute.lightsOut,
   ),
   _GameItem(
-    title: 'Netwalk',
-    subtitle: '회로 연결 퍼즐(난이도↑)',
-    icon: Icons.device_hub,
-    bg: Color(0xFFE8F5E9),
-    fg: Color(0xFF1B5E20),
-    route: _GameRoute.netwalk,
+    title: 'Video Poker+',
+    subtitle: '멀티핸드 · 오토홀드 · 도박',
+    icon: Icons.casino,
+    bg: Color(0xFFEDE7F6),
+    fg: Color(0xFF4A148C),
+    route: _GameRoute.videoPokerPlus,
   ),
-  // ⬇ 추가된 펠리컨 소터
+  // ⬇ 펠리컨 소터
   _GameItem(
     title: '펠리컨 소터',
     subtitle: '논리 카드 추론',

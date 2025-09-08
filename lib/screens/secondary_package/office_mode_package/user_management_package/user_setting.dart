@@ -2,11 +2,11 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../../../../models/user_model.dart';
-import 'sections/password_display.dart';
-import 'sections/role_type.dart';
+import 'sections/user_password_display_section.dart';
+import 'sections/user_role_type_section.dart';
 import 'sections/user_input_section.dart';
-import 'sections/role_dropdown_section.dart';
-import 'sections/validation_helpers.dart';
+import 'sections/user_role_dropdown_section.dart';
+import 'sections/user_validation_helpers_section.dart';
 
 class UserSettingBottomSheet extends StatefulWidget {
   final Function(
@@ -236,7 +236,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                 const SizedBox(height: 16),
 
                 // 권한 드롭다운
-                RoleDropdownSection(
+                UserRoleDropdownSection(
                   selectedRole: _selectedRole,
                   onChanged: (value) => setState(() => _selectedRole = value),
                 ),
@@ -262,7 +262,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                 const SizedBox(height: 16),
 
                 // 비밀번호 표시
-                PasswordDisplaySection(controller: _passwordController),
+                UserPasswordDisplaySection(controller: _passwordController),
                 const SizedBox(height: 16),
 
                 // 출근/퇴근 시간 선택
