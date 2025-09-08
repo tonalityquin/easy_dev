@@ -245,7 +245,7 @@ class CalendarModel extends ChangeNotifier {
     events.sort((a, b) {
       final sa = a.start?.dateTime ?? a.start?.date ?? DateTime(1900);
       final sb = b.start?.dateTime ?? b.start?.date ?? DateTime(1900);
-      return sa!.compareTo(sb!);
+      return sa.compareTo(sb);
     });
   }
 
