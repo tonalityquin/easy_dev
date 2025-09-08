@@ -4,7 +4,8 @@ import 'game_package/pelican_sorter_game.dart';
 import 'game_package/tetris.dart';
 import 'game_package/minesweeper.dart';
 import 'game_package/lights_out.dart';
-import 'game_package/video_poker.dart';
+// ⬇ WSOP 홀덤 데모로 교체
+import 'game_package/wsop_holdem.dart';
 
 class GameArcadeBottomSheet extends StatelessWidget {
   final BuildContext rootContext; // 바텀시트 밖으로 네비게이션할 때 사용
@@ -112,9 +113,9 @@ class GameArcadeBottomSheet extends StatelessWidget {
                                 MaterialPageRoute(builder: (_) => const LightsOut()),
                               );
                               break;
-                            case _GameRoute.videoPokerPlus:
+                            case _GameRoute.wsopHoldem:
                               Navigator.of(rootContext).push(
-                                MaterialPageRoute(builder: (_) => const VideoPokerPlusPage()),
+                                MaterialPageRoute(builder: (_) => const WsopHoldemPage()),
                               );
                               break;
                             case _GameRoute.pelicanSorter: // ⬅ 펠리컨 소터
@@ -143,10 +144,10 @@ class GameArcadeBottomSheet extends StatelessWidget {
 }
 
 // ──────────────────────────────────────────────────────────────
-// 게임 목록 정의 (테트리스 + 지뢰찾기 + 라이트아웃 + 비디오 포커+ + 펠리컨 소터)
+// 게임 목록 정의 (테트리스 + 지뢰찾기 + 라이트아웃 + WSOP 홀덤 + 펠리컨 소터)
 // ──────────────────────────────────────────────────────────────
 
-enum _GameRoute { tetris, minesweeper, lightsOut, videoPokerPlus, pelicanSorter, comingSoon }
+enum _GameRoute { tetris, minesweeper, lightsOut, wsopHoldem, pelicanSorter, comingSoon }
 
 class _GameItem {
   final String title;
@@ -192,12 +193,12 @@ const _games = <_GameItem>[
     route: _GameRoute.lightsOut,
   ),
   _GameItem(
-    title: 'Video Poker+',
-    subtitle: '멀티핸드 · 오토홀드 · 도박',
+    title: 'WSOP Hold’em',
+    subtitle: '토너먼트(WSOP/TDA) 데모',
     icon: Icons.casino,
     bg: Color(0xFFEDE7F6),
     fg: Color(0xFF4A148C),
-    route: _GameRoute.videoPokerPlus,
+    route: _GameRoute.wsopHoldem,
   ),
   // ⬇ 펠리컨 소터
   _GameItem(

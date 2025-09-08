@@ -1,10 +1,11 @@
 // File: lib/screens/stub_package/debug_bottom_sheet.dart
 //
-// - tail/전체 로드 토글
-// - 레벨 칩/태그 칩 필터 (가로 스크롤, 줄바꿈 없음)
-// - 검색(레벨/메시지/시간)
+// - error 로그만 표시
+// - Firestore / Local 소스 필터 칩
+// - 검색(메시지/시간)
 // - 내보내기/복사/전체삭제(회전 포함)
 // - 리스트 스크롤 성능 및 예외 처리
+// - 작은 화면에서도 안전하도록 타이틀/칩 영역 Row → Wrap 적용
 
 import 'dart:convert';
 
@@ -14,6 +15,9 @@ import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'debug_firestore_logger.dart';
+import 'debug_local_logger.dart';
+
+enum _LogSource { firestore, local }
 
 class DebugBottomSheet extends StatefulWidget {
   const DebugBottomSheet({super.key});
@@ -30,24 +34,19 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
   List<_LogEntry> _all = [];
   List<_LogEntry> _filtered = [];
 
-  // 태그 수집용
-  final Set<String> _allTags = {};
-  final Set<String> _selectedTags = {};
-
-  // 레벨 필터
-  final List<String> _levels = const ['success', 'error', 'called', 'warn', 'info'];
-  final Set<String> _selectedLevels = {'success', 'error', 'called', 'warn', 'info'};
-
   // 로딩 상태/모드
   bool _loading = true;
   bool _fullLoaded = false; // true면 회전 포함 전체 로드 완료
+
+  // 현재 소스
+  _LogSource _source = _LogSource.firestore;
 
   final DateFormat _fmt = DateFormat('yyyy-MM-dd HH:mm:ss');
 
   @override
   void initState() {
     super.initState();
-    _loadTail(); // 기본: 빠른 테일 로드
+    _loadTail();
   }
 
   @override
@@ -63,11 +62,12 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
       _loading = true;
       _fullLoaded = false;
     });
-    final lines = await DebugFirestoreLogger().readTailLines(
+
+    final lines = await _getLogger().readTailLines(
       maxLines: 1500,
-      maxBytes: 1024 * 1024, // 1MB
+      maxBytes: 1024 * 1024,
     );
-    _ingestLines(lines, newestFirst: true);
+    _ingestLines(lines);
   }
 
   Future<void> _loadAll() async {
@@ -75,22 +75,17 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
       _loading = true;
       _fullLoaded = true;
     });
-    final lines = await DebugFirestoreLogger().readAllLinesCombined();
-    _ingestLines(lines, newestFirst: false); // oldest..newest → 최신 우선 정렬
+    final lines = await _getLogger().readAllLinesCombined();
+    _ingestLines(lines);
   }
 
-  void _ingestLines(List<String> lines, {required bool newestFirst}) {
+  void _ingestLines(List<String> lines) {
     final entries = lines.map(_parseLine).whereType<_LogEntry>().toList();
-    // 최신이 위로 오도록
     entries.sort((a, b) {
       final at = a.ts?.millisecondsSinceEpoch ?? 0;
       final bt = b.ts?.millisecondsSinceEpoch ?? 0;
       return bt.compareTo(at);
     });
-
-    _allTags
-      ..clear()
-      ..addAll(entries.expand((e) => e.tags));
 
     setState(() {
       _all = entries;
@@ -102,21 +97,12 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
   // ------- 필터 로직 -------
   void _applyFilter() {
     final key = _searchCtrl.text.trim().toLowerCase();
-    final hasTagFilter = _selectedTags.isNotEmpty;
 
     _filtered = _all.where((e) {
-      // 레벨
-      if (e.level != null && !_selectedLevels.contains(e.level)) return false;
+      if (e.level != 'error') return false;
 
-      // 태그
-      if (hasTagFilter && !_selectedTags.any((t) => e.tags.contains(t))) {
-        return false;
-      }
-
-      // 검색
       if (key.isNotEmpty) {
         final s = StringBuffer();
-        if (e.level != null) s.write('${e.level} ');
         if (e.message != null) s.write('${e.message} ');
         if (e.ts != null) s.write(_fmt.format(e.ts!));
         if (!s.toString().toLowerCase().contains(key)) return false;
@@ -127,54 +113,6 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
   }
 
   void _onSearchChanged(String _) => setState(_applyFilter);
-
-  void _toggleLevel(String lv) {
-    setState(() {
-      if (_selectedLevels.contains(lv)) {
-        _selectedLevels.remove(lv);
-      } else {
-        _selectedLevels.add(lv);
-      }
-      if (_selectedLevels.isEmpty) {
-        _selectedLevels.add(lv); // 최소 1개는 유지
-      }
-      _applyFilter();
-    });
-  }
-
-  void _toggleTag(String tag) {
-    setState(() {
-      if (_selectedTags.contains(tag)) {
-        _selectedTags.remove(tag);
-      } else {
-        _selectedTags.add(tag);
-      }
-      _applyFilter();
-    });
-  }
-
-  void _clearTagFilter() {
-    setState(() {
-      _selectedTags.clear();
-      _applyFilter();
-    });
-  }
-
-  void _selectAllLevels() {
-    setState(() {
-      _selectedLevels
-        ..clear()
-        ..addAll(_levels);
-      _applyFilter();
-    });
-  }
-
-  void _selectNoLevels() {
-    setState(() {
-      _selectedLevels.clear();
-      _applyFilter();
-    });
-  }
 
   // ------- 기타 액션 -------
   Future<void> _refresh() async {
@@ -190,28 +128,21 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
 
   Future<void> _clear() async {
     if (!mounted) return;
-    setState(() {
-      _loading = true;
-    });
+    setState(() => _loading = true);
 
     try {
-      await DebugFirestoreLogger().init();     // 안전장치
-      await DebugFirestoreLogger().clearLog(); // 실제 삭제
+      await _getLogger().init();
+      await _getLogger().clearLog();
 
-      // 필터/검색 초기화 + info 보이게
       _searchCtrl.clear();
-      _selectedTags.clear();
-      _selectAllLevels();
-
       _all.clear();
       _filtered.clear();
 
-      // 최신만(빠름) 재로드
       await _loadTail();
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('로그가 삭제되었습니다.')),
+        SnackBar(content: Text('${_labelForSource()} 로그가 삭제되었습니다.')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -220,9 +151,7 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
       );
     } finally {
       if (mounted) {
-        setState(() {
-          _loading = false;
-        });
+        setState(() => _loading = false);
       }
     }
   }
@@ -237,19 +166,33 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
   }
 
   Future<void> _export() async {
-    final files = await DebugFirestoreLogger().getAllLogFilesExisting();
+    final files = await _getLogger().getAllLogFilesExisting();
     if (files.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('내보낼 로그 파일이 없습니다.')),
+        SnackBar(content: Text('내보낼 ${_labelForSource()} 로그 파일이 없습니다.')),
       );
       return;
     }
     await Share.shareXFiles(
       files.map((f) => XFile(f.path)).toList(),
-      text: 'Firestore 로그 묶음(회전 포함)',
-      subject: 'Firestore 로그',
+      text: '${_labelForSource()} 로그 묶음(회전 포함)',
+      subject: '${_labelForSource()} 로그',
     );
+  }
+
+  // ------- Helpers -------
+  dynamic _getLogger() {
+    switch (_source) {
+      case _LogSource.local:
+        return DebugLocalLogger();
+      case _LogSource.firestore:
+        return DebugFirestoreLogger();
+    }
+  }
+
+  String _labelForSource() {
+    return _source == _LogSource.local ? 'Local' : 'Firestore';
   }
 
   // ------- UI -------
@@ -278,31 +221,86 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
                   ),
                 ),
                 const SizedBox(height: 10),
+
+                // 타이틀 + 소스 선택 + 액션 (Wrap으로 오버플로우 방지)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
+                  child: Wrap(
+                    spacing: 12,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    alignment: WrapAlignment.spaceBetween,
                     children: [
-                      Icon(Icons.bug_report_rounded, color: cs.primary),
-                      const SizedBox(width: 8),
-                      Text('Firestore 로그', style: text.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
-                      const Spacer(),
-                      Tooltip(
-                        message: _fullLoaded ? '최근만 보기(빠름)' : '전체 불러오기(회전 포함)',
-                        child: TextButton.icon(
-                          onPressed: _fullLoaded ? _loadTail : _loadAll,
-                          icon: Icon(_fullLoaded ? Icons.bolt : Icons.unfold_more),
-                          label: Text(_fullLoaded ? '최근만' : '전체'),
+                      // 왼쪽: 아이콘 + 제목 (좁은 폭에서 말줄임)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.bug_report_rounded, color: cs.primary),
+                          const SizedBox(width: 8),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 240),
+                            child: Text(
+                              '${_labelForSource()} 에러 로그',
+                              overflow: TextOverflow.ellipsis,
+                              style: text.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      // 가운데: 소스 선택 칩(가로 스크롤 허용)
+                      SizedBox(
+                        height: 36,
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ChoiceChip(
+                                label: const Text('Firestore'),
+                                selected: _source == _LogSource.firestore,
+                                onSelected: (_) => setState(() {
+                                  _source = _LogSource.firestore;
+                                  _loadTail();
+                                }),
+                              ),
+                              const SizedBox(width: 6),
+                              ChoiceChip(
+                                label: const Text('Local'),
+                                selected: _source == _LogSource.local,
+                                onSelected: (_) => setState(() {
+                                  _source = _LogSource.local;
+                                  _loadTail();
+                                }),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                      IconButton(
-                        tooltip: '새로고침',
-                        onPressed: _refresh,
-                        icon: const Icon(Icons.refresh),
-                      ),
-                      IconButton(
-                        tooltip: '닫기',
-                        onPressed: () => Navigator.of(context).maybePop(),
-                        icon: const Icon(Icons.close_rounded),
+
+                      // 오른쪽: 액션 버튼들
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Tooltip(
+                            message: _fullLoaded ? '최근만 보기(빠름)' : '전체 불러오기(회전 포함)',
+                            child: TextButton.icon(
+                              onPressed: _fullLoaded ? _loadTail : _loadAll,
+                              icon: Icon(_fullLoaded ? Icons.bolt : Icons.unfold_more),
+                              label: Text(_fullLoaded ? '최근만' : '전체'),
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: '새로고침',
+                            onPressed: _refresh,
+                            icon: const Icon(Icons.refresh),
+                          ),
+                          IconButton(
+                            tooltip: '닫기',
+                            onPressed: () => Navigator.of(context).maybePop(),
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -319,7 +317,7 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
                           controller: _searchCtrl,
                           onChanged: _onSearchChanged,
                           decoration: InputDecoration(
-                            hintText: '검색 (레벨/메시지/시간)',
+                            hintText: '검색 (메시지/시간)',
                             isDense: true,
                             prefixIcon: const Icon(Icons.search_rounded),
                             suffixIcon: _searchCtrl.text.isEmpty
@@ -358,82 +356,6 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
                 ),
                 const SizedBox(height: 8),
 
-                // 레벨 칩 (가로 스크롤, 줄바꿈 없음)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        _chipButton(
-                          label: '모두',
-                          selected: _selectedLevels.length == _levels.length,
-                          onTap: _selectAllLevels,
-                          color: Colors.black87,
-                        ),
-                        const SizedBox(width: 8),
-                        _chipButton(
-                          label: '없음',
-                          selected: _selectedLevels.isEmpty,
-                          onTap: _selectNoLevels,
-                          color: Colors.black54,
-                        ),
-                        const SizedBox(width: 8),
-                        _levelChip('success', Colors.green),
-                        const SizedBox(width: 8),
-                        _levelChip('error', Colors.redAccent),
-                        const SizedBox(width: 8),
-                        _levelChip('called', Colors.blueAccent),
-                        const SizedBox(width: 8),
-                        _levelChip('warn', Colors.orange),
-                        const SizedBox(width: 8),
-                        _levelChip('info', cs.onSurface),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 6),
-
-                // 태그 칩(이미 가로 스크롤)
-                if (_allTags.isNotEmpty) ...[
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.tag, size: 16, color: Colors.black54),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
-                              children: [
-                                const SizedBox(width: 2),
-                                FilterChip(
-                                  label: const Text('태그 초기화'),
-                                  selected: _selectedTags.isEmpty,
-                                  onSelected: (_) => _clearTagFilter(),
-                                ),
-                                const SizedBox(width: 6),
-                                ..._allTags.map(
-                                      (t) => Padding(
-                                    padding: const EdgeInsets.only(right: 6),
-                                    child: FilterChip(
-                                      label: Text('#$t'),
-                                      selected: _selectedTags.contains(t),
-                                      onSelected: (_) => _toggleTag(t),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                ],
-
                 const Divider(height: 1),
 
                 Expanded(
@@ -458,94 +380,29 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
     );
   }
 
-  // UI helpers
-  Widget _chipButton({
-    required String label,
-    required bool selected,
-    required VoidCallback onTap,
-    Color? color,
-  }) {
-    return ChoiceChip(
-      label: Text(label),
-      selected: selected,
-      onSelected: (_) => onTap(),
-      selectedColor: (color ?? Colors.black87).withOpacity(.12),
-    );
-  }
-
-  Widget _levelChip(String lv, Color color) {
-    return FilterChip(
-      label: Text(lv),
-      selected: _selectedLevels.contains(lv),
-      onSelected: (_) => _toggleLevel(lv),
-      selectedColor: color.withOpacity(.12),
-      checkmarkColor: color,
-    );
-  }
-
   // -------- 파서 --------
   _LogEntry? _parseLine(String line) {
     if (line.trim().isEmpty) return null;
 
-    // JSON 우선
     try {
       final m = jsonDecode(line);
       if (m is Map<String, dynamic>) {
         final ts = (m['ts'] is String) ? DateTime.tryParse(m['ts'] as String) : null;
         final level = (m['level'] as String?)?.toLowerCase();
         final msg = (m['message'] as String?) ?? '';
-        final tags = <String>{};
-        final rawTags = m['tags'];
-        if (rawTags is List) {
-          for (final t in rawTags) {
-            if (t is String && t.trim().isNotEmpty) tags.add(t.trim());
-          }
-        } else {
-          // 메시지에서 #태그 추출(레거시 호환)
-          tags.addAll(_extractHashTags(msg));
-        }
-        return _LogEntry(ts: ts, level: level ?? 'info', message: msg, tags: tags.toList(), original: line);
+        return _LogEntry(ts: ts, level: level ?? 'error', message: msg, original: line);
       }
-    } catch (_) {
-      /* not json */
-    }
+    } catch (_) {}
 
-    // 레거시 "ISO: [LEVEL] message"
     DateTime? ts;
-    String? level;
     String msg = line;
     final idx = line.indexOf(': ');
     if (idx > 0) {
       ts = DateTime.tryParse(line.substring(0, idx));
-      final rest = line.substring(idx + 2);
-      final l1 = rest.indexOf('['), l2 = rest.indexOf(']');
-      if (l1 >= 0 && l2 > l1) {
-        level = rest.substring(l1 + 1, l2).toLowerCase();
-        msg = rest.substring(l2 + 1).trimLeft();
-      } else {
-        msg = rest;
-      }
+      msg = line.substring(idx + 2);
     }
 
-    final low = msg.toLowerCase();
-    level ??= low.contains('🔥') || low.contains('[error]')
-        ? 'error'
-        : low.contains('✅') || low.contains('[success]')
-        ? 'success'
-        : low.contains('[called]')
-        ? 'called'
-        : low.contains('warn')
-        ? 'warn'
-        : 'info';
-
-    final tags = _extractHashTags(msg);
-
-    return _LogEntry(ts: ts, level: level, message: msg, tags: tags.toList(), original: line);
-  }
-
-  Set<String> _extractHashTags(String text) {
-    final re = RegExp(r'(^|\s)#([a-zA-Z0-9_\-]+)');
-    return re.allMatches(text).map((m) => m.group(2)!).toSet();
+    return _LogEntry(ts: ts, level: 'error', message: msg, original: line);
   }
 }
 
@@ -553,10 +410,9 @@ class _LogEntry {
   final DateTime? ts;
   final String? level;
   final String? message;
-  final List<String> tags;
   final String? original;
 
-  _LogEntry({this.ts, this.level, this.message, this.tags = const [], this.original});
+  _LogEntry({this.ts, this.level, this.message, this.original});
 }
 
 class _LogTile extends StatelessWidget {
@@ -567,9 +423,6 @@ class _LogTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = _levelColor(context, entry.level);
-    final icon = _levelIcon(entry.level);
-
     final date = entry.ts != null ? fmt.format(entry.ts!) : '';
     final datePart = date.split(' ');
     final d0 = datePart.isNotEmpty ? datePart.first : '';
@@ -580,7 +433,7 @@ class _LogTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: color, size: 18),
+          const Icon(Icons.error, color: Colors.redAccent, size: 18),
           const SizedBox(width: 8),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -591,75 +444,13 @@ class _LogTile extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (entry.tags.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          ...entry.tags.map((t) => Padding(
-                            padding: const EdgeInsets.only(right: 6),
-                            child: _tagPill(t),
-                          )),
-                        ],
-                      ),
-                    ),
-                  ),
-                Text(
-                  entry.message ?? '',
-                  style: TextStyle(fontSize: 14, color: color, fontFamily: 'monospace'),
-                ),
-              ],
+            child: Text(
+              entry.message ?? '',
+              style: const TextStyle(fontSize: 14, color: Colors.redAccent, fontFamily: 'monospace'),
             ),
           ),
         ],
       ),
     );
-  }
-
-  Widget _tagPill(String t) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(.06),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text('#$t', style: const TextStyle(fontSize: 11)),
-    );
-  }
-
-  Color _levelColor(BuildContext context, String? level) {
-    final cs = Theme.of(context).colorScheme;
-    switch (level) {
-      case 'success':
-        return Colors.green;
-      case 'error':
-        return Colors.redAccent;
-      case 'called':
-        return Colors.blueAccent;
-      case 'warn':
-        return Colors.orange;
-      default:
-        return cs.onSurface;
-    }
-  }
-
-  IconData _levelIcon(String? level) {
-    switch (level) {
-      case 'success':
-        return Icons.check_circle;
-      case 'error':
-        return Icons.error;
-      case 'called':
-        return Icons.play_arrow;
-      case 'warn':
-        return Icons.warning_amber_rounded;
-      default:
-        return Icons.info;
-    }
   }
 }
