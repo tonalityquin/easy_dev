@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../../screens/stub_package/debug_package/debug_firestore_logger.dart';
+import '../../screens/community_package/debug_package/debug_firestore_logger.dart';
 
 class LocationCountService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;

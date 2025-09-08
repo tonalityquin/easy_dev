@@ -42,11 +42,14 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
       ],
       [
         _TabletCard(enabled: tabletEnabled),
-        const _ParkingCard(), // ▼ 새 카드 2
+        const _HeadquarterCard(),
       ],
       [
-        const _FaqCard(), // ▼ 새 카드 1
-        const _CommunityCard(), // 본사/관리자 카드는 항상 진입 가능
+        const _FaqCard(),
+        const _ParkingCard(),
+      ],
+      [
+        const _CommunityCard(),
       ],
     ];
 
@@ -66,10 +69,10 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
         title: Text(
           'Pelican Hubs',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.2,
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.2,
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
         ),
         iconTheme: IconThemeData(color: Theme.of(context).colorScheme.onSurface),
         actionsIconTheme: IconThemeData(color: Theme.of(context).colorScheme.onSurface),
@@ -369,7 +372,7 @@ class _ServiceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final titleStyle =
-        Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: Colors.black);
+    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: Colors.black);
 
     return Card(
       color: Colors.white,
@@ -402,9 +405,9 @@ class _ClockCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final base = Theme.of(context).textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.w700,
-          color: Colors.white,
-        );
+      fontWeight: FontWeight.w700,
+      color: Colors.white,
+    );
 
     return Card(
       color: _clockBg,
@@ -444,7 +447,7 @@ class _TabletCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final titleStyle =
-        Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: Colors.black);
+    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: Colors.black);
 
     return Card(
       color: Colors.white,
@@ -484,7 +487,6 @@ class _CommunityCard extends StatelessWidget {
         bg: cs.tertiaryContainer,
         iconColor: cs.onTertiaryContainer,
         title: '커뮤니티',
-        // 타이틀 변경
         // 임시 연결: 이후 커뮤니티 실제 화면/게임 허브로 교체 가능
         onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.communityStub),
       ),
@@ -500,7 +502,7 @@ class _FaqCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final titleStyle =
-        Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: Colors.black);
+    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: Colors.black);
 
     return Card(
       color: Colors.white,
@@ -513,7 +515,36 @@ class _FaqCard extends StatelessWidget {
         bg: cs.secondaryContainer,
         iconColor: cs.onSecondaryContainer,
         titleWidget: Text('FAQ / 문의', style: titleStyle, textAlign: TextAlign.center),
-        onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.faq), // TODO: routes 등록
+        onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.faq),
+      ),
+    );
+  }
+}
+
+/// 본사 카드 (항상 진입 가능)
+class _HeadquarterCard extends StatelessWidget {
+  const _HeadquarterCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final titleStyle =
+    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: Colors.black);
+
+    return Card(
+      color: Colors.white,
+      elevation: 1,
+      clipBehavior: Clip.antiAlias,
+      surfaceTintColor: cs.primary,
+      child: _cardBody(
+        context: context,
+        icon: Icons.apartment_rounded, // 본사/건물 느낌의 아이콘
+        bg: cs.primaryContainer,
+        iconColor: cs.onPrimaryContainer,
+        titleWidget: Text('본사', style: titleStyle, textAlign: TextAlign.center),
+        // ✅ CommunityStubPage 진입 로직과 동일하게 pushReplacementNamed 사용
+        //    라우트는 AppRoutes.headStub로 설정하여 HeadStubPage로 이동
+        onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.headStub),
       ),
     );
   }
@@ -527,7 +558,7 @@ class _ParkingCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final titleStyle =
-        Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: Colors.black);
+    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: Colors.black);
 
     return Card(
       color: Colors.white,
@@ -536,12 +567,11 @@ class _ParkingCard extends StatelessWidget {
       surfaceTintColor: cs.primary,
       child: _cardBody(
         context: context,
-        icon: Icons.location_city,
-        // 주차 아이콘
+        icon: Icons.location_city, // 주차 아이콘
         bg: cs.primaryContainer,
         iconColor: cs.onPrimaryContainer,
         titleWidget: Text('주차 관제 시스템(공사중)', style: titleStyle, textAlign: TextAlign.center),
-        onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.parking), // TODO: routes 등록
+        onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.parking),
       ),
     );
   }

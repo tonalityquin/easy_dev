@@ -1,3 +1,4 @@
+import 'package:easydev/screens/head_stub_page.dart';
 import 'package:flutter/material.dart';
 import 'screens/commute_package/commute_outside_screen.dart';
 import 'screens/commute_package/commute_inside_screen.dart';
@@ -22,13 +23,11 @@ class AppRoutes {
   static const headquarterPage = '/headquarter_page';
   static const typePage = '/type_page';
   static const tablet = '/tablet_page';
-
-  // ▼ 추가
   static const faq = '/faq';
   static const parking = '/parking';
-
-  // ▼ 새 임시 라우트 (본사/관리 전용)
   static const communityStub = '/community_stub';
+  static const headStub = '/head_stub';
+
 }
 
 final Map<String, WidgetBuilder> appRoutes = {
@@ -41,11 +40,8 @@ final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.headquarterPage: (context) => const HeadquarterPage(),
   AppRoutes.typePage: (context) => const TypePage(),
   AppRoutes.tablet: (context) => const TabletPage(),
-
-  // ▼ 추가
   AppRoutes.faq: (context) => const FaqPage(),
   AppRoutes.parking: (context) => const ParkingPage(),
-
-  // ▼ 본사/관리 임시 페이지
   AppRoutes.communityStub: (context) => const CommunityStubPage(),
+  AppRoutes.headStub: (context) => const HeadStubPage(),
 };

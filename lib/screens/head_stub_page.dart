@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'head_package/github_code_browser_bottom_sheet.dart';
+import 'head_package/github_markdown_bottom_sheet.dart';
+import 'head_package/local_prefs_bottom_sheet.dart';
+import 'head_package/roadmap_bottom_sheet.dart';
 
-import 'community_package/debug_package/debug_bottom_sheet.dart';
-import 'community_package/game_arcade_bottom_sheet.dart';
-import 'community_package/github_code_browser_bottom_sheet.dart';
-import 'community_package/github_markdown_bottom_sheet.dart';
-import 'community_package/local_prefs_bottom_sheet.dart';
-import 'community_package/roadmap_bottom_sheet.dart';
-
-class CommunityStubPage extends StatelessWidget {
-  const CommunityStubPage({super.key});
+class HeadStubPage extends StatelessWidget {
+  const HeadStubPage({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -30,7 +27,7 @@ class CommunityStubPage extends StatelessWidget {
           statusBarBrightness: Brightness.light,
         ),
         title: Text(
-          '커뮤니티 허브',
+          '본사 허브',
           style: text.titleMedium?.copyWith(
             fontWeight: FontWeight.w700,
             letterSpacing: 0.2,
@@ -61,22 +58,6 @@ class CommunityStubPage extends StatelessWidget {
                   crossAxisSpacing: 12,
                   childAspectRatio: 1.15,
                   children: [
-                    _ActionCard(
-                      icon: Icons.videogame_asset_rounded,
-                      title: '아케이드',
-                      subtitle: 'Arcade',
-                      bg: cs.secondaryContainer,
-                      fg: cs.onSecondaryContainer,
-                      onTap: () {
-                        showModalBottomSheet(
-                          context: context,
-                          isScrollControlled: true,
-                          backgroundColor: Colors.transparent,
-                          builder: (_) =>
-                              GameArcadeBottomSheet(rootContext: context),
-                        );
-                      },
-                    ),
                     _ActionCard(
                       icon: Icons.edit_note_rounded,
                       title: '로드맵',
@@ -144,31 +125,6 @@ class CommunityStubPage extends StatelessWidget {
                           isScrollControlled: true,
                           backgroundColor: Colors.transparent,
                           builder: (_) => const LocalPrefsBottomSheet(),
-                        );
-                      },
-                    ),
-                    // ✅ 추가된 디버그 로그 카드
-                    _ActionCard(
-                      icon: Icons.bug_report_rounded,
-                      title: '디버그',
-                      subtitle: 'Firestore Logs',
-                      bg: cs.errorContainer.withOpacity(.85),
-                      fg: cs.onErrorContainer,
-                      onTap: () {
-                        showModalBottomSheet(
-                          context: context,
-                          isScrollControlled: true,
-                          backgroundColor: Colors.transparent,
-                          builder: (_) => const Material(
-                            // 둥근 모서리로 감싸서 다른 시트들과 톤 맞춤
-                            borderRadius: BorderRadius.vertical(
-                                top: Radius.circular(16)),
-                            clipBehavior: Clip.antiAlias,
-                            child: SizedBox(
-                              height: 560,
-                              child: DebugBottomSheet(),
-                            ),
-                          ),
                         );
                       },
                     ),

@@ -3,6 +3,9 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 
+// 룰북 파일 실제 위치/이름에 맞춰 상대 경로로 import (로그 기준 wsop_rules.dart)
+import 'wsop_rules.dart' show WsopHoldemRulesPage;
+
 class WsopHoldemPage extends StatefulWidget {
   const WsopHoldemPage({super.key});
 
@@ -685,7 +688,7 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
       else
         score = suited ? 48 : 42;
     }
-    return score.clamp(0, 100);
+    return score.clamp(0, 100).toInt();
   }
 
   double _estimateWinProb(int seat) {
@@ -806,12 +809,24 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Texas Hold’em • Light'),
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
         actions: [
+          // 룰북 버튼 (const 제거: 상수 평가 회피)
+          IconButton(
+            tooltip: 'Rules',
+            icon: const Icon(Icons.menu_book_rounded),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => WsopHoldemRulesPage()),
+              );
+            },
+          ),
           IconButton(
             tooltip: 'Reset Table',
             icon: const Icon(Icons.restart_alt_rounded),
@@ -862,7 +877,8 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
                   children: [
                     ..._seatWidgets(w, h),
                     Positioned(
-                      bottom: 8, // ★ 커뮤니티 카드 하단 배치
+                      // 커뮤니티 카드 하단 배치 + SafeArea 하단 여백 반영
+                      bottom: 8 + bottomInset,
                       left: 0,
                       right: 0,
                       child: IgnorePointer(child: Center(child: _boardView())),
@@ -893,7 +909,16 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
     final centerY = h * .47;
     final baseRadius = min(w, h) * .36;
 
-    final safeRadiusY = min(centerY - topPad - seatH / 2, (h - bottomPad - seatH / 2) - centerY);
+    // 보드(카드) 영역만큼 하단 여유를 빼서 겹침 완화
+    const boardCardH = 82.0;   // _boardView의 카드 높이
+    const boardPad = 16.0;     // _boardView 주변 여백 감안
+    const boardBottomGap = 8.0; // Positioned bottom: 8
+    final bottomReserved = boardCardH + boardPad + boardBottomGap;
+
+    final safeRadiusY = min(
+      centerY - topPad - seatH / 2,
+      (h - bottomPad - seatH / 2 - bottomReserved) - centerY,
+    );
     final safeRadiusX = (w - seatW) / 2;
     final radius = max(0.0, min(baseRadius, min(safeRadiusY, safeRadiusX)));
 
@@ -936,16 +961,15 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
           children: [
             if (isBtn)
               Container(
-                width: 24,
-                height: 24,
-                margin: const EdgeInsets.only(right: 6),
-                decoration: BoxDecoration(
-                  color: Colors.amber,
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: Colors.black54),
-                ),
-                child: const Center(child: Text('D', style: TextStyle(fontWeight: FontWeight.w900))),
-              ),
+                  width: 24,
+                  height: 24,
+                  margin: const EdgeInsets.only(right: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.amber,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: Colors.black54),
+                  ),
+                  child: const Center(child: Text('D', style: TextStyle(fontWeight: FontWeight.w900)))),
             Expanded(
               child: FittedBox(
                 fit: BoxFit.scaleDown,
@@ -1036,7 +1060,7 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
 
         double clampFont(double want, double byHeightFrac) {
           final byH = h * byHeightFrac;
-          return want.clamp(8.0, byH);
+          return want.clamp(8.0, byH).toDouble();
         }
 
         final rankSize = clampFont(compact ? 14 : 18, 0.22);
@@ -1188,7 +1212,7 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
     int slider = (minTo <= maxTo) ? minTo : maxTo;
 
     final double maxVal = (maxTo >= minTo + 1 ? maxTo.toDouble() : (minTo + 1).toDouble());
-    final double minVal = minTo.toDouble().clamp(0.0, maxVal);
+    final double minVal = minTo.toDouble().clamp(0.0, maxVal).toDouble();
     final int divisions = (maxTo - minTo) > 0 ? (maxTo - minTo) : 1;
 
     showModalBottomSheet(
@@ -1206,7 +1230,7 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
                   const SizedBox(height: 8),
                   Text(_fmt(slider), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
                   Slider(
-                    value: (slider.toDouble().clamp(minVal, maxVal)),
+                    value: slider.toDouble().clamp(minVal, maxVal).toDouble(),
                     min: minVal,
                     max: maxVal,
                     divisions: divisions,
