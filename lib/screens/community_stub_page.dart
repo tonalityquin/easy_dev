@@ -9,6 +9,20 @@ import 'community_package/github_markdown_bottom_sheet.dart';
 import 'community_package/local_prefs_bottom_sheet.dart';
 import 'community_package/roadmap_bottom_sheet.dart';
 
+/// ====== 커뮤니티 전용 팔레트 (대비 강화) ======
+/// 버튼/Badge 배경(White와 5.3:1 대비 확보)
+const kCommunityPrimary = Color(0xFF00796B); // Teal 700
+const kCommunityPrimaryHover = Color(0xFF00897B); // Teal 600
+const kCommunityPrimaryPressed = Color(0xFF00695C); // Teal 800
+/// 밝은 포인트(배지/하이라이트)
+const kCommunityBase = Color(0xFF26A69A); // Teal 400
+/// 제목/링크성 텍스트(화이트 배경에서 가독성 우수)
+const kCommunityDarkText = Color(0xFF1E8077);
+/// 카드 tint/표면 강조
+const kCommunityTint = Color(0xFF64D8CB);
+/// Primary 위 텍스트/아이콘
+const kCommunityOnPrimary = Colors.white;
+
 class CommunityStubPage extends StatelessWidget {
   const CommunityStubPage({super.key});
 
@@ -56,7 +70,7 @@ class CommunityStubPage extends StatelessWidget {
               const _HeaderBanner(),
               const SizedBox(height: 16),
 
-              // ✅ 반응형 Grid
+              // ✅ 반응형 Grid (카드 디자인 변경 없음)
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
@@ -202,22 +216,34 @@ class CommunityStubPage extends StatelessWidget {
                   },
                 ),
               ),
-
-              Center(
-                child: InkWell(
-                  onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
-                    '/selector', // AppRoutes.selector
-                        (route) => false,
-                  ),
-                  borderRadius: BorderRadius.circular(8),
-                  child: SizedBox(
-                    height: 80,
-                    child: Image.asset('assets/images/pelican.png'),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
             ],
+          ),
+        ),
+      ),
+
+      // ✅ Pelican 이미지는 하얀 배경에 최적화 → 탭 시 '/selector'로 이동 로직 복원
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border(
+              top: BorderSide(color: Colors.black.withOpacity(0.06), width: 1),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
+                '/selector',
+                    (route) => false,
+              ),
+              child: SizedBox(
+                height: 120,
+                child: Image.asset('assets/images/pelican.png'),
+              ),
+            ),
           ),
         ),
       ),
@@ -230,33 +256,35 @@ class _HeaderBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: cs.primaryContainer.withOpacity(0.7),
+        // 커뮤니티 tint에 살짝 투명도를 주어 부드럽게
+        color: kCommunityTint.withOpacity(0.75),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
+          // 아이콘 배지 — Primary 대비 White 아이콘
           Container(
             width: 44,
             height: 44,
-            decoration: BoxDecoration(
-              color: cs.onPrimaryContainer.withOpacity(.08),
+            decoration: const BoxDecoration(
+              color: kCommunityPrimary,
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.groups_rounded, color: cs.onPrimaryContainer),
+            alignment: Alignment.center,
+            child: const Icon(Icons.groups_rounded, color: kCommunityOnPrimary),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               '커뮤니티 허브 입니다.',
               style: text.bodyMedium?.copyWith(
-                color: cs.onPrimaryContainer,
-                fontWeight: FontWeight.w600,
+                color: kCommunityDarkText, // 가독성 좋은 짙은 틸 텍스트
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),

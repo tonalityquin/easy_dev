@@ -28,8 +28,6 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     // 저장된 모드가 있으면 해당 카드만 선택 가능
     final serviceEnabled = _savedMode == null || _savedMode == 'service';
     final outsideEnabled = _savedMode == null || _savedMode == 'outside';
@@ -100,8 +98,8 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
                     _CardsPager(pages: pages),
                     const SizedBox(height: 16),
                     _HintBanner(
-                      color: cs.secondaryContainer,
-                      iconColor: cs.onSecondaryContainer,
+                      color: Colors.green, // 배경 초록
+                      iconColor: Colors.white, // 아이콘 흰색
                     ),
                   ],
                 ),
@@ -322,10 +320,12 @@ class _HeaderBadgeInner extends StatelessWidget {
 Widget _cardBody({
   required BuildContext context,
   required IconData icon,
-  required Color bg,
-  required Color iconColor,
-  String? title, // 기존과의 호환
-  Widget? titleWidget, // 커스텀 타이틀 위젯
+  required Color bg,         // 아이콘 배지 배경
+  required Color iconColor,  // 아이콘 색
+  Color? buttonBg,           // 이동 버튼 배경
+  Color? buttonFg,           // 이동 버튼 아이콘 색
+  String? title,             // 기존과의 호환
+  Widget? titleWidget,       // 커스텀 타이틀 위젯
   required VoidCallback? onTap,
   bool enabled = true,
   String? disabledHint,
@@ -352,6 +352,10 @@ Widget _cardBody({
           message: enabled ? '이동' : (disabledHint ?? '현재 저장된 모드에서만 선택할 수 있어요'),
           child: IconButton.filled(
             onPressed: enabled ? onTap : null,
+            style: IconButton.styleFrom(
+              backgroundColor: buttonBg ?? Theme.of(context).colorScheme.primary,
+              foregroundColor: buttonFg ?? Theme.of(context).colorScheme.onPrimary,
+            ),
             icon: const Icon(Icons.arrow_forward_rounded),
           ),
         ),
@@ -362,29 +366,41 @@ Widget _cardBody({
   return Opacity(opacity: enabled ? 1.0 : 0.48, child: content);
 }
 
-/// 서비스 로그인 카드 (배경 하양, 제목 검정색)
+/// 서비스 로그인 카드 — Deep Blue 팔레트
+///
+/// Palette:
+/// - base: #0D47A1 (badge/bg for button)
+/// - dark: #09367D (title)
+/// - light: #5472D3 (surface tint)
 class _ServiceCard extends StatelessWidget {
   final bool enabled;
 
   const _ServiceCard({this.enabled = true});
 
+  static const Color _base = Color(0xFF0D47A1);
+  static const Color _dark = Color(0xFF09367D);
+  static const Color _light = Color(0xFF5472D3);
+
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final titleStyle =
-    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: Colors.black);
+    final titleStyle = Theme.of(context)
+        .textTheme
+        .titleMedium
+        ?.copyWith(fontWeight: FontWeight.w700, color: _dark);
 
     return Card(
       color: Colors.white,
       elevation: 1,
       clipBehavior: Clip.antiAlias,
-      surfaceTintColor: cs.primary,
+      surfaceTintColor: _light,
       child: _cardBody(
         context: context,
         icon: Icons.local_parking,
-        bg: cs.primaryContainer,
-        iconColor: cs.onPrimaryContainer,
+        bg: _base,
+        iconColor: Colors.white,
         titleWidget: Text('서비스 로그인', style: titleStyle, textAlign: TextAlign.center),
+        buttonBg: _base,
+        buttonFg: Colors.white,
         onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.serviceLogin),
         enabled: enabled,
         disabledHint: '저장된 모드가 service일 때만 선택할 수 있어요',
@@ -393,42 +409,50 @@ class _ServiceCard extends StatelessWidget {
   }
 }
 
-/// 출퇴근 로그인 카드 (배경 #122232, '출퇴근' 흰색 + '로그인' 노란색)
+/// 출퇴근 로그인 카드 — Navy + Amber 팔레트
+///
+/// Palette:
+/// - navy(base): #122232 (card background)
+/// - amber700(accent): #FFB300 (badge/button/text accent)
+/// - onBadge: #1A1A1A (icon on amber)
 class _ClockCard extends StatelessWidget {
   final bool enabled;
 
   const _ClockCard({this.enabled = true});
 
-  static const Color _clockBg = Color(0xFF122232); // R=18, G=34, B=50
+  static const Color _navy = Color(0xFF122232);
+  static const Color _amber700 = Color(0xFFFFB300);
+  static const Color _onAmber = Color(0xFF1A1A1A);
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final base = Theme.of(context).textTheme.titleMedium?.copyWith(
       fontWeight: FontWeight.w700,
       color: Colors.white,
     );
 
     return Card(
-      color: _clockBg,
+      color: _navy,
       elevation: 1,
       clipBehavior: Clip.antiAlias,
       surfaceTintColor: Colors.transparent,
       child: _cardBody(
         context: context,
         icon: Icons.access_time_filled_rounded,
-        bg: cs.secondaryContainer,
-        iconColor: cs.onSecondaryContainer,
+        bg: _amber700,
+        iconColor: _onAmber,
         titleWidget: RichText(
           textAlign: TextAlign.center,
           text: TextSpan(
             style: base,
             children: const [
               TextSpan(text: '출퇴근 ', style: TextStyle(color: Colors.white)),
-              TextSpan(text: '로그인', style: TextStyle(color: Colors.yellow)),
+              TextSpan(text: '로그인', style: TextStyle(color: _amber700)),
             ],
           ),
         ),
+        buttonBg: _amber700,
+        buttonFg: _onAmber,
         onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.outsideLogin),
         enabled: enabled,
         disabledHint: '저장된 모드가 outside일 때만 선택할 수 있어요',
@@ -437,29 +461,39 @@ class _ClockCard extends StatelessWidget {
   }
 }
 
-/// 태블릿 로그인 카드 (서비스 카드와 동일 스타일)
+/// 태블릿 로그인 카드 — Cyan 팔레트
+///
+/// Palette:
+/// - base: #00ACC1 (badge/button)
+/// - dark: #00838F (title)
+/// - light: #4DD0E1 (surface tint)
 class _TabletCard extends StatelessWidget {
   final bool enabled;
 
   const _TabletCard({this.enabled = true});
 
+  static const Color _base = Color(0xFF00ACC1);
+  static const Color _dark = Color(0xFF00838F);
+  static const Color _light = Color(0xFF4DD0E1);
+
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final titleStyle =
-    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: Colors.black);
+    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
 
     return Card(
       color: Colors.white,
       elevation: 1,
       clipBehavior: Clip.antiAlias,
-      surfaceTintColor: cs.primary,
+      surfaceTintColor: _light,
       child: _cardBody(
         context: context,
         icon: Icons.tablet_mac_rounded,
-        bg: cs.tertiaryContainer,
-        iconColor: cs.onTertiaryContainer,
+        bg: _base,
+        iconColor: Colors.white,
         titleWidget: Text('태블릿 로그인', style: titleStyle, textAlign: TextAlign.center),
+        buttonBg: _base,
+        buttonFg: Colors.white,
         onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.tabletLogin),
         enabled: enabled,
         disabledHint: '저장된 모드가 tablet일 때만 선택할 수 있어요',
@@ -468,109 +502,148 @@ class _TabletCard extends StatelessWidget {
   }
 }
 
-/// 커뮤니티 카드 (커뮤니티/소통 허브)
+/// 커뮤니티 카드 — Teal 팔레트
+///
+/// Palette:
+/// - base: #26A69A (badge/button)
+/// - dark: #1E8077 (title)
+/// - light: #64D8CB (surface tint)
 class _CommunityCard extends StatelessWidget {
   const _CommunityCard();
 
+  static const Color _base = Color(0xFF26A69A);
+  static const Color _dark = Color(0xFF1E8077);
+  static const Color _light = Color(0xFF64D8CB);
+
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final titleStyle =
+    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
 
     return Card(
+      color: Colors.white,
       elevation: 1,
       clipBehavior: Clip.antiAlias,
-      surfaceTintColor: cs.tertiary, // 커뮤니티 느낌의 부드러운 톤
+      surfaceTintColor: _light,
       child: _cardBody(
         context: context,
         icon: Icons.groups_rounded,
-        // 👥 커뮤니티 아이콘
-        bg: cs.tertiaryContainer,
-        iconColor: cs.onTertiaryContainer,
-        title: '커뮤니티',
-        // 임시 연결: 이후 커뮤니티 실제 화면/게임 허브로 교체 가능
+        bg: _base,
+        iconColor: Colors.white,
+        titleWidget: Text('커뮤니티', style: titleStyle, textAlign: TextAlign.center),
+        buttonBg: _base,
+        buttonFg: Colors.white,
         onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.communityStub),
       ),
     );
   }
 }
 
-/// FAQ / 문의 카드 (항상 진입 가능)
+/// FAQ / 문의 카드 — Indigo 팔레트
+///
+/// Palette:
+/// - base: #3949AB (badge/button)
+/// - dark: #283593 (title)
+/// - light: #7986CB (surface tint)
 class _FaqCard extends StatelessWidget {
   const _FaqCard();
 
+  static const Color _base = Color(0xFF3949AB);
+  static const Color _dark = Color(0xFF283593);
+  static const Color _light = Color(0xFF7986CB);
+
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final titleStyle =
-    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: Colors.black);
+    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
 
     return Card(
       color: Colors.white,
       elevation: 1,
       clipBehavior: Clip.antiAlias,
-      surfaceTintColor: cs.primary,
+      surfaceTintColor: _light,
       child: _cardBody(
         context: context,
         icon: Icons.help_center_rounded,
-        bg: cs.secondaryContainer,
-        iconColor: cs.onSecondaryContainer,
+        bg: _base,
+        iconColor: Colors.white,
         titleWidget: Text('FAQ / 문의', style: titleStyle, textAlign: TextAlign.center),
+        buttonBg: _base,
+        buttonFg: Colors.white,
         onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.faq),
       ),
     );
   }
 }
 
-/// 본사 카드 (항상 진입 가능)
+/// 본사 카드 — Blue 팔레트
+///
+/// Palette:
+/// - base: #1E88E5 (badge/button)
+/// - dark: #1565C0 (title)
+/// - light: #64B5F6 (surface tint)
 class _HeadquarterCard extends StatelessWidget {
   const _HeadquarterCard();
 
+  static const Color _base = Color(0xFF1E88E5);
+  static const Color _dark = Color(0xFF1565C0);
+  static const Color _light = Color(0xFF64B5F6);
+
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final titleStyle =
-    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: Colors.black);
+    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
 
     return Card(
       color: Colors.white,
       elevation: 1,
       clipBehavior: Clip.antiAlias,
-      surfaceTintColor: cs.primary,
+      surfaceTintColor: _light,
       child: _cardBody(
         context: context,
-        icon: Icons.apartment_rounded, // 본사/건물 느낌의 아이콘
-        bg: cs.primaryContainer,
-        iconColor: cs.onPrimaryContainer,
+        icon: Icons.apartment_rounded,
+        bg: _base,
+        iconColor: Colors.white,
         titleWidget: Text('본사', style: titleStyle, textAlign: TextAlign.center),
-        // ✅ CommunityStubPage 진입 로직과 동일하게 pushReplacementNamed 사용
-        //    라우트는 AppRoutes.headStub로 설정하여 HeadStubPage로 이동
+        buttonBg: _base,
+        buttonFg: Colors.white,
         onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.headStub),
       ),
     );
   }
 }
 
-/// 주차 관제 시스템 카드 (항상 진입 가능)
+/// 주차 관제 시스템 카드 — Deep Orange 팔레트(공사중 느낌)
+///
+/// Palette:
+/// - base: #F4511E (badge/button)
+/// - dark: #D84315 (title)
+/// - light: #FFAB91 (surface tint)
 class _ParkingCard extends StatelessWidget {
   const _ParkingCard();
 
+  static const Color _base = Color(0xFFF4511E);
+  static const Color _dark = Color(0xFFD84315);
+  static const Color _light = Color(0xFFFFAB91);
+
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final titleStyle =
-    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: Colors.black);
+    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
 
     return Card(
       color: Colors.white,
       elevation: 1,
       clipBehavior: Clip.antiAlias,
-      surfaceTintColor: cs.primary,
+      surfaceTintColor: _light,
       child: _cardBody(
         context: context,
-        icon: Icons.location_city, // 주차 아이콘
-        bg: cs.primaryContainer,
-        iconColor: cs.onPrimaryContainer,
+        icon: Icons.location_city,
+        bg: _base,
+        iconColor: Colors.white,
         titleWidget: Text('주차 관제 시스템(공사중)', style: titleStyle, textAlign: TextAlign.center),
+        buttonBg: _base,
+        buttonFg: Colors.white,
         onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.parking),
       ),
     );
@@ -610,7 +683,7 @@ class _HintBanner extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.7),
+        color: color,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -620,7 +693,10 @@ class _HintBanner extends StatelessWidget {
           Expanded(
             child: Text(
               '저장된 로그인 모드가 있으면 해당 모드만 선택할 수 있어요. (로그아웃 후, 변경 가능)',
-              style: text.bodySmall,
+              style: text.bodySmall?.copyWith(
+                color: Colors.white, // 흰색
+                fontWeight: FontWeight.w700, // 진하게
+              ),
             ),
           ),
         ],

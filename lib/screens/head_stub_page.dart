@@ -1,4 +1,3 @@
-// lib/screens/head_stub_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../routes.dart'; // ▼ AppRoutes 사용
@@ -57,7 +56,6 @@ class HeadStubPage extends StatelessWidget {
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     final width = constraints.maxWidth;
-                    // 열 수: 넓으면 3~4, 보통은 2
                     final crossAxisCount = width >= 1100
                         ? 4
                         : width >= 800
@@ -68,23 +66,44 @@ class HeadStubPage extends StatelessWidget {
                     final textScale =
                     MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
 
-                    // 타일 너비/높이로 childAspectRatio 계산
                     final tileWidth =
                         (width - spacing * (crossAxisCount - 1)) / crossAxisCount;
 
-                    // 타일 기준 높이(컨텐츠에 맞춰 살짝 여유): 텍스트 배율 반영
-                    final baseTileHeight = 150.0; // 필요 시 140~170 사이로 미세조정
+                    // 타일 기준 높이(컨텐츠에 여유), 텍스트 배율 반영
+                    final baseTileHeight = 150.0;
                     final tileHeight = baseTileHeight * textScale;
-
                     final childAspectRatio = tileWidth / tileHeight;
+
+                    // ── 팔레트 정의 (base/dark/light) ─────────────────────────
+                    // Roadmap — Deep Purple
+                    const roadBase = Color(0xFF7E57C2);
+                    const roadDark = Color(0xFF5E35B1);
+                    const roadLight = Color(0xFFB39DDB);
+
+                    // Code — Cobalt Blue
+                    const codeBase = Color(0xFF1976D2);
+                    const codeDark = Color(0xFF1565C0);
+                    const codeLight = Color(0xFF90CAF9);
+
+                    // Company Calendar — Green
+                    const calBase = Color(0xFF43A047);
+                    const calDark = Color(0xFF2E7D32);
+                    const calLight = Color(0xFFA5D6A7);
+
+                    // Labor Guide — Orange/Amber
+                    const laborBase = Color(0xFFF57C00);
+                    const laborDark = Color(0xFFE65100);
+                    const laborLight = Color(0xFFFFCC80);
 
                     final cards = <Widget>[
                       _ActionCard(
                         icon: Icons.edit_note_rounded,
                         title: '로드맵',
                         subtitle: 'After Release',
-                        bg: cs.tertiaryContainer,
-                        fg: cs.onTertiaryContainer,
+                        bg: roadBase,
+                        fg: Colors.white,
+                        tintColor: roadLight,
+                        titleColor: roadDark,
                         onTap: () {
                           showModalBottomSheet(
                             context: context,
@@ -98,8 +117,10 @@ class HeadStubPage extends StatelessWidget {
                         icon: Icons.code,
                         title: '코드',
                         subtitle: 'Github',
-                        bg: cs.primaryContainer,
-                        fg: cs.onPrimaryContainer,
+                        bg: codeBase,
+                        fg: Colors.white,
+                        tintColor: codeLight,
+                        titleColor: codeDark,
                         onTap: () {
                           showModalBottomSheet(
                             context: context,
@@ -109,7 +130,6 @@ class HeadStubPage extends StatelessWidget {
                               owner: 'tonalityquin',
                               repo: 'easy_dev',
                               defaultBranch: 'main',
-                              // initialPath: '',
                             ),
                           );
                         },
@@ -118,19 +138,22 @@ class HeadStubPage extends StatelessWidget {
                         icon: Icons.calendar_month_rounded,
                         title: '회사 달력',
                         subtitle: 'Google Calendar\nGoogle Sheet', // ✅ 2줄
-                        bg: cs.secondaryContainer,
-                        fg: cs.onSecondaryContainer,
+                        bg: calBase,
+                        fg: Colors.white,
+                        tintColor: calLight,
+                        titleColor: calDark,
                         onTap: () {
-                          Navigator.of(context)
-                              .pushNamed(AppRoutes.companyCalendar);
+                          Navigator.of(context).pushNamed(AppRoutes.companyCalendar);
                         },
                       ),
                       _ActionCard(
                         icon: Icons.gavel_rounded,
                         title: '회사 노무',
                         subtitle: 'Google Drive',
-                        bg: cs.secondaryContainer,
-                        fg: cs.onSecondaryContainer,
+                        bg: laborBase,
+                        fg: Colors.white,
+                        tintColor: laborLight,
+                        titleColor: laborDark,
                         onTap: () {
                           Navigator.of(context).pushNamed(AppRoutes.laborGuide);
                         },
@@ -219,8 +242,10 @@ class _ActionCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
-  final Color bg;
-  final Color fg;
+  final Color bg;          // 배지 배경(base)
+  final Color fg;          // 배지 아이콘(onBase)
+  final Color? tintColor;  // 카드 surfaceTint(light)
+  final Color? titleColor; // 제목 색(dark)
   final VoidCallback? onTap; // 카드 아무 곳이나 탭
 
   const _ActionCard({
@@ -229,6 +254,8 @@ class _ActionCard extends StatelessWidget {
     required this.subtitle,
     required this.bg,
     required this.fg,
+    this.tintColor,
+    this.titleColor,
     this.onTap,
   });
 
@@ -238,7 +265,7 @@ class _ActionCard extends StatelessWidget {
       color: Colors.white,
       elevation: 1,
       clipBehavior: Clip.antiAlias,
-      surfaceTintColor: bg,
+      surfaceTintColor: tintColor ?? bg,
       child: InkWell(
         onTap: onTap,
         child: Padding(
@@ -268,7 +295,10 @@ class _ActionCard extends StatelessWidget {
               Text(
                 title,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontWeight: FontWeight.w700),
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: titleColor ?? Colors.black,
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),

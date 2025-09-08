@@ -1,6 +1,15 @@
+// lib/screens/faq_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../routes.dart'; // ← 라우트 사용
+
+// === FAQ 페이지 전용 팔레트 (SelectorHubs의 FAQ 카드와 동일) ===
+// base  : #3949AB (Indigo 600)  - 배지/강조/버튼
+// dark  : #283593 (Indigo 800)  - 제목 텍스트
+// light : #7986CB (Indigo 300)  - 서피스 틴트/보더
+const Color _faqBase = Color(0xFF3949AB);
+const Color _faqDark = Color(0xFF283593);
+const Color _faqLight = Color(0xFF7986CB);
 
 class FaqPage extends StatefulWidget {
   const FaqPage({super.key});
@@ -201,7 +210,7 @@ class _FaqPageState extends State<FaqPage> {
           child: ListView(
             padding: const EdgeInsets.all(24),
             children: [
-              // 검색바
+              // 검색바 (FAQ 팔레트 반영)
               TextField(
                 controller: _searchCtrl,
                 onChanged: (v) => setState(() => _query = v),
@@ -210,33 +219,44 @@ class _FaqPageState extends State<FaqPage> {
                   labelText: '코드 검색 (예: service_area_page_02)',
                   hintText: 'common_user_00, service_area_page_01 등',
                   isDense: true,
-                  prefixIcon: const Icon(Icons.search_rounded),
+                  filled: true,
+                  fillColor: _faqLight.withOpacity(0.08),
+                  prefixIcon: const Icon(Icons.search_rounded, color: _faqBase),
                   suffixIcon: _query.isEmpty
                       ? null
                       : IconButton(
-                          icon: const Icon(Icons.clear_rounded),
-                          tooltip: '지우기',
-                          onPressed: () {
-                            _searchCtrl.clear();
-                            setState(() => _query = '');
-                          },
-                        ),
+                    icon: const Icon(Icons.clear_rounded, color: _faqBase),
+                    tooltip: '지우기',
+                    onPressed: () {
+                      _searchCtrl.clear();
+                      setState(() => _query = '');
+                    },
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: _faqLight.withOpacity(0.6)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: _faqLight.withOpacity(0.6)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: _faqBase, width: 1.6),
                   ),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 ),
               ),
               const SizedBox(height: 12),
 
-              // 결과 개수 표시
+              // 결과 개수 표시 (FAQ 팔레트 반영)
               Row(
                 children: [
-                  const Icon(Icons.filter_alt_rounded, size: 16, color: Colors.black54),
+                  const Icon(Icons.filter_alt_rounded, size: 16, color: _faqBase),
                   const SizedBox(width: 6),
                   Text(
                     _query.isEmpty ? '전체 ${_allFaqs.length}건' : '검색 결과 ${_filtered.length}건',
-                    style: text.bodySmall?.copyWith(color: Colors.black54),
+                    style: text.bodySmall?.copyWith(color: _faqDark.withOpacity(0.9)),
                   ),
                 ],
               ),
@@ -246,16 +266,26 @@ class _FaqPageState extends State<FaqPage> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: cs.surfaceVariant.withOpacity(0.3),
+                    color: _faqLight.withOpacity(0.16),
                     borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: _faqLight.withOpacity(0.45)),
                   ),
-                  child: const Text('검색 결과가 없습니다. 철자를 다시 확인해주세요.'),
+                  child: Text(
+                    '검색 결과가 없습니다. 철자를 다시 확인해주세요.',
+                    style: text.bodyMedium?.copyWith(color: Colors.black87),
+                  ),
                 )
               else
                 ..._filtered.map((e) => _FaqItem(question: e.question, answer: e.answer)),
 
               const SizedBox(height: 24),
+
+              // 문의하기 버튼 (FAQ 팔레트 반영)
               FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: _faqBase,
+                  foregroundColor: Colors.white,
+                ),
                 onPressed: () {
                   // TODO: 실제 문의 채널(오픈채팅/메일/폼)로 연결
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -270,22 +300,28 @@ class _FaqPageState extends State<FaqPage> {
         ),
       ),
 
-      // ▼ 바텀 펠리컨 이미지 (탭하면 선택화면으로 이동)
+      // ▼ 바텀 펠리컨 이미지 (탭하면 선택화면으로 이동) — 화이트 배경 최적화 + 상단 구분선
       bottomNavigationBar: SafeArea(
         top: false,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
-              AppRoutes.selector,
-              (route) => false,
-            ),
-            borderRadius: BorderRadius.zero,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: SizedBox(
-                height: 120,
-                child: Image.asset('assets/images/pelican.png'),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border(top: BorderSide(color: Colors.black.withOpacity(0.06))),
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
+                AppRoutes.selector,
+                    (route) => false,
+              ),
+              borderRadius: BorderRadius.zero,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: SizedBox(
+                  height: 120,
+                  child: Image.asset('assets/images/pelican.png'),
+                ),
               ),
             ),
           ),
@@ -301,6 +337,7 @@ class _FaqData {
 
   const _FaqData({required this.question, required this.answer});
 }
+
 class _FaqItem extends StatelessWidget {
   final String question;
   final String answer;
@@ -313,24 +350,30 @@ class _FaqItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: cs.surfaceVariant.withOpacity(0.3),
+        color: _faqLight.withOpacity(0.16),
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _faqLight.withOpacity(0.45)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             question,
-            style: text.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            style: text.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: _faqDark, // 제목에 dark 톤 적용
+            ),
           ),
           const SizedBox(height: 8),
-          Text(answer, style: text.bodyMedium),
+          Text(
+            answer,
+            style: text.bodyMedium?.copyWith(color: Colors.black87),
+          ),
         ],
       ),
     );
