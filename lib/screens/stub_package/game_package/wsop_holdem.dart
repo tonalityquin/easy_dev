@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'wsop_rules.dart';
 
 class WsopHoldemPage extends StatefulWidget {
   const WsopHoldemPage({super.key});
@@ -135,13 +136,13 @@ class TournamentConfig {
     this.buyIn = 100,
     List<double>? payoutPercents,
   })  : levels = levels ??
-            const [
-              _Level(sb: 100, bb: 200, bbAnte: true, secs: 180),
-              _Level(sb: 200, bb: 400, bbAnte: true, secs: 180),
-              _Level(sb: 300, bb: 600, bbAnte: true, secs: 180),
-              _Level(sb: 500, bb: 1000, bbAnte: true, secs: 180),
-              _Level(sb: 1000, bb: 2000, bbAnte: true, secs: 180),
-            ],
+      const [
+        _Level(sb: 100, bb: 200, bbAnte: true, secs: 180),
+        _Level(sb: 200, bb: 400, bbAnte: true, secs: 180),
+        _Level(sb: 300, bb: 600, bbAnte: true, secs: 180),
+        _Level(sb: 500, bb: 1000, bbAnte: true, secs: 180),
+        _Level(sb: 1000, bb: 2000, bbAnte: true, secs: 180),
+      ],
         payoutPercents = payoutPercents ?? [0.5, 0.3, 0.2];
 
   TournamentConfig copyWith({
@@ -1040,6 +1041,11 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
         foregroundColor: Colors.white,
         actions: [
           IconButton(
+            tooltip: 'Rulebook',
+            icon: const Icon(Icons.menu_book_rounded),
+            onPressed: _openRulebook,
+          ),
+          IconButton(
             tooltip: 'History',
             icon: const Icon(Icons.history_rounded),
             onPressed: _openHistory,
@@ -1097,18 +1103,20 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
                 final w = cons.maxWidth;
                 final h = cons.maxHeight;
                 return Stack(
+                  clipBehavior: Clip.none,
                   children: [
-                    // 보드(커뮤니티 카드)
+                    // 좌석(원형 배치) 먼저: 아래 층
+                    ..._seatWidgets(w, h),
+
+                    // 보드(커뮤니티 카드) 나중에: 위 층
                     Positioned(
                       top: h * .22,
                       left: 0,
                       right: 0,
-                      child: Center(
-                        child: _boardView(),
+                      child: IgnorePointer(
+                        child: Center(child: _boardView()),
                       ),
                     ),
-                    // 좌석(원형 배치)
-                    ..._seatWidgets(w, h),
                   ],
                 );
               },
@@ -1226,15 +1234,14 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                    Text(p.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontWeight: FontWeight.w800)),
                     Text('₵ ${p.stack}',
-                        style: TextStyle(fontWeight: FontWeight.w800,
-                            color: p.isHero ? Colors.black : Colors.black87)),
-                    if (p.betThisStreet > 0)
-                      const SizedBox(height: 1),
-                    if (p.betThisStreet > 0)
-                      Text('Bet ${p.betThisStreet}', style: const TextStyle(fontSize: 12)),
+                        style: TextStyle(fontWeight: FontWeight.w800, color: p.isHero ? Colors.black : Colors.black87)),
+                    if (p.betThisStreet > 0) const SizedBox(height: 1),
+                    if (p.betThisStreet > 0) Text('Bet ${p.betThisStreet}', style: const TextStyle(fontSize: 12)),
                     if (!p.seated) const Text('OUT', style: TextStyle(fontSize: 12, color: Colors.grey)),
                     if (p.folded) const Text('FOLDED', style: TextStyle(fontSize: 12, color: Colors.grey)),
                     if (p.allIn) const Text('ALL-IN', style: TextStyle(fontSize: 12, color: Colors.redAccent)),
@@ -1326,7 +1333,7 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
             Text(
               c.rankStr,
               textHeightBehavior:
-                  const TextHeightBehavior(applyHeightToFirstAscent: false, applyHeightToLastDescent: false),
+              const TextHeightBehavior(applyHeightToFirstAscent: false, applyHeightToLastDescent: false),
               style: TextStyle(
                 fontWeight: FontWeight.w900,
                 color: c.suitColor,
@@ -1337,7 +1344,7 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
             Text(
               c.suitIcon,
               textHeightBehavior:
-                  const TextHeightBehavior(applyHeightToFirstAscent: false, applyHeightToLastDescent: false),
+              const TextHeightBehavior(applyHeightToFirstAscent: false, applyHeightToLastDescent: false),
               style: TextStyle(
                 color: c.suitColor,
                 fontSize: suitSize,
@@ -1356,7 +1363,7 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
               Text(
                 c.rankStr,
                 textHeightBehavior:
-                    const TextHeightBehavior(applyHeightToFirstAscent: false, applyHeightToLastDescent: false),
+                const TextHeightBehavior(applyHeightToFirstAscent: false, applyHeightToLastDescent: false),
                 style: TextStyle(
                   fontWeight: FontWeight.w900,
                   color: c.suitColor,
@@ -1367,7 +1374,7 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
               Text(
                 c.suitIcon,
                 textHeightBehavior:
-                    const TextHeightBehavior(applyHeightToFirstAscent: false, applyHeightToLastDescent: false),
+                const TextHeightBehavior(applyHeightToFirstAscent: false, applyHeightToLastDescent: false),
                 style: TextStyle(
                   color: c.suitColor,
                   fontSize: suitSize,
@@ -1401,7 +1408,7 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
                   ),
                 ),
                 if (!compact)
-                  // 우하단(대칭 인쇄) — 작은 카드에서는 생략
+                // 우하단(대칭 인쇄) — 작은 카드에서는 생략
                   Align(
                     alignment: Alignment.bottomRight,
                     child: FittedBox(
@@ -1543,7 +1550,7 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
                           _raiseTo(seat, p.betThisStreet + p.stack); // 올인
                         },
                         style:
-                            ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
+                        ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
                         child: const Text('ALL-IN'),
                       ),
                     ],
@@ -1581,7 +1588,7 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
         return StatefulBuilder(builder: (context, setSt) {
           return Padding(
             padding:
-                EdgeInsets.only(left: 16, right: 16, top: 12, bottom: 12 + MediaQuery.of(context).viewInsets.bottom),
+            EdgeInsets.only(left: 16, right: 16, top: 12, bottom: 12 + MediaQuery.of(context).viewInsets.bottom),
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -1917,6 +1924,12 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
      유틸
      ─────────────────────────────────────────────────────────────────────────── */
 
+  void _openRulebook() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const WsopHoldemRulesPage()),
+    );
+  }
+
   String _cardsStr(List<CardX> cs) => cs.map((c) => '${c.rankStr}${c.suitIcon}').join(' ');
 
   void _toast(String s) {
@@ -1963,3 +1976,4 @@ Widget _hudPill(IconData ico, String text) {
     ),
   );
 }
+
