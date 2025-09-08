@@ -1,9 +1,12 @@
+// lib/screens/head_package/company_calendar_page.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:googleapis/calendar/v3.dart' as gcal;
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'calendar_package/calendar_model.dart';
-import 'calendar_package/event_editor_dialog.dart'; // 프로젝트 경로에 맞추세요
+import 'calendar_package/event_editor_bottom_sheet.dart'; // ★ BottomSheet 버전 사용
 
 class CompanyCalendarPage extends StatefulWidget {
   const CompanyCalendarPage({super.key});
@@ -14,11 +17,47 @@ class CompanyCalendarPage extends StatefulWidget {
 
 class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
   final _idCtrl = TextEditingController();
+  static const _kLastCalendarIdKey = 'last_calendar_id';
+  bool _autoTried = false; // 자동 로드 1회만 시도
+
+  @override
+  void initState() {
+    super.initState();
+    // Provider가 빌드된 뒤에 자동 로드 시도
+    WidgetsBinding.instance.addPostFrameCallback((_) => _tryAutoload());
+  }
 
   @override
   void dispose() {
     _idCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _tryAutoload() async {
+    if (_autoTried) return;
+    _autoTried = true;
+
+    final prefs = await SharedPreferences.getInstance();
+    final lastId = prefs.getString(_kLastCalendarIdKey);
+    if (lastId == null || lastId.trim().isEmpty) return;
+
+    // 입력창에도 반영
+    _idCtrl.text = lastId;
+
+    // 자동 불러오기
+    final model = context.read<CalendarModel>();
+    await model.load(newCalendarId: lastId);
+
+    // 불러오기 성공 시(에러 없을 때) 정규화된 ID로 보정 저장
+    if (mounted && model.error == null && model.calendarId.isNotEmpty) {
+      _idCtrl.text = model.calendarId;
+      await prefs.setString(_kLastCalendarIdKey, model.calendarId);
+    }
+  }
+
+  Future<void> _saveLastCalendarId(String id) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kLastCalendarIdKey, id);
   }
 
   @override
@@ -40,7 +79,7 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _openCreateDialog(context),
+        onPressed: () => _openCreateSheet(context),
         child: const Icon(Icons.add),
       ),
       body: Padding(
@@ -88,6 +127,13 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
                     await context.read<CalendarModel>().load(
                       newCalendarId: _idCtrl.text,
                     );
+                    // 성공 시 정규화된 ID를 저장(다음 실행 때 자동 불러오기용)
+                    if (mounted &&
+                        model.error == null &&
+                        model.calendarId.isNotEmpty) {
+                      _idCtrl.text = model.calendarId;
+                      await _saveLastCalendarId(model.calendarId);
+                    }
                   },
                   icon: const Icon(Icons.download),
                   label: const Text('불러오기'),
@@ -109,7 +155,7 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
             Expanded(
               child: _EventList(
                 events: model.events,
-                onEdit: _openEditDialog,
+                onEdit: _openEditSheet,
                 onDelete: _confirmDelete,
               ),
             ),
@@ -119,7 +165,7 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
     );
   }
 
-  Future<void> _openCreateDialog(BuildContext context) async {
+  Future<void> _openCreateSheet(BuildContext context) async {
     final model = context.read<CalendarModel>();
     if (model.calendarId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -128,15 +174,13 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
       return;
     }
     final now = DateTime.now();
-    final created = await showDialog<EditResult>(
-      context: context,
-      builder: (_) => EventEditorDialog(
-        title: '이벤트 생성',
-        initialSummary: '',
-        initialStart: now,
-        initialEnd: now.add(const Duration(hours: 1)),
-        // initialColorId: null, // 필요시 기본 선택 색상 강제
-      ),
+    final created = await showEventEditorBottomSheet(
+      context,
+      title: '이벤트 생성',
+      initialSummary: '',
+      initialStart: now,
+      initialEnd: now.add(const Duration(hours: 1)),
+      // initialColorId: null,
     );
     if (created == null) return;
 
@@ -150,25 +194,27 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
     );
   }
 
-  Future<void> _openEditDialog(BuildContext context, gcal.Event e) async {
+  Future<void> _openEditSheet(BuildContext context, gcal.Event e) async {
     final model = context.read<CalendarModel>();
-    final start =
-        (e.start?.dateTime != null ? e.start!.dateTime!.toLocal() : e.start?.date) ?? DateTime.now();
-    final end = (e.end?.dateTime != null ? e.end!.dateTime!.toLocal() : e.end?.date) ??
+    final start = (e.start?.dateTime != null
+        ? e.start!.dateTime!.toLocal()
+        : e.start?.date) ??
+        DateTime.now();
+    final end = (e.end?.dateTime != null
+        ? e.end!.dateTime!.toLocal()
+        : e.end?.date) ??
         start.add(const Duration(hours: 1));
     final isAllDay = e.start?.date != null;
 
-    final edited = await showDialog<EditResult>(
-      context: context,
-      builder: (_) => EventEditorDialog(
-        title: '이벤트 수정',
-        initialSummary: e.summary ?? '',
-        initialDescription: e.description ?? '',
-        initialStart: start,
-        initialEnd: end,
-        initialAllDay: isAllDay,
-        initialColorId: e.colorId, // ★ 기존 색상 미리 선택
-      ),
+    final edited = await showEventEditorBottomSheet(
+      context,
+      title: '이벤트 수정',
+      initialSummary: e.summary ?? '',
+      initialDescription: e.description ?? '',
+      initialStart: start,
+      initialEnd: end,
+      initialAllDay: isAllDay,
+      initialColorId: e.colorId, // ★ 기존 색상 미리 선택
     );
     if (edited == null) return;
 
@@ -223,15 +269,27 @@ class _EventList extends StatelessWidget {
     if (events.isEmpty) {
       return const Center(child: Text('이벤트가 없습니다.'));
     }
-    final fmtDate = DateFormat('yyyy-MM-dd (EEE) HH:mm');
+
+    final fmtDate = DateFormat('yyyy-MM-dd (EEE)');
+    final fmtDateTime = DateFormat('yyyy-MM-dd (EEE) HH:mm');
+
     return ListView.separated(
       itemCount: events.length,
       separatorBuilder: (_, __) => const Divider(height: 1),
       itemBuilder: (context, i) {
         final e = events[i];
+
+        final isAllDay =
+            (e.start?.date != null) && (e.start?.dateTime == null);
+
         final startUtc = e.start?.dateTime;
-        final startLocal = (startUtc != null) ? startUtc.toLocal() : e.start?.date; // ★ 로컬로 변환
-        final when = (startLocal != null) ? fmtDate.format(startLocal) : '(시작 시간 미정)';
+        final startLocal =
+        (startUtc != null) ? startUtc.toLocal() : e.start?.date;
+
+        final when = (startLocal != null)
+            ? (isAllDay ? fmtDate.format(startLocal) : fmtDateTime.format(startLocal))
+            : '(시작 시간 미정)';
+
         return ListTile(
           leading: const Icon(Icons.event),
           title: Text(e.summary ?? '(제목 없음)'),

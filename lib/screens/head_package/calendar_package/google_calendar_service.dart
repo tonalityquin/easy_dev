@@ -9,7 +9,7 @@ class GoogleCalendarService {
   // CRUD를 위해 이벤트 쓰기 스코프 사용
   static const _scopes = [
     gcal.CalendarApi.calendarEventsScope, // 이벤트 읽기/쓰기
-    // gcal.CalendarApi.calendarReadonlyScope, // (원하면 추가)
+    // gcal.CalendarApi.calendarReadonlyScope, // 필요시 추가
   ];
 
   final http.Client _base = http.Client();
@@ -18,6 +18,7 @@ class GoogleCalendarService {
 
   Future<void> _ensureAuthClient() async {
     if (_client != null) return;
+
     // pubspec.yaml 의 assets 경로와 일치해야 합니다.
     final jsonStr =
     await rootBundle.loadString('assets/keys/easydev-97fb6-e31d7e6b30f9.json');

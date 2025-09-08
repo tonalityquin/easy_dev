@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:googleapis/calendar/v3.dart' as gcal;
-import 'google_calendar_service.dart';
+
+// 같은 폴더라면 아래 상대경로 유지, 폴더 구조가 다르면 경로만 수정하세요.
+import './google_calendar_service.dart';
 
 class CalendarModel extends ChangeNotifier {
   final GoogleCalendarService _service;
@@ -67,7 +69,7 @@ class CalendarModel extends ChangeNotifier {
     }
   }
 
-  // ====== Create (allDay 지원 + colorId 지원) ======
+  // ===== Create (allDay + colorId 지원) =====
   Future<gcal.Event?> create({
     required String summary,
     String? description,
@@ -102,7 +104,7 @@ class CalendarModel extends ChangeNotifier {
     }
   }
 
-  // ====== Update (부분 수정 + colorId 지원) ======
+  // ===== Update (부분 수정 + colorId 지원) =====
   Future<gcal.Event?> update({
     required String eventId,
     String? summary,
@@ -142,7 +144,7 @@ class CalendarModel extends ChangeNotifier {
     }
   }
 
-  // ====== Delete ======
+  // ===== Delete =====
   Future<bool> delete({required String eventId}) async {
     if (calendarId.isEmpty) {
       error = '먼저 캘린더를 불러오세요.';

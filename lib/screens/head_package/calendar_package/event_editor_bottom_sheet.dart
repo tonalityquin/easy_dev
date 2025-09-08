@@ -1,16 +1,46 @@
+// lib/screens/head_package/calendar_package/event_editor_bottom_sheet.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-class EventEditorDialog extends StatefulWidget {
-  const EventEditorDialog({
+/// 호출 헬퍼
+Future<EditResult?> showEventEditorBottomSheet(
+    BuildContext context, {
+      required String title,
+      required String initialSummary,
+      required DateTime initialStart,
+      required DateTime initialEnd,
+      String initialDescription = '',
+      bool initialAllDay = true, // 항상 종일
+      String? initialColorId,
+    }) {
+  return showModalBottomSheet<EditResult>(
+    context: context,
+    useSafeArea: true,                // ★ 안전영역 사용
+    isScrollControlled: true,         // ★ 키보드 대응을 위해 전체 화면 높이 사용
+    backgroundColor: Colors.transparent,
+    builder: (_) => EventEditorBottomSheet(
+      title: title,
+      initialSummary: initialSummary,
+      initialStart: initialStart,
+      initialEnd: initialEnd,
+      initialDescription: initialDescription,
+      initialAllDay: initialAllDay,
+      initialColorId: initialColorId,
+    ),
+  );
+}
+
+/// 바텀시트 본체
+class EventEditorBottomSheet extends StatefulWidget {
+  const EventEditorBottomSheet({
     super.key,
     required this.title,
     required this.initialSummary,
     required this.initialStart,
     required this.initialEnd,
     this.initialDescription = '',
-    this.initialAllDay = true,
-    this.initialColorId,
+    this.initialAllDay = true, // 항상 종일
+    this.initialColorId, // 선택 색상(없으면 null)
   });
 
   final String title;
@@ -19,15 +49,15 @@ class EventEditorDialog extends StatefulWidget {
   final DateTime initialStart;
   final DateTime initialEnd;
   final bool initialAllDay;
-  final String? initialColorId;
+  final String? initialColorId; // Google Calendar event colorId ("1"~"11") 또는 null
 
   @override
-  State<EventEditorDialog> createState() => _EventEditorDialogState();
+  State<EventEditorBottomSheet> createState() => _EventEditorBottomSheetState();
 }
 
 enum _TemplateTab { apply, hire } // 지원, 입사
 
-class _EventEditorDialogState extends State<EventEditorDialog>
+class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
     with SingleTickerProviderStateMixin {
   // 공통(자동 생성 대상)
   late TextEditingController _summary; // 자동 생성 제목(읽기전용)
@@ -54,6 +84,7 @@ class _EventEditorDialogState extends State<EventEditorDialog>
   final _hireRegion       = TextEditingController();
   final _hireName         = TextEditingController();
   final _hirePhone        = TextEditingController();
+  final _hireGmail        = TextEditingController(); // 지메일
   final _hireBank         = TextEditingController();
   final _hireAccountNo    = TextEditingController();
   final _hireSalary       = TextEditingController();
@@ -123,6 +154,7 @@ class _EventEditorDialogState extends State<EventEditorDialog>
     _hireRegion.dispose();
     _hireName.dispose();
     _hirePhone.dispose();
+    _hireGmail.dispose();
     _hireBank.dispose();
     _hireAccountNo.dispose();
     _hireSalary.dispose();
@@ -150,8 +182,8 @@ class _EventEditorDialogState extends State<EventEditorDialog>
       ].join(' ').trim();
 
       final desc = [
-        '사유: ${reason}',
-        '시간: ${time}',
+        '사유: $reason',
+        '시간: $time',
       ].join('\n');
 
       _summary.text = title.isEmpty ? '지원' : title;
@@ -167,15 +199,19 @@ class _EventEditorDialogState extends State<EventEditorDialog>
       ].join(' ').trim();
 
       final phone        = _hirePhone.text.trim();
+      final gmail        = _hireGmail.text.trim();
       final bank         = _hireBank.text.trim();
       final accountNo    = _hireAccountNo.text.trim();
       final salary       = _hireSalary.text.trim();
       final contractType = _hireContractType.text.trim();
-      final startStr     = _hireWorkStartDate != null ? fmtDate.format(_hireWorkStartDate!) : '';
-      final endStr       = _hireFirstEndDate   != null ? fmtDate.format(_hireFirstEndDate!)   : '';
+      final startStr     =
+      _hireWorkStartDate != null ? fmtDate.format(_hireWorkStartDate!) : '';
+      final endStr       =
+      _hireFirstEndDate != null ? fmtDate.format(_hireFirstEndDate!) : '';
 
       final desc = [
         '전화번호: $phone',
+        '지메일: $gmail',
         '은행계좌: $bank',
         '계좌번호: $accountNo',
         '총 급여: $salary',
@@ -193,154 +229,224 @@ class _EventEditorDialogState extends State<EventEditorDialog>
 
   @override
   Widget build(BuildContext context) {
+    final viewInsets = MediaQuery.of(context).viewInsets;
     final fmtDate = DateFormat('yyyy-MM-dd');
 
-    return AlertDialog(
-      backgroundColor: Colors.white,
-      surfaceTintColor: Colors.white,
-      title: Text(widget.title),
-      content: SingleChildScrollView(
-        child: Column(
-          children: [
-            // ===== 이벤트 날짜(종일) =====
-            Row(
-              children: [
-                Expanded(
-                  child: _DateField(
-                    label: '시작 날짜',
-                    valueText: fmtDate.format(_start),
-                    onPick: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: _start,
-                        firstDate: DateTime(2000),
-                        lastDate: DateTime(2100),
-                      );
-                      if (picked == null) return;
-                      _start = DateTime(picked.year, picked.month, picked.day);
-                      if (!_end.isAfter(_start)) {
-                        _end = _start.add(const Duration(days: 1));
-                      }
-                      setState(() {});
-                    },
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _DateField(
-                    label: '종료 날짜(포함 안 됨)',
-                    valueText: fmtDate.format(_end),
-                    onPick: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: _end,
-                        firstDate: DateTime(2000),
-                        lastDate: DateTime(2100),
-                      );
-                      if (picked == null) return;
-                      _end = DateTime(picked.year, picked.month, picked.day);
-                      if (!_end.isAfter(_start)) {
-                        _end = _start.add(const Duration(days: 1));
-                      }
-                      setState(() {});
-                    },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            // ===== 색상 선택 =====
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text('이벤트 색상', style: Theme.of(context).textTheme.bodyMedium),
-            ),
-            const SizedBox(height: 8),
-            _ColorPicker(
-              palette: _eventColors,
-              selectedId: _colorId,
-              onSelected: (id) => setState(() => _colorId = id),
-            ),
-            const SizedBox(height: 16),
-
-            // ===== 탭 (지원 / 입사) =====
-            DefaultTabController(
-              length: 2,
-              initialIndex: _currentTab == _TemplateTab.hire ? 1 : 0,
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(), // ★ 빈곳 탭 시 키보드 닫힘
+      child: AnimatedPadding(
+        duration: const Duration(milliseconds: 200), // ★ 부드럽게 회피
+        curve: Curves.easeOut,
+        padding: EdgeInsets.only(bottom: viewInsets.bottom), // ★ 키보드 높이만큼 패딩
+        child: DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.9,
+          minChildSize: 0.5,
+          maxChildSize: 0.97,
+          builder: (context, scrollController) {
+            return Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+              ),
               child: Column(
                 children: [
-                  TabBar(
-                    controller: _tabController,
-                    labelColor: Theme.of(context).colorScheme.primary,
-                    unselectedLabelColor: Colors.black54,
-                    tabs: const [
-                      Tab(text: '지원'),
-                      Tab(text: '입사'),
-                    ],
+                  const SizedBox(height: 8),
+                  Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.black12,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
                   const SizedBox(height: 8),
-                  _currentTab == _TemplateTab.apply
-                      ? _buildApplyForm()
-                      : _buildHireForm(),
-                ],
-              ),
-            ),
 
-            const SizedBox(height: 16),
-            // ===== 자동 생성 미리보기(읽기전용) =====
-            TextField(
-              controller: _summary,
-              readOnly: true,
-              decoration: const InputDecoration(
-                labelText: '제목(자동 생성)',
-                isDense: true,
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _desc,
-              readOnly: true,
-              minLines: 4,
-              maxLines: 8,
-              decoration: const InputDecoration(
-                labelText: '설명(자동 생성)',
-                isDense: true,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                '※ 종일 이벤트는 종료가 “다음날 0시”로 해석됩니다.',
-                style: TextStyle(fontSize: 12, color: Colors.black54),
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('취소'),
-        ),
-        FilledButton(
-          onPressed: () {
-            if (_summary.text.trim().isEmpty) return;
-            Navigator.pop(
-              context,
-              EditResult(
-                summary: _summary.text.trim(),
-                description: _desc.text.trim(),
-                start: _start,
-                end: _end,
-                allDay: _allDay,
-                colorId: _colorId,
+                  // 헤더
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            widget.title,
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // 내용(스크롤)
+                  Expanded(
+                    child: ListView(
+                      controller: scrollController, // ★ DraggableScrollable와 연결
+                      keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag, // ★ 드래그로 키보드 닫힘
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      children: [
+                        // ===== 이벤트 날짜(종일) =====
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _DateField(
+                                label: '시작 날짜',
+                                valueText: fmtDate.format(_start),
+                                onPick: () async {
+                                  final picked = await showDatePicker(
+                                    context: context,
+                                    initialDate: _start,
+                                    firstDate: DateTime(2000),
+                                    lastDate: DateTime(2100),
+                                  );
+                                  if (picked == null) return;
+                                  _start = DateTime(picked.year, picked.month, picked.day);
+                                  if (!_end.isAfter(_start)) {
+                                    _end = _start.add(const Duration(days: 1));
+                                  }
+                                  setState(() {});
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _DateField(
+                                label: '종료 날짜(포함 안 됨)',
+                                valueText: fmtDate.format(_end),
+                                onPick: () async {
+                                  final picked = await showDatePicker(
+                                    context: context,
+                                    initialDate: _end,
+                                    firstDate: DateTime(2000),
+                                    lastDate: DateTime(2100),
+                                  );
+                                  if (picked == null) return;
+                                  _end = DateTime(picked.year, picked.month, picked.day);
+                                  if (!_end.isAfter(_start)) {
+                                    _end = _start.add(const Duration(days: 1));
+                                  }
+                                  setState(() {});
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+
+                        // ===== 색상 선택 =====
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text('이벤트 색상',
+                              style: Theme.of(context).textTheme.bodyMedium),
+                        ),
+                        const SizedBox(height: 8),
+                        _ColorPicker(
+                          palette: _eventColors,
+                          selectedId: _colorId,
+                          onSelected: (id) => setState(() => _colorId = id),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // ===== 탭 (지원 / 입사) =====
+                        DefaultTabController(
+                          length: 2,
+                          initialIndex: _currentTab == _TemplateTab.hire ? 1 : 0,
+                          child: Column(
+                            children: [
+                              TabBar(
+                                controller: _tabController,
+                                labelColor: Theme.of(context).colorScheme.primary,
+                                unselectedLabelColor: Colors.black54,
+                                tabs: const [
+                                  Tab(text: '지원'),
+                                  Tab(text: '입사'),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              _currentTab == _TemplateTab.apply
+                                  ? _buildApplyForm()
+                                  : _buildHireForm(),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 16),
+                        // ===== 자동 생성 미리보기(읽기전용) =====
+                        TextField(
+                          controller: _summary,
+                          readOnly: true,
+                          decoration: const InputDecoration(
+                            labelText: '제목(자동 생성)',
+                            isDense: true,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _desc,
+                          readOnly: true,
+                          minLines: 4,
+                          maxLines: 8,
+                          decoration: const InputDecoration(
+                            labelText: '설명(자동 생성)',
+                            isDense: true,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            '※ 종일 이벤트는 종료가 “다음날 0시”로 해석됩니다.',
+                            style: TextStyle(fontSize: 12, color: Colors.black54),
+                          ),
+                        ),
+
+                        const SizedBox(height: 16),
+                        // 하단 버튼(스크롤 영역 안으로 넣어 키보드/높이에 유연)
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () => Navigator.pop(context),
+                                child: const Text('취소'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: FilledButton(
+                                onPressed: () {
+                                  if (_summary.text.trim().isEmpty) return;
+                                  Navigator.pop(
+                                    context,
+                                    EditResult(
+                                      summary: _summary.text.trim(),
+                                      description: _desc.text.trim(),
+                                      start: _start,
+                                      end: _end,
+                                      allDay: _allDay,
+                                      colorId: _colorId,
+                                    ),
+                                  );
+                                },
+                                child: const Text('저장'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             );
           },
-          child: const Text('저장'),
         ),
-      ],
+      ),
     );
   }
 
@@ -392,6 +498,13 @@ class _EventEditorDialogState extends State<EventEditorDialog>
           label: '전화번호',
           controller: _hirePhone,
           keyboardType: TextInputType.phone,
+          onChanged: (_) => _rebuildTemplate(),
+        ),
+        _LabeledField(
+          label: '지메일',
+          controller: _hireGmail,
+          keyboardType: TextInputType.emailAddress,
+          hint: '예: name@gmail.com',
           onChanged: (_) => _rebuildTemplate(),
         ),
         _LabeledField(
@@ -487,6 +600,7 @@ class _LabeledField extends StatelessWidget {
       child: TextField(
         controller: controller,
         keyboardType: keyboardType,
+        textInputAction: TextInputAction.next, // ★ 다음 필드로 이동 쉬움
         onChanged: onChanged,
         decoration: InputDecoration(
           labelText: label,
@@ -607,7 +721,7 @@ class _ColorDot extends StatelessWidget {
   }
 }
 
-/// 다이얼로그에서 반환되는 결과 DTO
+/// 바텀시트에서 반환되는 결과 DTO
 class EditResult {
   EditResult({
     required this.summary,
