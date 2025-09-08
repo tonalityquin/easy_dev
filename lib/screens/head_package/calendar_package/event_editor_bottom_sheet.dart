@@ -12,6 +12,7 @@ Future<EditResult?> showEventEditorBottomSheet(
       String initialDescription = '',
       bool initialAllDay = true, // 항상 종일
       String? initialColorId,
+      int initialProgress = 0,   // ★ 진행도(0 또는 100)
     }) {
   return showModalBottomSheet<EditResult>(
     context: context,
@@ -26,6 +27,7 @@ Future<EditResult?> showEventEditorBottomSheet(
       initialDescription: initialDescription,
       initialAllDay: initialAllDay,
       initialColorId: initialColorId,
+      initialProgress: initialProgress, // ★ 전달
     ),
   );
 }
@@ -41,6 +43,7 @@ class EventEditorBottomSheet extends StatefulWidget {
     this.initialDescription = '',
     this.initialAllDay = true, // 항상 종일
     this.initialColorId, // 선택 색상(없으면 null)
+    this.initialProgress = 0, // ★ 0 또는 100
   });
 
   final String title;
@@ -50,6 +53,7 @@ class EventEditorBottomSheet extends StatefulWidget {
   final DateTime initialEnd;
   final bool initialAllDay;
   final String? initialColorId; // Google Calendar event colorId ("1"~"11") 또는 null
+  final int initialProgress;    // 0 또는 100
 
   @override
   State<EventEditorBottomSheet> createState() => _EventEditorBottomSheetState();
@@ -70,6 +74,9 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
 
   // 색상
   String? _colorId;
+
+  // 진행도(0 또는 100)
+  late int _progress; // ★
 
   // 탭
   late TabController _tabController;
@@ -125,7 +132,8 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
       _end = _start.add(const Duration(days: 1));
     }
 
-    _colorId = widget.initialColorId;
+    _colorId  = widget.initialColorId;
+    _progress = (widget.initialProgress == 100) ? 100 : 0; // ★ 안전 보정
 
     // 초기 탭: 제목에 "입사" 포함 → 입사 탭, "지원" 포함 → 지원 탭, 기본 지원
     final initialIndex = widget.initialSummary.contains('입사')
@@ -353,6 +361,29 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                         ),
                         const SizedBox(height: 16),
 
+                        // ===== 진행도(0% / 100%) =====
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text('진행도', style: Theme.of(context).textTheme.bodyMedium),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          children: [
+                            ChoiceChip(
+                              label: const Text('0%'),
+                              selected: _progress == 0,
+                              onSelected: (v) => setState(() => _progress = 0),
+                            ),
+                            ChoiceChip(
+                              label: const Text('100%'),
+                              selected: _progress == 100,
+                              onSelected: (v) => setState(() => _progress = 100),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+
                         // ===== 탭 (지원 / 입사) =====
                         DefaultTabController(
                           length: 2,
@@ -430,6 +461,7 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                                       end: _end,
                                       allDay: _allDay,
                                       colorId: _colorId,
+                                      progress: _progress, // ★ 전달
                                     ),
                                   );
                                 },
@@ -730,6 +762,7 @@ class EditResult {
     required this.end,
     this.allDay = true, // 항상 종일
     this.colorId,       // "1"~"11" 또는 null
+    this.progress = 0,  // ★ 0 또는 100
   });
 
   final String summary;
@@ -738,4 +771,5 @@ class EditResult {
   final DateTime end;   // yyyy-MM-dd 의도(다음날 0시 의미)
   final bool allDay;
   final String? colorId;
+  final int progress;   // 0 or 100
 }

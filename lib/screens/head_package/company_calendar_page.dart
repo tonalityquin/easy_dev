@@ -6,7 +6,7 @@ import 'package:googleapis/calendar/v3.dart' as gcal;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'calendar_package/calendar_model.dart';
-import 'calendar_package/event_editor_bottom_sheet.dart'; // ★ BottomSheet 버전 사용
+import 'calendar_package/event_editor_bottom_sheet.dart'; // BottomSheet 버전 사용
 
 class CompanyCalendarPage extends StatefulWidget {
   const CompanyCalendarPage({super.key});
@@ -58,6 +58,31 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
   Future<void> _saveLastCalendarId(String id) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kLastCalendarIdKey, id);
+  }
+
+  // ===== progress 태그 도우미 =====
+  // 공백/대소문자 허용: [ progress : 100 ] 도 인식
+  static final RegExp _progressTag =
+  RegExp(r'\[\s*progress\s*:\s*(0|100)\s*\]', caseSensitive: false);
+
+  int _extractProgress(String? description) {
+    if (description == null) return 0;
+    final m = _progressTag.firstMatch(description);
+    if (m == null) return 0;
+    final v = int.tryParse(m.group(1) ?? '0') ?? 0;
+    return v == 100 ? 100 : 0;
+  }
+
+  String _setProgressTag(String? description, int progress) {
+    final val = (progress == 100) ? 100 : 0;
+    final base = (description ?? '').trimRight();
+
+    if (_progressTag.hasMatch(base)) {
+      // 여러 개가 있더라도 모두 최신 값으로 맞춤
+      return base.replaceAllMapped(_progressTag, (_) => '[progress:$val]');
+    }
+    if (base.isEmpty) return '[progress:$val]';
+    return '$base\n[progress:$val]';
   }
 
   @override
@@ -127,7 +152,7 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
                     await context.read<CalendarModel>().load(
                       newCalendarId: _idCtrl.text,
                     );
-                    // 성공 시 정규화된 ID를 저장(다음 실행 때 자동 불러오기용)
+                    // 성공 시 정규화된 ID 저장
                     if (mounted &&
                         model.error == null &&
                         model.calendarId.isNotEmpty) {
@@ -157,6 +182,8 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
                 events: model.events,
                 onEdit: _openEditSheet,
                 onDelete: _confirmDelete,
+                onToggleProgress: _toggleProgress, // 체크박스 토글
+                progressOf: (e) => _extractProgress(e.description),
               ),
             ),
           ],
@@ -180,31 +207,35 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
       initialSummary: '',
       initialStart: now,
       initialEnd: now.add(const Duration(hours: 1)),
-      // initialColorId: null,
+      initialProgress: 0, // 기본 0
     );
     if (created == null) return;
 
+    // description에 진행도 태그 주입
+    final descWithProgress =
+    _setProgressTag(created.description, created.progress);
+
     await model.create(
       summary: created.summary,
-      description: created.description,
+      description: descWithProgress,
       start: created.start,
       end: created.end,
       allDay: created.allDay,
-      colorId: created.colorId, // ★ 선택 색상 전달
+      colorId: created.colorId,
     );
   }
 
   Future<void> _openEditSheet(BuildContext context, gcal.Event e) async {
     final model = context.read<CalendarModel>();
-    final start = (e.start?.dateTime != null
-        ? e.start!.dateTime!.toLocal()
-        : e.start?.date) ??
-        DateTime.now();
-    final end = (e.end?.dateTime != null
-        ? e.end!.dateTime!.toLocal()
-        : e.end?.date) ??
-        start.add(const Duration(hours: 1));
+    final start =
+        (e.start?.dateTime != null ? e.start!.dateTime!.toLocal() : e.start?.date) ??
+            DateTime.now();
+    final end =
+        (e.end?.dateTime != null ? e.end!.dateTime!.toLocal() : e.end?.date) ??
+            start.add(const Duration(hours: 1));
     final isAllDay = e.start?.date != null;
+
+    final initialProgress = _extractProgress(e.description); // 기존 진행도
 
     final edited = await showEventEditorBottomSheet(
       context,
@@ -214,18 +245,22 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
       initialStart: start,
       initialEnd: end,
       initialAllDay: isAllDay,
-      initialColorId: e.colorId, // ★ 기존 색상 미리 선택
+      initialColorId: e.colorId,
+      initialProgress: initialProgress,
     );
     if (edited == null) return;
+
+    final descWithProgress =
+    _setProgressTag(edited.description, edited.progress);
 
     await model.update(
       eventId: e.id!,
       summary: edited.summary,
-      description: edited.description,
+      description: descWithProgress,
       start: edited.start,
       end: edited.end,
       allDay: edited.allDay,
-      colorId: edited.colorId, // ★ 선택 색상 전달
+      colorId: edited.colorId,
     );
   }
 
@@ -251,6 +286,33 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
       await context.read<CalendarModel>().delete(eventId: e.id!);
     }
   }
+
+  // 체크박스 토글 → 진행도 0/100 업데이트
+  Future<void> _toggleProgress(
+      BuildContext context, gcal.Event e, bool done) async {
+    final model = context.read<CalendarModel>();
+
+    final start =
+        (e.start?.dateTime != null ? e.start!.dateTime!.toLocal() : e.start?.date) ??
+            DateTime.now();
+    final end =
+        (e.end?.dateTime != null ? e.end!.dateTime!.toLocal() : e.end?.date) ??
+            start.add(const Duration(hours: 1));
+    final isAllDay = e.start?.date != null;
+
+    final newProgress = done ? 100 : 0;
+    final newDesc = _setProgressTag(e.description, newProgress);
+
+    await model.update(
+      eventId: e.id!,
+      summary: e.summary ?? '',
+      description: newDesc,
+      start: start,
+      end: end,
+      allDay: isAllDay,
+      colorId: e.colorId,
+    );
+  }
 }
 
 class _EventList extends StatelessWidget {
@@ -258,11 +320,15 @@ class _EventList extends StatelessWidget {
     required this.events,
     required this.onEdit,
     required this.onDelete,
+    required this.onToggleProgress,
+    required this.progressOf,
   });
 
   final List<gcal.Event> events;
   final void Function(BuildContext, gcal.Event) onEdit;
   final void Function(BuildContext, gcal.Event) onDelete;
+  final Future<void> Function(BuildContext, gcal.Event, bool) onToggleProgress;
+  final int Function(gcal.Event) progressOf;
 
   @override
   Widget build(BuildContext context) {
@@ -290,9 +356,19 @@ class _EventList extends StatelessWidget {
             ? (isAllDay ? fmtDate.format(startLocal) : fmtDateTime.format(startLocal))
             : '(시작 시간 미정)';
 
+        final done = progressOf(e) == 100;
+
         return ListTile(
-          leading: const Icon(Icons.event),
-          title: Text(e.summary ?? '(제목 없음)'),
+          leading: Checkbox(
+            value: done,
+            onChanged: (v) => onToggleProgress(context, e, v ?? false),
+          ),
+          title: Text(
+            e.summary ?? '(제목 없음)',
+            style: done
+                ? const TextStyle(decoration: TextDecoration.lineThrough)
+                : null,
+          ),
           subtitle: Text(when),
           onTap: () => onEdit(context, e),
           trailing: IconButton(

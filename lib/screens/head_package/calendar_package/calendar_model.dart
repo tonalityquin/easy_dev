@@ -35,6 +35,24 @@ class CalendarModel extends ChangeNotifier {
     return Uri.decodeComponent(s);
   }
 
+  /// 서버에서 최신 이벤트 목록을 다시 불러옵니다.
+  Future<void> refresh() async {
+    if (calendarId.isEmpty) return;
+    try {
+      loading = true;
+      error = null;
+      notifyListeners();
+
+      events = await _service.listEvents(calendarId: calendarId);
+      _sortEvents();
+    } catch (e) {
+      error = '새로고침 실패: $e';
+    } finally {
+      loading = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> load({String? newCalendarId}) async {
     final raw = (newCalendarId ?? calendarId).trim();
     final normalized = _normalizeCalendarId(raw);
@@ -83,24 +101,31 @@ class CalendarModel extends ChangeNotifier {
       notifyListeners();
       return null;
     }
+    loading = true;
+    error = null;
+    notifyListeners();
+
     try {
-      final created = await _service.createEvent(
+      await _service.createEvent(
         calendarId: calendarId,
         summary: summary,
-        description: description,
+        // 생성 시 description이 비어도 서버에 반영되도록 빈문자라도 전달
+        description: description ?? '',
         start: start,
         end: end,
         allDay: allDay,
         colorId: colorId,
       );
-      events.add(created);
-      _sortEvents();
-      notifyListeners();
-      return created;
+
+      // ✅ 생성 후 서버 기준으로 다시 목록 불러오기
+      await refresh();
+      return null; // 목록을 새로 불러오므로 단일 반환은 사용하지 않아도 됨
     } catch (e) {
       error = '생성 실패: $e';
-      notifyListeners();
       return null;
+    } finally {
+      loading = false;
+      notifyListeners();
     }
   }
 
@@ -119,28 +144,39 @@ class CalendarModel extends ChangeNotifier {
       notifyListeners();
       return null;
     }
+    loading = true;
+    error = null;
+    notifyListeners();
+
     try {
-      final updated = await _service.updateEvent(
+      // ✅ 반드시 description을 patch에 포함시키기 위해
+      //    description이 null이면 현재 이벤트의 description(또는 '')를 사용
+      final current = events.firstWhere(
+            (e) => e.id == eventId,
+        orElse: () => gcal.Event()..description = '',
+      );
+      final descToSend = (description != null) ? description : (current.description ?? '');
+
+      await _service.updateEvent(
         calendarId: calendarId,
         eventId: eventId,
         summary: summary,
-        description: description,
+        description: descToSend, // ← 항상 non-null로 전달하여 patch에 포함
         start: start,
         end: end,
         allDay: allDay,
         colorId: colorId,
       );
-      final i = events.indexWhere((e) => e.id == eventId);
-      if (i != -1) {
-        events[i] = updated;
-        _sortEvents();
-      }
-      notifyListeners();
-      return updated;
+
+      // ✅ 수정 후 서버 기준으로 다시 목록 불러오기
+      await refresh();
+      return null;
     } catch (e) {
       error = '수정 실패: $e';
-      notifyListeners();
       return null;
+    } finally {
+      loading = false;
+      notifyListeners();
     }
   }
 
@@ -151,15 +187,22 @@ class CalendarModel extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+    loading = true;
+    error = null;
+    notifyListeners();
+
     try {
       await _service.deleteEvent(calendarId: calendarId, eventId: eventId);
-      events.removeWhere((e) => e.id == eventId);
-      notifyListeners();
+
+      // ✅ 삭제 후 서버 기준으로 다시 목록 불러오기
+      await refresh();
       return true;
     } catch (e) {
       error = '삭제 실패: $e';
-      notifyListeners();
       return false;
+    } finally {
+      loading = false;
+      notifyListeners();
     }
   }
 
