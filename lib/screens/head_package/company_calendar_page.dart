@@ -1,6 +1,7 @@
 // lib/screens/head_package/company_calendar_page.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 // import 'package:intl/intl.dart'; // ❌ 미사용이라 제거
 import 'package:googleapis/calendar/v3.dart' as gcal;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -25,6 +26,12 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
 
   final PageController _pageController = PageController(initialPage: 0);
   int _viewIndex = 0; // 0: 캘린더, 1: 목록
+
+  // 🔒 캘린더 ID 입력 보호(잠금) 토글 — 기본값: 잠금 활성화
+  bool _idLocked = true;
+
+  // ✅ FAB 살짝 올리기(px)
+  static const double _fabLift = 24.0;
 
   @override
   void initState() {
@@ -93,9 +100,9 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
       appBar: AppBar(
         title: const Text('회사 달력'),
         centerTitle: true,
-        backgroundColor: Colors.white,        // ✅ 흰 배경
-        foregroundColor: Colors.black87,      // ✅ 검은 글자/아이콘
-        surfaceTintColor: Colors.white,       // ✅ 머티리얼3 틴트도 흰색으로
+        backgroundColor: Colors.white, // ✅ 흰 배경
+        foregroundColor: Colors.black87, // ✅ 검은 글자/아이콘
+        surfaceTintColor: Colors.white, // ✅ 머티리얼3 틴트도 흰색으로
         elevation: 0,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
@@ -113,10 +120,13 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _openCreateSheet(context),
-        child: const Icon(Icons.add),
-      ),
+
+      // ✅ FAB를 하단 중앙으로 이동
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+
+      // ✅ 확장형 FAB 적용 (살짝 위로 올림)
+      floatingActionButton: _buildCreateFab(context),
+
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -131,7 +141,7 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
               ),
               child: Text(
                 '캘린더 ID 또는 URL을 입력 후 불러오기를 누르세요. (예: someone@gmail.com)\n'
-                    '좌우로 스와이프하면 목록 ↔ 캘린더 뷰를 전환합니다.',
+                    '좌우로 스와이프하면 캘린더 ↔ 목록 뷰를 전환합니다.',
                 style: text.bodyMedium?.copyWith(
                   color: cs.onPrimaryContainer,
                   fontWeight: FontWeight.w600,
@@ -143,15 +153,45 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
             // 입력 + 버튼
             Row(
               children: [
+                // ✅ 잠금/지우기 기능 포함한 입력 필드
                 Expanded(
-                  child: TextField(
-                    controller: _idCtrl,
-                    decoration: const InputDecoration(
-                      labelText: '캘린더 ID 또는 URL',
-                      hintText: '예: someone@gmail.com 또는 Google Calendar URL',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
+                  child: ValueListenableBuilder<TextEditingValue>(
+                    valueListenable: _idCtrl,
+                    builder: (context, value, _) {
+                      return TextField(
+                        controller: _idCtrl,
+                        readOnly:
+                        _idLocked, // 🔒 잠금 시 편집 불가(복사는 가능 / 길게 눌러 복사 가능)
+                        decoration: InputDecoration(
+                          labelText: '캘린더 ID 또는 URL',
+                          hintText: '예: someone@gmail.com 또는 Google Calendar URL',
+                          border: const OutlineInputBorder(),
+                          isDense: true,
+                          suffixIcon: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // 🔒 잠금 토글
+                              IconButton(
+                                tooltip: _idLocked ? '잠금 해제' : '잠금',
+                                icon: Icon(
+                                  _idLocked ? Icons.lock : Icons.lock_open,
+                                ),
+                                onPressed: () =>
+                                    setState(() => _idLocked = !_idLocked),
+                              ),
+                              // ✕ 전체 지우기 (잠금 해제 + 내용 있을 때만 표시)
+                              if (value.text.isNotEmpty && !_idLocked)
+                                IconButton(
+                                  tooltip: '지우기',
+                                  icon: const Icon(Icons.clear),
+                                  onPressed: () =>
+                                      setState(() => _idCtrl.clear()),
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -182,7 +222,8 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
               const SizedBox(height: 8),
               Text(
                 model.error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+                style:
+                TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ],
 
@@ -220,6 +261,30 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// ✅ 하단 중앙 확장형 FAB (Transform으로 살짝 위로 올림)
+  Widget _buildCreateFab(BuildContext context) {
+    return Transform.translate(
+      offset: const Offset(0, -_fabLift),
+      child: SafeArea(
+        minimum: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: FloatingActionButton.extended(
+          heroTag: 'createEventFab',
+          tooltip: '새 이벤트 만들기',
+          onPressed: () => _openCreateSheet(context),
+          icon: const Icon(Icons.add),
+          label: const Text('새 이벤트'),
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black87,
+          elevation: 3,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(color: Colors.black.withOpacity(0.08)),
+          ),
         ),
       ),
     );

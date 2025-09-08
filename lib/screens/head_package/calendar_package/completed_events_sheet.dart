@@ -201,85 +201,146 @@ Future<void> openCompletedEventsSheet({
 /// 스프레드시트 설정(Spreadsheet ID / Range) 시트
 Future<void> _openSpreadsheetConfigSheet(BuildContext context) async {
   final prefs = await SharedPreferences.getInstance();
+
   final idCtrl = TextEditingController(text: prefs.getString(_kSheetIdKey) ?? '');
   final rangeCtrl = TextEditingController(text: prefs.getString(_kSheetRangeKey) ?? '완료!A2');
+
+  final idFocus = FocusNode();
+  final rangeFocus = FocusNode();
+
+  Future<void> save() async {
+    await prefs.setString(_kSheetIdKey, idCtrl.text.trim());
+    await prefs.setString(
+      _kSheetRangeKey,
+      (rangeCtrl.text.trim().isEmpty) ? '완료!A2' : rangeCtrl.text.trim(),
+    );
+    if (context.mounted) Navigator.pop(context);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('스프레드시트 설정을 저장했습니다.')),
+      );
+    }
+  }
 
   await showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
+    // ✅ 키보드 대응
     backgroundColor: Colors.white,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
     ),
-    builder: (context) {
-      return SafeArea(
-        child: Padding(
-          padding: EdgeInsets.only(
-            left: 16,
-            right: 16,
-            top: 16,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('스프레드시트 설정', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 12),
-              TextField(
-                controller: idCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Spreadsheet ID',
-                  hintText: '예: 1fjN8k...(URL 중간의 ID)',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: rangeCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Range',
-                  hintText: '예: 완료!A2',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
+    builder: (ctx) {
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => FocusScope.of(ctx).unfocus(), // 바깥 터치로 키보드 닫기
+        child: AnimatedPadding(
+          // ✅ 키보드 높이만큼 시트 내용이 자연스럽게 올라감
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          child: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('취소'),
-                    ),
+                  const Text('스프레드시트 설정', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 12),
+
+                  // Spreadsheet ID
+                  ValueListenableBuilder<TextEditingValue>(
+                    valueListenable: idCtrl,
+                    builder: (context, value, _) {
+                      return TextField(
+                        controller: idCtrl,
+                        focusNode: idFocus,
+                        autofocus: true,
+                        textInputAction: TextInputAction.next,
+                        onSubmitted: (_) => rangeFocus.requestFocus(),
+                        decoration: InputDecoration(
+                          labelText: 'Spreadsheet ID',
+                          hintText: '예: 1fjN8k...(URL 중간의 ID)',
+                          border: const OutlineInputBorder(),
+                          isDense: true,
+                          suffixIcon: value.text.isNotEmpty
+                              ? IconButton(
+                                  tooltip: '지우기',
+                                  icon: const Icon(Icons.clear),
+                                  onPressed: () {
+                                    idCtrl.clear();
+                                    idFocus.requestFocus();
+                                  },
+                                )
+                              : null,
+                        ),
+                      );
+                    },
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () async {
-                        await prefs.setString(_kSheetIdKey, idCtrl.text.trim());
-                        await prefs.setString(
-                          _kSheetRangeKey,
-                          (rangeCtrl.text.trim().isEmpty) ? '완료!A2' : rangeCtrl.text.trim(),
-                        );
-                        if (context.mounted) Navigator.pop(context);
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('스프레드시트 설정을 저장했습니다.')),
-                          );
-                        }
-                      },
-                      child: const Text('저장'),
-                    ),
+
+                  const SizedBox(height: 10),
+
+                  // Range
+                  ValueListenableBuilder<TextEditingValue>(
+                    valueListenable: rangeCtrl,
+                    builder: (context, value, _) {
+                      return TextField(
+                        controller: rangeCtrl,
+                        focusNode: rangeFocus,
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) => save(),
+                        decoration: InputDecoration(
+                          labelText: 'Range',
+                          hintText: '예: 완료!A2',
+                          border: const OutlineInputBorder(),
+                          isDense: true,
+                          suffixIcon: value.text.isNotEmpty
+                              ? IconButton(
+                                  tooltip: '지우기',
+                                  icon: const Icon(Icons.clear),
+                                  onPressed: () {
+                                    rangeCtrl.clear();
+                                    rangeFocus.requestFocus();
+                                  },
+                                )
+                              : null,
+                        ),
+                      );
+                    },
+                  ),
+
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text('취소'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: save,
+                          child: const Text('저장'),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
+            ),
           ),
         ),
       );
     },
   );
+
+  // 메모리 누수 방지
+  idCtrl.dispose();
+  rangeCtrl.dispose();
+  idFocus.dispose();
+  rangeFocus.dispose();
 }
 
 /// 완료된 이벤트들을 스프레드시트에 Append

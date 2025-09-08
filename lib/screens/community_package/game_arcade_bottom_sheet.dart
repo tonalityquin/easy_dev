@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'game_package/pelican_sorter_game.dart';
 import 'game_package/tetris.dart';
 import 'game_package/minesweeper.dart';
-import 'game_package/lights_out.dart';
-// ⬇ WSOP 홀덤 데모로 교체
 import 'game_package/wsop_holdem.dart';
 
 class GameArcadeBottomSheet extends StatelessWidget {
@@ -108,19 +105,9 @@ class GameArcadeBottomSheet extends StatelessWidget {
                                 MaterialPageRoute(builder: (_) => const Minesweeper()),
                               );
                               break;
-                            case _GameRoute.lightsOut:
-                              Navigator.of(rootContext).push(
-                                MaterialPageRoute(builder: (_) => const LightsOut()),
-                              );
-                              break;
                             case _GameRoute.wsopHoldem:
                               Navigator.of(rootContext).push(
                                 MaterialPageRoute(builder: (_) => const WsopHoldemPage()),
-                              );
-                              break;
-                            case _GameRoute.pelicanSorter: // ⬅ 펠리컨 소터
-                              Navigator.of(rootContext).push(
-                                MaterialPageRoute(builder: (_) => const PelicanSorterPage()),
                               );
                               break;
                             case _GameRoute.comingSoon:
@@ -147,7 +134,7 @@ class GameArcadeBottomSheet extends StatelessWidget {
 // 게임 목록 정의 (테트리스 + 지뢰찾기 + 라이트아웃 + WSOP 홀덤 + 펠리컨 소터)
 // ──────────────────────────────────────────────────────────────
 
-enum _GameRoute { tetris, minesweeper, lightsOut, wsopHoldem, pelicanSorter, comingSoon }
+enum _GameRoute { tetris, minesweeper, wsopHoldem, comingSoon }
 
 class _GameItem {
   final String title;
@@ -184,14 +171,7 @@ const _games = <_GameItem>[
     fg: Color(0xFF4A148C),
     route: _GameRoute.minesweeper,
   ),
-  _GameItem(
-    title: 'Lights Out',
-    subtitle: '불을 모두 꺼라 (논리 퍼즐)',
-    icon: Icons.lightbulb,
-    bg: Color(0xFFFFF9C4),
-    fg: Color(0xFFF57F17),
-    route: _GameRoute.lightsOut,
-  ),
+
   _GameItem(
     title: 'WSOP Hold’em',
     subtitle: '토너먼트(WSOP/TDA) 데모',
@@ -201,12 +181,4 @@ const _games = <_GameItem>[
     route: _GameRoute.wsopHoldem,
   ),
   // ⬇ 펠리컨 소터
-  _GameItem(
-    title: '펠리컨 소터',
-    subtitle: '논리 카드 추론',
-    icon: Icons.deck_rounded,
-    bg: Color(0xFFE3F2FD),
-    fg: Color(0xFF0D47A1),
-    route: _GameRoute.pelicanSorter,
-  ),
 ];

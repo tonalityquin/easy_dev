@@ -1,3 +1,4 @@
+// lib/screens/community_stub_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -54,127 +55,154 @@ class CommunityStubPage extends StatelessWidget {
             children: [
               const _HeaderBanner(),
               const SizedBox(height: 16),
+
+              // ✅ 반응형 Grid
               Expanded(
-                child: GridView.count(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                  childAspectRatio: 1.15,
-                  children: [
-                    _ActionCard(
-                      icon: Icons.videogame_asset_rounded,
-                      title: '아케이드',
-                      subtitle: 'Arcade',
-                      bg: cs.secondaryContainer,
-                      fg: cs.onSecondaryContainer,
-                      onTap: () {
-                        showModalBottomSheet(
-                          context: context,
-                          isScrollControlled: true,
-                          backgroundColor: Colors.transparent,
-                          builder: (_) =>
-                              GameArcadeBottomSheet(rootContext: context),
-                        );
-                      },
-                    ),
-                    _ActionCard(
-                      icon: Icons.edit_note_rounded,
-                      title: '로드맵',
-                      subtitle: 'After Release',
-                      bg: cs.tertiaryContainer,
-                      fg: cs.onTertiaryContainer,
-                      onTap: () {
-                        showModalBottomSheet(
-                          context: context,
-                          isScrollControlled: true,
-                          backgroundColor: Colors.transparent,
-                          builder: (_) => const RoadmapBottomSheet(),
-                        );
-                      },
-                    ),
-                    _ActionCard(
-                      icon: Icons.menu_book_rounded,
-                      title: '텍스트',
-                      subtitle: 'Writing',
-                      bg: cs.primaryContainer,
-                      fg: cs.onPrimaryContainer,
-                      onTap: () {
-                        showModalBottomSheet(
-                          context: context,
-                          isScrollControlled: true,
-                          backgroundColor: Colors.transparent,
-                          builder: (_) => const GithubMarkdownBottomSheet(
-                            owner: 'tonalityquin',
-                            repo: 'side_project',
-                            defaultBranch: 'main',
-                            // initialPath: 'README.md',
-                          ),
-                        );
-                      },
-                    ),
-                    _ActionCard(
-                      icon: Icons.code,
-                      title: '코드',
-                      subtitle: 'Project',
-                      bg: cs.primaryContainer,
-                      fg: cs.onPrimaryContainer,
-                      onTap: () {
-                        showModalBottomSheet(
-                          context: context,
-                          isScrollControlled: true,
-                          backgroundColor: Colors.transparent,
-                          builder: (_) => const GithubCodeBrowserBottomSheet(
-                            owner: 'tonalityquin',
-                            repo: 'easy_dev',
-                            defaultBranch: 'main',
-                            // initialPath: '',
-                          ),
-                        );
-                      },
-                    ),
-                    _ActionCard(
-                      icon: Icons.computer_rounded,
-                      title: '로컬 컴퓨터',
-                      subtitle: 'SharedPreferences',
-                      bg: cs.surfaceVariant,
-                      fg: cs.onSurfaceVariant,
-                      onTap: () {
-                        showModalBottomSheet(
-                          context: context,
-                          isScrollControlled: true,
-                          backgroundColor: Colors.transparent,
-                          builder: (_) => const LocalPrefsBottomSheet(),
-                        );
-                      },
-                    ),
-                    // ✅ 추가된 디버그 로그 카드
-                    _ActionCard(
-                      icon: Icons.bug_report_rounded,
-                      title: '디버그',
-                      subtitle: 'Firestore Logs',
-                      bg: cs.errorContainer.withOpacity(.85),
-                      fg: cs.onErrorContainer,
-                      onTap: () {
-                        showModalBottomSheet(
-                          context: context,
-                          isScrollControlled: true,
-                          backgroundColor: Colors.transparent,
-                          builder: (_) => const Material(
-                            // 둥근 모서리로 감싸서 다른 시트들과 톤 맞춤
-                            borderRadius: BorderRadius.vertical(
-                                top: Radius.circular(16)),
-                            clipBehavior: Clip.antiAlias,
-                            child: SizedBox(
-                              height: 560,
-                              child: DebugBottomSheet(),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final width = constraints.maxWidth;
+                    final crossAxisCount = width >= 1100
+                        ? 4
+                        : width >= 800
+                        ? 3
+                        : 2;
+                    const spacing = 12.0;
+                    final textScale =
+                    MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
+
+                    final tileWidth =
+                        (width - spacing * (crossAxisCount - 1)) / crossAxisCount;
+                    final baseTileHeight = 150.0; // 필요 시 140~170 조정
+                    final tileHeight = baseTileHeight * textScale;
+                    final childAspectRatio = tileWidth / tileHeight;
+
+                    final cards = <Widget>[
+                      _ActionCard(
+                        icon: Icons.videogame_asset_rounded,
+                        title: '아케이드',
+                        subtitle: 'Arcade',
+                        bg: cs.secondaryContainer,
+                        fg: cs.onSecondaryContainer,
+                        onTap: () {
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (_) =>
+                                GameArcadeBottomSheet(rootContext: context),
+                          );
+                        },
+                      ),
+                      _ActionCard(
+                        icon: Icons.edit_note_rounded,
+                        title: '로드맵',
+                        subtitle: 'After Release',
+                        bg: cs.tertiaryContainer,
+                        fg: cs.onTertiaryContainer,
+                        onTap: () {
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (_) => const RoadmapBottomSheet(),
+                          );
+                        },
+                      ),
+                      _ActionCard(
+                        icon: Icons.menu_book_rounded,
+                        title: '텍스트',
+                        subtitle: 'Side Project',
+                        bg: cs.primaryContainer,
+                        fg: cs.onPrimaryContainer,
+                        onTap: () {
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (_) => const GithubMarkdownBottomSheet(
+                              owner: 'tonalityquin',
+                              repo: 'side_project',
+                              defaultBranch: 'main',
+                              // initialPath: 'README.md',
                             ),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
+                          );
+                        },
+                      ),
+                      _ActionCard(
+                        icon: Icons.code,
+                        title: '코드',
+                        subtitle: 'Dev',
+                        bg: cs.primaryContainer,
+                        fg: cs.onPrimaryContainer,
+                        onTap: () {
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (_) => const GithubCodeBrowserBottomSheet(
+                              owner: 'tonalityquin',
+                              repo: 'easy_dev',
+                              defaultBranch: 'main',
+                              // initialPath: '',
+                            ),
+                          );
+                        },
+                      ),
+                      _ActionCard(
+                        icon: Icons.computer_rounded,
+                        title: '로컬 컴퓨터',
+                        subtitle: 'SharedPreferences',
+                        bg: cs.surfaceVariant,
+                        fg: cs.onSurfaceVariant,
+                        onTap: () {
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (_) => const LocalPrefsBottomSheet(),
+                          );
+                        },
+                      ),
+                      _ActionCard(
+                        icon: Icons.bug_report_rounded,
+                        title: '디버그',
+                        subtitle: 'Firestore Logs\nLocal Logs', // ✅ 2줄
+                        bg: cs.errorContainer.withOpacity(.85),
+                        fg: cs.onErrorContainer,
+                        onTap: () {
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (_) => const Material(
+                              borderRadius:
+                              BorderRadius.vertical(top: Radius.circular(16)),
+                              clipBehavior: Clip.antiAlias,
+                              child: SizedBox(
+                                height: 560,
+                                child: DebugBottomSheet(),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ];
+
+                    return GridView.builder(
+                      padding: EdgeInsets.zero,
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: crossAxisCount,
+                        mainAxisSpacing: spacing,
+                        crossAxisSpacing: spacing,
+                        childAspectRatio: childAspectRatio,
+                      ),
+                      itemCount: cards.length,
+                      itemBuilder: (context, i) => cards[i],
+                    );
+                  },
                 ),
               ),
+
               Center(
                 child: InkWell(
                   onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
@@ -244,7 +272,7 @@ class _ActionCard extends StatelessWidget {
   final String subtitle;
   final Color bg;
   final Color fg;
-  final VoidCallback? onTap; // 카드 아무 곳이나 탭
+  final VoidCallback? onTap;
 
   const _ActionCard({
     required this.icon,
@@ -257,39 +285,37 @@ class _ActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 카드 외곽 InkWell: 본문(아이콘 제외) 탭 처리용
     return Card(
       color: Colors.white,
       elevation: 1,
       clipBehavior: Clip.antiAlias,
       surfaceTintColor: bg,
       child: InkWell(
-        // 카드 빈 공간(본문)을 탭했을 때만 onTap
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(14),
+          // 여백 살짝 최적화
+          padding: const EdgeInsets.all(12),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // 아이콘: 별도 InkWell 로 분리
               Material(
                 color: Colors.transparent,
                 child: InkWell(
-                  onTap: onTap, // onIconTap 없으면 onTap을 대신 호출
+                  onTap: onTap,
                   customBorder: const CircleBorder(),
                   child: Container(
-                    width: 52,
-                    height: 52,
+                    width: 48,
+                    height: 48,
                     decoration: BoxDecoration(
                       color: bg,
                       shape: BoxShape.circle,
                     ),
                     alignment: Alignment.center,
-                    child: Icon(icon, color: fg, size: 28),
+                    child: Icon(icon, color: fg, size: 26),
                   ),
                 ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               Text(
                 title,
                 textAlign: TextAlign.center,
@@ -301,9 +327,14 @@ class _ActionCard extends StatelessWidget {
               Text(
                 subtitle,
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                style: TextStyle(
+                  color: Colors.grey.shade600,
+                  fontSize: 12,
+                  height: 1.15, // 2줄일 때도 촘촘하게
+                ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
+                softWrap: true,
               ),
             ],
           ),
