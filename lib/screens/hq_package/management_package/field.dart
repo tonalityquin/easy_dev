@@ -1,8 +1,9 @@
+// File: lib/screens/field/field.dart
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 
 import '../../../enums/plate_type.dart';
+import '../../../repositories/area_counts_repository.dart';
 import '../../../states/user/user_state.dart';
 import 'area_detail_screen.dart';
 
@@ -17,10 +18,12 @@ class _FieldState extends State<Field> {
   bool _isLoading = true;
   String? _errorMessage;
   List<AreaCount> _areaCounts = [];
+  late final AreaCountsRepository _repo;
 
   @override
   void initState() {
     super.initState();
+    _repo = AreaCountsRepository();
     _fetchAreaCounts();
   }
 
@@ -31,7 +34,6 @@ class _FieldState extends State<Field> {
     });
 
     try {
-      final firestore = FirebaseFirestore.instance;
       final userState = context.read<UserState>();
       final division = userState.user?.divisions.first;
 
@@ -39,42 +41,14 @@ class _FieldState extends State<Field> {
         throw Exception('division 정보가 없습니다.');
       }
 
-      final areaSnapshot = await firestore.collection('areas').where('division', isEqualTo: division).get();
-
-      final areas = areaSnapshot.docs.map((doc) => doc['name'] as String).toList();
-
-      List<AreaCount> results = [];
-
-      for (final area in areas) {
-        if (area == division) continue;
-
-        final counts = <PlateType, int>{};
-
-        for (final type in PlateType.values) {
-          final countSnapshot = await firestore
-              .collection('plates')
-              .where('area', isEqualTo: area)
-              .where('type', isEqualTo: type.firestoreValue)
-              .count()
-              .get();
-
-          counts[type] = countSnapshot.count ?? 0;
-
-        }
-
-        results.add(AreaCount(area, counts));
-      }
-
-      results.sort((a, b) => a.area.compareTo(b.area));
+      final results = await _repo.fetchAreaCountsByDivision(division);
 
       if (!mounted) return;
       setState(() {
         _areaCounts = results;
         _isLoading = false;
       });
-
     } catch (e) {
-
       if (!mounted) return;
       setState(() {
         _errorMessage = '데이터를 불러오지 못했습니다.\n${e.toString()}';
@@ -87,35 +61,36 @@ class _FieldState extends State<Field> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-          title: const Text('필드 별 업무/근퇴 현황'),
-          centerTitle: true,
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
-          elevation: 0),
+        title: const Text('필드 별 업무/근퇴 현황'),
+        centerTitle: true,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 0,
+      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _errorMessage != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(
-                      _errorMessage!,
-                      style: const TextStyle(color: Colors.red, fontSize: 16),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                )
-              : RefreshIndicator(
-                  onRefresh: _fetchAreaCounts,
-                  child: ListView.builder(
-                    itemCount: _areaCounts.length,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    itemBuilder: (context, index) {
-                      final areaCount = _areaCounts[index];
-                      return _buildAreaCard(areaCount);
-                    },
-                  ),
-                ),
+          ? Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            _errorMessage!,
+            style: const TextStyle(color: Colors.red, fontSize: 16),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      )
+          : RefreshIndicator(
+        onRefresh: _fetchAreaCounts,
+        child: ListView.builder(
+          itemCount: _areaCounts.length,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          itemBuilder: (context, index) {
+            final areaCount = _areaCounts[index];
+            return _buildAreaCard(areaCount);
+          },
+        ),
+      ),
     );
   }
 
@@ -125,15 +100,15 @@ class _FieldState extends State<Field> {
         showModalBottomSheet(
           backgroundColor: Colors.white,
           context: context,
-          isScrollControlled: true, // BottomSheet 전체 높이 조절 가능
+          isScrollControlled: true,
           shape: const RoundedRectangleBorder(
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
           builder: (context) {
             final height = MediaQuery.of(context).size.height;
             return Container(
-              height: height * 0.5, // 화면의 50% 높이
-              width: double.infinity, // 가로 꽉 채움
+              height: height * 0.5,
+              width: double.infinity,
               padding: const EdgeInsets.all(16),
               child: AreaDetailScreen(areaName: areaCount.area),
             );
@@ -198,11 +173,4 @@ class _FieldState extends State<Field> {
     if (count < 5) return Colors.orange;
     return Colors.redAccent;
   }
-}
-
-class AreaCount {
-  final String area;
-  final Map<PlateType, int> counts;
-
-  AreaCount(this.area, this.counts);
 }

@@ -1,47 +1,15 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-
+import '../../../repositories/area_user_repository.dart';
 
 class AreaDetailScreen extends StatelessWidget {
   final String areaName;
+  final AreaUserRepository _repo;
 
-  const AreaDetailScreen({super.key, required this.areaName});
-
-  static final Map<String, List<UserStatus>> _cachedUsers = {};
-  static final Map<String, DateTime> _lastFetchedTime = {};
-
-  Future<List<UserStatus>> _fetchUsersForArea(String area) async {
-    final now = DateTime.now();
-
-    if (_cachedUsers.containsKey(area)) {
-      final lastTime = _lastFetchedTime[area];
-      if (lastTime != null && now.difference(lastTime) < const Duration(minutes: 5)) {
-        return _cachedUsers[area]!;
-      }
-    }
-
-    try {
-
-
-      final snapshot =
-          await FirebaseFirestore.instance.collection('user_accounts').where('currentArea', isEqualTo: area).get();
-
-      final result = snapshot.docs.map((doc) {
-        final data = doc.data();
-        return UserStatus(
-          name: data['name'] ?? '이름 없음',
-          isWorking: data['isWorking'] == true,
-        );
-      }).toList();
-
-      _cachedUsers[area] = result;
-      _lastFetchedTime[area] = now;
-
-      return result;
-    } catch (e) {
-      rethrow;
-    }
-  }
+  AreaDetailScreen({
+    super.key,
+    required this.areaName,
+    AreaUserRepository? repository,
+  }) : _repo = repository ?? AreaUserRepository();
 
   @override
   Widget build(BuildContext context) {
@@ -55,7 +23,7 @@ class AreaDetailScreen extends StatelessWidget {
         automaticallyImplyLeading: false,
       ),
       body: FutureBuilder<List<UserStatus>>(
-        future: _fetchUsersForArea(areaName),
+        future: _repo.getUsersForArea(areaName),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -68,7 +36,6 @@ class AreaDetailScreen extends StatelessWidget {
           }
 
           final users = snapshot.data ?? [];
-
           if (users.isEmpty) {
             return const Center(child: Text('📭 해당 지역에 근무자가 없습니다.'));
           }
@@ -98,21 +65,10 @@ class AreaDetailScreen extends StatelessWidget {
                   ),
                 ),
               );
-
             },
           );
         },
       ),
     );
   }
-}
-
-class UserStatus {
-  final String name;
-  final bool isWorking;
-
-  UserStatus({
-    required this.name,
-    required this.isWorking,
-  });
 }

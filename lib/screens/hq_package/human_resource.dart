@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../widgets/navigation/navigation_hq_mini.dart';
+import '../../repositories/user_repo_services/user_read_service.dart';
 import '../../widgets/navigation/top_navigation.dart';
 import 'human_resource_package/break_calendar.dart';
 import 'human_resource_package/attendance_calendar.dart';
@@ -20,7 +20,10 @@ class _HumanResourceState extends State<HumanResource> {
   int _selectedIndex = 0;
   String? _selectedArea;
   bool _isLoading = true;
-  StreamSubscription? _userSubscription;
+
+  // ✅ 서비스/구독 핸들
+  final UserReadService _userReadService = UserReadService();
+  StreamSubscription<List<dynamic>>? _userSubscription;
 
   final TextEditingController _controller = TextEditingController();
 
@@ -41,12 +44,10 @@ class _HumanResourceState extends State<HumanResource> {
   }
 
   void _subscribeToUsers(String area) {
-    _userSubscription = FirebaseFirestore.instance
-        .collection('user_accounts')
-        .where('selectedArea', isEqualTo: area)
-        .snapshots()
-        .listen((snapshot) {
+    _userSubscription?.cancel();
+    _userSubscription = _userReadService.watchUsersBySelectedArea(area).listen((users) {
       if (!mounted) return;
+    }, onError: (e, st) {
     });
   }
 
@@ -77,9 +78,9 @@ class _HumanResourceState extends State<HumanResource> {
         ),
         body: _selectedIndex == 0
             ? AttendanceCalendar()
-                : _selectedIndex == 1
-                    ? GoogleDrive(selectedArea: _selectedArea!)
-                    : BreakCalendar(),
+            : _selectedIndex == 1
+                ? GoogleDrive(selectedArea: _selectedArea!)
+                : BreakCalendar(),
         bottomNavigationBar: HqMiniNavigation(
           height: 56,
           iconSize: 22,

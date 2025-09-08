@@ -52,6 +52,31 @@ class UserReadService {
     );
   }
 
+  // ----- NEW: 스트림으로 구독 -----
+
+  /// selectedArea 기준 사용자 스트림
+  Stream<List<UserModel>> watchUsersBySelectedArea(String selectedArea) {
+    final q = _getUserCollectionRef().where('selectedArea', isEqualTo: selectedArea);
+
+    return q.snapshots().handleError((e, st) async {
+      // Firestore 실패만 로깅
+      try {
+        await DebugFirestoreLogger().log({
+          'op': 'users.watchBySelectedArea',
+          'collection': 'user_accounts',
+          'filters': {'selectedArea': selectedArea},
+          'error': {
+            'type': e.runtimeType.toString(),
+            'message': e.toString(),
+          },
+          'stack': st.toString(),
+          'tags': ['users', 'watch', 'error'],
+        }, level: 'error');
+      } catch (_) {}
+    }).map((snap) =>
+        snap.docs.map((d) => UserModel.fromMap(d.id, d.data())).toList());
+  }
+
   // ----- Reads -----
 
   /// 사용자 ID로 조회 (user_accounts)
