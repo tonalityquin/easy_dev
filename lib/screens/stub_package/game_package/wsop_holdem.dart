@@ -862,7 +862,7 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
                   children: [
                     ..._seatWidgets(w, h),
                     Positioned(
-                      top: h * .22,
+                      bottom: 8, // ★ 커뮤니티 카드 하단 배치
                       left: 0,
                       right: 0,
                       child: IgnorePointer(child: Center(child: _boardView())),
@@ -879,10 +879,10 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
       floatingActionButton: handRunning
           ? null
           : FloatingActionButton.extended(
-              onPressed: _newHand,
-              label: const Text('DEAL'),
-              icon: const Icon(Icons.casino),
-            ),
+        onPressed: _newHand,
+        label: const Text('DEAL'),
+        icon: const Icon(Icons.casino),
+      ),
     );
   }
 
@@ -1049,13 +1049,13 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
             Text(
               c.rankStr,
               textHeightBehavior:
-                  const TextHeightBehavior(applyHeightToFirstAscent: false, applyHeightToLastDescent: false),
+              const TextHeightBehavior(applyHeightToFirstAscent: false, applyHeightToLastDescent: false),
               style: TextStyle(fontWeight: FontWeight.w900, color: c.suitColor, fontSize: rankSize, height: 1.0),
             ),
             Text(
               c.suitIcon,
               textHeightBehavior:
-                  const TextHeightBehavior(applyHeightToFirstAscent: false, applyHeightToLastDescent: false),
+              const TextHeightBehavior(applyHeightToFirstAscent: false, applyHeightToLastDescent: false),
               style: TextStyle(color: c.suitColor, fontSize: suitSize, height: 1.0),
             ),
           ],
@@ -1070,13 +1070,13 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
               Text(
                 c.rankStr,
                 textHeightBehavior:
-                    const TextHeightBehavior(applyHeightToFirstAscent: false, applyHeightToLastDescent: false),
+                const TextHeightBehavior(applyHeightToFirstAscent: false, applyHeightToLastDescent: false),
                 style: TextStyle(fontWeight: FontWeight.w900, color: c.suitColor, fontSize: rankSize, height: 1.0),
               ),
               Text(
                 c.suitIcon,
                 textHeightBehavior:
-                    const TextHeightBehavior(applyHeightToFirstAscent: false, applyHeightToLastDescent: false),
+                const TextHeightBehavior(applyHeightToFirstAscent: false, applyHeightToLastDescent: false),
                 style: TextStyle(color: c.suitColor, fontSize: suitSize, height: 1.0),
               ),
             ],
@@ -1232,7 +1232,7 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
                           _raiseTo(seat, p.betThisStreet + p.stack); // 올인
                         },
                         style:
-                            ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
+                        ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
                         child: const Text('ALL-IN'),
                       ),
                     ],

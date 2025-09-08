@@ -47,6 +47,7 @@ class _ManagementState extends State<Management> {
         bottomNavigationBar: HqMiniNavigation(
           height: 56,
           iconSize: 22,
+          currentIndex: _selectedIndex, // ⬅️ 추가
           icons: const [
             Icons.directions_walk,
             Icons.compare_arrows,

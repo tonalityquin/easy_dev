@@ -84,6 +84,7 @@ class _HumanResourceState extends State<HumanResource> {
         bottomNavigationBar: HqMiniNavigation(
           height: 56,
           iconSize: 22,
+          currentIndex: _selectedIndex, // ⬅️ 추가
           icons: const [
             Icons.how_to_reg,
             Icons.cloud,
