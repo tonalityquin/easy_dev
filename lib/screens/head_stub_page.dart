@@ -1,5 +1,7 @@
+// lib/screens/head_stub_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../routes.dart'; // ▼ AppRoutes 사용
 import 'head_package/github_code_browser_bottom_sheet.dart';
 import 'head_package/github_markdown_bottom_sheet.dart';
 import 'head_package/local_prefs_bottom_sheet.dart';
@@ -128,6 +130,30 @@ class HeadStubPage extends StatelessWidget {
                         );
                       },
                     ),
+
+                    // ▼ 신규: 회사 달력
+                    _ActionCard(
+                      icon: Icons.calendar_month_rounded,
+                      title: '회사 달력',
+                      subtitle: '일정/휴무/행사',
+                      bg: cs.secondaryContainer,
+                      fg: cs.onSecondaryContainer,
+                      onTap: () {
+                        Navigator.of(context).pushNamed(AppRoutes.companyCalendar);
+                      },
+                    ),
+
+                    // ▼ 신규: 회사 노무
+                    _ActionCard(
+                      icon: Icons.gavel_rounded,
+                      title: '회사 노무',
+                      subtitle: '가이드/서식/정책',
+                      bg: cs.secondaryContainer,
+                      fg: cs.onSecondaryContainer,
+                      onTap: () {
+                        Navigator.of(context).pushNamed(AppRoutes.laborGuide);
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -181,7 +207,7 @@ class _HeaderBanner extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              '커뮤니티 허브 입니다.',
+              '본사 허브 입니다.',
               style: text.bodyMedium?.copyWith(
                 color: cs.onPrimaryContainer,
                 fontWeight: FontWeight.w600,

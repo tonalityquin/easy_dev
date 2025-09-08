@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../belivus/service_cooperation_calendar.dart';
 import '../outside_login_controller.dart';
 
 class OutsideLoginForm extends StatefulWidget {
@@ -45,15 +44,6 @@ class _OutsideLoginFormState extends State<OutsideLoginForm> {
               const SizedBox(height: 12),
 
               GestureDetector(
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const CooperationCalendar(
-                        calendarId: 'belivus150119@gmail.com',
-                      ),
-                    ),
-                  );
-                },
                 child: SizedBox(
                   height: 360,
                   child: Image.asset('assets/images/easyvalet_logo_car.png'),

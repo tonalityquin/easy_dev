@@ -1,3 +1,4 @@
+// lib/providers/providers.dart
 import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
 
@@ -6,6 +7,8 @@ import '../repositories/location_repo_services/firestore_location_repository.dar
 import '../repositories/plate_repo_services/plate_repository.dart';
 import '../repositories/user_repo_services/user_repository.dart';
 
+import '../screens/head_package/calendar_package/calendar_model.dart';
+import '../screens/head_package/calendar_package/google_calendar_service.dart';
 import '../screens/tablet_package/states/tablet_pad_mode_state.dart';
 import '../states/area/area_state.dart';
 import '../states/bill/bill_state.dart';
@@ -98,5 +101,10 @@ final List<SingleChildWidget> stateProviders = [
   ),
   ChangeNotifierProvider(
     create: (_) => CalendarSelectionState(),
+  ),
+
+  // ▼ 신규 추가: CompanyCalendarPage에서 사용할 전역 CalendarModel
+  ChangeNotifierProvider(
+    create: (_) => CalendarModel(GoogleCalendarService()),
   ),
 ];

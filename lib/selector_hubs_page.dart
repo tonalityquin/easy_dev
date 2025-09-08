@@ -42,11 +42,11 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
       ],
       [
         _TabletCard(enabled: tabletEnabled),
-        const _HeadquarterCard(),
+        const _ParkingCard(),
       ],
       [
         const _FaqCard(),
-        const _ParkingCard(),
+        const _HeadquarterCard(),
       ],
       [
         const _CommunityCard(),

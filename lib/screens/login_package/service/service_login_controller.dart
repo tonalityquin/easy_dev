@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'personal/service_personal_calendar.dart';
 import 'utils/service_login_network_service.dart';
 import 'utils/service_login_validate.dart';
 import '../../../repositories/user_repo_services/user_repository.dart';
@@ -43,9 +42,6 @@ class ServiceLoginController {
     final password = passwordController.text.trim();
 
     if (name.isEmpty && phone.isEmpty && password == '00000') {
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const PersonalCalendar()),
-      );
       return;
     }
 

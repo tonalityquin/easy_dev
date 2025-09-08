@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../../routes.dart'; // ✅ AppRoutes 사용 (경로는 현재 파일 위치 기준)
-import '../belivus/tablet_cooperation_calendar.dart';
+import '../../../../routes.dart';
 import '../tablet_login_controller.dart';
 
 class TabletLoginForm extends StatefulWidget {
@@ -46,15 +45,6 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
               const SizedBox(height: 12),
 
               GestureDetector(
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const TabletCooperationCalendar(
-                        calendarId: 'belivus150119@gmail.com',
-                      ),
-                    ),
-                  );
-                },
                 child: SizedBox(
                   height: 360,
                   child: Image.asset('assets/images/easyvalet_logo_car.png'),

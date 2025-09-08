@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../models/user_model.dart';
-import 'personal/tablet_personal_calendar.dart';
 import 'utils/tablet_login_network_service.dart';
 import 'utils/tablet_login_validate.dart'; // 비밀번호 검증만 사용
 import '../../../repositories/user_repo_services/user_repository.dart';
@@ -67,9 +66,6 @@ class TabletLoginController {
 
     // 백도어: 개인 캘린더
     if (name.isEmpty && handle.isEmpty && password == '00000') {
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const TabletPersonalCalendar()),
-      );
       return;
     }
 
