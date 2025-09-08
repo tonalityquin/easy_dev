@@ -12,12 +12,12 @@ Future<EditResult?> showEventEditorBottomSheet(
       String initialDescription = '',
       bool initialAllDay = true, // 항상 종일
       String? initialColorId,
-      int initialProgress = 0,   // ★ 진행도(0 또는 100)
+      int initialProgress = 0, // ★ 진행도(0 또는 100)
     }) {
   return showModalBottomSheet<EditResult>(
     context: context,
-    useSafeArea: true,                // ★ 안전영역 사용
-    isScrollControlled: true,         // ★ 키보드 대응을 위해 전체 화면 높이 사용
+    useSafeArea: true, // ★ 안전영역 사용
+    isScrollControlled: true, // ★ 키보드 대응을 위해 전체 화면 높이 사용
     backgroundColor: Colors.transparent,
     builder: (_) => EventEditorBottomSheet(
       title: title,
@@ -53,51 +53,55 @@ class EventEditorBottomSheet extends StatefulWidget {
   final DateTime initialEnd;
   final bool initialAllDay;
   final String? initialColorId; // Google Calendar event colorId ("1"~"11") 또는 null
-  final int initialProgress;    // 0 또는 100
+  final int initialProgress; // 0 또는 100
 
   @override
   State<EventEditorBottomSheet> createState() => _EventEditorBottomSheetState();
 }
 
-enum _TemplateTab { apply, hire } // 지원, 입사
+enum _TemplateTab { apply, hire, free } // 지원, 입사, 자율
 
 class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
     with SingleTickerProviderStateMixin {
-  // 공통(자동 생성 대상)
-  late TextEditingController _summary; // 자동 생성 제목(읽기전용)
-  late TextEditingController _desc;    // 자동 생성 설명(읽기전용)
+  // 공통(자동/자율 생성 대상)
+  late TextEditingController _summary; // 제목(미리보기 & 결과)
+  late TextEditingController _desc; // 설명(미리보기 & 결과)
 
   // 이벤트 자체(종일)
   late DateTime _start; // yyyy-MM-dd만 사용
-  late DateTime _end;   // yyyy-MM-dd만 사용
+  late DateTime _end; // yyyy-MM-dd만 사용
   static const bool _allDay = true;
 
   // 색상
   String? _colorId;
 
   // 진행도(0 또는 100)
-  late int _progress; // ★
+  late int _progress;
 
   // 탭
   late TabController _tabController;
 
   // 지원 탭 입력
   final _applyRegion = TextEditingController();
-  final _applyName   = TextEditingController();
+  final _applyName = TextEditingController();
   final _applyReason = TextEditingController();
-  final _applyTime   = TextEditingController();
+  final _applyTime = TextEditingController();
 
   // 입사 탭 입력
-  final _hireRegion       = TextEditingController();
-  final _hireName         = TextEditingController();
-  final _hirePhone        = TextEditingController();
-  final _hireGmail        = TextEditingController(); // 지메일
-  final _hireBank         = TextEditingController();
-  final _hireAccountNo    = TextEditingController();
-  final _hireSalary       = TextEditingController();
+  final _hireRegion = TextEditingController();
+  final _hireName = TextEditingController();
+  final _hirePhone = TextEditingController();
+  final _hireGmail = TextEditingController(); // 지메일
+  final _hireBank = TextEditingController();
+  final _hireAccountNo = TextEditingController();
+  final _hireSalary = TextEditingController();
   final _hireContractType = TextEditingController();
   DateTime? _hireWorkStartDate;
   DateTime? _hireFirstEndDate;
+
+  // 자율(프리롤) 탭 입력
+  final _freeTitle = TextEditingController();
+  final _freeDesc = TextEditingController();
 
   // Google Calendar event colorId 팔레트
   static const Map<String, Color> _eventColors = {
@@ -124,25 +128,30 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
     super.initState();
 
     _summary = TextEditingController(text: widget.initialSummary);
-    _desc    = TextEditingController(text: widget.initialDescription);
+    _desc = TextEditingController(text: widget.initialDescription);
+
+    // 자율 탭 초기값에도 초기 summary/description 반영
+    _freeTitle.text = widget.initialSummary;
+    _freeDesc.text = widget.initialDescription;
 
     _start = _toLocalDateOnly(widget.initialStart);
-    _end   = _toLocalDateOnly(widget.initialEnd);
+    _end = _toLocalDateOnly(widget.initialEnd);
     if (!_end.isAfter(_start)) {
       _end = _start.add(const Duration(days: 1));
     }
 
-    _colorId  = widget.initialColorId;
+    _colorId = widget.initialColorId;
     _progress = (widget.initialProgress == 100) ? 100 : 0; // ★ 안전 보정
 
-    // 초기 탭: 제목에 "입사" 포함 → 입사 탭, "지원" 포함 → 지원 탭, 기본 지원
+    // 초기 탭: 제목에 "입사" 포함 → 입사(1), "지원" 포함 → 지원(0), 아니면 자율(2)
     final initialIndex = widget.initialSummary.contains('입사')
         ? 1
-        : (widget.initialSummary.contains('지원') ? 0 : 0);
-    _tabController = TabController(length: 2, vsync: this, initialIndex: initialIndex);
+        : (widget.initialSummary.contains('지원') ? 0 : 2);
+
+    _tabController = TabController(length: 3, vsync: this, initialIndex: initialIndex);
     _tabController.addListener(_rebuildTemplate);
 
-    // 최초 템플릿 생성
+    // 최초 템플릿/자율 내용 미리보기 생성
     WidgetsBinding.instance.addPostFrameCallback((_) => _rebuildTemplate());
   }
 
@@ -168,20 +177,32 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
     _hireSalary.dispose();
     _hireContractType.dispose();
 
+    // 자율
+    _freeTitle.dispose();
+    _freeDesc.dispose();
+
     super.dispose();
   }
 
-  _TemplateTab get _currentTab =>
-      _tabController.index == 1 ? _TemplateTab.hire : _TemplateTab.apply;
+  _TemplateTab get _currentTab {
+    switch (_tabController.index) {
+      case 0:
+        return _TemplateTab.apply;
+      case 1:
+        return _TemplateTab.hire;
+      default:
+        return _TemplateTab.free;
+    }
+  }
 
   void _rebuildTemplate() {
     final fmtDate = DateFormat('yyyy-MM-dd');
 
     if (_currentTab == _TemplateTab.apply) {
       final region = _applyRegion.text.trim();
-      final name   = _applyName.text.trim();
+      final name = _applyName.text.trim();
       final reason = _applyReason.text.trim();
-      final time   = _applyTime.text.trim();
+      final time = _applyTime.text.trim();
 
       final title = [
         if (region.isNotEmpty) region,
@@ -195,10 +216,10 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
       ].join('\n');
 
       _summary.text = title.isEmpty ? '지원' : title;
-      _desc.text    = desc;
-    } else {
+      _desc.text = desc;
+    } else if (_currentTab == _TemplateTab.hire) {
       final region = _hireRegion.text.trim();
-      final name   = _hireName.text.trim();
+      final name = _hireName.text.trim();
 
       final title = [
         if (region.isNotEmpty) region,
@@ -206,15 +227,15 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
         '입사',
       ].join(' ').trim();
 
-      final phone        = _hirePhone.text.trim();
-      final gmail        = _hireGmail.text.trim();
-      final bank         = _hireBank.text.trim();
-      final accountNo    = _hireAccountNo.text.trim();
-      final salary       = _hireSalary.text.trim();
+      final phone = _hirePhone.text.trim();
+      final gmail = _hireGmail.text.trim();
+      final bank = _hireBank.text.trim();
+      final accountNo = _hireAccountNo.text.trim();
+      final salary = _hireSalary.text.trim();
       final contractType = _hireContractType.text.trim();
-      final startStr     =
+      final startStr =
       _hireWorkStartDate != null ? fmtDate.format(_hireWorkStartDate!) : '';
-      final endStr       =
+      final endStr =
       _hireFirstEndDate != null ? fmtDate.format(_hireFirstEndDate!) : '';
 
       final desc = [
@@ -229,7 +250,11 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
       ].join('\n');
 
       _summary.text = title.isEmpty ? '입사' : title;
-      _desc.text    = desc;
+      _desc.text = desc;
+    } else {
+      // 자율(프리롤): 사용자가 입력한 값을 그대로 미리보기/결과에 반영
+      _summary.text = _freeTitle.text.trim();
+      _desc.text = _freeDesc.text;
     }
 
     setState(() {});
@@ -278,9 +303,10 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                         Expanded(
                           child: Text(
                             widget.title,
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w700),
                           ),
                         ),
                         IconButton(
@@ -291,13 +317,45 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                     ),
                   ),
 
-                  // 내용(스크롤)
+                  // ★★★ 미리보기(고정 영역) — 스크롤과 분리되어 항상 상단에 고정 ★★★
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('미리보기', style: Theme.of(context).textTheme.titleSmall),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _summary,
+                          readOnly: true,
+                          decoration: const InputDecoration(
+                            labelText: '제목(미리보기)',
+                            isDense: true,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _desc,
+                          readOnly: true,
+                          minLines: 3,
+                          maxLines: 6,
+                          decoration: const InputDecoration(
+                            labelText: '설명(미리보기)',
+                            isDense: true,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+
+                  // ===== 스크롤 영역 시작 =====
                   Expanded(
                     child: ListView(
                       controller: scrollController, // ★ DraggableScrollable와 연결
                       keyboardDismissBehavior:
                       ScrollViewKeyboardDismissBehavior.onDrag, // ★ 드래그로 키보드 닫힘
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                       children: [
                         // ===== 이벤트 날짜(종일) =====
                         Row(
@@ -364,7 +422,8 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                         // ===== 진행도(0% / 100%) =====
                         Align(
                           alignment: Alignment.centerLeft,
-                          child: Text('진행도', style: Theme.of(context).textTheme.bodyMedium),
+                          child: Text('진행도',
+                              style: Theme.of(context).textTheme.bodyMedium),
                         ),
                         const SizedBox(height: 8),
                         Wrap(
@@ -384,10 +443,19 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                         ),
                         const SizedBox(height: 16),
 
-                        // ===== 탭 (지원 / 입사) =====
+                        // ===== 탭 (지원 / 입사 / 자율) =====
                         DefaultTabController(
-                          length: 2,
-                          initialIndex: _currentTab == _TemplateTab.hire ? 1 : 0,
+                          length: 3,
+                          initialIndex: () {
+                            switch (_currentTab) {
+                              case _TemplateTab.apply:
+                                return 0;
+                              case _TemplateTab.hire:
+                                return 1;
+                              case _TemplateTab.free:
+                              return 2;
+                            }
+                          }(),
                           child: Column(
                             children: [
                               TabBar(
@@ -397,37 +465,20 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                                 tabs: const [
                                   Tab(text: '지원'),
                                   Tab(text: '입사'),
+                                  Tab(text: '자율'),
                                 ],
                               ),
                               const SizedBox(height: 8),
-                              _currentTab == _TemplateTab.apply
-                                  ? _buildApplyForm()
-                                  : _buildHireForm(),
+                              if (_currentTab == _TemplateTab.apply)
+                                _buildApplyForm()
+                              else if (_currentTab == _TemplateTab.hire)
+                                _buildHireForm()
+                              else
+                                _buildFreeForm(),
                             ],
                           ),
                         ),
 
-                        const SizedBox(height: 16),
-                        // ===== 자동 생성 미리보기(읽기전용) =====
-                        TextField(
-                          controller: _summary,
-                          readOnly: true,
-                          decoration: const InputDecoration(
-                            labelText: '제목(자동 생성)',
-                            isDense: true,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _desc,
-                          readOnly: true,
-                          minLines: 4,
-                          maxLines: 8,
-                          decoration: const InputDecoration(
-                            labelText: '설명(자동 생성)',
-                            isDense: true,
-                          ),
-                        ),
                         const SizedBox(height: 8),
                         const Align(
                           alignment: Alignment.centerLeft,
@@ -473,6 +524,7 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                       ],
                     ),
                   ),
+                  // ===== 스크롤 영역 끝 =====
                 ],
               ),
             );
@@ -568,9 +620,8 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
           contentPadding: EdgeInsets.zero,
           dense: true,
           title: const Text('근무 시작일'),
-          subtitle: Text(_hireWorkStartDate == null
-              ? '미선택'
-              : fmt.format(_hireWorkStartDate!)),
+          subtitle: Text(
+              _hireWorkStartDate == null ? '미선택' : fmt.format(_hireWorkStartDate!)),
           trailing: const Icon(Icons.edit_calendar),
           onTap: () async {
             final picked = await showDatePicker(
@@ -588,8 +639,9 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
           contentPadding: EdgeInsets.zero,
           dense: true,
           title: const Text('첫 계약 종료일'),
-          subtitle:
-          Text(_hireFirstEndDate == null ? '미선택' : fmt.format(_hireFirstEndDate!)),
+          subtitle: Text(_hireFirstEndDate == null
+              ? '미선택'
+              : fmt.format(_hireFirstEndDate!)),
           trailing: const Icon(Icons.edit_calendar),
           onTap: () async {
             final picked = await showDatePicker(
@@ -599,9 +651,39 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
               lastDate: DateTime(2100),
             );
             if (picked == null) return;
-            _hireFirstEndDate = DateTime(picked.year, picked.month, picked.day);
+            _hireFirstEndDate =
+                DateTime(picked.year, picked.month, picked.day);
             _rebuildTemplate();
           },
+        ),
+      ],
+    );
+  }
+
+  /// 자율(프리롤) 탭: 사용자가 직접 제목/설명을 입력
+  Widget _buildFreeForm() {
+    return Column(
+      children: [
+        _LabeledField(
+          label: '제목',
+          controller: _freeTitle,
+          hint: '자유롭게 제목을 입력하세요',
+          onChanged: (_) => _rebuildTemplate(),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: TextField(
+            controller: _freeDesc,
+            onChanged: (_) => _rebuildTemplate(),
+            minLines: 3,
+            maxLines: 8,
+            textInputAction: TextInputAction.newline,
+            decoration: const InputDecoration(
+              labelText: '설명',
+              hintText: '자유롭게 설명을 입력하세요',
+              isDense: true,
+            ),
+          ),
         ),
       ],
     );
@@ -733,9 +815,8 @@ class _ColorDot extends StatelessWidget {
           width: 1,
         ),
       ),
-      child: isSelected
-          ? const Icon(Icons.check, size: 18, color: Colors.white)
-          : null,
+      child:
+      isSelected ? const Icon(Icons.check, size: 18, color: Colors.white) : null,
     );
 
     return InkWell(
@@ -746,7 +827,8 @@ class _ColorDot extends StatelessWidget {
         children: [
           dot,
           const SizedBox(height: 4),
-          Text(label, style: const TextStyle(fontSize: 10, color: Colors.black54)),
+          Text(label,
+              style: const TextStyle(fontSize: 10, color: Colors.black54)),
         ],
       ),
     );
@@ -761,15 +843,15 @@ class EditResult {
     required this.start,
     required this.end,
     this.allDay = true, // 항상 종일
-    this.colorId,       // "1"~"11" 또는 null
-    this.progress = 0,  // ★ 0 또는 100
+    this.colorId, // "1"~"11" 또는 null
+    this.progress = 0, // ★ 0 또는 100
   });
 
   final String summary;
   final String? description;
   final DateTime start; // yyyy-MM-dd 의도(시간 없이)
-  final DateTime end;   // yyyy-MM-dd 의도(다음날 0시 의미)
+  final DateTime end; // yyyy-MM-dd 의도(다음날 0시 의미)
   final bool allDay;
   final String? colorId;
-  final int progress;   // 0 or 100
+  final int progress; // 0 or 100
 }

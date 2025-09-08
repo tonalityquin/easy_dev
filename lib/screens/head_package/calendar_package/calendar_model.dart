@@ -1,3 +1,4 @@
+// lib/screens/head_package/calendar_package/calendar_model.dart
 import 'package:flutter/foundation.dart';
 import 'package:googleapis/calendar/v3.dart' as gcal;
 
@@ -87,6 +88,37 @@ class CalendarModel extends ChangeNotifier {
     }
   }
 
+  // ===== NEW: 특정 기간(예: 월 범위)만 로드하여 events를 교체 =====
+  // 현재 GoogleCalendarService.listEvents(calendarId: ...) 시그니처만 있다고 가정하고,
+  // 일단 전체를 받아 클라이언트에서 [timeMin, timeMax)로 필터링합니다.
+  // (효율을 높이려면 service에 timeMin/timeMax 지원을 추가해 서버 측에서 기간 조회하세요.)
+  Future<void> loadRange({
+    required DateTime timeMin,
+    required DateTime timeMax, // exclusive
+  }) async {
+    if (calendarId.isEmpty) {
+      error = '먼저 캘린더를 불러오세요.';
+      notifyListeners();
+      return;
+    }
+
+    loading = true;
+    error = null;
+    notifyListeners();
+
+    try {
+      final all = await _service.listEvents(calendarId: calendarId);
+      events = _filterByRange(all, timeMin, timeMax);
+      _sortEvents();
+    } catch (e) {
+      error = '기간 로드 실패: $e';
+      // 실패 시 기존 events 유지
+    } finally {
+      loading = false;
+      notifyListeners();
+    }
+  }
+
   // ===== Create (allDay + colorId 지원) =====
   Future<gcal.Event?> create({
     required String summary,
@@ -155,7 +187,8 @@ class CalendarModel extends ChangeNotifier {
             (e) => e.id == eventId,
         orElse: () => gcal.Event()..description = '',
       );
-      final descToSend = (description != null) ? description : (current.description ?? '');
+      final descToSend =
+      (description != null) ? description : (current.description ?? '');
 
       await _service.updateEvent(
         calendarId: calendarId,
@@ -206,11 +239,55 @@ class CalendarModel extends ChangeNotifier {
     }
   }
 
+  // ===== Helpers =====
+
   void _sortEvents() {
     events.sort((a, b) {
       final sa = a.start?.dateTime ?? a.start?.date ?? DateTime(1900);
       final sb = b.start?.dateTime ?? b.start?.date ?? DateTime(1900);
       return sa!.compareTo(sb!);
     });
+  }
+
+  List<gcal.Event> _filterByRange(
+      List<gcal.Event> source,
+      DateTime min, // inclusive
+      DateTime max, // exclusive
+      ) {
+    bool overlaps(gcal.Event e) {
+      final range = _eventRangeLocal(e);
+      if (range == null) return false;
+      final start = range.$1;
+      final end = range.$2;
+      // [start, end) 와 [min, max) 가 겹치면 true
+      return start.isBefore(max) && end.isAfter(min);
+    }
+
+    final filtered = source.where(overlaps).toList();
+    return filtered;
+  }
+
+  /// 이벤트의 로컬시간 기준 [start, end)를 계산
+  /// - 종일: start = start.date 00:00, end = end.date 00:00 (Google은 end.date가 exclusive)
+  /// - 시간제: start = start.dateTime, end = end.dateTime (end가 null이면 start + 1h 가정)
+  (DateTime, DateTime)? _eventRangeLocal(gcal.Event e) {
+    if (e.start == null) return null;
+
+    if (e.start?.date != null) {
+      // 종일
+      final s = e.start!.date!;
+      // end.date는 다음날 00:00 (exclusive)
+      final ed = e.end?.date ?? s.add(const Duration(days: 1));
+      final start = DateTime(s.year, s.month, s.day);
+      final end = DateTime(ed.year, ed.month, ed.day);
+      return (start, end);
+    } else {
+      // 시간제
+      final sdt = e.start?.dateTime?.toLocal();
+      final edt = e.end?.dateTime?.toLocal();
+      if (sdt == null) return null;
+      final end = edt ?? sdt.add(const Duration(hours: 1));
+      return (sdt, end);
+    }
   }
 }
