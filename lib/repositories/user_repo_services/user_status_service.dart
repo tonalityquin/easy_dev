@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../screens/stub_package/debug_package/debug_firestore_logger.dart';
+
 class UserStatusService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
@@ -19,16 +21,72 @@ class UserStatusService {
       Map<String, dynamic> updates, {
         String opName = '',
       }) async {
+    final docRef = col.doc(docId);
+
     try {
-      await col.doc(docId).update(updates);
-    } on FirebaseException catch (e) {
-      // 문서가 없으면 set(merge)로 업서트 처리
+      await docRef.update(updates);
+    } on FirebaseException catch (e, st) {
       if (e.code == 'not-found') {
-        await col.doc(docId).set(updates, SetOptions(merge: true));
+        // 없으면 upsert
+        try {
+          await docRef.set(updates, SetOptions(merge: true));
+        } on FirebaseException catch (e2, st2) {
+          // Firestore 실패만 로깅
+          try {
+            await DebugFirestoreLogger().log({
+              'op': 'userStatus.$opName.upsert',
+              'collectionPath': col.path,
+              'docId': docId,
+              'updateKeys': updates.keys.take(30).toList(),
+              'updateLen': updates.length,
+              'error': {
+                'type': e2.runtimeType.toString(),
+                'code': e2.code,
+                'message': e2.toString(),
+              },
+              'stack': st2.toString(),
+              'tags': ['userStatus', opName, 'upsert', 'error'],
+            }, level: 'error');
+          } catch (_) {}
+          rethrow;
+        }
       } else {
+        // update 단계 Firestore 실패 로깅
+        try {
+          await DebugFirestoreLogger().log({
+            'op': 'userStatus.$opName.update',
+            'collectionPath': col.path,
+            'docId': docId,
+            'updateKeys': updates.keys.take(30).toList(),
+            'updateLen': updates.length,
+            'error': {
+              'type': e.runtimeType.toString(),
+              'code': e.code,
+              'message': e.toString(),
+            },
+            'stack': st.toString(),
+            'tags': ['userStatus', opName, 'update', 'error'],
+          }, level: 'error');
+        } catch (_) {}
         rethrow;
       }
-    } catch (e) {
+    } catch (e, st) {
+      // 기타 예외 로깅
+      try {
+        await DebugFirestoreLogger().log({
+          'op': 'userStatus.$opName.unknown',
+          'collectionPath': col.path,
+          'docId': docId,
+          'updateKeys': updates.keys.take(30).toList(),
+          'updateLen': updates.length,
+          'error': {
+            'type': e.runtimeType.toString(),
+            'message': e.toString(),
+          },
+          'stack': st.toString(),
+          'tags': ['userStatus', opName, 'error'],
+        }, level: 'error');
+      } catch (_) {}
       rethrow;
     }
   }

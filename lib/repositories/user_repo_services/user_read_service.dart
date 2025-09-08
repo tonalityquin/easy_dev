@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/tablet_model.dart';
 import '../../models/user_model.dart';
+import '../../screens/stub_package/debug_package/debug_firestore_logger.dart';
 
 class UserReadService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -57,15 +58,34 @@ class UserReadService {
   Future<UserModel?> getUserById(String userId) async {
     debugPrint("getUserById 호출 → ID: $userId");
 
-    final doc = await _getUserCollectionRef().doc(userId).get();
-    if (!doc.exists) {
-      debugPrint("DB 문서 없음 → userId=$userId");
-      return null;
-    }
+    try {
+      final doc = await _getUserCollectionRef().doc(userId).get();
+      if (!doc.exists) {
+        debugPrint("DB 문서 없음 → userId=$userId");
+        return null;
+      }
 
-    final data = doc.data()!;
-    debugPrint("DB 문서 조회 성공 → userId=$userId / 데이터: $data");
-    return UserModel.fromMap(doc.id, data);
+      final data = doc.data()!;
+      debugPrint("DB 문서 조회 성공 → userId=$userId / 데이터: $data");
+      return UserModel.fromMap(doc.id, data);
+    } on FirebaseException catch (e, st) {
+      // 파이어스토어 실패 로깅만
+      try {
+        await DebugFirestoreLogger().log({
+          'op': 'users.getById',
+          'collection': 'user_accounts',
+          'docId': userId,
+          'error': {
+            'type': e.runtimeType.toString(),
+            'code': e.code,
+            'message': e.toString(),
+          },
+          'stack': st.toString(),
+          'tags': ['users', 'getById', 'error'],
+        }, level: 'error');
+      } catch (_) {}
+      rethrow;
+    }
   }
 
   /// 전화번호로 사용자 조회 (user_accounts)
@@ -73,7 +93,8 @@ class UserReadService {
     debugPrint("getUserByPhone, 조회 시작 - phone: $phone");
 
     try {
-      final querySnapshot = await _getUserCollectionRef().where('phone', isEqualTo: phone).limit(1).get();
+      final querySnapshot =
+      await _getUserCollectionRef().where('phone', isEqualTo: phone).limit(1).get();
 
       debugPrint("조회 완료 - 결과 개수: ${querySnapshot.docs.length}");
 
@@ -84,6 +105,22 @@ class UserReadService {
       } else {
         debugPrint("DB에 사용자 없음");
       }
+    } on FirebaseException catch (e, st) {
+      try {
+        await DebugFirestoreLogger().log({
+          'op': 'users.getByPhone',
+          'collection': 'user_accounts',
+          'filters': {'phone': phone},
+          'error': {
+            'type': e.runtimeType.toString(),
+            'code': e.code,
+            'message': e.toString(),
+          },
+          'stack': st.toString(),
+          'tags': ['users', 'getByPhone', 'error'],
+        }, level: 'error');
+      } catch (_) {}
+      return null;
     } catch (e) {
       debugPrint("DB 조회 중 예외 발생: $e");
     }
@@ -109,6 +146,23 @@ class UserReadService {
         final doc = qs.docs.first;
         return UserModel.fromMap(doc.id, doc.data());
       } else {}
+    } on FirebaseException catch (e, st) {
+      try {
+        await DebugFirestoreLogger().log({
+          'op': 'users.getByHandle',
+          'collection': 'user_accounts',
+          'filters': {'handle': h},
+          'fallbackFilters': {'phone': h},
+          'error': {
+            'type': e.runtimeType.toString(),
+            'code': e.code,
+            'message': e.toString(),
+          },
+          'stack': st.toString(),
+          'tags': ['users', 'getByHandle', 'error'],
+        }, level: 'error');
+      } catch (_) {}
+      return null;
     } catch (e) {
       debugPrint("DB 조회 중 예외 발생: $e");
     }
@@ -128,6 +182,23 @@ class UserReadService {
       if (snap.exists && snap.data() != null) {
         return TabletModel.fromMap(snap.id, snap.data()!);
       } else {}
+    } on FirebaseException catch (e, st) {
+      try {
+        await DebugFirestoreLogger().log({
+          'op': 'tablets.getByHandleAndAreaName',
+          'collection': 'tablet_accounts',
+          'docId': docId,
+          'inputs': {'handle': h, 'areaName': name},
+          'error': {
+            'type': e.runtimeType.toString(),
+            'code': e.code,
+            'message': e.toString(),
+          },
+          'stack': st.toString(),
+          'tags': ['tablets', 'getByHandleAndAreaName', 'error'],
+        }, level: 'error');
+      } catch (_) {}
+      return null;
     } catch (e) {
       debugPrint("DB 조회 중 예외 발생: $e");
     }
@@ -146,6 +217,22 @@ class UserReadService {
         final doc = qs.docs.first;
         return TabletModel.fromMap(doc.id, doc.data());
       } else {}
+    } on FirebaseException catch (e, st) {
+      try {
+        await DebugFirestoreLogger().log({
+          'op': 'tablets.getByHandle',
+          'collection': 'tablet_accounts',
+          'filters': {'handle': h},
+          'error': {
+            'type': e.runtimeType.toString(),
+            'code': e.code,
+            'message': e.toString(),
+          },
+          'stack': st.toString(),
+          'tags': ['tablets', 'getByHandle', 'error'],
+        }, level: 'error');
+      } catch (_) {}
+      return null;
     } catch (e) {
       debugPrint("DB 조회 중 예외 발생: $e");
     }
@@ -177,29 +264,69 @@ class UserReadService {
   Future<List<UserModel>> refreshUsersBySelectedArea(String selectedArea) async {
     debugPrint('🔥 Firestore 호출 시작 → $selectedArea');
 
-    final querySnapshot = await _getUserCollectionRef().where('areas', arrayContains: selectedArea).get();
+    try {
+      final querySnapshot =
+      await _getUserCollectionRef().where('areas', arrayContains: selectedArea).get();
 
-    final users = querySnapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
+      final users =
+      querySnapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
 
-    await _updateCacheWithUsers(selectedArea, users);
-    return users;
+      await _updateCacheWithUsers(selectedArea, users);
+      return users;
+    } on FirebaseException catch (e, st) {
+      try {
+        await DebugFirestoreLogger().log({
+          'op': 'users.refreshByArea',
+          'collection': 'user_accounts',
+          'filters': {'areas_contains': selectedArea},
+          'error': {
+            'type': e.runtimeType.toString(),
+            'code': e.code,
+            'message': e.toString(),
+          },
+          'stack': st.toString(),
+          'tags': ['users', 'refreshByArea', 'error'],
+        }, level: 'error');
+      } catch (_) {}
+      rethrow;
+    }
   }
 
   /// Firestore에서 태블릿 새로 조회 후 (UserModel로 변환하여) 캐시 갱신 (tablet_accounts)
   Future<List<UserModel>> refreshTabletsBySelectedArea(String selectedArea) async {
     debugPrint('🔥 Firestore 호출 시작 (tablet) → $selectedArea');
 
-    final querySnapshot = await _getTabletCollectionRef().where('areas', arrayContains: selectedArea).get();
+    try {
+      final querySnapshot =
+      await _getTabletCollectionRef().where('areas', arrayContains: selectedArea).get();
 
-    // 1) TabletModel로 파싱
-    final tablets = querySnapshot.docs.map((doc) => TabletModel.fromMap(doc.id, doc.data())).toList();
+      // 1) TabletModel로 파싱
+      final tablets =
+      querySnapshot.docs.map((doc) => TabletModel.fromMap(doc.id, doc.data())).toList();
 
-    // 2) UserModel로 변환
-    final users = tablets.map(_tabletToUser).toList();
+      // 2) UserModel로 변환
+      final users = tablets.map(_tabletToUser).toList();
 
-    // 3) 캐시 업데이트 및 반환
-    await _updateCacheWithUsers(selectedArea, users);
-    return users;
+      // 3) 캐시 업데이트 및 반환
+      await _updateCacheWithUsers(selectedArea, users);
+      return users;
+    } on FirebaseException catch (e, st) {
+      try {
+        await DebugFirestoreLogger().log({
+          'op': 'tablets.refreshByArea',
+          'collection': 'tablet_accounts',
+          'filters': {'areas_contains': selectedArea},
+          'error': {
+            'type': e.runtimeType.toString(),
+            'code': e.code,
+            'message': e.toString(),
+          },
+          'stack': st.toString(),
+          'tags': ['tablets', 'refreshByArea', 'error'],
+        }, level: 'error');
+      } catch (_) {}
+      rethrow;
+    }
   }
 
   // ----- areas helpers -----
@@ -212,6 +339,22 @@ class UserReadService {
         final name = doc.data()?['englishName'] as String?;
         return name;
       }
+    } on FirebaseException catch (e, st) {
+      try {
+        await DebugFirestoreLogger().log({
+          'op': 'areas.getEnglishName',
+          'collection': 'areas',
+          'docId': '$division-$area',
+          'inputs': {'area': area, 'division': division},
+          'error': {
+            'type': e.runtimeType.toString(),
+            'code': e.code,
+            'message': e.toString(),
+          },
+          'stack': st.toString(),
+          'tags': ['areas', 'getEnglishName', 'error'],
+        }, level: 'error');
+      } catch (_) {}
     } catch (e) {
       debugPrint("[DEBUG] getEnglishNameByArea 실패: $e");
     }

@@ -462,7 +462,7 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
       payouts[0] = payouts[0].replaceFirst('+', '+${(prizePool * cfg.payoutPercents[0]).round() + diff}');
     }
 
-    final rank = finalOrder.asMap().entries.map((e) => '${e.key + 1}. ${e.value.name} – ₵ ${e.value.stack}').join('\n');
+    final rank = finalOrder.asMap().entries.map((e) => '${e.key + 1}. ${e.value.name} – ₵ ${_fmt(e.value.stack)}').join('\n');
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -473,7 +473,7 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
             children: [
               Text('Final stacks:\n$rank'),
               const SizedBox(height: 12),
-              Text('Entries: $entries   Prize Pool: ${prizePool}'),
+              Text('Entries: $entries   Prize Pool: ${_fmt(prizePool)}'),
               const SizedBox(height: 6),
               const Text('Payouts (ITM)'),
               Text(payouts.join('\n')),
@@ -669,27 +669,38 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
   }
 
   void _collectSidePots() {
+    // 각 플레이어의 커밋 레벨들을 수집 (폴드 여부 상관없이 금액 합산을 위해)
     final contribs = <int>[];
     for (int i = 0; i < players.length; i++) {
       final p = players[i];
-      if (p.committed > 0 && p.inHand) contribs.add(p.committed);
+      if (p.committed > 0) contribs.add(p.committed);
     }
     if (contribs.isEmpty) return;
 
     final lvls = (contribs.toSet().toList()..sort());
     int prev = 0;
     pots.clear();
+
     for (final lv in lvls) {
       final slice = PotSlice();
-      // 이 레벨 이상 커밋한 사람 수
-      int eligibleCount = 0;
+
+      // 이 레벨 이상 커밋한 사람 수(금액 계산용: 폴드자 포함)
+      int contributors = 0;
       for (int i = 0; i < players.length; i++) {
-        if (players[i].committed >= lv && players[i].inHand) {
-          eligibleCount++;
+        if (players[i].committed >= lv) {
+          contributors++;
+        }
+      }
+
+      // 해당 슬라이스에서 경쟁 자격자는 폴드하지 않은 사람만
+      for (int i = 0; i < players.length; i++) {
+        final p = players[i];
+        if (p.committed >= lv && p.inHand && !p.folded) {
           slice.eligible.add(i);
         }
       }
-      final chunk = (lv - prev) * eligibleCount;
+
+      final chunk = (lv - prev) * contributors;
       if (chunk > 0) {
         slice.amount = chunk;
         pots.add(slice);
@@ -711,9 +722,9 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
     if (alive.length == 1) {
       final winner = alive.first;
       players[winner].stack += totalPot;
-      msg = '${players[winner].name} wins $totalPot (no showdown)';
-      hh.add('No showdown. ${players[winner].name} wins $totalPot');
-      hh.replay.add(_ReplayStep(_ReplayType.award, '${players[winner].name} wins $totalPot'));
+      msg = '${players[winner].name} wins ${_fmt(totalPot)} (no showdown)';
+      hh.add('No showdown. ${players[winner].name} wins ${_fmt(totalPot)}');
+      hh.replay.add(_ReplayStep(_ReplayType.award, '${players[winner].name} wins ${_fmt(totalPot)}'));
       _finishHand();
       return;
     }
@@ -727,18 +738,34 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
       ranks[i] = evaluateBest7([...board, ...players[i].hole]);
     }
 
-    // 각 사이드팟마다 우승자 결정(동률 분할)
+    // 각 사이드팟마다 우승자 결정(동률 분할 + 홀칩 분배)
     int totalAward = 0;
     for (final pot in pots) {
       final contenders = pot.eligible.where((i) => players[i].inHand && !players[i].folded).toList();
       if (contenders.isEmpty || pot.amount == 0) continue;
+
       contenders.sort((a, b) => ranks[b]!.compareTo(ranks[a]!));
       final bestRank = ranks[contenders.first]!;
       final winners = contenders.where((i) => ranks[i]!.compareTo(bestRank) == 0).toList();
+
       final share = pot.amount ~/ max(1, winners.length);
+      final rem = pot.amount - share * winners.length;
+
       for (final w in winners) {
         players[w].stack += share;
         totalAward += share;
+      }
+
+      // 홀칩(odd chips) 분배: 버튼 왼쪽부터 동률자에게 1칩씩
+      int pos = dealer;
+      int r = rem;
+      while (r > 0) {
+        pos = _nextSeated(pos, 1);
+        if (winners.contains(pos)) {
+          players[pos].stack += 1;
+          totalAward += 1;
+          r--;
+        }
       }
     }
 
@@ -751,8 +778,8 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
     hh.replay.add(_ReplayStep(_ReplayType.showdown, 'Showdown',
         board: List<CardX>.from(board), showHoles: Map<int, List<CardX>>.from(hh.holeShownAtSD)));
 
-    msg = 'Showdown. Pot $totalAward awarded.';
-    hh.add('Pot $totalAward awarded.');
+    msg = 'Showdown. Pot ${_fmt(totalAward)} awarded.';
+    hh.add('Pot ${_fmt(totalAward)} awarded.');
     _finishHand();
   }
 
@@ -794,8 +821,8 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
 
   void _checkOrCall(int seat) {
     final p = players[seat];
-    final int toCall = max(0, currentBet - p.betThisStreet).toInt();
-    final int pay = min(p.stack, toCall).toInt();
+    final int toCall = max(0, currentBet - p.betThisStreet);
+    final int pay = min(p.stack, toCall);
     p.stack -= pay;
     p.betThisStreet += pay;
     p.committed += pay;
@@ -809,29 +836,34 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
     final p = players[seat];
 
     // 증액 계산
-    var add = raiseTo - p.betThisStreet; // int
-    add = min(add, p.stack).toInt(); // ensure int
-    var newBet = p.betThisStreet + add; // int
+    var add = max(0, raiseTo - p.betThisStreet);
+    add = min(add, p.stack);
+    var newBet = p.betThisStreet + add;
 
-    // TDA: 최소 레이즈(갭) 규칙. 올인이 아닌 경우 갭을 충족해야 함.
-    final int gapNeeded = max(minRaise, _lv.bb).toInt();
+    // 최소 레이즈(갭) 규칙: 올인이 아닌 경우에만 강제
+    final int fullRaiseNeeded = max(minRaise, _lv.bb);
     final int gap = newBet - currentBet;
     final bool isAllIn = add == p.stack;
-    if (!isAllIn && gap < gapNeeded) {
-      final int needTo = currentBet + gapNeeded;
-      add = min(p.stack, needTo - p.betThisStreet).toInt();
+
+    if (!isAllIn && gap < fullRaiseNeeded) {
+      final int needTo = currentBet + fullRaiseNeeded;
+      add = min(p.stack, needTo - p.betThisStreet);
       newBet = p.betThisStreet + add;
     }
 
+    // 적용
     p.stack -= add;
     p.betThisStreet += add;
     p.committed += add;
 
     final prevBet = currentBet;
-    currentBet = max(currentBet, p.betThisStreet).toInt();
-    final gap2 = currentBet - prevBet;
-    if (gap2 > 0) {
-      minRaise = gap2; // 마지막 레이즈 갭을 다음 최소레이즈로
+    currentBet = max(currentBet, p.betThisStreet);
+    final increased = currentBet - prevBet;
+
+    // 풀 레이즈(올인 아님 + 증액≥필요갭)일 때만 minRaise 갱신 → 짧은 올인은 리오픈 X
+    final madeFullRaise = !isAllIn && increased >= fullRaiseNeeded;
+    if (madeFullRaise) {
+      minRaise = increased;
       lastAggressor = seat;
     }
     if (p.stack == 0) p.allIn = true;
@@ -881,29 +913,31 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
     int score = 0;
 
     if (pair) {
-      if (high >= 13)
+      if (high >= 13) {
         score = 95; // AA/KK
-      else if (high == 12)
+      } else if (high == 12) {
         score = 88; // QQ
-      else if (high == 11)
+      } else if (high == 11) {
         score = 80; // JJ
-      else if (high == 10)
+      } else if (high == 10) {
         score = 72; // TT
-      else
+      } else {
         score = 55 + (high - 2) * 2; // 22..99
+      }
     } else {
-      if ((high == 14 && low >= 10))
+      if ((high == 14 && low >= 10)) {
         score = suited ? 85 : 78; // AK, AQ, AJ
-      else if (high >= 13 && low >= 10)
+      } else if (high >= 13 && low >= 10) {
         score = suited ? 76 : 68; // KQ, KJ, QJ
-      else if (connected && high >= 10)
+      } else if (connected && high >= 10) {
         score = suited ? 70 : 62;
-      else if (suited && connected && high >= 7)
+      } else if (suited && connected && high >= 7) {
         score = 58;
-      else if (high >= 12)
+      } else if (high >= 12) {
         score = suited ? 60 : 52;
-      else
+      } else {
         score = suited ? 48 : 42;
+      }
     }
     // 버튼/포지션 보정은 생략(간단)
     return score.clamp(0, 100);
@@ -920,7 +954,7 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
     }
     if (activeSeats.isEmpty) return 1.0;
 
-    final int samples = max(10, cfg.aiSamples).toInt();
+    final int samples = max(10, cfg.aiSamples);
     int wins = 0, ties = 0;
 
     for (int s = 0; s < samples; s++) {
@@ -954,9 +988,11 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
         wins++;
       } else {
         final cmp = myRank.compareTo(bestOpp);
-        if (cmp > 0)
+        if (cmp > 0) {
           wins++;
-        else if (cmp == 0) ties++;
+        } else if (cmp == 0) {
+          ties++;
+        }
       }
     }
 
@@ -973,7 +1009,7 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
     }
 
     // 현재 콜액/팟오즈
-    final int need = max(0, currentBet - p.betThisStreet).toInt();
+    final int need = max(0, currentBet - p.betThisStreet);
     final pot = players.fold<int>(0, (s, q) => s + q.committed);
     final stackBehind = p.stack;
     final potOdds = need == 0 ? 0.0 : need / max(1, pot + need);
@@ -983,7 +1019,7 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
       if (need == 0) {
         if (score >= 75 && stackBehind > _lv.bb * 3) {
           // 오픈레이즈 2.5~3bb
-          final int to = max(currentBet + max(minRaise, (_lv.bb * 3)).toInt(), p.betThisStreet + _lv.bb * 3).toInt();
+          final int to = max(currentBet + max(minRaise, (_lv.bb * 3)), p.betThisStreet + _lv.bb * 3);
           _raiseTo(seat, to);
         } else {
           _checkOrCall(seat);
@@ -994,7 +1030,7 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
         if (wantCall && stackBehind >= need) {
           // 3bet 조건
           if (score >= 80 && stackBehind > need + _lv.bb * 5) {
-            final int to = currentBet + max(minRaise, _lv.bb * 3).toInt();
+            final int to = currentBet + max(minRaise, _lv.bb * 3);
             _raiseTo(seat, to);
           } else {
             _checkOrCall(seat);
@@ -1010,7 +1046,7 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
       final marginal = ehs >= 0.45;
       if (need == 0) {
         if (strong && stackBehind > _lv.bb * 2) {
-          _raiseTo(seat, currentBet + max(minRaise, _lv.bb * 2).toInt());
+          _raiseTo(seat, currentBet + max(minRaise, _lv.bb * 2));
         } else {
           _checkOrCall(seat);
         }
@@ -1088,7 +1124,7 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
                     _hudPill(Icons.emoji_events, tourRunning ? 'Running' : 'Paused'),
                     _hudPill(Icons.people_alt_rounded,
                         'Players: ${players.where((p) => p.seated).length}/${players.length}'),
-                    _hudPill(Icons.account_circle, 'Hero: ${players[heroSeat].stack}'),
+                    _hudPill(Icons.account_circle, 'Hero: ₵ ${_fmt(players[heroSeat].stack)}'),
                     _hudPill(Icons.confirmation_num_outlined, 'Entries: $entries'),
                   ],
                 ),
@@ -1238,10 +1274,10 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontWeight: FontWeight.w800)),
-                    Text('₵ ${p.stack}',
+                    Text('₵ ${_fmt(p.stack)}',
                         style: TextStyle(fontWeight: FontWeight.w800, color: p.isHero ? Colors.black : Colors.black87)),
                     if (p.betThisStreet > 0) const SizedBox(height: 1),
-                    if (p.betThisStreet > 0) Text('Bet ${p.betThisStreet}', style: const TextStyle(fontSize: 12)),
+                    if (p.betThisStreet > 0) Text('Bet ${_fmt(p.betThisStreet)}', style: const TextStyle(fontSize: 12)),
                     if (!p.seated) const Text('OUT', style: TextStyle(fontSize: 12, color: Colors.grey)),
                     if (p.folded) const Text('FOLDED', style: TextStyle(fontSize: 12, color: Colors.grey)),
                     if (p.allIn) const Text('ALL-IN', style: TextStyle(fontSize: 12, color: Colors.redAccent)),
@@ -1438,7 +1474,7 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
   Widget _actionPanel(ColorScheme cs) {
     final hero = players[heroSeat];
     final myTurn = handRunning && toAct == heroSeat && hero.inHand && !hero.folded && !hero.allIn;
-    final int toCall = max(0, currentBet - hero.betThisStreet).toInt();
+    final int toCall = max(0, currentBet - hero.betThisStreet);
     final canCheck = toCall == 0;
 
     return Container(
@@ -1453,9 +1489,9 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
             runSpacing: 6,
             children: [
               _pill('Street: ${street.name.toUpperCase()}'),
-              _pill('Pot: ${players.fold<int>(0, (s, p) => s + p.committed)}'),
-              _pill('To call: $toCall'),
-              _pill('Min raise: ${max(minRaise, _lv.bb)}'),
+              _pill('Pot: ${_fmt(players.fold<int>(0, (s, p) => s + p.committed))}'),
+              _pill('To call: ${_fmt(toCall)}'),
+              _pill('Min raise: ${_fmt(max(minRaise, _lv.bb))}'),
             ],
           ),
           const SizedBox(height: 6),
@@ -1471,7 +1507,7 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
               ),
               ElevatedButton(
                 onPressed: myTurn ? () => _checkOrCall(heroSeat) : null,
-                child: Text(canCheck ? 'CHECK' : 'CALL $toCall', style: const TextStyle(fontWeight: FontWeight.w900)),
+                child: Text(canCheck ? 'CHECK' : 'CALL ${_fmt(toCall)}', style: const TextStyle(fontWeight: FontWeight.w900)),
               ),
               ElevatedButton(
                 onPressed: myTurn ? () => _openRaiseSheet(heroSeat) : null,
@@ -1499,9 +1535,10 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
 
   void _openRaiseSheet(int seat) {
     final p = players[seat];
-    final int minTo = max(currentBet + max(minRaise, _lv.bb).toInt(), p.betThisStreet + _lv.bb);
+    // 최소 레이즈 to: 테이블 현재 최고치 + 최소갭
+    final int minTo = currentBet + max(minRaise, _lv.bb);
     final int maxTo = p.betThisStreet + p.stack; // 올인까지
-    int slider = minTo; // 초기값: 최소 레이즈(굳이 clamp 불필요)
+    int slider = min(minTo, maxTo); // 초기값: 최소 레이즈 (올인보다 크면 올인 값으로)
 
     showModalBottomSheet(
       context: context,
@@ -1519,13 +1556,13 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
                 children: [
                   const Text('Choose Raise To', style: TextStyle(fontWeight: FontWeight.w900)),
                   const SizedBox(height: 8),
-                  Text('$slider', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+                  Text(_fmt(slider), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
                   Slider(
                     value: slider.toDouble(),
                     min: minVal,
                     max: maxVal,
-                    divisions: max(1, (maxTo - minTo)).toInt(),
-                    label: '$slider',
+                    divisions: max(1, (maxTo - minTo)),
+                    label: _fmt(slider),
                     onChanged: (v) => setSt(() => slider = v.round()),
                   ),
                   Row(
@@ -1580,6 +1617,8 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
     int cutoff = cfg.reentryCutoffLevel;
     int aiSamples = cfg.aiSamples;
     int levelPreset = 0; // 0: 기본, 1: 타이트(짧음), 2: 롱(느림)
+    bool autoNext = autoAdvance;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1617,7 +1656,7 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
                       label: '$startingStack',
                       onChanged: (v) => setSt(() => startingStack = (v ~/ 100) * 100),
                     ),
-                    trailing: Text('₵ $startingStack'),
+                    trailing: Text('₵ ${_fmt(startingStack)}'),
                   ),
                   _settingRow(
                     'Buy-in (prize pool)',
@@ -1660,6 +1699,12 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
                       onChanged: reentry ? (v) => setSt(() => cutoff = v.round()) : null,
                     ),
                     trailing: Text('≤ Level ${cutoff + 1}'),
+                  ),
+                  SwitchListTile.adaptive(
+                    value: autoNext,
+                    onChanged: (v) => setSt(() => autoNext = v),
+                    title: const Text('Auto-advance to next hand'),
+                    subtitle: const Text('쇼다운 후 자동으로 다음 핸드를 시작'),
                   ),
                   const SizedBox(height: 4),
                   Row(
@@ -1719,6 +1764,7 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
                             levels: presets[levelPreset],
                             buyIn: buyIn,
                           );
+                          autoAdvance = autoNext;
                           Navigator.pop(context);
                           _newTable();
                         },
@@ -1821,13 +1867,15 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
   }
 
   void _openReplay(HandHistory h) {
+    Timer? auto;
+
     showModalBottomSheet(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
       builder: (_) {
         int step = 0;
-        Timer? auto;
+
         void cancel() {
           auto?.cancel();
           auto = null;
@@ -1917,7 +1965,9 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
           },
         );
       },
-    );
+    ).whenComplete(() {
+      auto?.cancel(); // BottomSheet 닫힐 때 타이머 정리
+    });
   }
 
   /* ───────────────────────────────────────────────────────────────────────────
@@ -1945,6 +1995,19 @@ class _WsopHoldemPageState extends State<WsopHoldemPage> {
     final m = (s ~/ 60).toString().padLeft(2, '0');
     final ss = (s % 60).toString().padLeft(2, '0');
     return '$m:$ss';
+  }
+
+  String _fmt(int n) {
+    // 간단 천단위 구분자 포맷 (intl 미사용)
+    final s = n.toString();
+    final out = StringBuffer();
+    int cnt = 0;
+    for (int i = s.length - 1; i >= 0; i--) {
+      out.write(s[i]);
+      cnt++;
+      if (i > 0 && cnt % 3 == 0) out.write(',');
+    }
+    return out.toString().split('').reversed.join();
   }
 }
 
@@ -1976,4 +2039,3 @@ Widget _hudPill(IconData ico, String text) {
     ),
   );
 }
-
