@@ -24,7 +24,7 @@ Future<void> showDepartureRequestStatusBottomSheet({
   final rootContext = context;
 
   // ✅ 하얀색 배경 버튼 공통 스타일
-  ButtonStyle _whiteSheetButtonStyle(BuildContext ctx) => ElevatedButton.styleFrom(
+  ButtonStyle whiteSheetButtonStyle(BuildContext ctx) => ElevatedButton.styleFrom(
     minimumSize: const Size(double.infinity, 52),
     backgroundColor: Colors.white,
     foregroundColor: Colors.black87,
@@ -96,7 +96,7 @@ Future<void> showDepartureRequestStatusBottomSheet({
                         );
                       });
                     },
-                    style: _whiteSheetButtonStyle(sheetCtx),
+                    style: whiteSheetButtonStyle(sheetCtx),
                   ),
                   const SizedBox(height: 12),
 
@@ -121,7 +121,7 @@ Future<void> showDepartureRequestStatusBottomSheet({
                         );
                       });
                     },
-                    style: _whiteSheetButtonStyle(sheetCtx),
+                    style: whiteSheetButtonStyle(sheetCtx),
                   ),
                   const SizedBox(height: 12),
 

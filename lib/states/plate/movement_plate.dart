@@ -2,14 +2,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../models/plate_model.dart';
 import '../../repositories/plate/plate_repository.dart';
-import '../../screens/type_package/debugs/firestore_logger.dart';
 import '../../enums/plate_type.dart';
 import '../../models/plate_log_model.dart';
 
 class MovementPlate {
   final PlateRepository _repository;
-  final _logger = FirestoreLogger();
-
   MovementPlate(this._repository);
 
   Future<void> setParkingCompleted(
@@ -48,7 +45,6 @@ class MovementPlate {
   /// - 상태 전환과 함께 선택 해제(isSelected=false, selectedBy 삭제)를 **동일 트랜잭션 수준**으로 업데이트
   Future<void> setDepartureCompleted(PlateModel plate) async {
     final documentId = '${plate.plateNumber}_${plate.area}';
-    await _logger.log('[MovementPlate] setDepartureCompleted 시작: $documentId', level: 'called');
 
     try {
       final now = DateTime.now();
@@ -82,9 +78,7 @@ class MovementPlate {
 
       await _repository.updatePlate(documentId, updateFields, log: log);
 
-      await _logger.log('출차 완료 업데이트 Firestore 완료: $documentId', level: 'success');
     } catch (e) {
-      await _logger.log('출차 완료 이동 실패: $e', level: 'error');
       debugPrint('출차 완료 이동 실패: $e');
       rethrow;
     }
@@ -94,7 +88,6 @@ class MovementPlate {
   /// - transitionPlateState 이후에 선택 해제를 **추가 보장** (레포 함수 시그니처상 필드 병합이 어려운 경우 대비)
   Future<void> jumpingDepartureCompleted(PlateModel plate) async {
     final documentId = '${plate.plateNumber}_${plate.area}';
-    await _logger.log('[MovementPlate] jumpingDepartureCompleted 시작: $documentId', level: 'called');
 
     try {
       final log = PlateLogModel(
@@ -125,10 +118,8 @@ class MovementPlate {
         PlateFields.updatedAt: Timestamp.now(),
       });
 
-      await _logger.log('입차 완료 → 출차 완료 업데이트 완료(선택 해제 포함): $documentId', level: 'success');
       debugPrint("출차 완료 상태로 업데이트 완료: $documentId");
     } catch (e) {
-      await _logger.log('출차 완료 업데이트 실패: $e', level: 'error');
       debugPrint('출차 완료 업데이트 실패: $e');
       rethrow;
     }
@@ -183,12 +174,10 @@ class MovementPlate {
     String performedBy = '시스템',
   }) async {
     final documentId = '${plateNumber}_$area';
-    await _logger.log('[MovementPlate] _transferData 시작: $fromType → $toType | 문서ID: $documentId', level: 'called');
 
     try {
       final document = await _repository.getPlate(documentId);
       if (document == null) {
-        await _logger.log('문서를 찾을 수 없음: $documentId', level: 'warn');
         return false;
       }
 
@@ -226,14 +215,11 @@ class MovementPlate {
           });
         } catch (e) {
           // 선택 해제 보강 실패는 치명적이지 않으므로 warn로깅
-          await _logger.log('선택 해제 보강 실패(무시 가능): $e', level: 'warn');
         }
       }
 
-      await _logger.log('문서 상태 이동 완료: $fromType → $toType ($plateNumber)', level: 'success');
       return true;
     } catch (e) {
-      await _logger.log('상태 이동 오류: $e', level: 'error');
       debugPrint('문서 상태 이동 오류: $e');
       return false;
     }

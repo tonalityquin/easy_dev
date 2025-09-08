@@ -119,12 +119,12 @@ class _StatisticsState extends State<Statistics> {
                     ),
                     onPressed: _savedReports.isNotEmpty
                         ? () {
-                      setState(() {
-                        _savedReports.clear();
-                      });
-                      // ✅ 기본 SnackBar → 커스텀 스낵바
-                      showSuccessSnackbar(context, "🗑️ 보관된 통계가 초기화되었습니다.");
-                    }
+                            setState(() {
+                              _savedReports.clear();
+                            });
+                            // ✅ 기본 SnackBar → 커스텀 스낵바
+                            showSuccessSnackbar(context, "🗑️ 보관된 통계가 초기화되었습니다.");
+                          }
                         : null,
                   ),
                   const SizedBox(width: 8),
@@ -182,7 +182,7 @@ class _StatisticsState extends State<Statistics> {
               else if (_reportData != null)
                 _buildReportCard(_reportData!)
               else if (_selectedDate != null)
-                  const Text('👭 해당 날짜의 보고 내용이 없습니다.', style: TextStyle(color: Colors.grey)),
+                const Text('👭 해당 날짜의 보고 내용이 없습니다.', style: TextStyle(color: Colors.grey)),
             ],
           ),
         ),
@@ -192,16 +192,16 @@ class _StatisticsState extends State<Statistics> {
 
   Widget _buildReportCard(Map<String, dynamic> report) {
     // 업로드 평면 스키마 + 하위호환(중첩 vehicleCount) 모두 지원
-    int? _asInt(dynamic v) {
+    int? asInt(dynamic v) {
       if (v is num) return v.toInt();
       if (v is String) return int.tryParse(v);
       return null;
     }
 
     final vc = (report['vehicleCount'] is Map) ? (report['vehicleCount'] as Map).cast<String, dynamic>() : null;
-    final inCount = _asInt(report['vehicleInput'] ?? vc?['vehicleInput']);
-    final outCount = _asInt(report['vehicleOutput'] ?? vc?['vehicleOutput']);
-    final lockedFee = _asInt(report['totalLockedFee'] ?? vc?['totalLockedFee']);
+    final inCount = asInt(report['vehicleInput'] ?? vc?['vehicleInput']);
+    final outCount = asInt(report['vehicleOutput'] ?? vc?['vehicleOutput']);
+    final lockedFee = asInt(report['totalLockedFee'] ?? vc?['totalLockedFee']);
 
     final inText = inCount?.toString() ?? '정보 없음';
     final outText = outCount?.toString() ?? '정보 없음';

@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 
 import '../../models/plate_model.dart';
 import '../../enums/plate_type.dart';
-import '../../screens/type_package/debugs/firestore_logger.dart';
 
 class PlateCreationService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -31,7 +30,6 @@ class PlateCreationService {
     required String selectedBillType,
   }) async {
     final documentId = '${plateNumber}_$area';
-    await FirestoreLogger().log('addPlate called: $documentId, plateNumber=$plateNumber');
 
     // (기존) 정산 정보 로딩/세팅 로직 그대로 유지
     int? regularAmount;
@@ -50,14 +48,11 @@ class PlateCreationService {
 
           regularAmount = billData['regularAmount'];
           regularDurationHours = billData['regularDurationHours'];
-
-          await FirestoreLogger().log('addPlate billing data loaded: $billingType');
         } else {
           throw Exception('Firestore에서 정산 데이터를 찾을 수 없음');
         }
       } catch (e) {
         debugPrint("🔥 정산 정보 로드 실패: $e");
-        await FirestoreLogger().log('addPlate billing error: $e');
         throw Exception("Firestore 정산 정보 로드 실패: $e");
       }
     } else if (selectedBillType == '정기') {
@@ -123,12 +118,9 @@ class PlateCreationService {
 
         if (!_isAllowedDuplicate(existingType)) {
           debugPrint("🚨 중복된 번호판 등록 시도: $plateNumber (${existingType.name})");
-          await FirestoreLogger().log('addPlate error: duplicate plate - $plateNumber');
           throw Exception("이미 등록된 번호판입니다: $plateNumber");
         } else {
           debugPrint("⚠️ ${existingType.name} 상태 중복 등록 허용(트랜잭션): $plateNumber");
-          await FirestoreLogger().log('addPlate allowed duplicate (tx): $plateNumber (${existingType.name})');
-          // 허용 시 업데이트(merge)
           tx.set(docRef, plateWithLog.toMap(), SetOptions(merge: true));
         }
       } else {
@@ -160,11 +152,7 @@ class PlateCreationService {
           rethrow;
         }
       }
-
-      await FirestoreLogger().log('addPlate customStatus upserted (safe merge): $documentId');
     }
-
-    await FirestoreLogger().log('addPlate success: $documentId');
   }
 
   bool _isAllowedDuplicate(PlateType type) {

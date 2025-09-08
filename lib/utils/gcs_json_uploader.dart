@@ -18,10 +18,10 @@ class GcsJsonUploader {
     required DateTime date,
   }) async {
     // 헬퍼들 (메서드 내부에 국소 정의)
-    String _yyyymmdd(DateTime d) =>
+    String yyyymmdd(DateTime d) =>
         '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-    String _digitsOnly(String s) => s.replaceAll(RegExp(r'\D'), '');
-    DateTime? _parseTs(dynamic ts) {
+    String digitsOnly(String s) => s.replaceAll(RegExp(r'\D'), '');
+    DateTime? parseTs(dynamic ts) {
       if (ts == null) return null;
       if (ts is int) {
         // 큰 값은 ms, 아니면 s 가정
@@ -33,7 +33,7 @@ class GcsJsonUploader {
     }
 
 
-    final dateStr = _yyyymmdd(DateTime(date.year, date.month, date.day));
+    final dateStr = yyyymmdd(DateTime(date.year, date.month, date.day));
     final wantedSuffix = '_ToDoLogs_$dateStr.json';
     final prefix = '$division/$area/logs/';
 
@@ -84,7 +84,7 @@ class GcsJsonUploader {
 
 
       // 4) plateNumber(또는 4자리)로 필터 후 logs 모으기
-      final needle = _digitsOnly(plateNumber); // 전체를 넣어도 되고, 4자리만 넣어도 됨
+      final needle = digitsOnly(plateNumber); // 전체를 넣어도 되고, 4자리만 넣어도 됨
       final needleTail4 = needle.length >= 4 ? needle.substring(needle.length - 4) : needle;
 
 
@@ -95,7 +95,7 @@ class GcsJsonUploader {
         if (it is! Map) continue;
         final map = Map<String, dynamic>.from(it);
         final p = (map['plateNumber'] ?? map['docId'] ?? '').toString();
-        final pd = _digitsOnly(p);
+        final pd = digitsOnly(p);
 
 
         final matches = pd.isNotEmpty &&
@@ -117,8 +117,8 @@ class GcsJsonUploader {
 
       // 5) 시간 오름차순 정렬
       aggregated.sort((a, b) {
-        final at = _parseTs(a['timestamp']) ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final bt = _parseTs(b['timestamp']) ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final at = parseTs(a['timestamp']) ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bt = parseTs(b['timestamp']) ?? DateTime.fromMillisecondsSinceEpoch(0);
         return at.compareTo(bt);
       });
 

@@ -112,6 +112,7 @@ class _GithubCodeBrowserBottomSheetState extends State<GithubCodeBrowserBottomSh
   Future<void> _setTokenDialog() async {
     final tokenCtrl = TextEditingController();
     final formKey = GlobalKey<FormState>();
+
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -134,8 +135,12 @@ class _GithubCodeBrowserBottomSheetState extends State<GithubCodeBrowserBottomSh
           FilledButton(
             onPressed: () async {
               if (!formKey.currentState!.validate()) return;
+
               await _storage.write(key: _kTokenKey, value: tokenCtrl.text.trim());
-              if (!mounted) return;
+
+              // ✅ await 이후: 동일 컨텍스트 가드
+              if (!ctx.mounted || !mounted) return;
+
               Navigator.pop(ctx);
               setState(() => _tokenSaved = true);
               _toast('토큰이 저장되었습니다.');
@@ -146,6 +151,7 @@ class _GithubCodeBrowserBottomSheetState extends State<GithubCodeBrowserBottomSh
       ),
     );
   }
+
 
   void _toast(String msg) {
     if (!mounted) return;
@@ -464,7 +470,7 @@ class _GithubCodeBrowserBottomSheetState extends State<GithubCodeBrowserBottomSh
                               ],
                             );
 
-                            IconButton _btn({
+                            IconButton btn({
                               required IconData icon,
                               required VoidCallback onPressed,
                               String? tooltip,
@@ -482,9 +488,9 @@ class _GithubCodeBrowserBottomSheetState extends State<GithubCodeBrowserBottomSh
                             final trailing = Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                _btn(icon: Icons.open_in_new_rounded, onPressed: _openOnGithub, tooltip: '브라우저로 보기'),
-                                _btn(icon: Icons.vpn_key_rounded, onPressed: _setTokenDialog, tooltip: '토큰 설정'),
-                                _btn(icon: Icons.close_rounded, onPressed: () => Navigator.pop(context), tooltip: '닫기'),
+                                btn(icon: Icons.open_in_new_rounded, onPressed: _openOnGithub, tooltip: '브라우저로 보기'),
+                                btn(icon: Icons.vpn_key_rounded, onPressed: _setTokenDialog, tooltip: '토큰 설정'),
+                                btn(icon: Icons.close_rounded, onPressed: () => Navigator.pop(context), tooltip: '닫기'),
                               ],
                             );
 

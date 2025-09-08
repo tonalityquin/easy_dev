@@ -103,8 +103,7 @@ class _InputBottomActionSectionState extends State<InputBottomActionSection> {
           isLocationSelected: widget.controller.isLocationSelected,
           onPressed: () => widget.controller.submitPlateEntry(
             context,
-            widget.mountedContext,
-            widget.onStateRefresh,
+            widget.onStateRefresh, // ✅ bool 제거, 2개만 전달
           ),
         ),
       ],

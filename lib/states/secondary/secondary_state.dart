@@ -4,7 +4,7 @@ import 'secondary_info.dart';
 class SecondaryState with ChangeNotifier {
   int _selectedIndex = 0;
   List<SecondaryInfo> _pages;
-  bool _isLoading = false;
+  final bool _isLoading = false; // ✅ final로 변경
 
   SecondaryState({required List<SecondaryInfo> pages}) : _pages = pages;
 
@@ -19,7 +19,6 @@ class SecondaryState with ChangeNotifier {
       debugPrint('⚠️ 잘못된 인덱스 접근: $index');
       return;
     }
-
     if (_selectedIndex != index) {
       _selectedIndex = index;
       notifyListeners();
@@ -28,11 +27,9 @@ class SecondaryState with ChangeNotifier {
 
   void updatePages(List<SecondaryInfo> newPages, {bool keepIndex = false}) {
     _pages = newPages;
-
     if (!keepIndex || _selectedIndex >= newPages.length) {
       _selectedIndex = 0;
     }
-
     notifyListeners();
   }
 }

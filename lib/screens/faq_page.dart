@@ -214,18 +214,17 @@ class _FaqPageState extends State<FaqPage> {
                   suffixIcon: _query.isEmpty
                       ? null
                       : IconButton(
-                    icon: const Icon(Icons.clear_rounded),
-                    tooltip: '지우기',
-                    onPressed: () {
-                      _searchCtrl.clear();
-                      setState(() => _query = '');
-                    },
-                  ),
+                          icon: const Icon(Icons.clear_rounded),
+                          tooltip: '지우기',
+                          onPressed: () {
+                            _searchCtrl.clear();
+                            setState(() => _query = '');
+                          },
+                        ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 ),
               ),
               const SizedBox(height: 12),
@@ -233,13 +232,10 @@ class _FaqPageState extends State<FaqPage> {
               // 결과 개수 표시
               Row(
                 children: [
-                  const Icon(Icons.filter_alt_rounded,
-                      size: 16, color: Colors.black54),
+                  const Icon(Icons.filter_alt_rounded, size: 16, color: Colors.black54),
                   const SizedBox(width: 6),
                   Text(
-                    _query.isEmpty
-                        ? '전체 ${_allFaqs.length}건'
-                        : '검색 결과 ${_filtered.length}건',
+                    _query.isEmpty ? '전체 ${_allFaqs.length}건' : '검색 결과 ${_filtered.length}건',
                     style: text.bodySmall?.copyWith(color: Colors.black54),
                   ),
                 ],
@@ -256,16 +252,14 @@ class _FaqPageState extends State<FaqPage> {
                   child: const Text('검색 결과가 없습니다. 철자를 다시 확인해주세요.'),
                 )
               else
-                ..._filtered
-                    .map((e) => _FaqItem(question: e.question, answer: e.answer)),
+                ..._filtered.map((e) => _FaqItem(question: e.question, answer: e.answer)),
 
               const SizedBox(height: 24),
               FilledButton.icon(
                 onPressed: () {
                   // TODO: 실제 문의 채널(오픈채팅/메일/폼)로 연결
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text('문의 채널로 연결됩니다. (구현 필요)')),
+                    const SnackBar(content: Text('문의 채널로 연결됩니다. (구현 필요)')),
                   );
                 },
                 icon: const Icon(Icons.support_agent_rounded),
@@ -284,7 +278,7 @@ class _FaqPageState extends State<FaqPage> {
           child: InkWell(
             onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
               AppRoutes.selector,
-                  (route) => false,
+              (route) => false,
             ),
             borderRadius: BorderRadius.zero,
             child: Padding(
@@ -304,15 +298,17 @@ class _FaqPageState extends State<FaqPage> {
 class _FaqData {
   final String question; // "code. xxx" 형태로 보이게 유지
   final String answer;
+
   const _FaqData({required this.question, required this.answer});
 }
-
 class _FaqItem extends StatelessWidget {
   final String question;
   final String answer;
 
-  const _FaqItem({Key? key, required this.question, required this.answer})
-      : super(key: key);
+  const _FaqItem({
+    required this.question,
+    required this.answer,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -329,8 +325,10 @@ class _FaqItem extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(question,
-              style: text.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+          Text(
+            question,
+            style: text.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 8),
           Text(answer, style: text.bodyMedium),
         ],

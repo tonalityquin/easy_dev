@@ -36,13 +36,11 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
 
     final input = _controller.text.trim();
     if (input.isEmpty) {
-      if (!mounted) return;
       showSelectedSnackbar(context, '회사 이름을 입력해주세요.');
       return;
     }
     // 파이어스토어 문서 ID에서 '/'는 허용되지 않음
     if (input.contains('/')) {
-      if (!mounted) return;
       showSelectedSnackbar(context, '회사 이름에 "/" 문자는 사용할 수 없습니다.');
       return;
     }
@@ -62,7 +60,7 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
       });
 
       if (!mounted) return;
-      setState(() => _controller.clear());
+      _controller.clear();
       FocusScope.of(context).unfocus();
 
       showSuccessSnackbar(context, '회사 "$input" 이(가) 추가되었습니다.');
@@ -70,14 +68,15 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
       if (!mounted) return;
       showFailedSnackbar(context, '회사 추가 실패: $e');
     } finally {
-      if (!mounted) return;
-      setState(() => _adding = false);
+      // ⛔️ finally에서는 return 금지
+      if (mounted) {
+        setState(() => _adding = false);
+      }
     }
   }
 
   Future<void> _handleDeleteDivision(String division) async {
     if (_deletingDivisionName != null) {
-      // 이미 다른 삭제가 진행 중
       if (!mounted) return;
       showSelectedSnackbar(context, '다른 삭제 작업이 진행 중입니다. 잠시만 기다려주세요.');
       return;
@@ -85,33 +84,38 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
 
     // 확인 다이얼로그
     final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('회사 삭제'),
-        content: Text('"$division" 회사와 소속 지역을 모두 삭제하시겠습니까?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('취소')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('삭제')),
-        ],
-      ),
-    ) ??
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('회사 삭제'),
+            content: Text('"$division" 회사와 소속 지역을 모두 삭제하시겠습니까?'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('취소')),
+              TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('삭제')),
+            ],
+          ),
+        ) ??
         false;
 
     if (!ok) return;
 
+    // ✅ async gap(showDialog) 이후 컨텍스트 사용 전 안전 체크
+    if (!mounted) return;
     setState(() => _deletingDivisionName = division);
+
     try {
       // 부모 콜백: divisions/{division} 삭제 및 소속 areas 일괄 삭제(부모에서 배치 처리)
       await widget.onDivisionDeleted(division);
 
-      if (!mounted) return;
       // 성공 알림은 부모에서 표시(중복 방지)
     } catch (e) {
-      if (!mounted) return;
-      showFailedSnackbar(context, '삭제 실패: $e');
+      if (mounted) {
+        showFailedSnackbar(context, '삭제 실패: $e');
+      }
     } finally {
-      if (!mounted) return;
-      setState(() => _deletingDivisionName = null);
+      // ⛔️ finally에서는 return 금지: 상태만 정리
+      if (mounted) {
+        setState(() => _deletingDivisionName = null);
+      }
     }
   }
 
@@ -131,8 +135,10 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
           ElevatedButton.icon(
             icon: _adding
                 ? const SizedBox(
-              height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2),
-            )
+                    height: 16,
+                    width: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
                 : const Icon(Icons.add_business),
             label: Text(_adding ? '추가 중...' : '회사 추가'),
             onPressed: _adding || _deletingDivisionName != null ? null : _handleAddDivision,
@@ -153,14 +159,16 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
                       title: Text(division),
                       trailing: deleting
                           ? const SizedBox(
-                        height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
                           : IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.redAccent),
-                        onPressed: (_deletingDivisionName != null || _adding)
-                            ? null
-                            : () => _handleDeleteDivision(division),
-                      ),
+                              icon: const Icon(Icons.delete, color: Colors.redAccent),
+                              onPressed: (_deletingDivisionName != null || _adding)
+                                  ? null
+                                  : () => _handleDeleteDivision(division),
+                            ),
                     );
                   },
                 ),

@@ -36,9 +36,8 @@ class _TabletPersonalCalendarState extends State<TabletPersonalCalendar> {
           filterStates: loaded,
         );
         setState(() => _eventsByDay = events);
-      } catch (e, stack) {
-        print('🚨 초기화 오류: $e');
-        print(stack);
+      } catch (e) {
+        debugPrint('🚨 초기화 오류: $e');
       }
     });
   }
@@ -104,7 +103,7 @@ class _TabletPersonalCalendarState extends State<TabletPersonalCalendar> {
                 );
                 setState(() => _eventsByDay = events);
               } catch (e) {
-                print('🚨 페이지 변경 오류: $e');
+                debugPrint('🚨 페이지 변경 오류: $e');
               }
             },
             calendarBuilders: CalendarBuilders(

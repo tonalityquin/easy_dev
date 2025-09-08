@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'stub_package/debug_bottom_sheet.dart';
+import 'stub_package/debug_package/debug_bottom_sheet.dart';
 import 'stub_package/game_arcade_bottom_sheet.dart';
 import 'stub_package/github_code_browser_bottom_sheet.dart';
 import 'stub_package/github_markdown_bottom_sheet.dart';

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:googleapis/sheets/v4.dart';
 import 'package:googleapis_auth/auth_io.dart';
@@ -17,7 +18,7 @@ class GoogleSheetsHelper {
     final result = spreadsheetMap[trimmed];
 
     if (result == null) {
-      print('[ERROR] Unknown area="$area", fallback to belivus');
+      debugPrint('[ERROR] Unknown area="$area", fallback to belivus');
     }
 
     return result ?? spreadsheetMap['belivus']!;
@@ -162,7 +163,7 @@ class GoogleSheetsHelper {
     required String time,
   }) async {
     final spreadsheetId = getSpreadsheetId(area.trim());
-    print('[DEBUG] updateBreakRecord: area=$area → spreadsheetId=$spreadsheetId');
+    debugPrint('[DEBUG] updateBreakRecord: area=$area → spreadsheetId=$spreadsheetId');
 
     final client = await _getSheetsClient();
     final sheetsApi = SheetsApi(client);

@@ -51,7 +51,7 @@ class _CompletedTaskPageState extends State<CompletedTaskPage> {
         _completedEvents = events;
       });
     } catch (e) {
-      print('🚨 완료된 이벤트 로딩 실패: $e');
+      debugPrint('🚨 완료된 이벤트 로딩 실패: $e');
     } finally {
       setState(() => _isLoading = false);
     }
@@ -179,7 +179,7 @@ class _CompletedTaskPageState extends State<CompletedTaskPage> {
         showSuccessSnackbar(context, 'Google Sheet에 저장 완료');
       }
     } catch (e) {
-      print('🚨 Google Sheet 저장 실패: $e');
+      debugPrint('🚨 Google Sheet 저장 실패: $e');
       if (mounted) {
         // ✅ 실패 스낵바
         showFailedSnackbar(context, '저장 중 오류 발생');

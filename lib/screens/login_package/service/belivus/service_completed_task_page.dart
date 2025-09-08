@@ -36,22 +36,19 @@ class _CompletedTaskPageState extends State<CompletedTaskPage> {
       );
 
       final seenIds = <String>{};
-      final events = allEventsByDay.values
-          .expand((list) => list)
-          .where((e) => _getProgress(e.description) == 100)
-          .where((e) {
+      final events =
+          allEventsByDay.values.expand((list) => list).where((e) => _getProgress(e.description) == 100).where((e) {
         final id = e.id;
         if (id == null || seenIds.contains(id)) return false;
         seenIds.add(id);
         return true;
-      })
-          .toList();
+      }).toList();
 
       setState(() {
         _completedEvents = events;
       });
     } catch (e) {
-      print('🚨 완료된 이벤트 로딩 실패: $e');
+      debugPrint('🚨 완료된 이벤트 로딩 실패: $e');
     } finally {
       setState(() => _isLoading = false);
     }
@@ -179,7 +176,7 @@ class _CompletedTaskPageState extends State<CompletedTaskPage> {
         showSuccessSnackbar(context, 'Google Sheet에 저장 완료');
       }
     } catch (e) {
-      print('🚨 Google Sheet 저장 실패: $e');
+      debugPrint('🚨 Google Sheet 저장 실패: $e');
       if (mounted) {
         // ✅ 실패 스낵바
         showFailedSnackbar(context, '저장 중 오류 발생');
@@ -209,83 +206,83 @@ class _CompletedTaskPageState extends State<CompletedTaskPage> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _completedEvents.isEmpty
-          ? Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
-            Icon(Icons.inbox, size: 72, color: Colors.grey),
-            SizedBox(height: 12),
-            Text('완료된 할 일이 없습니다.', style: TextStyle(fontSize: 16, color: Colors.grey)),
-          ],
-        ),
-      )
-          : ListView.builder(
-        itemCount: _completedEvents.length,
-        itemBuilder: (context, index) {
-          final e = _completedEvents[index];
-          final date = e.start?.date;
-          final formattedDate = date != null ? DateFormat('yyyy-MM-dd').format(date) : '날짜 없음';
-          return Card(
-            color: Colors.white,
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    formattedDate,
-                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple),
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Icon(Icons.inbox, size: 72, color: Colors.grey),
+                      SizedBox(height: 12),
+                      Text('완료된 할 일이 없습니다.', style: TextStyle(fontSize: 16, color: Colors.grey)),
+                    ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    e.summary ?? '무제',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                  if ((e.description ?? '').isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4.0),
-                      child: Text(
-                        e.description!,
-                        style: const TextStyle(fontSize: 14),
+                )
+              : ListView.builder(
+                  itemCount: _completedEvents.length,
+                  itemBuilder: (context, index) {
+                    final e = _completedEvents[index];
+                    final date = e.start?.date;
+                    final formattedDate = date != null ? DateFormat('yyyy-MM-dd').format(date) : '날짜 없음';
+                    return Card(
+                      color: Colors.white,
+                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              formattedDate,
+                              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              e.summary ?? '무제',
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                            ),
+                            if ((e.description ?? '').isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4.0),
+                                child: Text(
+                                  e.description!,
+                                  style: const TextStyle(fontSize: 14),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
-                    ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
+                    );
+                  },
+                ),
       floatingActionButton: _completedEvents.isEmpty
           ? null
           : Padding(
-        padding: const EdgeInsets.only(bottom: 16.0, right: 8.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            FloatingActionButton.extended(
-              heroTag: 'saveBtn',
-              onPressed: _saveToGoogleSheet,
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.black87,
-              icon: const Icon(Icons.upload),
-              label: const Text('저장', style: TextStyle(fontWeight: FontWeight.bold)),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.only(bottom: 16.0, right: 8.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  FloatingActionButton.extended(
+                    heroTag: 'saveBtn',
+                    onPressed: _saveToGoogleSheet,
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.black87,
+                    icon: const Icon(Icons.upload),
+                    label: const Text('저장', style: TextStyle(fontWeight: FontWeight.bold)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  const SizedBox(height: 12),
+                  FloatingActionButton.extended(
+                    heroTag: 'deleteBtn',
+                    onPressed: _deleteCompletedEvents,
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.black87,
+                    icon: const Icon(Icons.delete),
+                    label: const Text('삭제', style: TextStyle(fontWeight: FontWeight.bold)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 12),
-            FloatingActionButton.extended(
-              heroTag: 'deleteBtn',
-              onPressed: _deleteCompletedEvents,
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.black87,
-              icon: const Icon(Icons.delete),
-              label: const Text('삭제', style: TextStyle(fontWeight: FontWeight.bold)),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

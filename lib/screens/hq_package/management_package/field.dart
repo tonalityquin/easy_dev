@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 
 import '../../../enums/plate_type.dart';
 import '../../../states/user/user_state.dart';
-import '../../type_package/debugs/firestore_logger.dart';
 import 'area_detail_screen.dart';
 
 class Field extends StatefulWidget {
@@ -37,26 +36,12 @@ class _FieldState extends State<Field> {
       final division = userState.user?.divisions.first;
 
       if (division == null || division.isEmpty) {
-        await FirestoreLogger().log(
-          '⚠️ division 정보 없음. _fetchAreaCounts() 중단',
-          level: 'error',
-        );
         throw Exception('division 정보가 없습니다.');
       }
-
-      await FirestoreLogger().log(
-        '✅ Firestore areas 쿼리 시작 division=$division',
-        level: 'called',
-      );
 
       final areaSnapshot = await firestore.collection('areas').where('division', isEqualTo: division).get();
 
       final areas = areaSnapshot.docs.map((doc) => doc['name'] as String).toList();
-
-      await FirestoreLogger().log(
-        '✅ Firestore areas 쿼리 완료 (총 ${areas.length}개)',
-        level: 'success',
-      );
 
       List<AreaCount> results = [];
 
@@ -75,10 +60,6 @@ class _FieldState extends State<Field> {
 
           counts[type] = countSnapshot.count ?? 0;
 
-          await FirestoreLogger().log(
-            '📊 area=$area type=${type.firestoreValue} count=${counts[type]}',
-            level: 'info',
-          );
         }
 
         results.add(AreaCount(area, counts));
@@ -92,15 +73,8 @@ class _FieldState extends State<Field> {
         _isLoading = false;
       });
 
-      await FirestoreLogger().log(
-        '✅ areaCounts 데이터 로드 및 정렬 완료 (${results.length}개)',
-        level: 'success',
-      );
     } catch (e) {
-      await FirestoreLogger().log(
-        '❌ _fetchAreaCounts() 오류: $e',
-        level: 'error',
-      );
+
       if (!mounted) return;
       setState(() {
         _errorMessage = '데이터를 불러오지 못했습니다.\n${e.toString()}';

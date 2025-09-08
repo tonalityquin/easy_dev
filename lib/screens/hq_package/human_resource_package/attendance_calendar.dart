@@ -51,14 +51,14 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
 
   Future<void> _loadUsers(String area) async {
     if (_userCache.containsKey(area)) {
-      print('[CACHE HIT] 사용자 목록 - area=$area');
+      debugPrint('[CACHE HIT] 사용자 목록 - area=$area');
       setState(() {
         _users = _userCache[area]!;
       });
       return;
     }
 
-    print('[CACHE MISS] 사용자 목록 - area=$area → Firestore 요청');
+    debugPrint('[CACHE MISS] 사용자 목록 - area=$area → Firestore 요청');
 
     try {
       final snapshot =
@@ -83,7 +83,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
     final cacheKey = '$userId-${_focusedDay.year}-${_focusedDay.month}';
 
     if (_inCache.containsKey(cacheKey) && _outCache.containsKey(cacheKey)) {
-      print('[CACHE HIT] 출퇴근 기록 - key=$cacheKey');
+      debugPrint('[CACHE HIT] 출퇴근 기록 - key=$cacheKey');
       setState(() {
         _clockInMap = _inCache[cacheKey]!;
         _clockOutMap = _outCache[cacheKey]!;
@@ -91,7 +91,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
       return;
     }
 
-    print('[CACHE MISS] 출퇴근 기록 - key=$cacheKey → Google Sheets 요청');
+    debugPrint('[CACHE MISS] 출퇴근 기록 - key=$cacheKey → Google Sheets 요청');
 
     final allRows = await GoogleSheetsHelper.loadClockInOutRecords(area);
 

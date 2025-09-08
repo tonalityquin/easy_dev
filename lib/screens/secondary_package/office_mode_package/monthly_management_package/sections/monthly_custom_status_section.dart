@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // ✅ 입력 포맷터 & MaxLengthEnforcement
 import '../../../../../utils/snackbar_helper.dart';
-import '../../../../type_package/debugs/firestore_logger.dart';
 import '../monthly_plate_controller.dart';
 
 class MonthlyCustomStatusSection extends StatefulWidget {
@@ -114,20 +113,15 @@ class _MonthlyCustomStatusSectionState extends State<MonthlyCustomStatusSection>
                         FocusScope.of(context).unfocus();
                         setState(() => _deleting = true);
                         try {
-                          await FirestoreLogger().log(
-                            '🗑️ 상태 메모 삭제 시도: ${widget.controller.buildPlateNumber()}',
-                            level: 'called',
-                          );
+
 
                           await widget.controller.deleteCustomStatusFromFirestore(context);
-                          await FirestoreLogger().log('✅ 상태 메모 삭제 완료', level: 'success');
 
                           widget.onDeleted();
                           widget.onStatusCleared();
 
                           showSuccessSnackbar(context, '자동 메모가 삭제되었습니다');
                         } catch (e) {
-                          await FirestoreLogger().log('❌ 상태 메모 삭제 실패: $e', level: 'error');
                           showFailedSnackbar(context, '삭제 실패. 다시 시도해주세요');
                         } finally {
                           if (mounted) setState(() => _deleting = false);

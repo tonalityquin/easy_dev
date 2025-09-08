@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
-import '../../type_package/debugs/firestore_logger.dart';
 
 class AreaDetailScreen extends StatelessWidget {
   final String areaName;
@@ -17,19 +16,12 @@ class AreaDetailScreen extends StatelessWidget {
     if (_cachedUsers.containsKey(area)) {
       final lastTime = _lastFetchedTime[area];
       if (lastTime != null && now.difference(lastTime) < const Duration(minutes: 5)) {
-        await FirestoreLogger().log(
-          '📦 $area 캐시 데이터 사용',
-          level: 'info',
-        );
         return _cachedUsers[area]!;
       }
     }
 
     try {
-      await FirestoreLogger().log(
-        '🔍 Firestore 쿼리 시작: currentArea=$area',
-        level: 'called',
-      );
+
 
       final snapshot =
           await FirebaseFirestore.instance.collection('user_accounts').where('currentArea', isEqualTo: area).get();
@@ -42,20 +34,11 @@ class AreaDetailScreen extends StatelessWidget {
         );
       }).toList();
 
-      await FirestoreLogger().log(
-        '✅ Firestore 쿼리 완료: $area - ${result.length}명',
-        level: 'success',
-      );
-
       _cachedUsers[area] = result;
       _lastFetchedTime[area] = now;
 
       return result;
     } catch (e) {
-      await FirestoreLogger().log(
-        '❌ Firestore 쿼리 실패: $e',
-        level: 'error',
-      );
       rethrow;
     }
   }

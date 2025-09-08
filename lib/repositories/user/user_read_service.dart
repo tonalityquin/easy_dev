@@ -5,7 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/tablet_model.dart';
 import '../../models/user_model.dart';
-import '../../screens/type_package/debugs/firestore_logger.dart';
 
 class UserReadService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -43,7 +42,8 @@ class UserReadService {
       isWorking: t.isWorking,
       name: t.name,
       password: t.password,
-      phone: t.handle, // 🔑 handle을 phone 슬롯에 매핑(현 UI/State 호환)
+      phone: t.handle,
+      // 🔑 handle을 phone 슬롯에 매핑(현 UI/State 호환)
       position: t.position,
       role: t.role,
       selectedArea: t.selectedArea,
@@ -56,44 +56,36 @@ class UserReadService {
   /// 사용자 ID로 조회 (user_accounts)
   Future<UserModel?> getUserById(String userId) async {
     debugPrint("getUserById 호출 → ID: $userId");
-    await FirestoreLogger().log('getUserById called: $userId');
 
     final doc = await _getUserCollectionRef().doc(userId).get();
     if (!doc.exists) {
       debugPrint("DB 문서 없음 → userId=$userId");
-      await FirestoreLogger().log('getUserById not found: $userId');
       return null;
     }
 
     final data = doc.data()!;
     debugPrint("DB 문서 조회 성공 → userId=$userId / 데이터: $data");
-    await FirestoreLogger().log('getUserById success: $userId');
     return UserModel.fromMap(doc.id, data);
   }
 
   /// 전화번호로 사용자 조회 (user_accounts)
   Future<UserModel?> getUserByPhone(String phone) async {
     debugPrint("getUserByPhone, 조회 시작 - phone: $phone");
-    await FirestoreLogger().log('getUserByPhone called: $phone');
 
     try {
-      final querySnapshot =
-      await _getUserCollectionRef().where('phone', isEqualTo: phone).limit(1).get();
+      final querySnapshot = await _getUserCollectionRef().where('phone', isEqualTo: phone).limit(1).get();
 
       debugPrint("조회 완료 - 결과 개수: ${querySnapshot.docs.length}");
 
       if (querySnapshot.docs.isNotEmpty) {
         final doc = querySnapshot.docs.first;
         debugPrint("사용자 찾음 - ID: ${doc.id}");
-        await FirestoreLogger().log('getUserByPhone success: ${doc.id}');
         return UserModel.fromMap(doc.id, doc.data());
       } else {
         debugPrint("DB에 사용자 없음");
-        await FirestoreLogger().log('getUserByPhone not found: $phone');
       }
     } catch (e) {
       debugPrint("DB 조회 중 예외 발생: $e");
-      await FirestoreLogger().log('getUserByPhone error: $e');
     }
 
     return null;
@@ -105,31 +97,20 @@ class UserReadService {
   Future<UserModel?> getUserByHandle(String handle) async {
     final h = _normalizeHandle(handle);
     debugPrint("getUserByHandle, 조회 시작 - handle: $h");
-    await FirestoreLogger().log('getUserByHandle called: $h');
 
     try {
-      var qs = await _getUserCollectionRef()
-          .where('handle', isEqualTo: h)
-          .limit(1)
-          .get();
+      var qs = await _getUserCollectionRef().where('handle', isEqualTo: h).limit(1).get();
 
       if (qs.docs.isEmpty) {
-        qs = await _getUserCollectionRef()
-            .where('phone', isEqualTo: h)
-            .limit(1)
-            .get();
+        qs = await _getUserCollectionRef().where('phone', isEqualTo: h).limit(1).get();
       }
 
       if (qs.docs.isNotEmpty) {
         final doc = qs.docs.first;
-        await FirestoreLogger().log('getUserByHandle success: ${doc.id}');
         return UserModel.fromMap(doc.id, doc.data());
-      } else {
-        await FirestoreLogger().log('getUserByHandle not found: $h');
-      }
+      } else {}
     } catch (e) {
       debugPrint("DB 조회 중 예외 발생: $e");
-      await FirestoreLogger().log('getUserByHandle error: $e');
     }
     return null;
   }
@@ -141,19 +122,14 @@ class UserReadService {
     final docId = '$h-$name';
 
     debugPrint("getTabletByHandleAndAreaName, docId: $docId");
-    await FirestoreLogger().log('getTabletByHandleAndAreaName called: $docId');
 
     try {
       final snap = await _getTabletCollectionRef().doc(docId).get();
       if (snap.exists && snap.data() != null) {
-        await FirestoreLogger().log('getTabletByHandleAndAreaName success: $docId');
         return TabletModel.fromMap(snap.id, snap.data()!);
-      } else {
-        await FirestoreLogger().log('getTabletByHandleAndAreaName not found: $docId');
-      }
+      } else {}
     } catch (e) {
       debugPrint("DB 조회 중 예외 발생: $e");
-      await FirestoreLogger().log('getTabletByHandleAndAreaName error: $e');
     }
     return null;
   }
@@ -162,24 +138,16 @@ class UserReadService {
   Future<TabletModel?> getTabletByHandle(String handle) async {
     final h = _normalizeHandle(handle);
     debugPrint("getTabletByHandle, 조회 시작 - handle: $h");
-    await FirestoreLogger().log('getTabletByHandle called: $h');
 
     try {
-      final qs = await _getTabletCollectionRef()
-          .where('handle', isEqualTo: h)
-          .limit(1)
-          .get();
+      final qs = await _getTabletCollectionRef().where('handle', isEqualTo: h).limit(1).get();
 
       if (qs.docs.isNotEmpty) {
         final doc = qs.docs.first;
-        await FirestoreLogger().log('getTabletByHandle success: ${doc.id}');
         return TabletModel.fromMap(doc.id, doc.data());
-      } else {
-        await FirestoreLogger().log('getTabletByHandle not found: $h');
-      }
+      } else {}
     } catch (e) {
       debugPrint("DB 조회 중 예외 발생: $e");
-      await FirestoreLogger().log('getTabletByHandle error: $e');
     }
     return null;
   }
@@ -208,39 +176,29 @@ class UserReadService {
   /// Firestore에서 사용자 새로 조회 후 캐시 갱신 (user_accounts)
   Future<List<UserModel>> refreshUsersBySelectedArea(String selectedArea) async {
     debugPrint('🔥 Firestore 호출 시작 → $selectedArea');
-    await FirestoreLogger().log('refreshUsersBySelectedArea called: $selectedArea');
 
-    final querySnapshot =
-    await _getUserCollectionRef().where('areas', arrayContains: selectedArea).get();
+    final querySnapshot = await _getUserCollectionRef().where('areas', arrayContains: selectedArea).get();
 
-    final users =
-    querySnapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
+    final users = querySnapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
 
     await _updateCacheWithUsers(selectedArea, users);
-    await FirestoreLogger()
-        .log('refreshUsersBySelectedArea success: ${users.length} users loaded');
     return users;
   }
 
   /// Firestore에서 태블릿 새로 조회 후 (UserModel로 변환하여) 캐시 갱신 (tablet_accounts)
   Future<List<UserModel>> refreshTabletsBySelectedArea(String selectedArea) async {
     debugPrint('🔥 Firestore 호출 시작 (tablet) → $selectedArea');
-    await FirestoreLogger().log('refreshTabletsBySelectedArea called: $selectedArea');
 
-    final querySnapshot =
-    await _getTabletCollectionRef().where('areas', arrayContains: selectedArea).get();
+    final querySnapshot = await _getTabletCollectionRef().where('areas', arrayContains: selectedArea).get();
 
     // 1) TabletModel로 파싱
-    final tablets =
-    querySnapshot.docs.map((doc) => TabletModel.fromMap(doc.id, doc.data())).toList();
+    final tablets = querySnapshot.docs.map((doc) => TabletModel.fromMap(doc.id, doc.data())).toList();
 
     // 2) UserModel로 변환
     final users = tablets.map(_tabletToUser).toList();
 
     // 3) 캐시 업데이트 및 반환
     await _updateCacheWithUsers(selectedArea, users);
-    await FirestoreLogger()
-        .log('refreshTabletsBySelectedArea success: ${users.length} users loaded');
     return users;
   }
 
@@ -248,18 +206,14 @@ class UserReadService {
 
   /// areas 컬렉션에서 영어 이름 조회
   Future<String?> getEnglishNameByArea(String area, String division) async {
-    await FirestoreLogger().log('getEnglishNameByArea called: $division-$area');
-
     try {
       final doc = await _getAreasCollectionRef().doc('$division-$area').get();
       if (doc.exists) {
         final name = doc.data()?['englishName'] as String?;
-        await FirestoreLogger().log('getEnglishNameByArea success: $name');
         return name;
       }
     } catch (e) {
       debugPrint("[DEBUG] getEnglishNameByArea 실패: $e");
-      await FirestoreLogger().log('getEnglishNameByArea error: $e');
     }
 
     return null;

@@ -1,6 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/location_model.dart';
-import '../../screens/type_package/debugs/firestore_logger.dart';
 
 class LocationWriteService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -9,13 +8,9 @@ class LocationWriteService {
     final docRef = _firestore.collection('locations').doc(location.id);
     final data = location.toFirestoreMap();
 
-    await FirestoreLogger().log('addSingleLocation called (id=${location.id}, data=$data)');
-
     try {
       await docRef.set(data);
-      await FirestoreLogger().log('addSingleLocation success: ${location.id}');
     } catch (e) {
-      await FirestoreLogger().log('addSingleLocation error: $e');
       rethrow;
     }
   }
@@ -25,8 +20,6 @@ class LocationWriteService {
     List<Map<String, dynamic>> subs,
     String area,
   ) async {
-    await FirestoreLogger().log('addCompositeLocation called (parent=$parent, subs=${subs.length}, area=$area)');
-
     final batch = _firestore.batch();
 
     for (final sub in subs) {
@@ -50,17 +43,13 @@ class LocationWriteService {
 
     try {
       await batch.commit();
-      await FirestoreLogger().log('addCompositeLocation success: ${subs.length} subs saved');
     } catch (e) {
-      await FirestoreLogger().log('addCompositeLocation error: $e');
       rethrow;
     }
   }
 
   Future<void> deleteLocations(List<String> ids) async {
     if (ids.isEmpty) return;
-
-    await FirestoreLogger().log('deleteLocations called (ids=${ids.join(",")})');
 
     final batch = _firestore.batch();
 
@@ -71,9 +60,7 @@ class LocationWriteService {
 
     try {
       await batch.commit();
-      await FirestoreLogger().log('deleteLocations success');
     } catch (e) {
-      await FirestoreLogger().log('deleteLocations error: $e');
       rethrow;
     }
   }

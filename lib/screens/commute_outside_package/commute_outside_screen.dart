@@ -6,7 +6,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../states/user/user_state.dart';
 import '../../utils/snackbar_helper.dart';
-import 'debugs/clock_in_debug_firestore_logger.dart';
 import 'commute_outside_controller.dart';
 import 'sections/report_button_section.dart';
 import 'sections/work_button_section.dart';
@@ -22,7 +21,6 @@ class CommuteOutsideScreen extends StatefulWidget {
 
 class _CommuteOutsideScreenState extends State<CommuteOutsideScreen> {
   final controller = CommuteOutsideController();
-  final logger = ClockInDebugFirestoreLogger();
 
   String? kakaoUrl;
   bool loadingUrl = true;
@@ -37,7 +35,6 @@ class _CommuteOutsideScreenState extends State<CommuteOutsideScreen> {
   @override
   void initState() {
     super.initState();
-    logger.log('ClockInWorkScreen.initState() 호출됨', level: 'called');
     controller.initialize(context);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -55,10 +52,7 @@ class _CommuteOutsideScreenState extends State<CommuteOutsideScreen> {
     });
 
     if (savedUrl != null && savedUrl.isNotEmpty) {
-      logger.log('✅ 사용자 지정 URL 사용: $savedUrl', level: 'info');
-    } else {
-      logger.log('❌ 사용자 URL 없음', level: 'warn');
-    }
+    } else {}
   }
 
   void _handleChangeUrl(BuildContext context) async {
@@ -88,17 +82,20 @@ class _CommuteOutsideScreenState extends State<CommuteOutsideScreen> {
               ElevatedButton(
                 onPressed: () async {
                   final url = controller.text.trim();
+
                   await prefs.setString('custom_kakao_url', url);
-                  logger.log('🔧 사용자 URL 저장됨: $url', level: 'success');
-                  if (!mounted) return;
+
+                  if (!context.mounted) return;
+
                   setState(() {
                     kakaoUrl = url;
                   });
+
                   Navigator.pop(context);
                   showSuccessSnackbar(context, 'URL이 저장되었습니다.');
                 },
                 child: const Text('저장'),
-              ),
+              )
             ],
           ),
         ),
@@ -108,15 +105,12 @@ class _CommuteOutsideScreenState extends State<CommuteOutsideScreen> {
 
   Future<void> _handleLogout(BuildContext context) async {
     try {
-      logger.log('로그아웃 시도 중...', level: 'called');
       final userState = context.read<UserState>();
       await FlutterForegroundTask.stopService();
       await userState.clearUserToPhone();
       await Future.delayed(const Duration(milliseconds: 500));
-      logger.log('✅ 로그아웃 성공', level: 'success');
       SystemChannels.platform.invokeMethod('SystemNavigator.pop');
     } catch (e) {
-      logger.log('❌ 로그아웃 실패: $e', level: 'error');
       if (context.mounted) {
         showFailedSnackbar(context, '로그아웃 실패: $e');
       }

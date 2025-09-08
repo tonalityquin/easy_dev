@@ -15,7 +15,7 @@ class UserInfoCard extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(12),
       onTap: () {
-        print('📄 사용자 상세 정보 보기');
+        debugPrint('📄 사용자 상세 정보 보기');
       },
       child: Card(
         elevation: 2,

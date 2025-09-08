@@ -34,18 +34,16 @@ class _MonthlyBottomActionSectionState extends State<MonthlyBottomActionSection>
             if (widget.isEditMode) {
               await widget.controller.updatePlateEntry(
                 context,
-                widget.mountedContext,
-                widget.onStateRefresh,
+                widget.onStateRefresh, // ✅ 두 개만 전달
               );
             } else {
               await widget.controller.submitPlateEntry(
                 context,
-                widget.mountedContext,
-                widget.onStateRefresh,
+                widget.onStateRefresh, // ✅ 두 개만 전달
               );
             }
           },
-        ),
+        )
       ],
     );
   }

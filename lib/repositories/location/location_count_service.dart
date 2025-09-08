@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../screens/type_package/debugs/firestore_logger.dart';
 
 class LocationCountService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -9,10 +8,6 @@ class LocationCountService {
     required String area,
     String type = 'parking_completed',
   }) async {
-    await FirestoreLogger().log(
-      'getPlateCount called (location=$locationName, area=$area, type=$type)',
-    );
-
     try {
       final snapshot = await _firestore
           .collection('plates')
@@ -22,13 +17,8 @@ class LocationCountService {
           .count()
           .get();
 
-      await FirestoreLogger().log(
-        'getPlateCount success: count=${snapshot.count}, location=$locationName',
-      );
-
       return snapshot.count ?? 0;
     } catch (e) {
-      await FirestoreLogger().log('getPlateCount error: $e');
       rethrow;
     }
   }
@@ -38,10 +28,6 @@ class LocationCountService {
     required String area,
     String type = 'parking_completed',
   }) async {
-    await FirestoreLogger().log(
-      'getPlateCountsForLocations called (${locationNames.length} locations, area=$area, type=$type)',
-    );
-
     try {
       final futures = locationNames.map((name) async {
         final count = await getPlateCount(
@@ -55,13 +41,8 @@ class LocationCountService {
       final entries = await Future.wait(futures);
       final result = Map.fromEntries(entries);
 
-      await FirestoreLogger().log(
-        'getPlateCountsForLocations success: total=${result.length}',
-      );
-
       return result;
     } catch (e) {
-      await FirestoreLogger().log('getPlateCountsForLocations error: $e');
       rethrow;
     }
   }

@@ -5,7 +5,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../states/bill/bill_state.dart';
 import '../../states/area/area_state.dart';
 
-import '../type_package/debugs/firestore_logger.dart';
 import 'input_plate_controller.dart';
 import 'sections/input_bill_section.dart';
 import 'sections/input_location_section.dart';
@@ -48,13 +47,9 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
         if (mounted && data != null) {
           final fetchedStatus = data['customStatus'] as String?;
-          final fetchedList = (data['statusList'] as List<dynamic>?)
-              ?.map((e) => e.toString())
-              .toList() ??
-              [];
+          final fetchedList = (data['statusList'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
 
-          final String? fetchedCountType =
-          (data['countType'] as String?)?.trim();
+          final String? fetchedCountType = (data['countType'] as String?)?.trim();
 
           setState(() {
             controller.fetchedCustomStatus = fetchedStatus;
@@ -79,27 +74,17 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       final billState = context.read<BillState>();
       await billState.loadFromBillCache();
       setState(() {
-        controller.isLocationSelected =
-            controller.locationController.text.isNotEmpty;
+        controller.isLocationSelected = controller.locationController.text.isNotEmpty;
       });
     });
   }
 
-  Future<Map<String, dynamic>?> _fetchPlateStatus(
-      String plateNumber, String area) async {
+  Future<Map<String, dynamic>?> _fetchPlateStatus(String plateNumber, String area) async {
     final docId = '${plateNumber}_$area';
-    await FirestoreLogger()
-        .log('🔍 번호판 상태 조회 시도: $docId', level: 'called');
-    final doc = await FirebaseFirestore.instance
-        .collection('plate_status')
-        .doc(docId)
-        .get();
+    final doc = await FirebaseFirestore.instance.collection('plate_status').doc(docId).get();
     if (doc.exists) {
-      await FirestoreLogger()
-          .log('✅ 상태 조회 성공: $docId', level: 'success ');
       return doc.data();
     }
-    await FirestoreLogger().log('📭 상태 데이터 없음: $docId', level: 'info');
     return null;
   }
 
@@ -111,8 +96,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         key: const ValueKey('frontKeypad'),
         controller: controller.controllerFrontDigit,
         maxLength: controller.isThreeDigit ? 3 : 2,
-        onComplete: () => setState(
-                () => controller.setActiveController(controller.controllerMidDigit)),
+        onComplete: () => setState(() => controller.setActiveController(controller.controllerMidDigit)),
         onChangeFrontDigitMode: (defaultThree) {
           setState(() {
             controller.setFrontDigitMode(defaultThree);
@@ -126,8 +110,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       return KorKeypad(
         key: const ValueKey('midKeypad'),
         controller: controller.controllerMidDigit,
-        onComplete: () => setState(
-                () => controller.setActiveController(controller.controllerBackDigit)),
+        onComplete: () => setState(() => controller.setActiveController(controller.controllerBackDigit)),
       );
     }
 
@@ -165,8 +148,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
           alignment: Alignment.centerRight,
           child: Text(
             controller.isThreeDigit ? '현재 앞자리: 세자리' : '현재 앞자리: 두자리',
-            style: const TextStyle(
-                fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black),
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black),
           ),
         ),
       ),
@@ -196,8 +178,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
               isThreeDigit: controller.isThreeDigit,
             ),
             const SizedBox(height: 32),
-            InputLocationSection(
-                locationController: controller.locationController),
+            InputLocationSection(locationController: controller.locationController),
             const SizedBox(height: 32),
             InputPhotoSection(
               capturedImages: controller.capturedImages,
@@ -206,11 +187,9 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
             const SizedBox(height: 32),
             InputBillSection(
               selectedBill: controller.selectedBill,
-              onChanged: (value) =>
-                  setState(() => controller.selectedBill = value),
+              onChanged: (value) => setState(() => controller.selectedBill = value),
               selectedBillType: selectedBillType,
-              onTypeChanged: (newType) =>
-                  setState(() => selectedBillType = newType),
+              onTypeChanged: (newType) => setState(() => selectedBillType = newType),
               countTypeController: controller.countTypeController,
             ),
             const SizedBox(height: 32),

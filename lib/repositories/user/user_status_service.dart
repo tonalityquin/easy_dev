@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../screens/type_package/debugs/firestore_logger.dart';
 
 class UserStatusService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -22,18 +21,14 @@ class UserStatusService {
       }) async {
     try {
       await col.doc(docId).update(updates);
-      await FirestoreLogger().log('$opName success: $docId (update)');
     } on FirebaseException catch (e) {
       // 문서가 없으면 set(merge)로 업서트 처리
       if (e.code == 'not-found') {
         await col.doc(docId).set(updates, SetOptions(merge: true));
-        await FirestoreLogger().log('$opName success: $docId (set/merge)');
       } else {
-        await FirestoreLogger().log('$opName error($docId): ${e.code} - ${e.message}');
         rethrow;
       }
     } catch (e) {
-      await FirestoreLogger().log('$opName error($docId): $e');
       rethrow;
     }
   }
@@ -54,7 +49,6 @@ class UserStatusService {
     if (isWorking != null) updates['isWorking'] = isWorking;
     if (isSaved != null) updates['isSaved'] = isSaved;
 
-    await FirestoreLogger().log('updateLogOutUserStatus called: $userId → $updates');
     await _safeUpdate(
       _getUserCollectionRef(),
       userId,
@@ -75,7 +69,6 @@ class UserStatusService {
     if (isWorking != null) updates['isWorking'] = isWorking;
     if (isSaved != null) updates['isSaved'] = isSaved;
 
-    await FirestoreLogger().log('updateWorkingUserStatus called: $userId → $updates');
     await _safeUpdate(
       _getUserCollectionRef(),
       userId,
@@ -91,7 +84,6 @@ class UserStatusService {
       String currentArea,
       ) async {
     final userId = '$phone-$area';
-    await FirestoreLogger().log('updateLoadCurrentArea called: $userId → $currentArea');
 
     await _safeUpdate(
       _getUserCollectionRef(),
@@ -108,7 +100,6 @@ class UserStatusService {
       String currentArea,
       ) async {
     final userId = '$phone-$area';
-    await FirestoreLogger().log('areaPickerCurrentArea called: $userId → $currentArea');
 
     await _safeUpdate(
       _getUserCollectionRef(),
@@ -136,7 +127,6 @@ class UserStatusService {
     if (isWorking != null) updates['isWorking'] = isWorking;
     if (isSaved != null) updates['isSaved'] = isSaved;
 
-    await FirestoreLogger().log('updateLogOutTabletStatus called: $tabletId → $updates');
     await _safeUpdate(
       _getTabletCollectionRef(),
       tabletId,
@@ -157,7 +147,6 @@ class UserStatusService {
     if (isWorking != null) updates['isWorking'] = isWorking;
     if (isSaved != null) updates['isSaved'] = isSaved;
 
-    await FirestoreLogger().log('updateWorkingTabletStatus called: $tabletId → $updates');
     await _safeUpdate(
       _getTabletCollectionRef(),
       tabletId,
@@ -173,7 +162,6 @@ class UserStatusService {
       String currentArea,
       ) async {
     final tabletId = '$handle-$area';
-    await FirestoreLogger().log('updateLoadCurrentAreaTablet called: $tabletId → $currentArea');
 
     await _safeUpdate(
       _getTabletCollectionRef(),
@@ -190,7 +178,6 @@ class UserStatusService {
       String currentArea,
       ) async {
     final tabletId = '$handle-$area';
-    await FirestoreLogger().log('areaPickerCurrentAreaTablet called: $tabletId → $currentArea');
 
     await _safeUpdate(
       _getTabletCollectionRef(),

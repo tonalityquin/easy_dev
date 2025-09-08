@@ -491,7 +491,7 @@ class _GithubMarkdownBottomSheetState extends State<GithubMarkdownBottomSheet> {
                               ],
                             );
 
-                            IconButton _btn({
+                            IconButton btn({
                               required VoidCallback onPressed,
                               required IconData icon,
                               String? tooltip,
@@ -514,12 +514,12 @@ class _GithubMarkdownBottomSheetState extends State<GithubMarkdownBottomSheet> {
                                   value: _preview,
                                   onChanged: (v) => setState(() => _preview = v),
                                 ),
-                                _btn(
+                                btn(
                                   tooltip: '브라우저로 보기',
                                   onPressed: _openOnGithub,
                                   icon: Icons.open_in_new_rounded,
                                 ),
-                                _btn(
+                                btn(
                                   tooltip: '토큰 설정',
                                   onPressed: () async {
                                     await _setTokenDialog();
@@ -528,7 +528,7 @@ class _GithubMarkdownBottomSheetState extends State<GithubMarkdownBottomSheet> {
                                   },
                                   icon: Icons.vpn_key_rounded,
                                 ),
-                                _btn(
+                                btn(
                                   tooltip: '닫기',
                                   onPressed: () => Navigator.pop(context),
                                   icon: Icons.close_rounded,

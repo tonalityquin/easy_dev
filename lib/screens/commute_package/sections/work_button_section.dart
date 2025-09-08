@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import '../../../states/user/user_state.dart';
 import '../../../utils/blocking_dialog.dart';
 import '../commute_controller.dart';
-import '../debugs/clock_in_debug_firestore_logger.dart';
 
 class WorkButtonSection extends StatelessWidget {
   final CommuteController controller;
@@ -17,7 +16,6 @@ class WorkButtonSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final logger = ClockInDebugFirestoreLogger();
     final userState = context.watch<UserState>();
     final isWorking = userState.isWorking;
 
@@ -27,7 +25,11 @@ class WorkButtonSection extends StatelessWidget {
       icon: const Icon(Icons.access_time),
       label: Text(
         label,
-        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.1),
+        style: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 1.1,
+        ),
       ),
       style: ElevatedButton.styleFrom(
         backgroundColor: Colors.white,
@@ -38,26 +40,25 @@ class WorkButtonSection extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
       onPressed: isWorking
-          ? () => logger.log('🚫 출근 버튼 클릭 무시: 이미 출근 상태', level: 'warn')
+          ? null // 이미 출근 상태일 경우 버튼 비활성화
           : () async {
-              logger.log('🧲 [UI] 출근 버튼 클릭됨', level: 'called');
-              onLoadingChanged(true);
-              try {
-                await runWithBlockingDialog(
-                  context: context,
-                  message: '출근 처리 중입니다...',
-                  task: () async {
-                    await controller.handleWorkStatus(
-                      context,
-                      context.read<UserState>(),
-                      () => onLoadingChanged(false), // (기존 시그니처 유지 시)
-                    );
-                  },
-                );
-              } finally {
-                onLoadingChanged(false);
-              }
+        onLoadingChanged(true);
+        try {
+          await runWithBlockingDialog(
+            context: context,
+            message: '출근 처리 중입니다...',
+            task: () async {
+              await controller.handleWorkStatus(
+                context,
+                context.read<UserState>(),
+                    () => onLoadingChanged(false),
+              );
             },
+          );
+        } finally {
+          onLoadingChanged(false);
+        }
+      },
     );
   }
 }

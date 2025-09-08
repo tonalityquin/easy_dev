@@ -168,7 +168,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
       }
 
       // 3) (옵션) location 이름이 '부모 - 자식'일 수 있으므로 raw→child 순으로 조회
-      Future<QuerySnapshot<Map<String, dynamic>>> _fetchAt(String loc) {
+      Future<QuerySnapshot<Map<String, dynamic>>> fetchAt(String loc) {
         return coll
             .where('type', isEqualTo: PlateType.parkingCompleted.firestoreValue)
             .where('area', isEqualTo: area)
@@ -179,9 +179,9 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
       }
 
       // raw 먼저, 없으면 child로 폴백
-      QuerySnapshot<Map<String, dynamic>> qs = await _fetchAt(raw);
+      QuerySnapshot<Map<String, dynamic>> qs = await fetchAt(raw);
       if (qs.docs.isEmpty && child != null && child.isNotEmpty) {
-        qs = await _fetchAt(child);
+        qs = await fetchAt(child);
       }
 
       // 4) 번호판만 뽑기 (스키마에 맞춰 plate_number 우선)

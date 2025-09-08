@@ -150,13 +150,16 @@ class _AreaManagementState extends State<AreaManagement> with SingleTickerProvid
       if (!mounted) return;
       showFailedSnackbar(context, '❌ 삭제 실패: $e');
     } finally {
-      if (!mounted) return;
-      setState(() {
-        _isDeletingDivision = false;
-        _deletingDivisionName = null;
-      });
+      // ⛔️ return 금지: mounted만 체크하고 상태만 정리
+      if (mounted) {
+        setState(() {
+          _isDeletingDivision = false;
+          _deletingDivisionName = null;
+        });
+      }
     }
   }
+
 
   @override
   Widget build(BuildContext context) {

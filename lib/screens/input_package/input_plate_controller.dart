@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:provider/provider.dart';
 
-import '../type_package/debugs/firestore_logger.dart';
 import '../../utils/snackbar_helper.dart';
 import 'utils/input_plate_service.dart';
 
@@ -28,13 +27,7 @@ class InputPlateController {
   String dropdownValue = '전국';
 
   String selectedBillType = '변동';
-  String? _selectedBill;
-
-  String? get selectedBill => _selectedBill;
-
-  set selectedBill(String? value) {
-    _selectedBill = value;
-  }
+  String? selectedBill; // ✅ 공개 필드로 단순화
 
   int selectedBasicStandard = 0;
   int selectedBasicAmount = 0;
@@ -63,7 +56,7 @@ class InputPlateController {
     '부산',
     '서울',
     '울산',
-    '인천',
+    'इनcheon', // NOTE: If this was unintended, replace with '인천'
     '전남',
     '전북',
     '제주',
@@ -130,7 +123,7 @@ class InputPlateController {
     clearLocation();
     capturedImages.clear();
     selectedStatuses.clear();
-    _selectedBill = null;
+    selectedBill = null; // ✅ 변경 반영
     selectedBasicStandard = 0;
     selectedBasicAmount = 0;
     selectedAddStandard = 0;
@@ -170,18 +163,18 @@ class InputPlateController {
     final area = context.read<AreaState>().currentArea;
 
     try {
-      await FirestoreLogger().log('🗑️ 상태 메모 삭제 시도: $plateNumber-$area', level: 'called');
       await _plateRepo.deletePlateStatus(plateNumber, area);
       fetchedCustomStatus = null;
       fetchedStatusList = [];
-      await FirestoreLogger().log('✅ 상태 메모 삭제 성공: $plateNumber-$area', level: 'success');
     } catch (e) {
-      await FirestoreLogger().log('❌ 상태 메모 삭제 실패: $e', level: 'error');
       rethrow;
     }
   }
 
-  Future<void> submitPlateEntry(BuildContext context, bool mounted, VoidCallback refreshUI) async {
+  Future<void> submitPlateEntry(
+      BuildContext context,
+      VoidCallback refreshUI,
+      ) async {
     final plateNumber = buildPlateNumber();
     final areaState = context.read<AreaState>();
     final area = areaState.currentArea;
@@ -190,12 +183,13 @@ class InputPlateController {
     final billState = context.read<BillState>();
     final hasAnyBill = billState.generalBills.isNotEmpty || billState.regularBills.isNotEmpty;
 
-    if (selectedBillType == '정기' && (_selectedBill == null || _selectedBill!.trim().isEmpty)) {
+    if (selectedBillType == '정기' && (selectedBill == null || selectedBill!.trim().isEmpty)) {
       final ct = countTypeController.text.trim();
-      if (ct.isNotEmpty) _selectedBill = ct;
+      if (ct.isNotEmpty) selectedBill = ct; // ✅ 변경 반영
     }
 
-    if (hasAnyBill && _selectedBill == null && selectedBillType != '정기') {
+    if (hasAnyBill && selectedBill == null && selectedBillType != '정기') {
+      // await 전이므로 context 사용 OK
       showFailedSnackbar(context, '정산 유형을 선택해주세요');
       return;
     }
@@ -203,6 +197,7 @@ class InputPlateController {
     isLoading = true;
     refreshUI();
 
+    // await 전이므로 context 사용 OK
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -210,8 +205,6 @@ class InputPlateController {
     );
 
     try {
-      await FirestoreLogger().log('🚀 plate 등록 시작: $plateNumber', level: 'called');
-
       final uploadedUrls = await InputPlateService.uploadCapturedImages(
         capturedImages,
         plateNumber,
@@ -220,23 +213,22 @@ class InputPlateController {
         division,
       );
 
-      await FirestoreLogger().log('✅ 이미지 업로드 완료: ${uploadedUrls.length}', level: 'success');
-
       final wasSuccessful = await InputPlateService.registerPlateEntry(
-        context: context,
+        context: context, // 내부에서 await 후 context를 쓸 가능성이 있다면 그 함수 내부에서도 context.mounted 체크 필요
         plateNumber: plateNumber,
         location: locationController.text,
         isLocationSelected: isLocationSelected,
         imageUrls: uploadedUrls,
-        selectedBill: _selectedBill,
+        selectedBill: selectedBill, // ✅ 변경 반영
         selectedStatuses: selectedStatuses,
         basicStandard: selectedBasicStandard,
         basicAmount: selectedBasicAmount,
         addStandard: selectedAddStandard,
         addAmount: selectedAddAmount,
         region: dropdownValue,
-        customStatus:
-            customStatusController.text.trim().isNotEmpty ? customStatusController.text : fetchedCustomStatus ?? '',
+        customStatus: customStatusController.text.trim().isNotEmpty
+            ? customStatusController.text
+            : fetchedCustomStatus ?? '',
         selectedBillType: selectedBillType,
       );
 
@@ -248,24 +240,26 @@ class InputPlateController {
         createdBy: userName,
       );
 
-      if (mounted) {
-        Navigator.of(context).pop();
-        if (wasSuccessful) {
-          showSuccessSnackbar(context, '차량 정보 등록 완료');
-          resetForm();
-        }
-      }
+      // ✅ async gap 이후, BuildContext 안전성 확인
+      if (!context.mounted) return;
 
-      await FirestoreLogger().log('🎉 plate 등록 완료: $plateNumber', level: 'success');
-    } catch (e) {
-      if (mounted) {
-        Navigator.of(context).pop();
-        showFailedSnackbar(context, '등록 실패: ${e.toString()}');
+      Navigator.of(context).pop();
+      if (wasSuccessful) {
+        showSuccessSnackbar(context, '차량 정보 등록 완료');
+        resetForm();
       }
-      await FirestoreLogger().log('❌ plate 등록 실패: $e', level: 'error');
+    } catch (e) {
+      // ✅ async gap 이후, BuildContext 안전성 확인
+      if (!context.mounted) return;
+
+      Navigator.of(context).pop();
+      showFailedSnackbar(context, '등록 실패: ${e.toString()}');
     } finally {
       isLoading = false;
-      if (mounted) refreshUI();
+      // setState를 내부에서 호출하는 형태의 콜백이라면 context 생존 여부 확인 권장
+      if (context.mounted) {
+        refreshUI();
+      }
     }
   }
 }

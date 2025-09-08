@@ -14,7 +14,7 @@ class UserInfoCardSection extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(12),
       onTap: () {
-        print('📄 사용자 상세 정보 보기');
+        debugPrint('📄 사용자 상세 정보 보기');
       },
       child: Card(
         elevation: 2,
@@ -99,7 +99,7 @@ class UserInfoCardSection extends StatelessWidget {
           Icon(icon, size: 18, color: Colors.grey[700]),
           const SizedBox(width: 8),
           Text(
-            '$label',
+            label, // ✅ 불필요한 보간 제거
             style: const TextStyle(
               fontSize: 13,
               color: Colors.grey,

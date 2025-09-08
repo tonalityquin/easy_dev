@@ -131,7 +131,7 @@ class ModifyBillSection extends StatelessWidget {
                                   onChanged(bill);
                                 },
                               );
-                            }).toList(),
+                            }),
                           ],
                         ),
                       );

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'game_package/pelican_sorter_game.dart';
 import 'game_package/tetris.dart';
 import 'game_package/minesweeper.dart';
 import 'game_package/lights_out.dart';
@@ -116,6 +117,11 @@ class GameArcadeBottomSheet extends StatelessWidget {
                                 MaterialPageRoute(builder: (_) => const Netwalk()),
                               );
                               break;
+                            case _GameRoute.pelicanSorter: // ⬅ 추가: 펠리컨 소터
+                              Navigator.of(rootContext).push(
+                                MaterialPageRoute(builder: (_) => const PelicanSorterPage()),
+                              );
+                              break;
                             case _GameRoute.comingSoon:
                               ScaffoldMessenger.of(rootContext).showSnackBar(
                                 SnackBar(content: Text('「${g.title}」는 준비 중입니다.')),
@@ -137,10 +143,10 @@ class GameArcadeBottomSheet extends StatelessWidget {
 }
 
 // ──────────────────────────────────────────────────────────────
-// 게임 목록 정의 (테트리스 + 지뢰찾기 + 라이트아웃 + Netwalk)
+// 게임 목록 정의 (테트리스 + 지뢰찾기 + 라이트아웃 + Netwalk + 펠리컨 소터)
 // ──────────────────────────────────────────────────────────────
 
-enum _GameRoute { tetris, minesweeper, lightsOut, netwalk, comingSoon }
+enum _GameRoute { tetris, minesweeper, lightsOut, netwalk, pelicanSorter, comingSoon }
 
 class _GameItem {
   final String title;
@@ -164,7 +170,8 @@ const _games = <_GameItem>[
   _GameItem(
     title: '테트리스',
     subtitle: '클래식 드롭 퍼즐',
-    icon: Icons.extension, // 블록 느낌
+    icon: Icons.extension,
+    // 블록 느낌
     bg: Color(0xFFE0F7FA),
     fg: Color(0xFF006064),
     route: _GameRoute.tetris,
@@ -192,5 +199,14 @@ const _games = <_GameItem>[
     bg: Color(0xFFE8F5E9),
     fg: Color(0xFF1B5E20),
     route: _GameRoute.netwalk,
+  ),
+  // ⬇ 추가된 펠리컨 소터
+  _GameItem(
+    title: '펠리컨 소터',
+    subtitle: '논리 카드 추론',
+    icon: Icons.deck_rounded,
+    bg: Color(0xFFE3F2FD),
+    fg: Color(0xFF0D47A1),
+    route: _GameRoute.pelicanSorter,
   ),
 ];

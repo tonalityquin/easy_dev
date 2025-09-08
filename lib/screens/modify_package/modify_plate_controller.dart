@@ -12,7 +12,6 @@ import '../../states/plate/plate_state.dart';
 import '../../states/bill/bill_state.dart';
 import '../../states/area/area_state.dart';
 
-import '../type_package/debugs/firestore_logger.dart';
 import '../../utils/snackbar_helper.dart';
 import 'utils/modify_plate_service.dart';
 
@@ -252,10 +251,8 @@ class ModifyPlateController {
     final newBillingType = selectedBill;
     final updatedCustomStatus = customStatusController.text.trim();
 
-    await FirestoreLogger().log('🛠️ Modify 시작: $plateNumber', level: 'called');
 
     final mergedImageUrls = await service.uploadAndMergeImages(plateNumber);
-    await FirestoreLogger().log('✅ 이미지 병합 완료 (${mergedImageUrls.length})', level: 'success');
 
     final success = await service.updatePlateInfo(
       plateNumber: plateNumber,
@@ -267,7 +264,6 @@ class ModifyPlateController {
     if (success) {
       final area = context.read<AreaState>().currentArea;
 
-      await FirestoreLogger().log('📤 상태 정보 Firestore 업데이트 시도 ($plateNumber-$area)', level: 'called');
 
       await _plateRepo.setPlateStatus(
         plateNumber: plateNumber,
@@ -277,14 +273,11 @@ class ModifyPlateController {
         createdBy: 'devAdmin020',
       );
 
-      await FirestoreLogger().log('✅ 상태 정보 업데이트 완료', level: 'success');
 
       await FirebaseFirestore.instance.collection('plates').doc(plate.id).update({
         'customStatus': updatedCustomStatus,
         'statusList': selectedStatuses,
       });
-
-      await FirestoreLogger().log('✅ plates 문서 업데이트 완료', level: 'success');
 
       final updatedPlate = plate.copyWith(
         billingType: newBillingType,
@@ -309,17 +302,14 @@ class ModifyPlateController {
         plateNumber: plateNumber,
         userName: plate.userName,
         onError: (error) async {
-          await FirestoreLogger().log('⚠️ togglePlateIsSelected 에러: $error', level: 'error');
         },
       );
 
       await plateState.updatePlateLocally(collectionKey, updatedPlate);
 
-      await FirestoreLogger().log('🎉 Plate 수정 완료', level: 'success');
 
       onSuccess();
     } else {
-      await FirestoreLogger().log('❌ Plate 수정 실패', level: 'error');
     }
   }
 

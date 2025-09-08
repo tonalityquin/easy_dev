@@ -110,7 +110,7 @@ Future<bool?> showEditTaskBottomSheet({
                           onPressed: () async {
                             String finalDesc = descriptionController.text.trim();
                             if (done) {
-                              finalDesc = (finalDesc.isEmpty ? '' : '$finalDesc\n') + '✔️DONE';
+                              finalDesc = '${finalDesc.isEmpty ? '' : '$finalDesc\n'}✔️DONE';
                             }
 
                             final updatedEvent = calendar.Event()
@@ -138,7 +138,7 @@ Future<bool?> showEditTaskBottomSheet({
                               await reloadEvents();
                               Navigator.pop(context, true);
                             } catch (e) {
-                              print('이벤트 수정 실패: $e');
+                              debugPrint('이벤트 수정 실패: $e');
                             }
                           },
                           child: const Text('저장'),
@@ -169,7 +169,7 @@ Future<bool> _deleteEvent(
     await calendarApi.events.delete(calendarId, eventId);
     return true;
   } catch (e) {
-    print('이벤트 삭제 실패: $e');
+    debugPrint('이벤트 삭제 실패: $e');
     return false;
   }
 }

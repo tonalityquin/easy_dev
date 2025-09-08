@@ -51,8 +51,7 @@ class _AddAreaTabState extends State<AddAreaTab> {
   }
 
   // 입력 정규화: 선후 공백 제거, '/' → '-', 다중 공백 1개로
-  String _norm(String s) =>
-      s.trim().replaceAll('/', '-').replaceAll(RegExp(r'\s+'), ' ');
+  String _norm(String s) => s.trim().replaceAll('/', '-').replaceAll(RegExp(r'\s+'), ' ');
 
   Future<void> _addArea() async {
     if (_adding) return;
@@ -74,6 +73,7 @@ class _AddAreaTabState extends State<AddAreaTab> {
     final areaId = '$division-$areaName';
 
     setState(() => _adding = true);
+
     try {
       final fs = FirebaseFirestore.instance;
       final ref = fs.collection('areas').doc(areaId);
@@ -107,8 +107,10 @@ class _AddAreaTabState extends State<AddAreaTab> {
       if (!mounted) return;
       showFailedSnackbar(context, '❌ 지역 추가 실패: $e');
     } finally {
-      if (!mounted) return;
-      setState(() => _adding = false);
+      // ⛔️ return 금지: mounted만 체크하고 상태만 정리
+      if (mounted) {
+        setState(() => _adding = false);
+      }
     }
   }
 
@@ -119,10 +121,7 @@ class _AddAreaTabState extends State<AddAreaTab> {
         .collection('areas')
         .where('division', isEqualTo: division)
         .get(const GetOptions(source: Source.serverAndCache));
-    final list = snapshot.docs
-        .map((e) => (e['name'] as String?)?.trim())
-        .whereType<String>()
-        .toList()
+    final list = snapshot.docs.map((e) => (e['name'] as String?)?.trim()).whereType<String>().toList()
       ..sort((a, b) => a.compareTo(b)); // 정렬 일관성
     return list;
   }
@@ -150,7 +149,11 @@ class _AddAreaTabState extends State<AddAreaTab> {
 
     if (confirm != true) return;
 
+    // 🔒 async gap(showDialog) 이후 컨텍스트 사용 전 확인
+    if (!mounted) return;
+
     setState(() => _deletingAreaName = areaName);
+
     try {
       final areaId = '$division-$areaName';
       await FirebaseFirestore.instance.collection('areas').doc(areaId).delete();
@@ -165,8 +168,10 @@ class _AddAreaTabState extends State<AddAreaTab> {
       if (!mounted) return;
       showFailedSnackbar(context, '❌ 삭제 실패: $e');
     } finally {
-      if (!mounted) return;
-      setState(() => _deletingAreaName = null);
+      // ⛔️ return 금지: mounted만 확인하고 상태만 정리
+      if (mounted) {
+        setState(() => _deletingAreaName = null);
+      }
     }
   }
 
@@ -180,18 +185,16 @@ class _AddAreaTabState extends State<AddAreaTab> {
         children: [
           DropdownButtonFormField<String>(
             value: widget.selectedDivision,
-            items: widget.divisionList
-                .map((div) => DropdownMenuItem(value: div, child: Text(div)))
-                .toList(),
+            items: widget.divisionList.map((div) => DropdownMenuItem(value: div, child: Text(div))).toList(),
             onChanged: busy
                 ? null
                 : (val) {
-              // 부모 콜백 호출 + 로컬 Future 캐시 갱신
-              widget.onDivisionChanged(val);
-              setState(() {
-                _areasFuture = _loadAreas();
-              });
-            },
+                    // 부모 콜백 호출 + 로컬 Future 캐시 갱신
+                    widget.onDivisionChanged(val);
+                    setState(() {
+                      _areasFuture = _loadAreas();
+                    });
+                  },
             decoration: const InputDecoration(labelText: '회사 선택'),
           ),
           const SizedBox(height: 12),
@@ -225,41 +228,41 @@ class _AddAreaTabState extends State<AddAreaTab> {
             child: widget.selectedDivision == null
                 ? const Center(child: Text('📌 회사를 먼저 선택하세요.'))
                 : FutureBuilder<List<String>>(
-              future: _areasFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+                    future: _areasFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
 
-                final areas = snapshot.data ?? const <String>[];
-                if (areas.isEmpty) {
-                  return const Center(child: Text('등록된 지역이 없습니다.'));
-                }
+                      final areas = snapshot.data ?? const <String>[];
+                      if (areas.isEmpty) {
+                        return const Center(child: Text('등록된 지역이 없습니다.'));
+                      }
 
-                return ListView.builder(
-                  itemCount: areas.length,
-                  itemBuilder: (context, index) {
-                    final areaName = areas[index];
-                    final deleting = _deletingAreaName == areaName;
-                    return ListTile(
-                      key: ValueKey(areaName), // 리빌드 안정성
-                      title: Text(areaName),
-                      trailing: deleting
-                          ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                          : IconButton(
-                        tooltip: '지역 삭제',
-                        icon: const Icon(Icons.delete_outline),
-                        onPressed: busy ? null : () => _deleteArea(areaName),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
+                      return ListView.builder(
+                        itemCount: areas.length,
+                        itemBuilder: (context, index) {
+                          final areaName = areas[index];
+                          final deleting = _deletingAreaName == areaName;
+                          return ListTile(
+                            key: ValueKey(areaName), // 리빌드 안정성
+                            title: Text(areaName),
+                            trailing: deleting
+                                ? const SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : IconButton(
+                                    tooltip: '지역 삭제',
+                                    icon: const Icon(Icons.delete_outline),
+                                    onPressed: busy ? null : () => _deleteArea(areaName),
+                                  ),
+                          );
+                        },
+                      );
+                    },
+                  ),
           ),
         ],
       ),

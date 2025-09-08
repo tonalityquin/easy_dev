@@ -6,13 +6,10 @@ import 'package:permission_handler/permission_handler.dart';
 
 import 'routes.dart';
 import 'providers/providers.dart';
-import 'screens/commute_package/debugs/clock_in_debug_firestore_logger.dart';
 import 'screens/login_package/service/debugs/service_login_debug_firestore_logger.dart';
-import 'screens/stub_package/debug_firestore_logger.dart';
 import 'theme.dart';
 import 'utils/init/dev_initializer.dart';
 import 'utils/foreground_task_handler.dart';
-import 'screens/type_package/debugs/firestore_logger.dart';
 
 @pragma('vm:entry-point')
 void myForegroundCallback() {
@@ -71,12 +68,9 @@ class AppBootstrapper extends StatelessWidget {
   Future<void> _initializeApp() async {
     await Firebase.initializeApp();
 
-    await FirestoreLogger().init();
 
     await LoginDebugFirestoreLogger().init();
 
-    await ClockInDebugFirestoreLogger().init();
-    await DebugFirestoreLogger().init();
     await registerDevResources();
 
     var status = await Permission.locationWhenInUse.status;

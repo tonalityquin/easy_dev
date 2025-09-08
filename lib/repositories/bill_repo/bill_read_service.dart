@@ -1,50 +1,52 @@
+import 'package:flutter/foundation.dart'; // debugPrint, kDebugMode
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/bill_model.dart';
 import '../../models/regular_bill_model.dart';
-import '../../screens/type_package/debugs/firestore_logger.dart';
 
 class BillReadService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  Future<
-      ({
-        List<BillModel> generalBills,
-        List<RegularBillModel> regularBills,
-      })> getBillOnce(String area) async {
-    await FirestoreLogger().log('getBillOnce called (area=$area)');
-    try {
-      final snapshot = await _firestore.collection('bill').where('area', isEqualTo: area).get();
+  Future<({
+  List<BillModel> generalBills,
+  List<RegularBillModel> regularBills,
+  })> getBillOnce(String area) async {
+    final snapshot =
+    await _firestore.collection('bill').where('area', isEqualTo: area).get();
 
-      List<BillModel> generalBills = [];
-      List<RegularBillModel> regularBills = [];
+    final List<BillModel> generalBills = [];
+    final List<RegularBillModel> regularBills = [];
 
-      for (var doc in snapshot.docs) {
-        final data = doc.data();
-        final type = data['type'] ?? '변동';
-
-        if (type == '고정') {
-          try {
-            regularBills.add(RegularBillModel.fromMap(doc.id, data));
-          } catch (e) {
-            await FirestoreLogger().log('⚠️ RegularBillModel 변환 실패: $e');
-          }
-        } else {
-          try {
-            generalBills.add(BillModel.fromMap(doc.id, data));
-          } catch (e) {
-            await FirestoreLogger().log('⚠️ BillModel 변환 실패: $e');
-          }
+    // 안전 파서: 실패 시 null 반환 + 디버그 로그
+    T? tryParse<T>(T Function() parse, {required String id}) {
+      try {
+        return parse();
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('⚠️ Bill parse 실패(id=$id): $e');
         }
+        return null;
       }
-
-      await FirestoreLogger().log(
-        'getBillOnce success: ${generalBills.length} 변동, ${regularBills.length} 고정 로드됨',
-      );
-
-      return (generalBills: generalBills, regularBills: regularBills);
-    } catch (e) {
-      await FirestoreLogger().log('getBillOnce error: $e');
-      rethrow;
     }
+
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+      final type = (data['type'] as String?) ?? '변동';
+
+      if (type == '고정') {
+        final item = tryParse<RegularBillModel>(
+              () => RegularBillModel.fromMap(doc.id, data),
+          id: doc.id,
+        );
+        if (item != null) regularBills.add(item);
+      } else {
+        final item = tryParse<BillModel>(
+              () => BillModel.fromMap(doc.id, data),
+          id: doc.id,
+        );
+        if (item != null) generalBills.add(item);
+      }
+    }
+
+    return (generalBills: generalBills, regularBills: regularBills);
   }
 }

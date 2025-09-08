@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:provider/provider.dart';
 
-import '../../../type_package/debugs/firestore_logger.dart';
 import '../../../../utils/snackbar_helper.dart';
 
 import '../../../../repositories/plate/firestore_plate_repository.dart';
@@ -22,9 +21,9 @@ class MonthlyPlateController {
   final TextEditingController customStatusController = TextEditingController();
 
   // 요금/기간 관련(필요 시 주입)
-  final TextEditingController? nameController;      // countType
-  final TextEditingController? amountController;    // regularAmount
-  final TextEditingController? durationController;  // duration(숫자)
+  final TextEditingController? nameController; // countType
+  final TextEditingController? amountController; // regularAmount
+  final TextEditingController? durationController; // duration(숫자)
   final TextEditingController? startDateController;
   final TextEditingController? endDateController;
 
@@ -121,8 +120,7 @@ class MonthlyPlateController {
   // ─────────────────────────────────────────────────────────────────────────────
 
   /// 상태 or 메모가 하나 이상 입력되어 있는지
-  bool get hasStatusOrMemo =>
-      customStatusController.text.trim().isNotEmpty || selectedStatuses.isNotEmpty;
+  bool get hasStatusOrMemo => customStatusController.text.trim().isNotEmpty || selectedStatuses.isNotEmpty;
 
   /// 제출 전 간단 가드(번호판/기간/상태·메모)
   bool _validateBeforeWrite(BuildContext context) {
@@ -150,11 +148,8 @@ class MonthlyPlateController {
 
   /// 앞자리(2/3자리), 중간(한글 1자), 뒷자리(4자리) 유효성
   bool isInputValid() {
-    final validFront =
-    isThreeDigit ? controllerFrontDigit.text.length == 3 : controllerFrontDigit.text.length == 2;
-    return validFront &&
-        controllerMidDigit.text.length == 1 &&
-        controllerBackDigit.text.length == 4;
+    final validFront = isThreeDigit ? controllerFrontDigit.text.length == 3 : controllerFrontDigit.text.length == 2;
+    return validFront && controllerMidDigit.text.length == 1 && controllerBackDigit.text.length == 4;
   }
 
   /// "plateNumber_area" 형태의 문서 ID에서 plateNumber만 추출
@@ -336,16 +331,13 @@ class MonthlyPlateController {
 
     try {
       final docId = '${plateNumber}_$area';
-      await FirebaseFirestore.instance
-          .collection('plate_status')
-          .doc(docId)
-          .set(
-        {'payment_history': FieldValue.arrayUnion([historyEntry])},
+      await FirebaseFirestore.instance.collection('plate_status').doc(docId).set(
+        {
+          'payment_history': FieldValue.arrayUnion([historyEntry])
+        },
         SetOptions(merge: true),
       );
-      await FirestoreLogger().log('✅ 결제 로그 저장 완료: $docId');
     } catch (e) {
-      await FirestoreLogger().log('❌ 결제 로그 저장 실패: $e');
       rethrow;
     }
   }
@@ -355,22 +347,19 @@ class MonthlyPlateController {
     final area = context.read<AreaState>().currentArea;
 
     try {
-      await FirestoreLogger().log('🗑️ 상태 메모 삭제 시도: $plateNumber-$area');
       await _plateRepo.deletePlateStatus(plateNumber, area);
       fetchedCustomStatus = null;
       fetchedStatusList = [];
-      await FirestoreLogger().log('✅ 상태 메모 삭제 성공: $plateNumber-$area');
     } catch (e) {
-      await FirestoreLogger().log('❌ 상태 메모 삭제 실패: $e');
       rethrow;
     }
   }
 
   /// 기존 문서 데이터 로딩(편집 진입 시)
   Future<void> loadExistingData(
-      Map<String, dynamic> data, {
-        required String docId,
-      }) async {
+    Map<String, dynamic> data, {
+    required String docId,
+  }) async {
     isEditMode = true;
     docIdToEdit = docId;
 
@@ -401,11 +390,13 @@ class MonthlyPlateController {
   // 등록/수정 (UI와의 호환 유지)
   // ─────────────────────────────────────────────────────────────────────────────
   Future<void> updatePlateEntry(
-      BuildContext context,
-      bool mounted,
-      VoidCallback refreshUI,
-      ) async {
+    BuildContext context,
+    VoidCallback refreshUI,
+  ) async {
     if (!_validateBeforeWrite(context)) return;
+
+    // await 전에 필요한 핸들러를 확보해 두면 lint를 더 쉽게 피할 수 있습니다.
+    final nav = Navigator.of(context, rootNavigator: true);
 
     final plateNumber = buildPlateNumber();
     final area = context.read<AreaState>().currentArea;
@@ -414,6 +405,7 @@ class MonthlyPlateController {
     isLoading = true;
     refreshUI();
 
+    // await 전이므로 context 사용 OK
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -421,8 +413,6 @@ class MonthlyPlateController {
     );
 
     try {
-      await FirestoreLogger().log('✏️ plate 수정 시작: $plateNumber');
-
       await _plateRepo.setPlateStatus(
         plateNumber: plateNumber,
         area: area,
@@ -450,33 +440,33 @@ class MonthlyPlateController {
 
       await extendDatesIfNeeded();
 
-      if (mounted) {
-        final nav = Navigator.of(context, rootNavigator: true);
-        if (nav.canPop()) nav.pop();
-        showSuccessSnackbar(context, '수정 완료');
-        resetForm();
-      }
+      // ✅ async gap 이후엔 BuildContext 생존 확인
+      if (!context.mounted) return;
 
-      await FirestoreLogger().log('✅ plate 수정 완료: $plateNumber');
+      if (nav.canPop()) nav.pop();
+      showSuccessSnackbar(context, '수정 완료');
+      resetForm();
     } catch (e) {
-      if (mounted) {
-        final nav = Navigator.of(context, rootNavigator: true);
-        if (nav.canPop()) nav.pop();
-        showFailedSnackbar(context, '수정 실패: ${e.toString()}');
-      }
-      await FirestoreLogger().log('❌ plate 수정 실패: $e');
+      if (!context.mounted) return;
+
+      if (nav.canPop()) nav.pop();
+      showFailedSnackbar(context, '수정 실패: ${e.toString()}');
     } finally {
       isLoading = false;
-      if (mounted) refreshUI();
+      if (context.mounted) {
+        refreshUI();
+      }
     }
   }
 
   Future<void> submitPlateEntry(
-      BuildContext context,
-      bool mounted,
-      VoidCallback refreshUI,
-      ) async {
+    BuildContext context,
+    VoidCallback refreshUI,
+  ) async {
     if (!_validateBeforeWrite(context)) return;
+
+    // await 이전에 핸들러 캐싱
+    final nav = Navigator.of(context, rootNavigator: true);
 
     final plateNumber = buildPlateNumber();
     final area = context.read<AreaState>().currentArea;
@@ -486,6 +476,7 @@ class MonthlyPlateController {
     isLoading = true;
     refreshUI();
 
+    // await 전이므로 context 사용 OK
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -493,8 +484,6 @@ class MonthlyPlateController {
     );
 
     try {
-      await FirestoreLogger().log('🚀 plate 등록 시작: $plateNumber');
-
       await _plateRepo.setPlateStatus(
         plateNumber: plateNumber,
         area: area,
@@ -520,24 +509,22 @@ class MonthlyPlateController {
         isExtended: isExtended,
       );
 
-      if (mounted) {
-        final nav = Navigator.of(context, rootNavigator: true);
-        if (nav.canPop()) nav.pop();
-        showSuccessSnackbar(context, '차량 정보 등록 완료');
-        resetForm();
-      }
+      // ✅ async gap 이후 BuildContext 생존 여부 확인
+      if (!context.mounted) return;
 
-      await FirestoreLogger().log('🎉 plate 등록 완료: $plateNumber');
+      if (nav.canPop()) nav.pop();
+      showSuccessSnackbar(context, '차량 정보 등록 완료');
+      resetForm();
     } catch (e) {
-      if (mounted) {
-        final nav = Navigator.of(context, rootNavigator: true);
-        if (nav.canPop()) nav.pop();
-        showFailedSnackbar(context, '등록 실패: ${e.toString()}');
-      }
-      await FirestoreLogger().log('❌ plate 등록 실패: $e');
+      if (!context.mounted) return;
+
+      if (nav.canPop()) nav.pop();
+      showFailedSnackbar(context, '등록 실패: ${e.toString()}');
     } finally {
       isLoading = false;
-      if (mounted) refreshUI();
+      if (context.mounted) {
+        refreshUI();
+      }
     }
   }
 

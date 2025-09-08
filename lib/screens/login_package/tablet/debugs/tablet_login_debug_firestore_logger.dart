@@ -143,7 +143,7 @@ class TabletLoginDebugFirestoreLogger {
       }).toList();
 
       await _logFile!.writeAsString(
-        retainedLines.join('\n') + '\n',
+        '${retainedLines.join('\n')}\n',
         encoding: utf8,
       );
     } catch (e) {
@@ -175,7 +175,7 @@ class TabletLoginDebugFirestoreLogger {
       final retainedLines = allLines.skip(allLines.length - 5000).toList();
 
       await _logFile!.writeAsString(
-        retainedLines.join('\n') + '\n',
+        '${retainedLines.join('\n')}\n',
         encoding: utf8,
       );
 

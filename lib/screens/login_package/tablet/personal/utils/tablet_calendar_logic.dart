@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:googleapis/calendar/v3.dart' as calendar;
 import 'package:googleapis_auth/auth_io.dart';
@@ -100,7 +101,7 @@ Future<void> addEvent({
     );
     updateEvents(updated);
   } catch (e) {
-    print('이벤트 추가 실패: $e');
+    debugPrint('이벤트 추가 실패: $e');
   }
 }
 

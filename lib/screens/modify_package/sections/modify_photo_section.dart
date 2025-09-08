@@ -162,7 +162,7 @@ class ModifyPhotoSection extends StatelessWidget {
                                           itemBuilder: (context, index) {
                                             final url = urls[index];
                                             final segments = url.split('/').last.split('_');
-                                            final date = segments.length > 0 ? segments[0] : '날짜 없음';
+                                            final date = segments.isNotEmpty ? segments[0] : '날짜 없음';
                                             final number = segments.length > 2 ? segments[2] : '번호판 없음';
                                             final userWithExt = segments.length > 3 ? segments[3] : '미상';
                                             final user = userWithExt.replaceAll('.jpg', '');

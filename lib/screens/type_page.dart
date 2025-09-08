@@ -237,7 +237,6 @@ class _RefreshableBodyState extends State<RefreshableBody> {
   }
 }
 
-/// 하단 네비게이션: (type, area)별 Future<int> 캐싱으로 중복 쿼리 방지
 class PageBottomNavigation extends StatefulWidget {
   const PageBottomNavigation({super.key});
 

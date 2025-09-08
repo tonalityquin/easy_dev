@@ -53,14 +53,14 @@ class _BreakCalendarState extends State<BreakCalendar> {
     final cacheKey = '$userId-${_focusedDay.year}-${_focusedDay.month}';
 
     if (_breakTimeCache.containsKey(cacheKey)) {
-      print('[CACHE HIT] 휴게기록 - key=$cacheKey');
+      debugPrint('[CACHE HIT] 휴게기록 - key=$cacheKey');
       setState(() {
         _breakTimeMap = _breakTimeCache[cacheKey]!;
       });
       return;
     }
 
-    print('[CACHE MISS] 휴게기록 - key=$cacheKey → Google Sheets 요청');
+    debugPrint('[CACHE MISS] 휴게기록 - key=$cacheKey → Google Sheets 요청');
 
     final allRows = await GoogleSheetsHelper.loadBreakRecords(area);
 
@@ -79,14 +79,14 @@ class _BreakCalendarState extends State<BreakCalendar> {
 
   Future<void> _loadUsers(String area) async {
     if (_userCache.containsKey(area)) {
-      print('[CACHE HIT] 사용자 목록 - area=$area');
+      debugPrint('[CACHE HIT] 사용자 목록 - area=$area');
       setState(() {
         _users = _userCache[area]!;
       });
       return;
     }
 
-    print('[CACHE MISS] 사용자 목록 - area=$area → Firestore 요청');
+    debugPrint('[CACHE MISS] 사용자 목록 - area=$area → Firestore 요청');
 
     try {
       final snapshot =

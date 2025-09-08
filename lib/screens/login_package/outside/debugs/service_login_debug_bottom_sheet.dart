@@ -32,13 +32,7 @@ class _LoginDebugBottomSheetState extends State<LoginDebugBottomSheet> {
       if (text.isEmpty) {
         _logLines = ['🚫 저장된 로그가 없습니다.'];
       } else {
-        _logLines = text
-            .trim()
-            .split('\n')
-            .where((line) => line.trim().isNotEmpty)
-            .toList()
-            .reversed
-            .toList();
+        _logLines = text.trim().split('\n').where((line) => line.trim().isNotEmpty).toList().reversed.toList();
       }
       _filteredLines = List.from(_logLines);
     });
@@ -49,9 +43,7 @@ class _LoginDebugBottomSheetState extends State<LoginDebugBottomSheet> {
       if (query.isEmpty) {
         _filteredLines = List.from(_logLines);
       } else {
-        _filteredLines = _logLines
-            .where((line) => line.toLowerCase().contains(query.toLowerCase()))
-            .toList();
+        _filteredLines = _logLines.where((line) => line.toLowerCase().contains(query.toLowerCase())).toList();
       }
     });
   }
@@ -59,19 +51,19 @@ class _LoginDebugBottomSheetState extends State<LoginDebugBottomSheet> {
   Future<void> _clearLog() async {
     await LoginDebugFirestoreLogger().clearLog();
     await _loadLog();
-    if (context.mounted) {
-      // ✅ 교체: 기본 SnackBar → 커스텀 스낵바
-      showSuccessSnackbar(context, '로그가 삭제되었습니다.');
-    }
+
+    // ✅ async gap 이후, State의 mounted로 가드
+    if (!mounted) return;
+
+    // ✅ 안전: 이제 context 사용
+    showSuccessSnackbar(context, '로그가 삭제되었습니다.');
   }
 
   Future<void> _exportLogFile() async {
     final file = LoginDebugFirestoreLogger().getLogFile();
     if (file == null || !await file.exists()) {
-      if (context.mounted) {
-        // ✅ 교체: 실패 알림
-        showFailedSnackbar(context, '내보낼 로그 파일이 없습니다.');
-      }
+      if (!mounted) return; // ✅ State의 mounted로 가드
+      showFailedSnackbar(context, '내보낼 로그 파일이 없습니다.');
       return;
     }
 
@@ -80,17 +72,18 @@ class _LoginDebugBottomSheetState extends State<LoginDebugBottomSheet> {
       text: 'Firestore 로그 파일',
       subject: 'Firestore 로그',
     );
-    // (선택) 공유 시트 안내가 필요하면:
-    // if (context.mounted) showSelectedSnackbar(context, '공유 시트를 열었습니다.');
+
+    // (선택) 공유 시트 안내 필요 시
+    if (!mounted) return;
+    showSelectedSnackbar(context, '공유 시트를 열었습니다.');
   }
 
   Future<void> _copyLogsToClipboard() async {
     final allLogs = _filteredLines.reversed.join('\n');
     await Clipboard.setData(ClipboardData(text: allLogs));
-    if (context.mounted) {
-      // ✅ 교체: 성공 알림
-      showSuccessSnackbar(context, '로그가 클립보드에 복사되었습니다.');
-    }
+
+    if (!mounted) return; // ✅ State의 mounted 사용
+    showSuccessSnackbar(context, '로그가 클립보드에 복사되었습니다.');
   }
 
   @override
@@ -152,9 +145,7 @@ class _LoginDebugBottomSheetState extends State<LoginDebugBottomSheet> {
             ),
             const Divider(height: 1),
             Expanded(
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _buildLogList(),
+              child: _isLoading ? const Center(child: CircularProgressIndicator()) : _buildLogList(),
             ),
           ],
         ),

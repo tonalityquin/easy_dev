@@ -150,7 +150,7 @@ class InputBillSection extends StatelessWidget {
                                     onChanged(countType);
                                   },
                                 );
-                              }).toList(),
+                              }),
                             ],
                           ),
                         );

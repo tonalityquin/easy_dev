@@ -22,7 +22,7 @@ class _TodayLogSectionState extends State<TodayLogSection> {
   // ===== 공통 로직: 로그 정규화 =====
   List<Map<String, dynamic>> _normalizeLogs(List<dynamic> raw) {
     return raw
-        .where((e) => e is Map)
+        .whereType<Map>()
         .map((e) => Map<String, dynamic>.from(e as Map))
         .toList();
   }
