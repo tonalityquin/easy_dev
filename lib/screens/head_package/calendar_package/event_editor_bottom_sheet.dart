@@ -1,25 +1,23 @@
-// lib/screens/head_package/calendar_package/event_editor_bottom_sheet.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 /// 호출 헬퍼
 Future<EditResult?> showEventEditorBottomSheet(
-  BuildContext context, {
-  required String title,
-  required String initialSummary,
-  required DateTime initialStart,
-  required DateTime initialEnd,
-  String initialDescription = '',
-  bool initialAllDay = true, // 항상 종일
-  String? initialColorId,
-  int initialProgress = 0, // ★ 진행도(0 또는 100)
-}) {
+    BuildContext context, {
+      required String title,
+      required String initialSummary,
+      required DateTime initialStart,
+      required DateTime initialEnd,
+      String initialDescription = '',
+      bool initialAllDay = true, // 항상 종일
+      String? initialColorId,
+      int initialProgress = 0, // 0 또는 100
+      bool isEditMode = false, // ★ 편집 모드 추가
+    }) {
   return showModalBottomSheet<EditResult>(
     context: context,
     useSafeArea: true,
-    // ★ 안전영역 사용
     isScrollControlled: true,
-    // ★ 키보드 대응을 위해 전체 화면 높이 사용
     backgroundColor: Colors.transparent,
     builder: (_) => EventEditorBottomSheet(
       title: title,
@@ -29,7 +27,8 @@ Future<EditResult?> showEventEditorBottomSheet(
       initialDescription: initialDescription,
       initialAllDay: initialAllDay,
       initialColorId: initialColorId,
-      initialProgress: initialProgress, // ★ 전달
+      initialProgress: initialProgress,
+      isEditMode: isEditMode, // ★ 전달
     ),
   );
 }
@@ -45,7 +44,8 @@ class EventEditorBottomSheet extends StatefulWidget {
     this.initialDescription = '',
     this.initialAllDay = true, // 항상 종일
     this.initialColorId, // 선택 색상(없으면 null)
-    this.initialProgress = 0, // ★ 0 또는 100
+    this.initialProgress = 0, // 0 또는 100
+    this.isEditMode = false, // ★ 편집 모드
   });
 
   final String title;
@@ -56,6 +56,7 @@ class EventEditorBottomSheet extends StatefulWidget {
   final bool initialAllDay;
   final String? initialColorId; // Google Calendar event colorId ("1"~"11") 또는 null
   final int initialProgress; // 0 또는 100
+  final bool isEditMode;
 
   @override
   State<EventEditorBottomSheet> createState() => _EventEditorBottomSheetState();
@@ -132,7 +133,6 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet> with Si
     _summary = TextEditingController(text: widget.initialSummary);
     _desc = TextEditingController(text: widget.initialDescription);
 
-    // 자율 탭 초기값에도 초기 summary/description 반영
     _freeTitle.text = widget.initialSummary;
     _freeDesc.text = widget.initialDescription;
 
@@ -143,16 +143,20 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet> with Si
     }
 
     _colorId = widget.initialColorId;
-    _progress = (widget.initialProgress == 100) ? 100 : 0; // ★ 안전 보정
+    _progress = (widget.initialProgress == 100) ? 100 : 0;
 
-    // 초기 탭: 제목에 "입사" 포함 → 입사(1), "지원" 포함 → 지원(0), 아니면 자율(2)
-    final initialIndex = widget.initialSummary.contains('입사') ? 1 : (widget.initialSummary.contains('지원') ? 0 : 2);
+    // 편집모드면 자율 탭에서 시작(원본 그대로 보여줌), 생성모드면 키워드 자동선택
+    final initialIndex = widget.isEditMode
+        ? 2
+        : (widget.initialSummary.contains('입사') ? 1 : (widget.initialSummary.contains('지원') ? 0 : 2));
 
     _tabController = TabController(length: 3, vsync: this, initialIndex: initialIndex);
-    _tabController.addListener(_rebuildTemplate);
 
-    // 최초 템플릿/자율 내용 미리보기 생성
-    WidgetsBinding.instance.addPostFrameCallback((_) => _rebuildTemplate());
+    // ✅ 생성 모드에서만 탭 변경 시 템플릿으로 미리보기 재생성
+    if (!widget.isEditMode) {
+      _tabController.addListener(_rebuildTemplate);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _rebuildTemplate());
+    }
   }
 
   @override
@@ -267,11 +271,11 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet> with Si
     final fmtDate = DateFormat('yyyy-MM-dd');
 
     return GestureDetector(
-      onTap: () => FocusScope.of(context).unfocus(), // ★ 빈곳 탭 시 키보드 닫힘
+      onTap: () => FocusScope.of(context).unfocus(),
       child: AnimatedPadding(
-        duration: const Duration(milliseconds: 200), // ★ 부드럽게 회피
+        duration: const Duration(milliseconds: 200),
         curve: Curves.easeOut,
-        padding: EdgeInsets.only(bottom: viewInsets.bottom), // ★ 키보드 높이만큼 패딩
+        padding: EdgeInsets.only(bottom: viewInsets.bottom),
         child: DraggableScrollableSheet(
           expand: false,
           initialChildSize: 0.9,
@@ -315,19 +319,29 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet> with Si
                     ),
                   ),
 
-                  // ★★★ 미리보기(고정 영역) — 스크롤과 분리되어 항상 상단에 고정 ★★★
+                  // ===== 상단 고정 영역 =====
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('미리보기', style: Theme.of(context).textTheme.titleSmall),
+                        // ★ 편집 모드에서 원본 미리보기 표시
+                        if (widget.isEditMode) ...[
+                          Text('원본 내용', style: Theme.of(context).textTheme.titleSmall),
+                          const SizedBox(height: 8),
+                          _ReadOnlyCard(
+                            summary: widget.initialSummary,
+                            description: widget.initialDescription,
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        Text(widget.isEditMode ? '새 내용 미리보기' : '미리보기', style: Theme.of(context).textTheme.titleSmall),
                         const SizedBox(height: 8),
                         TextField(
                           controller: _summary,
                           readOnly: true,
                           decoration: const InputDecoration(
-                            labelText: '제목(미리보기)',
+                            labelText: '제목',
                             isDense: true,
                           ),
                         ),
@@ -338,7 +352,7 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet> with Si
                           minLines: 3,
                           maxLines: 6,
                           decoration: const InputDecoration(
-                            labelText: '설명(미리보기)',
+                            labelText: '설명',
                             isDense: true,
                           ),
                         ),
@@ -347,14 +361,14 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet> with Si
                   ),
                   const Divider(height: 1),
 
-                  // ===== 스크롤 영역 시작 =====
+                  // ===== 스크롤 영역 =====
                   Expanded(
                     child: ListView(
-                      controller: scrollController, // ★ DraggableScrollable와 연결
-                      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag, // ★ 드래그로 키보드 닫힘
+                      controller: scrollController,
+                      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                       children: [
-                        // ===== 이벤트 날짜(종일) =====
+                        // 날짜(종일)
                         Row(
                           children: [
                             Expanded(
@@ -402,7 +416,7 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet> with Si
                         ),
                         const SizedBox(height: 12),
 
-                        // ===== 색상 선택 =====
+                        // 색상
                         Align(
                           alignment: Alignment.centerLeft,
                           child: Text('이벤트 색상', style: Theme.of(context).textTheme.bodyMedium),
@@ -415,7 +429,7 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet> with Si
                         ),
                         const SizedBox(height: 16),
 
-                        // ===== 진행도(0% / 100%) =====
+                        // 진행도
                         Align(
                           alignment: Alignment.centerLeft,
                           child: Text('진행도', style: Theme.of(context).textTheme.bodyMedium),
@@ -438,7 +452,7 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet> with Si
                         ),
                         const SizedBox(height: 16),
 
-                        // ===== 탭 (지원 / 입사 / 자율) =====
+                        // 탭 (지원 / 입사 / 자율)
                         DefaultTabController(
                           length: 3,
                           initialIndex: () {
@@ -484,7 +498,6 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet> with Si
                         ),
 
                         const SizedBox(height: 16),
-                        // 하단 버튼(스크롤 영역 안으로 넣어 키보드/높이에 유연)
                         Row(
                           children: [
                             Expanded(
@@ -507,7 +520,7 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet> with Si
                                       end: _end,
                                       allDay: _allDay,
                                       colorId: _colorId,
-                                      progress: _progress, // ★ 전달
+                                      progress: _progress,
                                     ),
                                   );
                                 },
@@ -519,7 +532,6 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet> with Si
                       ],
                     ),
                   ),
-                  // ===== 스크롤 영역 끝 =====
                 ],
               ),
             );
@@ -688,6 +700,38 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet> with Si
 
 // ====== 보조 위젯들 ======
 
+class _ReadOnlyCard extends StatelessWidget {
+  const _ReadOnlyCard({required this.summary, required this.description});
+
+  final String summary;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        border: Border.all(color: Colors.black12),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(summary, style: const TextStyle(fontWeight: FontWeight.w700)),
+          if (description.trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              description,
+              style: const TextStyle(color: Colors.black87, height: 1.3),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _LabeledField extends StatelessWidget {
   const _LabeledField({
     required this.label,
@@ -711,7 +755,6 @@ class _LabeledField extends StatelessWidget {
         controller: controller,
         keyboardType: keyboardType,
         textInputAction: TextInputAction.next,
-        // ★ 다음 필드로 이동 쉬움
         onChanged: onChanged,
         decoration: InputDecoration(
           labelText: label,
@@ -839,7 +882,7 @@ class EditResult {
     required this.end,
     this.allDay = true, // 항상 종일
     this.colorId, // "1"~"11" 또는 null
-    this.progress = 0, // ★ 0 또는 100
+    this.progress = 0, // 0 또는 100
   });
 
   final String summary;

@@ -34,7 +34,6 @@ class EventList extends StatelessWidget {
         final e = events[i];
 
         final isAllDay = (e.start?.date != null) && (e.start?.dateTime == null);
-
         final startUtc = e.start?.dateTime;
         final startLocal = (startUtc != null) ? startUtc.toLocal() : e.start?.date;
 
@@ -54,10 +53,24 @@ class EventList extends StatelessWidget {
             style: done ? const TextStyle(decoration: TextDecoration.lineThrough) : null,
           ),
           subtitle: Text(when),
+          // ▶︎ 탭/롱탭 시 바로 수정 시트 오픈
           onTap: () => onEdit(context, e),
-          trailing: IconButton(
-            icon: const Icon(Icons.delete_outline),
-            onPressed: () => onDelete(context, e),
+          onLongPress: () => onEdit(context, e),
+          // ▶︎ 우측 액션: 편집/삭제
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                tooltip: '수정',
+                icon: const Icon(Icons.edit_outlined),
+                onPressed: () => onEdit(context, e),
+              ),
+              IconButton(
+                tooltip: '삭제',
+                icon: const Icon(Icons.delete_outline),
+                onPressed: () => onDelete(context, e),
+              ),
+            ],
           ),
         );
       },

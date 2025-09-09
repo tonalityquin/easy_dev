@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../routes.dart'; // ▼ AppRoutes 사용
-import 'head_package/github_code_browser_bottom_sheet.dart';
 import 'head_package/roadmap_bottom_sheet.dart';
 
 class HeadStubPage extends StatelessWidget {
@@ -59,15 +58,13 @@ class HeadStubPage extends StatelessWidget {
                     final crossAxisCount = width >= 1100
                         ? 4
                         : width >= 800
-                        ? 3
-                        : 2;
+                            ? 3
+                            : 2;
 
                     const spacing = 12.0;
-                    final textScale =
-                    MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
+                    final textScale = MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
 
-                    final tileWidth =
-                        (width - spacing * (crossAxisCount - 1)) / crossAxisCount;
+                    final tileWidth = (width - spacing * (crossAxisCount - 1)) / crossAxisCount;
 
                     // 타일 기준 높이(컨텐츠에 여유), 텍스트 배율 반영
                     final baseTileHeight = 150.0;
@@ -79,11 +76,6 @@ class HeadStubPage extends StatelessWidget {
                     const roadBase = Color(0xFF7E57C2);
                     const roadDark = Color(0xFF5E35B1);
                     const roadLight = Color(0xFFB39DDB);
-
-                    // Code — Cobalt Blue
-                    const codeBase = Color(0xFF1976D2);
-                    const codeDark = Color(0xFF1565C0);
-                    const codeLight = Color(0xFF90CAF9);
 
                     // Company Calendar — Green
                     const calBase = Color(0xFF43A047);
@@ -114,30 +106,10 @@ class HeadStubPage extends StatelessWidget {
                         },
                       ),
                       _ActionCard(
-                        icon: Icons.code,
-                        title: '코드',
-                        subtitle: 'Github',
-                        bg: codeBase,
-                        fg: Colors.white,
-                        tintColor: codeLight,
-                        titleColor: codeDark,
-                        onTap: () {
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (_) => const GithubCodeBrowserBottomSheet(
-                              owner: 'tonalityquin',
-                              repo: 'easy_dev',
-                              defaultBranch: 'main',
-                            ),
-                          );
-                        },
-                      ),
-                      _ActionCard(
                         icon: Icons.calendar_month_rounded,
                         title: '회사 달력',
-                        subtitle: 'Google Calendar\nGoogle Sheet', // ✅ 2줄
+                        subtitle: 'Google Calendar\nGoogle Sheet',
+                        // ✅ 2줄
                         bg: calBase,
                         fg: Colors.white,
                         tintColor: calLight,
@@ -179,7 +151,7 @@ class HeadStubPage extends StatelessWidget {
                 child: InkWell(
                   onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
                     '/selector', // AppRoutes.selector
-                        (route) => false,
+                    (route) => false,
                   ),
                   borderRadius: BorderRadius.circular(8),
                   child: SizedBox(
@@ -200,16 +172,29 @@ class HeadStubPage extends StatelessWidget {
 class _HeaderBanner extends StatelessWidget {
   const _HeaderBanner();
 
+  // 본사 카드 팔레트(고정값)
+  static const Color _base = Color(0xFF1E88E5); // 배너 테두리 틴트
+  static const Color _dark = Color(0xFF1565C0); // 텍스트/아이콘
+  static const Color _light = Color(0xFF64B5F6); // 배경 계열
+
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: cs.primaryContainer.withOpacity(0.7),
+        // 단색을 원하면: color: _light.withOpacity(0.7),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            _light.withOpacity(0.95),
+            _light.withOpacity(0.72),
+          ],
+        ),
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _base.withOpacity(0.12)),
       ),
       child: Row(
         children: [
@@ -217,17 +202,17 @@ class _HeaderBanner extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: cs.onPrimaryContainer.withOpacity(.08),
+              color: _dark.withOpacity(0.08), // 아이콘 배경 원형
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.groups_rounded, color: cs.onPrimaryContainer),
+            child: const Icon(Icons.groups_rounded, color: _dark),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               '본사 허브 입니다.',
               style: text.bodyMedium?.copyWith(
-                color: cs.onPrimaryContainer,
+                color: _dark, // 텍스트 컬러 고정
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -242,9 +227,9 @@ class _ActionCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
-  final Color bg;          // 배지 배경(base)
-  final Color fg;          // 배지 아이콘(onBase)
-  final Color? tintColor;  // 카드 surfaceTint(light)
+  final Color bg; // 배지 배경(base)
+  final Color fg; // 배지 아이콘(onBase)
+  final Color? tintColor; // 카드 surfaceTint(light)
   final Color? titleColor; // 제목 색(dark)
   final VoidCallback? onTap; // 카드 아무 곳이나 탭
 
@@ -311,7 +296,8 @@ class _ActionCard extends StatelessWidget {
                   fontSize: 12,
                   height: 1.15, // 줄간격을 살짝 촘촘하게
                 ),
-                maxLines: 2, // 최대 2줄
+                maxLines: 2,
+                // 최대 2줄
                 overflow: TextOverflow.ellipsis,
                 softWrap: true,
               ),

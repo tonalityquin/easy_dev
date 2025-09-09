@@ -2,9 +2,6 @@ import 'package:flutter/material.dart';
 
 import 'game_package/tetris.dart';
 import 'game_package/minesweeper.dart';
-import 'game_package/wsop_holdem.dart';
-import 'game_package/chess_trainer.dart'; // 체스 트레이너 연결
-import 'game_package/sokoban.dart'; // ★ 소코반 연결
 
 class GameArcadeBottomSheet extends StatelessWidget {
   final BuildContext rootContext; // 바텀시트 밖으로 네비게이션할 때 사용
@@ -107,21 +104,6 @@ class GameArcadeBottomSheet extends StatelessWidget {
                                 MaterialPageRoute(builder: (_) => const Minesweeper()),
                               );
                               break;
-                            case _GameRoute.wsopHoldem:
-                              Navigator.of(rootContext).push(
-                                MaterialPageRoute(builder: (_) => const WsopHoldemPage()),
-                              );
-                              break;
-                            case _GameRoute.chessTrainer:
-                              Navigator.of(rootContext).push(
-                                MaterialPageRoute(builder: (_) => const ChessTrainerPage()),
-                              );
-                              break;
-                            case _GameRoute.sokoban: // ★ 소코반 이동
-                              Navigator.of(rootContext).push(
-                                MaterialPageRoute(builder: (_) => const SokobanPage()),
-                              );
-                              break;
                             case _GameRoute.comingSoon:
                               ScaffoldMessenger.of(rootContext).showSnackBar(
                                 SnackBar(content: Text('「${g.title}」는 준비 중입니다.')),
@@ -146,7 +128,7 @@ class GameArcadeBottomSheet extends StatelessWidget {
 // 게임 목록 정의 (테트리스 + 지뢰찾기 + WSOP 홀덤 + 체스 트레이너 + 소코반 ...)
 // ──────────────────────────────────────────────────────────────
 
-enum _GameRoute { tetris, minesweeper, wsopHoldem, chessTrainer, sokoban, comingSoon }
+enum _GameRoute { tetris, minesweeper, comingSoon }
 
 class _GameItem {
   final String title;
@@ -182,29 +164,5 @@ const _games = <_GameItem>[
     bg: Color(0xFFF3E5F5),
     fg: Color(0xFF4A148C),
     route: _GameRoute.minesweeper,
-  ),
-  _GameItem(
-    title: 'WSOP Hold’em',
-    subtitle: '토너먼트(WSOP/TDA) 데모',
-    icon: Icons.casino,
-    bg: Color(0xFFEDE7F6),
-    fg: Color(0xFF4A148C),
-    route: _GameRoute.wsopHoldem,
-  ),
-  _GameItem(
-    title: '체스 트레이너',
-    subtitle: '튜토리얼 · 코치 대국 · 퍼즐',
-    icon: Icons.sports_esports,
-    bg: Color(0xFFE8F5E9),
-    fg: Color(0xFF1B5E20),
-    route: _GameRoute.chessTrainer,
-  ),
-  _GameItem(
-    title: 'Sokoban',
-    subtitle: '창고 밀기 퍼즐 (UNDO/스와이프)',
-    icon: Icons.inventory_2, // 대체 아이콘
-    bg: Color(0xFFE3F2FD),
-    fg: Color(0xFF0D47A1),
-    route: _GameRoute.sokoban,
   ),
 ];

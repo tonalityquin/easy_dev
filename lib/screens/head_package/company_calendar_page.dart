@@ -12,6 +12,17 @@ import 'calendar_package/event_list.dart';
 import 'calendar_package/month_calendar_view.dart';
 import 'calendar_package/completed_events_sheet.dart'; // ✅ 추가
 
+// ────────────────────────────────────────────────────────────
+// Company Calendar 팔레트(카드와 동일한 톤)
+// base: #43A047, dark: #2E7D32, light: #A5D6A7, fg: white
+// ────────────────────────────────────────────────────────────
+class _CalColors {
+  static const base = Color(0xFF43A047);
+  static const dark = Color(0xFF2E7D32);
+  static const light = Color(0xFFA5D6A7);
+  static const fg = Color(0xFFFFFFFF);
+}
+
 class CompanyCalendarPage extends StatefulWidget {
   const CompanyCalendarPage({super.key});
 
@@ -91,8 +102,6 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final text = Theme.of(context).textTheme;
     final model = context.watch<CalendarModel>();
 
     return Scaffold(
@@ -133,91 +142,34 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // 안내 배너
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: cs.primaryContainer.withOpacity(.7),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                '캘린더 ID 또는 URL을 입력 후 불러오기를 누르세요. (예: someone@gmail.com)\n'
-                '좌우로 스와이프하면 캘린더 ↔ 목록 뷰를 전환합니다.',
-                style: text.bodyMedium?.copyWith(
-                  color: cs.onPrimaryContainer,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+            // 안내 배너 (리팩토링 + 팔레트 적용)
+            const _InfoBanner(),
+            const SizedBox(height: 12),
+
+            // 입력 + 버튼 (리팩토링 + 팔레트 적용)
+            _CalendarIdSection(
+              controller: _idCtrl,
+              locked: _idLocked,
+              loading: model.loading,
+              onToggleLock: () => setState(() => _idLocked = !_idLocked),
+              onClear: () => setState(() => _idCtrl.clear()),
+              onLoad: () async {
+                FocusScope.of(context).unfocus();
+                await context.read<CalendarModel>().load(newCalendarId: _idCtrl.text);
+                if (mounted && model.error == null && model.calendarId.isNotEmpty) {
+                  _idCtrl.text = model.calendarId;
+                  await _saveLastCalendarId(model.calendarId);
+                }
+              },
             ),
             const SizedBox(height: 12),
 
-            // 입력 + 버튼
-            Row(
-              children: [
-                // ✅ 잠금/지우기 기능 포함한 입력 필드
-                Expanded(
-                  child: ValueListenableBuilder<TextEditingValue>(
-                    valueListenable: _idCtrl,
-                    builder: (context, value, _) {
-                      return TextField(
-                        controller: _idCtrl,
-                        readOnly: _idLocked, // 🔒 잠금 시 편집 불가(복사는 가능 / 길게 눌러 복사 가능)
-                        decoration: InputDecoration(
-                          labelText: '캘린더 ID 또는 URL',
-                          hintText: '예: someone@gmail.com 또는 Google Calendar URL',
-                          border: const OutlineInputBorder(),
-                          isDense: true,
-                          suffixIcon: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // 🔒 잠금 토글
-                              IconButton(
-                                tooltip: _idLocked ? '잠금 해제' : '잠금',
-                                icon: Icon(
-                                  _idLocked ? Icons.lock : Icons.lock_open,
-                                ),
-                                onPressed: () => setState(() => _idLocked = !_idLocked),
-                              ),
-                              // ✕ 전체 지우기 (잠금 해제 + 내용 있을 때만 표시)
-                              if (value.text.isNotEmpty && !_idLocked)
-                                IconButton(
-                                  tooltip: '지우기',
-                                  icon: const Icon(Icons.clear),
-                                  onPressed: () => setState(() => _idCtrl.clear()),
-                                ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(width: 8),
-                FilledButton.icon(
-                  onPressed: model.loading
-                      ? null
-                      : () async {
-                          FocusScope.of(context).unfocus();
-                          await context.read<CalendarModel>().load(newCalendarId: _idCtrl.text);
-                          if (mounted && model.error == null && model.calendarId.isNotEmpty) {
-                            _idCtrl.text = model.calendarId;
-                            await _saveLastCalendarId(model.calendarId);
-                          }
-                        },
-                  icon: const Icon(Icons.download),
-                  label: const Text('불러오기'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            if (model.loading) const LinearProgressIndicator(),
+            if (model.loading) const LinearProgressIndicator(color: _CalColors.base),
             if (model.error != null) ...[
               const SizedBox(height: 8),
               Text(
                 model.error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+                style: const TextStyle(color: Colors.redAccent),
               ),
             ],
 
@@ -238,9 +190,9 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
                     onToggleProgress: _toggleProgress,
                     onMonthRequested: (monthStart, monthEnd) async {
                       await context.read<CalendarModel>().loadRange(
-                            timeMin: monthStart,
-                            timeMax: monthEnd,
-                          );
+                        timeMin: monthStart,
+                        timeMax: monthEnd,
+                      );
                     },
                   ),
                   // 1) 목록(Agenda)
@@ -339,6 +291,7 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
       initialAllDay: isAllDay,
       initialColorId: e.colorId,
       initialProgress: initialProgress,
+      isEditMode: true, // ✅ 편집 모드: 탭 전환에도 원본 미리보기 유지
     );
     if (edited == null) return;
 
@@ -379,10 +332,10 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
   }
 
   Future<void> _toggleProgress(
-    BuildContext context,
-    gcal.Event e,
-    bool done,
-  ) async {
+      BuildContext context,
+      gcal.Event e,
+      bool done,
+      ) async {
     final model = context.read<CalendarModel>();
 
     final start = (e.start?.dateTime != null ? e.start!.dateTime!.toLocal() : e.start?.date) ?? DateTime.now();
@@ -401,6 +354,155 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
       end: end,
       allDay: isAllDay,
       colorId: e.colorId,
+    );
+  }
+}
+
+// ===== 디자인 리팩토링 보조 위젯 =====
+
+class _InfoBanner extends StatelessWidget {
+  const _InfoBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            _CalColors.light.withOpacity(.95),
+            _CalColors.base.withOpacity(.85),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _CalColors.dark.withOpacity(.18)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          Icon(Icons.info_outline_rounded, color: _CalColors.fg, size: 22),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '캘린더 ID 또는 URL을 입력 후 불러오기를 누르세요. (예: someone@gmail.com)\n'
+                  '좌우로 스와이프하면 캘린더 ↔ 목록 뷰를 전환합니다.',
+              style: TextStyle(
+                color: _CalColors.fg,
+                fontWeight: FontWeight.w700,
+                height: 1.25,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CalendarIdSection extends StatelessWidget {
+  const _CalendarIdSection({
+    required this.controller,
+    required this.locked,
+    required this.loading,
+    required this.onToggleLock,
+    required this.onClear,
+    required this.onLoad,
+  });
+
+  final TextEditingController controller;
+  final bool locked;
+  final bool loading;
+  final VoidCallback onToggleLock;
+  final VoidCallback onClear;
+  final Future<void> Function() onLoad;
+
+  @override
+  Widget build(BuildContext context) {
+    final btn = FilledButton.icon(
+      style: FilledButton.styleFrom(
+        backgroundColor: _CalColors.base,
+        foregroundColor: _CalColors.fg,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      onPressed: loading ? null : onLoad,
+      icon: loading
+          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: _CalColors.fg))
+          : const Icon(Icons.download_rounded),
+      label: const Text('불러오기'),
+    );
+
+    return LayoutBuilder(
+      builder: (context, cons) {
+        final narrow = cons.maxWidth < 560;
+
+        final field = ValueListenableBuilder<TextEditingValue>(
+          valueListenable: controller,
+          builder: (context, value, _) {
+            return TextField(
+              controller: controller,
+              readOnly: locked,
+              decoration: InputDecoration(
+                labelText: '캘린더 ID 또는 URL',
+                hintText: '예: someone@gmail.com 또는 Google Calendar URL',
+                prefixIcon: const Icon(Icons.link_rounded, color: _CalColors.base),
+                filled: true,
+                fillColor: _CalColors.light.withOpacity(.20),
+                isDense: true,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: _CalColors.base.withOpacity(.25)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: _CalColors.base, width: 1.2),
+                ),
+                suffixIcon: SizedBox(
+                  width: 92,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      IconButton(
+                        tooltip: locked ? '잠금 해제' : '잠금',
+                        onPressed: onToggleLock,
+                        icon: Icon(locked ? Icons.lock : Icons.lock_open, color: _CalColors.dark),
+                      ),
+                      if (value.text.isNotEmpty && !locked)
+                        IconButton(
+                          tooltip: '지우기',
+                          onPressed: onClear,
+                          icon: const Icon(Icons.clear, color: _CalColors.dark),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+
+        if (narrow) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              field,
+              const SizedBox(height: 8),
+              Align(alignment: Alignment.centerRight, child: btn),
+            ],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: field),
+            const SizedBox(width: 10),
+            btn,
+          ],
+        );
+      },
     );
   }
 }
