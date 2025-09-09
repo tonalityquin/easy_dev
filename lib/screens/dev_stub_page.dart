@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 
 import '../routes.dart';
 import 'dev_package/debug_package/debug_bottom_sheet.dart';
-import 'dev_package/game_arcade_bottom_sheet.dart';
 import 'dev_package/github_code_browser_bottom_sheet.dart';
 import 'dev_package/github_markdown_bottom_sheet.dart';
 import 'dev_package/local_prefs_bottom_sheet.dart';
@@ -25,10 +24,10 @@ const kDevDarkText = Color(0xFF4A148C);
 const kDevOnPrimary = Colors.white;
 
 /// ====== 회사 달력(그린) 팔레트: Head/Hub 카드와 동일 톤 ======
-const calBase = Color(0xFF43A047);  // base
-const calDark = Color(0xFF2E7D32);  // dark (title)
+const calBase = Color(0xFF43A047); // base
+const calDark = Color(0xFF2E7D32); // dark (title)
 const calLight = Color(0xFFA5D6A7); // light (tint)
-const calFg = Colors.white;         // on base
+const calFg = Colors.white; // on base
 
 class DevStubPage extends StatelessWidget {
   const DevStubPage({super.key});
@@ -85,8 +84,8 @@ class DevStubPage extends StatelessWidget {
                     final crossAxisCount = width >= 1100
                         ? 4
                         : width >= 800
-                        ? 3
-                        : 2;
+                            ? 3
+                            : 2;
                     const spacing = 12.0;
                     final textScale = MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
 
@@ -96,21 +95,6 @@ class DevStubPage extends StatelessWidget {
                     final childAspectRatio = tileWidth / tileHeight;
 
                     final cards = <Widget>[
-                      _ActionCard(
-                        icon: Icons.videogame_asset_rounded,
-                        title: '아케이드',
-                        subtitle: 'Arcade',
-                        bg: cs.secondaryContainer,
-                        fg: cs.onSecondaryContainer,
-                        onTap: () {
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (_) => GameArcadeBottomSheet(rootContext: context),
-                          );
-                        },
-                      ),
                       _ActionCard(
                         icon: Icons.code,
                         title: '코드',
@@ -128,19 +112,6 @@ class DevStubPage extends StatelessWidget {
                               defaultBranch: 'main',
                             ),
                           );
-                        },
-                      ),
-                      // ✅ 회사 달력 카드 (그린 팔레트 + tint/titleColor 지원)
-                      _ActionCard(
-                        icon: Icons.calendar_month_rounded,
-                        title: '개인 달력',
-                        subtitle: 'Google Calendar',
-                        bg: calBase,
-                        fg: calFg,
-                        tintColor: calLight,
-                        titleColor: calDark,
-                        onTap: () {
-                          Navigator.of(context).pushNamed(AppRoutes.devCalendar);
                         },
                       ),
                       _ActionCard(
@@ -162,6 +133,8 @@ class DevStubPage extends StatelessWidget {
                           );
                         },
                       ),
+                      // ✅ 회사 달력 카드 (그린 팔레트 + tint/titleColor 지원)
+
                       _ActionCard(
                         icon: Icons.computer_rounded,
                         title: '로컬 컴퓨터',
@@ -197,6 +170,18 @@ class DevStubPage extends StatelessWidget {
                               ),
                             ),
                           );
+                        },
+                      ),
+                      _ActionCard(
+                        icon: Icons.calendar_month_rounded,
+                        title: '개인 달력',
+                        subtitle: 'Google Calendar',
+                        bg: calBase,
+                        fg: calFg,
+                        tintColor: calLight,
+                        titleColor: calDark,
+                        onTap: () {
+                          Navigator.of(context).pushNamed(AppRoutes.devCalendar);
                         },
                       ),
                     ];
@@ -236,7 +221,7 @@ class DevStubPage extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
               onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
                 AppRoutes.selector,
-                    (route) => false,
+                (route) => false,
               ),
               child: SizedBox(
                 height: 120,
@@ -296,9 +281,9 @@ class _ActionCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
-  final Color bg;          // 배지 배경(base)
-  final Color fg;          // 배지 아이콘(onBase)
-  final Color? tintColor;  // 카드 surfaceTint(light)  ← 추가
+  final Color bg; // 배지 배경(base)
+  final Color fg; // 배지 아이콘(onBase)
+  final Color? tintColor; // 카드 surfaceTint(light)  ← 추가
   final Color? titleColor; // 제목 색(dark)           ← 추가
   final VoidCallback? onTap;
 
@@ -319,7 +304,8 @@ class _ActionCard extends StatelessWidget {
       color: Colors.white,
       elevation: 1,
       clipBehavior: Clip.antiAlias,
-      surfaceTintColor: tintColor ?? bg, // ✅ tintColor 지원
+      surfaceTintColor: tintColor ?? bg,
+      // ✅ tintColor 지원
       child: InkWell(
         onTap: onTap,
         child: Padding(
