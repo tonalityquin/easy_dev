@@ -7,6 +7,7 @@ import './google_calendar_service.dart';
 
 class CalendarModel extends ChangeNotifier {
   final GoogleCalendarService _service;
+
   CalendarModel(this._service);
 
   String calendarId = '';
@@ -184,17 +185,17 @@ class CalendarModel extends ChangeNotifier {
       // ✅ 반드시 description을 patch에 포함시키기 위해
       //    description이 null이면 현재 이벤트의 description(또는 '')를 사용
       final current = events.firstWhere(
-            (e) => e.id == eventId,
+        (e) => e.id == eventId,
         orElse: () => gcal.Event()..description = '',
       );
-      final descToSend =
-      (description != null) ? description : (current.description ?? '');
+      final descToSend = (description != null) ? description : (current.description ?? '');
 
       await _service.updateEvent(
         calendarId: calendarId,
         eventId: eventId,
         summary: summary,
-        description: descToSend, // ← 항상 non-null로 전달하여 patch에 포함
+        description: descToSend,
+        // ← 항상 non-null로 전달하여 patch에 포함
         start: start,
         end: end,
         allDay: allDay,
@@ -250,10 +251,10 @@ class CalendarModel extends ChangeNotifier {
   }
 
   List<gcal.Event> _filterByRange(
-      List<gcal.Event> source,
-      DateTime min, // inclusive
-      DateTime max, // exclusive
-      ) {
+    List<gcal.Event> source,
+    DateTime min, // inclusive
+    DateTime max, // exclusive
+  ) {
     bool overlaps(gcal.Event e) {
       final range = _eventRangeLocal(e);
       if (range == null) return false;

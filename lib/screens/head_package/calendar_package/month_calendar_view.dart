@@ -15,7 +15,7 @@ class MonthCalendarView extends StatefulWidget {
 
   final List<gcal.Event> allEvents;
   final int Function(gcal.Event) progressOf;
-  final void Function(BuildContext, gcal.Event) onEdit;   // (읽기 전용 시트에서는 사용 안 함)
+  final void Function(BuildContext, gcal.Event) onEdit; // (읽기 전용 시트에서는 사용 안 함)
   final void Function(BuildContext, gcal.Event) onDelete; // (읽기 전용 시트에서는 사용 안 함)
   final Future<void> Function(BuildContext, gcal.Event, bool) onToggleProgress; // (읽기 전용 시트에서는 사용 안 함)
   final Future<void> Function(DateTime monthStart, DateTime monthEnd)? onMonthRequested;
@@ -45,8 +45,7 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
     widget.onMonthRequested!(start, end);
   }
 
-  bool _isSameDay(DateTime a, DateTime b) =>
-      a.year == b.year && a.month == b.month && a.day == b.day;
+  bool _isSameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
 
   List<DateTime> _daysInGrid(DateTime month) {
     final first = DateTime(month.year, month.month, 1);
@@ -117,9 +116,11 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
                 children: [
                   const SizedBox(height: 8),
                   Container(
-                    width: 36, height: 4,
+                    width: 36,
+                    height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.black12, borderRadius: BorderRadius.circular(2),
+                      color: Colors.black12,
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -131,8 +132,8 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
                           child: Text(
                             fmtDay.format(day),
                             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
+                                  fontWeight: FontWeight.w700,
+                                ),
                           ),
                         ),
                         IconButton(
@@ -147,42 +148,40 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
                     child: events.isEmpty
                         ? const Center(child: Text('이 날짜에 이벤트가 없습니다.'))
                         : ListView.separated(
-                      controller: controller,
-                      itemCount: events.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (context, i) {
-                        final e = events[i];
-                        final isAllDay = (e.start?.date != null) && (e.start?.dateTime == null);
-                        String whenText;
-                        if (isAllDay) {
-                          whenText = '종일';
-                        } else {
-                          final st = e.start?.dateTime?.toLocal();
-                          final ed = e.end?.dateTime?.toLocal();
-                          if (st != null && ed != null) {
-                            whenText = '${fmtTime.format(st)} ~ ${fmtTime.format(ed)}';
-                          } else if (st != null) {
-                            whenText = fmtTime.format(st);
-                          } else {
-                            whenText = '(시간 미정)';
-                          }
-                        }
-                        final done = widget.progressOf(e) == 100;
+                            controller: controller,
+                            itemCount: events.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            itemBuilder: (context, i) {
+                              final e = events[i];
+                              final isAllDay = (e.start?.date != null) && (e.start?.dateTime == null);
+                              String whenText;
+                              if (isAllDay) {
+                                whenText = '종일';
+                              } else {
+                                final st = e.start?.dateTime?.toLocal();
+                                final ed = e.end?.dateTime?.toLocal();
+                                if (st != null && ed != null) {
+                                  whenText = '${fmtTime.format(st)} ~ ${fmtTime.format(ed)}';
+                                } else if (st != null) {
+                                  whenText = fmtTime.format(st);
+                                } else {
+                                  whenText = '(시간 미정)';
+                                }
+                              }
+                              final done = widget.progressOf(e) == 100;
 
-                        return ListTile(
-                          leading: done
-                              ? const Icon(Icons.check_circle, size: 20)
-                              : const Icon(Icons.radio_button_unchecked, size: 20),
-                          title: Text(
-                            e.summary ?? '(제목 없음)',
-                            style: done
-                                ? const TextStyle(decoration: TextDecoration.lineThrough)
-                                : null,
+                              return ListTile(
+                                leading: done
+                                    ? const Icon(Icons.check_circle, size: 20)
+                                    : const Icon(Icons.radio_button_unchecked, size: 20),
+                                title: Text(
+                                  e.summary ?? '(제목 없음)',
+                                  style: done ? const TextStyle(decoration: TextDecoration.lineThrough) : null,
+                                ),
+                                subtitle: Text(whenText),
+                              );
+                            },
                           ),
-                          subtitle: Text(whenText),
-                        );
-                      },
-                    ),
                   ),
                 ],
               ),
@@ -345,10 +344,7 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
                                     style: TextStyle(
                                       fontSize: 9,
                                       height: 1.0,
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurface
-                                          .withOpacity(0.6),
+                                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                                     ),
                                   ),
                                 ),
@@ -369,6 +365,7 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
 
 class _DowCell extends StatelessWidget {
   const _DowCell(this.label);
+
   final String label;
 
   @override

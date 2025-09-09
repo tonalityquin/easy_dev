@@ -4,20 +4,22 @@ import 'package:intl/intl.dart';
 
 /// 호출 헬퍼
 Future<EditResult?> showEventEditorBottomSheet(
-    BuildContext context, {
-      required String title,
-      required String initialSummary,
-      required DateTime initialStart,
-      required DateTime initialEnd,
-      String initialDescription = '',
-      bool initialAllDay = true, // 항상 종일
-      String? initialColorId,
-      int initialProgress = 0, // ★ 진행도(0 또는 100)
-    }) {
+  BuildContext context, {
+  required String title,
+  required String initialSummary,
+  required DateTime initialStart,
+  required DateTime initialEnd,
+  String initialDescription = '',
+  bool initialAllDay = true, // 항상 종일
+  String? initialColorId,
+  int initialProgress = 0, // ★ 진행도(0 또는 100)
+}) {
   return showModalBottomSheet<EditResult>(
     context: context,
-    useSafeArea: true, // ★ 안전영역 사용
-    isScrollControlled: true, // ★ 키보드 대응을 위해 전체 화면 높이 사용
+    useSafeArea: true,
+    // ★ 안전영역 사용
+    isScrollControlled: true,
+    // ★ 키보드 대응을 위해 전체 화면 높이 사용
     backgroundColor: Colors.transparent,
     builder: (_) => EventEditorBottomSheet(
       title: title,
@@ -61,8 +63,7 @@ class EventEditorBottomSheet extends StatefulWidget {
 
 enum _TemplateTab { apply, hire, free } // 지원, 입사, 자율
 
-class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
-    with SingleTickerProviderStateMixin {
+class _EventEditorBottomSheetState extends State<EventEditorBottomSheet> with SingleTickerProviderStateMixin {
   // 공통(자동/자율 생성 대상)
   late TextEditingController _summary; // 제목(미리보기 & 결과)
   late TextEditingController _desc; // 설명(미리보기 & 결과)
@@ -83,6 +84,7 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
 
   // 지원 탭 입력
   final _applyRegion = TextEditingController();
+  final _applyStart = TextEditingController();
   final _applyName = TextEditingController();
   final _applyReason = TextEditingController();
   final _applyTime = TextEditingController();
@@ -144,9 +146,7 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
     _progress = (widget.initialProgress == 100) ? 100 : 0; // ★ 안전 보정
 
     // 초기 탭: 제목에 "입사" 포함 → 입사(1), "지원" 포함 → 지원(0), 아니면 자율(2)
-    final initialIndex = widget.initialSummary.contains('입사')
-        ? 1
-        : (widget.initialSummary.contains('지원') ? 0 : 2);
+    final initialIndex = widget.initialSummary.contains('입사') ? 1 : (widget.initialSummary.contains('지원') ? 0 : 2);
 
     _tabController = TabController(length: 3, vsync: this, initialIndex: initialIndex);
     _tabController.addListener(_rebuildTemplate);
@@ -162,6 +162,7 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
     _tabController.dispose();
 
     // 지원
+    _applyStart.dispose();
     _applyRegion.dispose();
     _applyName.dispose();
     _applyReason.dispose();
@@ -199,12 +200,14 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
     final fmtDate = DateFormat('yyyy-MM-dd');
 
     if (_currentTab == _TemplateTab.apply) {
+      final start = _applyStart.text.trim();
       final region = _applyRegion.text.trim();
       final name = _applyName.text.trim();
       final reason = _applyReason.text.trim();
       final time = _applyTime.text.trim();
 
       final title = [
+        if (start.isNotEmpty) start,
         if (region.isNotEmpty) region,
         if (name.isNotEmpty) name,
         '지원',
@@ -233,10 +236,8 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
       final accountNo = _hireAccountNo.text.trim();
       final salary = _hireSalary.text.trim();
       final contractType = _hireContractType.text.trim();
-      final startStr =
-      _hireWorkStartDate != null ? fmtDate.format(_hireWorkStartDate!) : '';
-      final endStr =
-      _hireFirstEndDate != null ? fmtDate.format(_hireFirstEndDate!) : '';
+      final startStr = _hireWorkStartDate != null ? fmtDate.format(_hireWorkStartDate!) : '';
+      final endStr = _hireFirstEndDate != null ? fmtDate.format(_hireFirstEndDate!) : '';
 
       final desc = [
         '전화번호: $phone',
@@ -303,10 +304,7 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                         Expanded(
                           child: Text(
                             widget.title,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w700),
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
                           ),
                         ),
                         IconButton(
@@ -353,8 +351,7 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                   Expanded(
                     child: ListView(
                       controller: scrollController, // ★ DraggableScrollable와 연결
-                      keyboardDismissBehavior:
-                      ScrollViewKeyboardDismissBehavior.onDrag, // ★ 드래그로 키보드 닫힘
+                      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag, // ★ 드래그로 키보드 닫힘
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                       children: [
                         // ===== 이벤트 날짜(종일) =====
@@ -408,8 +405,7 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                         // ===== 색상 선택 =====
                         Align(
                           alignment: Alignment.centerLeft,
-                          child: Text('이벤트 색상',
-                              style: Theme.of(context).textTheme.bodyMedium),
+                          child: Text('이벤트 색상', style: Theme.of(context).textTheme.bodyMedium),
                         ),
                         const SizedBox(height: 8),
                         _ColorPicker(
@@ -422,8 +418,7 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                         // ===== 진행도(0% / 100%) =====
                         Align(
                           alignment: Alignment.centerLeft,
-                          child: Text('진행도',
-                              style: Theme.of(context).textTheme.bodyMedium),
+                          child: Text('진행도', style: Theme.of(context).textTheme.bodyMedium),
                         ),
                         const SizedBox(height: 8),
                         Wrap(
@@ -453,7 +448,7 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                               case _TemplateTab.hire:
                                 return 1;
                               case _TemplateTab.free:
-                              return 2;
+                                return 2;
                             }
                           }(),
                           child: Column(
@@ -540,6 +535,11 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
     return Column(
       children: [
         _LabeledField(
+          label: '업무자',
+          controller: _applyStart,
+          onChanged: (_) => _rebuildTemplate(),
+        ),
+        _LabeledField(
           label: '지역',
           controller: _applyRegion,
           onChanged: (_) => _rebuildTemplate(),
@@ -620,8 +620,7 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
           contentPadding: EdgeInsets.zero,
           dense: true,
           title: const Text('근무 시작일'),
-          subtitle: Text(
-              _hireWorkStartDate == null ? '미선택' : fmt.format(_hireWorkStartDate!)),
+          subtitle: Text(_hireWorkStartDate == null ? '미선택' : fmt.format(_hireWorkStartDate!)),
           trailing: const Icon(Icons.edit_calendar),
           onTap: () async {
             final picked = await showDatePicker(
@@ -639,9 +638,7 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
           contentPadding: EdgeInsets.zero,
           dense: true,
           title: const Text('첫 계약 종료일'),
-          subtitle: Text(_hireFirstEndDate == null
-              ? '미선택'
-              : fmt.format(_hireFirstEndDate!)),
+          subtitle: Text(_hireFirstEndDate == null ? '미선택' : fmt.format(_hireFirstEndDate!)),
           trailing: const Icon(Icons.edit_calendar),
           onTap: () async {
             final picked = await showDatePicker(
@@ -651,8 +648,7 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
               lastDate: DateTime(2100),
             );
             if (picked == null) return;
-            _hireFirstEndDate =
-                DateTime(picked.year, picked.month, picked.day);
+            _hireFirstEndDate = DateTime(picked.year, picked.month, picked.day);
             _rebuildTemplate();
           },
         ),
@@ -714,7 +710,8 @@ class _LabeledField extends StatelessWidget {
       child: TextField(
         controller: controller,
         keyboardType: keyboardType,
-        textInputAction: TextInputAction.next, // ★ 다음 필드로 이동 쉬움
+        textInputAction: TextInputAction.next,
+        // ★ 다음 필드로 이동 쉬움
         onChanged: onChanged,
         decoration: InputDecoration(
           labelText: label,
@@ -815,8 +812,7 @@ class _ColorDot extends StatelessWidget {
           width: 1,
         ),
       ),
-      child:
-      isSelected ? const Icon(Icons.check, size: 18, color: Colors.white) : null,
+      child: isSelected ? const Icon(Icons.check, size: 18, color: Colors.white) : null,
     );
 
     return InkWell(
@@ -827,8 +823,7 @@ class _ColorDot extends StatelessWidget {
         children: [
           dot,
           const SizedBox(height: 4),
-          Text(label,
-              style: const TextStyle(fontSize: 10, color: Colors.black54)),
+          Text(label, style: const TextStyle(fontSize: 10, color: Colors.black54)),
         ],
       ),
     );

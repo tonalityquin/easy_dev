@@ -92,6 +92,15 @@ const List<RoadmapItem> _roadmapData = [
   ),
   RoadmapItem(
     load: RoadmapLoad.light,
+    title: 'Calendar Page 진입 로직 보안 강화',
+    notes: [
+      '앱을 사용하는 임의의 사용자가 다른 사람의 구글 계정만 인지하면 계정의 캘린더 진입 가능'
+      'Goal.진입할 수 있는 구글 계정 명과 ',
+    ],
+    status: RoadmapStatus.inProgress,
+  ),
+  RoadmapItem(
+    load: RoadmapLoad.light,
     title: 'Block Dialog 삽입 과정 추가',
     notes: [
       '번호판 생성 수정 등 실시간에 민감한 로직에 방어 코드 삽입',

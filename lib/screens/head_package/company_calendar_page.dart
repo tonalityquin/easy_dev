@@ -69,8 +69,7 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
   }
 
   // ===== progress 태그 도우미 =====
-  static final RegExp _progressTag =
-  RegExp(r'\[\s*progress\s*:\s*(0|100)\s*\]', caseSensitive: false);
+  static final RegExp _progressTag = RegExp(r'\[\s*progress\s*:\s*(0|100)\s*\]', caseSensitive: false);
 
   int _extractProgress(String? description) {
     if (description == null) return 0;
@@ -100,9 +99,12 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
       appBar: AppBar(
         title: const Text('회사 달력'),
         centerTitle: true,
-        backgroundColor: Colors.white, // ✅ 흰 배경
-        foregroundColor: Colors.black87, // ✅ 검은 글자/아이콘
-        surfaceTintColor: Colors.white, // ✅ 머티리얼3 틴트도 흰색으로
+        backgroundColor: Colors.white,
+        // ✅ 흰 배경
+        foregroundColor: Colors.black87,
+        // ✅ 검은 글자/아이콘
+        surfaceTintColor: Colors.white,
+        // ✅ 머티리얼3 틴트도 흰색으로
         elevation: 0,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
@@ -141,7 +143,7 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
               ),
               child: Text(
                 '캘린더 ID 또는 URL을 입력 후 불러오기를 누르세요. (예: someone@gmail.com)\n'
-                    '좌우로 스와이프하면 캘린더 ↔ 목록 뷰를 전환합니다.',
+                '좌우로 스와이프하면 캘린더 ↔ 목록 뷰를 전환합니다.',
                 style: text.bodyMedium?.copyWith(
                   color: cs.onPrimaryContainer,
                   fontWeight: FontWeight.w600,
@@ -160,8 +162,7 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
                     builder: (context, value, _) {
                       return TextField(
                         controller: _idCtrl,
-                        readOnly:
-                        _idLocked, // 🔒 잠금 시 편집 불가(복사는 가능 / 길게 눌러 복사 가능)
+                        readOnly: _idLocked, // 🔒 잠금 시 편집 불가(복사는 가능 / 길게 눌러 복사 가능)
                         decoration: InputDecoration(
                           labelText: '캘린더 ID 또는 URL',
                           hintText: '예: someone@gmail.com 또는 Google Calendar URL',
@@ -176,16 +177,14 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
                                 icon: Icon(
                                   _idLocked ? Icons.lock : Icons.lock_open,
                                 ),
-                                onPressed: () =>
-                                    setState(() => _idLocked = !_idLocked),
+                                onPressed: () => setState(() => _idLocked = !_idLocked),
                               ),
                               // ✕ 전체 지우기 (잠금 해제 + 내용 있을 때만 표시)
                               if (value.text.isNotEmpty && !_idLocked)
                                 IconButton(
                                   tooltip: '지우기',
                                   icon: const Icon(Icons.clear),
-                                  onPressed: () =>
-                                      setState(() => _idCtrl.clear()),
+                                  onPressed: () => setState(() => _idCtrl.clear()),
                                 ),
                             ],
                           ),
@@ -199,17 +198,13 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
                   onPressed: model.loading
                       ? null
                       : () async {
-                    FocusScope.of(context).unfocus();
-                    await context
-                        .read<CalendarModel>()
-                        .load(newCalendarId: _idCtrl.text);
-                    if (mounted &&
-                        model.error == null &&
-                        model.calendarId.isNotEmpty) {
-                      _idCtrl.text = model.calendarId;
-                      await _saveLastCalendarId(model.calendarId);
-                    }
-                  },
+                          FocusScope.of(context).unfocus();
+                          await context.read<CalendarModel>().load(newCalendarId: _idCtrl.text);
+                          if (mounted && model.error == null && model.calendarId.isNotEmpty) {
+                            _idCtrl.text = model.calendarId;
+                            await _saveLastCalendarId(model.calendarId);
+                          }
+                        },
                   icon: const Icon(Icons.download),
                   label: const Text('불러오기'),
                 ),
@@ -222,8 +217,7 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
               const SizedBox(height: 8),
               Text(
                 model.error!,
-                style:
-                TextStyle(color: Theme.of(context).colorScheme.error),
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ],
 
@@ -244,9 +238,9 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
                     onToggleProgress: _toggleProgress,
                     onMonthRequested: (monthStart, monthEnd) async {
                       await context.read<CalendarModel>().loadRange(
-                        timeMin: monthStart,
-                        timeMax: monthEnd,
-                      );
+                            timeMin: monthStart,
+                            timeMax: monthEnd,
+                          );
                     },
                   ),
                   // 1) 목록(Agenda)
@@ -314,8 +308,7 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
     );
     if (created == null) return;
 
-    final descWithProgress =
-    _setProgressTag(created.description, created.progress);
+    final descWithProgress = _setProgressTag(created.description, created.progress);
 
     await model.create(
       summary: created.summary,
@@ -329,14 +322,9 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
 
   Future<void> _openEditSheet(BuildContext context, gcal.Event e) async {
     final model = context.read<CalendarModel>();
-    final start = (e.start?.dateTime != null
-        ? e.start!.dateTime!.toLocal()
-        : e.start?.date) ??
-        DateTime.now();
-    final end = (e.end?.dateTime != null
-        ? e.end!.dateTime!.toLocal()
-        : e.end?.date) ??
-        start.add(const Duration(hours: 1));
+    final start = (e.start?.dateTime != null ? e.start!.dateTime!.toLocal() : e.start?.date) ?? DateTime.now();
+    final end =
+        (e.end?.dateTime != null ? e.end!.dateTime!.toLocal() : e.end?.date) ?? start.add(const Duration(hours: 1));
     final isAllDay = e.start?.date != null;
 
     final initialProgress = _extractProgress(e.description);
@@ -354,8 +342,7 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
     );
     if (edited == null) return;
 
-    final descWithProgress =
-    _setProgressTag(edited.description, edited.progress);
+    final descWithProgress = _setProgressTag(edited.description, edited.progress);
 
     await model.update(
       eventId: e.id!,
@@ -392,20 +379,15 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
   }
 
   Future<void> _toggleProgress(
-      BuildContext context,
-      gcal.Event e,
-      bool done,
-      ) async {
+    BuildContext context,
+    gcal.Event e,
+    bool done,
+  ) async {
     final model = context.read<CalendarModel>();
 
-    final start = (e.start?.dateTime != null
-        ? e.start!.dateTime!.toLocal()
-        : e.start?.date) ??
-        DateTime.now();
-    final end = (e.end?.dateTime != null
-        ? e.end!.dateTime!.toLocal()
-        : e.end?.date) ??
-        start.add(const Duration(hours: 1));
+    final start = (e.start?.dateTime != null ? e.start!.dateTime!.toLocal() : e.start?.date) ?? DateTime.now();
+    final end =
+        (e.end?.dateTime != null ? e.end!.dateTime!.toLocal() : e.end?.date) ?? start.add(const Duration(hours: 1));
     final isAllDay = e.start?.date != null;
 
     final newProgress = done ? 100 : 0;

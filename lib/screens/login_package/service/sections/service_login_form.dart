@@ -17,7 +17,6 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
 
   // Deep Blue 팔레트
   static const Color _base = Color(0xFF0D47A1);  // 버튼/포커스/배지
-  static const Color _dark = Color(0xFF09367D);  // 타이틀 톤
   static const Color _light = Color(0xFF5472D3); // 서피스 틴트/선택
 
   @override

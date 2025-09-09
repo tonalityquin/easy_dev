@@ -10,7 +10,8 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart' as md;
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart'
+    show FlutterSecureStorage, AndroidOptions, IOSOptions, KeychainAccessibility;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher_string.dart';
@@ -49,6 +50,15 @@ class _GithubCodeBrowserBottomSheetState extends State<GithubCodeBrowserBottomSh
   static const _kTokenKey = 'gh_token';
   final _storage = const FlutterSecureStorage();
 
+  // 🔐 Use the same secure-storage options as the Markdown sheet
+  AndroidOptions get _aOpts => const AndroidOptions(
+    encryptedSharedPreferences: true,
+  );
+
+  IOSOptions get _iOpts => const IOSOptions(
+    accessibility: KeychainAccessibility.first_unlock,
+  );
+
   // --- Prefs keys ---
   static const _kOwner = 'code_owner';
   static const _kRepo = 'code_repo';
@@ -65,7 +75,8 @@ class _GithubCodeBrowserBottomSheetState extends State<GithubCodeBrowserBottomSh
   String? _filePath; // full path for opened file (for web open)
   bool get _isFileView => _fileContent != null;
 
-  bool _isMarkdownPath(String path) => path.toLowerCase().endsWith('.md') || path.toLowerCase().endsWith('.markdown');
+  bool _isMarkdownPath(String path) =>
+      path.toLowerCase().endsWith('.md') || path.toLowerCase().endsWith('.markdown');
 
   @override
   void initState() {
@@ -101,57 +112,104 @@ class _GithubCodeBrowserBottomSheetState extends State<GithubCodeBrowserBottomSh
     await p.setString(_kPath, _pathCtrl.text.trim());
   }
 
+  // ---------- Token helpers (with options + legacy fallback) ----------
+  Future<String?> _readToken() async {
+    try {
+      // Preferred location
+      String? t = await _storage.read(key: _kTokenKey, aOptions: _aOpts, iOptions: _iOpts);
+      if (t != null && t.isNotEmpty) return t;
+
+      // Legacy location (no options)
+      t = await _storage.read(key: _kTokenKey);
+      return t;
+    } catch (_) {
+      // Silent: we'll just behave as no token
+      return null;
+    }
+  }
+
+  Future<void> _writeToken(String token) async {
+    // Write to preferred location
+    await _storage.write(
+      key: _kTokenKey,
+      value: token.trim(),
+      aOptions: _aOpts,
+      iOptions: _iOpts,
+    );
+    // Optional: clear legacy location to avoid confusion
+    await _storage.delete(key: _kTokenKey);
+  }
+
+  Future<void> _deleteToken() async {
+    // Delete both preferred and legacy
+    await _storage.delete(key: _kTokenKey, aOptions: _aOpts, iOptions: _iOpts);
+    await _storage.delete(key: _kTokenKey);
+  }
+
   Future<void> _checkTokenSaved() async {
-    final t = await _storage.read(key: _kTokenKey);
+    final t = await _readToken();
     if (!mounted) return;
     setState(() => _tokenSaved = (t != null && t.isNotEmpty));
   }
 
-  Future<String?> _readToken() => _storage.read(key: _kTokenKey);
-
   Future<void> _setTokenDialog() async {
-    final tokenCtrl = TextEditingController();
+    final tokenCtrl = TextEditingController(text: await _readToken() ?? '');
     final formKey = GlobalKey<FormState>();
+    bool obscure = true;
 
     await showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('GitHub Personal Access Token'),
-        content: Form(
-          key: formKey,
-          child: TextFormField(
-            controller: tokenCtrl,
-            obscureText: true,
-            decoration: const InputDecoration(
-              labelText: 'Token',
-              hintText: 'ghp_xxx (fine-grained 권장)',
-              border: OutlineInputBorder(),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('GitHub Personal Access Token'),
+          content: Form(
+            key: formKey,
+            child: TextFormField(
+              controller: tokenCtrl,
+              obscureText: obscure,
+              enableSuggestions: false,
+              autocorrect: false,
+              decoration: InputDecoration(
+                labelText: 'Token',
+                hintText: 'ghp_xxx (fine-grained 권장)',
+                border: const OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  tooltip: obscure ? '표시' : '숨김',
+                  icon: Icon(obscure ? Icons.visibility : Icons.visibility_off),
+                  onPressed: () => setLocal(() => obscure = !obscure),
+                ),
+              ),
+              validator: (v) => (v == null || v.trim().isEmpty) ? '토큰을 입력하세요' : null,
             ),
-            validator: (v) => (v == null || v.trim().isEmpty) ? '토큰을 입력하세요' : null,
           ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                await _deleteToken();
+                if (!ctx.mounted || !mounted) return;
+                Navigator.pop(ctx);
+                setState(() => _tokenSaved = false);
+                _toast('토큰이 삭제되었습니다.');
+              },
+              child: const Text('삭제'),
+            ),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
+            FilledButton(
+              onPressed: () async {
+                if (!formKey.currentState!.validate()) return;
+                await _writeToken(tokenCtrl.text);
+                if (!ctx.mounted || !mounted) return;
+                Navigator.pop(ctx);
+                setState(() => _tokenSaved = true);
+                _toast('토큰이 저장되었습니다.');
+              },
+              child: const Text('저장'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
-          FilledButton(
-            onPressed: () async {
-              if (!formKey.currentState!.validate()) return;
-
-              await _storage.write(key: _kTokenKey, value: tokenCtrl.text.trim());
-
-              // ✅ await 이후: 동일 컨텍스트 가드
-              if (!ctx.mounted || !mounted) return;
-
-              Navigator.pop(ctx);
-              setState(() => _tokenSaved = true);
-              _toast('토큰이 저장되었습니다.');
-            },
-            child: const Text('저장'),
-          ),
-        ],
       ),
     );
   }
-
 
   void _toast(String msg) {
     if (!mounted) return;
@@ -160,9 +218,11 @@ class _GithubCodeBrowserBottomSheetState extends State<GithubCodeBrowserBottomSh
 
   // -------------------- Notes helpers --------------------
 
-  String _contextPath() => _isFileView ? (_filePath ?? _pathCtrl.text.trim()) : _pathCtrl.text.trim();
+  String _contextPath() =>
+      _isFileView ? (_filePath ?? _pathCtrl.text.trim()) : _pathCtrl.text.trim();
 
-  String _noteKeyFor(String owner, String repo, String branch, String path) => 'code_note|$owner|$repo|$branch|$path';
+  String _noteKeyFor(String owner, String repo, String branch, String path) =>
+      'code_note|$owner|$repo|$branch|$path';
 
   Future<void> _loadNoteForContext() async {
     final p = await SharedPreferences.getInstance();
@@ -409,12 +469,12 @@ class _GithubCodeBrowserBottomSheetState extends State<GithubCodeBrowserBottomSh
   }
 
   InputDecoration _dec(String label, {String? hint}) => InputDecoration(
-        labelText: label,
-        hintText: hint,
-        isDense: true,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      );
+    labelText: label,
+    hintText: hint,
+    isDense: true,
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -480,7 +540,8 @@ class _GithubCodeBrowserBottomSheetState extends State<GithubCodeBrowserBottomSh
                                 onPressed: onPressed,
                                 icon: Icon(icon),
                                 padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+                                constraints:
+                                const BoxConstraints.tightFor(width: 40, height: 40),
                                 visualDensity: VisualDensity.compact,
                               );
                             }
@@ -488,9 +549,18 @@ class _GithubCodeBrowserBottomSheetState extends State<GithubCodeBrowserBottomSh
                             final trailing = Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                btn(icon: Icons.open_in_new_rounded, onPressed: _openOnGithub, tooltip: '브라우저로 보기'),
-                                btn(icon: Icons.vpn_key_rounded, onPressed: _setTokenDialog, tooltip: '토큰 설정'),
-                                btn(icon: Icons.close_rounded, onPressed: () => Navigator.pop(context), tooltip: '닫기'),
+                                btn(
+                                    icon: Icons.open_in_new_rounded,
+                                    onPressed: _openOnGithub,
+                                    tooltip: '브라우저로 보기'),
+                                btn(
+                                    icon: Icons.vpn_key_rounded,
+                                    onPressed: _setTokenDialog,
+                                    tooltip: '토큰 설정'),
+                                btn(
+                                    icon: Icons.close_rounded,
+                                    onPressed: () => Navigator.pop(context),
+                                    tooltip: '닫기'),
                               ],
                             );
 
@@ -565,7 +635,10 @@ class _GithubCodeBrowserBottomSheetState extends State<GithubCodeBrowserBottomSh
                             onPressed: _loading ? null : _loadPath,
                             icon: _loading
                                 ? const SizedBox(
-                                    width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
                                 : const Icon(Icons.folder_open_rounded),
                             label: const Text('열기/목록 불러오기'),
                           ),
@@ -573,10 +646,10 @@ class _GithubCodeBrowserBottomSheetState extends State<GithubCodeBrowserBottomSh
                           OutlinedButton.icon(
                             onPressed: _isFileView
                                 ? () => setState(() {
-                                      _fileContent = null;
-                                      _filePath = null;
-                                      _loadPath();
-                                    })
+                              _fileContent = null;
+                              _filePath = null;
+                              _loadPath();
+                            })
                                 : null,
                             icon: const Icon(Icons.arrow_back_rounded),
                             label: const Text('목록으로'),
@@ -599,15 +672,15 @@ class _GithubCodeBrowserBottomSheetState extends State<GithubCodeBrowserBottomSh
                             borderRadius: BorderRadius.circular(10),
                             child: _isFileView
                                 ? _FileViewer(
-                                    path: _filePath ?? _pathCtrl.text.trim(),
-                                    content: _fileContent!,
-                                    isMarkdown: _isMarkdownPath(_filePath ?? ''),
-                                  )
+                              path: _filePath ?? _pathCtrl.text.trim(),
+                              content: _fileContent!,
+                              isMarkdown: _isMarkdownPath(_filePath ?? ''),
+                            )
                                 : _DirectoryView(
-                                    entries: _dirEntries,
-                                    onOpenDir: _enterDir,
-                                    onOpenFile: _openFile,
-                                  ),
+                              entries: _dirEntries,
+                              onOpenDir: _enterDir,
+                              onOpenFile: _openFile,
+                            ),
                           ),
                         ),
                       ),
@@ -635,7 +708,9 @@ class _GithubCodeBrowserBottomSheetState extends State<GithubCodeBrowserBottomSh
                                 const SizedBox(width: 8),
                                 Flexible(
                                   child: Text(
-                                    _contextPath().isEmpty ? '(repo root)' : _contextPath(),
+                                    _contextPath().isEmpty
+                                        ? '(repo root)'
+                                        : _contextPath(),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
@@ -682,7 +757,7 @@ class _GithubCodeBrowserBottomSheetState extends State<GithubCodeBrowserBottomSh
                       const SizedBox(height: 12),
                       Text(
                         'Tip: 🔑 토큰을 저장한 뒤 "열기/목록 불러오기"로 탐색하세요. '
-                        '폴더 클릭 시 진입, 상단 ⬆️ 버튼으로 상위 폴더로 이동합니다.',
+                            '폴더 클릭 시 진입, 상단 ⬆️ 버튼으로 상위 폴더로 이동합니다.',
                         style: TextStyle(fontSize: 12, color: Colors.grey[700]),
                       ),
                       const SizedBox(height: 16),

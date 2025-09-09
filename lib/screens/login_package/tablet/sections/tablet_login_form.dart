@@ -17,7 +17,6 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
   // Cyan 팔레트
   static const Color _base  = Color(0xFF00ACC1); // 버튼/배지/포커스
   static const Color _dark  = Color(0xFF00838F); // 타이틀/라벨(떠있을 때)
-  static const Color _light = Color(0xFF4DD0E1); // 틴트/호버 등 보조
 
   @override
   void initState() {

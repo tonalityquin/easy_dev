@@ -33,12 +33,10 @@ class EventList extends StatelessWidget {
       itemBuilder: (context, i) {
         final e = events[i];
 
-        final isAllDay =
-            (e.start?.date != null) && (e.start?.dateTime == null);
+        final isAllDay = (e.start?.date != null) && (e.start?.dateTime == null);
 
         final startUtc = e.start?.dateTime;
-        final startLocal =
-        (startUtc != null) ? startUtc.toLocal() : e.start?.date;
+        final startLocal = (startUtc != null) ? startUtc.toLocal() : e.start?.date;
 
         final when = (startLocal != null)
             ? (isAllDay ? fmtDate.format(startLocal) : fmtDateTime.format(startLocal))

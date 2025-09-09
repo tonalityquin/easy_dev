@@ -20,8 +20,7 @@ class GoogleCalendarService {
     if (_client != null) return;
 
     // pubspec.yaml 의 assets 경로와 일치해야 합니다.
-    final jsonStr =
-    await rootBundle.loadString('assets/keys/easydev-97fb6-e31d7e6b30f9.json');
+    final jsonStr = await rootBundle.loadString('assets/keys/easydev-97fb6-e31d7e6b30f9.json');
     final Map<String, dynamic> jsonMap = json.decode(jsonStr);
 
     final creds = auth.ServiceAccountCredentials.fromJson(jsonMap);
@@ -73,10 +72,10 @@ class GoogleCalendarService {
       final s = DateTime(start.year, start.month, start.day);
       final e = DateTime(end.year, end.month, end.day);
       event.start = gcal.EventDateTime(date: s);
-      event.end   = gcal.EventDateTime(date: e);
+      event.end = gcal.EventDateTime(date: e);
     } else {
       event.start = gcal.EventDateTime(dateTime: start.toUtc());
-      event.end   = gcal.EventDateTime(dateTime: end.toUtc());
+      event.end = gcal.EventDateTime(dateTime: end.toUtc());
     }
 
     final created = await _api!.events.insert(event, calendarId);
@@ -107,10 +106,10 @@ class GoogleCalendarService {
         final s = DateTime(start.year, start.month, start.day);
         final e = DateTime(end.year, end.month, end.day);
         patch.start = gcal.EventDateTime(date: s);
-        patch.end   = gcal.EventDateTime(date: e);
+        patch.end = gcal.EventDateTime(date: e);
       } else {
         patch.start = gcal.EventDateTime(dateTime: start.toUtc());
-        patch.end   = gcal.EventDateTime(dateTime: end.toUtc());
+        patch.end = gcal.EventDateTime(dateTime: end.toUtc());
       }
     }
 
