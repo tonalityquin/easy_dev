@@ -102,8 +102,6 @@ final List<SingleChildWidget> stateProviders = [
   ChangeNotifierProvider(
     create: (_) => CalendarSelectionState(),
   ),
-
-  // ▼ 신규 추가: CompanyCalendarPage에서 사용할 전역 CalendarModel
   ChangeNotifierProvider(
     create: (_) => CalendarModel(GoogleCalendarService()),
   ),

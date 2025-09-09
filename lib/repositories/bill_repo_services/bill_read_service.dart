@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart'; // debugPrint, kDebugMode
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/bill_model.dart';
 import '../../models/regular_bill_model.dart';
-import '../../screens/community_package/debug_package/debug_firestore_logger.dart';
+import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
 
 class BillReadService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;

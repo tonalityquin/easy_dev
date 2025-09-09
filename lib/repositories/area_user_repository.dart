@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../screens/community_package/debug_package/debug_firestore_logger.dart';
+import '../screens/dev_package/debug_package/debug_firestore_logger.dart';
 
 class UserStatus {
   final String name;

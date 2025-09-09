@@ -1,38 +1,39 @@
-// lib/screens/head_package/company_calendar_page.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-// import 'package:intl/intl.dart'; // ❌ 미사용이라 제거
 import 'package:googleapis/calendar/v3.dart' as gcal;
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'calendar_package/calendar_model.dart';
-import 'calendar_package/event_editor_bottom_sheet.dart';
-import 'calendar_package/event_list.dart';
-import 'calendar_package/month_calendar_view.dart';
-import 'calendar_package/completed_events_sheet.dart'; // ✅ 추가
+import 'dev_calendar_package/calendar_model.dart';
+import 'dev_calendar_package/event_editor_bottom_sheet.dart';
+import 'dev_calendar_package/event_list.dart';
+import 'dev_calendar_package/month_calendar_view.dart';
+import 'dev_calendar_package/completed_events_sheet.dart'; // ✅ 추가
 
 // ────────────────────────────────────────────────────────────
-// Company Calendar 팔레트(카드와 동일한 톤)
-// base: #43A047, dark: #2E7D32, light: #A5D6A7, fg: white
+// Dev Calendar 팔레트 (개발 카드와 동일 톤)
+// base: #6A1B9A, dark: #4A148C, light: #CE93D8, fg: white
 // ────────────────────────────────────────────────────────────
 class _CalColors {
-  static const base = Color(0xFF43A047);
-  static const dark = Color(0xFF2E7D32);
-  static const light = Color(0xFFA5D6A7);
+  static const base = Color(0xFF6A1B9A);
+  static const dark = Color(0xFF4A148C);
+  static const light = Color(0xFFCE93D8);
   static const fg = Color(0xFFFFFFFF);
 }
 
-class CompanyCalendarPage extends StatefulWidget {
-  const CompanyCalendarPage({super.key});
+class DevCalendarPage extends StatefulWidget {
+  const DevCalendarPage({super.key});
 
   @override
-  State<CompanyCalendarPage> createState() => _CompanyCalendarPageState();
+  State<DevCalendarPage> createState() => _DevCalendarPageState();
 }
 
-class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
+class _DevCalendarPageState extends State<DevCalendarPage> {
   final _idCtrl = TextEditingController();
-  static const _kLastCalendarIdKey = 'company_last_calendar_id';
+
+  // 🔑 Company와 충돌 방지: dev 전용 키 사용
+  static const _kLastCalendarIdKey = 'dev_last_calendar_id';
+
   bool _autoTried = false;
 
   final PageController _pageController = PageController(initialPage: 0);
@@ -106,14 +107,11 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('회사 달력'),
+        title: const Text('개발 달력'),
         centerTitle: true,
-        backgroundColor: Colors.white,
-        // ✅ 흰 배경
-        foregroundColor: Colors.black87,
-        // ✅ 검은 글자/아이콘
-        surfaceTintColor: Colors.white,
-        // ✅ 머티리얼3 틴트도 흰색으로
+        backgroundColor: Colors.white, // ✅ 흰 배경
+        foregroundColor: Colors.black87, // ✅ 검은 글자/아이콘
+        surfaceTintColor: Colors.white, // ✅ M3 틴트도 흰색
         elevation: 0,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
@@ -430,7 +428,8 @@ class _CalendarIdSection extends StatelessWidget {
       ),
       onPressed: loading ? null : onLoad,
       icon: loading
-          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: _CalColors.fg))
+          ? const SizedBox(
+          width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: _CalColors.fg))
           : const Icon(Icons.download_rounded),
       label: const Text('불러오기'),
     );
@@ -490,7 +489,6 @@ class _CalendarIdSection extends StatelessWidget {
                     ],
                   ),
                 ),
-
               ),
             );
           },

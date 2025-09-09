@@ -1,28 +1,37 @@
-// lib/screens/community_stub_page.dart
+// lib/screens/dev_stub_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'community_package/game_arcade_bottom_sheet.dart';
-import 'community_package/roadmap_bottom_sheet.dart';
+import '../routes.dart';
+import 'dev_package/debug_package/debug_bottom_sheet.dart';
+import 'dev_package/game_arcade_bottom_sheet.dart';
+import 'dev_package/github_code_browser_bottom_sheet.dart';
+import 'dev_package/github_markdown_bottom_sheet.dart';
+import 'dev_package/local_prefs_bottom_sheet.dart';
 
-/// ====== 커뮤니티 전용 팔레트 (대비 강화) ======
-/// 버튼/Badge 배경(White와 5.3:1 대비 확보)
-const kCommunityPrimary = Color(0xFF00796B); // Teal 700
-const kCommunityPrimaryHover = Color(0xFF00897B); // Teal 600
-const kCommunityPrimaryPressed = Color(0xFF00695C); // Teal 800
-/// 밝은 포인트(배지/하이라이트)
-const kCommunityBase = Color(0xFF26A69A); // Teal 400
+/// ====== 개발 전용 팔레트 (개발 카드와 동일 톤) ======
+/// 버튼/Badge 배경
+const kDevPrimary = Color(0xFF6A1B9A); // Deep Purple
+const kDevPrimaryHover = Color(0xFF7B1FA2); // (옵션) Hover
+const kDevPrimaryPressed = Color(0xFF4A148C); // Pressed / Dark
+
+/// 밝은 포인트(카드 tint/표면 강조)
+const kDevTint = Color(0xFFCE93D8); // Purple 200
+
 /// 제목/링크성 텍스트(화이트 배경에서 가독성 우수)
-const kCommunityDarkText = Color(0xFF1E8077);
-
-/// 카드 tint/표면 강조
-const kCommunityTint = Color(0xFF64D8CB);
+const kDevDarkText = Color(0xFF4A148C);
 
 /// Primary 위 텍스트/아이콘
-const kCommunityOnPrimary = Colors.white;
+const kDevOnPrimary = Colors.white;
 
-class CommunityStubPage extends StatelessWidget {
-  const CommunityStubPage({super.key});
+/// ====== 회사 달력(그린) 팔레트: Head/Hub 카드와 동일 톤 ======
+const calBase = Color(0xFF43A047);  // base
+const calDark = Color(0xFF2E7D32);  // dark (title)
+const calLight = Color(0xFFA5D6A7); // light (tint)
+const calFg = Colors.white;         // on base
+
+class DevStubPage extends StatelessWidget {
+  const DevStubPage({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -43,7 +52,7 @@ class CommunityStubPage extends StatelessWidget {
           statusBarBrightness: Brightness.light,
         ),
         title: Text(
-          '커뮤니티 허브',
+          '개발 허브',
           style: text.titleMedium?.copyWith(
             fontWeight: FontWeight.w700,
             letterSpacing: 0.2,
@@ -68,7 +77,7 @@ class CommunityStubPage extends StatelessWidget {
               const _HeaderBanner(),
               const SizedBox(height: 16),
 
-              // ✅ 반응형 Grid (카드 디자인 변경 없음)
+              // ✅ 반응형 Grid
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
@@ -76,13 +85,13 @@ class CommunityStubPage extends StatelessWidget {
                     final crossAxisCount = width >= 1100
                         ? 4
                         : width >= 800
-                            ? 3
-                            : 2;
+                        ? 3
+                        : 2;
                     const spacing = 12.0;
                     final textScale = MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
 
                     final tileWidth = (width - spacing * (crossAxisCount - 1)) / crossAxisCount;
-                    final baseTileHeight = 150.0; // 필요 시 140~170 조정
+                    final baseTileHeight = 150.0;
                     final tileHeight = baseTileHeight * textScale;
                     final childAspectRatio = tileWidth / tileHeight;
 
@@ -103,17 +112,90 @@ class CommunityStubPage extends StatelessWidget {
                         },
                       ),
                       _ActionCard(
-                        icon: Icons.edit_note_rounded,
-                        title: '로드맵',
-                        subtitle: 'After Release',
-                        bg: cs.tertiaryContainer,
-                        fg: cs.onTertiaryContainer,
+                        icon: Icons.code,
+                        title: '코드',
+                        subtitle: 'Dev',
+                        bg: cs.primaryContainer,
+                        fg: cs.onPrimaryContainer,
                         onTap: () {
                           showModalBottomSheet(
                             context: context,
                             isScrollControlled: true,
                             backgroundColor: Colors.transparent,
-                            builder: (_) => const RoadmapBottomSheet(),
+                            builder: (_) => const GithubCodeBrowserBottomSheet(
+                              owner: 'tonalityquin',
+                              repo: 'easy_dev',
+                              defaultBranch: 'main',
+                            ),
+                          );
+                        },
+                      ),
+                      // ✅ 회사 달력 카드 (그린 팔레트 + tint/titleColor 지원)
+                      _ActionCard(
+                        icon: Icons.calendar_month_rounded,
+                        title: '개인 달력',
+                        subtitle: 'Google Calendar',
+                        bg: calBase,
+                        fg: calFg,
+                        tintColor: calLight,
+                        titleColor: calDark,
+                        onTap: () {
+                          Navigator.of(context).pushNamed(AppRoutes.devCalendar);
+                        },
+                      ),
+                      _ActionCard(
+                        icon: Icons.menu_book_rounded,
+                        title: '텍스트',
+                        subtitle: 'Side Project',
+                        bg: cs.primaryContainer,
+                        fg: cs.onPrimaryContainer,
+                        onTap: () {
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (_) => const GithubMarkdownBottomSheet(
+                              owner: 'tonalityquin',
+                              repo: 'side_project',
+                              defaultBranch: 'main',
+                            ),
+                          );
+                        },
+                      ),
+                      _ActionCard(
+                        icon: Icons.computer_rounded,
+                        title: '로컬 컴퓨터',
+                        subtitle: 'SharedPreferences',
+                        bg: cs.surfaceVariant,
+                        fg: cs.onSurfaceVariant,
+                        onTap: () {
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (_) => const LocalPrefsBottomSheet(),
+                          );
+                        },
+                      ),
+                      _ActionCard(
+                        icon: Icons.bug_report_rounded,
+                        title: '디버그',
+                        subtitle: 'Firestore Logs\nLocal Logs',
+                        bg: cs.errorContainer.withOpacity(.85),
+                        fg: cs.onErrorContainer,
+                        onTap: () {
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (_) => const Material(
+                              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                              clipBehavior: Clip.antiAlias,
+                              child: SizedBox(
+                                height: 560,
+                                child: DebugBottomSheet(),
+                              ),
+                            ),
                           );
                         },
                       ),
@@ -138,7 +220,7 @@ class CommunityStubPage extends StatelessWidget {
         ),
       ),
 
-      // ✅ Pelican 이미지는 하얀 배경에 최적화 → 탭 시 '/selector'로 이동 로직 복원
+      // ✅ Pelican 이미지는 하얀 배경에 최적화 → 탭 시 '/selector'로 이동
       bottomNavigationBar: SafeArea(
         top: false,
         child: DecoratedBox(
@@ -153,8 +235,8 @@ class CommunityStubPage extends StatelessWidget {
             child: InkWell(
               borderRadius: BorderRadius.circular(8),
               onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
-                '/selector',
-                (route) => false,
+                AppRoutes.selector,
+                    (route) => false,
               ),
               child: SizedBox(
                 height: 120,
@@ -178,29 +260,28 @@ class _HeaderBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        // 커뮤니티 tint에 살짝 투명도를 주어 부드럽게
-        color: kCommunityTint.withOpacity(0.75),
+        color: kDevTint.withOpacity(0.75), // ✅ 개발 tint 적용
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
-          // 아이콘 배지 — Primary 대비 White 아이콘
+          // 아이콘 배지 — Dev Primary 대비 White 아이콘
           Container(
             width: 44,
             height: 44,
             decoration: const BoxDecoration(
-              color: kCommunityPrimary,
+              color: kDevPrimary, // ✅ 개발 Primary
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,
-            child: const Icon(Icons.groups_rounded, color: kCommunityOnPrimary),
+            child: const Icon(Icons.developer_mode_rounded, color: kDevOnPrimary),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              '커뮤니티 허브 입니다.',
+              '개발 허브 입니다.',
               style: text.bodyMedium?.copyWith(
-                color: kCommunityDarkText, // 가독성 좋은 짙은 틸 텍스트
+                color: kDevDarkText, // ✅ 가독성 좋은 Deep Purple 계열 텍스트
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -215,8 +296,10 @@ class _ActionCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
-  final Color bg;
-  final Color fg;
+  final Color bg;          // 배지 배경(base)
+  final Color fg;          // 배지 아이콘(onBase)
+  final Color? tintColor;  // 카드 surfaceTint(light)  ← 추가
+  final Color? titleColor; // 제목 색(dark)           ← 추가
   final VoidCallback? onTap;
 
   const _ActionCard({
@@ -225,6 +308,8 @@ class _ActionCard extends StatelessWidget {
     required this.subtitle,
     required this.bg,
     required this.fg,
+    this.tintColor,
+    this.titleColor,
     this.onTap,
   });
 
@@ -234,11 +319,11 @@ class _ActionCard extends StatelessWidget {
       color: Colors.white,
       elevation: 1,
       clipBehavior: Clip.antiAlias,
-      surfaceTintColor: bg,
+      surfaceTintColor: tintColor ?? bg, // ✅ tintColor 지원
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          // 여백 살짝 최적화
+          // 여백 최적화
           padding: const EdgeInsets.all(12),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -264,7 +349,10 @@ class _ActionCard extends StatelessWidget {
               Text(
                 title,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontWeight: FontWeight.w700),
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: titleColor ?? Colors.black, // ✅ titleColor 지원
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),

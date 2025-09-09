@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../enums/plate_type.dart';
-import '../screens/community_package/debug_package/debug_firestore_logger.dart';
+import '../screens/dev_package/debug_package/debug_firestore_logger.dart';
 
 class AreaCount {
   final String area;

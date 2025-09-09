@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../routes.dart'; // ▼ AppRoutes 사용
-import 'head_package/roadmap_bottom_sheet.dart';
+import '../routes.dart';
 
 class HeadStubPage extends StatelessWidget {
   const HeadStubPage({super.key});
@@ -72,10 +71,6 @@ class HeadStubPage extends StatelessWidget {
                     final childAspectRatio = tileWidth / tileHeight;
 
                     // ── 팔레트 정의 (base/dark/light) ─────────────────────────
-                    // Roadmap — Deep Purple
-                    const roadBase = Color(0xFF7E57C2);
-                    const roadDark = Color(0xFF5E35B1);
-                    const roadLight = Color(0xFFB39DDB);
 
                     // Company Calendar — Green
                     const calBase = Color(0xFF43A047);
@@ -88,23 +83,6 @@ class HeadStubPage extends StatelessWidget {
                     const laborLight = Color(0xFFFFCC80);
 
                     final cards = <Widget>[
-                      _ActionCard(
-                        icon: Icons.edit_note_rounded,
-                        title: '로드맵',
-                        subtitle: 'After Release',
-                        bg: roadBase,
-                        fg: Colors.white,
-                        tintColor: roadLight,
-                        titleColor: roadDark,
-                        onTap: () {
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (_) => const RoadmapBottomSheet(),
-                          );
-                        },
-                      ),
                       _ActionCard(
                         icon: Icons.calendar_month_rounded,
                         title: '회사 달력',

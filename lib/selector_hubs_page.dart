@@ -1,3 +1,4 @@
+// lib/screens/selector_hubs_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -47,6 +48,7 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
         const _HeadquarterCard(),
       ],
       [
+        const _DevCard(),             // ✅ 개발 카드 추가
         const _CommunityCard(),
       ],
     ];
@@ -608,6 +610,43 @@ class _HeadquarterCard extends StatelessWidget {
         buttonBg: _base,
         buttonFg: Colors.white,
         onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.headStub),
+      ),
+    );
+  }
+}
+
+/// 개발 카드 — Deep Purple 팔레트
+///
+/// Palette:
+/// - base: #6A1B9A (badge/button)
+/// - dark: #4A148C (title)
+/// - light: #CE93D8 (surface tint)
+class _DevCard extends StatelessWidget {
+  const _DevCard();
+
+  static const Color _base = Color(0xFF6A1B9A);
+  static const Color _dark = Color(0xFF4A148C);
+  static const Color _light = Color(0xFFCE93D8);
+
+  @override
+  Widget build(BuildContext context) {
+    final titleStyle =
+    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
+
+    return Card(
+      color: Colors.white,
+      elevation: 1,
+      clipBehavior: Clip.antiAlias,
+      surfaceTintColor: _light,
+      child: _cardBody(
+        context: context,
+        icon: Icons.developer_mode_rounded,
+        bg: _base,
+        iconColor: Colors.white,
+        titleWidget: Text('개발', style: titleStyle, textAlign: TextAlign.center),
+        buttonBg: _base,
+        buttonFg: Colors.white,
+        onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.devStub), // ✅ DevStub 진입
       ),
     );
   }

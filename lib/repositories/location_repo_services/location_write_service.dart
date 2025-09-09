@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/location_model.dart';
-import '../../screens/community_package/debug_package/debug_firestore_logger.dart';
+import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
 
 class LocationWriteService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;

@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../models/plate_model.dart';
 import '../../enums/plate_type.dart';
-import '../../screens/community_package/debug_package/debug_firestore_logger.dart';
+import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
 
 class PlateCreationService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
