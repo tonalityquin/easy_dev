@@ -7,7 +7,6 @@ import '../../repositories/user_repo_services/user_read_service.dart';
 import '../../widgets/navigation/top_navigation.dart';
 import 'human_resource_package/break_calendar.dart';
 import 'human_resource_package/attendance_calendar.dart';
-import 'human_resource_package/google_drive.dart';
 
 class HumanResource extends StatefulWidget {
   const HumanResource({super.key});
@@ -17,7 +16,7 @@ class HumanResource extends StatefulWidget {
 }
 
 class _HumanResourceState extends State<HumanResource> {
-  int _selectedIndex = 0;
+  int _selectedIndex = 0; // 0: ATT, 1: Brk
   String? _selectedArea;
   bool _isLoading = true;
 
@@ -45,10 +44,13 @@ class _HumanResourceState extends State<HumanResource> {
 
   void _subscribeToUsers(String area) {
     _userSubscription?.cancel();
-    _userSubscription = _userReadService.watchUsersBySelectedArea(area).listen((users) {
-      if (!mounted) return;
-    }, onError: (e, st) {
-    });
+    _userSubscription =
+        _userReadService.watchUsersBySelectedArea(area).listen((users) {
+          if (!mounted) return;
+          // 필요 시 users로 UI 업데이트 로직 추가
+        }, onError: (e, st) {
+          // 에러 처리 필요 시 추가
+        });
   }
 
   @override
@@ -76,23 +78,18 @@ class _HumanResourceState extends State<HumanResource> {
           foregroundColor: Colors.black,
           elevation: 0,
         ),
-        body: _selectedIndex == 0
-            ? AttendanceCalendar()
-            : _selectedIndex == 1
-                ? GoogleDrive(selectedArea: _selectedArea!)
-                : BreakCalendar(),
+        // ✅ 2개 탭만: 0=ATT, 1=Brk
+        body: _selectedIndex == 0 ? AttendanceCalendar() : BreakCalendar(),
         bottomNavigationBar: HqMiniNavigation(
           height: 56,
           iconSize: 22,
-          currentIndex: _selectedIndex, // ⬅️ 추가
+          currentIndex: _selectedIndex,
           icons: const [
-            Icons.how_to_reg,
-            Icons.cloud,
-            Icons.self_improvement,
+            Icons.how_to_reg,       // ATT
+            Icons.self_improvement, // Brk
           ],
           labels: const [
             'ATT',
-            'Drive',
             'Brk',
           ],
           onIconTapped: (index) {
