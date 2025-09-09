@@ -1,3 +1,4 @@
+// lib/screens/head_stub_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../routes.dart';
@@ -57,8 +58,8 @@ class HeadStubPage extends StatelessWidget {
                     final crossAxisCount = width >= 1100
                         ? 4
                         : width >= 800
-                            ? 3
-                            : 2;
+                        ? 3
+                        : 2;
 
                     const spacing = 12.0;
                     final textScale = MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
@@ -82,12 +83,16 @@ class HeadStubPage extends StatelessWidget {
                     const laborDark = Color(0xFFE65100);
                     const laborLight = Color(0xFFFFCC80);
 
+                    // Attendance Sheet — Indigo
+                    const attBase = Color(0xFF3949AB);
+                    const attDark = Color(0xFF283593);
+                    const attLight = Color(0xFF7986CB);
+
                     final cards = <Widget>[
                       _ActionCard(
                         icon: Icons.calendar_month_rounded,
                         title: '회사 달력',
-                        subtitle: 'Google Calendar\nGoogle Sheet',
-                        // ✅ 2줄
+                        subtitle: 'Google Calendar\nGoogle Sheets',
                         bg: calBase,
                         fg: Colors.white,
                         tintColor: calLight,
@@ -106,6 +111,20 @@ class HeadStubPage extends StatelessWidget {
                         titleColor: laborDark,
                         onTap: () {
                           Navigator.of(context).pushNamed(AppRoutes.laborGuide);
+                        },
+                      ),
+
+                      // ▼ 신규: 출/퇴근(시트 뷰)
+                      _ActionCard(
+                        icon: Icons.schedule_rounded,
+                        title: '출/퇴근',
+                        subtitle: 'Google Sheets',
+                        bg: attBase,
+                        fg: Colors.white,
+                        tintColor: attLight,
+                        titleColor: attDark,
+                        onTap: () {
+                          Navigator.of(context).pushNamed(AppRoutes.attendanceSheet);
                         },
                       ),
                     ];
@@ -129,7 +148,7 @@ class HeadStubPage extends StatelessWidget {
                 child: InkWell(
                   onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
                     '/selector', // AppRoutes.selector
-                    (route) => false,
+                        (route) => false,
                   ),
                   borderRadius: BorderRadius.circular(8),
                   child: SizedBox(
@@ -162,7 +181,6 @@ class _HeaderBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        // 단색을 원하면: color: _light.withOpacity(0.7),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -180,7 +198,7 @@ class _HeaderBanner extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: _dark.withOpacity(0.08), // 아이콘 배경 원형
+              color: _dark.withOpacity(0.08),
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.groups_rounded, color: _dark),
@@ -190,7 +208,7 @@ class _HeaderBanner extends StatelessWidget {
             child: Text(
               '본사 허브 입니다.',
               style: text.bodyMedium?.copyWith(
-                color: _dark, // 텍스트 컬러 고정
+                color: _dark,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -232,7 +250,6 @@ class _ActionCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          // 살짝 여백 절약
           padding: const EdgeInsets.all(12),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -272,10 +289,9 @@ class _ActionCard extends StatelessWidget {
                 style: TextStyle(
                   color: Colors.grey.shade600,
                   fontSize: 12,
-                  height: 1.15, // 줄간격을 살짝 촘촘하게
+                  height: 1.15,
                 ),
                 maxLines: 2,
-                // 최대 2줄
                 overflow: TextOverflow.ellipsis,
                 softWrap: true,
               ),

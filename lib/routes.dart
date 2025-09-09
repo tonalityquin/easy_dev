@@ -1,23 +1,11 @@
 // lib/routes.dart
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-
 import 'package:easydev/screens/dev_stub_page.dart';
 import 'package:easydev/screens/head_stub_page.dart';
-
+import 'package:flutter/material.dart';
 import 'screens/commute_package/commute_outside_screen.dart';
 import 'screens/commute_package/commute_inside_screen.dart';
-
 import 'screens/dev_package/dev_calendar_page.dart';
-import 'screens/dev_package/dev_calendar_package/calendar_model.dart' as devcal;
-import 'screens/dev_package/dev_calendar_package/google_calendar_service.dart'
-as devsvc;
-
 import 'screens/head_package/company_calendar_page.dart';
-import 'screens/head_package/calendar_package/calendar_model.dart' as headcal;
-import 'screens/head_package/calendar_package/google_calendar_service.dart'
-as headsvc;
-
 import 'screens/head_package/labor_guide_page.dart';
 import 'screens/headquarter_page.dart';
 import 'screens/login_package/login_screen.dart';
@@ -30,6 +18,8 @@ import 'screens/parking_page.dart';
 
 import 'screens/community_stub_page.dart';
 
+// ▼ 신규 페이지 import
+import 'screens/head_package/timesheet_page.dart';
 class AppRoutes {
   static const selector = '/selector';
   static const serviceLogin = '/service_login';
@@ -46,10 +36,14 @@ class AppRoutes {
   static const headStub = '/head_stub';
   static const devStub = '/dev_stub';
 
-  // ▼ 신규 라우트
+  // ▼ 기존
   static const companyCalendar = '/company_calendar';
   static const devCalendar = '/dev_calendar';
   static const laborGuide = '/labor_guide';
+
+  // ▼ 신규 라우트
+  static const attendanceSheet = '/attendance_sheet';
+  static const breakSheet = '/break_sheet';
 }
 
 final Map<String, WidgetBuilder> appRoutes = {
@@ -68,16 +62,12 @@ final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.headStub: (context) => const HeadStubPage(),
   AppRoutes.devStub: (context) => const DevStubPage(),
 
-  // ▼ 신규 페이지 매핑 (각 페이지별 알맞은 Provider 주입)
-  AppRoutes.companyCalendar: (context) =>
-      ChangeNotifierProvider<headcal.CalendarModel>(
-        create: (_) => headcal.CalendarModel(headsvc.GoogleCalendarService()),
-        child: const CompanyCalendarPage(),
-      ),
-  AppRoutes.devCalendar: (context) =>
-      ChangeNotifierProvider<devcal.CalendarModel>(
-        create: (_) => devcal.CalendarModel(devsvc.GoogleCalendarService()),
-        child: const DevCalendarPage(),
-      ),
+  // ▼ 기존 페이지
+  AppRoutes.companyCalendar: (context) => const CompanyCalendarPage(),
+  AppRoutes.devCalendar: (context) => const DevCalendarPage(),
   AppRoutes.laborGuide: (context) => const LaborGuidePage(),
+
+  // ▼ 신규 페이지 매핑
+  AppRoutes.attendanceSheet: (context) => const TimesheetPage(initialTab: TimesheetTab.attendance),
+  AppRoutes.breakSheet: (context) => const TimesheetPage(initialTab: TimesheetTab.breakTime),
 };
