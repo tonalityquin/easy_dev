@@ -10,12 +10,11 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart' as md;
-import 'package:flutter_secure_storage/flutter_secure_storage.dart'
-    show FlutterSecureStorage, AndroidOptions, IOSOptions, KeychainAccessibility;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
+import 'github_common.dart';
 class GithubCodeBrowserBottomSheet extends StatefulWidget {
   const GithubCodeBrowserBottomSheet({
     super.key,
@@ -48,22 +47,11 @@ class _GithubCodeBrowserBottomSheetState extends State<GithubCodeBrowserBottomSh
 
   // --- Token storage ---
   static const _kTokenKey = 'gh_token';
-  final _storage = const FlutterSecureStorage();
+  // final _storage = const FlutterSecureStorage(); // moved to GithubTokenStore
 
-  // 🔐 Use the same secure-storage options as the Markdown sheet
-  AndroidOptions get _aOpts => const AndroidOptions(
-    encryptedSharedPreferences: true,
-  );
-
-  IOSOptions get _iOpts => const IOSOptions(
-    accessibility: KeychainAccessibility.first_unlock,
-  );
-
-  // --- Prefs keys ---
-  static const _kOwner = 'code_owner';
-  static const _kRepo = 'code_repo';
-  static const _kBranch = 'code_branch';
-  static const _kPath = 'code_path';
+  // 🔐 Use the same secure-storage options are now managed in GithubTokenStore
+  // AndroidOptions _aOpts = const AndroidOptions(encryptedSharedPreferences: true); // moved to GithubTokenStore
+  // IOSOptions _iOpts = const IOSOptions(accessibility: KeychainAccessibility.first_unlock); // moved to GithubTokenStore
 
   // --- View state ---
   bool _loading = false;
@@ -95,55 +83,42 @@ class _GithubCodeBrowserBottomSheetState extends State<GithubCodeBrowserBottomSh
   }
 
   Future<void> _restorePrefs() async {
-    final p = await SharedPreferences.getInstance();
+    final p = await ghPrefsInstance();
+    final d = await GhPrefs.restore(p);
     setState(() {
-      _ownerCtrl.text = widget.owner ?? p.getString(_kOwner) ?? _ownerCtrl.text;
-      _repoCtrl.text = widget.repo ?? p.getString(_kRepo) ?? _repoCtrl.text;
-      _branchCtrl.text = widget.defaultBranch ?? p.getString(_kBranch) ?? _branchCtrl.text;
-      _pathCtrl.text = widget.initialPath ?? p.getString(_kPath) ?? _pathCtrl.text;
+      _ownerCtrl.text = widget.owner ?? d.owner ?? _ownerCtrl.text;
+      _repoCtrl.text = widget.repo ?? d.repo ?? _repoCtrl.text;
+      _branchCtrl.text = widget.defaultBranch ?? d.branch ?? _branchCtrl.text;
+      _pathCtrl.text = widget.initialPath ?? d.path ?? _pathCtrl.text;
     });
   }
 
   Future<void> _savePrefs() async {
-    final p = await SharedPreferences.getInstance();
-    await p.setString(_kOwner, _ownerCtrl.text.trim());
-    await p.setString(_kRepo, _repoCtrl.text.trim());
-    await p.setString(_kBranch, _branchCtrl.text.trim());
-    await p.setString(_kPath, _pathCtrl.text.trim());
+    final p = await ghPrefsInstance();
+    await GhPrefs.save(
+      p,
+      owner: _ownerCtrl.text.trim(),
+      repo: _repoCtrl.text.trim(),
+      branch: _branchCtrl.text.trim(),
+      path: _pathCtrl.text.trim(),
+    );
   }
 
-  // ---------- Token helpers (with options + legacy fallback) ----------
+  // ---------- Token helpers (now via GithubTokenStore, with options + legacy fallback) ----------
   Future<String?> _readToken() async {
     try {
-      // Preferred location
-      String? t = await _storage.read(key: _kTokenKey, aOptions: _aOpts, iOptions: _iOpts);
-      if (t != null && t.isNotEmpty) return t;
-
-      // Legacy location (no options)
-      t = await _storage.read(key: _kTokenKey);
-      return t;
+      return await GithubTokenStore.read(key: _kTokenKey);
     } catch (_) {
-      // Silent: we'll just behave as no token
       return null;
     }
   }
 
   Future<void> _writeToken(String token) async {
-    // Write to preferred location
-    await _storage.write(
-      key: _kTokenKey,
-      value: token.trim(),
-      aOptions: _aOpts,
-      iOptions: _iOpts,
-    );
-    // Optional: clear legacy location to avoid confusion
-    await _storage.delete(key: _kTokenKey);
+    await GithubTokenStore.write(token, key: _kTokenKey);
   }
 
   Future<void> _deleteToken() async {
-    // Delete both preferred and legacy
-    await _storage.delete(key: _kTokenKey, aOptions: _aOpts, iOptions: _iOpts);
-    await _storage.delete(key: _kTokenKey);
+    await GithubTokenStore.delete(key: _kTokenKey);
   }
 
   Future<void> _checkTokenSaved() async {

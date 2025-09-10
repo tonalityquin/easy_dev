@@ -84,8 +84,8 @@ class DevStubPage extends StatelessWidget {
                     final crossAxisCount = width >= 1100
                         ? 4
                         : width >= 800
-                            ? 3
-                            : 2;
+                        ? 3
+                        : 2;
                     const spacing = 12.0;
                     final textScale = MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
 
@@ -221,7 +221,7 @@ class DevStubPage extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
               onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
                 AppRoutes.selector,
-                (route) => false,
+                    (route) => false,
               ),
               child: SizedBox(
                 height: 120,
