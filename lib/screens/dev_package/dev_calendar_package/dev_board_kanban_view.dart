@@ -5,26 +5,20 @@ import 'package:googleapis/calendar/v3.dart' as gcal;
 /// 보드 버킷 정의
 enum BoardBucket { today, thisWeek, later, done }
 
-/// progress 추출, 편집/삭제/토글, 이동 콜백을 외부에서 주입
-/// - 이 버전은 "한 화면에 한 컬럼"만 보여주고, PageView 스와이프로 칼럼 전환
+/// progress 추출, 완료 토글 콜백(onToggleProgress)만 외부에서 주입
+/// - "한 화면에 한 컬럼"만 보여주고, PageView 스와이프로 칼럼 전환
 class DevBoardKanbanView extends StatefulWidget {
   const DevBoardKanbanView({
     super.key,
     required this.allEvents,
     required this.progressOf,
-    required this.onEdit,
-    required this.onDelete,
     required this.onToggleProgress,
-    required this.onMove,
     this.initialPage = 0,
   });
 
   final List<gcal.Event> allEvents;
   final int Function(gcal.Event e) progressOf;
-  final Future<void> Function(BuildContext context, gcal.Event e) onEdit;
-  final Future<void> Function(BuildContext context, gcal.Event e) onDelete;
   final Future<void> Function(BuildContext context, gcal.Event e, bool done) onToggleProgress;
-  final Future<void> Function(BuildContext context, gcal.Event e, BoardBucket target) onMove;
 
   /// 0: 오늘, 1: 이번주, 2: 나중에, 3: 완료
   final int initialPage;
@@ -105,10 +99,7 @@ class _DevBoardKanbanViewState extends State<DevBoardKanbanView> {
                 bucket: p.bucket,
                 events: p.events,
                 progressOf: widget.progressOf,
-                onEdit: widget.onEdit,
-                onDelete: widget.onDelete,
                 onToggleProgress: widget.onToggleProgress,
-                onMove: widget.onMove,
               );
             },
           ),
@@ -119,10 +110,10 @@ class _DevBoardKanbanViewState extends State<DevBoardKanbanView> {
 
   /// 버킷 분류
   Map<BoardBucket, List<gcal.Event>> _splitByBucket(
-      List<gcal.Event> source,
-      int Function(gcal.Event e) progressOf,
-      DateTime now,
-      ) {
+    List<gcal.Event> source,
+    int Function(gcal.Event e) progressOf,
+    DateTime now,
+  ) {
     final map = {
       BoardBucket.today: <gcal.Event>[],
       BoardBucket.thisWeek: <gcal.Event>[],
@@ -176,7 +167,12 @@ class _DevBoardKanbanViewState extends State<DevBoardKanbanView> {
 }
 
 class _BoardPageData {
-  _BoardPageData({required this.title, required this.bucket, required this.events});
+  _BoardPageData({
+    required this.title,
+    required this.bucket,
+    required this.events,
+  });
+
   final String title;
   final BoardBucket bucket;
   final List<gcal.Event> events;
@@ -184,7 +180,12 @@ class _BoardPageData {
 
 /// 상단 탭 (인디케이터 + 카운트)
 class _TopTabs extends StatelessWidget {
-  const _TopTabs({required this.index, required this.pages, required this.onTap});
+  const _TopTabs({
+    required this.index,
+    required this.pages,
+    required this.onTap,
+  });
+
   final int index;
   final List<_BoardPageData> pages;
   final ValueChanged<int> onTap;
@@ -203,13 +204,16 @@ class _TopTabs extends StatelessWidget {
               onTap: () => onTap(i),
               borderRadius: BorderRadius.circular(10),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 8,
+                ),
                 decoration: sel
                     ? BoxDecoration(
-                  color: Colors.purple.shade100.withOpacity(.35),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.purple.shade200),
-                )
+                        color: Colors.purple.shade100.withOpacity(.35),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.purple.shade200),
+                      )
                     : null,
                 child: Center(
                   child: Row(
@@ -224,14 +228,21 @@ class _TopTabs extends StatelessWidget {
                       ),
                       const SizedBox(width: 6),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: sel ? Colors.purple.shade300 : Colors.purple.shade200,
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
                           '${p.events.length}',
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                          ),
                         ),
                       ),
                     ],
@@ -253,20 +264,14 @@ class _KanbanColumnPage extends StatelessWidget {
     required this.bucket,
     required this.events,
     required this.progressOf,
-    required this.onEdit,
-    required this.onDelete,
     required this.onToggleProgress,
-    required this.onMove,
   });
 
   final String title;
   final BoardBucket bucket;
   final List<gcal.Event> events;
   final int Function(gcal.Event e) progressOf;
-  final Future<void> Function(BuildContext context, gcal.Event e) onEdit;
-  final Future<void> Function(BuildContext context, gcal.Event e) onDelete;
   final Future<void> Function(BuildContext context, gcal.Event e, bool done) onToggleProgress;
-  final Future<void> Function(BuildContext context, gcal.Event e, BoardBucket target) onMove;
 
   @override
   Widget build(BuildContext context) {
@@ -275,32 +280,18 @@ class _KanbanColumnPage extends StatelessWidget {
         _ColumnHeader(title: title, count: events.length),
         const Divider(height: 1),
         Expanded(
-          child: DragTarget<gcal.Event>(
-            onWillAccept: (_) => true,
-            onAccept: (e) => onMove(context, e, bucket),
-            builder: (context, candidate, rejected) {
-              final isActive = candidate.isNotEmpty;
-              return Container(
-                decoration: BoxDecoration(
-                  color: isActive ? Colors.purple.withOpacity(.05) : null,
-                  border: isActive
-                      ? Border(left: BorderSide(color: Colors.purple.withOpacity(.25), width: 3))
-                      : null,
-                ),
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(8),
-                  itemCount: events.length,
-                  itemBuilder: (context, i) {
-                    final e = events[i];
-                    return _DraggableEventCard(
-                      event: e,
-                      progress: progressOf(e),
-                      onEdit: () => onEdit(context, e),
-                      onDelete: () => onDelete(context, e),
-                      onToggleDone: () => onToggleProgress(context, e, progressOf(e) != 100),
-                      onMove: (t) => onMove(context, e, t),
-                    );
-                  },
+          child: ListView.builder(
+            padding: const EdgeInsets.all(8),
+            itemCount: events.length,
+            itemBuilder: (context, i) {
+              final e = events[i];
+              return _EventCard(
+                event: e,
+                progress: progressOf(e),
+                onToggleDone: () => onToggleProgress(
+                  context,
+                  e,
+                  progressOf(e) != 100,
                 ),
               );
             },
@@ -313,6 +304,7 @@ class _KanbanColumnPage extends StatelessWidget {
 
 class _ColumnHeader extends StatelessWidget {
   const _ColumnHeader({required this.title, required this.count});
+
   final String title;
   final int count;
 
@@ -333,7 +325,11 @@ class _ColumnHeader extends StatelessWidget {
             ),
             child: Text(
               '$count',
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
             ),
           ),
         ],
@@ -342,23 +338,17 @@ class _ColumnHeader extends StatelessWidget {
   }
 }
 
-/// 드래그 가능한 이벤트 카드 (다른 버킷으로 '이동' 메뉴 포함)
-class _DraggableEventCard extends StatelessWidget {
-  const _DraggableEventCard({
+/// 단순 이벤트 카드 (완료 토글 버튼만 유지)
+class _EventCard extends StatelessWidget {
+  const _EventCard({
     required this.event,
     required this.progress,
-    required this.onEdit,
-    required this.onDelete,
     required this.onToggleDone,
-    required this.onMove,
   });
 
   final gcal.Event event;
   final int progress;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
   final VoidCallback onToggleDone;
-  final void Function(BoardBucket target) onMove;
 
   @override
   Widget build(BuildContext context) {
@@ -382,7 +372,11 @@ class _DraggableEventCard extends StatelessWidget {
             color: isDone ? Colors.green.shade600 : Colors.purple.shade300,
             shape: BoxShape.circle,
           ),
-          child: Icon(isDone ? Icons.check_rounded : Icons.drag_indicator_rounded, color: Colors.white, size: 18),
+          child: Icon(
+            isDone ? Icons.check_rounded : Icons.circle_outlined,
+            color: Colors.white,
+            size: 18,
+          ),
         ),
         title: Text(
           title,
@@ -402,71 +396,17 @@ class _DraggableEventCard extends StatelessWidget {
             decoration: isDone ? TextDecoration.lineThrough : null,
           ),
         ),
-        trailing: Wrap(
-          spacing: 2,
-          children: [
-            IconButton(
-              icon: Icon(isDone ? Icons.undo_rounded : Icons.done_rounded),
-              tooltip: isDone ? '미완료로' : '완료하기',
-              onPressed: onToggleDone,
-              iconSize: 20,
-            ),
-            IconButton(
-              icon: const Icon(Icons.edit),
-              tooltip: '편집',
-              onPressed: onEdit,
-              iconSize: 20,
-            ),
-            PopupMenuButton<String>(
-              tooltip: '이동',
-              itemBuilder: (context) => [
-                const PopupMenuItem(value: 'today', child: Text('오늘로 이동')),
-                const PopupMenuItem(value: 'week', child: Text('이번주로 이동')),
-                const PopupMenuItem(value: 'later', child: Text('나중에로 이동')),
-                const PopupMenuItem(value: 'done', child: Text('완료로 이동')),
-              ],
-              onSelected: (v) {
-                switch (v) {
-                  case 'today':
-                    onMove(BoardBucket.today);
-                    break;
-                  case 'week':
-                    onMove(BoardBucket.thisWeek);
-                    break;
-                  case 'later':
-                    onMove(BoardBucket.later);
-                    break;
-                  case 'done':
-                    onMove(BoardBucket.done);
-                    break;
-                }
-              },
-              icon: const Icon(Icons.more_vert, size: 20),
-            ),
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              tooltip: '삭제',
-              onPressed: onDelete,
-              iconSize: 20,
-            ),
-          ],
+        // ✅ 완료 토글 버튼만 유지
+        trailing: IconButton(
+          icon: Icon(isDone ? Icons.undo_rounded : Icons.done_rounded),
+          tooltip: isDone ? '미완료로' : '완료하기',
+          onPressed: onToggleDone,
+          iconSize: 20,
         ),
       ),
     );
 
-    return LongPressDraggable<gcal.Event>(
-      data: event,
-      feedback: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 320),
-        child: Material(
-          color: Colors.transparent,
-          child: Opacity(opacity: .9, child: card),
-        ),
-      ),
-      childWhenDragging: Opacity(opacity: .35, child: card),
-      dragAnchorStrategy: pointerDragAnchorStrategy,
-      child: card,
-    );
+    return card;
   }
 
   String _formatWhen(gcal.Event e) {

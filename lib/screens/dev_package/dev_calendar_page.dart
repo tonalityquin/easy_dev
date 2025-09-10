@@ -282,10 +282,7 @@ class _DevCalendarPageState extends State<DevCalendarPage> {
               progressOf: (e) => _extractProgress(e.description),
 
               // ✅ 보드의 내부 context(c)가 아니라 pageContext로 래핑
-              onEdit: (c, e) => _openEditSheet(pageContext, e),
-              onDelete: (c, e) => _confirmDelete(pageContext, e),
               onToggleProgress: (c, e, done) => _toggleProgress(pageContext, e, done),
-              onMove: (c, e, bucket) => _moveToBucket(pageContext, e, bucket),
 
               initialPage: 0,
             ),
@@ -405,98 +402,6 @@ class _DevCalendarPageState extends State<DevCalendarPage> {
   }
 
   /// ✅ 드래그/메뉴 이동 시 날짜/진행도 보정
-  Future<void> _moveToBucket(BuildContext context, gcal.Event e, BoardBucket target) async {
-    final model = context.read<DevCalendarModel>();
-
-    final now = DateTime.now();
-    final start0 = (e.start?.dateTime != null ? e.start!.dateTime!.toLocal() : e.start?.date) ?? now;
-    final end0 = (e.end?.dateTime != null ? e.end!.dateTime!.toLocal() : e.end?.date) ??
-        (e.start?.dateTime != null ? start0.add(const Duration(hours: 1)) : start0.add(const Duration(days: 1)));
-    final isAllDay = e.start?.date != null;
-    final dur = end0.difference(start0);
-
-    DateTime _roundUp30(DateTime t) {
-      final add = (t.minute % 30 == 0) ? 0 : (30 - (t.minute % 30));
-      final base = DateTime(t.year, t.month, t.day, t.hour, t.minute);
-      return base.add(Duration(minutes: add));
-    }
-
-    DateTime nextWeekday(DateTime t) {
-      final wd = t.weekday; // 월=1, ... 일=7
-      final add = (wd >= 5) ? (8 - wd) : 1; // 금/토/일이면 다음 월, 아니면 +1일
-      return DateTime(t.year, t.month, t.day).add(Duration(days: add));
-    }
-
-    DateTime nextMonday(DateTime t) {
-      final wd = t.weekday; // 월=1
-      final add = (8 - wd) % 7;
-      final d = DateTime(t.year, t.month, t.day).add(Duration(days: add == 0 ? 7 : add));
-      return d;
-    }
-
-    DateTime newStart;
-    DateTime newEnd;
-    int newProgress;
-
-    switch (target) {
-      case BoardBucket.done:
-        newStart = start0;
-        newEnd = end0;
-        newProgress = 100;
-        break;
-
-      case BoardBucket.today:
-        if (isAllDay) {
-          final d0 = DateTime(now.year, now.month, now.day);
-          newStart = d0;
-          newEnd = d0.add(dur.inDays > 0 ? Duration(days: dur.inDays) : const Duration(days: 1));
-        } else {
-          final base = _roundUp30(now).add(const Duration(minutes: 30));
-          newStart = DateTime(base.year, base.month, base.day, base.hour, base.minute);
-          newEnd = newStart.add(dur.inMinutes > 0 ? dur : const Duration(hours: 1));
-        }
-        newProgress = 0;
-        break;
-
-      case BoardBucket.thisWeek:
-        if (isAllDay) {
-          final d = nextWeekday(now);
-          newStart = DateTime(d.year, d.month, d.day);
-          newEnd = newStart.add(dur.inDays > 0 ? Duration(days: dur.inDays) : const Duration(days: 1));
-        } else {
-          final d = nextWeekday(now);
-          newStart = DateTime(d.year, d.month, d.day, 10, 0);
-          newEnd = newStart.add(dur.inMinutes > 0 ? dur : const Duration(hours: 1));
-        }
-        newProgress = 0;
-        break;
-
-      case BoardBucket.later:
-        if (isAllDay) {
-          final d = nextMonday(now);
-          newStart = DateTime(d.year, d.month, d.day);
-          newEnd = newStart.add(dur.inDays > 0 ? Duration(days: dur.inDays) : const Duration(days: 1));
-        } else {
-          final d = nextMonday(now);
-          newStart = DateTime(d.year, d.month, d.day, 9, 0);
-          newEnd = newStart.add(dur.inMinutes > 0 ? dur : const Duration(hours: 1));
-        }
-        newProgress = 0;
-        break;
-    }
-
-    final newDesc = _setProgressTag(e.description, newProgress);
-
-    await model.update(
-      eventId: e.id!,
-      summary: e.summary ?? '',
-      description: newDesc,
-      start: newStart,
-      end: newEnd,
-      allDay: isAllDay,
-      colorId: e.colorId,
-    );
-  }
 }
 
 // ===== 바텀시트용 보드 래퍼(상단 핸들/닫기 버튼 포함) =====
