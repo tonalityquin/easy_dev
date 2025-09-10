@@ -480,8 +480,7 @@ class _InfoBanner extends StatelessWidget {
           SizedBox(width: 10),
           Expanded(
             child: Text(
-              '캘린더 ID 또는 URL을 입력 후 불러오기를 누르세요. (예: someone@gmail.com)\n'
-              '좌우 스와이프: 캘린더 ↔ 목록,  하단 좌측 "보드" 버튼: 칸반 보드(스와이프로 컬럼 전환).',
+              '테스크 캘린더',
               style: TextStyle(
                 color: _CalColors.fg,
                 fontWeight: FontWeight.w700,

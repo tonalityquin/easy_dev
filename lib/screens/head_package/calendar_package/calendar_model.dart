@@ -15,6 +15,28 @@ class CalendarModel extends ChangeNotifier {
   String? error;
   List<gcal.Event> events = [];
 
+  // ---- progress 파생상태 유틸 (위젯 쪽에서 공용으로 쓰기 좋게 제공) ----
+  static final RegExp progressTag = RegExp(r'\[\s*progress\s*:\s*(0|100)\s*\]', caseSensitive: false);
+
+  /// description에 [progress:0|100]이 있으면 0/100 반환, 없으면 0
+  static int progressOfEvent(gcal.Event e) {
+    final m = progressTag.firstMatch(e.description ?? '');
+    if (m == null) return 0;
+    final v = int.tryParse(m.group(1) ?? '0') ?? 0;
+    return v == 100 ? 100 : 0;
+  }
+
+  /// description에 [progress:x]를 삽입/치환하여 반환 (x는 0 또는 100)
+  static String setProgressTag(String? description, int progress) {
+    final val = (progress == 100) ? 100 : 0;
+    final base = (description ?? '').trimRight();
+    if (progressTag.hasMatch(base)) {
+      return base.replaceAllMapped(progressTag, (_) => '[progress:$val]');
+    }
+    if (base.isEmpty) return '[progress:$val]';
+    return '$base\n[progress:$val]';
+  }
+
   // URL 전체를 붙여넣어도 src=에서 캘린더 ID를 뽑아내는 정규화
   String? _normalizeCalendarId(String raw) {
     if (raw.isEmpty) return null;
@@ -185,7 +207,7 @@ class CalendarModel extends ChangeNotifier {
       // ✅ 반드시 description을 patch에 포함시키기 위해
       //    description이 null이면 현재 이벤트의 description(또는 '')를 사용
       final current = events.firstWhere(
-        (e) => e.id == eventId,
+            (e) => e.id == eventId,
         orElse: () => gcal.Event()..description = '',
       );
       final descToSend = (description != null) ? description : (current.description ?? '');
@@ -194,8 +216,7 @@ class CalendarModel extends ChangeNotifier {
         calendarId: calendarId,
         eventId: eventId,
         summary: summary,
-        description: descToSend,
-        // ← 항상 non-null로 전달하여 patch에 포함
+        description: descToSend, // ← 항상 non-null로 전달하여 patch에 포함
         start: start,
         end: end,
         allDay: allDay,
@@ -251,10 +272,10 @@ class CalendarModel extends ChangeNotifier {
   }
 
   List<gcal.Event> _filterByRange(
-    List<gcal.Event> source,
-    DateTime min, // inclusive
-    DateTime max, // exclusive
-  ) {
+      List<gcal.Event> source,
+      DateTime min, // inclusive
+      DateTime max, // exclusive
+      ) {
     bool overlaps(gcal.Event e) {
       final range = _eventRangeLocal(e);
       if (range == null) return false;

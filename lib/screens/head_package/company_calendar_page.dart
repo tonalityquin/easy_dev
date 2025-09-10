@@ -10,7 +10,8 @@ import 'calendar_package/calendar_model.dart';
 import 'calendar_package/event_editor_bottom_sheet.dart';
 import 'calendar_package/event_list.dart';
 import 'calendar_package/month_calendar_view.dart';
-import 'calendar_package/completed_events_sheet.dart'; // ✅ 추가
+import 'calendar_package/completed_events_sheet.dart'; // ✅ 완료 목록 바텀시트
+import 'calendar_package/board_kanban_view.dart'; // ✅ 보드(오늘/이번주/나중에/완료) 페이지
 
 // ────────────────────────────────────────────────────────────
 // Company Calendar 팔레트(카드와 동일한 톤)
@@ -36,7 +37,7 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
   bool _autoTried = false;
 
   final PageController _pageController = PageController(initialPage: 0);
-  int _viewIndex = 0; // 0: 캘린더, 1: 목록
+  int _viewIndex = 0; // 0: 캘린더, 1: 목록, 2: 보드
 
   // 🔒 캘린더 ID 입력 보호(잠금) 토글 — 기본값: 잠금 활성화
   bool _idLocked = true;
@@ -108,12 +109,9 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
       appBar: AppBar(
         title: const Text('회사 달력'),
         centerTitle: true,
-        backgroundColor: Colors.white,
-        // ✅ 흰 배경
-        foregroundColor: Colors.black87,
-        // ✅ 검은 글자/아이콘
-        surfaceTintColor: Colors.white,
-        // ✅ 머티리얼3 틴트도 흰색으로
+        backgroundColor: Colors.white,         // ✅ 흰 배경
+        foregroundColor: Colors.black87,       // ✅ 검은 글자/아이콘
+        surfaceTintColor: Colors.white,        // ✅ 머티리얼3 틴트도 흰색으로
         elevation: 0,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
@@ -135,8 +133,8 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
       // ✅ FAB를 하단 중앙으로 이동
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
 
-      // ✅ 확장형 FAB 적용 (살짝 위로 올림)
-      floatingActionButton: _buildCreateFab(context),
+      // ✅ Dev와 동일: 왼쪽 '보드', 오른쪽 '새 이벤트' (두 버튼 통일 디자인)
+      floatingActionButton: _buildFabRow(context),
 
       body: Padding(
         padding: const EdgeInsets.all(16),
@@ -152,7 +150,7 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
               locked: _idLocked,
               loading: model.loading,
               onToggleLock: () => setState(() => _idLocked = !_idLocked),
-              onClear: () => setState(() => _idCtrl.clear()),
+              onClear: () => setState(() => _idCtrl.clear() ),
               onLoad: () async {
                 FocusScope.of(context).unfocus();
                 await context.read<CalendarModel>().load(newCalendarId: _idCtrl.text);
@@ -175,7 +173,7 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
 
             const SizedBox(height: 8),
 
-            // 본문: 좌우 스와이프 전환
+            // 본문: 좌우 스와이프 전환 (보드 페이지도 유지)
             Expanded(
               child: PageView(
                 controller: _pageController,
@@ -203,6 +201,12 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
                     onToggleProgress: _toggleProgress,
                     progressOf: (e) => _extractProgress(e.description),
                   ),
+                  // 2) 보드(오늘/이번주/나중에/완료) — 페이지에서도 사용 가능(유지)
+                  BoardKanbanView(
+                    allEvents: model.events,
+                    progressOf: (e) => _extractProgress(e.description),
+                    onToggleProgress: _toggleProgress,
+                  ),
                 ],
               ),
             ),
@@ -212,27 +216,85 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
     );
   }
 
-  /// ✅ 하단 중앙 확장형 FAB (Transform으로 살짝 위로 올림)
-  Widget _buildCreateFab(BuildContext context) {
+  /// ──────────────────────────────────────────────────────────
+  /// 공통 pill 스타일 버튼 (Outlined)
+  /// ──────────────────────────────────────────────────────────
+  Widget _pillButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+  }) {
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 20),
+      label: Text(label),
+      style: OutlinedButton.styleFrom(
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black87,
+        side: BorderSide(color: Colors.black.withOpacity(0.12)),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        textStyle: const TextStyle(fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+
+  /// ✅ Dev와 동일한 FAB Row: 왼쪽 '보드' + 오른쪽 '새 이벤트'
+  Widget _buildFabRow(BuildContext context) {
     return Transform.translate(
       offset: const Offset(0, -_fabLift),
       child: SafeArea(
         minimum: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: FloatingActionButton.extended(
-          heroTag: 'createEventFab',
-          tooltip: '새 이벤트 만들기',
-          onPressed: () => _openCreateSheet(context),
-          icon: const Icon(Icons.add),
-          label: const Text('새 이벤트'),
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black87,
-          elevation: 3,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: BorderSide(color: Colors.black.withOpacity(0.08)),
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _pillButton(
+              icon: Icons.view_kanban_rounded,
+              label: '보드',
+              onPressed: _openBoardSheet,
+            ),
+            const SizedBox(width: 8),
+            _pillButton(
+              icon: Icons.add,
+              label: '새 이벤트',
+              onPressed: () => _openCreateSheet(context),
+            ),
+          ],
         ),
       ),
+    );
+  }
+
+  /// ✅ Dev와 동일: 보드 바텀시트 오픈 (회사용 BoardKanbanView 사용)
+  Future<void> _openBoardSheet() async {
+    final pageContext = context; // Provider 읽을 상위 컨텍스트 고정
+
+    final model = pageContext.read<CalendarModel>();
+    if (model.calendarId.isEmpty) {
+      ScaffoldMessenger.of(pageContext).showSnackBar(
+        const SnackBar(content: Text('먼저 캘린더를 불러오세요.')),
+      );
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: pageContext,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) {
+        return FractionallySizedBox(
+          heightFactor: 0.92,
+          child: _BoardSheetScaffold(
+            child: BoardKanbanView(
+              allEvents: model.events,
+              progressOf: (e) => _extractProgress(e.description),
+              // ✅ 내부 위젯 context가 아닌 pageContext로 토글 로직 연결
+              onToggleProgress: (c, e, done) => _toggleProgress(pageContext, e, done),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -358,6 +420,53 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
   }
 }
 
+// ===== 바텀시트용 보드 래퍼(상단 핸들/닫기 버튼 포함) =====
+class _BoardSheetScaffold extends StatelessWidget {
+  const _BoardSheetScaffold({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+        child: Material(
+          elevation: 2,
+          clipBehavior: Clip.antiAlias,
+          borderRadius: BorderRadius.circular(16),
+          color: Colors.white,
+          child: Column(
+            children: [
+              const SizedBox(height: 8),
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 8),
+              ListTile(
+                dense: true,
+                title: const Text('보드', style: TextStyle(fontWeight: FontWeight.w800)),
+                trailing: IconButton(
+                  tooltip: '닫기',
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(child: child),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ===== 디자인 리팩토링 보조 위젯 =====
 
 class _InfoBanner extends StatelessWidget {
@@ -387,8 +496,7 @@ class _InfoBanner extends StatelessWidget {
           SizedBox(width: 10),
           Expanded(
             child: Text(
-              '캘린더 ID 또는 URL을 입력 후 불러오기를 누르세요. (예: someone@gmail.com)\n'
-                  '좌우로 스와이프하면 캘린더 ↔ 목록 뷰를 전환합니다.',
+                  '이벤트 완료는 보드에서,\n이벤트 수정 및 삭제와 상세 보기는 목록에서',
               style: TextStyle(
                 color: _CalColors.fg,
                 fontWeight: FontWeight.w700,
