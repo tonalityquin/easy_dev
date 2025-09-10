@@ -7,6 +7,7 @@ import 'dev_package/debug_package/debug_bottom_sheet.dart';
 import 'dev_package/github_code_browser_bottom_sheet.dart';
 import 'dev_package/github_markdown_bottom_sheet.dart';
 import 'dev_package/local_prefs_bottom_sheet.dart';
+import 'dev_package/memo/easy_memo.dart';
 
 /// ====== 개발 전용 팔레트 (개발 카드와 동일 톤) ======
 /// 버튼/Badge 배경
@@ -87,9 +88,11 @@ class DevStubPage extends StatelessWidget {
                         ? 3
                         : 2;
                     const spacing = 12.0;
-                    final textScale = MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
+                    final textScale =
+                    MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
 
-                    final tileWidth = (width - spacing * (crossAxisCount - 1)) / crossAxisCount;
+                    final tileWidth =
+                        (width - spacing * (crossAxisCount - 1)) / crossAxisCount;
                     final baseTileHeight = 150.0;
                     final tileHeight = baseTileHeight * textScale;
                     final childAspectRatio = tileWidth / tileHeight;
@@ -133,8 +136,7 @@ class DevStubPage extends StatelessWidget {
                           );
                         },
                       ),
-                      // ✅ 회사 달력 카드 (그린 팔레트 + tint/titleColor 지원)
-
+                      // ✅ 로컬 Prefs
                       _ActionCard(
                         icon: Icons.computer_rounded,
                         title: '로컬 컴퓨터',
@@ -150,6 +152,7 @@ class DevStubPage extends StatelessWidget {
                           );
                         },
                       ),
+                      // ✅ 디버그
                       _ActionCard(
                         icon: Icons.bug_report_rounded,
                         title: '디버그',
@@ -162,7 +165,8 @@ class DevStubPage extends StatelessWidget {
                             isScrollControlled: true,
                             backgroundColor: Colors.transparent,
                             builder: (_) => const Material(
-                              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                              borderRadius:
+                              BorderRadius.vertical(top: Radius.circular(16)),
                               clipBehavior: Clip.antiAlias,
                               child: SizedBox(
                                 height: 560,
@@ -172,6 +176,21 @@ class DevStubPage extends StatelessWidget {
                           );
                         },
                       ),
+                      // ✅ 메모: 카드 탭 → 메모 패널 열기 (온/오프 스위치는 패널 내부)
+                      _ActionCard(
+                        icon: Icons.sticky_note_2_rounded,
+                        title: '메모',
+                        subtitle: '플로팅 버블 · 어디서나 기록',
+                        bg: cs.primaryContainer,
+                        fg: cs.onPrimaryContainer,
+                        tintColor: kDevTint.withOpacity(0.45),
+                        titleColor: kDevDarkText,
+                        onTap: () async {
+                          // 카드에서는 온오프를 건드리지 않음. 패널에서 스위치로 제어.
+                          await EasyMemo.openPanel();
+                        },
+                      ),
+                      // ✅ 개인 달력 (그린 팔레트)
                       _ActionCard(
                         icon: Icons.calendar_month_rounded,
                         title: '개인 달력',
@@ -283,8 +302,8 @@ class _ActionCard extends StatelessWidget {
   final String subtitle;
   final Color bg; // 배지 배경(base)
   final Color fg; // 배지 아이콘(onBase)
-  final Color? tintColor; // 카드 surfaceTint(light)  ← 추가
-  final Color? titleColor; // 제목 색(dark)           ← 추가
+  final Color? tintColor; // 카드 surfaceTint(light)
+  final Color? titleColor; // 제목 색(dark)
   final VoidCallback? onTap;
 
   const _ActionCard({
@@ -305,7 +324,6 @@ class _ActionCard extends StatelessWidget {
       elevation: 1,
       clipBehavior: Clip.antiAlias,
       surfaceTintColor: tintColor ?? bg,
-      // ✅ tintColor 지원
       child: InkWell(
         onTap: onTap,
         child: Padding(
@@ -337,7 +355,7 @@ class _ActionCard extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontWeight: FontWeight.w700,
-                  color: titleColor ?? Colors.black, // ✅ titleColor 지원
+                  color: titleColor ?? Colors.black,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

@@ -6,9 +6,13 @@ import 'package:permission_handler/permission_handler.dart';
 
 import 'routes.dart';
 import 'providers/providers.dart';
+import 'screens/dev_package/memo/easy_memo.dart';
 import 'theme.dart';
 import 'utils/init/dev_initializer.dart';
 import 'utils/foreground_task_handler.dart';
+
+// ✅ EasyMemo 추가
+
 
 @pragma('vm:entry-point')
 void myForegroundCallback() {
@@ -80,6 +84,9 @@ class AppBootstrapper extends StatelessWidget {
       notificationTitle: '출차 요청 수신 중',
       notificationText: '포그라운드에서 대기 중',
     );
+
+    // ✅ EasyMemo 초기화(토글/메모 상태 로드)
+    await EasyMemo.init();
   }
 }
 
@@ -94,14 +101,20 @@ class MyApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         title: 'easyvalet',
         theme: appTheme,
-
-        // ✅ 초기 라우트를 분기 페이지로 변경
         initialRoute: AppRoutes.selector,
-
         routes: appRoutes,
-        onUnknownRoute: (_) => MaterialPageRoute(
-          builder: (_) => const NotFoundPage(),
-        ),
+        onUnknownRoute: (_) => MaterialPageRoute(builder: (_) => const NotFoundPage()),
+
+        // ✅ navigatorKey 연결
+        navigatorKey: EasyMemo.navigatorKey,
+
+        // ✅ 첫 프레임 후 오버레이 장착 (켜짐 상태일 때만)
+        builder: (context, child) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            EasyMemo.mountIfNeeded();
+          });
+          return child!;
+        },
       ),
     );
   }
