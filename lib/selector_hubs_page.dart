@@ -48,7 +48,7 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
         const _HeadquarterCard(),
       ],
       [
-        const _DevCard(),             // ✅ 개발 카드 추가
+        const _DevCard(), // ✅ 개발 카드 추가
         const _CommunityCard(),
       ],
     ];
@@ -318,55 +318,147 @@ class _HeaderBadgeInner extends StatelessWidget {
   }
 }
 
-// 공통 바디: 아이콘 → 타이틀 → 화살표 버튼
+/// 공통 바디: 아이콘 → 타이틀 → 화살표 버튼
+/// - 카드 본문 탭 시 네비게이션 + 살짝 축소 애니메이션
 Widget _cardBody({
   required BuildContext context,
   required IconData icon,
-  required Color bg,         // 아이콘 배지 배경
-  required Color iconColor,  // 아이콘 색
-  Color? buttonBg,           // 이동 버튼 배경
-  Color? buttonFg,           // 이동 버튼 아이콘 색
-  String? title,             // 기존과의 호환
-  Widget? titleWidget,       // 커스텀 타이틀 위젯
+  required Color bg, // 아이콘 배지 배경
+  required Color iconColor, // 아이콘 색
+  Color? buttonBg, // 이동 버튼 배경
+  Color? buttonFg, // 이동 버튼 아이콘 색
+  String? title, // 기존과의 호환
+  Widget? titleWidget, // 커스텀 타이틀 위젯
   required VoidCallback? onTap,
   bool enabled = true,
   String? disabledHint,
 }) {
   assert(title != null || titleWidget != null, 'title 또는 titleWidget 중 하나는 제공되어야 합니다.');
-  final text = Theme.of(context).textTheme;
-
-  final defaultTitle = Text(
-    title ?? '',
-    style: text.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-    textAlign: TextAlign.center,
+  return _CardBody(
+    icon: icon,
+    bg: bg,
+    iconColor: iconColor,
+    buttonBg: buttonBg,
+    buttonFg: buttonFg,
+    title: title,
+    titleWidget: titleWidget,
+    onTap: onTap,
+    enabled: enabled,
+    disabledHint: disabledHint,
   );
-
-  final content = Padding(
-    padding: const EdgeInsets.all(20),
-    child: Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _LeadingIcon(bg: bg, icon: icon, iconColor: iconColor),
-        const SizedBox(height: 12),
-        titleWidget ?? defaultTitle,
-        const SizedBox(height: 12),
-        Tooltip(
-          message: enabled ? '이동' : (disabledHint ?? '현재 저장된 모드에서만 선택할 수 있어요'),
-          child: IconButton.filled(
-            onPressed: enabled ? onTap : null,
-            style: IconButton.styleFrom(
-              backgroundColor: buttonBg ?? Theme.of(context).colorScheme.primary,
-              foregroundColor: buttonFg ?? Theme.of(context).colorScheme.onPrimary,
-            ),
-            icon: const Icon(Icons.arrow_forward_rounded),
-          ),
-        ),
-      ],
-    ),
-  );
-
-  return Opacity(opacity: enabled ? 1.0 : 0.48, child: content);
 }
+
+class _CardBody extends StatefulWidget {
+  const _CardBody({
+    required this.icon,
+    required this.bg,
+    required this.iconColor,
+    this.buttonBg,
+    this.buttonFg,
+    this.title,
+    this.titleWidget,
+    required this.onTap,
+    this.enabled = true,
+    this.disabledHint,
+  });
+
+  final IconData icon;
+  final Color bg;
+  final Color iconColor;
+  final Color? buttonBg;
+  final Color? buttonFg;
+  final String? title;
+  final Widget? titleWidget;
+  final VoidCallback? onTap;
+  final bool enabled;
+  final String? disabledHint;
+
+  @override
+  State<_CardBody> createState() => _CardBodyState();
+}
+
+class _CardBodyState extends State<_CardBody> {
+  static const _pressScale = 0.96;                 // 조금 더 눈에 띄게
+  static const _duration = Duration(milliseconds: 160);
+  static const _frame = Duration(milliseconds: 16);
+
+  bool _pressed = false;
+  bool _animating = false;
+
+  Future<void> _animateThenNavigate() async {
+    if (!widget.enabled || widget.onTap == null || _animating) return;
+    _animating = true;
+
+    // 1) 축소 시작 (그림이 한 프레임이라도 그려지도록 짧은 대기)
+    setState(() => _pressed = true);
+    await Future<void>.delayed(_frame);
+
+    // 2) 축소 상태를 유지해 사용자가 체감할 시간 확보
+    await Future<void>.delayed(_duration);
+
+    // 3) (옵션) 가벼운 햅틱 피드백
+    HapticFeedback.selectionClick();
+
+    // 4) 내비게이션
+    widget.onTap!.call();
+
+    // pushReplacementNamed면 이 위젯은 dispose됩니다.
+    // 혹시 돌아오는 경우를 대비해 플래그 정리
+    _animating = false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+
+    final defaultTitle = Text(
+      widget.title ?? '',
+      style: text.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+      textAlign: TextAlign.center,
+    );
+
+    final content = Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _LeadingIcon(bg: widget.bg, icon: widget.icon, iconColor: widget.iconColor),
+          const SizedBox(height: 12),
+          widget.titleWidget ?? defaultTitle,
+          const SizedBox(height: 12),
+          Tooltip(
+            message: widget.enabled ? '이동' : (widget.disabledHint ?? '현재 저장된 모드에서만 선택할 수 있어요'),
+            child: IconButton.filled(
+              // ✅ 버튼도 동일 애니메이션 후 이동
+              onPressed: widget.enabled ? () => _animateThenNavigate() : null,
+              style: IconButton.styleFrom(
+                backgroundColor: widget.buttonBg ?? Theme.of(context).colorScheme.primary,
+                foregroundColor: widget.buttonFg ?? Theme.of(context).colorScheme.onPrimary,
+              ),
+              icon: const Icon(Icons.arrow_forward_rounded),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return Opacity(
+      opacity: widget.enabled ? 1.0 : 0.48,
+      child: AnimatedScale(
+        scale: _pressed ? _pressScale : 1.0,
+        duration: _duration,
+        curve: Curves.easeOut,
+        child: InkWell(
+          // ✅ 카드 본문 탭도 동일 애니메이션 후 이동
+          onTap: widget.enabled ? _animateThenNavigate : null,
+          // highlight 콜백은 더 이상 사용하지 않습니다(즉시 원상복귀 방지).
+          child: content,
+        ),
+      ),
+    );
+  }
+}
+
 
 /// 서비스 로그인 카드 — Deep Blue 팔레트
 ///
@@ -385,10 +477,7 @@ class _ServiceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleStyle = Theme.of(context)
-        .textTheme
-        .titleMedium
-        ?.copyWith(fontWeight: FontWeight.w700, color: _dark);
+    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
 
     return Card(
       color: Colors.white,
@@ -480,8 +569,7 @@ class _TabletCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleStyle =
-    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
+    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
 
     return Card(
       color: Colors.white,
@@ -519,8 +607,7 @@ class _CommunityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleStyle =
-    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
+    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
 
     return Card(
       color: Colors.white,
@@ -556,8 +643,7 @@ class _FaqCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleStyle =
-    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
+    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
 
     return Card(
       color: Colors.white,
@@ -593,8 +679,7 @@ class _HeadquarterCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleStyle =
-    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
+    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
 
     return Card(
       color: Colors.white,
@@ -630,8 +715,7 @@ class _DevCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleStyle =
-    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
+    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
 
     return Card(
       color: Colors.white,
@@ -667,8 +751,7 @@ class _ParkingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleStyle =
-    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
+    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
 
     return Card(
       color: Colors.white,
