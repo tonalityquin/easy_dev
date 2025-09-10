@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:googleapis/calendar/v3.dart' as gcal;
 
-class MonthCalendarView extends StatefulWidget {
-  const MonthCalendarView({
+class DevMonthCalendarView extends StatefulWidget {
+  const DevMonthCalendarView({
     super.key,
     required this.allEvents,
     required this.progressOf,
@@ -21,10 +21,10 @@ class MonthCalendarView extends StatefulWidget {
   final Future<void> Function(DateTime monthStart, DateTime monthEnd)? onMonthRequested;
 
   @override
-  State<MonthCalendarView> createState() => _MonthCalendarViewState();
+  State<DevMonthCalendarView> createState() => _DevMonthCalendarViewState();
 }
 
-class _MonthCalendarViewState extends State<MonthCalendarView> {
+class _DevMonthCalendarViewState extends State<DevMonthCalendarView> {
   late DateTime _visibleMonth; // 해당 월의 1일
   DateTime? _selectedDay; // 탭 하이라이트
 

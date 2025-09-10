@@ -5,12 +5,12 @@ import 'package:provider/provider.dart';
 import 'package:googleapis/calendar/v3.dart' as gcal;
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'dev_calendar_package/calendar_model.dart';
-import 'dev_calendar_package/event_editor_bottom_sheet.dart';
-import 'dev_calendar_package/event_list.dart';
-import 'dev_calendar_package/month_calendar_view.dart';
-import 'dev_calendar_package/completed_events_sheet.dart';
-import 'dev_calendar_package/board_kanban_view.dart'; // ✅ 보드 뷰
+import 'dev_calendar_package/dev_calendar_model.dart';
+import 'dev_calendar_package/dev_event_editor_bottom_sheet.dart';
+import 'dev_calendar_package/dev_event_list.dart';
+import 'dev_calendar_package/dev_month_calendar_view.dart';
+import 'dev_calendar_package/dev_completed_events_sheet.dart';
+import 'dev_calendar_package/dev_board_kanban_view.dart'; // ✅ 보드 뷰
 
 // ────────────────────────────────────────────────────────────
 // Dev Calendar 팔레트 (개발 카드와 동일 톤)
@@ -68,7 +68,7 @@ class _DevCalendarPageState extends State<DevCalendarPage> {
     if (lastId == null || lastId.trim().isEmpty) return;
 
     _idCtrl.text = lastId;
-    final model = context.read<CalendarModel>();
+    final model = context.read<DevCalendarModel>();
     await model.load(newCalendarId: lastId);
 
     if (mounted && model.error == null && model.calendarId.isNotEmpty) {
@@ -105,7 +105,7 @@ class _DevCalendarPageState extends State<DevCalendarPage> {
 
   @override
   Widget build(BuildContext context) {
-    final model = context.watch<CalendarModel>();
+    final model = context.watch<DevCalendarModel>();
 
     return Scaffold(
       appBar: AppBar(
@@ -151,7 +151,7 @@ class _DevCalendarPageState extends State<DevCalendarPage> {
               onClear: () => setState(() => _idCtrl.clear()),
               onLoad: () async {
                 FocusScope.of(context).unfocus();
-                await context.read<CalendarModel>().load(newCalendarId: _idCtrl.text);
+                await context.read<DevCalendarModel>().load(newCalendarId: _idCtrl.text);
                 if (mounted && model.error == null && model.calendarId.isNotEmpty) {
                   _idCtrl.text = model.calendarId;
                   await _saveLastCalendarId(model.calendarId);
@@ -174,21 +174,21 @@ class _DevCalendarPageState extends State<DevCalendarPage> {
                 onPageChanged: (i) => setState(() => _viewIndex = i),
                 children: [
                   // 0) 캘린더
-                  MonthCalendarView(
+                  DevMonthCalendarView(
                     allEvents: model.events,
                     progressOf: (e) => _extractProgress(e.description),
                     onEdit: _openEditSheet,
                     onDelete: _confirmDelete,
                     onToggleProgress: _toggleProgress,
                     onMonthRequested: (monthStart, monthEnd) async {
-                      await context.read<CalendarModel>().loadRange(
-                        timeMin: monthStart,
-                        timeMax: monthEnd,
-                      );
+                      await context.read<DevCalendarModel>().loadRange(
+                            timeMin: monthStart,
+                            timeMax: monthEnd,
+                          );
                     },
                   ),
                   // 1) 목록
-                  EventList(
+                  DevEventList(
                     events: model.events,
                     onEdit: _openEditSheet,
                     onDelete: _confirmDelete,
@@ -260,7 +260,7 @@ class _DevCalendarPageState extends State<DevCalendarPage> {
     //    페이지의 컨텍스트를 캡처해서 Provider를 읽게 만든다.
     final pageContext = context;
 
-    final model = pageContext.read<CalendarModel>();
+    final model = pageContext.read<DevCalendarModel>();
     if (model.calendarId.isEmpty) {
       ScaffoldMessenger.of(pageContext).showSnackBar(
         const SnackBar(content: Text('먼저 캘린더를 불러오세요.')),
@@ -277,7 +277,7 @@ class _DevCalendarPageState extends State<DevCalendarPage> {
         return FractionallySizedBox(
           heightFactor: 0.92,
           child: _BoardSheetScaffold(
-            child: BoardKanbanView(
+            child: DevBoardKanbanView(
               allEvents: model.events,
               progressOf: (e) => _extractProgress(e.description),
 
@@ -296,7 +296,7 @@ class _DevCalendarPageState extends State<DevCalendarPage> {
   }
 
   Future<void> _openCreateSheet(BuildContext context) async {
-    final model = context.read<CalendarModel>();
+    final model = context.read<DevCalendarModel>();
     if (model.calendarId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('먼저 캘린더를 불러오세요.')));
       return;
@@ -330,7 +330,7 @@ class _DevCalendarPageState extends State<DevCalendarPage> {
   }
 
   Future<void> _openEditSheet(BuildContext context, gcal.Event e) async {
-    final model = context.read<CalendarModel>();
+    final model = context.read<DevCalendarModel>();
     final start = (e.start?.dateTime != null ? e.start!.dateTime!.toLocal() : e.start?.date) ?? DateTime.now();
     final end =
         (e.end?.dateTime != null ? e.end!.dateTime!.toLocal() : e.end?.date) ?? start.add(const Duration(hours: 1));
@@ -378,12 +378,12 @@ class _DevCalendarPageState extends State<DevCalendarPage> {
       ),
     );
     if (ok == true) {
-      await context.read<CalendarModel>().delete(eventId: e.id!);
+      await context.read<DevCalendarModel>().delete(eventId: e.id!);
     }
   }
 
   Future<void> _toggleProgress(BuildContext context, gcal.Event e, bool done) async {
-    final model = context.read<CalendarModel>();
+    final model = context.read<DevCalendarModel>();
 
     final start = (e.start?.dateTime != null ? e.start!.dateTime!.toLocal() : e.start?.date) ?? DateTime.now();
     final end =
@@ -406,7 +406,7 @@ class _DevCalendarPageState extends State<DevCalendarPage> {
 
   /// ✅ 드래그/메뉴 이동 시 날짜/진행도 보정
   Future<void> _moveToBucket(BuildContext context, gcal.Event e, BoardBucket target) async {
-    final model = context.read<CalendarModel>();
+    final model = context.read<DevCalendarModel>();
 
     final now = DateTime.now();
     final start0 = (e.start?.dateTime != null ? e.start!.dateTime!.toLocal() : e.start?.date) ?? now;
@@ -576,7 +576,7 @@ class _InfoBanner extends StatelessWidget {
           Expanded(
             child: Text(
               '캘린더 ID 또는 URL을 입력 후 불러오기를 누르세요. (예: someone@gmail.com)\n'
-                  '좌우 스와이프: 캘린더 ↔ 목록,  하단 좌측 "보드" 버튼: 칸반 보드(스와이프로 컬럼 전환).',
+              '좌우 스와이프: 캘린더 ↔ 목록,  하단 좌측 "보드" 버튼: 칸반 보드(스와이프로 컬럼 전환).',
               style: TextStyle(
                 color: _CalColors.fg,
                 fontWeight: FontWeight.w700,
@@ -619,7 +619,7 @@ class _CalendarIdSection extends StatelessWidget {
       onPressed: loading ? null : onLoad,
       icon: loading
           ? const SizedBox(
-          width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: _CalColors.fg))
+              width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: _CalColors.fg))
           : const Icon(Icons.download_rounded),
       label: const Text('불러오기'),
     );

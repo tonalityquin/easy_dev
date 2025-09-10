@@ -7,8 +7,8 @@ enum BoardBucket { today, thisWeek, later, done }
 
 /// progress 추출, 편집/삭제/토글, 이동 콜백을 외부에서 주입
 /// - 이 버전은 "한 화면에 한 컬럼"만 보여주고, PageView 스와이프로 칼럼 전환
-class BoardKanbanView extends StatefulWidget {
-  const BoardKanbanView({
+class DevBoardKanbanView extends StatefulWidget {
+  const DevBoardKanbanView({
     super.key,
     required this.allEvents,
     required this.progressOf,
@@ -30,10 +30,10 @@ class BoardKanbanView extends StatefulWidget {
   final int initialPage;
 
   @override
-  State<BoardKanbanView> createState() => _BoardKanbanViewState();
+  State<DevBoardKanbanView> createState() => _DevBoardKanbanViewState();
 }
 
-class _BoardKanbanViewState extends State<BoardKanbanView> {
+class _DevBoardKanbanViewState extends State<DevBoardKanbanView> {
   late final PageController _pageController;
   int _index = 0;
 

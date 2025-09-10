@@ -5,7 +5,7 @@ import 'package:googleapis_auth/auth_io.dart' as auth;
 import 'package:http/http.dart' as http;
 
 /// 구글 캘린더 읽기/쓰기 서비스 (서비스 계정 사용)
-class GoogleCalendarService {
+class DevGoogleCalendarService {
   // CRUD를 위해 이벤트 쓰기 스코프 사용
   static const _scopes = [
     gcal.CalendarApi.calendarEventsScope, // 이벤트 읽기/쓰기

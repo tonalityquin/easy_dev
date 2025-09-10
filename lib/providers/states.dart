@@ -1,4 +1,3 @@
-// lib/providers/providers.dart
 import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
 
@@ -9,6 +8,11 @@ import '../repositories/user_repo_services/user_repository.dart';
 
 import '../screens/head_package/calendar_package/calendar_model.dart';
 import '../screens/head_package/calendar_package/google_calendar_service.dart';
+
+// ▼ Dev 캘린더 전역 주입을 위한 추가 import
+import '../screens/dev_package/dev_calendar_package/dev_calendar_model.dart';
+import '../screens/dev_package/dev_calendar_package/dev_google_calendar_service.dart';
+
 import '../screens/tablet_package/states/tablet_pad_mode_state.dart';
 import '../states/area/area_state.dart';
 import '../states/bill/bill_state.dart';
@@ -102,7 +106,12 @@ final List<SingleChildWidget> stateProviders = [
   ChangeNotifierProvider(
     create: (_) => CalendarSelectionState(),
   ),
+  // 본사(운영) 캘린더 모델
   ChangeNotifierProvider(
     create: (_) => CalendarModel(GoogleCalendarService()),
+  ),
+  // ▼ 개발용 Dev 캘린더 모델(CompanyCalendarPage와 동일 패턴의 전역 주입)
+  ChangeNotifierProvider(
+    create: (_) => DevCalendarModel(DevGoogleCalendarService()),
   ),
 ];

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:googleapis/calendar/v3.dart' as gcal;
 
-class EventList extends StatelessWidget {
-  const EventList({
+class DevEventList extends StatelessWidget {
+  const DevEventList({
     super.key,
     required this.events,
     required this.onEdit,

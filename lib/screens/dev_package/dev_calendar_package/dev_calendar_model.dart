@@ -3,12 +3,12 @@ import 'package:flutter/foundation.dart';
 import 'package:googleapis/calendar/v3.dart' as gcal;
 
 // 같은 폴더라면 아래 상대경로 유지, 폴더 구조가 다르면 경로만 수정하세요.
-import './google_calendar_service.dart';
+import 'dev_google_calendar_service.dart';
 
-class CalendarModel extends ChangeNotifier {
-  final GoogleCalendarService _service;
+class DevCalendarModel extends ChangeNotifier {
+  final DevGoogleCalendarService _service;
 
-  CalendarModel(this._service);
+  DevCalendarModel(this._service);
 
   String calendarId = '';
   bool loading = false;
