@@ -53,6 +53,13 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
       ],
     ];
 
+    // ▶︎ 화면/키보드 상황에 따른 하단 이미지 높이/표시 제어
+    final media = MediaQuery.of(context);
+    final bool isShort = media.size.height < 640;
+    final bool keyboardOpen = media.viewInsets.bottom > 0;
+    final double footerHeight = (isShort || keyboardOpen) ? 72 : 120;
+    const double footerBottomPadding = 8;
+
     return Scaffold(
       backgroundColor: Colors.white, // 전체 배경 화이트
       appBar: AppBar(
@@ -85,42 +92,59 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
         ),
       ),
       body: SafeArea(
-        child: Container(
-          color: Colors.white, // 바디 배경 화이트
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 880),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _Header(),
-                    const SizedBox(height: 24),
-                    _CardsPager(pages: pages),
-                    const SizedBox(height: 16),
-                    _HintBanner(
-                      color: Colors.green, // 배경 초록
-                      iconColor: Colors.white, // 아이콘 흰색
-                    ),
-                  ],
+        child: Stack(
+          children: [
+            // ▼ 본문(스크롤 가능) — 하단에 이미지 높이만큼 여백을 추가하여 겹침 방지
+            SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(
+                24,
+                24,
+                24,
+                24 + footerHeight + footerBottomPadding,
+              ),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 880),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _Header(),
+                      const SizedBox(height: 24),
+                      _CardsPager(pages: pages),
+                      const SizedBox(height: 16),
+                      const _HintBanner(
+                        color: Colors.green, // 배경 초록
+                        iconColor: Colors.white, // 아이콘 흰색
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
+
+            // ▼ 하단 펠리컨 이미지(바디 내부 고정)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: footerBottomPadding,
+              child: IgnorePointer(
+                child: AnimatedOpacity(
+                  opacity: keyboardOpen ? 0.0 : 1.0,
+                  duration: const Duration(milliseconds: 160),
+                  child: SizedBox(
+                    height: footerHeight,
+                    child: Image.asset(
+                      'assets/images/pelican.png',
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
-      // ▼ 하단 펠리컨 이미지
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: SizedBox(
-            height: 120,
-            child: Image.asset('assets/images/pelican.png'),
-          ),
-        ),
-      ),
+      // ❌ 기존 bottomNavigationBar 제거 (Stack으로 대체)
     );
   }
 }
@@ -319,7 +343,7 @@ class _HeaderBadgeInner extends StatelessWidget {
 }
 
 /// 공통 바디: 아이콘 → 타이틀 → 화살표 버튼
-/// - 카드 본문 탭 시 네비게이션 + 살짝 축소 애니메이션
+/// - 카드 본문 탭 시 네비게이션 + 살짝 축소 애니메이션(내비 이전 유지시간 보장)
 Widget _cardBody({
   required BuildContext context,
   required IconData icon,
@@ -402,8 +426,6 @@ class _CardBodyState extends State<_CardBody> {
     // 4) 내비게이션
     widget.onTap!.call();
 
-    // pushReplacementNamed면 이 위젯은 dispose됩니다.
-    // 혹시 돌아오는 경우를 대비해 플래그 정리
     _animating = false;
   }
 
@@ -429,7 +451,7 @@ class _CardBodyState extends State<_CardBody> {
           Tooltip(
             message: widget.enabled ? '이동' : (widget.disabledHint ?? '현재 저장된 모드에서만 선택할 수 있어요'),
             child: IconButton.filled(
-              // ✅ 버튼도 동일 애니메이션 후 이동
+              // 버튼도 동일 애니메이션 후 이동
               onPressed: widget.enabled ? () => _animateThenNavigate() : null,
               style: IconButton.styleFrom(
                 backgroundColor: widget.buttonBg ?? Theme.of(context).colorScheme.primary,
@@ -449,16 +471,13 @@ class _CardBodyState extends State<_CardBody> {
         duration: _duration,
         curve: Curves.easeOut,
         child: InkWell(
-          // ✅ 카드 본문 탭도 동일 애니메이션 후 이동
           onTap: widget.enabled ? _animateThenNavigate : null,
-          // highlight 콜백은 더 이상 사용하지 않습니다(즉시 원상복귀 방지).
           child: content,
         ),
       ),
     );
   }
 }
-
 
 /// 서비스 로그인 카드 — Deep Blue 팔레트
 ///
