@@ -6,8 +6,10 @@ import '../routes.dart';
 import 'dev_package/debug_package/debug_bottom_sheet.dart';
 import 'dev_package/github_code_browser_bottom_sheet.dart';
 import 'dev_package/github_markdown_bottom_sheet.dart';
+import 'dev_package/google_docs_bottom_sheet.dart';
 import 'dev_package/local_prefs_bottom_sheet.dart';
 import 'dev_package/dev_memo.dart';
+
 
 /// ====== 개발 전용 팔레트 (개발 카드와 동일 톤) ======
 /// 버튼/Badge 배경
@@ -85,8 +87,8 @@ class DevStubPage extends StatelessWidget {
                     final crossAxisCount = width >= 1100
                         ? 4
                         : width >= 800
-                            ? 3
-                            : 2;
+                        ? 3
+                        : 2;
                     const spacing = 12.0;
                     final textScale = MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
 
@@ -173,7 +175,7 @@ class DevStubPage extends StatelessWidget {
                           );
                         },
                       ),
-                      // ✅ 메모: 카드 탭 → 메모 패널 열기 (온/오프 스위치는 패널 내부)
+                      // ✅ 메모: 카드 탭 → 메모 패널 열기
                       _ActionCard(
                         icon: Icons.sticky_note_2_rounded,
                         title: '메모',
@@ -183,7 +185,6 @@ class DevStubPage extends StatelessWidget {
                         tintColor: kDevTint.withOpacity(0.45),
                         titleColor: kDevDarkText,
                         onTap: () async {
-                          // 카드에서는 온오프를 건드리지 않음. 패널에서 스위치로 제어.
                           await DevMemo.openPanel();
                         },
                       ),
@@ -198,6 +199,32 @@ class DevStubPage extends StatelessWidget {
                         titleColor: calDark,
                         onTap: () {
                           Navigator.of(context).pushNamed(AppRoutes.devCalendar);
+                        },
+                      ),
+
+                      // ⬇️ 신규 카드: "구글 독스" 편집 (Docs API 기반)
+                      _ActionCard(
+                        icon: Icons.description_outlined,
+                        title: '구글 독스',
+                        subtitle: '문서 편집 · Docs API',
+                        bg: cs.primaryContainer,
+                        fg: cs.onPrimaryContainer,
+                        tintColor: kDevTint.withOpacity(0.35),
+                        titleColor: kDevDarkText,
+                        onTap: () {
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (_) => const Material(
+                              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                              clipBehavior: Clip.antiAlias,
+                              child: SizedBox(
+                                height: 640,
+                                child: GoogleDocsDocBottomSheet(),
+                              ),
+                            ),
+                          );
                         },
                       ),
                     ];
@@ -237,7 +264,7 @@ class DevStubPage extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
               onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
                 AppRoutes.selector,
-                (route) => false,
+                    (route) => false,
               ),
               child: SizedBox(
                 height: 120,
