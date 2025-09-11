@@ -131,6 +131,7 @@ class _EasyMemoBubbleState extends State<_EasyMemoBubble> {
     final media = MediaQuery.maybeOf(context);
     final screen = media?.size ?? Size.zero;
     final bottomInset = media?.padding.bottom ?? 0;
+    final cs = Theme.of(context).colorScheme;
 
     return Positioned(
       left: _pos.dx,
@@ -160,14 +161,16 @@ class _EasyMemoBubbleState extends State<_EasyMemoBubble> {
               width: _bubbleSize,
               height: _bubbleSize,
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary,
+                color: cs.primary.withOpacity(0.5), // ✅ 50% 반투명
                 shape: BoxShape.circle,
-                border: Border.all(color: Theme.of(context).dividerColor.withOpacity(.12)),
+                border: Border.all(color: cs.onSurface.withOpacity(.08)),
                 boxShadow: const [BoxShadow(blurRadius: 10, color: Colors.black26)],
               ),
               alignment: Alignment.center,
-              child: Icon(Icons.sticky_note_2_rounded,
-                  color: Theme.of(context).colorScheme.onPrimary),
+              child: Icon(
+                Icons.sticky_note_2_rounded,
+                color: Colors.white.withOpacity(0.95), // 대비 강화
+              ),
             ),
           ),
         ),
@@ -217,7 +220,7 @@ class _EasyMemoSheetState extends State<_EasyMemoSheet> {
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         child: Stack(
           children: [
-            // 살짝 블러+틴트 배경 (요즘 감성)
+            // 살짝 블러+틴트 배경
             BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
               child: Container(color: cs.surface.withOpacity(0.9)),
@@ -334,7 +337,10 @@ class _EasyMemoSheetState extends State<_EasyMemoSheet> {
                                 return Dismissible(
                                   key: ValueKey(line),
                                   direction: DismissDirection.endToStart,
-                                  background: _SwipeDeleteBackground(color: cs.errorContainer, iconColor: cs.onErrorContainer),
+                                  background: _SwipeDeleteBackground(
+                                    color: cs.errorContainer,
+                                    iconColor: cs.onErrorContainer,
+                                  ),
                                   onDismissed: (_) {
                                     EasyMemo.removeLine(line);
                                     HapticFeedback.selectionClick();
@@ -347,7 +353,9 @@ class _EasyMemoSheetState extends State<_EasyMemoSheet> {
                                       child: Icon(Icons.notes_rounded, color: cs.onPrimaryContainer, size: 18),
                                     ),
                                     title: Text(text, maxLines: 2, overflow: TextOverflow.ellipsis),
-                                    subtitle: time.isNotEmpty ? Text(time, style: textTheme.bodySmall?.copyWith(color: cs.outline)) : null,
+                                    subtitle: time.isNotEmpty
+                                        ? Text(time, style: textTheme.bodySmall?.copyWith(color: cs.outline))
+                                        : null,
                                     trailing: Wrap(
                                       spacing: 4,
                                       children: [
@@ -357,7 +365,11 @@ class _EasyMemoSheetState extends State<_EasyMemoSheet> {
                                           onPressed: () {
                                             Clipboard.setData(ClipboardData(text: text));
                                             ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(content: const Text('메모를 복사했어요'), behavior: SnackBarBehavior.floating, duration: const Duration(milliseconds: 900)),
+                                              SnackBar(
+                                                content: const Text('메모를 복사했어요'),
+                                                behavior: SnackBarBehavior.floating,
+                                                duration: const Duration(milliseconds: 900),
+                                              ),
                                             );
                                           },
                                         ),
@@ -389,7 +401,9 @@ class _EasyMemoSheetState extends State<_EasyMemoSheet> {
   // ---------- helpers ----------
 
   OutlineInputBorder _inputBorder({bool focused = false, ColorScheme? cs}) {
-    final color = focused ? (cs ?? Theme.of(context).colorScheme).primary : Theme.of(context).dividerColor.withOpacity(.2);
+    final color = focused
+        ? (cs ?? Theme.of(context).colorScheme).primary
+        : Theme.of(context).dividerColor.withOpacity(.2);
     return OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
       borderSide: BorderSide(color: color, width: focused ? 1.4 : 1),
@@ -460,8 +474,6 @@ class ValueListenableNotifier<T> extends ValueNotifier<T> {
     if (!identical(newValue, super.value)) {
       super.value = newValue;
     } else {
-      // 같은 인스턴스여도 강제로 통지하고 싶다면:
-      // notifyListeners();
       super.value = newValue;
     }
   }

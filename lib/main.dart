@@ -13,7 +13,6 @@ import 'utils/foreground_task_handler.dart';
 
 // ✅ EasyMemo 추가
 
-
 @pragma('vm:entry-point')
 void myForegroundCallback() {
   FlutterForegroundTask.setTaskHandler(MyTaskHandler());
@@ -81,7 +80,7 @@ class AppBootstrapper extends StatelessWidget {
     await Permission.ignoreBatteryOptimizations.request();
 
     await FlutterForegroundTask.startService(
-      notificationTitle: '출차 요청 수신 중',
+      notificationTitle: '이 서비스 알림 탭은 main에서 메시지 발신 중',
       notificationText: '포그라운드에서 대기 중',
     );
 
@@ -103,7 +102,8 @@ class MyApp extends StatelessWidget {
         theme: appTheme,
         initialRoute: AppRoutes.selector,
         routes: appRoutes,
-        onUnknownRoute: (_) => MaterialPageRoute(builder: (_) => const NotFoundPage()),
+        onUnknownRoute: (_) =>
+            MaterialPageRoute(builder: (_) => const NotFoundPage()),
 
         // ✅ navigatorKey 연결
         navigatorKey: EasyMemo.navigatorKey,
