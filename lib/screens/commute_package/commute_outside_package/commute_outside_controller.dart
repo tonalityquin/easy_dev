@@ -1,3 +1,4 @@
+// lib/screens/commute_package/commute_outside_package/commute_outside_controller.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -7,10 +8,11 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import '../../../routes.dart';
 import '../../../states/user/user_state.dart';
 import '../../../states/area/area_state.dart';
-import '../../../utils/snackbar_helper.dart';
 import '../../type_package/common_widgets/dashboard_bottom_sheet/utils/break_log_uploader.dart';
 import '../../type_package/common_widgets/dashboard_bottom_sheet/utils/clock_out_log_uploader.dart';
+import 'floating_controls/commute_outside_floating.dart';
 import 'utils/commute_outside_clock_in_log_uploader.dart';
+import '../../../utils/app_navigator.dart';
 
 class CommuteOutsideController {
   void initialize(BuildContext context) {
@@ -38,15 +40,13 @@ class CommuteOutsideController {
       await _uploadAttendanceSilently(context);
       await userState.isHeWorking();
 
-      if (!context.mounted) return; // ✅ context 안전성 체크
+      if (!context.mounted) return;
 
       if (userState.isWorking && navigateOnWorking) {
         await _navigateToProperPageIfWorking(context, userState);
       }
     } catch (e) {
-      if (context.mounted) {
-        _showWorkError(context);
-      }
+      if (context.mounted) {}
     } finally {
       onLoadingChanged.call();
     }
@@ -74,12 +74,6 @@ class CommuteOutsideController {
     }
   }
 
-  void _showWorkError(BuildContext context) {
-    if (!context.mounted) return;
-
-    showFailedSnackbar(context, '작업 처리 중 오류가 발생했습니다. 다시 시도해주세요.');
-  }
-
   Future<void> _uploadAttendanceSilently(BuildContext context) async {
     final userState = Provider.of<UserState>(context, listen: false);
     final area = userState.area;
@@ -102,10 +96,37 @@ class CommuteOutsideController {
     if (!context.mounted) return;
 
     if (success) {
-      showSuccessSnackbar(context, '출근 기록 업로드 완료');
-    } else {
-      showFailedSnackbar(context, '출근 기록 업로드 실패');
-    }
+      // ✅ 출근 성공 → 플로팅(휴식/퇴근) 활성화
+      await _enableFloatingShortcutsAfterClockIn(context, userState);
+    } else {}
+  }
+
+  /// 출근 성공 직후 플로팅 오버레이(휴식/퇴근) 활성화
+  Future<void> _enableFloatingShortcutsAfterClockIn(
+    BuildContext context,
+    UserState cachedUserState,
+  ) async {
+    // ✅ Snackbar/Sheet에 안전한 Context: Navigator(=ScaffoldMessenger) 우선
+    BuildContext _safeCtx() =>
+        AppNavigator.key.currentState?.context ??
+        AppNavigator.key.currentState?.overlay?.context ?? // ← 보조
+        context;
+
+    CommuteOutsideFloating.configure(
+      onBreak: () async {
+        final ctx = _safeCtx();
+        await handleBreakPressed(ctx, cachedUserState, () {});
+      },
+      onClockOut: () async {
+        final ctx = _safeCtx();
+        await handleLeavePressed(ctx, cachedUserState, () {}, exitAppAfter: true);
+        await CommuteOutsideFloating.setEnabled(false);
+      },
+    );
+
+    await CommuteOutsideFloating.init();
+    await CommuteOutsideFloating.setEnabled(true);
+    CommuteOutsideFloating.mountIfNeeded();
   }
 
   /// '휴식해요' 버튼 로직
@@ -121,8 +142,9 @@ class CommuteOutsideController {
       final name = userState.name;
 
       if (area.isEmpty || name.isEmpty) {
-        if (context.mounted) showFailedSnackbar(context, '사용자/지역 정보가 없습니다.');
-        return;
+        if (context.mounted) {
+          return;
+        }
       }
 
       final now = DateTime.now();
@@ -142,12 +164,9 @@ class CommuteOutsideController {
 
       if (!context.mounted) return;
       if (ok) {
-        showSuccessSnackbar(context, '휴게 기록 업로드 완료');
-      } else {
-        showFailedSnackbar(context, '휴게 기록 업로드 실패 또는 중복');
-      }
+      } else {}
     } catch (e) {
-      if (context.mounted) showFailedSnackbar(context, '휴게 기록 중 오류: $e');
+      if (context.mounted) ;
     } finally {
       onLoadingChanged.call();
     }
@@ -165,7 +184,7 @@ class CommuteOutsideController {
     try {
       final name = userState.name;
       if (name.isEmpty) {
-        if (context.mounted) showFailedSnackbar(context, '사용자 정보가 없습니다.');
+        if (context.mounted) ;
         return;
       }
 
@@ -184,15 +203,16 @@ class CommuteOutsideController {
 
       if (context.mounted) {
         if (ok) {
-          showSuccessSnackbar(context, '퇴근 기록 업로드 완료');
-        } else {
-          showFailedSnackbar(context, '퇴근 기록 업로드 실패 또는 중복');
-        }
+        } else {}
       }
 
+      // ✅ 퇴근 처리 후 포그라운드 서비스 종료 + 상태 리프레시
       await FlutterForegroundTask.stopService();
       await userState.isHeWorking();
       await Future.delayed(const Duration(milliseconds: 600));
+
+      // ✅ 퇴근 후 플로팅 비활성화(안전 차원) + 저장
+      await CommuteOutsideFloating.setEnabled(false);
 
       if (exitAppAfter) {
         SystemNavigator.pop();
@@ -202,7 +222,7 @@ class CommuteOutsideController {
         // }
       }
     } catch (e) {
-      if (context.mounted) showFailedSnackbar(context, '퇴근 처리 중 오류: $e');
+      if (context.mounted) ;
     } finally {
       onLoadingChanged.call();
     }

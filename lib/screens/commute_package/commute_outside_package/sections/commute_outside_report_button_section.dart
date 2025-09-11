@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:android_intent_plus/android_intent.dart';
-import '../../../../utils/snackbar_helper.dart';
 
 class CommuteOutsideReportButtonSection extends StatelessWidget {
   final bool loadingUrl;
@@ -45,7 +44,6 @@ class CommuteOutsideReportButtonSection extends StatelessWidget {
 
         if (kakaoUrl == null || kakaoUrl!.isEmpty) {
           // 🔁 기본 SnackBar → 커스텀 스낵바
-          showFailedSnackbar(context, '카카오톡 URL이 없습니다.');
           return;
         }
 
@@ -60,7 +58,6 @@ class CommuteOutsideReportButtonSection extends StatelessWidget {
         } catch (e) {
           if (context.mounted) {
             // 🔁 기본 SnackBar → 커스텀 스낵바
-            showFailedSnackbar(context, '크롬으로 열 수 없습니다: $e');
           }
         }
       },

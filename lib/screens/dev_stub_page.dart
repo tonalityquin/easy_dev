@@ -211,7 +211,6 @@ class DevStubPage extends StatelessWidget {
                         tintColor: kDevTint.withOpacity(0.35),
                         titleColor: kDevDarkText,
                         onTap: () async {
-                          // (선택) 버블도 함께 보이게 하고 싶으면 켜두기
                           GoogleDocsDocPanel.enabled.value = true;
                           await GoogleDocsDocPanel.togglePanel(); // ← 여기로 교체
                         },
