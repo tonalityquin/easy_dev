@@ -1,35 +1,24 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData, HapticFeedback;
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../utils/app_navigator.dart';
 
-/// DevMemo (Firestore 버전)
-/// - 전역 navigatorKey로 안전한 컨텍스트 확보 (showModalBottomSheet/Overlay)
-/// - ✅ SharedPreferences 제거 → Firestore document 실시간 동기화
-/// - 드래그 가능한 플로팅 버블 + 90% 높이 바텀시트 패널
 class DevMemo {
   DevMemo._();
 
   /// ✅ MaterialApp.navigatorKey 로 연결
   static GlobalKey<NavigatorState> get navigatorKey => AppNavigator.key;
-
   /// 켜짐/꺼짐 토글 상태
   static final enabled = ValueNotifier<bool>(false);
 
   /// "YYYY-MM-DD HH:mm | 내용" 형태의 문자열 리스트
   static final notes = ValueListenableNotifier<List<String>>(<String>[]);
 
-  // ---- Firestore ----
-  static FirebaseFirestore? _db;
-  static DocumentReference<Map<String, dynamic>>? _doc;
-  static Stream<DocumentSnapshot<Map<String, dynamic>>>? _snapStream;
-  static StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _sub;
-  static String _docId = 'dev_global'; // 기본값 (필요 시 init(docId: ...)로 교체)
+  static const _kEnabledKey = 'dev_memo_enabled_v1';
+  static const _kNotesKey = 'dev_memo_notes_v1';
 
-  // 오버레이
+  static SharedPreferences? _prefs;
   static OverlayEntry? _entry;
 
   // ===== 패널 토글 상태 & 중복 호출 가드 =====
@@ -37,69 +26,19 @@ class DevMemo {
   static Future<void>? _panelFuture;
 
   /// 앱 시작 시 1회 호출
-  /// - docId 에 구글 Docs/Sheets ID를 그대로 넘겨 사용하세요.
-  static Future<void> init({String docId = 'dev_global'}) async {
-    _docId = docId;
-    _db ??= FirebaseFirestore.instance;
-    _doc = _db!.collection('memo_docs').doc(_docId);
+  static Future<void> init() async {
+    _prefs ??= await SharedPreferences.getInstance();
+    enabled.value = _prefs!.getBool(_kEnabledKey) ?? false;
+    notes.value = _prefs!.getStringList(_kNotesKey) ?? const <String>[];
 
-    // 문서가 없으면 초기값 생성
-    final snap = await _doc!.get();
-    if (!snap.exists) {
-      await _doc!.set({
-        'enabled': false,
-        'notes': <String>[],
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-    }
-
-    // 실시간 구독 → enabled/notes 동기화
-    await _sub?.cancel();
-    _snapStream = _doc!.snapshots();
-    _sub = _snapStream!.listen((s) {
-      final data = s.data();
-      if (data == null) return;
-      final bool on = (data['enabled'] ?? false) as bool;
-      final List<String> list = List<String>.from(data['notes'] ?? const <String>[]);
-      // 외부 변경도 반영
-      if (enabled.value != on) enabled.value = on;
-      if (!_listEquals(notes.value, list)) notes.value = list;
-    });
-
-    // 로컬에서 스위치 바꾸면 Firestore 로 반영
+    // 토글 변경 시 저장 + 오버레이 토글
     enabled.addListener(() {
-      _doc?.update({'enabled': enabled.value, 'updatedAt': FieldValue.serverTimestamp()});
+      _prefs?.setBool(_kEnabledKey, enabled.value);
       if (enabled.value) {
         _showOverlay();
       } else {
         _hideOverlay();
       }
-    });
-  }
-
-  /// 런타임에 다른 문서로 전환(예: 다른 Google Docs/Sheets ID)
-  static Future<void> switchDoc(String newDocId) async {
-    if (newDocId.trim().isEmpty || newDocId == _docId) return;
-    await _sub?.cancel();
-    _docId = newDocId;
-    _doc = _db!.collection('memo_docs').doc(_docId);
-
-    final snap = await _doc!.get();
-    if (!snap.exists) {
-      await _doc!.set({
-        'enabled': false,
-        'notes': <String>[],
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-    }
-
-    _sub = _doc!.snapshots().listen((s) {
-      final data = s.data();
-      if (data == null) return;
-      final bool on = (data['enabled'] ?? false) as bool;
-      final List<String> list = List<String>.from(data['notes'] ?? const <String>[]);
-      if (enabled.value != on) enabled.value = on;
-      if (!_listEquals(notes.value, list)) notes.value = list;
     });
   }
 
@@ -127,9 +66,12 @@ class DevMemo {
     }
 
     if (_isPanelOpen) {
+      // 이미 열려 있으면 닫기
       Navigator.of(ctx).maybePop();
       return;
     }
+
+    // 빠른 연속 탭 가드
     if (_panelFuture != null) return;
 
     _isPanelOpen = true;
@@ -137,7 +79,7 @@ class DevMemo {
       context: ctx,
       useSafeArea: true,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.transparent, // 바깥(시트 바깥) 배경은 투명 유지
       builder: (_) => const _DevMemoSheet(),
     ).whenComplete(() {
       _isPanelOpen = false;
@@ -148,6 +90,7 @@ class DevMemo {
   }
 
   // ----------------- 내부: 오버레이(버블) -----------------
+
   static void _showOverlay() {
     if (_entry != null) return;
     final overlay = navigatorKey.currentState?.overlay;
@@ -164,7 +107,7 @@ class DevMemo {
     _entry = null;
   }
 
-  // ----------------- 데이터 조작 (Firestore Transaction) -----------------
+  // ----------------- 데이터 조작 -----------------
 
   static Future<void> add(String text) async {
     final now = DateTime.now();
@@ -172,49 +115,21 @@ class DevMemo {
         "${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} "
         "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
     final line = "$stamp | $text";
-
-    await _db!.runTransaction((tx) async {
-      final s = await tx.get(_doc!);
-      final cur = List<String>.from(s.data()?['notes'] ?? const <String>[]);
-      cur.insert(0, line);
-      tx.update(_doc!, {'notes': cur, 'updatedAt': FieldValue.serverTimestamp()});
-    });
+    final list = List<String>.from(notes.value)..insert(0, line);
+    notes.value = list;
+    await _prefs?.setStringList(_kNotesKey, list);
   }
 
   static Future<void> removeAt(int index) async {
-    await _db!.runTransaction((tx) async {
-      final s = await tx.get(_doc!);
-      final cur = List<String>.from(s.data()?['notes'] ?? const <String>[]);
-      if (index >= 0 && index < cur.length) {
-        cur.removeAt(index);
-        tx.update(_doc!, {'notes': cur, 'updatedAt': FieldValue.serverTimestamp()});
-      }
-    });
+    final list = List<String>.from(notes.value)..removeAt(index);
+    notes.value = list;
+    await _prefs?.setStringList(_kNotesKey, list);
   }
 
   static Future<void> removeLine(String line) async {
-    await _db!.runTransaction((tx) async {
-      final s = await tx.get(_doc!);
-      final cur = List<String>.from(s.data()?['notes'] ?? const <String>[]);
-      cur.remove(line);
-      tx.update(_doc!, {'notes': cur, 'updatedAt': FieldValue.serverTimestamp()});
-    });
-  }
-
-  /// 종료 정리(선택)
-  static Future<void> dispose() async {
-    await _sub?.cancel();
-    _sub = null;
-    _snapStream = null;
-  }
-
-  static bool _listEquals(List<String> a, List<String> b) {
-    if (identical(a, b)) return true;
-    if (a.length != b.length) return false;
-    for (int i = 0; i < a.length; i++) {
-      if (a[i] != b[i]) return false;
-    }
-    return true;
+    final list = List<String>.from(notes.value)..remove(line);
+    notes.value = list;
+    await _prefs?.setStringList(_kNotesKey, list);
   }
 }
 
@@ -250,6 +165,7 @@ class _DevMemoBubbleState extends State<_DevMemoBubble> {
           });
         },
         onPanEnd: (_) {
+          // 좌/우 엣지 스냅
           final snapX = (_pos.dx + _bubbleSize / 2) < screen.width / 2
               ? 8.0
               : screen.width - _bubbleSize - 8.0;
@@ -258,13 +174,13 @@ class _DevMemoBubbleState extends State<_DevMemoBubble> {
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: DevMemo.togglePanel,
+            onTap: DevMemo.togglePanel, // ✅ 토글로 변경
             customBorder: const CircleBorder(),
             child: Container(
               width: _bubbleSize,
               height: _bubbleSize,
               decoration: BoxDecoration(
-                color: cs.primary.withOpacity(0.5), // 50% 반투명
+                color: cs.primary.withOpacity(0.5), // ✅ 50% 반투명
                 shape: BoxShape.circle,
                 border: Border.all(color: cs.onSurface.withOpacity(.08)),
                 boxShadow: const [BoxShadow(blurRadius: 10, color: Colors.black26)],
@@ -272,7 +188,7 @@ class _DevMemoBubbleState extends State<_DevMemoBubble> {
               alignment: Alignment.center,
               child: Icon(
                 Icons.sticky_note_2_rounded,
-                color: Colors.white.withOpacity(0.95),
+                color: Colors.white.withOpacity(0.95), // 대비 강화
               ),
             ),
           ),
@@ -316,12 +232,13 @@ class _DevMemoSheetState extends State<_DevMemoSheet> {
     final textTheme = Theme.of(context).textTheme;
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
+    // 90% 높이 바텀시트 (배경: 순백색)
     return FractionallySizedBox(
       heightFactor: 0.9,
       child: ClipRRect(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         child: Material(
-          color: Colors.white,
+          color: Colors.white, // ✅ 배경을 완전한 흰색으로 고정
           child: SafeArea(
             top: false,
             child: Padding(
@@ -460,10 +377,10 @@ class _DevMemoSheetState extends State<_DevMemoSheet> {
                                       onPressed: () {
                                         Clipboard.setData(ClipboardData(text: text));
                                         ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            content: Text('메모를 복사했어요'),
+                                          SnackBar(
+                                            content: const Text('메모를 복사했어요'),
                                             behavior: SnackBarBehavior.floating,
-                                            duration: Duration(milliseconds: 900),
+                                            duration: const Duration(milliseconds: 900),
                                           ),
                                         );
                                       },

@@ -6,10 +6,9 @@ import '../routes.dart';
 import 'dev_package/debug_package/debug_bottom_sheet.dart';
 import 'dev_package/github_code_browser_bottom_sheet.dart';
 import 'dev_package/github_markdown_bottom_sheet.dart';
-import 'dev_package/google_docs_bottom_sheet.dart';
 import 'dev_package/local_prefs_bottom_sheet.dart';
 import 'dev_package/dev_memo.dart';
-
+import 'dev_package/google_docs_bottom_sheet.dart';
 
 /// ====== 개발 전용 팔레트 (개발 카드와 동일 톤) ======
 /// 버튼/Badge 배경
@@ -87,8 +86,8 @@ class DevStubPage extends StatelessWidget {
                     final crossAxisCount = width >= 1100
                         ? 4
                         : width >= 800
-                        ? 3
-                        : 2;
+                            ? 3
+                            : 2;
                     const spacing = 12.0;
                     final textScale = MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
 
@@ -202,7 +201,7 @@ class DevStubPage extends StatelessWidget {
                         },
                       ),
 
-                      // ⬇️ 신규 카드: "구글 독스" 편집 (Docs API 기반)
+                      // "구글 독스" 카드 onTap 수정
                       _ActionCard(
                         icon: Icons.description_outlined,
                         title: '구글 독스',
@@ -211,20 +210,10 @@ class DevStubPage extends StatelessWidget {
                         fg: cs.onPrimaryContainer,
                         tintColor: kDevTint.withOpacity(0.35),
                         titleColor: kDevDarkText,
-                        onTap: () {
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (_) => const Material(
-                              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-                              clipBehavior: Clip.antiAlias,
-                              child: SizedBox(
-                                height: 640,
-                                child: GoogleDocsDocBottomSheet(),
-                              ),
-                            ),
-                          );
+                        onTap: () async {
+                          // (선택) 버블도 함께 보이게 하고 싶으면 켜두기
+                          GoogleDocsDocPanel.enabled.value = true;
+                          await GoogleDocsDocPanel.togglePanel(); // ← 여기로 교체
                         },
                       ),
                     ];
@@ -264,7 +253,7 @@ class DevStubPage extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
               onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
                 AppRoutes.selector,
-                    (route) => false,
+                (route) => false,
               ),
               child: SizedBox(
                 height: 120,

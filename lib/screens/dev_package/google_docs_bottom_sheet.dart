@@ -1,34 +1,173 @@
 // lib/screens/dev_package/google_docs_doc_bottom_sheet.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter/services.dart' show rootBundle, Clipboard, HapticFeedback;
+import 'package:flutter/foundation.dart'; // debugPrint
 import 'package:googleapis/docs/v1.dart' as gdocs;
 import 'package:googleapis_auth/auth_io.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/foundation.dart'; // debugPrint 사용
 
-/// Google Docs(문서) 편집 바텀시트
-/// - 서비스계정 인증 (Docs API scope)
-/// - 새 문서 생성 / 기존 문서 로딩
-/// - 본문 전체를 "플레인 텍스트"로 편집 후 저장
-///   (문서 제목 변경은 Drive API가 필요하므로 여기서는 생성 시 제목만 사용)
-class GoogleDocsDocBottomSheet extends StatefulWidget {
-  const GoogleDocsDocBottomSheet({super.key});
+import '../../utils/app_navigator.dart'; // navigatorKey 사용
 
-  @override
-  State<GoogleDocsDocBottomSheet> createState() => _GoogleDocsDocBottomSheetState();
+/// 드래그 가능한 플로팅 버블 + 90% 높이 바텀시트로
+/// Google Docs 문서를 "플레인 텍스트"로 불러오고/저장하는 패널.
+///
+/// - 문서 생성 ❌ (기존 문서만 사용)
+/// - ID는 SharedPreferences에 저장/복원
+/// - 서비스 계정 인증(json 키 파일 필요)
+class GoogleDocsDocPanel {
+  GoogleDocsDocPanel._();
+
+  static GlobalKey<NavigatorState> get navigatorKey => AppNavigator.key;
+
+  /// 플로팅 버블 on/off
+  static final enabled = ValueNotifier<bool>(false);
+
+  static OverlayEntry? _entry;
+  static bool _isPanelOpen = false;
+  static Future<void>? _panelFuture;
+
+  /// 앱 시작 시 한 번 호출(선택)
+  static Future<void> init() async {
+    // 필요 시 부팅 시점에 enabled.value = true 로 기본 ON 설정 가능
+    enabled.addListener(() {
+      if (enabled.value) {
+        _showOverlay();
+      } else {
+        _hideOverlay();
+      }
+    });
+  }
+
+  /// 첫 프레임 이후 부착 필요 시 호출
+  static void mountIfNeeded() {
+    if (enabled.value) _showOverlay();
+  }
+
+  static void _showOverlay() {
+    if (_entry != null) return;
+    final overlay = navigatorKey.currentState?.overlay;
+    if (overlay == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _showOverlay());
+      return;
+    }
+    _entry = OverlayEntry(builder: (_) => const _GDocBubble());
+    overlay.insert(_entry!);
+  }
+
+  static void _hideOverlay() {
+    _entry?.remove();
+    _entry = null;
+  }
+
+  /// 외부에서 호출할 토글 API
+  static Future<void> togglePanel() async {
+    final ctx = navigatorKey.currentState?.overlay?.context ?? navigatorKey.currentState?.context;
+    if (ctx == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => togglePanel());
+      return;
+    }
+    if (_isPanelOpen) {
+      Navigator.of(ctx).maybePop();
+      return;
+    }
+    if (_panelFuture != null) return;
+
+    _isPanelOpen = true;
+    _panelFuture = showModalBottomSheet(
+      context: ctx,
+      useSafeArea: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _GoogleDocsDocBottomSheet(),
+    ).whenComplete(() {
+      _isPanelOpen = false;
+      _panelFuture = null;
+    });
+
+    await _panelFuture;
+  }
 }
 
-class _GoogleDocsDocBottomSheetState extends State<GoogleDocsDocBottomSheet> {
+/// 드래그 가능한 플로팅 버블
+class _GDocBubble extends StatefulWidget {
+  const _GDocBubble();
+
+  @override
+  State<_GDocBubble> createState() => _GDocBubbleState();
+}
+
+class _GDocBubbleState extends State<_GDocBubble> {
+  static const double _bubbleSize = 56;
+  Offset _pos = const Offset(12, 200);
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.maybeOf(context);
+    final screen = media?.size ?? Size.zero;
+    final bottomInset = media?.padding.bottom ?? 0;
+    final cs = Theme.of(context).colorScheme;
+
+    return Positioned(
+      left: _pos.dx,
+      top: _pos.dy,
+      child: GestureDetector(
+        onPanUpdate: (d) {
+          setState(() {
+            _pos = Offset(
+              (_pos.dx + d.delta.dx).clamp(0.0, screen.width - _bubbleSize),
+              (_pos.dy + d.delta.dy).clamp(0.0, screen.height - _bubbleSize - bottomInset),
+            );
+          });
+        },
+        onPanEnd: (_) {
+          final snapX = (_pos.dx + _bubbleSize / 2) < screen.width / 2 ? 8.0 : screen.width - _bubbleSize - 8.0;
+          setState(() => _pos = Offset(snapX, _pos.dy));
+        },
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: GoogleDocsDocPanel.togglePanel,
+            customBorder: const CircleBorder(),
+            child: Container(
+              width: _bubbleSize,
+              height: _bubbleSize,
+              decoration: BoxDecoration(
+                color: cs.primary.withOpacity(0.5),
+                shape: BoxShape.circle,
+                border: Border.all(color: cs.onSurface.withOpacity(.08)),
+                boxShadow: const [BoxShadow(blurRadius: 10, color: Colors.black26)],
+              ),
+              alignment: Alignment.center,
+              child: Icon(Icons.description_rounded, color: Colors.white.withOpacity(0.95)),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 90% 높이 바텀시트 본문
+class _GoogleDocsDocBottomSheet extends StatefulWidget {
+  const _GoogleDocsDocBottomSheet();
+
+  @override
+  State<_GoogleDocsDocBottomSheet> createState() => _GoogleDocsDocBottomSheetState();
+}
+
+class _GoogleDocsDocBottomSheetState extends State<_GoogleDocsDocBottomSheet> {
   static const _prefsDocIdKey = 'dev_google_docs_document_id';
   static const _serviceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
 
   final _docIdCtrl = TextEditingController();
-  final _newTitleCtrl = TextEditingController(text: 'Dev Document');
   final _editorCtrl = TextEditingController();
 
   bool _busy = false;
   String? _lastMessage;
+
+  /// ✅ 문서 ID 잠금 상태(기본 true)
+  bool _idLocked = true;
 
   @override
   void initState() {
@@ -55,41 +194,7 @@ class _GoogleDocsDocBottomSheetState extends State<GoogleDocsDocBottomSheet> {
     return gdocs.DocsApi(client);
   }
 
-  /// 새 빈 문서 생성 (본문엔 빈 줄 1개 기본 생성됨)
-  Future<void> _createNewDocument() async {
-    try {
-      setState(() => _busy = true);
-      final api = await _getDocsApi();
-      final title = '${_newTitleCtrl.text.trim()} - ${DateTime.now().toIso8601String().substring(0, 19)}';
-
-      final created = await api.documents.create(gdocs.Document(title: title));
-      final docId = created.documentId ?? '';
-      if (docId.isEmpty) {
-        throw Exception('문서 ID를 가져오지 못했습니다.');
-      }
-
-      setState(() {
-        _docIdCtrl.text = docId;
-        _editorCtrl.text = ''; // 에디터는 비워둠
-        _lastMessage = '새 문서를 생성했습니다: $title';
-      });
-      await _savePrefs();
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('새 구글 독스 문서를 생성했습니다.')),
-      );
-    } catch (e) {
-      setState(() => _lastMessage = '생성 실패: $e');
-      // 🔎 디버깅 프린트
-      debugPrint('[GoogleDocs] _createNewDocument() 실패: $e');
-    } finally {
-      if (!mounted) return;
-      setState(() => _busy = false);
-    }
-  }
-
-  /// 문서 불러오기: 본문을 플레인 텍스트로 평탄화
+  /// 문서 불러오기(기존 문서만)
   Future<void> _loadDocument() async {
     try {
       setState(() => _busy = true);
@@ -102,15 +207,15 @@ class _GoogleDocsDocBottomSheetState extends State<GoogleDocsDocBottomSheet> {
       final text = _flattenPlainText(doc);
       setState(() {
         _editorCtrl.text = text;
-        _lastMessage = '로딩 완료: 길이 ${text.length.toString()}자';
+        _lastMessage = '로딩 완료: 길이 ${text.length}자';
       });
       await _savePrefs();
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('문서를 불러왔습니다.')));
+      HapticFeedback.selectionClick();
     } catch (e, st) {
       setState(() => _lastMessage = '로딩 실패: $e');
-      // 🔎 디버깅 프린트(에러 + 스택)
       debugPrint('[GoogleDocs] _loadDocument() 실패: $e');
       debugPrint('[GoogleDocs] _loadDocument() stack:\n$st');
       if (!mounted) return;
@@ -120,7 +225,7 @@ class _GoogleDocsDocBottomSheetState extends State<GoogleDocsDocBottomSheet> {
     }
   }
 
-  /// 문서 저장: 기존 본문 삭제 후 index=1 위치에 전체 텍스트 삽입
+  /// 문서 저장(본문 전체 교체)
   Future<void> _saveDocument() async {
     try {
       setState(() => _busy = true);
@@ -132,15 +237,14 @@ class _GoogleDocsDocBottomSheetState extends State<GoogleDocsDocBottomSheet> {
       // 현재 문서 길이를 알아내기 위해 get
       final doc = await api.documents.get(id);
       final endIndex = _getDocumentEndIndex(doc); // 최소 1 이상
-      // Docs API는 마지막 "세그먼트 끝 개행"은 삭제 범위에 포함할 수 없음 → -1
+      // 마지막 세그먼트 개행은 삭제 범위에서 제외 → -1
       final deleteEnd = (endIndex - 1).clamp(1, endIndex);
-      debugPrint('[GoogleDocs] save: endIndex=$endIndex, deleteEnd=$deleteEnd');
 
       final newText = _ensureTrailingNewline(_editorCtrl.text);
 
       final requests = <gdocs.Request>[];
 
-      // 기존 본문 삭제 (본문은 index 1부터 시작, 끝 개행 제외)
+      // 기존 본문 삭제 (본문은 index 1부터 시작)
       if (deleteEnd > 1) {
         requests.add(
           gdocs.Request(
@@ -169,9 +273,9 @@ class _GoogleDocsDocBottomSheetState extends State<GoogleDocsDocBottomSheet> {
       setState(() => _lastMessage = '저장 완료: ${newText.length}자');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('문서를 저장했습니다.')));
+      HapticFeedback.lightImpact();
     } catch (e, st) {
       setState(() => _lastMessage = '저장 실패: $e');
-      // 🔎 디버깅 프린트(에러 + 스택)
       debugPrint('[GoogleDocs] _saveDocument() 실패: $e');
       debugPrint('[GoogleDocs] _saveDocument() stack:\n$st');
       if (!mounted) return;
@@ -183,7 +287,6 @@ class _GoogleDocsDocBottomSheetState extends State<GoogleDocsDocBottomSheet> {
 
   // ===== Helpers =====
 
-  /// 본문(Body) 끝 인덱스 계산
   int _getDocumentEndIndex(gdocs.Document doc) {
     final contents = doc.body?.content ?? const <gdocs.StructuralElement>[];
     int maxEnd = 1;
@@ -194,7 +297,6 @@ class _GoogleDocsDocBottomSheetState extends State<GoogleDocsDocBottomSheet> {
     return maxEnd;
   }
 
-  /// 텍스트 평탄화: Paragraph/TextRun의 content를 이어붙임 + 표는 탭/개행 직렬화
   String _flattenPlainText(gdocs.Document doc) {
     final buffer = StringBuffer();
     final contents = doc.body?.content ?? const <gdocs.StructuralElement>[];
@@ -241,7 +343,6 @@ class _GoogleDocsDocBottomSheetState extends State<GoogleDocsDocBottomSheet> {
   @override
   void dispose() {
     _docIdCtrl.dispose();
-    _newTitleCtrl.dispose();
     _editorCtrl.dispose();
     super.dispose();
   }
@@ -249,92 +350,132 @@ class _GoogleDocsDocBottomSheetState extends State<GoogleDocsDocBottomSheet> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
-    return Column(
-      children: [
-        // 헤더 바
-        Container(
-          height: 52,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border(
-              bottom: BorderSide(color: Colors.black.withOpacity(0.06), width: 1),
-            ),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.description_rounded),
-              const SizedBox(width: 8),
-              const Text('구글 독스 · 문서 편집', style: TextStyle(fontWeight: FontWeight.w700)),
-              const Spacer(),
-              if (_busy) const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-              IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () => Navigator.of(context).maybePop(),
-              ),
-            ],
-          ),
-        ),
+    return FractionallySizedBox(
+      heightFactor: 0.9,
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        child: Material(
+          color: Colors.white,
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: EdgeInsets.only(bottom: bottomInset),
+              child: Column(
+                children: [
+                  const SizedBox(height: 10),
+                  _DragHandle(),
+                  const SizedBox(height: 12),
 
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              children: [
-                // 컨트롤 패널
-                Card(
-                  elevation: 0,
-                  color: Colors.white,
-                  surfaceTintColor: cs.primaryContainer,
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
+                  // 헤더
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
                       children: [
-                        // 1) ID/제목 입력 행
-                        Row(
-                          children: [
-                            Expanded(
-                              flex: 3,
-                              child: TextField(
-                                controller: _docIdCtrl,
-                                decoration: const InputDecoration(
-                                  labelText: '문서 ID',
-                                  hintText: '1A2B3C... (문서 URL의 /d/ 와 /edit 사이)',
-                                  border: OutlineInputBorder(),
-                                  isDense: true,
-                                ),
+                        Icon(Icons.description_rounded, color: cs.primary),
+                        const SizedBox(width: 8),
+                        const Text('구글 독스 · 문서 편집', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20)),
+                        const Spacer(),
+                        ValueListenableBuilder<bool>(
+                          valueListenable: GoogleDocsDocPanel.enabled,
+                          builder: (_, on, __) => Row(
+                            children: [
+                              Text(
+                                on ? 'On' : 'Off',
+                                style: TextStyle(color: Theme.of(context).colorScheme.outline, fontSize: 12),
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              flex: 2,
-                              child: TextField(
-                                controller: _newTitleCtrl,
-                                decoration: const InputDecoration(
-                                  labelText: '새 문서 제목',
-                                  hintText: '새 문서 생성 시 사용',
-                                  border: OutlineInputBorder(),
-                                  isDense: true,
-                                ),
+                              const SizedBox(width: 6),
+                              Switch(
+                                value: on,
+                                onChanged: (v) => GoogleDocsDocPanel.enabled.value = v,
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                        const SizedBox(height: 8),
+                        if (_busy)
+                          const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                        IconButton(
+                          tooltip: '닫기',
+                          icon: const Icon(Icons.close_rounded),
+                          onPressed: () => Navigator.of(context).maybePop(),
+                        ),
+                      ],
+                    ),
+                  ),
 
-                        // 2) 버튼 모음 + 상태 메시지 (Wrap으로 줄바꿈 허용)
-                        Column(
+                  // 컨트롤 카드
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                    child: Card(
+                      elevation: 0,
+                      color: Colors.white,
+                      surfaceTintColor: cs.primaryContainer,
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // ID 입력 (+ 잠금)
+                            TextField(
+                              controller: _docIdCtrl,
+                              readOnly: _idLocked, // ✅ 잠금 시 편집 불가
+                              decoration: InputDecoration(
+                                labelText: '문서 ID',
+                                hintText: '1A2B3C... (문서 URL의 /d/ 와 /edit 사이)',
+                                border: const OutlineInputBorder(),
+                                isDense: true,
+                                // ✅ 잠금 토글 버튼
+                                suffixIcon: IconButton(
+                                  tooltip: _idLocked ? 'ID 잠금 해제' : 'ID 잠금',
+                                  icon: Icon(_idLocked ? Icons.lock : Icons.lock_open),
+                                  onPressed: () => setState(() => _idLocked = !_idLocked),
+                                ),
+                              ),
+                              onSubmitted: (_) async {
+                                if (_idLocked) {
+                                  if (!mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('잠금을 해제한 뒤 ID를 수정하세요.')),
+                                  );
+                                  return;
+                                }
+                                await _savePrefs();
+                                HapticFeedback.selectionClick();
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('문서 ID를 저장했습니다.')),
+                                  );
+                                }
+                              },
+                            ),
+                            const SizedBox(height: 8),
                             Wrap(
                               spacing: 8,
                               runSpacing: 8,
                               children: [
-                                ElevatedButton.icon(
-                                  icon: const Icon(Icons.add),
-                                  label: const Text('새 빈 문서'),
-                                  onPressed: _busy ? null : _createNewDocument,
+                                // 붙여넣기 (잠금 시 비활성화)
+                                Tooltip(
+                                  message: _idLocked ? '잠금 해제 후 붙여넣기 가능' : '클립보드에서 붙여넣기',
+                                  child: OutlinedButton.icon(
+                                    icon: const Icon(Icons.paste_rounded),
+                                    label: const Text('붙여넣기'),
+                                    onPressed: (_busy || _idLocked)
+                                        ? null
+                                        : () async {
+                                      final data = await Clipboard.getData('text/plain');
+                                      final pasted = (data?.text ?? '').trim();
+                                      if (pasted.isNotEmpty) {
+                                        _docIdCtrl.text = pasted;
+                                        await _savePrefs();
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(content: Text('문서 ID를 저장했습니다.')),
+                                          );
+                                        }
+                                      }
+                                    },
+                                  ),
                                 ),
                                 OutlinedButton.icon(
                                   icon: const Icon(Icons.download_rounded),
@@ -350,48 +491,73 @@ class _GoogleDocsDocBottomSheetState extends State<GoogleDocsDocBottomSheet> {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              _lastMessage ?? '서비스계정에 문서 편집 권한이 있어야 저장됩니다.',
+                              _lastMessage ?? '서비스 계정에 해당 문서의 편집 권한이 있어야 합니다.',
                               style: TextStyle(color: Colors.black.withOpacity(0.6), fontSize: 12),
-                              maxLines: 1,
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                // 플레인 텍스트 에디터
-                Card(
-                  elevation: 0,
-                  color: Colors.white,
-                  clipBehavior: Clip.antiAlias,
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    height: 460,
-                    child: TextField(
-                      controller: _editorCtrl,
-                      expands: true,
-                      maxLines: null,
-                      minLines: null,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        hintText: '여기에 문서 본문을 입력하거나, 불러온 텍스트를 편집하세요.',
-                        alignLabelWithHint: true,
                       ),
-                      style: const TextStyle(fontSize: 14, height: 1.4),
-                      keyboardType: TextInputType.multiline,
                     ),
                   ),
-                ),
-              ],
+
+                  // 에디터
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      child: Stack(
+                        children: [
+                          TextField(
+                            controller: _editorCtrl,
+                            expands: true,
+                            maxLines: null,
+                            minLines: null,
+                            textAlignVertical: TextAlignVertical.top,
+                            keyboardType: TextInputType.multiline,
+                            decoration: const InputDecoration(
+                              hintText: '문서 본문을 입력하거나, 불러온 텍스트를 편집하세요.',
+                              border: OutlineInputBorder(),
+                              contentPadding: EdgeInsets.fromLTRB(12, 12, 12, 16),
+                            ),
+                            style: const TextStyle(fontSize: 14, height: 1.4, fontFamily: 'monospace'),
+                          ),
+                          if (_busy)
+                            Positioned.fill(
+                              child: Container(
+                                alignment: Alignment.center,
+                                color: Colors.white.withOpacity(.5),
+                                child: const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(strokeWidth: 2.2),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
-      ],
+      ),
+    );
+  }
+}
+
+class _DragHandle extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 42,
+      height: 5,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.outlineVariant,
+        borderRadius: BorderRadius.circular(3),
+      ),
     );
   }
 }
