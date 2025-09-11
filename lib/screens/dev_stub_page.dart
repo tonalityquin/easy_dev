@@ -7,7 +7,7 @@ import 'dev_package/debug_package/debug_bottom_sheet.dart';
 import 'dev_package/github_code_browser_bottom_sheet.dart';
 import 'dev_package/github_markdown_bottom_sheet.dart';
 import 'dev_package/local_prefs_bottom_sheet.dart';
-import 'dev_package/memo/easy_memo.dart';
+import 'dev_package/dev_memo.dart';
 
 /// ====== 개발 전용 팔레트 (개발 카드와 동일 톤) ======
 /// 버튼/Badge 배경
@@ -85,14 +85,12 @@ class DevStubPage extends StatelessWidget {
                     final crossAxisCount = width >= 1100
                         ? 4
                         : width >= 800
-                        ? 3
-                        : 2;
+                            ? 3
+                            : 2;
                     const spacing = 12.0;
-                    final textScale =
-                    MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
+                    final textScale = MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
 
-                    final tileWidth =
-                        (width - spacing * (crossAxisCount - 1)) / crossAxisCount;
+                    final tileWidth = (width - spacing * (crossAxisCount - 1)) / crossAxisCount;
                     final baseTileHeight = 150.0;
                     final tileHeight = baseTileHeight * textScale;
                     final childAspectRatio = tileWidth / tileHeight;
@@ -165,8 +163,7 @@ class DevStubPage extends StatelessWidget {
                             isScrollControlled: true,
                             backgroundColor: Colors.transparent,
                             builder: (_) => const Material(
-                              borderRadius:
-                              BorderRadius.vertical(top: Radius.circular(16)),
+                              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
                               clipBehavior: Clip.antiAlias,
                               child: SizedBox(
                                 height: 560,
@@ -187,7 +184,7 @@ class DevStubPage extends StatelessWidget {
                         titleColor: kDevDarkText,
                         onTap: () async {
                           // 카드에서는 온오프를 건드리지 않음. 패널에서 스위치로 제어.
-                          await EasyMemo.openPanel();
+                          await DevMemo.openPanel();
                         },
                       ),
                       // ✅ 개인 달력 (그린 팔레트)
@@ -240,7 +237,7 @@ class DevStubPage extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
               onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
                 AppRoutes.selector,
-                    (route) => false,
+                (route) => false,
               ),
               child: SizedBox(
                 height: 120,

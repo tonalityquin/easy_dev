@@ -6,12 +6,12 @@ import 'package:permission_handler/permission_handler.dart';
 
 import 'routes.dart';
 import 'providers/providers.dart';
-import 'screens/dev_package/memo/easy_memo.dart';
+import 'screens/dev_package/dev_memo.dart';
+import 'screens/head_package/head_memo.dart';
 import 'theme.dart';
 import 'utils/init/dev_initializer.dart';
 import 'utils/foreground_task_handler.dart';
-
-// ✅ EasyMemo 추가
+import 'utils/app_navigator.dart'; // ✅ 추가
 
 @pragma('vm:entry-point')
 void myForegroundCallback() {
@@ -84,8 +84,9 @@ class AppBootstrapper extends StatelessWidget {
       notificationText: '포그라운드에서 대기 중',
     );
 
-    // ✅ EasyMemo 초기화(토글/메모 상태 로드)
-    await EasyMemo.init();
+    // ✅ 두 메모 초기화(토글/메모 상태 로드)
+    await DevMemo.init();
+    await HeadMemo.init();
   }
 }
 
@@ -102,16 +103,16 @@ class MyApp extends StatelessWidget {
         theme: appTheme,
         initialRoute: AppRoutes.selector,
         routes: appRoutes,
-        onUnknownRoute: (_) =>
-            MaterialPageRoute(builder: (_) => const NotFoundPage()),
+        onUnknownRoute: (_) => MaterialPageRoute(builder: (_) => const NotFoundPage()),
 
-        // ✅ navigatorKey 연결
-        navigatorKey: EasyMemo.navigatorKey,
+        // ✅ 단 한 번만, 전역키로!
+        navigatorKey: AppNavigator.key,
 
         // ✅ 첫 프레임 후 오버레이 장착 (켜짐 상태일 때만)
         builder: (context, child) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            EasyMemo.mountIfNeeded();
+            DevMemo.mountIfNeeded();
+            HeadMemo.mountIfNeeded();
           });
           return child!;
         },

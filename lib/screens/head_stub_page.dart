@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../routes.dart';
+import 'head_package/head_memo.dart';
 
 class HeadStubPage extends StatelessWidget {
   const HeadStubPage({super.key});
@@ -58,8 +59,8 @@ class HeadStubPage extends StatelessWidget {
                     final crossAxisCount = width >= 1100
                         ? 4
                         : width >= 800
-                        ? 3
-                        : 2;
+                            ? 3
+                            : 2;
 
                     const spacing = 12.0;
                     final textScale = MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
@@ -127,6 +128,19 @@ class HeadStubPage extends StatelessWidget {
                           Navigator.of(context).pushNamed(AppRoutes.attendanceSheet);
                         },
                       ),
+                      _ActionCard(
+                        icon: Icons.sticky_note_2_rounded,
+                        title: '메모',
+                        subtitle: '플로팅 버블 · 어디서나 기록',
+                        bg: cs.primaryContainer,
+                        fg: cs.onPrimaryContainer,
+                        tintColor: calLight.withOpacity(0.45),
+                        titleColor: calDark,
+                        onTap: () async {
+                          // 카드에서는 온오프를 건드리지 않음. 패널에서 스위치로 제어.
+                          await HeadMemo.openPanel();
+                        },
+                      ),
                     ];
 
                     return GridView.builder(
@@ -148,7 +162,7 @@ class HeadStubPage extends StatelessWidget {
                 child: InkWell(
                   onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
                     '/selector', // AppRoutes.selector
-                        (route) => false,
+                    (route) => false,
                   ),
                   borderRadius: BorderRadius.circular(8),
                   child: SizedBox(

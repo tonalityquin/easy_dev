@@ -24,37 +24,6 @@ class RoadmapItem {
 
 const List<RoadmapItem> _roadmapData = [
   RoadmapItem(
-    load: RoadmapLoad.heavy,
-    title: '태블릿 모드 작업',
-    notes: [
-      '페이지 생성',
-      '모드 생성',
-      '라우트 연결',
-    ],
-    status: RoadmapStatus.done,
-  ),
-  RoadmapItem(
-    load: RoadmapLoad.heavy,
-    title: '출퇴근 모드 작업',
-    notes: [
-      '페이지 생성',
-      '모드 생성',
-      '라우트 연결',
-    ],
-    status: RoadmapStatus.done,
-  ),
-  RoadmapItem(
-    load: RoadmapLoad.heavy,
-    title: '종합 라우트 페이지 설계',
-    notes: [
-      '페이지 생성',
-      '모드 생성',
-      '라우트 연결',
-      '추가 기능 및 로직들 삽입',
-    ],
-    status: RoadmapStatus.done,
-  ),
-  RoadmapItem(
     load: RoadmapLoad.medium,
     title: 'API 외부 삽입 로직 강화',
     notes: [
@@ -106,6 +75,16 @@ const List<RoadmapItem> _roadmapData = [
       '문제 발생 시에만 메서드 혹은 함수 알림',
     ],
     status: RoadmapStatus.planned,
+  ),
+  RoadmapItem(
+    load: RoadmapLoad.heavy,
+    title: '개발자 용 - 플로팅 버튼 추가',
+    notes: [
+      'Goal.출퇴근 ForeGroundTask 에셋 사전 설계',
+      'Google Docs API 연동',
+      '로컬 저장용 버튼 반응도 조사',
+    ],
+    status: RoadmapStatus.done,
   ),
   RoadmapItem(
     load: RoadmapLoad.heavy,

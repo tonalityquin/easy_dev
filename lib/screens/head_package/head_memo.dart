@@ -1,29 +1,33 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData, HapticFeedback;
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../utils/app_navigator.dart';
 
 /// EasyMemo
 /// - 전역 navigatorKey로 안전한 컨텍스트 확보 (showModalBottomSheet/Overlay)
 /// - 토글/메모 SharedPreferences 영속화
 /// - 드래그 가능한 플로팅 버블 + 90% 높이 바텀시트 패널
-class EasyMemo {
-  EasyMemo._();
+class HeadMemo {
+  HeadMemo._();
 
   /// ✅ MaterialApp.navigatorKey 로 연결
-  static final navigatorKey = GlobalKey<NavigatorState>();
-
+  static GlobalKey<NavigatorState> get navigatorKey => AppNavigator.key;
   /// 켜짐/꺼짐 토글 상태
   static final enabled = ValueNotifier<bool>(false);
 
   /// "YYYY-MM-DD HH:mm | 내용" 형태의 문자열 리스트
   static final notes = ValueListenableNotifier<List<String>>(<String>[]);
 
-  static const _kEnabledKey = 'easy_memo_enabled_v1';
-  static const _kNotesKey = 'easy_memo_notes_v1';
+  static const _kEnabledKey = 'head_memo_enabled_v1';
+  static const _kNotesKey = 'head_memo_notes_v1';
 
   static SharedPreferences? _prefs;
   static OverlayEntry? _entry;
+
+  // ===== 패널 토글 상태 & 중복 호출 가드 =====
+  static bool _isPanelOpen = false;
+  static Future<void>? _panelFuture;
 
   /// 앱 시작 시 1회 호출
   static Future<void> init() async {
@@ -54,20 +58,39 @@ class EasyMemo {
     return overlayCtx ?? state?.context;
   }
 
-  /// 메모 패널 열기 (온/오프 스위치는 패널 내부 스위치로 제어)
-  static Future<void> openPanel() async {
+  /// (호환용) 기존 API는 토글로 라우팅
+  static Future<void> openPanel() => togglePanel();
+
+  /// ✅ 버블/카드가 부를 토글 API: 열려 있으면 닫고, 닫혀 있으면 연다
+  static Future<void> togglePanel() async {
     final ctx = _bestContext();
     if (ctx == null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => openPanel());
+      WidgetsBinding.instance.addPostFrameCallback((_) => togglePanel());
       return;
     }
-    await showModalBottomSheet(
+
+    if (_isPanelOpen) {
+      // 이미 열려 있으면 닫기
+      Navigator.of(ctx).maybePop();
+      return;
+    }
+
+    // 빠른 연속 탭 가드
+    if (_panelFuture != null) return;
+
+    _isPanelOpen = true;
+    _panelFuture = showModalBottomSheet(
       context: ctx,
       useSafeArea: true,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent, // 바깥 배경 투명
-      builder: (_) => const _EasyMemoSheet(),
-    );
+      backgroundColor: Colors.transparent, // 바깥(시트 바깥) 배경은 투명 유지
+      builder: (_) => const _HeadMemoSheet(),
+    ).whenComplete(() {
+      _isPanelOpen = false;
+      _panelFuture = null;
+    });
+
+    await _panelFuture;
   }
 
   // ----------------- 내부: 오버레이(버블) -----------------
@@ -79,7 +102,7 @@ class EasyMemo {
       WidgetsBinding.instance.addPostFrameCallback((_) => _showOverlay());
       return;
     }
-    _entry = OverlayEntry(builder: (context) => const _EasyMemoBubble());
+    _entry = OverlayEntry(builder: (context) => const _HeadMemoBubble());
     overlay.insert(_entry!);
   }
 
@@ -115,14 +138,14 @@ class EasyMemo {
 }
 
 /// 드래그 가능한 플로팅 버블(엣지 스냅)
-class _EasyMemoBubble extends StatefulWidget {
-  const _EasyMemoBubble();
+class _HeadMemoBubble extends StatefulWidget {
+  const _HeadMemoBubble();
 
   @override
-  State<_EasyMemoBubble> createState() => _EasyMemoBubbleState();
+  State<_HeadMemoBubble> createState() => _HeadMemoBubbleState();
 }
 
-class _EasyMemoBubbleState extends State<_EasyMemoBubble> {
+class _HeadMemoBubbleState extends State<_HeadMemoBubble> {
   static const double _bubbleSize = 56;
   Offset _pos = const Offset(12, 200);
 
@@ -155,7 +178,7 @@ class _EasyMemoBubbleState extends State<_EasyMemoBubble> {
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: EasyMemo.openPanel,
+            onTap: HeadMemo.togglePanel, // ✅ 토글로 변경
             customBorder: const CircleBorder(),
             child: Container(
               width: _bubbleSize,
@@ -180,14 +203,14 @@ class _EasyMemoBubbleState extends State<_EasyMemoBubble> {
 }
 
 /// 메모 바텀시트(90% 높이 · 스위치 · 검색 · 입력 · 스와이프 삭제)
-class _EasyMemoSheet extends StatefulWidget {
-  const _EasyMemoSheet();
+class _HeadMemoSheet extends StatefulWidget {
+  const _HeadMemoSheet();
 
   @override
-  State<_EasyMemoSheet> createState() => _EasyMemoSheetState();
+  State<_HeadMemoSheet> createState() => _HeadMemoSheetState();
 }
 
-class _EasyMemoSheetState extends State<_EasyMemoSheet> {
+class _HeadMemoSheetState extends State<_HeadMemoSheet> {
   final TextEditingController _inputCtrl = TextEditingController();
   final TextEditingController _searchCtrl = TextEditingController();
   String _query = '';
@@ -213,186 +236,177 @@ class _EasyMemoSheetState extends State<_EasyMemoSheet> {
     final textTheme = Theme.of(context).textTheme;
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
-    // 90% 높이 바텀시트
+    // 90% 높이 바텀시트 (배경: 순백색)
     return FractionallySizedBox(
       heightFactor: 0.9,
       child: ClipRRect(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        child: Stack(
-          children: [
-            // 살짝 블러+틴트 배경
-            BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-              child: Container(color: cs.surface.withOpacity(0.9)),
-            ),
-            Material(
-              color: Colors.transparent,
-              child: SafeArea(
-                top: false,
-                child: Padding(
-                  padding: EdgeInsets.only(bottom: bottomInset),
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 10),
-                      _DragHandle(),
-                      const SizedBox(height: 12),
+        child: Material(
+          color: Colors.white, // ✅ 배경을 완전한 흰색으로 고정
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: EdgeInsets.only(bottom: bottomInset),
+              child: Column(
+                children: [
+                  const SizedBox(height: 10),
+                  _DragHandle(),
+                  const SizedBox(height: 12),
 
-                      // 헤더: 타이틀 · 온/오프 · 닫기
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Row(
-                          children: [
-                            Icon(Icons.sticky_note_2_rounded, color: cs.primary),
-                            const SizedBox(width: 8),
-                            Text('메모', style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
-                            const Spacer(),
-                            ValueListenableBuilder<bool>(
-                              valueListenable: EasyMemo.enabled,
-                              builder: (_, on, __) => Row(
-                                children: [
-                                  Text(on ? 'On' : 'Off', style: textTheme.labelMedium?.copyWith(color: cs.outline)),
-                                  const SizedBox(width: 6),
-                                  Switch(value: on, onChanged: (v) => EasyMemo.enabled.value = v),
-                                ],
-                              ),
-                            ),
-                            IconButton(
-                              tooltip: '닫기',
-                              icon: const Icon(Icons.close_rounded),
-                              onPressed: () => Navigator.of(context).maybePop(),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      // 검색 바
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                        child: TextField(
-                          controller: _searchCtrl,
-                          textInputAction: TextInputAction.search,
-                          decoration: InputDecoration(
-                            prefixIcon: const Icon(Icons.search_rounded),
-                            hintText: '메모 검색',
-                            filled: true,
-                            fillColor: cs.surfaceVariant.withOpacity(.5),
-                            border: _inputBorder(),
-                            enabledBorder: _inputBorder(),
-                            focusedBorder: _inputBorder(focused: true, cs: cs),
-                            isDense: true,
+                  // 헤더: 타이틀 · 온/오프 · 닫기
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        Icon(Icons.sticky_note_2_rounded, color: cs.primary),
+                        const SizedBox(width: 8),
+                        Text('메모', style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                        const Spacer(),
+                        ValueListenableBuilder<bool>(
+                          valueListenable: HeadMemo.enabled,
+                          builder: (_, on, __) => Row(
+                            children: [
+                              Text(on ? 'On' : 'Off', style: textTheme.labelMedium?.copyWith(color: cs.outline)),
+                              const SizedBox(width: 6),
+                              Switch(value: on, onChanged: (v) => HeadMemo.enabled.value = v),
+                            ],
                           ),
                         ),
-                      ),
-
-                      // 입력 영역
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: _inputCtrl,
-                                textInputAction: TextInputAction.done,
-                                minLines: 1,
-                                maxLines: 3,
-                                decoration: InputDecoration(
-                                  hintText: '메모를 입력하세요',
-                                  prefixIcon: const Icon(Icons.edit_note_rounded),
-                                  filled: true,
-                                  fillColor: cs.surfaceVariant.withOpacity(.5),
-                                  border: _inputBorder(),
-                                  enabledBorder: _inputBorder(),
-                                  focusedBorder: _inputBorder(focused: true, cs: cs),
-                                  isDense: true,
-                                ),
-                                onSubmitted: _submitNote,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            FilledButton.icon(
-                              onPressed: () => _submitNote(_inputCtrl.text),
-                              icon: const Icon(Icons.send_rounded),
-                              label: const Text('추가'),
-                            ),
-                          ],
+                        IconButton(
+                          tooltip: '닫기',
+                          icon: const Icon(Icons.close_rounded),
+                          onPressed: () => Navigator.of(context).maybePop(),
                         ),
-                      ),
+                      ],
+                    ),
+                  ),
 
-                      // 리스트
-                      Expanded(
-                        child: ValueListenableBuilder<List<String>>(
-                          valueListenable: EasyMemo.notes,
-                          builder: (_, list, __) {
-                            final filtered = _filtered(list, _query);
-                            if (filtered.isEmpty) {
-                              return _EmptyState(query: _query);
-                            }
-                            return ListView.separated(
-                              padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
-                              itemCount: filtered.length,
-                              separatorBuilder: (_, __) => const Divider(height: 1),
-                              itemBuilder: (context, i) {
-                                final line = filtered[i];
-                                final (time, text) = _parse(line);
-                                return Dismissible(
-                                  key: ValueKey(line),
-                                  direction: DismissDirection.endToStart,
-                                  background: _SwipeDeleteBackground(
-                                    color: cs.errorContainer,
-                                    iconColor: cs.onErrorContainer,
-                                  ),
-                                  onDismissed: (_) {
-                                    EasyMemo.removeLine(line);
-                                    HapticFeedback.selectionClick();
-                                  },
-                                  child: ListTile(
-                                    dense: false,
-                                    leading: CircleAvatar(
-                                      radius: 18,
-                                      backgroundColor: cs.primaryContainer,
-                                      child: Icon(Icons.notes_rounded, color: cs.onPrimaryContainer, size: 18),
-                                    ),
-                                    title: Text(text, maxLines: 2, overflow: TextOverflow.ellipsis),
-                                    subtitle: time.isNotEmpty
-                                        ? Text(time, style: textTheme.bodySmall?.copyWith(color: cs.outline))
-                                        : null,
-                                    trailing: Wrap(
-                                      spacing: 4,
-                                      children: [
-                                        IconButton(
-                                          tooltip: '복사',
-                                          icon: const Icon(Icons.copy_rounded),
-                                          onPressed: () {
-                                            Clipboard.setData(ClipboardData(text: text));
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(
-                                                content: const Text('메모를 복사했어요'),
-                                                behavior: SnackBarBehavior.floating,
-                                                duration: const Duration(milliseconds: 900),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                        IconButton(
-                                          tooltip: '삭제',
-                                          icon: const Icon(Icons.delete_outline_rounded),
-                                          onPressed: () => EasyMemo.removeLine(line),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
+                  // 검색 바
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                    child: TextField(
+                      controller: _searchCtrl,
+                      textInputAction: TextInputAction.search,
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.search_rounded),
+                        hintText: '메모 검색',
+                        filled: true,
+                        fillColor: cs.surfaceVariant.withOpacity(.5),
+                        border: _inputBorder(),
+                        enabledBorder: _inputBorder(),
+                        focusedBorder: _inputBorder(focused: true, cs: cs),
+                        isDense: true,
+                      ),
+                    ),
+                  ),
+
+                  // 입력 영역
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _inputCtrl,
+                            textInputAction: TextInputAction.done,
+                            minLines: 1,
+                            maxLines: 3,
+                            decoration: InputDecoration(
+                              hintText: '메모를 입력하세요',
+                              prefixIcon: const Icon(Icons.edit_note_rounded),
+                              filled: true,
+                              fillColor: cs.surfaceVariant.withOpacity(.5),
+                              border: _inputBorder(),
+                              enabledBorder: _inputBorder(),
+                              focusedBorder: _inputBorder(focused: true, cs: cs),
+                              isDense: true,
+                            ),
+                            onSubmitted: _submitNote,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton.icon(
+                          onPressed: () => _submitNote(_inputCtrl.text),
+                          icon: const Icon(Icons.send_rounded),
+                          label: const Text('추가'),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // 리스트
+                  Expanded(
+                    child: ValueListenableBuilder<List<String>>(
+                      valueListenable: HeadMemo.notes,
+                      builder: (_, list, __) {
+                        final filtered = _filtered(list, _query);
+                        if (filtered.isEmpty) {
+                          return _EmptyState(query: _query);
+                        }
+                        return ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+                          itemCount: filtered.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (context, i) {
+                            final line = filtered[i];
+                            final (time, text) = _parse(line);
+                            return Dismissible(
+                              key: ValueKey(line),
+                              direction: DismissDirection.endToStart,
+                              background: _SwipeDeleteBackground(
+                                color: cs.errorContainer,
+                                iconColor: cs.onErrorContainer,
+                              ),
+                              onDismissed: (_) {
+                                HeadMemo.removeLine(line);
+                                HapticFeedback.selectionClick();
                               },
+                              child: ListTile(
+                                dense: false,
+                                leading: CircleAvatar(
+                                  radius: 18,
+                                  backgroundColor: cs.primaryContainer,
+                                  child: Icon(Icons.notes_rounded, color: cs.onPrimaryContainer, size: 18),
+                                ),
+                                title: Text(text, maxLines: 2, overflow: TextOverflow.ellipsis),
+                                subtitle: time.isNotEmpty
+                                    ? Text(time, style: textTheme.bodySmall?.copyWith(color: cs.outline))
+                                    : null,
+                                trailing: Wrap(
+                                  spacing: 4,
+                                  children: [
+                                    IconButton(
+                                      tooltip: '복사',
+                                      icon: const Icon(Icons.copy_rounded),
+                                      onPressed: () {
+                                        Clipboard.setData(ClipboardData(text: text));
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: const Text('메모를 복사했어요'),
+                                            behavior: SnackBarBehavior.floating,
+                                            duration: const Duration(milliseconds: 900),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                    IconButton(
+                                      tooltip: '삭제',
+                                      icon: const Icon(Icons.delete_outline_rounded),
+                                      onPressed: () => HeadMemo.removeLine(line),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             );
                           },
-                        ),
-                      ),
-                    ],
+                        );
+                      },
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -427,7 +441,7 @@ class _EasyMemoSheetState extends State<_EasyMemoSheet> {
   void _submitNote(String raw) {
     final t = raw.trim();
     if (t.isEmpty) return;
-    EasyMemo.add(t);
+    HeadMemo.add(t);
     _inputCtrl.clear();
     FocusScope.of(context).unfocus();
     HapticFeedback.lightImpact();
