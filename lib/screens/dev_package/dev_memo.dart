@@ -1,5 +1,13 @@
+// lib/screens/dev_package/dev_memo.dart
+//
+// ※ intl 패키지가 필요합니다. pubspec.yaml에 추가하세요:
+// dependencies:
+//   intl: ^0.19.0
+
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData, HapticFeedback;
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../utils/app_navigator.dart';
@@ -9,14 +17,21 @@ class DevMemo {
 
   /// ✅ MaterialApp.navigatorKey 로 연결
   static GlobalKey<NavigatorState> get navigatorKey => AppNavigator.key;
+
   /// 켜짐/꺼짐 토글 상태
   static final enabled = ValueNotifier<bool>(false);
 
   /// "YYYY-MM-DD HH:mm | 내용" 형태의 문자열 리스트
   static final notes = ValueListenableNotifier<List<String>>(<String>[]);
 
+  // ---- SharedPreferences Keys ----
   static const _kEnabledKey = 'dev_memo_enabled_v1';
   static const _kNotesKey = 'dev_memo_notes_v1';
+  static const _kBubbleXKey = 'dev_memo_bubble_x_v1';
+  static const _kBubbleYKey = 'dev_memo_bubble_y_v1';
+
+  /// 노트 보관 상한 (옵션): 초과 시 오래된 항목을 잘라냅니다.
+  static const int kMaxNotes = 1000;
 
   static SharedPreferences? _prefs;
   static OverlayEntry? _entry;
@@ -57,7 +72,7 @@ class DevMemo {
   /// (호환용) 기존 API는 토글로 라우팅
   static Future<void> openPanel() => togglePanel();
 
-  /// ✅ 버블/카드가 부를 토글 API: 열려 있으면 닫고, 닫혀 있으면 연다
+  /// ✅ 바텀시트 토글 API (메뉴의 "메모 열기"에서 사용)
   static Future<void> togglePanel() async {
     final ctx = _bestContext();
     if (ctx == null) {
@@ -66,12 +81,10 @@ class DevMemo {
     }
 
     if (_isPanelOpen) {
-      // 이미 열려 있으면 닫기
       Navigator.of(ctx).maybePop();
       return;
     }
 
-    // 빠른 연속 탭 가드
     if (_panelFuture != null) return;
 
     _isPanelOpen = true;
@@ -79,7 +92,7 @@ class DevMemo {
       context: ctx,
       useSafeArea: true,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent, // 바깥(시트 바깥) 배경은 투명 유지
+      backgroundColor: Colors.transparent,
       builder: (_) => const _DevMemoSheet(),
     ).whenComplete(() {
       _isPanelOpen = false;
@@ -111,11 +124,14 @@ class DevMemo {
 
   static Future<void> add(String text) async {
     final now = DateTime.now();
-    final stamp =
-        "${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} "
-        "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+    final stamp = DateFormat('yyyy-MM-dd HH:mm').format(now);
     final line = "$stamp | $text";
+
     final list = List<String>.from(notes.value)..insert(0, line);
+    // 상한 적용
+    if (list.length > kMaxNotes) {
+      list.length = kMaxNotes; // 앞쪽(최신)만 남기고 뒤쪽(오래된) 커트
+    }
     notes.value = list;
     await _prefs?.setStringList(_kNotesKey, list);
   }
@@ -131,9 +147,24 @@ class DevMemo {
     notes.value = list;
     await _prefs?.setStringList(_kNotesKey, list);
   }
+
+  /// 버블 좌표 저장/복원 (영속화)
+  static Future<void> saveBubblePos(Offset pos) async {
+    _prefs ??= await SharedPreferences.getInstance();
+    await _prefs!.setDouble(_kBubbleXKey, pos.dx);
+    await _prefs!.setDouble(_kBubbleYKey, pos.dy);
+  }
+
+  static Offset restoreBubblePos() {
+    final dx = _prefs?.getDouble(_kBubbleXKey) ?? 12.0;
+    final dy = _prefs?.getDouble(_kBubbleYKey) ?? 200.0;
+    return Offset(dx, dy);
+  }
 }
 
-/// 드래그 가능한 플로팅 버블(엣지 스냅)
+/// 드래그 가능한 플로팅 버블
+/// - 탭 시: 기어 회전 + 두 개의 미니 버튼("메모 열기", "플로팅 종료") 가로 펼침/접힘
+/// - 배경 탭 시: 접힘
 class _DevMemoBubble extends StatefulWidget {
   const _DevMemoBubble();
 
@@ -141,9 +172,50 @@ class _DevMemoBubble extends StatefulWidget {
   State<_DevMemoBubble> createState() => _DevMemoBubbleState();
 }
 
-class _DevMemoBubbleState extends State<_DevMemoBubble> {
+class _DevMemoBubbleState extends State<_DevMemoBubble> with SingleTickerProviderStateMixin {
   static const double _bubbleSize = 56;
-  Offset _pos = const Offset(12, 200);
+  static const double _miniSize = 44;
+  static const double _gap = 60; // 버튼 간 기본 간격(가로)
+  late Offset _pos;
+  bool _clampedOnce = false;
+
+  // 펼침/접힘 + 기어 회전
+  late final AnimationController _ctrl;
+  late final Animation<double> _gearTurn; // 0 → 1
+
+  // ✅ 단순/안정 판정: 값만 보고 확장 여부 판단 (리스너가 매 프레임 리빌드 보장)
+  bool get _expanded => _ctrl.value > 0.001;
+
+  @override
+  void initState() {
+    super.initState();
+    _pos = DevMemo.restoreBubblePos();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 220));
+    _gearTurn = CurvedAnimation(
+      parent: _ctrl,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    );
+
+    // ✅ 애니메이션 값/상태 변화 시마다 리빌드 → 배경 탭 레이어/미니버튼 표시 갱신
+    _ctrl.addListener(() => setState(() {}));
+    _ctrl.addStatusListener((_) => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _toggleMenu() {
+    if (_expanded) {
+      _ctrl.reverse();
+    } else {
+      _ctrl.forward();
+    }
+    HapticFeedback.selectionClick();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -152,48 +224,206 @@ class _DevMemoBubbleState extends State<_DevMemoBubble> {
     final bottomInset = media?.padding.bottom ?? 0;
     final cs = Theme.of(context).colorScheme;
 
-    return Positioned(
-      left: _pos.dx,
-      top: _pos.dy,
-      child: GestureDetector(
-        onPanUpdate: (d) {
-          setState(() {
-            _pos = Offset(
-              (_pos.dx + d.delta.dx).clamp(0.0, screen.width - _bubbleSize),
-              (_pos.dy + d.delta.dy).clamp(0.0, screen.height - _bubbleSize - bottomInset),
-            );
-          });
-        },
-        onPanEnd: (_) {
-          // 좌/우 엣지 스냅
-          final snapX = (_pos.dx + _bubbleSize / 2) < screen.width / 2
-              ? 8.0
-              : screen.width - _bubbleSize - 8.0;
-          setState(() => _pos = Offset(snapX, _pos.dy));
-        },
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: DevMemo.togglePanel, // ✅ 토글로 변경
-            customBorder: const CircleBorder(),
-            child: Container(
-              width: _bubbleSize,
-              height: _bubbleSize,
-              decoration: BoxDecoration(
-                color: cs.primary.withOpacity(0.5), // ✅ 50% 반투명
-                shape: BoxShape.circle,
-                border: Border.all(color: cs.onSurface.withOpacity(.08)),
-                boxShadow: const [BoxShadow(blurRadius: 10, color: Colors.black26)],
-              ),
-              alignment: Alignment.center,
-              child: Icon(
-                Icons.sticky_note_2_rounded,
-                color: Colors.white.withOpacity(0.95), // 대비 강화
+    // 첫 빌드 시 화면 경계로 1회 클램프
+    if (!_clampedOnce && screen != Size.zero) {
+      _clampedOnce = true;
+      _pos = _clampToScreen(_pos, screen, bottomInset);
+    }
+
+    // ✅ 가로 방향 배치: 왼쪽에 있으면 → 오른쪽(+), 오른쪽이면 → 왼쪽(-)
+    final isLeft = (_pos.dx + _bubbleSize / 2) < (screen.width / 2);
+    final baseDirX = isLeft ? 1.0 : -1.0;
+
+    // 각 미니버튼의 가로 오프셋(애니메이션 비율 반영)
+    final oOpen = Offset(baseDirX * _gap * _gearTurn.value, 0);
+    final oExit = Offset(baseDirX * (_gap * 2) * _gearTurn.value, 0);
+
+    return Stack(
+      children: [
+        // 배경 탭 → 접힘
+        if (_expanded)
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: _toggleMenu,
+              behavior: HitTestBehavior.opaque,
+            ),
+          ),
+
+        // 미니 버튼 1: 메모 열기 (바텀시트)
+        Positioned(
+          left: _pos.dx + (_bubbleSize - _miniSize) / 2 + oOpen.dx,
+          top: _pos.dy + (_bubbleSize - _miniSize) / 2 + oOpen.dy,
+          child: IgnorePointer(
+            ignoring: !_expanded,
+            child: Opacity(
+              opacity: _gearTurn.value,
+              child: _MiniActionButton(
+                size: _miniSize,
+                color: cs.secondaryContainer,
+                icon: Icons.sticky_note_2_rounded,
+                tooltip: '메모 열기',
+                label: '메모 열기',
+                iconColor: cs.onSecondaryContainer,
+                onTap: () async {
+                  HapticFeedback.selectionClick();
+                  await _ctrl.reverse(); // 메뉴 접고
+                  await DevMemo.togglePanel(); // 바텀시트 열기
+                },
               ),
             ),
           ),
         ),
-      ),
+
+        // 미니 버튼 2: 플로팅 종료 (enabled=false → overlay 제거)
+        Positioned(
+          left: _pos.dx + (_bubbleSize - _miniSize) / 2 + oExit.dx,
+          top: _pos.dy + (_bubbleSize - _miniSize) / 2 + oExit.dy,
+          child: IgnorePointer(
+            ignoring: !_expanded,
+            child: Opacity(
+              opacity: _gearTurn.value,
+              child: _MiniActionButton(
+                size: _miniSize,
+                color: cs.errorContainer,
+                icon: Icons.power_settings_new_rounded,
+                tooltip: '플로팅 종료',
+                label: '플로팅 종료',
+                iconColor: cs.onErrorContainer,
+                onTap: () async {
+                  HapticFeedback.selectionClick();
+                  // 먼저 메뉴 닫고 → 기능 비활성화
+                  await _ctrl.reverse();
+                  DevMemo.enabled.value = false; // 리스너에서 overlay 제거 & 상태 저장
+                },
+              ),
+            ),
+          ),
+        ),
+
+        // 메인 버블 (드래그 + 탭으로 메뉴 토글)
+        Positioned(
+          left: _pos.dx,
+          top: _pos.dy,
+          child: GestureDetector(
+            onPanUpdate: (d) {
+              setState(() {
+                final next = Offset(_pos.dx + d.delta.dx, _pos.dy + d.delta.dy);
+                _pos = _clampToScreen(next, screen, bottomInset);
+              });
+            },
+            onPanEnd: (_) async {
+              // 좌/우 엣지 스냅
+              final snapX = (_pos.dx + _bubbleSize / 2) < screen.width / 2
+                  ? 8.0
+                  : screen.width - _bubbleSize - 8.0;
+              setState(() => _pos = Offset(snapX, _pos.dy));
+              await DevMemo.saveBubblePos(_pos);
+            },
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _toggleMenu,
+                customBorder: const CircleBorder(),
+                child: AnimatedBuilder(
+                  animation: _gearTurn,
+                  builder: (_, __) {
+                    return Container(
+                      width: _bubbleSize,
+                      height: _bubbleSize,
+                      decoration: BoxDecoration(
+                        color: cs.primary.withOpacity(0.5),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: cs.onSurface.withOpacity(.08)),
+                        boxShadow: const [BoxShadow(blurRadius: 10, color: Colors.black26)],
+                      ),
+                      alignment: Alignment.center,
+                      child: Transform.rotate(
+                        angle: _gearTurn.value * math.pi, // 0 → π (반바퀴)
+                        child: Icon(
+                          Icons.settings_rounded,
+                          color: Colors.white.withOpacity(0.95),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Offset _clampToScreen(Offset raw, Size screen, double bottomInset) {
+    final maxX = (screen.width - _bubbleSize).clamp(0.0, double.infinity);
+    final maxY = (screen.height - _bubbleSize - bottomInset).clamp(0.0, double.infinity);
+    final dx = raw.dx.clamp(0.0, maxX);
+    final dy = raw.dy.clamp(0.0, maxY);
+    return Offset(dx, dy);
+  }
+}
+
+class _MiniActionButton extends StatelessWidget {
+  final double size;
+  final Color color;
+  final IconData icon;
+  final String tooltip;
+  final String label;
+  final Color? iconColor;
+  final VoidCallback onTap;
+
+  const _MiniActionButton({
+    required this.size,
+    required this.color,
+    required this.icon,
+    required this.tooltip,
+    required this.label,
+    required this.onTap,
+    this.iconColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final onColor = iconColor ?? Theme.of(context).colorScheme.onPrimaryContainer;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            customBorder: const CircleBorder(),
+            child: Tooltip(
+              message: tooltip,
+              child: Container(
+                width: size,
+                height: size,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.black.withOpacity(.06)),
+                  boxShadow: const [BoxShadow(blurRadius: 8, color: Colors.black12)],
+                ),
+                alignment: Alignment.center,
+                child: Icon(icon, color: onColor),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.6),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            label,
+            style: const TextStyle(color: Colors.white, fontSize: 11),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -232,13 +462,12 @@ class _DevMemoSheetState extends State<_DevMemoSheet> {
     final textTheme = Theme.of(context).textTheme;
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
-    // 90% 높이 바텀시트 (배경: 순백색)
     return FractionallySizedBox(
       heightFactor: 0.9,
       child: ClipRRect(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         child: Material(
-          color: Colors.white, // ✅ 배경을 완전한 흰색으로 고정
+          color: Colors.white,
           child: SafeArea(
             top: false,
             child: Padding(
@@ -347,15 +576,15 @@ class _DevMemoSheetState extends State<_DevMemoSheet> {
                             final line = filtered[i];
                             final (time, text) = _parse(line);
                             return Dismissible(
-                              key: ValueKey(line),
+                              key: ValueKey('${line}_$i'),
                               direction: DismissDirection.endToStart,
                               background: _SwipeDeleteBackground(
                                 color: cs.errorContainer,
                                 iconColor: cs.onErrorContainer,
                               ),
-                              onDismissed: (_) {
-                                DevMemo.removeLine(line);
-                                HapticFeedback.selectionClick();
+                              onDismissed: (_) async {
+                                await DevMemo.removeLine(line);
+                                HapticFeedback.selectionClick(); // 삭제 햅틱
                               },
                               child: ListTile(
                                 dense: false,
@@ -375,12 +604,13 @@ class _DevMemoSheetState extends State<_DevMemoSheet> {
                                       tooltip: '복사',
                                       icon: const Icon(Icons.copy_rounded),
                                       onPressed: () {
+                                        HapticFeedback.selectionClick(); // 복사 햅틱
                                         Clipboard.setData(ClipboardData(text: text));
                                         ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: const Text('메모를 복사했어요'),
+                                          const SnackBar(
+                                            content: Text('메모를 복사했어요'),
                                             behavior: SnackBarBehavior.floating,
-                                            duration: const Duration(milliseconds: 900),
+                                            duration: Duration(milliseconds: 900),
                                           ),
                                         );
                                       },
@@ -388,7 +618,10 @@ class _DevMemoSheetState extends State<_DevMemoSheet> {
                                     IconButton(
                                       tooltip: '삭제',
                                       icon: const Icon(Icons.delete_outline_rounded),
-                                      onPressed: () => DevMemo.removeLine(line),
+                                      onPressed: () async {
+                                        await DevMemo.removeLine(line);
+                                        HapticFeedback.selectionClick(); // 삭제 햅틱
+                                      },
                                     ),
                                   ],
                                 ),
