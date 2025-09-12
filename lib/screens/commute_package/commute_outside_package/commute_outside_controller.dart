@@ -1,4 +1,3 @@
-// lib/screens/commute_package/commute_outside_package/commute_outside_controller.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -8,10 +7,10 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import '../../../routes.dart';
 import '../../../states/user/user_state.dart';
 import '../../../states/area/area_state.dart';
-import '../../type_package/common_widgets/dashboard_bottom_sheet/utils/break_log_uploader.dart';
-import '../../type_package/common_widgets/dashboard_bottom_sheet/utils/clock_out_log_uploader.dart';
 import 'floating_controls/commute_outside_floating.dart';
 import 'utils/commute_outside_clock_in_log_uploader.dart';
+import 'utils/commute_outside_clock_out_log_uploader.dart';
+import 'utils/commute_outside_break_log_uploader.dart';
 import '../../../utils/app_navigator.dart';
 
 class CommuteOutsideController {
@@ -150,7 +149,7 @@ class CommuteOutsideController {
       final now = DateTime.now();
       final hhmm = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
 
-      final ok = await BreakLogUploader.uploadBreakJson(
+      final ok = await CommuteOutsideBreakLogUploader.uploadBreakJson(
         context: context,
         data: {
           'userId': userState.user?.id ?? '',
@@ -191,7 +190,7 @@ class CommuteOutsideController {
       final now = DateTime.now();
       final hhmm = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
 
-      final ok = await ClockOutLogUploader.uploadLeaveJson(
+      final ok = await CommuteOutsideClockOutLogUploader.uploadLeaveJson(
         context: context,
         data: {
           'userId': userState.user?.id ?? '',
