@@ -124,33 +124,44 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
     _progress = (widget.initialProgress == 100) ? 100 : 0; // 0/100만 허용
 
     // ★ 템플릿 세트 구성(외부 주입 없으면 기본 세트)
+    // - 외근(지원 → 명칭 변경)
+    // - 외출(외근과 동일 로직이나 '업무자','이름' 필드 숨김)
+    // - 아이디어
+    // - 자율
     _templates = widget.templates ??
         [
-          ApplyTemplate(),
-          HireTemplate(),
+          VisitLikeTemplate(id: 'fieldwork', label: '외근'),
+          VisitLikeTemplate(
+            id: 'outing',
+            label: '외출',
+            showWorker: false, // ← 요구사항: 외출에서는 업무자 숨김
+            showName: false,   // ← 요구사항: 외출에서는 이름 숨김
+          ),
+          IdeaTemplate(),
           FreeTemplate(
             initialTitle: widget.initialSummary,
             initialBody: widget.initialDescription,
           ),
         ];
 
-    // 시작 탭: 편집모드면 free, 생성모드면 키워드로 추론(입사/지원 없으면 free)
+    // 시작 탭: 편집모드면 free, 생성모드면 키워드로 추론
     int initialIndex = 0;
     if (widget.isEditMode) {
       initialIndex = _templates.indexWhere((t) => t.id == 'free');
       if (initialIndex < 0) initialIndex = 0;
     } else {
       final s = widget.initialSummary;
-      if (s.contains('입사')) {
-        final idx = _templates.indexWhere((t) => t.id == 'hire');
-        initialIndex = idx >= 0 ? idx : 0;
-      } else if (s.contains('지원')) {
-        final idx = _templates.indexWhere((t) => t.id == 'apply');
-        initialIndex = idx >= 0 ? idx : 0;
+      int idx = -1;
+      if (s.contains('외근') || s.contains('지원')) {
+        idx = _templates.indexWhere((t) => t.id == 'fieldwork');
+      } else if (s.contains('외출')) {
+        idx = _templates.indexWhere((t) => t.id == 'outing');
+      } else if (s.contains('아이디어')) {
+        idx = _templates.indexWhere((t) => t.id == 'idea');
       } else {
-        final idx = _templates.indexWhere((t) => t.id == 'free');
-        initialIndex = idx >= 0 ? idx : 0;
+        idx = _templates.indexWhere((t) => t.id == 'free');
       }
+      initialIndex = idx >= 0 ? idx : 0;
     }
 
     _tabController = TabController(
@@ -260,8 +271,7 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                           ),
                           const SizedBox(height: 12),
                         ],
-                        Text(
-                            widget.isEditMode ? '새 내용 미리보기' : '미리보기',
+                        Text(widget.isEditMode ? '새 내용 미리보기' : '미리보기',
                             style: Theme.of(context).textTheme.titleSmall),
                         const SizedBox(height: 8),
                         TextField(
@@ -314,8 +324,7 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                                   _start = DateTime(
                                       picked.year, picked.month, picked.day);
                                   if (!_end.isAfter(_start)) {
-                                    _end =
-                                        _start.add(const Duration(days: 1));
+                                    _end = _start.add(const Duration(days: 1));
                                   }
                                   setState(() {});
                                 },
@@ -337,8 +346,7 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                                   _end = DateTime(
                                       picked.year, picked.month, picked.day);
                                   if (!_end.isAfter(_start)) {
-                                    _end =
-                                        _start.add(const Duration(days: 1));
+                                    _end = _start.add(const Duration(days: 1));
                                   }
                                   setState(() {});
                                 },
@@ -393,6 +401,7 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                           children: [
                             TabBar(
                               controller: _tabController,
+                              isScrollable: true, // 탭 많아질 때 대비
                               labelColor:
                               Theme.of(context).colorScheme.primary,
                               unselectedLabelColor: Colors.black54,
@@ -466,179 +475,294 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
 
 /// 각 탭을 데이터/로직 단위로 독립시키는 추상 클래스
 abstract class EventTemplate {
-  String get id;        // 내부 아이디 (예: 'apply', 'hire', 'free')
-  String get label;     // 탭 라벨 (예: '지원')
+  String get id; // 내부 아이디 (예: 'fieldwork', 'outing', 'idea', 'free')
+  String get label; // 탭 라벨 (예: '외근', '외출', '아이디어', '자율')
   Widget buildForm(BuildContext context, VoidCallback onChanged);
   void computePreview(TextEditingController summary, TextEditingController desc);
-  void dispose();       // 내부 컨트롤러 정리
+  void dispose(); // 내부 컨트롤러 정리
 }
 
-/// 지원 템플릿
-class ApplyTemplate implements EventTemplate {
+/// 외근/외출 공통 템플릿 (구: 지원) — 표시 필드 제어 옵션 추가
+class VisitLikeTemplate implements EventTemplate {
+  VisitLikeTemplate({
+    required this.id,
+    required this.label,
+    this.showWorker = true,
+    this.showName = true,
+  });
+
+  @override
+  final String id;
+  @override
+  final String label;
+
+  final bool showWorker;
+  final bool showName;
+
   final worker = TextEditingController(); // 업무자
   final region = TextEditingController();
-  final name   = TextEditingController();
+  final name = TextEditingController();
   final reason = TextEditingController();
-  final time   = TextEditingController();
-
-  @override
-  String get id => 'apply';
-  @override
-  String get label => '지원';
+  final time = TextEditingController();
 
   @override
   Widget buildForm(BuildContext context, VoidCallback onChanged) {
     return Column(children: [
-      _LabeledField(label: '업무자', controller: worker, onChanged: (_) => onChanged()),
-      _LabeledField(label: '지역',   controller: region, onChanged: (_) => onChanged()),
-      _LabeledField(label: '이름',   controller: name,   onChanged: (_) => onChanged()),
-      _LabeledField(label: '사유',   controller: reason, onChanged: (_) => onChanged()),
-      _LabeledField(label: '시간',   controller: time,   hint: '예: 10:00~12:00', onChanged: (_) => onChanged()),
+      if (showWorker)
+        _LabeledField(
+          label: '업무자',
+          controller: worker,
+          onChanged: (_) => onChanged(),
+        ),
+      _LabeledField(
+        label: '지역',
+        controller: region,
+        onChanged: (_) => onChanged(),
+      ),
+      if (showName)
+        _LabeledField(
+          label: '이름',
+          controller: name,
+          onChanged: (_) => onChanged(),
+        ),
+      _LabeledField(
+        label: '사유',
+        controller: reason,
+        onChanged: (_) => onChanged(),
+      ),
+      _LabeledField(
+        label: '시간',
+        controller: time,
+        hint: '예: 10:00~12:00',
+        onChanged: (_) => onChanged(),
+      ),
     ]);
   }
 
   @override
-  void computePreview(TextEditingController summary, TextEditingController desc) {
-    final t = [
+  void computePreview(
+      TextEditingController summary, TextEditingController desc) {
+    final parts = <String>[
       if (region.text.trim().isNotEmpty) region.text.trim(),
-      if (name.text.trim().isNotEmpty)   name.text.trim(),
-      if (worker.text.trim().isNotEmpty) worker.text.trim(),
-      '지원',
-    ].join(' ').trim();
+      if (showName && name.text.trim().isNotEmpty) name.text.trim(),
+      if (showWorker && worker.text.trim().isNotEmpty) worker.text.trim(),
+      label,
+    ];
+
+    final t = parts.join(' ').trim();
 
     final lines = <String>[];
-    if (reason.text.trim().isNotEmpty) lines.add('사유: ${reason.text.trim()}');
-    if (time.text.trim().isNotEmpty)   lines.add('시간: ${time.text.trim()}');
+    if (reason.text.trim().isNotEmpty) {
+      lines.add('사유: ${reason.text.trim()}');
+    }
+    if (time.text.trim().isNotEmpty) {
+      lines.add('시간: ${time.text.trim()}');
+    }
 
-    summary.text = t.isEmpty ? '지원' : t;
-    desc.text    = lines.join('\n');
+    summary.text = t.isEmpty ? label : t;
+    desc.text = lines.join('\n');
   }
 
   @override
   void dispose() {
-    worker.dispose(); region.dispose(); name.dispose(); reason.dispose(); time.dispose();
+    worker.dispose();
+    region.dispose();
+    name.dispose();
+    reason.dispose();
+    time.dispose();
   }
 }
 
-/// 입사 템플릿
-class HireTemplate implements EventTemplate {
-  final region = TextEditingController();
-  final name   = TextEditingController();
-  final phone  = TextEditingController();
-  final gmail  = TextEditingController();
-  final bank   = TextEditingController();
-  final accountNo    = TextEditingController();
-  final salary       = TextEditingController();
-  final contractType = TextEditingController();
-
-  DateTime? workStartDate;
-  DateTime? firstEndDate;
+/// 아이디어 템플릿 (추천 항목)
+class IdeaTemplate implements EventTemplate {
+  final title = TextEditingController(); // 아이디어 제목
+  final problem = TextEditingController(); // 문제 정의
+  final solution = TextEditingController(); // 핵심 해결안
+  final impact = TextEditingController(); // 기대 효과/임팩트
+  final priority = TextEditingController(); // 우선순위(1~5 등)
+  final difficulty = TextEditingController(); // 난이도(1~5 등)
+  final tags = TextEditingController(); // 태그(쉼표)
+  final links = TextEditingController(); // 참조 링크(쉼표/줄바꿈)
+  final notes = TextEditingController(); // 비고/메모
 
   @override
-  String get id => 'hire';
+  String get id => 'idea';
+
   @override
-  String get label => '입사';
+  String get label => '아이디어';
 
   @override
   Widget buildForm(BuildContext context, VoidCallback onChanged) {
-    final fmt = DateFormat('yyyy-MM-dd');
-    return Column(children: [
-      _LabeledField(label: '지역', controller: region, onChanged: (_) => onChanged()),
-      _LabeledField(label: '이름', controller: name,   onChanged: (_) => onChanged()),
-      _LabeledField(label: '전화번호', controller: phone, keyboardType: TextInputType.phone, onChanged: (_) => onChanged()),
-      _LabeledField(label: '지메일', controller: gmail, keyboardType: TextInputType.emailAddress, hint: '예: name@gmail.com', onChanged: (_) => onChanged()),
-      _LabeledField(label: '은행계좌', controller: bank, hint: '예: 우리은행', onChanged: (_) => onChanged()),
-      _LabeledField(label: '계좌번호', controller: accountNo, keyboardType: TextInputType.number, onChanged: (_) => onChanged()),
-      _LabeledField(label: '총 급여', controller: salary, hint: '예: 3,000,000원', keyboardType: TextInputType.number, onChanged: (_) => onChanged()),
-      _LabeledField(label: '계약 형태', controller: contractType, hint: '예: 정규직/계약직', onChanged: (_) => onChanged()),
-      ListTile(
-        contentPadding: EdgeInsets.zero,
-        dense: true,
-        title: const Text('근무 시작일'),
-        subtitle: Text(workStartDate == null ? '미선택' : fmt.format(workStartDate!)),
-        trailing: const Icon(Icons.edit_calendar),
-        onTap: () async {
-          final picked = await showDatePicker(
-            context: context,
-            initialDate: workStartDate ?? DateTime.now(),
-            firstDate: DateTime(2000),
-            lastDate: DateTime(2100),
-          );
-          if (picked != null) {
-            workStartDate = DateTime(picked.year, picked.month, picked.day);
-            onChanged();
-          }
-        },
-      ),
-      ListTile(
-        contentPadding: EdgeInsets.zero,
-        dense: true,
-        title: const Text('첫 계약 종료일'),
-        subtitle: Text(firstEndDate == null ? '미선택' : fmt.format(firstEndDate!)),
-        trailing: const Icon(Icons.edit_calendar),
-        onTap: () async {
-          final picked = await showDatePicker(
-            context: context,
-            initialDate: firstEndDate ?? DateTime.now(),
-            firstDate: DateTime(2000),
-            lastDate: DateTime(2100),
-          );
-          if (picked != null) {
-            firstEndDate = DateTime(picked.year, picked.month, picked.day);
-            onChanged();
-          }
-        },
-      ),
-    ]);
+    return Column(
+      children: [
+        _LabeledField(
+          label: '아이디어 제목',
+          controller: title,
+          hint: '예: 현장 점검 자동화',
+          onChanged: (_) => onChanged(),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: TextField(
+            controller: problem,
+            minLines: 2,
+            maxLines: 4,
+            onChanged: (_) => onChanged(),
+            decoration: const InputDecoration(
+              labelText: '문제 정의',
+              hintText: '현재 어떤 문제가 있나요?',
+              isDense: true,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: TextField(
+            controller: solution,
+            minLines: 2,
+            maxLines: 4,
+            onChanged: (_) => onChanged(),
+            decoration: const InputDecoration(
+              labelText: '핵심 해결안',
+              hintText: '핵심 아이디어/접근 방법을 적어주세요',
+              isDense: true,
+            ),
+          ),
+        ),
+        _LabeledField(
+          label: '기대 효과',
+          controller: impact,
+          hint: '예: 처리시간 30% 절감',
+          onChanged: (_) => onChanged(),
+        ),
+        Row(
+          children: [
+            Expanded(
+              child: _LabeledField(
+                label: '우선순위',
+                controller: priority,
+                hint: '예: 1~5',
+                keyboardType: TextInputType.number,
+                onChanged: (_) => onChanged(),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _LabeledField(
+                label: '난이도',
+                controller: difficulty,
+                hint: '예: 1~5',
+                keyboardType: TextInputType.number,
+                onChanged: (_) => onChanged(),
+              ),
+            ),
+          ],
+        ),
+        _LabeledField(
+          label: '태그',
+          controller: tags,
+          hint: '쉼표로 구분 (예: 모바일, 자동화)',
+          onChanged: (_) => onChanged(),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: TextField(
+            controller: links,
+            minLines: 2,
+            maxLines: 4,
+            onChanged: (_) => onChanged(),
+            decoration: const InputDecoration(
+              labelText: '참조 링크',
+              hintText: '쉼표(,) 또는 줄바꿈으로 여러 개 입력',
+              isDense: true,
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: TextField(
+            controller: notes,
+            minLines: 2,
+            maxLines: 6,
+            onChanged: (_) => onChanged(),
+            decoration: const InputDecoration(
+              labelText: '메모',
+              hintText: '기타 상세, 다음 액션 등',
+              isDense: true,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
-  void computePreview(TextEditingController summary, TextEditingController desc) {
-    final fmt = DateFormat('yyyy-MM-dd');
-    final t = [
-      if (region.text.trim().isNotEmpty) region.text.trim(),
-      if (name.text.trim().isNotEmpty)   name.text.trim(),
-      '입사',
-    ].join(' ').trim();
+  void computePreview(
+      TextEditingController summary, TextEditingController desc) {
+    final t = title.text.trim();
+    summary.text = t.isEmpty ? '아이디어' : '아이디어: $t';
 
     final lines = <String>[];
-    void add(String k, String v) {
+
+    void addLine(String k, String v) {
       if (v.trim().isNotEmpty) lines.add('$k: ${v.trim()}');
     }
-    add('전화번호', phone.text);
-    add('지메일', gmail.text);
-    add('은행계좌', bank.text);
-    add('계좌번호', accountNo.text);
-    add('총 급여', salary.text);
-    add('계약 형태', contractType.text);
-    if (workStartDate != null) lines.add('근무 시작일: ${fmt.format(workStartDate!)}');
-    if (firstEndDate != null)  lines.add('첫 계약 종료일: ${fmt.format(firstEndDate!)}');
 
-    summary.text = t.isEmpty ? '입사' : t;
-    desc.text    = lines.join('\n');
+    addLine('문제', problem.text);
+    addLine('핵심 해결안', solution.text);
+    addLine('기대 효과', impact.text);
+    addLine('우선순위', priority.text);
+    addLine('난이도', difficulty.text);
+
+    final tagList = tags.text
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    if (tagList.isNotEmpty) {
+      lines.add('태그: ${tagList.join(', ')}');
+    }
+
+    final linkList = links.text
+        .split(RegExp(r'[,\n]'))
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    if (linkList.isNotEmpty) {
+      lines.add('참조 링크:');
+      lines.addAll(linkList.map((e) => '- $e'));
+    }
+
+    if (notes.text.trim().isNotEmpty) {
+      lines.add('메모:');
+      lines.add(notes.text.trim());
+    }
+
+    desc.text = lines.join('\n');
   }
 
   @override
   void dispose() {
-    region.dispose();
-    name.dispose();
-    phone.dispose();
-    gmail.dispose();
-    bank.dispose();
-    accountNo.dispose();
-    salary.dispose();
-    contractType.dispose();
+    title.dispose();
+    problem.dispose();
+    solution.dispose();
+    impact.dispose();
+    priority.dispose();
+    difficulty.dispose();
+    tags.dispose();
+    links.dispose();
+    notes.dispose();
   }
 }
 
 /// 자율 템플릿
 class FreeTemplate implements EventTemplate {
   final TextEditingController title = TextEditingController();
-  final TextEditingController body  = TextEditingController();
+  final TextEditingController body = TextEditingController();
 
   FreeTemplate({String? initialTitle, String? initialBody}) {
     if (initialTitle != null) title.text = initialTitle;
-    if (initialBody  != null) body.text  = initialBody;
+    if (initialBody != null) body.text = initialBody;
   }
 
   @override
@@ -674,9 +798,10 @@ class FreeTemplate implements EventTemplate {
   }
 
   @override
-  void computePreview(TextEditingController summary, TextEditingController desc) {
+  void computePreview(
+      TextEditingController summary, TextEditingController desc) {
     summary.text = title.text.trim();
-    desc.text    = body.text;
+    desc.text = body.text;
   }
 
   @override
@@ -857,7 +982,8 @@ class _ColorDot extends StatelessWidget {
         children: [
           dot,
           const SizedBox(height: 4),
-          Text(label, style: const TextStyle(fontSize: 10, color: Colors.black54)),
+          Text(label,
+              style: const TextStyle(fontSize: 10, color: Colors.black54)),
         ],
       ),
     );
