@@ -428,7 +428,7 @@ class _MiniActionButton extends StatelessWidget {
   }
 }
 
-/// 메모 바텀시트(90% 높이 · 스위치 · 검색 · 입력 · 스와이프 삭제)
+/// 메모 바텀시트(풀높이 · 스위치 · 검색 · 입력 · 스와이프 삭제)
 class _DevMemoSheet extends StatefulWidget {
   const _DevMemoSheet();
 
@@ -463,13 +463,13 @@ class _DevMemoSheetState extends State<_DevMemoSheet> {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return FractionallySizedBox(
-      heightFactor: 0.9,
+      heightFactor: 1.0, // ⬅️ 최상단까지
       child: ClipRRect(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         child: Material(
           color: Colors.white,
           child: SafeArea(
-            top: false,
+            top: false, // 외부 showModalBottomSheet(useSafeArea:true)와 중복 방지
             child: Padding(
               padding: EdgeInsets.only(bottom: bottomInset),
               child: Column(

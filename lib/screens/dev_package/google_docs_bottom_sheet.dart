@@ -9,7 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../utils/app_navigator.dart'; // navigatorKey 사용
 
-/// 드래그 가능한 플로팅 버블 + 90% 높이 바텀시트로
+/// 드래그 가능한 플로팅 버블 + 풀높이(최상단) 바텀시트로
 /// Google Docs 문서를 "플레인 텍스트"로 불러오고/저장하는 패널.
 ///
 /// - 문서 생성 ❌ (기존 문서만 사용)
@@ -148,7 +148,7 @@ class _GDocBubbleState extends State<_GDocBubble> {
   }
 }
 
-/// 90% 높이 바텀시트 본문
+/// 풀높이 바텀시트 본문
 class _GoogleDocsDocBottomSheet extends StatefulWidget {
   const _GoogleDocsDocBottomSheet();
 
@@ -353,13 +353,13 @@ class _GoogleDocsDocBottomSheetState extends State<_GoogleDocsDocBottomSheet> {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return FractionallySizedBox(
-      heightFactor: 0.9,
+      heightFactor: 1.0, // ⬅️ 최상단까지
       child: ClipRRect(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         child: Material(
           color: Colors.white,
           child: SafeArea(
-            top: false,
+            top: false, // useSafeArea가 true이므로 내부 top은 false 유지
             child: Padding(
               padding: EdgeInsets.only(bottom: bottomInset),
               child: Column(
@@ -508,7 +508,8 @@ class _GoogleDocsDocBottomSheetState extends State<_GoogleDocsDocBottomSheet> {
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                       child: Stack(
                         children: [
-                          TextField(
+                          TextField
+                            (
                             controller: _editorCtrl,
                             expands: true,
                             maxLines: null,

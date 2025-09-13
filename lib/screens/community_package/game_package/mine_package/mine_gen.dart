@@ -1,150 +1,170 @@
-part of '../minesweeper.dart';
+import 'dart:math';
+import 'package:flutter/foundation.dart';
+import 'mine_models.dart';
 
-// Isolate 파라미터/결과
-class _GenParams {
-  final int rows, cols, mines, sr, sc;
-  const _GenParams({
-    required this.rows,
-    required this.cols,
-    required this.mines,
-    required this.sr,
-    required this.sc,
-  });
+/// Isolate-safe 퍼즐 생성기
+/// 입력: {rows, cols, mines, sr, sc, fair(bool), seed(int?), maxAttempts, timeoutMs}
+/// 출력: {'mine': List<List<bool>>, 'adj': List<List<int>>}
+Future<Map<String, dynamic>> generateBoardMap(Map<String, dynamic> params) async {
+  return compute<Map<String, dynamic>, Map<String, dynamic>>(_generateBoardMap, params);
 }
 
-class _GenResult {
-  final List<List<bool>> mine;
-  final List<List<int>> adj;
-  const _GenResult(this.mine, this.adj);
-}
+Map<String, dynamic> _generateBoardMap(Map<String, dynamic> p) {
+  final rows = p['rows'] as int;
+  final cols = p['cols'] as int;
+  final mines = p['mines'] as int;
+  final sr = p['sr'] as int;
+  final sc = p['sc'] as int;
+  final fair = (p['fair'] as bool?) ?? true;
+  final seed = p['seed'] as int?;
+  final maxAttempts = (p['maxAttempts'] as int?) ?? 400;
+  final timeoutMs = (p['timeoutMs'] as int?) ?? 800;
 
-// 항상 노게스(결정 규칙만으로 완해) 보드 생성
-_GenResult _generateNoGuessBoard(_GenParams p) {
-  final rnd = Random();
+  final sw = Stopwatch()..start();
+  final rnd = Random(seed);
 
-  bool inRange(int r, int c) => r >= 0 && r < p.rows && c >= 0 && c < p.cols;
-  Iterable<Point<int>> neighbors(int r, int c) sync* {
-    for (int dr = -1; dr <= 1; dr++) {
-      for (int dc = -1; dc <= 1; dc++) {
-        if (dr == 0 && dc == 0) continue;
-        final rr = r + dr, cc = c + dc;
-        if (inRange(rr, cc)) yield Point(rr, cc);
+  List<List<bool>> bestMine = [];
+  List<List<int>> bestAdj = [];
+
+  bool attemptFair() {
+    // 1) 무작위 배치(3×3 보호)
+    final mine = List.generate(rows, (_) => List<bool>.filled(cols, false));
+    int placed = 0;
+    while (placed < mines) {
+      final r = rnd.nextInt(rows);
+      final c = rnd.nextInt(cols);
+      if (in3x3(r, c, sr, sc)) continue;
+      if (!mine[r][c]) {
+        mine[r][c] = true;
+        placed++;
       }
     }
-  }
-
-  bool inExcluded(int r, int c) => (r - p.sr).abs() <= 1 && (c - p.sc).abs() <= 1;
-
-  while (true) {
-    // 1) 무작위 배치(첫 클릭 3x3 제외)
-    final mine = List.generate(p.rows, (_) => List<bool>.filled(p.cols, false));
-    final idx = <int>[];
-    for (int r = 0; r < p.rows; r++) {
-      for (int c = 0; c < p.cols; c++) {
-        if (!inExcluded(r, c)) idx.add(r * p.cols + c);
-      }
-    }
-    idx.shuffle(rnd);
-    final take = min(p.mines, idx.length);
-    for (int i = 0; i < take; i++) {
-      final id = idx[i];
-      mine[id ~/ p.cols][id % p.cols] = true;
-    }
-
-    // 2) 인접수 계산
-    final adj = List.generate(p.rows, (r) => List<int>.filled(p.cols, 0));
-    for (int r = 0; r < p.rows; r++) {
-      for (int c = 0; c < p.cols; c++) {
+    // 2) adj 계산
+    final adj = List.generate(rows, (_) => List<int>.filled(cols, 0));
+    for (int r = 0; r < rows; r++) {
+      for (int c = 0; c < cols; c++) {
         if (mine[r][c]) continue;
-        adj[r][c] = neighbors(r, c).where((q) => mine[q.x][q.y]).length;
+        int cnt = 0;
+        for (final p in neighbors(r, c, rows, cols)) {
+          if (mine[p.x][p.y]) cnt++;
+        }
+        adj[r][c] = cnt;
       }
     }
 
-    if (mine[p.sr][p.sc]) continue; // sr,sc 안전 보장
+    if (!fair) {
+      bestMine = mine;
+      bestAdj = adj;
+      return true;
+    }
 
-    // 3) 결정적 규칙 시뮬레이션
-    final open = List.generate(p.rows, (r) => List<bool>.filled(p.cols, false));
-    final flag = List.generate(p.rows, (r) => List<bool>.filled(p.cols, false));
+    // 3) 공정성 체크(A/B 규칙으로 전부 열리는가)
+    final opened = List.generate(rows, (_) => List<bool>.filled(cols, false));
+    final flagged = List.generate(rows, (_) => List<bool>.filled(cols, false));
 
-    void flood(int rr, int cc) {
-      final st = <Point<int>>[Point(rr, cc)];
-      while (st.isNotEmpty) {
-        final v = st.removeLast();
-        final r = v.x, c = v.y;
-        if (!inRange(r, c) || open[r][c] || flag[r][c]) continue;
-        if (mine[r][c]) return;
-        open[r][c] = true;
-        if (adj[r][c] == 0) {
-          for (final nb in neighbors(r, c)) {
-            if (!open[nb.x][nb.y] && !flag[nb.x][nb.y] && !mine[nb.x][nb.y]) {
-              st.add(nb);
-            }
-          }
+    void open(int r, int c) {
+      if (opened[r][c] || flagged[r][c]) return;
+      opened[r][c] = true;
+      if (adj[r][c] == 0) {
+        for (final p in neighbors(r, c, rows, cols)) {
+          if (!opened[p.x][p.y] && !mine[p.x][p.y]) open(p.x, p.y);
         }
       }
     }
 
-    flood(p.sr, p.sc);
+    open(sr, sc);
 
-    bool progress = true, contradiction = false;
-    while (progress && !contradiction) {
-      progress = false;
-      for (int r = 0; r < p.rows; r++) {
-        for (int c = 0; c < p.cols; c++) {
-          if (!open[r][c]) continue;
-          final num = adj[r][c];
-          if (num == 0) continue;
-
-          final nbs = neighbors(r, c).toList();
-          int flags = 0, unknown = 0;
-          final unknownCells = <Point<int>>[];
-          for (final nb in nbs) {
-            final rr = nb.x, cc = nb.y;
-            if (flag[rr][cc]) {
-              flags++;
-            } else if (!open[rr][cc]) {
-              unknown++;
-              unknownCells.add(nb);
-            }
+    bool step() {
+      bool changed = false;
+      for (int r = 0; r < rows; r++) {
+        for (int c = 0; c < cols; c++) {
+          if (!opened[r][c]) continue;
+          final nList = neighbors(r, c, rows, cols).toList();
+          final hidden = <Point<int>>[];
+          int flaggedCnt = 0;
+          for (final p0 in nList) {
+            if (flagged[p0.x][p0.y]) flaggedCnt++;
+            if (!opened[p0.x][p0.y] && !flagged[p0.x][p0.y]) hidden.add(p0);
           }
+          final need = adj[r][c];
 
-          // A: flags == num → unknown 오픈
-          if (flags == num && unknown > 0) {
-            for (final u in unknownCells) {
-              if (mine[u.x][u.y]) {
-                contradiction = true; // 지뢰를 열어야 하는 모순
-                break;
+          // A: 필요 지뢰 수 == 숨김칸 수 → 숨김 전부 지뢰
+          if (hidden.isNotEmpty && need - flaggedCnt == hidden.length) {
+            for (final q in hidden) {
+              if (!flagged[q.x][q.y]) {
+                flagged[q.x][q.y] = true;
+                changed = true;
               }
-              flood(u.x, u.y);
-              progress = true;
             }
           }
-          if (contradiction) break;
 
-          // B: flags + unknown == num → unknown 전부 지뢰(깃발)
-          if (flags + unknown == num && unknown > 0) {
-            for (final u in unknownCells) {
-              if (!flag[u.x][u.y]) {
-                flag[u.x][u.y] = true;
-                progress = true;
+          // B: 필요 지뢰 수 == 깃발 수 → 숨김 전부 안전
+          if (hidden.isNotEmpty && need == flaggedCnt) {
+            for (final q in hidden) {
+              if (!opened[q.x][q.y] && !flagged[q.x][q.y] && !mine[q.x][q.y]) {
+                open(q.x, q.y);
+                changed = true;
               }
             }
           }
         }
-        if (contradiction) break;
       }
+      return changed;
     }
-    if (contradiction) continue;
 
-    int safe = 0, opened = 0;
-    for (int r = 0; r < p.rows; r++) {
-      for (int c = 0; c < p.cols; c++) {
-        if (!mine[r][c]) {
-          safe++;
-          if (open[r][c]) opened++;
+    while (step()) {}
+
+    // 모든 안전칸이 열렸으면 공정 보드
+    bool ok = true;
+    outer:
+    for (int r = 0; r < rows; r++) {
+      for (int c = 0; c < cols; c++) {
+        if (!mine[r][c] && !opened[r][c]) {
+          ok = false; break outer;
         }
       }
     }
-    if (opened == safe) return _GenResult(mine, adj); // 성공
+    if (ok) {
+      bestMine = mine;
+      bestAdj = adj;
+      return true;
+    }
+    return false;
   }
+
+  int attempts = 0;
+  while (attempts < maxAttempts && sw.elapsedMilliseconds < timeoutMs) {
+    attempts++;
+    if (attemptFair()) break;
+  }
+
+  // 실패 시 폴백(공정성 미보장): 3×3 제외 랜덤
+  if (bestMine.isEmpty) {
+    final mine = List.generate(rows, (_) => List<bool>.filled(cols, false));
+    int placed = 0;
+    while (placed < mines) {
+      final r = rnd.nextInt(rows);
+      final c = rnd.nextInt(cols);
+      if (in3x3(r, c, sr, sc)) continue;
+      if (!mine[r][c]) {
+        mine[r][c] = true;
+        placed++;
+      }
+    }
+    final adj = List.generate(rows, (_) => List<int>.filled(cols, 0));
+    for (int r = 0; r < rows; r++) {
+      for (int c = 0; c < cols; c++) {
+        if (mine[r][c]) continue;
+        int cnt = 0;
+        for (final p in neighbors(r, c, rows, cols)) {
+          if (mine[p.x][p.y]) cnt++;
+        }
+        adj[r][c] = cnt;
+      }
+    }
+    bestMine = mine;
+    bestAdj = adj;
+  }
+
+  return {'mine': bestMine, 'adj': bestAdj};
 }

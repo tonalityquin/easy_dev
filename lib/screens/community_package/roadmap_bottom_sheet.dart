@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
 
 enum RoadmapStatus { planned, inProgress, done }
-
 enum RoadmapLoad { light, medium, heavy }
 
 class RoadmapItem {
   final String? date;
-
   final RoadmapLoad? load;
-
   final String title;
   final List<String> notes;
   final RoadmapStatus status;
@@ -217,9 +214,11 @@ class RoadmapBottomSheet extends StatelessWidget {
     final text = Theme.of(context).textTheme;
 
     return DraggableScrollableSheet(
-      initialChildSize: 0.78,
+      // ⬇️ 열자마자 최상단까지
+      initialChildSize: 1.0,
       minChildSize: 0.4,
-      maxChildSize: 0.95,
+      maxChildSize: 1.0,
+      expand: false,
       builder: (_, controller) {
         return Container(
           decoration: const BoxDecoration(
@@ -227,7 +226,8 @@ class RoadmapBottomSheet extends StatelessWidget {
             borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
           ),
           child: SafeArea(
-            top: false,
+            top: true,  // 상태바 아래까지 안전하게
+            bottom: false,
             child: Column(
               children: [
                 const SizedBox(height: 8),
@@ -273,7 +273,8 @@ class RoadmapBottomSheet extends StatelessWidget {
                           label: _statusLabel(RoadmapStatus.planned),
                           color: _statusColor(context, RoadmapStatus.planned)),
                       _legendChip(context,
-                          label: _statusLabel(RoadmapStatus.done), color: _statusColor(context, RoadmapStatus.done)),
+                          label: _statusLabel(RoadmapStatus.done),
+                          color: _statusColor(context, RoadmapStatus.done)),
                     ],
                   ),
                 ),
@@ -282,7 +283,7 @@ class RoadmapBottomSheet extends StatelessWidget {
 
                 Expanded(
                   child: ListView.builder(
-                    controller: controller,
+                    controller: controller, // ⬅️ 제공된 스크롤러 사용
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     itemCount: _roadmapData.length,
                     itemBuilder: (context, i) => _TimelineTile(
@@ -394,7 +395,7 @@ class _TimelineTile extends StatelessWidget {
                   Text(item.title, style: text.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
                   const SizedBox(height: 6),
                   ...item.notes.map(
-                    (n) => Padding(
+                        (n) => Padding(
                       padding: const EdgeInsets.only(bottom: 4),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,

@@ -13,13 +13,14 @@ class GameArcadeBottomSheet extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
 
-    return SafeArea(
-      child: Container(
-        decoration: const BoxDecoration(
-          color: Colors.transparent,
-        ),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+    return DraggableScrollableSheet(
+      // ⬇️ 열자마자 최상단까지
+      initialChildSize: 1.0,
+      minChildSize: 0.4,
+      maxChildSize: 1.0,
+      expand: false, // 시트 자체 높이는 childSize에 따르고, 부모에 꽉 채우지 않음
+      builder: (_, controller) {
+        return Container(
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
@@ -31,96 +32,105 @@ class GameArcadeBottomSheet extends StatelessWidget {
               ),
             ],
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // drag handle
-              Container(
-                width: 44,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 12),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(2),
+          child: SafeArea(
+            top: true,  // 상단 상태바 영역 보호
+            bottom: false,
+            child: ListView(
+              controller: controller, // ⬅️ DraggableScrollableSheet 제공 스크롤러 사용
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              children: [
+                // drag handle
+                Container(
+                  width: 44,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
-              ),
-              Row(
-                children: [
-                  Icon(Icons.videogame_asset_rounded, color: cs.primary),
-                  const SizedBox(width: 8),
-                  Text(
-                    '게임 아케이드',
-                    style: text.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
+                Row(
+                  children: [
+                    Icon(Icons.videogame_asset_rounded, color: cs.primary),
+                    const SizedBox(width: 8),
+                    Text(
+                      '게임 아케이드',
+                      style: text.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  '원하는 게임을 선택하세요',
-                  style: text.bodySmall?.copyWith(color: Colors.grey[600]),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 12),
+                const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '원하는 게임을 선택하세요',
+                    style: text.bodySmall?.copyWith(color: Colors.grey[600]),
+                  ),
+                ),
+                const SizedBox(height: 12),
 
-              // 게임 목록
-              Flexible(
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: _games.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final g = _games[index];
-                    return ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: g.bg,
-                        child: Icon(g.icon, color: g.fg),
-                      ),
-                      title: Text(
-                        g.title,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      subtitle: Text(g.subtitle),
-                      onTap: () {
-                        // 바텀시트를 닫고 → 게임 화면으로 이동
-                        Navigator.of(context).pop();
-                        Future.microtask(() {
-                          switch (g.route) {
-                            case _GameRoute.tetris:
-                              Navigator.of(rootContext).push(
-                                MaterialPageRoute(builder: (_) => const Tetris()),
-                              );
-                              break;
-                            case _GameRoute.minesweeper:
-                              Navigator.of(rootContext).push(
-                                MaterialPageRoute(builder: (_) => const Minesweeper()),
-                              );
-                              break;
-                            case _GameRoute.comingSoon:
-                              ScaffoldMessenger.of(rootContext).showSnackBar(
-                                SnackBar(content: Text('「${g.title}」는 준비 중입니다.')),
-                              );
-                              break;
-                          }
-                        });
-                      },
-                    );
-                  },
-                ),
-              ),
-            ],
+                // 게임 목록(구분선 포함)
+                ..._buildGameTiles(context, cs),
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
+  }
+
+  List<Widget> _buildGameTiles(BuildContext context, ColorScheme cs) {
+    final tiles = <Widget>[];
+    for (int i = 0; i < _games.length; i++) {
+      final g = _games[i];
+      tiles.add(
+        ListTile(
+          leading: CircleAvatar(
+            backgroundColor: g.bg,
+            child: Icon(g.icon, color: g.fg),
+          ),
+          title: Text(
+            g.title,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          subtitle: Text(g.subtitle),
+          onTap: () {
+            // 바텀시트를 닫고 → 게임 화면으로 이동
+            Navigator.of(context).pop();
+            Future.microtask(() {
+              switch (g.route) {
+                case _GameRoute.tetris:
+                  Navigator.of(rootContext).push(
+                    MaterialPageRoute(builder: (_) => const Tetris()),
+                  );
+                  break;
+                case _GameRoute.minesweeper:
+                  Navigator.of(rootContext).push(
+                    MaterialPageRoute(builder: (_) => const Minesweeper()),
+                  );
+                  break;
+                case _GameRoute.comingSoon:
+                  ScaffoldMessenger.of(rootContext).showSnackBar(
+                    SnackBar(content: Text('「${g.title}」는 준비 중입니다.')),
+                  );
+                  break;
+              }
+            });
+          },
+        ),
+      );
+      if (i != _games.length - 1) {
+        tiles.add(const Divider(height: 1));
+      }
+    }
+    return tiles;
   }
 }
 
