@@ -29,6 +29,10 @@ class PlateTtsListenerService {
   static int _listenSeq = 0;
   static String? _currentArea;
 
+  // ===== 출차 완료 반복 발화 설정 =====
+  static const int _completionRepeat = 2;
+  static const Duration _completionRepeatGap = Duration(milliseconds: 700);
+
   static void start(String currentArea, {bool force = false}) {
     Future.microtask(() => _startListening(currentArea, force: force));
   }
@@ -72,8 +76,9 @@ class PlateTtsListenerService {
     _log('▶ START listen area="$_currentArea" since=$_startTime');
 
     final typesToMonitor = <String>[
-      PlateType.parkingRequests.firestoreValue,   // 'parking_requests'
-      PlateType.departureRequests.firestoreValue, // 'departure_requests'
+      PlateType.parkingRequests.firestoreValue,     // 'parking_requests'
+      PlateType.departureRequests.firestoreValue,   // 'departure_requests'
+      PlateType.departureCompleted.firestoreValue,  // 'departure_completed'
     ];
     _log('monitor types=$typesToMonitor');
 
@@ -137,6 +142,11 @@ class PlateTtsListenerService {
                   _log('SPEAK(added): $utter (id=$docId, area=$_currentArea)');
                   _safeSpeak(utter);
                   didSpeak = true;
+                } else if (newType == PlateType.departureCompleted.firestoreValue) {
+                  final utter = '$spokenTail, 출차 완료 되었습니다.';
+                  _log('SPEAK(added×$_completionRepeat): $utter (id=$docId, area=$_currentArea)');
+                  _speakRepeated(utter, times: _completionRepeat, gap: _completionRepeatGap);
+                  didSpeak = true;
                 }
               } else {
                 _log('skip(added): ${isFirstEmission ? 'initial snapshot old' : 'dedup'} id=$docId');
@@ -156,6 +166,11 @@ class PlateTtsListenerService {
                   _log('SPEAK(modified→type change): $utter (id=$docId, area=$_currentArea)');
                   _safeSpeak(utter);
                   didSpeak = true;
+                } else if (newType == PlateType.departureCompleted.firestoreValue) {
+                  final utter = '$spokenTail, 출차 완료 되었습니다.';
+                  _log('SPEAK(modified→type change×$_completionRepeat): $utter (id=$docId, area=$_currentArea)');
+                  _speakRepeated(utter, times: _completionRepeat, gap: _completionRepeatGap);
+                  didSpeak = true;
                 }
               } else {
                 _log('ignore modified (no type change or dedup) id=$docId');
@@ -169,7 +184,7 @@ class PlateTtsListenerService {
             _lastTypes[docId] = newType;
 
             if (didSpeak) {
-              // 필요 시: 추가 후처리 훅(예: 로컬/원격 로깅)
+              // 필요 시 후처리
             }
           } catch (e, st) {
             _log('ERROR in change loop: $e\n$st');
@@ -217,6 +232,16 @@ class PlateTtsListenerService {
       );
     } catch (e, st) {
       _log('TTS ERROR: $e\n$st');
+    }
+  }
+
+  // 출차 완료 멘트 2회 반복 발화용
+  static Future<void> _speakRepeated(String text, {int times = 1, Duration gap = Duration.zero}) async {
+    for (var i = 0; i < times; i++) {
+      await _safeSpeak(text);
+      if (i < times - 1 && gap > Duration.zero) {
+        await Future.delayed(gap);
+      }
     }
   }
 
