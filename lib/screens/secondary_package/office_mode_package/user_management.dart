@@ -56,21 +56,21 @@ class _UserManagementState extends State<UserManagement> {
   void buildUserBottomSheet({
     required BuildContext context,
     required void Function(
-      String name,
-      String phone,
-      String email,
-      String role,
-      String password,
-      String area,
-      String division,
-      bool isWorking,
-      bool isSaved,
-      String selectedArea,
-      String? startTime,
-      String? endTime,
-      List<String> fixedHolidays,
-      String position,
-    ) onSave,
+        String name,
+        String phone,
+        String email,
+        String role,
+        String password,
+        String area,
+        String division,
+        bool isWorking,
+        bool isSaved,
+        String selectedArea,
+        String? startTime,
+        String? endTime,
+        List<String> fixedHolidays,
+        String position,
+        ) onSave,
     UserModel? initialUser,
   }) {
     final areaState = context.read<AreaState>();
@@ -80,12 +80,10 @@ class _UserManagementState extends State<UserManagement> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      useSafeArea: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetCtx) => Padding(
-        padding: MediaQuery.of(sheetCtx).viewInsets, // ✅ sheetCtx 사용
+      useSafeArea: true,                   // ✅ 안전영역 반영
+      backgroundColor: Colors.transparent, // ✅ 내부 컨테이너가 배경/라운드 담당
+      builder: (sheetCtx) => FractionallySizedBox(
+        heightFactor: 1,                   // ✅ 화면 높이 100% → 최상단까지
         child: UserSettingBottomSheet(
           onSave: onSave,
           areaValue: currentArea,
@@ -103,22 +101,22 @@ class _UserManagementState extends State<UserManagement> {
 
   Future<bool> _confirmDelete(BuildContext context) async {
     return await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text('삭제 확인'),
-            content: const Text('선택한 계정을 삭제하시겠습니까?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('취소'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('삭제'),
-              ),
-            ],
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('삭제 확인'),
+        content: const Text('선택한 계정을 삭제하시겠습니까?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
           ),
-        ) ??
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    ) ??
         false;
   }
 
@@ -130,23 +128,25 @@ class _UserManagementState extends State<UserManagement> {
       buildUserBottomSheet(
         context: context,
         onSave: (
-          name,
-          phone,
-          email,
-          role,
-          password,
-          area,
-          division,
-          isWorking,
-          isSaved,
-          selectedArea,
-          startTime,
-          endTime,
-          fixedHolidays,
-          position,
-        ) async {
+            name,
+            phone,
+            email,
+            role,
+            password,
+            area,
+            division,
+            isWorking,
+            isSaved,
+            selectedArea,
+            startTime,
+            endTime,
+            fixedHolidays,
+            position,
+            ) async {
           try {
-            final englishName = await context.read<UserRepository>().getEnglishNameByArea(selectedArea, division);
+            final englishName = await context
+                .read<UserRepository>()
+                .getEnglishNameByArea(selectedArea, division);
 
             final newUser = UserModel(
               id: '$phone-$area',
@@ -184,7 +184,8 @@ class _UserManagementState extends State<UserManagement> {
 
     // 수정
     if (index == 0 && selectedId != null) {
-      final selectedUser = userState.users.firstWhereOrNull((u) => u.id == selectedId);
+      final selectedUser =
+      userState.users.firstWhereOrNull((u) => u.id == selectedId);
       if (selectedUser == null) {
         showFailedSnackbar(context, '선택된 계정을 찾지 못했습니다.');
         return;
@@ -194,23 +195,25 @@ class _UserManagementState extends State<UserManagement> {
         context: context,
         initialUser: selectedUser,
         onSave: (
-          name,
-          phone,
-          email,
-          role,
-          password,
-          area,
-          division,
-          isWorking,
-          isSaved,
-          selectedArea,
-          startTime,
-          endTime,
-          fixedHolidays,
-          position,
-        ) async {
+            name,
+            phone,
+            email,
+            role,
+            password,
+            area,
+            division,
+            isWorking,
+            isSaved,
+            selectedArea,
+            startTime,
+            endTime,
+            fixedHolidays,
+            position,
+            ) async {
           try {
-            final englishName = await context.read<UserRepository>().getEnglishNameByArea(selectedArea, division);
+            final englishName = await context
+                .read<UserRepository>()
+                .getEnglishNameByArea(selectedArea, division);
 
             final updatedUser = selectedUser.copyWith(
               name: name,
@@ -273,7 +276,8 @@ class _UserManagementState extends State<UserManagement> {
 
       // unnecessary_null_comparison 경고 제거
       final areaOk = currentArea.isEmpty || areas.contains(currentArea);
-      final divisionOk = currentDivision.isEmpty || divisions.contains(currentDivision);
+      final divisionOk =
+          currentDivision.isEmpty || divisions.contains(currentDivision);
       return areaOk && divisionOk;
     }
 
@@ -284,7 +288,8 @@ class _UserManagementState extends State<UserManagement> {
         backgroundColor: Colors.white,
         elevation: 0,
         foregroundColor: Colors.black87,
-        title: const Text('계정', style: TextStyle(fontWeight: FontWeight.bold)),
+        title:
+        const Text('계정', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         automaticallyImplyLeading: false,
         actions: [
@@ -307,37 +312,42 @@ class _UserManagementState extends State<UserManagement> {
       body: userState.isLoading
           ? const Center(child: CircularProgressIndicator())
           : filteredUsers.isEmpty
-              ? Center(
-                  child:
-                      userState.users.isEmpty ? const Text('전체 계정 데이터가 없습니다') : const Text('현재 지역/사업소에 해당하는 계정이 없습니다'),
-                )
-              : ListView.builder(
-                  itemCount: filteredUsers.length,
-                  itemBuilder: (context, index) {
-                    final user = filteredUsers[index];
-                    final isSelected = userState.selectedUserId == user.id;
+          ? Center(
+        child: userState.users.isEmpty
+            ? const Text('전체 계정 데이터가 없습니다')
+            : const Text('현재 지역/사업소에 해당하는 계정이 없습니다'),
+      )
+          : ListView.builder(
+        itemCount: filteredUsers.length,
+        itemBuilder: (context, index) {
+          final user = filteredUsers[index];
+          final isSelected = userState.selectedUserId == user.id;
 
-                    return ListTile(
-                      key: ValueKey(user.id),
-                      title: Text(
-                        user.name,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('이메일: ${user.email}'),
-                          Text('출근: ${formatTime(user.startTime)} / 퇴근: ${formatTime(user.endTime)}'),
-                          Text('역할: ${user.role}'),
-                          if (user.position?.isNotEmpty == true) Text('직책: ${user.position!}'),
-                        ],
-                      ),
-                      trailing: isSelected ? const Icon(Icons.check_circle, color: Colors.green) : null,
-                      selected: isSelected,
-                      onTap: () => userState.toggleUserCard(user.id),
-                    );
-                  },
-                ),
+          return ListTile(
+            key: ValueKey(user.id),
+            title: Text(
+              user.name,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('이메일: ${user.email}'),
+                Text(
+                    '출근: ${formatTime(user.startTime)} / 퇴근: ${formatTime(user.endTime)}'),
+                Text('역할: ${user.role}'),
+                if (user.position?.isNotEmpty == true)
+                  Text('직책: ${user.position!}'),
+              ],
+            ),
+            trailing: isSelected
+                ? const Icon(Icons.check_circle, color: Colors.green)
+                : null,
+            selected: isSelected,
+            onTap: () => userState.toggleUserCard(user.id),
+          );
+        },
+      ),
       bottomNavigationBar: SecondaryMiniNavigation(
         icons: getNavigationIcons(userState.selectedUserId != null),
         onIconTapped: (index) => onIconTapped(context, index, userState),

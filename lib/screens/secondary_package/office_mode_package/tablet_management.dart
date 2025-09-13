@@ -88,12 +88,10 @@ class _TabletManagementState extends State<TabletManagement> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      useSafeArea: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetCtx) => Padding(
-        padding: MediaQuery.of(sheetCtx).viewInsets, // ✅ sheetCtx 사용
+      useSafeArea: true,                   // ✅ 안전영역 반영
+      backgroundColor: Colors.transparent, // ✅ 내부 컨테이너가 배경/라운드 담당
+      builder: (sheetCtx) => FractionallySizedBox(
+        heightFactor: 1,                   // ✅ 화면 높이 100% → 최상단까지
         child: TabletSettingBottomSheet(
           onSave: onSave,
           areaValue: currentArea,
@@ -147,7 +145,9 @@ class _TabletManagementState extends State<TabletManagement> {
             division,
             ) async {
           try {
-            final englishName = await context.read<UserRepository>().getEnglishNameByArea(area, division);
+            final englishName = await context
+                .read<UserRepository>()
+                .getEnglishNameByArea(area, division);
 
             // 🔁 UserModel → TabletModel 로 생성
             final newTablet = TabletModel(
@@ -187,7 +187,8 @@ class _TabletManagementState extends State<TabletManagement> {
 
     // 수정
     if (index == 0 && selectedId != null) {
-      final selectedUser = userState.users.firstWhereOrNull((u) => u.id == selectedId);
+      final selectedUser =
+      userState.users.firstWhereOrNull((u) => u.id == selectedId);
       if (selectedUser == null) {
         showFailedSnackbar(context, '선택된 계정을 찾지 못했습니다.');
         return;
@@ -209,10 +210,12 @@ class _TabletManagementState extends State<TabletManagement> {
             division,
             ) async {
           try {
-            final englishName = await context.read<UserRepository>().getEnglishNameByArea(area, division);
+            final englishName = await context
+                .read<UserRepository>()
+                .getEnglishNameByArea(area, division);
 
             // ⚠️ 현재 예제에서는 UserModel로 업데이트(기존 로직 유지).
-            // tablet_accounts 쪽으로도 업데이트하려면 userState에 updateTabletCard 추가 후 호출 권장.
+            // tablet_accounts 동기화를 원하면 userState.updateTabletCard 추가 권장.
             final updatedUser = selectedUser.copyWith(
               name: name,
               phone: handle, // handle을 phone 필드에 저장(호환)

@@ -7,7 +7,8 @@ class LocationSettingBottomSheet extends StatefulWidget {
   const LocationSettingBottomSheet({super.key, required this.onSave});
 
   @override
-  State<LocationSettingBottomSheet> createState() => _LocationSettingBottomSheetState();
+  State<LocationSettingBottomSheet> createState() =>
+      _LocationSettingBottomSheetState();
 }
 
 /// 하위 구역 입력 컨트롤러를 타입 안전하게 보관
@@ -23,7 +24,8 @@ class _SubFieldCtrls {
   }
 }
 
-class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet> {
+class _LocationSettingBottomSheetState
+    extends State<LocationSettingBottomSheet> {
   // 상위(단일/복합 공통)
   final TextEditingController _locationController = TextEditingController();
 
@@ -129,7 +131,9 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
         'capacity': int.parse(_capacityController.text.trim()),
       });
     } else {
-      final subs = _subControllers.where((c) => c.name.text.trim().isNotEmpty).map((c) {
+      final subs = _subControllers
+          .where((c) => c.name.text.trim().isNotEmpty)
+          .map((c) {
         final cap = int.tryParse(c.capacity.text.trim()) ?? 0;
         return {
           'name': c.name.text.trim(),
@@ -155,7 +159,8 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
     return InputDecoration(
       labelText: label,
       isDense: true,
-      contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+      contentPadding:
+      const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
       focusedBorder: OutlineInputBorder(
         borderSide: BorderSide(color: cs.primary),
@@ -168,193 +173,235 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
+    final screenHeight = MediaQuery.of(context).size.height; // ✅ 화면 높이
 
     return Padding(
       padding: EdgeInsets.only(bottom: bottomPadding),
       child: SingleChildScrollView(
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-          decoration: const BoxDecoration(
-            color: Colors.white, // 바텀시트 배경 고정(요구사항에 따라 surface로 변경 가능)
-            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Drag handle
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2),
+        child: ConstrainedBox(
+          // ✅ 키보드 높이를 제외한 영역만큼 최소 높이 확보 → 배경이 최상단까지 꽉 참
+          constraints:
+          BoxConstraints(minHeight: screenHeight - bottomPadding),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            decoration: const BoxDecoration(
+              color:
+              Colors.white, // 바텀시트 배경 고정(요구사항에 따라 surface로 변경 가능)
+              borderRadius:
+              BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Drag handle
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
                 ),
-              ),
 
-              const Text(
-                '주차 구역 설정',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-
-              // 모드 선택
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  ChoiceChip(
-                    label: const Text('단일'),
-                    selected: _isSingle,
-                    selectedColor: cs.primary,
-                    backgroundColor: cs.surfaceVariant,
-                    labelStyle: TextStyle(color: _isSingle ? cs.onPrimary : cs.onSurface),
-                    showCheckmark: false,
-                    onSelected: (selected) {
-                      if (selected) setState(() => _isSingle = true);
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                  ChoiceChip(
-                    label: const Text('복합'),
-                    selected: !_isSingle,
-                    selectedColor: cs.primary,
-                    backgroundColor: cs.surfaceVariant,
-                    labelStyle: TextStyle(color: !_isSingle ? cs.onPrimary : cs.onSurface),
-                    showCheckmark: false,
-                    onSelected: (selected) {
-                      if (selected) {
-                        setState(() {
-                          _isSingle = false;
-                          if (_subControllers.isEmpty) _addSubLocation();
-                        });
-                      }
-                    },
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-
-              // 상위 구역명
-              TextField(
-                controller: _locationController,
-                onTapOutside: (_) => FocusScope.of(context).unfocus(),
-                textInputAction: TextInputAction.next,
-                decoration: _inputDecoration(context, _isSingle ? '구역명' : '상위 구역명'),
-                onSubmitted: (_) {
-                  if (_isSingle) {
-                    // 단일 모드일 때 수용대수로 이동
-                    FocusScope.of(context).nextFocus();
-                  }
-                },
-              ),
-              const SizedBox(height: 16),
-
-              // 단일 모드: 수용대수
-              if (_isSingle)
-                TextField(
-                  controller: _capacityController,
-                  onTapOutside: (_) => FocusScope.of(context).unfocus(),
-                  keyboardType: TextInputType.number,
-                  textInputAction: TextInputAction.done,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(4),
-                  ],
-                  decoration: _inputDecoration(context, '수용 가능 차량 수'),
+                const Text(
+                  '주차 구역 설정',
+                  style:
+                  TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
+                const SizedBox(height: 16),
 
-              // 복합 모드: 하위 구역 목록
-              if (!_isSingle)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                // 모드 선택
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text('하위 구역', style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    ..._subControllers.asMap().entries.map((entry) {
-                      final index = entry.key;
-                      final sub = entry.value;
-                      return Padding(
-                        key: ValueKey(sub), // 안정 키
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: sub.name,
-                                onTapOutside: (_) => FocusScope.of(context).unfocus(),
-                                textInputAction: TextInputAction.next,
-                                decoration: _inputDecoration(context, '하위 ${index + 1}'),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            SizedBox(
-                              width: 100,
-                              child: TextField(
-                                controller: sub.capacity,
-                                onTapOutside: (_) => FocusScope.of(context).unfocus(),
-                                keyboardType: TextInputType.number,
-                                textInputAction: TextInputAction.next,
-                                inputFormatters: [
-                                  FilteringTextInputFormatter.digitsOnly,
-                                  LengthLimitingTextInputFormatter(4),
-                                ],
-                                decoration: _inputDecoration(context, '수용'),
-                              ),
-                            ),
-                            IconButton(
-                              onPressed: () => _removeSubLocation(index),
-                              icon: const Icon(Icons.delete, color: Colors.red),
-                              tooltip: '하위 구역 삭제',
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton.icon(
-                        onPressed: _addSubLocation,
-                        icon: const Icon(Icons.add),
-                        label: const Text('하위 구역 추가'),
-                      ),
+                    ChoiceChip(
+                      label: const Text('단일'),
+                      selected: _isSingle,
+                      selectedColor: cs.primary,
+                      backgroundColor: cs.surfaceVariant,
+                      labelStyle: TextStyle(
+                          color: _isSingle
+                              ? cs.onPrimary
+                              : cs.onSurface),
+                      showCheckmark: false,
+                      onSelected: (selected) {
+                        if (selected) setState(() => _isSingle = true);
+                      },
                     ),
-                    const SizedBox(height: 8),
-                    Text('총 수용 차량: ${_calculateTotalSubCapacity()}대'),
+                    const SizedBox(width: 8),
+                    ChoiceChip(
+                      label: const Text('복합'),
+                      selected: !_isSingle,
+                      selectedColor: cs.primary,
+                      backgroundColor: cs.surfaceVariant,
+                      labelStyle: TextStyle(
+                          color: !_isSingle
+                              ? cs.onPrimary
+                              : cs.onSurface),
+                      showCheckmark: false,
+                      onSelected: (selected) {
+                        if (selected) {
+                          setState(() {
+                            _isSingle = false;
+                            if (_subControllers.isEmpty)
+                              _addSubLocation();
+                          });
+                        }
+                      },
+                    ),
                   ],
                 ),
+                const SizedBox(height: 20),
 
-              if (_errorMessage != null) ...[
-                const SizedBox(height: 12),
-                Text(_errorMessage!, style: TextStyle(color: cs.error)),
-              ],
+                // 상위 구역명
+                TextField(
+                  controller: _locationController,
+                  onTapOutside: (_) =>
+                      FocusScope.of(context).unfocus(),
+                  textInputAction: TextInputAction.next,
+                  decoration: _inputDecoration(
+                      context, _isSingle ? '구역명' : '상위 구역명'),
+                  onSubmitted: (_) {
+                    if (_isSingle) {
+                      // 단일 모드일 때 수용대수로 이동
+                      FocusScope.of(context).nextFocus();
+                    }
+                  },
+                ),
+                const SizedBox(height: 16),
 
-              const SizedBox(height: 24),
-
-              // 하단 액션
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('취소'),
-                    ),
+                // 단일 모드: 수용대수
+                if (_isSingle)
+                  TextField(
+                    controller: _capacityController,
+                    onTapOutside: (_) =>
+                        FocusScope.of(context).unfocus(),
+                    keyboardType: TextInputType.number,
+                    textInputAction: TextInputAction.done,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(4),
+                    ],
+                    decoration:
+                    _inputDecoration(context, '수용 가능 차량 수'),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: _handleSave,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: cs.primary,
-                        foregroundColor: cs.onPrimary,
+
+                // 복합 모드: 하위 구역 목록
+                if (!_isSingle)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('하위 구역',
+                          style:
+                          TextStyle(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      ..._subControllers
+                          .asMap()
+                          .entries
+                          .map((entry) {
+                        final index = entry.key;
+                        final sub = entry.value;
+                        return Padding(
+                          key: ValueKey(sub), // 안정 키
+                          padding:
+                          const EdgeInsets.symmetric(vertical: 6),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: sub.name,
+                                  onTapOutside: (_) =>
+                                      FocusScope.of(context)
+                                          .unfocus(),
+                                  textInputAction:
+                                  TextInputAction.next,
+                                  decoration: _inputDecoration(
+                                      context, '하위 ${index + 1}'),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              SizedBox(
+                                width: 100,
+                                child: TextField(
+                                  controller: sub.capacity,
+                                  onTapOutside: (_) =>
+                                      FocusScope.of(context)
+                                          .unfocus(),
+                                  keyboardType:
+                                  TextInputType.number,
+                                  textInputAction:
+                                  TextInputAction.next,
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter
+                                        .digitsOnly,
+                                    LengthLimitingTextInputFormatter(
+                                        4),
+                                  ],
+                                  decoration:
+                                  _inputDecoration(context, '수용'),
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: () =>
+                                    _removeSubLocation(index),
+                                icon: const Icon(Icons.delete,
+                                    color: Colors.red),
+                                tooltip: '하위 구역 삭제',
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton.icon(
+                          onPressed: _addSubLocation,
+                          icon: const Icon(Icons.add),
+                          label: const Text('하위 구역 추가'),
+                        ),
                       ),
-                      child: const Text('저장'),
-                    ),
+                      const SizedBox(height: 8),
+                      Text(
+                          '총 수용 차량: ${_calculateTotalSubCapacity()}대'),
+                    ],
                   ),
+
+                if (_errorMessage != null) ...[
+                  const SizedBox(height: 12),
+                  Text(_errorMessage!,
+                      style: TextStyle(color: cs.error)),
                 ],
-              ),
-            ],
+
+                const SizedBox(height: 24),
+
+                // 하단 액션
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('취소'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _handleSave,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: cs.primary,
+                          foregroundColor: cs.onPrimary,
+                        ),
+                        child: const Text('저장'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),

@@ -34,11 +34,12 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
         showModalBottomSheet(
           context: context,
           isScrollControlled: true,
-          backgroundColor: Colors.white,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+          useSafeArea: true,                      // ✅ 최상단까지 안전영역 포함
+          backgroundColor: Colors.transparent,    // ✅ 내부 컨테이너가 배경/라운드 담당
+          builder: (context) => const FractionallySizedBox(
+            heightFactor: 1,                     // ✅ 화면 높이 100%
+            child: MonthlyPlateBottomSheet(),
           ),
-          builder: (context) => const MonthlyPlateBottomSheet(),
         );
       } else {
         // 수정
@@ -52,14 +53,15 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
             showModalBottomSheet(
               context: context,
               isScrollControlled: true,
-              backgroundColor: Colors.white,
-              shape: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-              ),
-              builder: (context) => MonthlyPlateBottomSheet(
-                isEditMode: true,
-                initialDocId: _selectedDocId!,
-                initialData: data,
+              useSafeArea: true,
+              backgroundColor: Colors.transparent,
+              builder: (context) => FractionallySizedBox(
+                heightFactor: 1,
+                child: MonthlyPlateBottomSheet(
+                  isEditMode: true,
+                  initialDocId: _selectedDocId!,
+                  initialData: data,
+                ),
               ),
             );
           } else {
@@ -269,8 +271,8 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     const Text('💳 결제 내역',
-                                        style: TextStyle(
-                                            fontSize: 16, fontWeight: FontWeight.bold)),
+                                        style:
+                                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                                     const SizedBox(height: 8),
                                     ...(() {
                                       final payments =
@@ -351,12 +353,10 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                                               if (note.isNotEmpty) ...[
                                                 const SizedBox(height: 4),
                                                 Row(
-                                                  crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
                                                   children: [
                                                     const Icon(Icons.note,
-                                                        size: 16,
-                                                        color: Colors.deepPurple),
+                                                        size: 16, color: Colors.deepPurple),
                                                     const SizedBox(width: 6),
                                                     Expanded(
                                                       child: Text(note,
@@ -385,8 +385,9 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
         },
       ),
       bottomNavigationBar: SecondaryMiniNavigation(
-        icons:
-        _selectedDocId == null ? const [Icons.add, Icons.delete] : const [Icons.edit, Icons.delete],
+        icons: _selectedDocId == null
+            ? const [Icons.add, Icons.delete]
+            : const [Icons.edit, Icons.delete],
         onIconTapped: (index) => _handleIconTap(context, index),
       ),
     );

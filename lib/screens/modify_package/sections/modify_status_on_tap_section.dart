@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../utils/status_mapping_helper.dart';
+import '../../../utils/plate_limit/status_mapping_helper.dart';
 
 class ModifyStatusOnTapSection extends StatefulWidget {
   final List<String>? initialSelectedStatuses;

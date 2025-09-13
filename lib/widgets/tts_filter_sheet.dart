@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../../states/area/area_state.dart';
-import '../../utils/tts_user_filters.dart';
+import '../../utils/tts/tts_user_filters.dart';
 
 class TtsFilterSheet extends StatefulWidget {
   const TtsFilterSheet({super.key});

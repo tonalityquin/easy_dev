@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 
 // 🔧 전역 리미트 설정값(최소/최대/기본값, prefsKey)을 단일 소스로 관리
-import '../../../../utils/plate_limit_config.dart';
+import '../../../../utils/plate_limit/plate_limit_config.dart';
 
 
 /// 지역별(location 단위) 리미트 관리 탭

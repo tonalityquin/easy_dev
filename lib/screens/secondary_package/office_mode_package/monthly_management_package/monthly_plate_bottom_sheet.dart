@@ -165,141 +165,152 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
     _selectedPeriodUnit = controller.selectedPeriodUnit;
 
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final effectiveHeight = screenHeight - bottomInset;
 
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.only(bottom: bottomInset),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height * 0.95,
-          ),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      controller.isThreeDigit ? '현재 앞자리: 세자리' : '현재 앞자리: 두자리',
-                      textAlign: TextAlign.right,
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+        // ✅ Expanded 사용을 위해 높이를 명시적으로 고정 → 내부 Column이 유한 높이를 가짐
+        child: SizedBox(
+          height: effectiveHeight,
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: const BoxDecoration(
+              color: Colors.white, // 바텀시트 배경
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            child: Column(
+              children: [
+                // 상단 상태/닫기
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        controller.isThreeDigit ? '현재 앞자리: 세자리' : '현재 앞자리: 두자리',
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                      ),
                     ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () {
-                      final nav = Navigator.of(context, rootNavigator: true);
-                      if (nav.canPop()) nav.pop();
-                    },
-                  ),
-                ],
-              ),
-              const Divider(),
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      MonthlyPlateSection(
-                        dropdownValue: controller.dropdownValue,
-                        regions: MonthlyPlateController.regions,
-                        controllerFrontDigit: controller.controllerFrontDigit,
-                        controllerMidDigit: controller.controllerMidDigit,
-                        controllerBackDigit: controller.controllerBackDigit,
-                        activeController: controller.activeController,
-                        onKeypadStateChanged: (tc) {
-                          // 값 초기화 없이 활성 필드 전환만
-                          setState(() => controller.setActiveController(tc));
-                        },
-                        onRegionChanged: (region) {
-                          setState(() {
-                            controller.dropdownValue = region;
-                          });
-                        },
-                        isThreeDigit: controller.isThreeDigit,
-                        isEditMode: widget.isEditMode,
-                      ),
-                      const SizedBox(height: 32),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () {
+                        final nav = Navigator.of(context, rootNavigator: true);
+                        if (nav.canPop()) nav.pop();
+                      },
+                    ),
+                  ],
+                ),
+                const Divider(),
 
-                      // 정산 유형(단일 옵션인 경우 읽기 전용 표시가 자연스러움)
-                      InputDecorator(
-                        decoration: const InputDecoration(
-                          labelText: '정산 유형',
-                          border: OutlineInputBorder(),
-                        ),
-                        child: const Text('정기'),
-                      ),
-
-                      if (widget.isEditMode) ...[
-                        const SizedBox(height: 16),
-                        MonthlyPaymentSection(
-                          controller: controller,
-                          onExtendedChanged: (val) {
+                // 본문 스크롤 영역
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        MonthlyPlateSection(
+                          dropdownValue: controller.dropdownValue,
+                          regions: MonthlyPlateController.regions,
+                          controllerFrontDigit: controller.controllerFrontDigit,
+                          controllerMidDigit: controller.controllerMidDigit,
+                          controllerBackDigit: controller.controllerBackDigit,
+                          activeController: controller.activeController,
+                          onKeypadStateChanged: (tc) {
+                            // 값 초기화 없이 활성 필드 전환만
+                            setState(() => controller.setActiveController(tc));
+                          },
+                          onRegionChanged: (region) {
                             setState(() {
-                              controller.isExtended = val ?? false;
+                              controller.dropdownValue = region;
+                            });
+                          },
+                          isThreeDigit: controller.isThreeDigit,
+                          isEditMode: widget.isEditMode,
+                        ),
+                        const SizedBox(height: 32),
+
+                        // 정산 유형(단일 옵션인 경우 읽기 전용 표시가 자연스러움)
+                        const InputDecorator(
+                          decoration: InputDecoration(
+                            labelText: '정산 유형',
+                            border: OutlineInputBorder(),
+                          ),
+                          child: Text('정기'),
+                        ),
+
+                        if (widget.isEditMode) ...[
+                          const SizedBox(height: 16),
+                          MonthlyPaymentSection(
+                            controller: controller,
+                            onExtendedChanged: (val) {
+                              setState(() {
+                                controller.isExtended = val ?? false;
+                              });
+                            },
+                          ),
+                        ],
+
+                        const SizedBox(height: 32),
+                        MonthlyBillSection(
+                          nameController: _regularNameController,
+                          amountController: _regularAmountController,
+                          durationController: _regularDurationController,
+                          selectedType: _selectedRegularType,
+                          onTypeChanged: (val) => setState(() => _selectedRegularType = val),
+                          selectedPeriodUnit: _selectedPeriodUnit,
+                          onPeriodUnitChanged: (val) {
+                            setState(() {
+                              controller.selectedPeriodUnit = val!;
+                              _selectedPeriodUnit = val;
                             });
                           },
                         ),
+                        const SizedBox(height: 32),
+
+                        MonthlyCustomStatusSection(
+                          controller: controller,
+                          fetchedCustomStatus: controller.fetchedCustomStatus,
+                          statusSectionKey: statusSectionKey,
+                          onDeleted: () {
+                            setState(() {
+                              controller.fetchedCustomStatus = null;
+                              controller.customStatusController.clear();
+                            });
+                          },
+                          onStatusCleared: () {
+                            // 섹션 강제 리빌드용 키 재생성만
+                            setState(() {
+                              statusSectionKey = UniqueKey();
+                            });
+                          },
+                        ),
+
+                        const SizedBox(height: 16),
+                        MonthlyDateRangePickerSection(
+                          startDateController: _startDateController,
+                          endDateController: _endDateController,
+                          periodUnit: _selectedPeriodUnit,
+                          duration: int.tryParse(_regularDurationController.text) ?? 1,
+                        ),
                       ],
-
-                      const SizedBox(height: 32),
-                      MonthlyBillSection(
-                        nameController: _regularNameController,
-                        amountController: _regularAmountController,
-                        durationController: _regularDurationController,
-                        selectedType: _selectedRegularType,
-                        onTypeChanged: (val) => setState(() => _selectedRegularType = val),
-                        selectedPeriodUnit: _selectedPeriodUnit,
-                        onPeriodUnitChanged: (val) {
-                          setState(() {
-                            controller.selectedPeriodUnit = val!;
-                            _selectedPeriodUnit = val;
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 32),
-
-                      MonthlyCustomStatusSection(
-                        controller: controller,
-                        fetchedCustomStatus: controller.fetchedCustomStatus,
-                        statusSectionKey: statusSectionKey,
-                        onDeleted: () {
-                          setState(() {
-                            controller.fetchedCustomStatus = null;
-                            controller.customStatusController.clear();
-                          });
-                        },
-                        onStatusCleared: () {
-                          // 섹션 강제 리빌드용 키 재생성만
-                          setState(() {
-                            statusSectionKey = UniqueKey();
-                          });
-                        },
-                      ),
-
-                      const SizedBox(height: 16),
-                      MonthlyDateRangePickerSection(
-                        startDateController: _startDateController,
-                        endDateController: _endDateController,
-                        periodUnit: _selectedPeriodUnit,
-                        duration: int.tryParse(_regularDurationController.text) ?? 1,
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              MonthlyBottomNavigation(
-                showKeypad: controller.showKeypad,
-                keypad: _buildKeypad(),
-                actionButton: MonthlyBottomActionSection(
-                  controller: controller,
-                  mountedContext: mounted,
-                  onStateRefresh: () => setState(() {}),
-                  isEditMode: widget.isEditMode,
+
+                const SizedBox(height: 16),
+                MonthlyBottomNavigation(
+                  showKeypad: controller.showKeypad,
+                  keypad: _buildKeypad(),
+                  actionButton: MonthlyBottomActionSection(
+                    controller: controller,
+                    mountedContext: mounted,
+                    onStateRefresh: () => setState(() {}),
+                    isEditMode: widget.isEditMode,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

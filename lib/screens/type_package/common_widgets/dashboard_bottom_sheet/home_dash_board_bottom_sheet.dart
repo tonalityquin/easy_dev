@@ -17,7 +17,7 @@ import 'widgets/home_work_button_widget.dart';
 import 'widgets/home_show_report_dialog.dart';
 
 // ⬇️ 추가: TTS 필터 로드 & 시트
-import '../../../../utils/tts_user_filters.dart';
+import '../../../../utils/tts/tts_user_filters.dart';
 
 class HomeDashBoardBottomSheet extends StatelessWidget {
   const HomeDashBoardBottomSheet({super.key});

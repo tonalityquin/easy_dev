@@ -31,21 +31,25 @@ class _BillManagementState extends State<BillManagement> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      useSafeArea: true,                    // ✅ 안전영역 반영
+      backgroundColor: Colors.transparent,  // ✅ 내부 컨테이너가 배경/라운드 담당
       builder: (_) {
-        return BillSettingBottomSheet(
-          onSave: (billData) async {
-            try {
-              await context.read<BillState>().addBillFromMap(billData);
-              if (context.mounted) {
-                showSuccessSnackbar(context, '✅ 정산 데이터가 추가되었습니다. 목록이 곧 반영됩니다.');
+        return FractionallySizedBox(
+          heightFactor: 1, // ✅ 화면 높이 100% → 최상단까지
+          child: BillSettingBottomSheet(
+            onSave: (billData) async {
+              try {
+                await context.read<BillState>().addBillFromMap(billData);
+                if (context.mounted) {
+                  showSuccessSnackbar(context, '✅ 정산 데이터가 추가되었습니다. 목록이 곧 반영됩니다.');
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  showFailedSnackbar(context, '🚨 데이터 추가 중 오류가 발생했습니다: $e');
+                }
               }
-            } catch (e) {
-              if (context.mounted) {
-                showFailedSnackbar(context, '🚨 데이터 추가 중 오류가 발생했습니다: $e');
-              }
-            }
-          },
+            },
+          ),
         );
       },
     );
@@ -53,22 +57,22 @@ class _BillManagementState extends State<BillManagement> {
 
   Future<bool> _confirmDelete(BuildContext context) async {
     return await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text('삭제 확인'),
-            content: const Text('선택한 항목을 삭제하시겠어요?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('취소'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('삭제'),
-              ),
-            ],
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('삭제 확인'),
+        content: const Text('선택한 항목을 삭제하시겠어요?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
           ),
-        ) ??
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    ) ??
         false;
   }
 
@@ -118,8 +122,10 @@ class _BillManagementState extends State<BillManagement> {
       ),
       body: Consumer<BillState>(
         builder: (context, state, child) {
-          final generalBills = state.generalBills.where((bill) => bill.area.trim() == currentArea).toList();
-          final regularBills = state.regularBills.where((bill) => bill.area.trim() == currentArea).toList();
+          final generalBills =
+          state.generalBills.where((bill) => bill.area.trim() == currentArea).toList();
+          final regularBills =
+          state.regularBills.where((bill) => bill.area.trim() == currentArea).toList();
 
           if (generalBills.isEmpty && regularBills.isEmpty) {
             return const Center(child: Text('현재 지역에 해당하는 정산 데이터가 없습니다.'));
@@ -170,11 +176,11 @@ class _BillManagementState extends State<BillManagement> {
   }
 
   Widget _buildGeneralBillTile(
-    BuildContext context,
-    BillState state,
-    dynamic bill,
-    NumberFormat won,
-  ) {
+      BuildContext context,
+      BillState state,
+      dynamic bill,
+      NumberFormat won,
+      ) {
     final isSelected = state.selectedBillId == bill.id;
 
     return ListTile(
@@ -202,11 +208,11 @@ class _BillManagementState extends State<BillManagement> {
   }
 
   Widget _buildRegularBillTile(
-    BuildContext context,
-    BillState state,
-    dynamic bill,
-    NumberFormat won,
-  ) {
+      BuildContext context,
+      BillState state,
+      dynamic bill,
+      NumberFormat won,
+      ) {
     final isSelected = state.selectedBillId == bill.id;
 
     return ListTile(

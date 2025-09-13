@@ -5,12 +5,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/tablet_model.dart';
 import '../../repositories/user_repo_services/user_repository.dart';
 import '../../models/user_model.dart';
-import '../../utils/plate_tts_listener_service.dart';
-import '../../utils/chat_tts_listener_service.dart';
+import '../../utils/tts/plate_tts_listener_service.dart';
+import '../../utils/tts/chat_tts_listener_service.dart';
 import '../area/area_state.dart';
 
 // ⬇️ 추가: 오너십 스위치(앱/포그라운드 중 Plate TTS 실행 주체)
-import '../../utils/tts_ownership.dart';
+import '../../utils/tts/tts_ownership.dart';
 
 class UserState extends ChangeNotifier {
   final UserRepository _repository;

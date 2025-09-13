@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../../../routes.dart'; // ✅ AppRoutes 사용 (경로는 현재 파일 위치 기준)
-import '../belivus/service_cooperation_calendar.dart';
 import '../service_login_controller.dart';
 
 class ServiceLoginForm extends StatefulWidget {
@@ -109,13 +108,6 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
                 // 로고 탭 → 협업 캘린더로 이동
                 GestureDetector(
                   onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const CooperationCalendar(
-                          calendarId: 'belivus150119@gmail.com',
-                        ),
-                      ),
-                    );
                   },
                   child: SizedBox(
                     height: 360,

@@ -35,53 +35,62 @@ class _LocationManagementState extends State<LocationManagement> {
           borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
         ),
         builder: (sheetCtx) {
-          final currentArea = Provider.of<AreaState>(context, listen: false).currentArea;
+          final currentArea =
+              Provider.of<AreaState>(context, listen: false).currentArea;
 
-          return LocationSettingBottomSheet(
-            onSave: (location) {
-              if (location is Map<String, dynamic>) {
-                final type = location['type'];
+          // ✅ 전체 높이(최상단까지)로 차오르게 래핑
+          return FractionallySizedBox(
+            heightFactor: 1,
+            child: LocationSettingBottomSheet(
+              onSave: (location) {
+                if (location is Map<String, dynamic>) {
+                  final type = location['type'];
 
-                if (type == 'single') {
-                  final name = location['name']?.toString() ?? '';
-                  final capacity = (location['capacity'] as int?) ?? 0;
+                  if (type == 'single') {
+                    final name = location['name']?.toString() ?? '';
+                    final capacity = (location['capacity'] as int?) ?? 0;
 
-                  locationState
-                      .addSingleLocation(
-                    name,
-                    currentArea,
-                    capacity: capacity,
-                    onError: (error) => showFailedSnackbar(context, '🚨 주차 구역 추가 실패: $error'),
-                  )
-                      .then((_) => showSuccessSnackbar(context, '✅ 주차 구역이 추가되었습니다.'));
-                } else if (type == 'composite') {
-                  final parent = location['parent']?.toString() ?? '';
-                  final rawSubs = location['subs'];
+                    locationState
+                        .addSingleLocation(
+                      name,
+                      currentArea,
+                      capacity: capacity,
+                      onError: (error) => showFailedSnackbar(
+                          context, '🚨 주차 구역 추가 실패: $error'),
+                    )
+                        .then((_) => showSuccessSnackbar(
+                        context, '✅ 주차 구역이 추가되었습니다.'));
+                  } else if (type == 'composite') {
+                    final parent = location['parent']?.toString() ?? '';
+                    final rawSubs = location['subs'];
 
-                  final subs = (rawSubs is List)
-                      ? rawSubs
-                      .map<Map<String, dynamic>>((sub) => {
-                    'name': sub['name']?.toString() ?? '',
-                    'capacity': sub['capacity'] ?? 0,
-                  })
-                      .toList()
-                      : <Map<String, dynamic>>[];
+                    final subs = (rawSubs is List)
+                        ? rawSubs
+                        .map<Map<String, dynamic>>((sub) => {
+                      'name': sub['name']?.toString() ?? '',
+                      'capacity': sub['capacity'] ?? 0,
+                    })
+                        .toList()
+                        : <Map<String, dynamic>>[];
 
-                  locationState
-                      .addCompositeLocation(
-                    parent,
-                    subs,
-                    currentArea,
-                    onError: (error) => showFailedSnackbar(context, '🚨 복합 주차 구역 추가 실패: $error'),
-                  )
-                      .then((_) => showSuccessSnackbar(context, '✅ 복합 주차 구역이 추가되었습니다.'));
+                    locationState
+                        .addCompositeLocation(
+                      parent,
+                      subs,
+                      currentArea,
+                      onError: (error) => showFailedSnackbar(
+                          context, '🚨 복합 주차 구역 추가 실패: $error'),
+                    )
+                        .then((_) => showSuccessSnackbar(
+                        context, '✅ 복합 주차 구역이 추가되었습니다.'));
+                  } else {
+                    showFailedSnackbar(context, '❗ 알 수 없는 주차 구역 유형입니다.');
+                  }
                 } else {
-                  showFailedSnackbar(context, '❗ 알 수 없는 주차 구역 유형입니다.');
+                  showFailedSnackbar(context, '❗ 알 수 없는 형식의 주차 구역 데이터입니다.');
                 }
-              } else {
-                showFailedSnackbar(context, '❗ 알 수 없는 형식의 주차 구역 데이터입니다.');
-              }
-            },
+              },
+            ),
           );
         },
       );
@@ -96,7 +105,8 @@ class _LocationManagementState extends State<LocationManagement> {
 
       locationState.deleteLocations(
         [selectedId],
-        onError: (error) => showFailedSnackbar(context, '🚨 주차 구역 삭제 실패: $error'),
+        onError: (error) =>
+            showFailedSnackbar(context, '🚨 주차 구역 삭제 실패: $error'),
       );
     } else {
       showFailedSnackbar(context, '⚠️ 지원되지 않는 동작입니다.');
@@ -130,11 +140,13 @@ class _LocationManagementState extends State<LocationManagement> {
     final cs = Theme.of(context).colorScheme;
     final currentArea = context.watch<AreaState>().currentArea;
 
-    final allLocations =
-    locationState.locations.where((location) => location.area == currentArea).toList();
+    final allLocations = locationState.locations
+        .where((location) => location.area == currentArea)
+        .toList();
 
     final singles = allLocations.where((loc) => loc.type == 'single').toList();
-    final composites = allLocations.where((loc) => loc.type == 'composite').toList();
+    final composites =
+    allLocations.where((loc) => loc.type == 'composite').toList();
 
     final Map<String, List<LocationModel>> grouped = {};
     for (final loc in composites) {
@@ -147,7 +159,8 @@ class _LocationManagementState extends State<LocationManagement> {
         backgroundColor: Colors.white,
         elevation: 0,
         foregroundColor: Colors.black87,
-        title: const Text('주차구역', style: TextStyle(fontWeight: FontWeight.bold)),
+        title:
+        const Text('주차구역', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         automaticallyImplyLeading: false, // ✅ 오타 수정
       ),
@@ -171,13 +184,15 @@ class _LocationManagementState extends State<LocationManagement> {
                 ChoiceChip(
                   label: const Text('단일'),
                   selected: _filter == 'single',
-                  onSelected: (_) => setState(() => _filter = 'single'),
+                  onSelected: (_) =>
+                      setState(() => _filter = 'single'),
                 ),
                 const SizedBox(width: 8),
                 ChoiceChip(
                   label: const Text('복합'),
                   selected: _filter == 'composite',
-                  onSelected: (_) => setState(() => _filter = 'composite'),
+                  onSelected: (_) =>
+                      setState(() => _filter = 'composite'),
                 ),
               ],
             ),
@@ -185,9 +200,11 @@ class _LocationManagementState extends State<LocationManagement> {
           const Divider(height: 1),
           Expanded(
             child: _filter == 'single'
-                ? _buildSimpleList(singles, locationState, colorScheme: cs)
+                ? _buildSimpleList(singles, locationState,
+                colorScheme: cs)
                 : _filter == 'composite'
-                ? _buildGroupedList(grouped, locationState, colorScheme: cs)
+                ? _buildGroupedList(grouped, locationState,
+                colorScheme: cs)
                 : _buildAllListView(
               singles: singles,
               grouped: grouped,
@@ -199,7 +216,8 @@ class _LocationManagementState extends State<LocationManagement> {
       ),
       bottomNavigationBar: SecondaryMiniNavigation(
         icons: locationState.navigationIcons,
-        onIconTapped: (index) => handleIconTapped(index, locationState, context),
+        onIconTapped: (index) =>
+            handleIconTapped(index, locationState, context),
       ),
     );
   }
@@ -265,7 +283,8 @@ class _LocationManagementState extends State<LocationManagement> {
       ColorScheme cs,
       ) {
     return grouped.entries.map((entry) {
-      final totalCapacity = entry.value.fold<int>(0, (sum, loc) => sum + loc.capacity);
+      final totalCapacity =
+      entry.value.fold<int>(0, (sum, loc) => sum + loc.capacity);
 
       return ExpansionTile(
         title: Text('상위 구역: ${entry.key} (공간 $totalCapacity대)'),
@@ -276,7 +295,8 @@ class _LocationManagementState extends State<LocationManagement> {
             title: Text(loc.locationName),
             subtitle: loc.capacity > 0 ? Text('공간 ${loc.capacity}대') : null,
             leading: const Icon(Icons.subdirectory_arrow_right),
-            trailing: isSelected ? Icon(Icons.check_circle, color: cs.primary) : null,
+            trailing:
+            isSelected ? Icon(Icons.check_circle, color: cs.primary) : null,
             selected: isSelected,
             onTap: () => state.toggleLocationSelection(loc.id),
           );
@@ -304,7 +324,9 @@ class _LocationManagementState extends State<LocationManagement> {
             loc.type == 'single' ? Icons.location_on : Icons.maps_home_work,
             color: colorScheme.onSurfaceVariant,
           ),
-          trailing: isSelected ? Icon(Icons.check_circle, color: colorScheme.primary) : null,
+          trailing: isSelected
+              ? Icon(Icons.check_circle, color: colorScheme.primary)
+              : null,
           selected: isSelected,
           onTap: () => state.toggleLocationSelection(loc.id),
         );
@@ -320,7 +342,8 @@ class _LocationManagementState extends State<LocationManagement> {
       }) {
     return ListView(
       children: grouped.entries.map((entry) {
-        final totalCapacity = entry.value.fold<int>(0, (sum, loc) => sum + loc.capacity);
+        final totalCapacity =
+        entry.value.fold<int>(0, (sum, loc) => sum + loc.capacity);
 
         return ExpansionTile(
           title: Text('상위 구역: ${entry.key} (공간 $totalCapacity대)'),
@@ -331,7 +354,9 @@ class _LocationManagementState extends State<LocationManagement> {
               title: Text(loc.locationName),
               subtitle: loc.capacity > 0 ? Text('공간 ${loc.capacity}대') : null,
               leading: const Icon(Icons.subdirectory_arrow_right),
-              trailing: isSelected ? Icon(Icons.check_circle, color: colorScheme.primary) : null,
+              trailing: isSelected
+                  ? Icon(Icons.check_circle, color: colorScheme.primary)
+                  : null,
               selected: isSelected,
               onTap: () => state.toggleLocationSelection(loc.id),
             );

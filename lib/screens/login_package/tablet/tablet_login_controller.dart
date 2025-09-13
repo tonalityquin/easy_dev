@@ -11,9 +11,9 @@ import '../../../states/user/user_state.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../routes.dart'; // ✅ 라우트 상수 사용 (TabletPage로 이동)
 // ⬇️ 추가: TTS 오너십 스위치
-import '../../../utils/tts_ownership.dart';
+import '../../../utils/tts/tts_ownership.dart';
 // ⬇️ 추가: TTS 사용자 필터
-import '../../../utils/tts_user_filters.dart';
+import '../../../utils/tts/tts_user_filters.dart';
 
 String _ts() => DateTime.now().toIso8601String();
 

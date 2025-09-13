@@ -119,10 +119,16 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
     final cs = theme.colorScheme;
     final isEditMode = widget.isEditMode || (widget.initialUser != null);
 
+    // ✅ 최상단까지 차오르도록 높이 고정 + 키보드 여백 반영
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final effectiveHeight = screenHeight - bottomInset;
+
     return SafeArea(
       child: Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-        child: SingleChildScrollView(
+        padding: EdgeInsets.only(bottom: bottomInset), // 키보드 여백
+        child: SizedBox(
+          height: effectiveHeight, // 화면 높이(키보드 제외)만큼 고정
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: const BoxDecoration(
@@ -151,49 +157,60 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
                 ),
                 const SizedBox(height: 16),
 
-                // 입력 섹션(이름/아이디/이메일 로컬파트)
-                TabletInputSection(
-                  nameController: _nameController,
-                  handleController: _handleController,
-                  emailController: _emailController,
-                  nameFocus: _nameFocus,
-                  handleFocus: _handleFocus,
-                  emailFocus: _emailFocus,
-                  errorMessage: _errorMessage,
-                ),
-                const SizedBox(height: 16),
+                // ===== 본문 스크롤 영역 =====
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // 입력 섹션(이름/아이디/이메일 로컬파트)
+                        TabletInputSection(
+                          nameController: _nameController,
+                          handleController: _handleController,
+                          emailController: _emailController,
+                          nameFocus: _nameFocus,
+                          handleFocus: _handleFocus,
+                          emailFocus: _emailFocus,
+                          errorMessage: _errorMessage,
+                        ),
+                        const SizedBox(height: 16),
 
-                // 권한 드롭다운
-                TabletRoleDropdownSection(
-                  selectedRole: _selectedRole,
-                  onChanged: (value) => setState(() => _selectedRole = value),
-                ),
-                const SizedBox(height: 16),
+                        // 권한 드롭다운
+                        TabletRoleDropdownSection(
+                          selectedRole: _selectedRole,
+                          onChanged: (value) => setState(() => _selectedRole = value),
+                        ),
+                        const SizedBox(height: 16),
 
-                // 비밀번호 표시
-                TabletPasswordDisplay(controller: _passwordController),
+                        // 비밀번호 표시
+                        TabletPasswordDisplay(controller: _passwordController),
 
-                const SizedBox(height: 16),
+                        const SizedBox(height: 16),
 
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    '현재 지역: ${widget.areaValue}',
-                    style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                ),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            '현재 지역: ${widget.areaValue}',
+                            style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                        ),
 
-                if (_errorMessage != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: Text(
-                      _errorMessage!,
-                      style: TextStyle(color: theme.colorScheme.error),
+                        if (_errorMessage != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: Text(
+                              _errorMessage!,
+                              style: TextStyle(color: theme.colorScheme.error),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
+                ),
+
                 const SizedBox(height: 24),
 
-                // 하단 버튼
+                // ===== 하단 버튼 =====
                 Row(
                   children: [
                     Expanded(
@@ -230,7 +247,6 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
                             widget.division,
                           );
 
-                          // onSave가 async여도 즉시 닫음
                           Navigator.pop(context);
                         },
                         style: ElevatedButton.styleFrom(

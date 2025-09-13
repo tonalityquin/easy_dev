@@ -13,7 +13,7 @@ import '../../../widgets/tts_filter_sheet.dart';
 import '../states/tablet_pad_mode_state.dart';
 
 // ⬇️ 추가: TTS 사용자 필터 & 필터 시트
-import '../../../utils/tts_user_filters.dart';
+import '../../../utils/tts/tts_user_filters.dart';
 
 class TabletTopNavigation extends StatelessWidget {
   final bool isAreaSelectable;

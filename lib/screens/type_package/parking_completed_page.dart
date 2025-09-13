@@ -34,7 +34,7 @@ import '../../states/user/user_state.dart';
 
 import '../../utils/snackbar_helper.dart';
 // 🔧 리미트 설정 단일 소스
-import '../../utils/plate_limit_config.dart';
+import '../../utils/plate_limit/plate_limit_config.dart';
 
 
 import 'parking_completed_package/widgets/signature_plate_search_bottom_sheet/parking_completed_search_bottom_sheet.dart';

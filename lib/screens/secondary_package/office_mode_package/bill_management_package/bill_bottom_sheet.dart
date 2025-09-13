@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // ← 추가!
+import 'package:flutter/services.dart'; // 숫자만 입력
 import 'package:provider/provider.dart';
 
 import '../../../../states/area/area_state.dart';
@@ -100,7 +100,7 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
     if (_selectedMode == '변동') {
       billData = {
         'type': '변동',
-        // 🔧 여기! 'CountType' (대문자 C)로 맞춤
+        // ✅ 대문자 키 유지
         'CountType': _billController.text.trim(),
         'basicStandard': int.tryParse(_basicStandardValue!.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0,
         'basicAmount': int.tryParse(_basicAmountController.text) ?? 0,
@@ -112,7 +112,7 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
     } else {
       billData = {
         'type': '고정',
-        // 🔧 여기도 동일
+        // ✅ 대문자 키 유지
         'CountType': _regularNameController.text.trim(),
         'regularType': _regularType,
         'regularAmount': int.tryParse(_regularPriceController.text) ?? 0,
@@ -129,144 +129,157 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final viewInsets = MediaQuery.of(context).viewInsets;
+    // ✅ 최상단까지 차오르도록 높이 고정 + 키보드 여백 반영
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final effectiveHeight = screenHeight - bottomInset;
 
-    return DraggableScrollableSheet(
-      initialChildSize: 0.65,
-      minChildSize: 0.4,
-      maxChildSize: 0.95,
-      expand: false,
-      builder: (context, scrollController) {
-        return SafeArea(
-          child: Padding(
-            padding: EdgeInsets.only(bottom: viewInsets.bottom),
-            child: Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-              ),
-              child: ListView(
-                controller: scrollController,
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        borderRadius: BorderRadius.circular(2),
-                      ),
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(bottom: bottomInset), // 키보드 여백
+        child: SizedBox(
+          height: effectiveHeight, // 화면 높이(키보드 제외)만큼 고정
+          child: Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            child: Column(
+              children: [
+                // ===== 상단 헤더 영역 =====
+                const SizedBox(height: 16),
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                  const Text(
-                    '정산 유형 추가',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  ToggleButtons(
-                    isSelected: [_selectedMode == '변동', _selectedMode == '고정'],
-                    onPressed: (index) {
-                      setState(() {
-                        _selectedMode = index == 0 ? '변동' : '고정';
-                      });
-                    },
-                    borderRadius: BorderRadius.circular(8),
-                    children: const [
-                      Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16),
-                        child: Text('변동'),
-                      ),
-                      Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16),
-                        child: Text('고정'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  if (_selectedMode == '변동') ...[
-                    BillTypeInputSection(controller: _billController),
-                    const SizedBox(height: 16),
-                    BillStandardAndAmountRowSection(
-                      selectedValue: _basicStandardValue,
-                      options: _basicStandardOptions,
-                      onChanged: (val) => setState(() => _basicStandardValue = val),
-                      amountController: _basicAmountController,
-                      standardLabel: '기본 시간',
-                      amountLabel: '기본 요금',
-                      // ↓ const 를 빼고, digitsOnly 전달
-                      amountInputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                ),
+                const Text(
+                  '정산 유형 추가',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                ToggleButtons(
+                  isSelected: [_selectedMode == '변동', _selectedMode == '고정'],
+                  onPressed: (index) {
+                    setState(() {
+                      _selectedMode = index == 0 ? '변동' : '고정';
+                    });
+                  },
+                  borderRadius: BorderRadius.circular(8),
+                  children: const [
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: Text('변동'),
                     ),
-                    const SizedBox(height: 16),
-                    BillStandardAndAmountRowSection(
-                      selectedValue: _addStandardValue,
-                      options: _addStandardOptions,
-                      onChanged: (val) => setState(() => _addStandardValue = val),
-                      amountController: _addAmountController,
-                      standardLabel: '추가 시간',
-                      amountLabel: '추가 요금',
-                      amountInputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      child: Text('고정'),
                     ),
                   ],
-                  if (_selectedMode == '고정') ...[
-                    TextField(
-                      controller: _regularNameController,
-                      decoration: const InputDecoration(
-                        labelText: '고정 유형',
-                        hintText: '예: 일일 주차',
-                        border: OutlineInputBorder(),
-                      ),
+                ),
+                const SizedBox(height: 16),
+
+                // ===== 본문 스크롤 영역 =====
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                    child: Column(
+                      children: [
+                        if (_selectedMode == '변동') ...[
+                          BillTypeInputSection(controller: _billController),
+                          const SizedBox(height: 16),
+                          BillStandardAndAmountRowSection(
+                            selectedValue: _basicStandardValue,
+                            options: _basicStandardOptions,
+                            onChanged: (val) => setState(() => _basicStandardValue = val),
+                            amountController: _basicAmountController,
+                            standardLabel: '기본 시간',
+                            amountLabel: '기본 요금',
+                            amountInputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          ),
+                          const SizedBox(height: 16),
+                          BillStandardAndAmountRowSection(
+                            selectedValue: _addStandardValue,
+                            options: _addStandardOptions,
+                            onChanged: (val) => setState(() => _addStandardValue = val),
+                            amountController: _addAmountController,
+                            standardLabel: '추가 시간',
+                            amountLabel: '추가 요금',
+                            amountInputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          ),
+                        ],
+                        if (_selectedMode == '고정') ...[
+                          TextField(
+                            controller: _regularNameController,
+                            decoration: const InputDecoration(
+                              labelText: '고정 유형',
+                              hintText: '예: 일일 주차',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          DropdownButtonFormField<String>(
+                            value: _regularType,
+                            decoration: const InputDecoration(
+                              labelText: '일&월 주차 선택',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: _regularTypeOptions
+                                .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                                .toList(),
+                            onChanged: (val) => setState(() => _regularType = val),
+                          ),
+                          const SizedBox(height: 16),
+                          TextField(
+                            controller: _regularDurationController,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                            decoration: const InputDecoration(
+                              labelText: '주차 가능 시간',
+                              hintText: '예: 720',
+                              suffixText: '시간',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          TextField(
+                            controller: _regularPriceController,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                            decoration: const InputDecoration(
+                              labelText: '일일 요금',
+                              hintText: '예: 10000',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 16),
+                        BillErrorMessageTextSection(message: _errorMessage),
+                      ],
                     ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
-                      value: _regularType,
-                      decoration: const InputDecoration(
-                        labelText: '일&월 주차 선택',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: _regularTypeOptions.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                      onChanged: (val) => setState(() => _regularType = val),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: _regularDurationController,
-                      keyboardType: TextInputType.number,
-                      // ↓ const 제거
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      decoration: const InputDecoration(
-                        labelText: '주차 가능 시간',
-                        hintText: '예: 720',
-                        suffixText: '시간',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: _regularPriceController,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      decoration: const InputDecoration(
-                        labelText: '일일 요금',
-                        hintText: '예: 10000',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  BillErrorMessageTextSection(message: _errorMessage),
-                  const SizedBox(height: 24),
-                  BillBottomButtonsSection(
+                  ),
+                ),
+
+                // ===== 하단 버튼 고정 영역 =====
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: BillBottomButtonsSection(
                     onCancel: () => Navigator.pop(context),
                     onSave: _handleSave,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }

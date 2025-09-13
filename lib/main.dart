@@ -7,13 +7,12 @@ import 'package:permission_handler/permission_handler.dart';
 
 import 'routes.dart';
 import 'providers/providers.dart';
-// ⬇️ CommuteOutsideFloating import 제거됨
 import 'screens/dev_package/dev_memo.dart';
 import 'screens/head_package/head_memo.dart';
 import 'theme.dart';
 import 'utils/init/dev_initializer.dart';
-import 'utils/foreground_task_handler.dart';
-import 'utils/app_navigator.dart'; // ✅ 전역 NavigatorKey
+import 'utils/tts/foreground_task_handler.dart';
+import 'utils/app_navigator.dart';
 
 String _ts() => DateTime.now().toIso8601String();
 
