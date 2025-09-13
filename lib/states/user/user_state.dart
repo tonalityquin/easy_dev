@@ -9,6 +9,9 @@ import '../../utils/plate_tts_listener_service.dart';
 import '../../utils/chat_tts_listener_service.dart';
 import '../area/area_state.dart';
 
+// ⬇️ 추가: 오너십 스위치(앱/포그라운드 중 Plate TTS 실행 주체)
+import '../../utils/tts_ownership.dart';
+
 class UserState extends ChangeNotifier {
   final UserRepository _repository;
   final AreaState _areaState;
@@ -144,9 +147,9 @@ class UserState extends ChangeNotifier {
     // UserModel → TabletModel 매핑 (A안: docId = handle(=phone)-한글지역명)
     final handle = updatedUserAsTablet.phone.trim().toLowerCase();
     final areaName = (updatedUserAsTablet.selectedArea ??
-            updatedUserAsTablet.currentArea ??
-            updatedUserAsTablet.areas.firstOrNull ??
-            '')
+        updatedUserAsTablet.currentArea ??
+        updatedUserAsTablet.areas.firstOrNull ??
+        '')
         .trim();
 
     final tablet = TabletModel(
@@ -352,8 +355,11 @@ class UserState extends ChangeNotifier {
       // ✅ Provider의 AreaState 먼저 세팅 (검색/우측 패널이 빈 area로 시작하지 않도록)
       await _areaState.initializeArea(trimmedArea);
 
-      // ✅ TTS는 area 세팅 이후 시작
-      PlateTtsListenerService.start(trimmedArea);
+      // ✅ 오너십이 app일 때만 앱 내 Plate TTS 시작
+      if (await TtsOwnership.isAppOwner()) {
+        PlateTtsListenerService.start(trimmedArea);
+      }
+      // ✅ 채팅 TTS는 앱 내에서만 동작
       ChatTtsListenerService.start(trimmedArea);
     } catch (e) {
       debugPrint("loadUserToLogIn, 오류: $e");
@@ -413,8 +419,11 @@ class UserState extends ChangeNotifier {
       // ✅ Provider의 AreaState 먼저 세팅
       await _areaState.initializeArea(selectedArea);
 
-      // ✅ area 세팅 이후에 TTS 시작(빈 area로 시작하는 문제 방지)
-      PlateTtsListenerService.start(selectedArea);
+      // ✅ 오너십이 app일 때만 앱 내 Plate TTS 시작
+      if (await TtsOwnership.isAppOwner()) {
+        PlateTtsListenerService.start(selectedArea);
+      }
+      // ✅ 채팅 TTS는 앱 내에서만 동작
       ChatTtsListenerService.start(selectedArea);
     } catch (e) {
       debugPrint("loadTabletToLogIn, 오류: $e");
@@ -450,7 +459,11 @@ class UserState extends ChangeNotifier {
     // ✅ Provider AreaState도 동기화 (루트/우측 패널 등 즉시 반영)
     await _areaState.updateArea(newArea, isSyncing: true);
 
-    PlateTtsListenerService.start(newArea);
+    // ✅ 오너십이 app일 때만 앱 내 Plate TTS 시작(재시작)
+    if (await TtsOwnership.isAppOwner()) {
+      PlateTtsListenerService.start(newArea);
+    }
+    // ✅ 채팅 TTS는 앱 내에서만 동작
     ChatTtsListenerService.start(newArea);
   }
 

@@ -1,54 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     package="com.example.easydev">
 
-
-    <!-- ✅ TTS 음성 재생을 위한 네트워크 권한 -->
+    <!-- 네트워크 통신(HTTP/HTTPS) 사용 -->
     <uses-permission android:name="android.permission.INTERNET" />
 
-
-    <!-- ✅ 포그라운드 서비스 -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
-
-
-    <!-- ✅ 백그라운드 위치 사용 -->
-    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
-
-
-    <!-- ✅ 위치 권한 -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-
-
-    <!-- ✅ 화면 꺼짐 방지 -->
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
-
-
-    <!-- ✅ 네트워크 상태 확인 -->
+    <!-- 네트워크 연결 상태 확인(온라인 여부 체크 등) -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- 포그라운드 서비스 기본 권한(API 28+) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
-    <!-- ✅ 부팅 후 앱 실행 -->
+    <!-- (API 34+) 포그라운드 서비스: 데이터 동기화 유형 사용(실시간 Firestore/백그라운드 동작 유지) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
+    <!-- (API 34+) 포그라운드 서비스: 미디어 재생 유형 사용(TTS 오디오 출력) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+
+    <!-- 배터리 최적화 제외 요청(백그라운드 동작 안정화; 사용자 승인 필요) -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- 기기 깨우기 유지(서비스 동작 중 화면/CPU 슬립 방지에 사용 가능) -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- 부팅 완료 브로드캐스트 수신(재부팅 후 서비스 자동 재시작 옵션 대응) -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
-
-    <!-- ✅ 외부 저장소 접근 (Android 10 이하) -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission
-        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="28" />
-
-
-    <!-- ✅ Android 11+ 파일 접근 권한 (사용 시 필요) -->
-    <uses-permission
-        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
-        tools:ignore="ScopedStorage" />
-
-
-    <!-- ✅ Android 13 알림 권한 (선택 사항) -->
+    <!-- (Android 13+) 알림 표시 권한(포그라운드 서비스 알림/일반 알림 표시) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- ✅ 위치 권한 (앱 사용 중) : 코드에서 Permission.locationWhenInUse 요청 시 반드시 필요 -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+    <!--
+      ⚠️ 아래 권한/설정은 '정말 필요할 때만' 추가하세요.
+      - ACCESS_BACKGROUND_LOCATION (백그라운드 위치가 필요한 경우)
+      - FOREGROUND_SERVICE_LOCATION + service의 foregroundServiceType에 location 추가
+      - READ/WRITE_EXTERNAL_STORAGE, MANAGE_EXTERNAL_STORAGE (스토리지 접근이 필요한 경우)
+    -->
 
     <application
         android:name="${applicationName}"
@@ -57,7 +48,6 @@
         android:label="Easy Valet(Beta)"
         android:theme="@style/LaunchTheme">
 
-
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
@@ -65,16 +55,13 @@
             android:exported="true"
             android:hardwareAccelerated="true"
             android:launchMode="singleTop"
-            android:requestLegacyExternalStorage="true"
             android:taskAffinity=""
             android:theme="@style/LaunchTheme"
             android:windowSoftInputMode="adjustResize">
 
-
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme" />
-
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -82,13 +69,16 @@
             </intent-filter>
         </activity>
 
-
-        <!-- 포그라운드 서비스 -->
+        <!-- 플러그인 포그라운드 서비스 선언: 데이터 동기화 + TTS 오디오 재생 용도 -->
         <service
             android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
             android:exported="false"
-            android:foregroundServiceType="location" />
-
+            android:foregroundServiceType="dataSync|mediaPlayback" />
+        <!--
+          위치를 서비스에서 실제로 사용할 때만:
+          android:foregroundServiceType="dataSync|mediaPlayback|location"
+          그리고 매니페스트 상단에 FOREGROUND_SERVICE_LOCATION 권한도 추가
+        -->
 
         <!-- Flutter 엔진 등록 -->
         <meta-data
@@ -96,16 +86,13 @@
             android:value="2" />
     </application>
 
-
-    <!-- ProcessText Plugin (다른 앱 텍스트 접근용) + 외부 앱 실행/조회 허용 -->
+    <!-- 외부 앱/인텐트 조회 허용 (필요한 대상만 제한적으로 명시) -->
     <queries>
-        <!-- ✅ 마이발렛 Biz 패키지 조회 허용 (앱 실행용) -->
+        <!-- 특정 외부 앱 실행 허용(예: 마이발렛 Biz) -->
         <package android:name="com.myvalet.b2b.android" />
 
-
-        <!-- Gmail 패키지 조회 허용 -->
+        <!-- Gmail 패키지 조회 허용(공유/메일 전송 등) -->
         <package android:name="com.google.android.gm" />
-
 
         <!-- 메일앱으로 보내기(mailto:) 인텐트 조회 허용 -->
         <intent>
@@ -113,23 +100,17 @@
             <data android:scheme="mailto" />
         </intent>
 
-
-        <!-- 외부 브라우저로 보기(https) 인텐트 조회 허용 -->
+        <!-- 외부 브라우저(https) 인텐트 조회 허용 -->
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="https" />
         </intent>
 
-
-        <!-- (기존) 다른 앱 텍스트 접근 -->
+        <!-- 다른 앱의 텍스트 처리(PROCESS_TEXT) 인텐트 조회 허용 -->
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT" />
             <data android:mimeType="text/plain" />
         </intent>
     </queries>
 
-
 </manifest>
-
-
-

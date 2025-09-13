@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_tts/flutter_tts.dart';
+
+import 'tts_manager.dart';
 
 class ChatTtsListenerService {
   static StreamSubscription? _subscription;
@@ -63,9 +64,8 @@ class ChatTtsListenerService {
 
       _lastSpokenTimestamp = timestamp;
 
-      final String toSpeak = (name == null || name.trim().isEmpty)
-          ? text
-          : "$name 님의 메시지: $text";
+      final String toSpeak =
+      (name == null || name.trim().isEmpty) ? text : "$name 님의 메시지: $text";
 
       debugPrint('[ChatTTS] 새 메시지 ▶ $toSpeak');
       TtsHelper.speak(toSpeak);
@@ -74,33 +74,15 @@ class ChatTtsListenerService {
 }
 
 class TtsHelper {
-  static final FlutterTts _flutterTts = FlutterTts();
-  static bool _isInitialized = false;
-  static bool _isInitializing = false;
-
   static Future<void> speak(String text) async {
-    if (!_isInitialized && !_isInitializing) {
-      _isInitializing = true;
-      await _ensureGoogleTtsEngine();
-      _isInitialized = true;
-      _isInitializing = false;
-    }
-
-    await _flutterTts.setLanguage("ko-KR");
-    await _flutterTts.setSpeechRate(0.4);
-    await _flutterTts.setVolume(1.0);
-    await _flutterTts.setPitch(1.0);
-
-    await _flutterTts.stop();
-    await _flutterTts.speak(text);
-  }
-
-  static Future<void> _ensureGoogleTtsEngine() async {
-    final engines = await _flutterTts.getEngines ?? [];
-    if (engines.contains('com.google.android.tts')) {
-      await _flutterTts.setEngine('com.google.android.tts');
-    } else {
-      debugPrint('[TTS] Google TTS 엔진 없음');
-    }
+    await TtsManager.speak(
+      text,
+      language: 'ko-KR',
+      rate: 0.4,
+      volume: 1.0,
+      pitch: 1.0,
+      preferGoogleOnAndroid: true,
+      openPlayStoreIfMissing: false, // 채팅은 스토어 유도 없음(로그만)
+    );
   }
 }

@@ -1,154 +1,227 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_tts/flutter_tts.dart';
+// lib/utils/plate_tts_listener_service.dart
 import 'dart:async';
-import 'package:url_launcher/url_launcher.dart' as launcher;
-
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
+import 'package:firebase_core/firebase_core.dart'; // ✅ 안전장치
 import '../../enums/plate_type.dart';
+import '../screens/dev_package/debug_package/tts_local_log.dart';
+import 'tts_manager.dart';
+import 'tts_ownership.dart';
+
+
+String _ts() => DateTime.now().toIso8601String();
 
 class PlateTtsListenerService {
-  static StreamSubscription? _subscription;
+  static StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _subscription;
 
   static final Map<String, String?> _lastTypes = {};
+  static DateTime _startTime = DateTime.now().toUtc();
+  static int _listenSeq = 0;
+  static String? _currentArea;
 
-  static DateTime _startTime = DateTime.now();
-
-  static void start(String currentArea) {
-    Future.microtask(() => _startListening(currentArea));
+  static void start(String currentArea, {bool force = false}) {
+    Future.microtask(() => _startListening(currentArea, force: force));
   }
 
-  static void _startListening(String currentArea) {
-    _subscription?.cancel();
+  static Future<void> _ensureFirebaseInThisIsolate() async {
+    try {
+      if (Firebase.apps.isEmpty) {
+        await Firebase.initializeApp();
+        debugPrint('[PLATE_TTS][${_ts()}] Firebase.initializeApp() done (isolate)');
+      }
+    } catch (e, st) {
+      debugPrint('[PLATE_TTS][${_ts()}] Firebase init error: $e\n$st');
+      // ❗ 중요: 앱/FG 이솔레이트 외에서 Firebase 초기화 실패
+      await TtsLocalLog.error(
+        'TTS.firebaseInit',
+        'Firebase initialize failed in listener isolate',
+        data: {'error': '$e', 'stack': '$st'},
+      );
+    }
+  }
+
+  static void _log(String msg) => debugPrint('[PLATE_TTS][$_listenSeq][${_ts()}] $msg');
+
+  static Future<void> _startListening(String currentArea, {bool force = false}) async {
+    // 앱 이솔레이트에서는 owner=app일 때만, FG 이솔레이트는 force=true로 강제 시작
+    if (!force) {
+      final isApp = await TtsOwnership.isAppOwner();
+      if (!isApp) {
+        _log('skip start in app (owner=foreground)');
+        return;
+      }
+    }
+
+    await _ensureFirebaseInThisIsolate();
+
+    _listenSeq += 1;
+
+    await _subscription?.cancel();
+    _subscription = null;
     _lastTypes.clear();
-    _startTime = DateTime.now();
+    _startTime = DateTime.now().toUtc(); // 기준 시각
+    _currentArea = currentArea;
 
-    debugPrint('[TTS] 감지 시작: $currentArea @ $_startTime');
+    _log('▶ START listen area="$_currentArea" since=$_startTime');
 
-    final typesToMonitor = [
+    final typesToMonitor = <String>[
       PlateType.parkingRequests.firestoreValue,
       PlateType.departureRequests.firestoreValue,
     ];
+    _log('monitor types=$typesToMonitor');
 
-    _subscription = FirebaseFirestore.instance
-        .collection('plates')
-        .where('area', isEqualTo: currentArea)
-        .where('type', whereIn: typesToMonitor)
-        .snapshots()
-        .listen((snapshot) {
-      for (var change in snapshot.docChanges) {
-        final doc = change.doc;
-        final data = doc.data();
-        if (data == null) continue;
+    try {
+      final query = FirebaseFirestore.instance
+          .collection('plates')
+          .where('area', isEqualTo: currentArea)
+          .where('type', whereIn: typesToMonitor);
 
-        final docId = doc.id;
-        final newType = data['type'];
-        final location = data['location'];
-        final plateNumber = data['plate_number'] ?? '';
-        final Timestamp? requestTime = data['request_time'];
-        final prevType = _lastTypes[docId];
+      _subscription = query.snapshots().listen((snapshot) {
+        final dc = snapshot.docChanges.length;
+        final total = snapshot.docs.length;
+        _log('snapshot: total=$total changes=$dc');
 
-        _lastTypes[docId] = newType;
+        for (final change in snapshot.docChanges) {
+          try {
+            final doc = change.doc;
+            final data = doc.data();
+            if (data == null) {
+              _log('(doc null) id=${doc.id} → skip');
+              // ❗ 중요: null 문서 데이터
+              TtsLocalLog.error(
+                'TTS.listener',
+                'doc data is null',
+                data: {'id': doc.id, 'area': _currentArea},
+              );
+              continue;
+            }
 
-        final tailPlate = plateNumber.length >= 4 ? plateNumber.substring(plateNumber.length - 4) : plateNumber;
-        final spokenTail = _convertToKoreanDigits(tailPlate);
+            final docId = doc.id;
+            final newType = data['type'];
+            final location = (data['location'] ?? '') as String;
+            final plateNumber = (data['plate_number'] ?? '') as String;
+            final Timestamp? requestTime = data['request_time'];
+            final prevType = _lastTypes[docId];
 
-        debugPrint('[TTS] DEBUG ▶ changeType: ${change.type}, newType: $newType, prevType: $prevType');
+            _lastTypes[docId] = newType;
 
-        if (change.type == DocumentChangeType.added) {
-          final isDeparture = newType == PlateType.departureRequests.firestoreValue;
+            final tailPlate = plateNumber.length >= 4
+                ? plateNumber.substring(plateNumber.length - 4)
+                : plateNumber;
+            final spokenTail = _convertToKoreanDigits(tailPlate);
 
-          if (requestTime == null) {
-            debugPrint('[TTS] 무시됨 (추가 - 시간 없음) ▶ $docId');
-            continue;
-          }
+            _log('change: id=$docId type=${change.type} newType=$newType prevType=$prevType '
+                'reqTime=${requestTime?.toDate()}');
 
-          final isNew = requestTime.toDate().isAfter(_startTime);
-          if (!isNew) {
-            debugPrint('[TTS] 무시됨 (과거 추가) ▶ $docId (요청 시각: ${requestTime.toDate()})');
-            continue;
-          }
+            if (change.type != DocumentChangeType.added) {
+              _log('ignore changeType=${change.type} id=$docId');
+              continue;
+            }
 
-          if (newType == PlateType.parkingRequests.firestoreValue) {
-            debugPrint('[TTS] (추가) 입차 ▶ $docId');
-            TtsHelper.speak("입차 요청");
+            // ✅ 신규 판정: request_time이 없으면 “신규”로 간주(안전),
+            // 있으면 리스닝 시작시각 -3초 버퍼 이후만 신규 처리
+            bool isNew = true;
+            if (requestTime != null) {
+              final reqUtc = requestTime.toDate().toUtc();
+              isNew = reqUtc.isAfter(_startTime.subtract(const Duration(seconds: 3)));
+            }
+            if (!isNew) {
+              _log('skip: old doc id=$docId (req=${requestTime?.toDate()}, since=$_startTime)');
+              continue;
+            }
 
-          } else if (isDeparture) {
-            debugPrint('[TTS] (추가) 출차 요청 ▶ $docId, 번호판: $tailPlate, 위치: $location');
-            TtsHelper.speak("출차 요청 $spokenTail, $location");
+            final isDeparture = newType == PlateType.departureRequests.firestoreValue;
+            if (newType == PlateType.parkingRequests.firestoreValue) {
+              final utter = '입차 요청';
+              _log('SPEAK: $utter (id=$docId, area=$_currentArea)');
+              _safeSpeak(utter, docId: docId, area: _currentArea, type: '$newType');
+            } else if (isDeparture) {
+              final utter = '출차 요청 $spokenTail, $location';
+              _log('SPEAK: $utter (id=$docId, area=$_currentArea)');
+              _safeSpeak(utter, docId: docId, area: _currentArea, type: '$newType');
+            } else {
+              _log('skip: added but unhandled type=$newType id=$docId');
+              // ❗ 중요: 알 수 없는 타입
+              TtsLocalLog.error(
+                'TTS.listener',
+                'unhandled type',
+                data: {'id': docId, 'area': _currentArea, 'type': '$newType'},
+              );
+            }
+          } catch (e, st) {
+            _log('ERROR in change loop: $e\n$st');
+            // ❗ 중요: 개별 change 처리 중 예외
+            TtsLocalLog.error(
+              'TTS.listener',
+              'error in change loop',
+              data: {'area': _currentArea, 'error': '$e', 'stack': '$st'},
+            );
           }
         }
-      }
-    });
+      }, onError: (e, st) {
+        _log('STREAM ERROR: $e\n$st');
+        // ❗ 중요: 스냅샷 스트림 에러
+        TtsLocalLog.error(
+          'TTS.listener',
+          'stream error',
+          data: {'area': _currentArea, 'error': '$e', 'stack': '$st'},
+        );
+      }, onDone: () {
+        _log('STREAM DONE for area=$_currentArea');
+      });
+    } catch (e, st) {
+      _log('START ERROR: $e\n$st');
+      // ❗ 중요: 리스너 초기화 실패
+      TtsLocalLog.error(
+        'TTS.listener',
+        'attach snapshots failed',
+        data: {'area': _currentArea, 'error': '$e', 'stack': '$st'},
+      );
+    }
+  }
+
+  static Future<void> _safeSpeak(
+      String text, {
+        String? docId,
+        String? area,
+        String? type,
+      }) async {
+    try {
+      await TtsManager.speak(
+        text,
+        language: 'ko-KR',
+        rate: 0.5,
+        volume: 1.0,
+        pitch: 1.0,
+        preferGoogleOnAndroid: true,
+        openPlayStoreIfMissing: true,
+      );
+    } catch (e, st) {
+      _log('TTS ERROR: $e\n$st');
+      // ❗ 중요: 발화 실패
+      TtsLocalLog.error(
+        'TTS.speak',
+        'speak failed',
+        data: {'id': docId ?? '', 'area': area ?? '', 'type': type ?? '', 'error': '$e', 'stack': '$st'},
+      );
+    }
   }
 
   static void stop() {
+    if (_subscription != null) {
+      _log('▶ STOP listen (area=$_currentArea)');
+    }
     _subscription?.cancel();
     _subscription = null;
     _lastTypes.clear();
+    _currentArea = null;
   }
 
   static String _convertToKoreanDigits(String digits) {
     const koreanDigits = {
-      '0': '공',
-      '1': '하나',
-      '2': '둘',
-      '3': '삼',
-      '4': '사',
-      '5': '오',
-      '6': '육',
-      '7': '칠',
-      '8': '팔',
-      '9': '구',
+      '0': '공', '1': '하나', '2': '둘', '3': '삼', '4': '사',
+      '5': '오', '6': '육', '7': '칠', '8': '팔', '9': '구',
     };
     return digits.split('').map((d) => koreanDigits[d] ?? d).join(', ');
-  }
-}
-
-class TtsHelper {
-  static final FlutterTts _flutterTts = FlutterTts();
-  static bool _isInitialized = false;
-  static bool _isInitializing = false;
-
-  static Future<void> speak(String text) async {
-    if (!_isInitialized && !_isInitializing) {
-      _isInitializing = true;
-      await _ensureGoogleTtsEngine();
-      _isInitialized = true;
-      _isInitializing = false;
-    }
-
-    await _flutterTts.setLanguage("ko-KR");
-    await _flutterTts.setSpeechRate(0.5);
-    await _flutterTts.setVolume(1.0);
-    await _flutterTts.setPitch(1.0);
-
-    await _flutterTts.stop();
-    await _flutterTts.speak(text);
-  }
-
-  static Future<void> _ensureGoogleTtsEngine() async {
-    final engines = await _flutterTts.getEngines ?? [];
-    debugPrint('[TTS] available engines: $engines');
-
-    if (engines.contains('com.google.android.tts')) {
-      await _flutterTts.setEngine('com.google.android.tts');
-      debugPrint('[TTS] Google TTS 엔진 선택됨');
-    } else {
-      debugPrint('[TTS] Google TTS 엔진 없음, PlayStore 유도');
-      await _openGoogleTtsOnPlayStore();
-    }
-  }
-
-  static Future<void> _openGoogleTtsOnPlayStore() async {
-    final url = Uri.parse("https://play.google.com/store/apps/details?id=com.google.android.tts");
-
-    final launched = await launcher.launchUrl(
-      url,
-      mode: launcher.LaunchMode.externalApplication,
-    );
-
-    if (!launched) {
-      debugPrint('[TTS] PlayStore 열기 실패');
-    }
   }
 }

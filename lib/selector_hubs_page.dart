@@ -12,7 +12,7 @@ class SelectorHubsPage extends StatefulWidget {
 }
 
 class _SelectorHubsPageState extends State<SelectorHubsPage> {
-  String? _savedMode; // 'service' | 'outside' | 'tablet' | null(미저장)
+  String? _savedMode; // 'service' | 'tablet' | null(미저장)
 
   @override
   void initState() {
@@ -31,25 +31,23 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
   Widget build(BuildContext context) {
     // 저장된 모드가 있으면 해당 카드만 선택 가능
     final serviceEnabled = _savedMode == null || _savedMode == 'service';
-    final outsideEnabled = _savedMode == null || _savedMode == 'outside';
     final tabletEnabled = _savedMode == null || _savedMode == 'tablet';
 
     final List<List<Widget>> pages = [
       [
         _ServiceCard(enabled: serviceEnabled),
-        _ClockCard(enabled: outsideEnabled),
+        _TabletCard(enabled: tabletEnabled),
       ],
       [
-        _TabletCard(enabled: tabletEnabled),
+        const _HeadquarterCard(),
         const _ParkingCard(),
       ],
       [
         const _FaqCard(),
-        const _HeadquarterCard(),
+        const _CommunityCard(),
       ],
       [
-        const _DevCard(), // ✅ 개발 카드 추가
-        const _CommunityCard(),
+        const _DevCard(),
       ],
     ];
 
@@ -514,58 +512,6 @@ class _ServiceCard extends StatelessWidget {
         onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.serviceLogin),
         enabled: enabled,
         disabledHint: '저장된 모드가 service일 때만 선택할 수 있어요',
-      ),
-    );
-  }
-}
-
-/// 출퇴근 로그인 카드 — Navy + Amber 팔레트
-///
-/// Palette:
-/// - navy(base): #122232 (card background)
-/// - amber700(accent): #FFB300 (badge/button/text accent)
-/// - onBadge: #1A1A1A (icon on amber)
-class _ClockCard extends StatelessWidget {
-  final bool enabled;
-
-  const _ClockCard({this.enabled = true});
-
-  static const Color _navy = Color(0xFF122232);
-  static const Color _amber700 = Color(0xFFFFB300);
-  static const Color _onAmber = Color(0xFF1A1A1A);
-
-  @override
-  Widget build(BuildContext context) {
-    final base = Theme.of(context).textTheme.titleMedium?.copyWith(
-      fontWeight: FontWeight.w700,
-      color: Colors.white,
-    );
-
-    return Card(
-      color: _navy,
-      elevation: 1,
-      clipBehavior: Clip.antiAlias,
-      surfaceTintColor: Colors.transparent,
-      child: _cardBody(
-        context: context,
-        icon: Icons.access_time_filled_rounded,
-        bg: _amber700,
-        iconColor: _onAmber,
-        titleWidget: RichText(
-          textAlign: TextAlign.center,
-          text: TextSpan(
-            style: base,
-            children: const [
-              TextSpan(text: '출퇴근 ', style: TextStyle(color: Colors.white)),
-              TextSpan(text: '로그인', style: TextStyle(color: _amber700)),
-            ],
-          ),
-        ),
-        buttonBg: _amber700,
-        buttonFg: _onAmber,
-        onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.outsideLogin),
-        enabled: enabled,
-        disabledHint: '저장된 모드가 outside일 때만 선택할 수 있어요',
       ),
     );
   }

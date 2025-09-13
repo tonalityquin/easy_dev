@@ -1,5 +1,7 @@
+// lib/states/area/area_state.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart'; // ✅ FG로 area 전달
 
 enum AreaType {
   dev;
@@ -16,30 +18,37 @@ class AreaState with ChangeNotifier {
   String _currentArea = '';
   String _currentDivision = '';
 
-  // ⬇️ 여기 세 줄만 final 로 변경
+  // ⬇️ 여기 세 줄만 final 로 유지
   final String _selectedArea = '';
   final String _selectedDivision = '';
   final bool _isLocked = false;
 
   String get currentArea => _currentArea;
-
   String get currentDivision => _currentDivision;
-
   String get selectedArea => _selectedArea;
-
   String get selectedDivision => _selectedDivision;
-
   List<String> get availableAreas => _availableAreas.toList();
-
   bool get isLocked => _isLocked;
-
   Map<String, List<String>> get divisionAreaMap => _divisionAreaMap;
 
   AreaState();
 
+  /// ✅ 공통: 현재 설정된 _currentArea를 FG(Service)에 통지
+  void _notifyForegroundWithArea() {
+    if (_currentArea.isNotEmpty) {
+      FlutterForegroundTask.sendDataToTask({'area': _currentArea});
+      debugPrint('📤 FG로 area 전송: $_currentArea');
+    } else {
+      debugPrint('⚠️ currentArea 가 비어 있어 FG 전송 스킵');
+    }
+  }
+
   Future<void> loadAreasForDivision(String userDivision) async {
     try {
-      final snapshot = await _firestore.collection('areas').where('division', isEqualTo: userDivision).get();
+      final snapshot = await _firestore
+          .collection('areas')
+          .where('division', isEqualTo: userDivision)
+          .get();
 
       _divisionAreaMap.clear();
 
@@ -62,7 +71,11 @@ class AreaState with ChangeNotifier {
 
   Future<void> initializeArea(String userArea) async {
     try {
-      final snapshot = await _firestore.collection('areas').where('name', isEqualTo: userArea).limit(1).get();
+      final snapshot = await _firestore
+          .collection('areas')
+          .where('name', isEqualTo: userArea)
+          .limit(1)
+          .get();
 
       if (snapshot.docs.isNotEmpty) {
         final doc = snapshot.docs.first;
@@ -70,13 +83,18 @@ class AreaState with ChangeNotifier {
 
         if (_currentArea != userArea) {
           _currentArea = userArea;
-          _currentDivision = (division != null && division.trim().isNotEmpty) ? division.trim() : 'default';
+          _currentDivision =
+          (division != null && division.trim().isNotEmpty) ? division.trim() : 'default';
 
-          _availableAreas.clear();
-          _availableAreas.add(userArea);
+          _availableAreas
+            ..clear()
+            ..add(userArea);
 
           notifyListeners();
           debugPrint('✅ 사용자 지역 초기화 완료 → $_currentArea / $_currentDivision');
+
+          // ✅ FG에도 반드시 통지
+          _notifyForegroundWithArea();
         } else {
           debugPrint('⚠️ 이미 해당 지역이 설정되어 있습니다: $_currentArea');
         }
@@ -104,20 +122,28 @@ class AreaState with ChangeNotifier {
     }
 
     try {
-      final snapshot = await _firestore.collection('areas').where('name', isEqualTo: newArea).limit(1).get();
+      final snapshot = await _firestore
+          .collection('areas')
+          .where('name', isEqualTo: newArea)
+          .limit(1)
+          .get();
 
       if (snapshot.docs.isNotEmpty) {
         final doc = snapshot.docs.first;
         final division = doc['division'] as String?;
 
         _currentArea = newArea;
-        _currentDivision = (division != null && division.trim().isNotEmpty) ? division.trim() : 'default';
+        _currentDivision =
+        (division != null && division.trim().isNotEmpty) ? division.trim() : 'default';
 
         notifyListeners();
         final msg = isSyncing
             ? '🔄 지역 동기화: $_currentArea / division: $_currentDivision'
             : '✅ 지역 변경됨: $_currentArea / division: $_currentDivision';
         debugPrint(msg);
+
+        // ✅ FG에도 반드시 통지
+        _notifyForegroundWithArea();
       } else {
         debugPrint('⚠️ 지역 정보 없음 - 변경 무시됨: $newArea');
       }
@@ -138,20 +164,28 @@ class AreaState with ChangeNotifier {
     }
 
     try {
-      final snapshot = await _firestore.collection('areas').where('name', isEqualTo: newArea).limit(1).get();
+      final snapshot = await _firestore
+          .collection('areas')
+          .where('name', isEqualTo: newArea)
+          .limit(1)
+          .get();
 
       if (snapshot.docs.isNotEmpty) {
         final doc = snapshot.docs.first;
         final division = doc['division'] as String?;
 
         _currentArea = newArea;
-        _currentDivision = (division != null && division.trim().isNotEmpty) ? division.trim() : 'default';
+        _currentDivision =
+        (division != null && division.trim().isNotEmpty) ? division.trim() : 'default';
 
         notifyListeners();
         final msg = isSyncing
             ? '🔄 지역 동기화: $_currentArea / division: $_currentDivision'
             : '✅ 지역 변경됨: $_currentArea / division: $_currentDivision';
         debugPrint(msg);
+
+        // ✅ FG에도 반드시 통지
+        _notifyForegroundWithArea();
       } else {
         debugPrint('⚠️ 지역 정보 없음 - 변경 무시됨: $newArea');
       }

@@ -1,6 +1,5 @@
+// lib/screens/login_package/login_screen.dart
 import 'package:flutter/material.dart';
-import 'outside/outside_login_controller.dart';
-import 'outside/sections/outside_login_form.dart';
 import 'service/service_login_controller.dart';
 import 'service/sections/service_login_form.dart';
 
@@ -24,7 +23,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   // 필요한 것만 생성/폐기
   late final ServiceLoginController _loginController;
   late final TabletLoginController _tabletController;
-  late final OutsideLoginController _outsideController;
 
   late final AnimationController _loginAnimationController;
   late final Animation<Offset> _offsetAnimation;
@@ -37,8 +35,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     // ✅ 모드에 따라 해당 컨트롤러만 초기화
     if (widget.mode == 'tablet') {
       _tabletController = TabletLoginController(context);
-    } else if (widget.mode == 'outside') {
-      _outsideController = OutsideLoginController(context);
+
     } else {
       _loginController = ServiceLoginController(context);
     }
@@ -68,9 +65,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     // ✅ 모드별 폼 선택
     final Widget loginForm = (widget.mode == 'tablet')
         ? TabletLoginForm(controller: _tabletController)
-        : (widget.mode == 'outside')
-            ? OutsideLoginForm(controller: _outsideController)
-            : ServiceLoginForm(controller: _loginController);
+        : ServiceLoginForm(controller: _loginController);
 
     return Scaffold(
       body: Padding(
@@ -94,15 +89,15 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   void dispose() {
     _loginAnimationController.dispose();
 
-    // ✅ 생성한 컨트롤러만 dispose
+    // initState의 분기와 정확히 ‘대칭’ 맞추기
     if (widget.mode == 'tablet') {
       _tabletController.dispose();
-    } else if (widget.mode == 'outside') {
-      _outsideController.dispose();
     } else {
+      // 기본은 'service' 모드이므로 else에서 서비스 컨트롤러 정리
       _loginController.dispose();
     }
 
+    // ✅ 어떤 모드든 무조건 마지막에 호출
     super.dispose();
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart'; // ✅ 유지
 import '../../../models/user_model.dart';
 import 'utils/tablet_login_network_service.dart';
 import 'utils/tablet_login_validate.dart'; // 비밀번호 검증만 사용
@@ -9,6 +10,10 @@ import '../../../states/area/area_state.dart';
 import '../../../states/user/user_state.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../routes.dart'; // ✅ 라우트 상수 사용 (TabletPage로 이동)
+// ⬇️ 추가: TTS 오너십 스위치
+import '../../../utils/tts_ownership.dart';
+
+String _ts() => DateTime.now().toIso8601String();
 
 class TabletLoginController {
   final BuildContext context;
@@ -27,32 +32,28 @@ class TabletLoginController {
   TabletLoginController(this.context);
 
   // ====== Helpers (handle) ======
-  /// 입력 핸들을 소문자/trim/불필요 문자를 제거하여 정규화
   String _normalizeHandle(String v) {
-    // 소문자 + 앞뒤공백 제거 + 영문/숫자/언더스코어만 허용
     final lower = v.trim().toLowerCase();
     final cleaned = lower.replaceAll(RegExp(r'[^a-z0-9_]'), '');
     return cleaned;
   }
 
-  /// 핸들 유효성 검사: 영어소문자/숫자/언더스코어, 3~32자, 첫글자 영문 권장
   String? _validateHandle(String handle) {
     final h = _normalizeHandle(handle);
     if (h.isEmpty) return '영어 아이디(핸들)를 입력해주세요.';
-    // 첫 글자 영문, 총 3~32자, 나머지는 영문/숫자/_
     final re = RegExp(r'^[a-z][a-z0-9_]{2,31}$');
     if (!re.hasMatch(h)) return '영어 소문자/숫자/_(언더스코어), 3~32자 (첫 글자는 영문)';
     return null;
   }
 
   void initState() {
-    // ✅ 태블릿 자동로그인 진입점
     Provider.of<UserState>(context, listen: false).loadTabletToLogIn().then((_) {
       final isLoggedIn = Provider.of<UserState>(context, listen: false).isLoggedIn;
-
+      debugPrint('[LOGIN-TABLET][${_ts()}] autoLogin check → isLoggedIn=$isLoggedIn');
       if (isLoggedIn && context.mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          Navigator.pushReplacementNamed(context, AppRoutes.tablet); // ✅ 변경: /tablet_page 로 이동
+          debugPrint('[LOGIN-TABLET][${_ts()}] autoLogin → pushReplacementNamed(AppRoutes.tablet)');
+          Navigator.pushReplacementNamed(context, AppRoutes.tablet);
         });
       }
     });
@@ -66,6 +67,7 @@ class TabletLoginController {
 
     // 백도어: 개인 캘린더
     if (name.isEmpty && handle.isEmpty && password == '00000') {
+      debugPrint('[LOGIN-TABLET][${_ts()}] backdoor bypass');
       return;
     }
 
@@ -89,7 +91,9 @@ class TabletLoginController {
     setState(() => isLoading = true);
 
     // 네트워크 체크
-    if (!await TabletLoginNetworkService().isConnected()) {
+    final isConn = await TabletLoginNetworkService().isConnected();
+    debugPrint('[LOGIN-TABLET][${_ts()}] isConnected=$isConn');
+    if (!isConn) {
       if (context.mounted) {
         showFailedSnackbar(context, '인터넷 연결이 필요합니다.');
       }
@@ -101,15 +105,12 @@ class TabletLoginController {
       final repo = context.read<UserRepository>();
       final tablet = await repo.getTabletByHandle(handle);
 
-      if (tablet != null) {
-      } else {}
-
       if (context.mounted) {
-        debugPrint('입력값: name=$name, handle=$handle, password=$password');
+        debugPrint('[LOGIN-TABLET][${_ts()}] input name="$name" handle="$handle" pwLen=${password.length}');
         if (tablet != null) {
-          debugPrint('DB 태블릿: name=${tablet.name}, handle=${tablet.handle}, password=${tablet.password}');
+          debugPrint('[LOGIN-TABLET][${_ts()}] DB tablet: name=${tablet.name}, handle=${tablet.handle}');
         } else {
-          debugPrint('DB에서 태블릿 계정 없음');
+          debugPrint('[LOGIN-TABLET][${_ts()}] DB no tablet for handle="$handle"');
         }
       }
 
@@ -120,7 +121,9 @@ class TabletLoginController {
 
         // 표시/저장용 지역명 결정(한글 지역명 우선)
         final areaName =
-            (tablet.selectedArea ?? tablet.currentArea ?? (tablet.areas.isNotEmpty ? tablet.areas.first : '')).trim();
+        (tablet.selectedArea ?? tablet.currentArea ?? (tablet.areas.isNotEmpty ? tablet.areas.first : '')).trim();
+        debugPrint('[LOGIN-TABLET][${_ts()}] resolved areaName="$areaName" from tablet.selected/current/areas');
+
         if (areaName.isEmpty) {
           showFailedSnackbar(context, '해당 계정에 등록된 지역이 없습니다.');
           setState(() => isLoading = false);
@@ -139,49 +142,65 @@ class TabletLoginController {
           englishSelectedAreaName: tablet.englishSelectedAreaName,
           fixedHolidays: List<String>.from(tablet.fixedHolidays),
           isSaved: true,
-          // 로그인 성공 시 저장됨
           isSelected: tablet.isSelected,
           isWorking: tablet.isWorking,
           name: tablet.name,
           password: tablet.password,
-          phone: tablet.handle,
-          // 중요: handle을 phone 슬롯에 넣어 상태/UI 호환
+          phone: tablet.handle, // 핸들을 phone 슬롯에 넣어 상태/UI 호환
           position: tablet.position,
           role: tablet.role,
-          selectedArea: areaName,
-          // 한글 지역명
+          selectedArea: areaName, // 한글 지역명
           startTime: tablet.startTime,
         );
 
-        // SharedPreferences(핸들/지역키/모드)도 직접 보존
+        // SharedPreferences(핸들/지역키/모드) 보존
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('handle', handle);
         await prefs.setString('selectedArea', areaName); // 한글 지역명
         await prefs.setString('englishSelectedAreaName', englishAreaName);
-        await prefs.setString('mode', 'tablet'); // ✅ 추가: 로그인 모드 저장
+        await prefs.setString('mode', 'tablet'); // ✅ 로그인 모드 저장
+        // ✅ 오너십: 포그라운드가 Plate TTS를 담당하도록 설정
+        await TtsOwnership.setOwner(TtsOwner.foreground);
+        debugPrint('[LOGIN-TABLET][${_ts()}] prefs saved (handle/selectedArea/englishSelectedAreaName/mode & owner=foreground)');
 
-        // 상태 업데이트: tablet_accounts 기준으로 저장/업서트 + prefs 저장 + 목록 리로드
+        // 상태 업데이트
         await userState.updateLoginTablet(userAsTablet);
+        debugPrint('[LOGIN-TABLET][${_ts()}] userState.updateLoginTablet done');
 
-        // 현재 앱의 지역 컨텍스트 업데이트
+        // ✅ 1) 먼저 AreaState 갱신 (currentArea가 확정됨)
         areaState.updateArea(areaName);
+        debugPrint('[LOGIN-TABLET][${_ts()}] areaState.updateArea("$areaName")');
+
+        // ✅ 2) 그리고 갱신된 currentArea를 TTS로 전달 (태블릿도 currentArea 기준)
+        final current = context.read<AreaState>().currentArea;
+        debugPrint('[LOGIN-TABLET][${_ts()}] send area to FG (currentArea="$current")');
+        if (current.isNotEmpty) {
+          FlutterForegroundTask.sendDataToTask({'area': current});
+          debugPrint('[LOGIN-TABLET][${_ts()}] sendDataToTask ok');
+        } else {
+          debugPrint('[LOGIN-TABLET][${_ts()}] currentArea is empty → skip send');
+        }
 
         if (context.mounted) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            Navigator.pushReplacementNamed(context, AppRoutes.tablet); // ✅ 변경: TabletPage로 이동
+            debugPrint('[LOGIN-TABLET][${_ts()}] navigate → AppRoutes.tablet');
+            Navigator.pushReplacementNamed(context, AppRoutes.tablet);
           });
         }
       } else {
         if (context.mounted) {
+          debugPrint('[LOGIN-TABLET][${_ts()}] auth failed (name/password mismatch or no tablet)');
           showFailedSnackbar(context, '이름 또는 비밀번호가 올바르지 않습니다.');
         }
       }
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('[LOGIN-TABLET][${_ts()}] login error: $e\n$st');
       if (context.mounted) {
         showFailedSnackbar(context, '로그인 실패: $e');
       }
     } finally {
       setState(() => isLoading = false);
+      debugPrint('[LOGIN-TABLET][${_ts()}] set isLoading=false');
     }
   }
 

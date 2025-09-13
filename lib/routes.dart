@@ -2,7 +2,6 @@
 import 'package:easydev/screens/dev_stub_page.dart';
 import 'package:easydev/screens/head_stub_page.dart';
 import 'package:flutter/material.dart';
-import 'screens/commute_package/commute_outside_screen.dart';
 import 'screens/commute_package/commute_inside_screen.dart';
 import 'screens/dev_package/dev_calendar_page.dart';
 import 'screens/head_package/company_calendar_page.dart';
@@ -52,7 +51,6 @@ final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.tabletLogin: (context) => const LoginScreen(mode: 'tablet'),
   AppRoutes.outsideLogin: (context) => const LoginScreen(mode: 'outside'),
   AppRoutes.commute: (context) => const CommuteInsideScreen(),
-  AppRoutes.commuteShortcut: (context) => const CommuteOutsideScreen(),
   AppRoutes.headquarterPage: (context) => const HeadquarterPage(),
   AppRoutes.typePage: (context) => const TypePage(),
   AppRoutes.tablet: (context) => const TabletPage(),
