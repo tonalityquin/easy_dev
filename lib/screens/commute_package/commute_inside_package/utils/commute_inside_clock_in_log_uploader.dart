@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
+// lib/screens/.../commute_inside_package/utils/commute_inside_clock_in_log_uploader.dart
 import 'package:flutter/services.dart';
+import 'package:flutter/material.dart';
 import 'package:googleapis/sheets/v4.dart';
 import 'package:googleapis_auth/auth_io.dart';
 import 'package:provider/provider.dart';
@@ -7,20 +8,11 @@ import 'package:intl/intl.dart';
 
 import '../../../../../states/area/area_state.dart';
 import '../../../../../states/user/user_state.dart';
+import '../../../../../utils/sheets_config.dart';
 
 class CommuteInsideClockInLogUploader {
   static const _sheetName = '출퇴근기록';
   static const _serviceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
-
-  static String _getSpreadsheetId(String area) {
-    switch (area.toLowerCase()) {
-      case 'pelican':
-        return '11VXQiw4bHpZHPmAd1GJHdao4d9C3zU4NmkEe81pv57I'; // pelican
-      case 'belivus':
-      default:
-        return '14qZa34Ha-y5Z6kj7eUqZxcP2CdLlaUQcyTJtLsyU_uo'; // belivus
-    }
-  }
 
   static Future<bool> uploadAttendanceJson({
     required BuildContext context,
@@ -31,39 +23,33 @@ class CommuteInsideClockInLogUploader {
       final userState = context.read<UserState>();
 
       final area = userState.user?.selectedArea ?? '';
-      final spreadsheetId = _getSpreadsheetId(area);
       final division = areaState.currentDivision;
       final userId = userState.user?.id ?? '';
       final userName = userState.name;
 
+      final spreadsheetId = await SheetsConfig.getCommuteSheetId();
+      if (spreadsheetId == null || spreadsheetId.isEmpty) {
+        debugPrint('❌ 출근 업로드 실패: 스프레드시트 ID가 설정되지 않았습니다. (commute_sheet_id)');
+        return false;
+      }
+
       final now = DateTime.now();
       final dateStr = DateFormat('yyyy-MM-dd').format(now);
       final recordedTime = data['recordedTime'] ?? '';
-      final status = '출근';
+      const status = '출근';
 
+      // 중복 검사
       final existingRows = await _loadAllRecords(spreadsheetId);
-      final isDuplicate = existingRows.any((row) =>
-      row.length >= 7 &&
-          row[0] == dateStr &&
-          row[2] == userId &&
-          row[6] == status,
+      final isDuplicate = existingRows.any(
+            (row) => row.length >= 7 && row[0] == dateStr && row[2] == userId && row[6] == status,
       );
-
       if (isDuplicate) {
         debugPrint('⚠️ 이미 출근 기록이 존재합니다.');
         return false;
       }
 
-      final row = [
-        dateStr,
-        recordedTime,
-        userId,
-        userName,
-        area,
-        division,
-        status,
-      ];
-
+      // 업로드
+      final row = [dateStr, recordedTime, userId, userName, area, division, status];
       final client = await _getSheetsClient();
       final sheetsApi = SheetsApi(client);
 
@@ -75,7 +61,6 @@ class CommuteInsideClockInLogUploader {
       );
 
       client.close();
-
       debugPrint('✅ 출근 기록 업로드 완료 (Google Sheets)');
       return true;
     } catch (e) {
@@ -104,15 +89,13 @@ class CommuteInsideClockInLogUploader {
 
     client.close();
 
-    return result.values?.map((row) =>
-        row.map((cell) => cell.toString()).toList()
-    ).toList() ?? [];
+    return result.values?.map((row) => row.map((cell) => cell.toString()).toList()).toList() ?? [];
   }
 
-  static String getDownloadPath({
-    required String area,
-  }) {
-    final id = _getSpreadsheetId(area);
+  /// 저장된 출근 시트 ID로 열람 URL을 돌려줍니다. (설정이 없으면 null)
+  static Future<String?> getDownloadPath() async {
+    final id = await SheetsConfig.getCommuteSheetId();
+    if (id == null || id.isEmpty) return null;
     return 'https://docs.google.com/spreadsheets/d/$id/edit';
   }
 }

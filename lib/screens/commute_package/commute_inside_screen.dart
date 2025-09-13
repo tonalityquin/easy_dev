@@ -1,3 +1,4 @@
+// lib/screens/.../CommuteInsideScreen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -6,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../states/user/user_state.dart';
 import '../../../utils/snackbar_helper.dart';
+import '../../../utils/sheets_config.dart';
 import 'commute_inside_package/commute_inside_controller.dart';
 import 'commute_inside_package/sections/commute_inside_report_button_section.dart';
 import 'commute_inside_package/sections/commute_inside_work_button_section.dart';
@@ -99,6 +101,51 @@ class _CommuteInsideScreenState extends State<CommuteInsideScreen> {
     );
   }
 
+  Future<void> _handleSetCommuteSheetId(BuildContext context) async {
+    final current = await SheetsConfig.getCommuteSheetId();
+    final textCtrl = TextEditingController(text: current ?? '');
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => Padding(
+        padding: MediaQuery.of(context).viewInsets,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('출근/퇴근/휴게 스프레드시트 ID 입력', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              TextField(
+                controller: textCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Google Sheets ID 또는 전체 URL',
+                  helperText: 'URL 전체를 붙여넣어도 ID만 추출됩니다.',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: () async {
+                  final raw = textCtrl.text.trim();
+                  if (raw.isEmpty) return;
+                  final id = SheetsConfig.extractSpreadsheetId(raw);
+                  await SheetsConfig.setCommuteSheetId(id);
+                  if (!context.mounted) return;
+                  Navigator.pop(context);
+                  showSuccessSnackbar(context, '출근 시트 ID가 저장되었습니다.');
+                },
+                child: const Text('저장'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _handleLogout(BuildContext context) async {
     try {
       final userState = context.read<UserState>();
@@ -179,6 +226,9 @@ class _CommuteInsideScreenState extends State<CommuteInsideScreen> {
                         case 'changeUrl':
                           _handleChangeUrl(context);
                           break;
+                        case 'setCommuteSheet':
+                          _handleSetCommuteSheetId(context);
+                          break;
                       }
                     },
                     itemBuilder: (context) => [
@@ -199,6 +249,16 @@ class _CommuteInsideScreenState extends State<CommuteInsideScreen> {
                             Icon(Icons.edit_location_alt, color: Colors.blueAccent),
                             SizedBox(width: 8),
                             Text('경로 변경'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'setCommuteSheet',
+                        child: Row(
+                          children: [
+                            Icon(Icons.assignment_add, color: Colors.green),
+                            SizedBox(width: 8),
+                            Text('출근 시트 삽입'),
                           ],
                         ),
                       ),

@@ -42,23 +42,23 @@ class CommuteInsideWorkButtonSection extends StatelessWidget {
       onPressed: isWorking
           ? null // 이미 출근 상태일 경우 버튼 비활성화
           : () async {
-        onLoadingChanged(true);
-        try {
-          await runWithBlockingDialog(
-            context: context,
-            message: '출근 처리 중입니다...',
-            task: () async {
-              await controller.handleWorkStatus(
-                context,
-                context.read<UserState>(),
-                    () => onLoadingChanged(false),
-              );
+              onLoadingChanged(true);
+              try {
+                await runWithBlockingDialog(
+                  context: context,
+                  message: '출근 처리 중입니다...',
+                  task: () async {
+                    await controller.handleWorkStatus(
+                      context,
+                      context.read<UserState>(),
+                      () => onLoadingChanged(false),
+                    );
+                  },
+                );
+              } finally {
+                onLoadingChanged(false);
+              }
             },
-          );
-        } finally {
-          onLoadingChanged(false);
-        }
-      },
     );
   }
 }
