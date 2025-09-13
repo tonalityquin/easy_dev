@@ -27,6 +27,7 @@ class TabletAnimatedKeypad extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final keypad = Container(
+      // fullHeight가 true라도 내부 키패드가 전체를 자연스럽게 차지하도록 여백 최소화
       padding: const EdgeInsets.only(bottom: 8),
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -41,7 +42,7 @@ class TabletAnimatedKeypad extends StatelessWidget {
       ),
       // fullHeight=false(기본)일 때만 최대 높이 45% 제한
       constraints: fullHeight
-          ? const BoxConstraints()
+          ? const BoxConstraints() // 제약 없음
           : BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.45),
       child: TabletNumKeypadForTabletPlateSearch(
         controller: controller,
@@ -57,7 +58,8 @@ class TabletAnimatedKeypad extends StatelessWidget {
       child: SlideTransition(
         position: slideAnimation,
         child: fullHeight
-            ? SizedBox.expand(child: keypad) // 화면 전체 채우기
+        // 🔹 스몰패드에서는 패널(가용 영역)을 전부 채움
+            ? SizedBox.expand(child: keypad)
             : keypad,
       ),
     );

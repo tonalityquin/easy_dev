@@ -14,7 +14,7 @@ import '../utils/modify_camera_helper.dart';
 class ModifyCameraPreviewDialog extends StatefulWidget {
   final void Function(List<XFile>)? onCaptureComplete;
   final void Function(XFile)? onImageCaptured;
--
+
   const ModifyCameraPreviewDialog({
     super.key,
     this.onCaptureComplete,

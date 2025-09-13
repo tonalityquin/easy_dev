@@ -1,6 +1,12 @@
+// lib/screens/tablet_package/widgets/keypad/tablet_num_keypad_for_tablet_plate_search.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+/// 숫자 4자리 입력 중심의 키패드.
+/// - 각 행(Row)과 각 버튼을 Expanded로 구성 → 가용 높이/너비를 모두 채움
+/// - 스몰패드에서 여백 없이 패널 전체를 버튼이 채우도록 동작
+/// - FittedBox로 콘텐츠 오버플로우 방지
 class TabletNumKeypadForTabletPlateSearch extends StatefulWidget {
   final TextEditingController controller;
   final int maxLength;
@@ -24,130 +30,107 @@ class TabletNumKeypadForTabletPlateSearch extends StatefulWidget {
   });
 
   @override
-  State<TabletNumKeypadForTabletPlateSearch> createState() =>
-      _TabletNumKeypadForTabletPlateSearchState();
+  State<TabletNumKeypadForTabletPlateSearch> createState() => _TabletNumKeypadForTabletPlateSearchState();
 }
 
-class _TabletNumKeypadForTabletPlateSearchState
-    extends State<TabletNumKeypadForTabletPlateSearch>
-    with TickerProviderStateMixin {
-  final Map<String, AnimationController> _controllers = {};
-  final Map<String, bool> _isPressed = {};
+class _TabletNumKeypadForTabletPlateSearchState extends State<TabletNumKeypadForTabletPlateSearch> {
+  Timer? _repeatDeleteTimer;
+
+  bool get _isFull => widget.controller.text.length >= widget.maxLength;
+  bool get _isReadyToSearch => widget.controller.text.length == widget.maxLength;
 
   @override
   void dispose() {
-    for (final controller in _controllers.values) {
-      controller.dispose();
-    }
+    _repeatDeleteTimer?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final bg = widget.backgroundColor ?? Colors.white;
     return Container(
-      decoration: BoxDecoration(
-        color: widget.backgroundColor ?? Colors.white,
-        borderRadius: BorderRadius.zero,
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 6,
-            offset: Offset(0, -2),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 12),
+      color: bg, // 여백 제거를 위해 데코 단순화
+      padding: EdgeInsets.zero,
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisSize: MainAxisSize.max, // 🔹 가용 높이를 끝까지 사용
         children: [
-          _buildRow(['1', '2', '3']),
-          _buildRow(['4', '5', '6']),
-          _buildRow(['7', '8', '9']),
-          _buildRow(_lastRowKeys()),
+          _buildExpandedRow(const [_KeySpec.label('1'), _KeySpec.label('2'), _KeySpec.label('3')]),
+          _buildExpandedRow(const [_KeySpec.label('4'), _KeySpec.label('5'), _KeySpec.label('6')]),
+          _buildExpandedRow(const [_KeySpec.label('7'), _KeySpec.label('8'), _KeySpec.label('9')]),
+          _buildExpandedRow(_lastRowKeys()),
         ],
       ),
     );
   }
 
-  List<String> _lastRowKeys() {
-    if (widget.enableDigitModeSwitch) {
-      return ['두자리', '0', '세자리'];
-    } else if (widget.onReset != null) {
-      return ['처음', '0', '검색'];
-    } else {
-      return ['', '0', ''];
-    }
-  }
-
-  Widget _buildRow(List<String> keys) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: keys.map((key) => _buildKeyButton(key)).toList(),
-    );
-  }
-
-  Widget _buildKeyButton(String key) {
-    if (key.isEmpty) {
-      return const Expanded(child: SizedBox());
-    }
-
-    _controllers.putIfAbsent(
-      key,
-          () => AnimationController(
-        duration: const Duration(milliseconds: 80),
-        vsync: this,
-        lowerBound: 0.0,
-        upperBound: 0.1,
+  // 각 행 전체를 Expanded로
+  Widget _buildExpandedRow(List<_KeySpec> keys) {
+    return Expanded(
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          for (final k in keys) Expanded(child: _buildKey(k)),
+        ],
       ),
     );
-    _isPressed.putIfAbsent(key, () => false);
+  }
 
-    final controller = _controllers[key]!;
-    final animation = Tween(begin: 1.0, end: 0.85).animate(
-      CurvedAnimation(parent: controller, curve: Curves.easeOut),
-    );
+  List<_KeySpec> _lastRowKeys() {
+    if (widget.enableDigitModeSwitch) {
+      return const [
+        _KeySpec.label('두자리'),
+        _KeySpec.label('0'),
+        _KeySpec.label('세자리'),
+      ];
+    }
+    return const [
+      _KeySpec.icon(label: '지움', icon: Icons.backspace_outlined),
+      _KeySpec.label('0'),
+      _KeySpec.label('검색'),
+    ];
+  }
 
-    return Expanded(
-      child: Padding(
-        padding: const EdgeInsets.all(4.0),
-        child: GestureDetector(
-          onTapDown: (_) {
-            HapticFeedback.selectionClick();
-            setState(() => _isPressed[key] = true);
-            controller.forward();
-          },
-          onTapUp: (_) {
-            setState(() => _isPressed[key] = false);
-            Future.delayed(const Duration(milliseconds: 100), () {
-              if (mounted) controller.reverse();
-            });
-            _handleKeyTap(key);
-          },
-          onTapCancel: () {
-            setState(() => _isPressed[key] = false);
-            controller.reverse();
-          },
-          child: ScaleTransition(
-            scale: animation,
-            child: Container(
-              constraints: const BoxConstraints(
-                minHeight: 48,
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 12.0),
-              decoration: BoxDecoration(
-                color: _isPressed[key]! ? Colors.lightBlue[100] : Colors.grey[50],
-                borderRadius: BorderRadius.zero,
-                border: Border.all(color: Colors.grey[300]!),
-              ),
-              child: Center(
-                child: Text(
-                  key,
-                  style: (widget.textStyle ??
-                      const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w500,
-                      ))
-                      .copyWith(color: Colors.black87),
+  Widget _buildKey(_KeySpec spec) {
+    final enabled = _isKeyEnabled(spec);
+    final labelStyle = (widget.textStyle ?? const TextStyle(fontSize: 18, fontWeight: FontWeight.w500))
+        .copyWith(color: enabled ? Colors.black87 : Colors.black38);
+
+    return Padding(
+      padding: const EdgeInsets.all(4.0), // 셀 간 최소 간격(완전 0 원하면 제거)
+      child: _Pressable(
+        enabled: enabled,
+        onTap: () => _handleTap(spec),
+        onLongPressStart: spec.isBackspace && widget.onReset != null
+            ? (_) {
+          // 길게 누르면 전체 초기화
+          _startRepeatDelete(fullReset: true);
+        }
+            : null,
+        onLongPressEnd: spec.isBackspace && widget.onReset != null
+            ? (_) {
+          _stopRepeatDelete();
+        }
+            : null,
+        child: SizedBox.expand( // 🔹 셀 영역을 100% 채움
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              border: Border.all(color: Colors.grey[300]!),
+            ),
+            child: Center(
+              child: FittedBox( // 🔹 폭이 좁아도 자동 축소
+                fit: BoxFit.scaleDown,
+                child: spec.icon == null
+                    ? Text(spec.label!, style: labelStyle)
+                    : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(spec.icon, size: 20, color: enabled ? Colors.black87 : Colors.black38),
+                    if (spec.label != null) ...[
+                      const SizedBox(width: 6),
+                      Text(spec.label!, style: labelStyle),
+                    ],
+                  ],
                 ),
               ),
             ),
@@ -157,32 +140,146 @@ class _TabletNumKeypadForTabletPlateSearchState
     );
   }
 
-  void _handleKeyTap(String key) {
-    if (key == '두자리') {
+  bool _isKeyEnabled(_KeySpec spec) {
+    if (spec.isDigit) return !_isFull;
+    if (spec.isSearch) return _isReadyToSearch;
+    return true; // 두자리/세자리/지움은 항상 가능
+  }
+
+  void _handleTap(_KeySpec spec) {
+    HapticFeedback.lightImpact();
+
+    if (spec.isDigit) {
+      _insertDigit(spec.label!);
+      if (_isReadyToSearch) Future.microtask(() => widget.onComplete?.call());
+      return;
+    }
+    if (spec.isBackspace) {
+      _deleteOne();
+      return;
+    }
+    if (spec.isSearch) {
+      if (_isReadyToSearch) Future.microtask(() => widget.onComplete?.call());
+      return;
+    }
+    // 모드 스위치
+    if (spec.label == '두자리') {
       widget.onChangeFrontDigitMode?.call(false);
       return;
-    } else if (key == '세자리') {
+    }
+    if (spec.label == '세자리') {
       widget.onChangeFrontDigitMode?.call(true);
       return;
-    } else if (key == '처음') {
-      widget.onReset?.call();
-      return;
-    } else if (key == '검색') {
-      // 길이가 유효할 때만 검색 실행
-      if (widget.controller.text.length == widget.maxLength) {
-        Future.microtask(() => widget.onComplete?.call());
-      }
-      return;
     }
+  }
 
-    // 숫자 입력 처리
-    if (widget.controller.text.length < widget.maxLength) {
-      widget.controller.text += key;
-      if (widget.controller.text.length == widget.maxLength) {
-        Future.microtask(() {
-          widget.onComplete?.call();
-        });
-      }
+  void _insertDigit(String d) {
+    if (_isFull) return;
+    final old = widget.controller.value;
+    final newText = old.text + d;
+    widget.controller.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: newText.length),
+      composing: TextRange.empty,
+    );
+  }
+
+  void _deleteOne() {
+    final old = widget.controller.value;
+    if (old.text.isEmpty) return;
+    final newText = old.text.substring(0, old.text.length - 1);
+    widget.controller.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: newText.length),
+      composing: TextRange.empty,
+    );
+  }
+
+  void _startRepeatDelete({required bool fullReset}) {
+    if (fullReset) {
+      widget.onReset?.call();
+    } else {
+      _deleteOne();
     }
+    _repeatDeleteTimer?.cancel();
+    _repeatDeleteTimer = Timer.periodic(const Duration(milliseconds: 80), (_) {
+      if (!mounted) return;
+      if (fullReset) {
+        _stopRepeatDelete();
+      } else {
+        if (widget.controller.text.isEmpty) {
+          _stopRepeatDelete();
+        } else {
+          _deleteOne();
+        }
+      }
+    });
+  }
+
+  void _stopRepeatDelete() {
+    _repeatDeleteTimer?.cancel();
+    _repeatDeleteTimer = null;
+  }
+}
+
+class _KeySpec {
+  final String? label;
+  final IconData? icon;
+
+  const _KeySpec._(this.label, this.icon);
+  const _KeySpec.label(String label) : this._(label, null);
+  const _KeySpec.icon({String? label, required IconData icon}) : this._(label, icon);
+
+  bool get isDigit => label != null && RegExp(r'^\d$').hasMatch(label!);
+  bool get isSearch => label == '검색';
+  bool get isBackspace => icon == Icons.backspace_outlined;
+}
+
+/// 눌림 애니메이션 + 롱프레스 감지
+class _Pressable extends StatefulWidget {
+  final Widget child;
+  final GestureTapCallback? onTap;
+  final GestureLongPressStartCallback? onLongPressStart;
+  final GestureLongPressEndCallback? onLongPressEnd;
+  final bool enabled;
+
+  const _Pressable({
+    required this.child,
+    this.onTap,
+    this.onLongPressStart,
+    this.onLongPressEnd,
+    this.enabled = true,
+  });
+
+  @override
+  State<_Pressable> createState() => _PressableState();
+}
+
+class _PressableState extends State<_Pressable> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final scaledChild = AnimatedScale(
+      scale: _pressed ? 0.92 : 1.0,
+      duration: const Duration(milliseconds: 90),
+      curve: Curves.easeOut,
+      child: widget.child,
+    );
+
+    return Material(
+      color: Colors.transparent,
+      child: GestureDetector(
+        onLongPressStart: widget.enabled ? widget.onLongPressStart : null,
+        onLongPressEnd: widget.enabled ? widget.onLongPressEnd : null,
+        child: InkWell(
+          onTap: widget.enabled ? widget.onTap : null,
+          onHighlightChanged: (v) => setState(() => _pressed = v && widget.enabled),
+          splashColor: Colors.lightBlue.withOpacity(0.12),
+          highlightColor: Colors.lightBlue.withOpacity(0.06),
+          child: scaledChild,
+        ),
+      ),
+    );
   }
 }
