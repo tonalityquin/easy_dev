@@ -9,7 +9,11 @@ import '../../../states/area/area_state.dart';
 import '../../../states/user/user_state.dart';
 import '../../../utils/blocking_dialog.dart';
 import '../../../utils/snackbar_helper.dart';
+import '../../../widgets/tts_filter_sheet.dart';
 import '../states/tablet_pad_mode_state.dart';
+
+// ⬇️ 추가: TTS 사용자 필터 & 필터 시트
+import '../../../utils/tts_user_filters.dart';
 
 class TabletTopNavigation extends StatelessWidget {
   final bool isAreaSelectable;
@@ -222,6 +226,55 @@ class TabletTopNavigation extends StatelessWidget {
 
                   const SizedBox(height: 20),
 
+                  // 🔊 음성 알림(TTS) 설정 섹션
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '음성 알림',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey.shade700,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.volume_up_outlined),
+                      label: const Text('TTS 설정'),
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 48),
+                        backgroundColor: Colors.white,
+                        foregroundColor: Colors.black,
+                        elevation: 0,
+                        side: const BorderSide(color: Colors.grey, width: 1.0),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () async {
+                        // 먼저 현재 다이얼로그 닫기
+                        Navigator.of(dialogCtx).pop();
+
+                        // 시트 열기
+                        await _openTtsFilterSheet(context);
+
+                        // 시트에서 저장된 최신 필터를 FG로 즉시 전달
+                        final currentArea = context.read<AreaState>().currentArea;
+                        if (currentArea.isNotEmpty) {
+                          final filters = await TtsUserFilters.load();
+                          FlutterForegroundTask.sendDataToTask({
+                            'area': currentArea,
+                            'ttsFilters': filters.toMap(),
+                          });
+                        }
+                      },
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
                   // 로그아웃 버튼 (기존 스타일 유지)
                   SizedBox(
                     width: double.infinity,
@@ -259,6 +312,18 @@ class TabletTopNavigation extends StatelessWidget {
         );
       },
     );
+  }
+
+  Future<void> _openTtsFilterSheet(BuildContext context) async {
+    // 바텀시트 열기 (SafeArea & 둥근 모서리)
+    await showModalBottomSheet<void>(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => const TtsFilterSheet(),
+    );
+    // 저장은 시트 내부에서 하도록 가정
   }
 
   Future<void> _logout(BuildContext context) async {

@@ -12,6 +12,8 @@ import '../../../utils/snackbar_helper.dart';
 import '../../../routes.dart'; // ✅ 라우트 상수 사용 (TabletPage로 이동)
 // ⬇️ 추가: TTS 오너십 스위치
 import '../../../utils/tts_ownership.dart';
+// ⬇️ 추가: TTS 사용자 필터
+import '../../../utils/tts_user_filters.dart';
 
 String _ts() => DateTime.now().toIso8601String();
 
@@ -171,12 +173,16 @@ class TabletLoginController {
         areaState.updateArea(areaName);
         debugPrint('[LOGIN-TABLET][${_ts()}] areaState.updateArea("$areaName")');
 
-        // ✅ 2) 그리고 갱신된 currentArea를 TTS로 전달 (태블릿도 currentArea 기준)
+        // ✅ 2) 그리고 갱신된 currentArea를 TTS로 전달 (+ 필터 동봉)
         final current = context.read<AreaState>().currentArea;
         debugPrint('[LOGIN-TABLET][${_ts()}] send area to FG (currentArea="$current")');
         if (current.isNotEmpty) {
-          FlutterForegroundTask.sendDataToTask({'area': current});
-          debugPrint('[LOGIN-TABLET][${_ts()}] sendDataToTask ok');
+          final filters = await TtsUserFilters.load(); // ⬅️ 추가
+          FlutterForegroundTask.sendDataToTask({
+            'area': current,
+            'ttsFilters': filters.toMap(), // ⬅️ 추가
+          });
+          debugPrint('[LOGIN-TABLET][${_ts()}] sendDataToTask ok (with filters ${filters.toMap()})');
         } else {
           debugPrint('[LOGIN-TABLET][${_ts()}] currentArea is empty → skip send');
         }
@@ -234,9 +240,7 @@ class TabletLoginController {
       fillColor: Colors.grey.shade100,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: Colors.indigo, width: 2),
-      ),
+          borderRadius: BorderRadius.circular(16)),
     );
   }
 

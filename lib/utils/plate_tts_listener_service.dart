@@ -1,4 +1,3 @@
-// lib/utils/plate_tts_listener_service.dart
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -7,31 +6,47 @@ import 'package:firebase_core/firebase_core.dart';
 
 import '../../enums/plate_type.dart';
 import 'tts_manager.dart';
-import 'tts_ownership.dart';
+// ⬇️ 유저 필터
+import 'tts_user_filters.dart';
 
 String _ts() => DateTime.now().toIso8601String();
 
 class PlateTtsListenerService {
   static StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _subscription;
 
-  // 직전 type 기억(타입 전환 감지)
+  // 타입 전환 감지용
   static final Map<String, String?> _lastTypes = {};
-
-  // 직전 발화 시각(디듀프)
+  // 짧은 디듀프
   static final Map<String, DateTime> _lastSpokenAt = {};
   static const Duration _speakDedupWindow = Duration(seconds: 2);
 
-  // 첫 스냅샷 묵음 처리용 플래그
+  // 첫 스냅샷 묵음 처리
   static bool _initialEmissionDone = false;
 
-  // 기준 시각(로그용), area/seq
+  // 기준 시각/상태
   static DateTime _startTime = DateTime.now().toUtc();
   static int _listenSeq = 0;
   static String? _currentArea;
 
-  // ===== 출차 완료 반복 발화 설정 =====
+  // 출차 완료 반복
   static const int _completionRepeat = 2;
   static const Duration _completionRepeatGap = Duration(milliseconds: 700);
+
+  // ✅ 유저 선택 필터(기본: 전부 on)
+  static TtsUserFilters _filters = TtsUserFilters.defaults();
+
+  static void updateFilters(TtsUserFilters f) {
+    _filters = f;
+    _log('filters updated: ${_filters.toMap()}');
+  }
+
+  static bool _isEnabledForType(String? type) {
+    if (type == null) return false;
+    if (type == PlateType.parkingRequests.firestoreValue) return _filters.parking;
+    if (type == PlateType.departureRequests.firestoreValue) return _filters.departure;
+    if (type == PlateType.departureCompleted.firestoreValue) return _filters.completed;
+    return false;
+  }
 
   static void start(String currentArea, {bool force = false}) {
     Future.microtask(() => _startListening(currentArea, force: force));
@@ -51,15 +66,8 @@ class PlateTtsListenerService {
   static void _log(String msg) => debugPrint('[PLATE_TTS][$_listenSeq][${_ts()}] $msg');
 
   static Future<void> _startListening(String currentArea, {bool force = false}) async {
-    // 앱 이솔레이트는 owner=app일 때만, FG 이솔레이트는 force=true로 강제 시작
-    if (!force) {
-      final isApp = await TtsOwnership.isAppOwner();
-      if (!isApp) {
-        _log('skip start in app (owner=foreground)');
-        return;
-      }
-    }
-
+    // 오너십 체크는 유지하고 싶다면 여기(TtsOwnership)에서 수행
+    // force가 true면 바로 진행
     await _ensureFirebaseInThisIsolate();
 
     _listenSeq += 1;
@@ -70,15 +78,15 @@ class PlateTtsListenerService {
     _lastSpokenAt.clear();
     _initialEmissionDone = false;
 
-    _startTime = DateTime.now().toUtc(); // 기준 시각(로그)
+    _startTime = DateTime.now().toUtc();
     _currentArea = currentArea;
 
-    _log('▶ START listen area="$_currentArea" since=$_startTime');
+    _log('▶ START listen area="$_currentArea" since=$_startTime filters=${_filters.toMap()}');
 
     final typesToMonitor = <String>[
-      PlateType.parkingRequests.firestoreValue,     // 'parking_requests'
-      PlateType.departureRequests.firestoreValue,   // 'departure_requests'
-      PlateType.departureCompleted.firestoreValue,  // 'departure_completed'
+      PlateType.parkingRequests.firestoreValue,
+      PlateType.departureRequests.firestoreValue,
+      PlateType.departureCompleted.firestoreValue,
     ];
     _log('monitor types=$typesToMonitor');
 
@@ -113,22 +121,24 @@ class PlateTtsListenerService {
             final plateNumber = (data['plate_number'] ?? '') as String;
             final Timestamp? requestTime = data['request_time'] as Timestamp?;
             final prevType = _lastTypes[docId];
-            final inMonitored = newType != null && typesToMonitor.contains(newType);
 
-            final tailPlate = plateNumber.length >= 4
+            final tail = plateNumber.length >= 4
                 ? plateNumber.substring(plateNumber.length - 4)
                 : plateNumber;
-            final spokenTail = _convertToKoreanDigits(tailPlate);
+            final spokenTail = _convertToKoreanDigits(tail);
 
-            _log('change: id=$docId type=${change.type} newType=$newType '
-                'prevType=$prevType reqTime=${requestTime?.toDate()}');
+            _log('change: id=$docId type=${change.type} newType=$newType prevType=$prevType reqTime=${requestTime?.toDate()}');
 
             bool didSpeak = false;
 
-            // 1) 'added'
-            if (change.type == DocumentChangeType.added && inMonitored) {
-              // 첫 스냅샷: request_time 기준(버퍼 3s)으로만 "신규" 판정 → 묵음 방지
-              // 이후 스냅샷: 시간과 무관하게 "신규"로 간주(쿼리 재진입/타 디바이스 변경 포함)
+            // 필터 미적용 타입은 즉시 skip
+            if (!_isEnabledForType(newType)) {
+              _log('skip by filter: type=$newType id=$docId');
+              _lastTypes[docId] = newType; // 상태는 갱신
+              continue;
+            }
+
+            if (change.type == DocumentChangeType.added) {
               final shouldSpeak = !isFirstEmission ? true : _isNewByRequestTime(requestTime);
 
               if (shouldSpeak && _dedup(docId)) {
@@ -151,9 +161,7 @@ class PlateTtsListenerService {
               } else {
                 _log('skip(added): ${isFirstEmission ? 'initial snapshot old' : 'dedup'} id=$docId');
               }
-
-              // 2) 'modified'에서 type 전환 감지 → 시간 무관 발화
-            } else if (change.type == DocumentChangeType.modified && inMonitored) {
+            } else if (change.type == DocumentChangeType.modified) {
               final typeChanged = prevType != null && prevType != newType;
               if (typeChanged && _dedup(docId)) {
                 if (newType == PlateType.parkingRequests.firestoreValue) {
@@ -175,16 +183,14 @@ class PlateTtsListenerService {
               } else {
                 _log('ignore modified (no type change or dedup) id=$docId');
               }
-
             } else {
               _log('ignore changeType=${change.type} id=$docId');
             }
 
-            // 마지막에 prevType 갱신
             _lastTypes[docId] = newType;
 
             if (didSpeak) {
-              // 필요 시 후처리
+              // 후처리 여지
             }
           } catch (e, st) {
             _log('ERROR in change loop: $e\n$st');
@@ -200,14 +206,12 @@ class PlateTtsListenerService {
     }
   }
 
-  // 초기 스냅샷에서만 사용하는 "신규" 판정 (시간 기준 + 3초 버퍼)
   static bool _isNewByRequestTime(Timestamp? requestTime) {
     if (requestTime == null) return true;
     final reqUtc = requestTime.toDate().toUtc();
     return reqUtc.isAfter(_startTime.subtract(const Duration(seconds: 3)));
   }
 
-  // 짧은 디듀프 창으로 중복발화 억제
   static bool _dedup(String docId) {
     final now = DateTime.now().toUtc();
     final last = _lastSpokenAt[docId];
@@ -235,7 +239,6 @@ class PlateTtsListenerService {
     }
   }
 
-  // 출차 완료 멘트 2회 반복 발화용
   static Future<void> _speakRepeated(String text, {int times = 1, Duration gap = Duration.zero}) async {
     for (var i = 0; i < times; i++) {
       await _safeSpeak(text);

@@ -1,4 +1,3 @@
-// lib/screens/login_package/service/service_login_controller.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -11,6 +10,8 @@ import '../../../states/user/user_state.dart';
 import '../../../utils/snackbar_helper.dart';
 // ⬇️ 추가: TTS 오너십 스위치
 import '../../../utils/tts_ownership.dart';
+// ⬇️ 추가: TTS 사용자 필터
+import '../../../utils/tts_user_filters.dart';
 
 String _ts() => DateTime.now().toIso8601String();
 
@@ -120,12 +121,16 @@ class ServiceLoginController {
         await areaState.updateArea(areaToSet); // ← 반드시 await
         debugPrint('[LOGIN-SERVICE][${_ts()}] areaState.updateArea("$areaToSet")');
 
-        // ✅ 서비스 모드: currentArea 기준으로 TTS 구독 영역 전달 (네비게이션 전에)
+        // ✅ 서비스 모드: currentArea 기준으로 TTS 구독 영역 + 필터 전달 (네비게이션 전에)
         final a = context.read<AreaState>().currentArea; // ← '' 방지
         debugPrint('[LOGIN-SERVICE][${_ts()}] send area to FG (currentArea="$a")');
         if (a.isNotEmpty) {
-          FlutterForegroundTask.sendDataToTask({'area': a});
-          debugPrint('[LOGIN-SERVICE][${_ts()}] sendDataToTask ok');
+          final filters = await TtsUserFilters.load(); // ⬅️ 추가
+          FlutterForegroundTask.sendDataToTask({
+            'area': a,
+            'ttsFilters': filters.toMap(), // ⬅️ 추가
+          });
+          debugPrint('[LOGIN-SERVICE][${_ts()}] sendDataToTask ok (with filters ${filters.toMap()})');
         } else {
           debugPrint('[LOGIN-SERVICE][${_ts()}] currentArea is empty → skip send');
         }
@@ -195,9 +200,7 @@ class ServiceLoginController {
       fillColor: Colors.grey.shade100,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: Colors.indigo, width: 2),
-      ),
+          borderRadius: BorderRadius.circular(16)),
     );
   }
 
