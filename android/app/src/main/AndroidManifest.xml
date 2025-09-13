@@ -2,28 +2,36 @@
     xmlns:tools="http://schemas.android.com/tools"
     package="com.example.easydev">
 
+
     <!-- ✅ TTS 음성 재생을 위한 네트워크 권한 -->
     <uses-permission android:name="android.permission.INTERNET" />
+
 
     <!-- ✅ 포그라운드 서비스 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
 
+
     <!-- ✅ 백그라운드 위치 사용 -->
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+
 
     <!-- ✅ 위치 권한 -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
+
     <!-- ✅ 화면 꺼짐 방지 -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+
 
     <!-- ✅ 네트워크 상태 확인 -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+
     <!-- ✅ 부팅 후 앱 실행 -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
 
     <!-- ✅ 외부 저장소 접근 (Android 10 이하) -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
@@ -31,20 +39,24 @@
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
 
+
     <!-- ✅ Android 11+ 파일 접근 권한 (사용 시 필요) -->
     <uses-permission
         android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
 
+
     <!-- ✅ Android 13 알림 권한 (선택 사항) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
 
     <application
         android:name="${applicationName}"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
-        android:label="easydev"
+        android:label="Easy Valet(Beta)"
         android:theme="@style/LaunchTheme">
+
 
         <activity
             android:name=".MainActivity"
@@ -58,9 +70,11 @@
             android:theme="@style/LaunchTheme"
             android:windowSoftInputMode="adjustResize">
 
+
             <meta-data
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme" />
+
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -68,11 +82,13 @@
             </intent-filter>
         </activity>
 
+
         <!-- 포그라운드 서비스 -->
         <service
             android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
             android:exported="false"
             android:foregroundServiceType="location" />
+
 
         <!-- Flutter 엔진 등록 -->
         <meta-data
@@ -80,13 +96,16 @@
             android:value="2" />
     </application>
 
+
     <!-- ProcessText Plugin (다른 앱 텍스트 접근용) + 외부 앱 실행/조회 허용 -->
     <queries>
         <!-- ✅ 마이발렛 Biz 패키지 조회 허용 (앱 실행용) -->
         <package android:name="com.myvalet.b2b.android" />
 
+
         <!-- Gmail 패키지 조회 허용 -->
         <package android:name="com.google.android.gm" />
+
 
         <!-- 메일앱으로 보내기(mailto:) 인텐트 조회 허용 -->
         <intent>
@@ -94,11 +113,13 @@
             <data android:scheme="mailto" />
         </intent>
 
+
         <!-- 외부 브라우저로 보기(https) 인텐트 조회 허용 -->
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="https" />
         </intent>
+
 
         <!-- (기존) 다른 앱 텍스트 접근 -->
         <intent>
@@ -107,4 +128,8 @@
         </intent>
     </queries>
 
+
 </manifest>
+
+
+

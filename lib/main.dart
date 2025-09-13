@@ -110,7 +110,7 @@ class MyApp extends StatelessWidget {
       providers: appProviders,
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
-        title: 'easyvalet',
+        title: 'Easy Valet(Beta)',
         theme: appTheme,
         initialRoute: AppRoutes.selector,
         routes: appRoutes,

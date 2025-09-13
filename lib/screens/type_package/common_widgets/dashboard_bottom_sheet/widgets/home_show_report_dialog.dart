@@ -1,21 +1,26 @@
 import 'dart:convert';
 
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 
 import '../../../../../../states/area/area_state.dart';
 import '../../../../../../states/user/user_state.dart';
 import '../../../../../../utils/snackbar_helper.dart';
 import '../../../../../../utils/blocking_dialog.dart';
 
+
 import '../../../../../repositories/plate_repo_services/plate_count_service.dart';
 import 'home_end_work_report_content.dart';
+
 
 /// 잠금 요금 안전 추출
 int _extractLockedFeeAmount(Map<String, dynamic> data) {
   final top = data['lockedFeeAmount'];
   if (top is num) return top.round();
+
 
   final logs = data['logs'];
   if (logs is List) {
@@ -30,6 +35,7 @@ int _extractLockedFeeAmount(Map<String, dynamic> data) {
   return 0;
 }
 
+
 /// JSON 인코딩 가능한 값으로 변환(Logs 내부에 Timestamp 등이 있어도 안전하게)
 dynamic _jsonSafe(dynamic v) {
   if (v is Timestamp) return v.toDate().toIso8601String();
@@ -43,12 +49,15 @@ dynamic _jsonSafe(dynamic v) {
   return v;
 }
 
+
 Future<void> showHomeReportDialog(BuildContext context) async {
   // 다이얼로그 열기 전에 현재 지역 읽고 자동 집계값 미리 구하기
   final area = context.read<AreaState>().currentArea;
 
+
   int prefilledVehicleOutput = 0; // 출차(전체): departure_completed && isLockedFee
   int prefilledVehicleInput = 0; // 입차(전체): parking_completed
+
 
   try {
     if (area.isNotEmpty) {
@@ -59,6 +68,7 @@ Future<void> showHomeReportDialog(BuildContext context) async {
     prefilledVehicleOutput = 0;
     prefilledVehicleInput = 0;
   }
+
 
   return showModalBottomSheet(
     context: context,
@@ -87,6 +97,7 @@ Future<void> showHomeReportDialog(BuildContext context) async {
                 return;
               }
 
+
               await runWithBlockingDialog(
                 context: context,
                 message: '보고 처리 중입니다. 잠시만 기다려 주세요...',
@@ -94,6 +105,7 @@ Future<void> showHomeReportDialog(BuildContext context) async {
                   final area = context.read<AreaState>().currentArea;
                   final division = context.read<AreaState>().currentDivision;
                   final userName = context.read<UserState>().name;
+
 
                   if (type == 'end') {
                     // 1) 입력 파싱
@@ -117,6 +129,7 @@ Future<void> showHomeReportDialog(BuildContext context) async {
                       return;
                     }
 
+
                     // 2) 전체 누적 요약을 갱신하기 위한 스냅샷 확보(이 스냅샷을 logs 추출에도 재사용)
                     final platesSnap = await FirebaseFirestore.instance
                         .collection('plates')
@@ -125,14 +138,17 @@ Future<void> showHomeReportDialog(BuildContext context) async {
                         .where('isLockedFee', isEqualTo: true)
                         .get();
 
+
                     int total = 0;
                     for (final d in platesSnap.docs) {
                       total += _extractLockedFeeAmount(d.data());
                     }
 
+
                     // 3) 요약 문서 upsert
                     final summaryRef =
-                        FirebaseFirestore.instance.collection('fee_summaries').doc('${division}_${area}_all');
+                    FirebaseFirestore.instance.collection('fee_summaries').doc('${division}_${area}_all');
+
 
                     await summaryRef.set({
                       'division': division,
@@ -143,6 +159,7 @@ Future<void> showHomeReportDialog(BuildContext context) async {
                       'lastUpdated': FieldValue.serverTimestamp(),
                     }, SetOptions(merge: true));
 
+
                     // 4) 최신 합계 읽기
                     final latestSnap = await summaryRef.get();
                     final latestData = latestSnap.data();
@@ -150,8 +167,10 @@ Future<void> showHomeReportDialog(BuildContext context) async {
                         ? (latestData?['totalLockedFee'] as num).round()
                         : 0;
 
+
                     // 5) 출차 차량 수 자동 집계(전체)로 보정하고 보고 JSON 구성
                     final vehicleOutputAuto = await PlateCountService().getDepartureCompletedCountAll(area);
+
 
                     final reportLog = {
                       'division': division,
@@ -164,6 +183,7 @@ Future<void> showHomeReportDialog(BuildContext context) async {
                       'timestamp': FieldValue.serverTimestamp(),
                     };
 
+
                     // 6) 보고 JSON 업로드(GCS)
                     await uploadEndWorkReportJson(
                       report: reportLog,
@@ -171,6 +191,7 @@ Future<void> showHomeReportDialog(BuildContext context) async {
                       area: area,
                       userName: userName,
                     );
+
 
                     // 7) 🔥 logs 집계 JSON 생성 → 업로드(GCS)
                     final List<Map<String, dynamic>> items = [];
@@ -182,11 +203,13 @@ Future<void> showHomeReportDialog(BuildContext context) async {
                       });
                     }
 
+
                     final logsPayload = {
                       'division': division,
                       'area': area,
                       'items': items,
                     };
+
 
                     await uploadEndLogJson(
                       report: logsPayload,
@@ -195,8 +218,10 @@ Future<void> showHomeReportDialog(BuildContext context) async {
                       userName: userName,
                     );
 
+
                     // 8) 필요 시 문서 삭제(보고·백업 완료 후)
-                    // await deleteLockedDepartureDocs(area);
+                    await deleteLockedDepartureDocs(area);
+
 
                     // 9) UI 피드백
                     if (context.mounted) {
@@ -204,7 +229,7 @@ Future<void> showHomeReportDialog(BuildContext context) async {
                       showSuccessSnackbar(
                         context,
                         "업무 종료 보고 업로드 및 출차 초기화 "
-                        "(입차: ${parsed['vehicleInput']}, 출차: $vehicleOutputAuto • 전체집계)",
+                            "(입차: ${parsed['vehicleInput']}, 출차: $vehicleOutputAuto • 전체집계)",
                       );
                     }
                   } else if (type == 'start') {
@@ -218,6 +243,7 @@ Future<void> showHomeReportDialog(BuildContext context) async {
                       showFailedSnackbar(context, '사용자 정보가 없어 보고를 저장할 수 없습니다.');
                       return;
                     }
+
 
                     if (context.mounted) {
                       Navigator.pop(context);
@@ -234,9 +260,11 @@ Future<void> showHomeReportDialog(BuildContext context) async {
   );
 }
 
+
 /// 🔧 보고 후 정리: departure_completed & isLockedFee=true 문서 일괄 삭제
 Future<void> deleteLockedDepartureDocs(String area) async {
   final firestore = FirebaseFirestore.instance;
+
 
   final snap = await firestore
       .collection('plates')
@@ -245,7 +273,9 @@ Future<void> deleteLockedDepartureDocs(String area) async {
       .where('isLockedFee', isEqualTo: true)
       .get();
 
+
   if (snap.docs.isEmpty) return;
+
 
   final batch = firestore.batch();
   for (final d in snap.docs) {
@@ -253,3 +283,6 @@ Future<void> deleteLockedDepartureDocs(String area) async {
   }
   await batch.commit();
 }
+
+
+

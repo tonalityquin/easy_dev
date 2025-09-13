@@ -66,11 +66,12 @@ dependencies:
   # git
   flutter_secure_storage: ^9.2.4
   flutter_markdown: ^0.7.7+1
-
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.4   # ← 버전만 둡니다
+
 
 flutter:
   uses-material-design: true
@@ -83,4 +84,19 @@ flutter:
     - assets/images/move_to_service.png
     - assets/icons/icon_belivussnc.PNG
     - assets/icons/icon_easyvalet.PNG
+    - assets/icons/app_icon.png        # 런처 아이콘 원본을 앱 내에서도 쓸 거면 유지, 아니면 삭제해도 됨
+    - assets/icons/app_icon_ios.png
     - assets/keys/easydev-97fb6-e31d7e6b30f9.json
+
+
+# ↓↓↓ 최상위 레벨 설정 블록 (dev_dependencies 밖)
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/icons/app_icon.png
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: assets/icons/app_icon.png
+  remove_alpha_ios: true
+
+
+
