@@ -8,6 +8,7 @@
 // 요구 정책 반영:
 //  * userCommon / fieldCommon: '유저 관리', '구역 관리'는 노출되지 않아야 함
 //  * adminCommon: 공통 탭(유저/구역)만 노출 (tablet/monthly/bill 탭은 제외)
+//  * 역할에 “Tablet”이 붙지 않은 변형(태블릿 X)은 Section.tablet을 허용하지 않음
 //
 // 이 파일은 "탭 구성 규칙"만 제공하며, 실사용(계산/반영)은 SecondaryPage 에서 수행합니다.
 //
@@ -110,49 +111,91 @@ const SecondaryInfo tabAreaManage = SecondaryInfo(
   Icon(Icons.add_location_alt),
 );
 
-// ── 역할 정책(어떤 섹션을 허용할지) ───────────────────────────────────────────
-// RoleType 은 기존 위치(예: user_role_type_section.dart)에 있다고 가정합니다.
+// ── 역할 정의 ────────────────────────────────────────────────────────────────
+/// 프로젝트 전역에서 쓰는 RoleType
+/// (라벨과 fromName까지 enum 내부에 포함)
 enum RoleType {
   dev,
   adminBillMonthly,
+  adminBillMonthlyTablet,
   adminBill,
+  adminBillTablet,
   adminCommon,
+  adminCommonTablet,
   userLocationMonthly,
   userMonthly,
   userCommon,
-  fieldCommon,
-}
+  fieldCommon;
 
-extension RoleTypeX on RoleType {
-  static RoleType fromName(String name) {
-    switch (name) {
-      case 'dev':
-        return RoleType.dev;
-      case 'adminBillMonthly':
-        return RoleType.adminBillMonthly;
-      case 'adminBill':
-        return RoleType.adminBill;
-      case 'adminCommon':
-        return RoleType.adminCommon;
-      case 'userLocationMonthly':
-        return RoleType.userLocationMonthly;
-      case 'userMonthly':
-        return RoleType.userMonthly;
-      case 'userCommon':
-        return RoleType.userCommon;
-      case 'fieldCommon':
-        return RoleType.fieldCommon;
-      default:
-        return RoleType.userCommon;
+  /// 한국어 라벨 반환
+  String get label {
+    switch (this) {
+      case RoleType.dev:
+        return '개발자(태블릿 O)';
+      case RoleType.adminBillMonthly:
+        return '모두 열린 관리자(태블릿 X)';
+      case RoleType.adminBillMonthlyTablet:
+        return '모두 열린 관리자(태블릿 O)';
+      case RoleType.adminBill:
+        return '정산만 열린 관리자(태블릿 X)';
+      case RoleType.adminBillTablet:
+        return '정산만 열린 관리자(태블릿 O)';
+      case RoleType.adminCommon:
+        return '공통 관리자(태블릿 X)';
+      case RoleType.adminCommonTablet:
+        return '공통 관리자(태블릿 O)';
+      case RoleType.userLocationMonthly:
+        return '모두 열린 유저(태블릿 X)';
+      case RoleType.userMonthly:
+        return '정기 주차만 열린 유저(태블릿 X)';
+      case RoleType.userCommon:
+        return '공통 유저(태블릿 X)';
+      case RoleType.fieldCommon:
+        return '공통 필드(태블릿 X)';
     }
+  }
+
+  /// 이름 문자열에서 RoleType enum으로 변환 (방어적 매핑)
+  static RoleType fromName(String name) {
+    return RoleType.values.firstWhere(
+          (e) => e.name == name,
+      orElse: () {
+        // 과거 호환 / 오타 방지 기본값: 가장 제한적인 공통 유저
+        switch (name) {
+          case 'adminBillMonthlyTablet':
+            return RoleType.adminBillMonthlyTablet;
+          case 'adminBillTablet':
+            return RoleType.adminBillTablet;
+          case 'adminCommonTablet':
+            return RoleType.adminCommonTablet;
+          case 'adminBillMonthly':
+            return RoleType.adminBillMonthly;
+          case 'adminBill':
+            return RoleType.adminBill;
+          case 'adminCommon':
+            return RoleType.adminCommon;
+          case 'userLocationMonthly':
+            return RoleType.userLocationMonthly;
+          case 'userMonthly':
+            return RoleType.userMonthly;
+          case 'fieldCommon':
+            return RoleType.fieldCommon;
+          case 'dev':
+            return RoleType.dev;
+          default:
+            return RoleType.userCommon;
+        }
+      },
+    );
   }
 }
 
 /// 역할 → 허용 섹션
 ///
-/// 요구사항 반영:
-/// - userCommon / fieldCommon 은 '유저 관리', '구역 관리'가 노출되면 안 됨
-/// - adminCommon 은 공통 탭(유저/구역)만 노출하고 tablet/monthly/bill 제외
+/// 규칙:
+/// - “Tablet” 변형인 역할만 Section.tablet 허용
+/// - userCommon / fieldCommon 은 '유저 관리', '구역 관리' 노출 금지
+/// - adminCommon 은 공통 탭(유저/구역)만 노출 (tablet/monthly/bill 제외)
 final Map<RoleType, Set<Section>> kRolePolicy = {
   RoleType.dev: {
     Section.local,
@@ -160,51 +203,87 @@ final Map<RoleType, Set<Section>> kRolePolicy = {
     Section.area,     // 개발만 지역 추가
     Section.user,
     Section.location,
-    Section.tablet,
+    Section.tablet,   // 태블릿 O
     Section.monthly,
     Section.bill,
   },
+
+  // 모두 열린 관리자
   RoleType.adminBillMonthly: {
     Section.local,
     Section.backend,
     Section.user,
     Section.location,
-    Section.tablet,
+    // tablet 제외(태블릿 X)
     Section.monthly,
     Section.bill,
   },
+  RoleType.adminBillMonthlyTablet: {
+    Section.local,
+    Section.backend,
+    Section.user,
+    Section.location,
+    Section.tablet,   // 태블릿 O
+    Section.monthly,
+    Section.bill,
+  },
+
+  // 정산만 열린 관리자
   RoleType.adminBill: {
     Section.local,
     Section.backend,
     Section.user,
     Section.location,
-    Section.tablet,
-    Section.bill,     // monthly 제외
+    // tablet 제외(태블릿 X)
+    Section.bill,
   },
+  RoleType.adminBillTablet: {
+    Section.local,
+    Section.backend,
+    Section.user,
+    Section.location,
+    Section.tablet,   // 태블릿 O
+    Section.bill,
+  },
+
+  // 공통 관리자 (tablet/monthly/bill 제외)
   RoleType.adminCommon: {
     Section.local,
     Section.backend,
     Section.user,
-    Section.location, // tablet/monthly/bill 제외
+    Section.location,
   },
+  RoleType.adminCommonTablet: {
+    Section.local,
+    Section.backend,
+    Section.user,
+    Section.location,
+    Section.tablet,   // 태블릿 O
+  },
+
+  // 유저(공간+정기)
   RoleType.userLocationMonthly: {
     Section.local,
     Section.backend,
     Section.location,
     Section.monthly,
   },
+
+  // 유저(정기)
   RoleType.userMonthly: {
     Section.local,
     Section.backend,
     Section.monthly,
   },
+
+  // 공통 유저 / 공통 필드 → 공통 탭만
   RoleType.userCommon: {
     Section.local,
-    Section.backend,  // user/location 숨김
+    Section.backend,
   },
   RoleType.fieldCommon: {
     Section.local,
-    Section.backend,  // user/location 숨김
+    Section.backend,
   },
 };
 

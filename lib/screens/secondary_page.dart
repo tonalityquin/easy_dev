@@ -1,7 +1,7 @@
 // lib/screens/secondary_page.dart
 //
-// ModeStatus 제거 + 상단 TabBar/TabBarView 전환 버전(칩 UI 전면 삭제).
-// - 상단 AppBar: 고정 텍스트 타이틀(칩/요약 정보 없음) + TabBar
+// ModeStatus 제거 + 상단 TabBar/TabBarView 전환 버전(심플 타이틀, 칩 없음).
+// - 상단 AppBar: 고정 텍스트 타이틀 + TabBar
 // - 탭 계산: RoleType + 지역 Capabilities + kRolePolicy + kSectionRequires
 // - 하단 BottomNavigationBar 없음
 //
@@ -64,7 +64,7 @@ class SecondaryPage extends StatelessWidget {
         ChangeNotifierProxyProvider2<UserState, AreaState, SecondaryState>(
           create: (_) => SecondaryState(pages: const [tabLocalData, tabBackend]),
           update: (ctx, userState, areaState, secondaryState) {
-            final role = RoleTypeX.fromName(userState.role);
+            final role = RoleType.fromName(userState.role);
             final caps = areaState.capabilitiesOfCurrentArea;
             final newPages = _computePages(role: role, areaCaps: caps);
 
@@ -110,7 +110,7 @@ class _SecondaryScaffold extends StatelessWidget {
               foregroundColor: Colors.black,
               elevation: 1,
               centerTitle: true,
-              // ✅ 칩/요약 제거 → 심플 타이틀만
+              // 심플 타이틀
               title: const Text(
                 '보조 페이지',
                 style: TextStyle(fontWeight: FontWeight.w600),

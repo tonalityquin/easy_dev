@@ -1,15 +1,3 @@
-// lib/models/capability.dart
-//
-// 지역별 기능 스위치: tablet(태블릿), monthly(정기 주차), bill(정산)
-// - "구역 관리"와 "유저 관리"는 공통 정책(역할로 제어)으로 처리하므로 capability로 다루지 않음.
-//
-// ✅ 제공 내용
-// 1) Capability 열거형: tablet, monthly, bill
-// 2) Cap 유틸(fromDynamic/toKeys/supports/human)
-//
-// ✅ 참고
-// - 이전 구조의 ModeStatus 관련 kModeRequirements / isModeSupported 는 모두 제거되었습니다.
-//
 enum Capability {
   /// 태블릿/단말 관리
   tablet,
@@ -81,11 +69,6 @@ class Cap {
 
     return <Capability>{};
   }
-
-  static List<String> toKeys(CapSet caps) =>
-      caps.map((c) => c.key).toList(growable: false);
-
-  /// areaCaps 가 requires(필요 capability)들을 모두 포함하는지
   static bool supports(CapSet areaCaps, CapSet requires) =>
       requires.every(areaCaps.contains);
 
