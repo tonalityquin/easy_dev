@@ -1,10 +1,14 @@
+// lib/states/secondary/secondary_state.dart
+//
+// 하단 탭(Secondary) 상태: 선택 인덱스와 페이지 목록 관리
+//
 import 'package:flutter/material.dart';
 import 'secondary_info.dart';
 
 class SecondaryState with ChangeNotifier {
   int _selectedIndex = 0;
   List<SecondaryInfo> _pages;
-  final bool _isLoading = false; // ✅ final로 변경
+  final bool _isLoading = false; // ✅ final로 유지
 
   SecondaryState({required List<SecondaryInfo> pages}) : _pages = pages;
 

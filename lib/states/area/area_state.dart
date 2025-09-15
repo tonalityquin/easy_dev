@@ -1,7 +1,22 @@
 // lib/states/area/area_state.dart
+//
+// - Firestore 'areas' 컬렉션에서 name, division, capabilities 를 읽어
+//   현재 지역(currentArea/currentDivision)과 지역별 Capability 를 관리합니다.
+// - FlutterForegroundTask 로 currentArea 를 전달합니다.
+// - capabilitiesOfCurrentArea 게터 추가: UI/가드에서 바로 사용.
+//
+// 참고: Firestore 문서 스키마 예시
+//   areas/{docId} = {
+//     name: "강남A",
+//     division: "seoul",
+//     capabilities: ["monthly","tablet","bill"] // 또는 {monthly: true, tablet: false} 등
+//   }
+//
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart'; // ✅ FG로 area 전달
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+
+import '../../models/capability.dart';
 
 enum AreaType {
   dev;
@@ -23,6 +38,9 @@ class AreaState with ChangeNotifier {
   final String _selectedDivision = '';
   final bool _isLocked = false;
 
+  // 지역명 → Capability Set 매핑
+  final Map<String, CapSet> _areaCaps = {};
+
   String get currentArea => _currentArea;
   String get currentDivision => _currentDivision;
   String get selectedArea => _selectedArea;
@@ -30,6 +48,10 @@ class AreaState with ChangeNotifier {
   List<String> get availableAreas => _availableAreas.toList();
   bool get isLocked => _isLocked;
   Map<String, List<String>> get divisionAreaMap => _divisionAreaMap;
+
+  /// 현재 지역의 Capability 집합
+  CapSet get capabilitiesOfCurrentArea =>
+      _areaCaps[_currentArea] ?? <Capability>{};
 
   AreaState();
 
@@ -43,6 +65,28 @@ class AreaState with ChangeNotifier {
     }
   }
 
+  /// Firestore 문서 데이터(Map)에서 division/capabilities 파싱 후 상태 반영
+  void _applyDocDataToState(Map<String, dynamic>? data,
+      {required String areaName}) {
+    final divisionRaw = data?['division'] as String?;
+    final capsRaw = data?['capabilities'];
+
+    _currentArea = areaName;
+    _currentDivision =
+    (divisionRaw != null && divisionRaw.trim().isNotEmpty)
+        ? divisionRaw.trim()
+        : 'default';
+
+    // Capability 파싱(없으면 빈 집합)
+    final caps = Cap.fromDynamic(capsRaw);
+    _areaCaps[areaName] = caps;
+
+    // 비어 있던 리스트 초기화/유지
+    _availableAreas
+      ..clear()
+      ..add(areaName);
+  }
+
   Future<void> loadAreasForDivision(String userDivision) async {
     try {
       final snapshot = await _firestore
@@ -53,12 +97,17 @@ class AreaState with ChangeNotifier {
       _divisionAreaMap.clear();
 
       for (final doc in snapshot.docs) {
-        final division = doc['division'] as String? ?? 'default';
-        final name = doc['name'] as String?;
+        final data = doc.data() as Map<String, dynamic>?;
+        final division = (data?['division'] as String?)?.trim();
+        final name = (data?['name'] as String?)?.trim();
 
-        if (name != null && name.trim().isNotEmpty) {
-          _divisionAreaMap.putIfAbsent(division, () => []);
-          _divisionAreaMap[division]!.add(name);
+        if (name != null && name.isNotEmpty) {
+          _divisionAreaMap.putIfAbsent(division ?? 'default', () => []);
+          _divisionAreaMap[division ?? 'default']!.add(name);
+
+          // capabilities 캐시 (선행 로드)
+          final capsRaw = data?['capabilities'];
+          _areaCaps[name] = Cap.fromDynamic(capsRaw);
         }
       }
 
@@ -78,81 +127,39 @@ class AreaState with ChangeNotifier {
           .get();
 
       if (snapshot.docs.isNotEmpty) {
-        final doc = snapshot.docs.first;
-        final division = doc['division'] as String?;
+        final data = snapshot.docs.first.data() as Map<String, dynamic>?;
+        _applyDocDataToState(data, areaName: userArea);
 
-        if (_currentArea != userArea) {
-          _currentArea = userArea;
-          _currentDivision =
-          (division != null && division.trim().isNotEmpty) ? division.trim() : 'default';
+        notifyListeners();
+        debugPrint('✅ 사용자 지역 초기화 완료 → $_currentArea / $_currentDivision'
+            ' / caps: ${Cap.human(capabilitiesOfCurrentArea)}');
 
-          _availableAreas
-            ..clear()
-            ..add(userArea);
-
-          notifyListeners();
-          debugPrint('✅ 사용자 지역 초기화 완료 → $_currentArea / $_currentDivision');
-
-          // ✅ FG에도 반드시 통지
-          _notifyForegroundWithArea();
-        } else {
-          debugPrint('⚠️ 이미 해당 지역이 설정되어 있습니다: $_currentArea');
-        }
+        // ✅ FG에도 반드시 통지
+        _notifyForegroundWithArea();
       } else {
         debugPrint('⚠️ Firestore에 해당 지역이 존재하지 않음: $userArea');
         _currentArea = '';
         _currentDivision = '';
+        notifyListeners();
       }
     } catch (e) {
       debugPrint('❌ Firestore 사용자 지역 초기화 실패: $e');
       _currentArea = '';
       _currentDivision = '';
+      notifyListeners();
     }
   }
 
   Future<void> updateAreaPicker(String newArea, {bool isSyncing = false}) async {
-    if (_isLocked && !isSyncing) {
-      debugPrint('⛔ currentArea는 보호 중 → 변경 무시됨 (입력: $newArea)');
-      return;
-    }
-
-    if (_currentArea == newArea) {
-      debugPrint('ℹ️ currentArea 변경 없음: $_currentArea 그대로 유지됨');
-      return;
-    }
-
-    try {
-      final snapshot = await _firestore
-          .collection('areas')
-          .where('name', isEqualTo: newArea)
-          .limit(1)
-          .get();
-
-      if (snapshot.docs.isNotEmpty) {
-        final doc = snapshot.docs.first;
-        final division = doc['division'] as String?;
-
-        _currentArea = newArea;
-        _currentDivision =
-        (division != null && division.trim().isNotEmpty) ? division.trim() : 'default';
-
-        notifyListeners();
-        final msg = isSyncing
-            ? '🔄 지역 동기화: $_currentArea / division: $_currentDivision'
-            : '✅ 지역 변경됨: $_currentArea / division: $_currentDivision';
-        debugPrint(msg);
-
-        // ✅ FG에도 반드시 통지
-        _notifyForegroundWithArea();
-      } else {
-        debugPrint('⚠️ 지역 정보 없음 - 변경 무시됨: $newArea');
-      }
-    } catch (e) {
-      debugPrint('❌ 지역 변경 실패: $e');
-    }
+    await _updateAreaCommon(newArea, isSyncing: isSyncing);
   }
 
   Future<void> updateArea(String newArea, {bool isSyncing = false}) async {
+    await _updateAreaCommon(newArea, isSyncing: isSyncing);
+  }
+
+  Future<void> _updateAreaCommon(String newArea,
+      {required bool isSyncing}) async {
     if (_isLocked && !isSyncing) {
       debugPrint('⛔ currentArea는 보호 중 → 변경 무시됨 (입력: $newArea)');
       return;
@@ -171,18 +178,14 @@ class AreaState with ChangeNotifier {
           .get();
 
       if (snapshot.docs.isNotEmpty) {
-        final doc = snapshot.docs.first;
-        final division = doc['division'] as String?;
-
-        _currentArea = newArea;
-        _currentDivision =
-        (division != null && division.trim().isNotEmpty) ? division.trim() : 'default';
+        final data = snapshot.docs.first.data() as Map<String, dynamic>?;
+        _applyDocDataToState(data, areaName: newArea);
 
         notifyListeners();
         final msg = isSyncing
             ? '🔄 지역 동기화: $_currentArea / division: $_currentDivision'
             : '✅ 지역 변경됨: $_currentArea / division: $_currentDivision';
-        debugPrint(msg);
+        debugPrint('$msg / caps: ${Cap.human(capabilitiesOfCurrentArea)}');
 
         // ✅ FG에도 반드시 통지
         _notifyForegroundWithArea();

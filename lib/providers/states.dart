@@ -28,7 +28,6 @@ import '../states/plate/plate_state.dart';
 import '../states/plate/filter_plate.dart';
 import '../states/plate/delete_plate.dart';
 import '../states/plate/movement_plate.dart';
-import '../states/secondary/secondary_mode.dart';
 import '../states/user/user_state.dart';
 
 final List<SingleChildWidget> stateProviders = [
@@ -37,9 +36,6 @@ final List<SingleChildWidget> stateProviders = [
   ),
   ChangeNotifierProvider(
     create: (_) => AreaState(),
-  ),
-  ChangeNotifierProvider(
-    create: (_) => SecondaryMode(),
   ),
   ChangeNotifierProvider(
     create: (_) => TabletPadModeState(),

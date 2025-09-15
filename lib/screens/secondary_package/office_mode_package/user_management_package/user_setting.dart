@@ -10,21 +10,21 @@ import 'sections/user_validation_helpers_section.dart';
 
 class UserSettingBottomSheet extends StatefulWidget {
   final Function(
-      String name,
-      String phone,
-      String email,
-      String role,
-      String password,
-      String area,
-      String division,
-      bool isWorking,
-      bool isSaved,
-      String selectedArea,
-      String? startTime,
-      String? endTime,
-      List<String> fixedHolidays,
-      String position,
-      ) onSave;
+    String name,
+    String phone,
+    String email,
+    String role,
+    String password,
+    String area,
+    String division,
+    bool isWorking,
+    bool isSaved,
+    String selectedArea,
+    String? startTime,
+    String? endTime,
+    List<String> fixedHolidays,
+    String position,
+  ) onSave;
 
   final String areaValue;
   final String division;
@@ -57,7 +57,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
   final _emailFocus = FocusNode();
 
   // --- States ---
-  RoleType _selectedRole = RoleType.lowField;
+  RoleType _selectedRole = RoleType.fieldCommon;
   String? _errorMessage;
 
   TimeOfDay? _startTime;
@@ -74,12 +74,12 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
     if (user != null) {
       _nameController.text = user.name;
       _phoneController.text = user.phone;
-      _emailController.text = user.email.split('@').first; // 로컬파트
+      _emailController.text = user.email.split('@').first;
       _passwordController.text = user.password;
       _positionController.text = user.position ?? '';
       _selectedRole = RoleType.values.firstWhere(
-            (r) => r.name == user.role,
-        orElse: () => RoleType.lowField,
+        (r) => r.name == user.role,
+        orElse: () => RoleType.fieldCommon,
       );
       _startTime = user.startTime;
       _endTime = user.endTime;
@@ -179,9 +179,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
   }
 
   String? _timeToString(TimeOfDay? time) {
-    return time != null
-        ? '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}'
-        : null;
+    return time != null ? '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}' : null;
   }
 
   // --- Build ---
@@ -391,9 +389,12 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                             _passwordController.text,
                             widget.areaValue,
                             widget.division,
-                            false, // isWorking (초기 정책 유지)
-                            false, // isSaved   (초기 정책 유지)
-                            widget.areaValue, // selectedArea
+                            false,
+                            // isWorking (초기 정책 유지)
+                            false,
+                            // isSaved   (초기 정책 유지)
+                            widget.areaValue,
+                            // selectedArea
                             _timeToString(_startTime),
                             _timeToString(_endTime),
                             _selectedHolidays.toList(),

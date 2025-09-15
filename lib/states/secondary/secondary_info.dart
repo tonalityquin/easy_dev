@@ -1,5 +1,19 @@
+// lib/states/secondary/secondary_info.dart
+//
+// Secondary 탭 정의와 "역할 정책 + capability 요구"를 한 곳에 정리.
+// - 공통 탭(로컬/백엔드)은 항상 표시 가능(별도 Capability 불요)
+// - 선택 탭(태블릿/월주차/정산)은 Capability 필요
+// - 역할(RoleType)별로 어느 섹션(Section)을 허용할지 정책 맵으로 관리
+//
+// 요구 정책 반영:
+//  * userCommon / fieldCommon: '유저 관리', '구역 관리'는 노출되지 않아야 함
+//  * adminCommon: 공통 탭(유저/구역)만 노출 (tablet/monthly/bill 탭은 제외)
+//
+// 이 파일은 "탭 구성 규칙"만 제공하며, 실사용(계산/반영)은 SecondaryPage 에서 수행합니다.
+//
 import 'package:flutter/material.dart';
 
+import '../../models/capability.dart';
 
 import '../../screens/secondary_package/office_mode_package/bill_management.dart';
 import '../../screens/secondary_package/office_mode_package/location_management.dart';
@@ -10,89 +24,198 @@ import '../../screens/secondary_package/dev_mode_package/back_end_controller.dar
 import '../../screens/secondary_package/dev_mode_package/area_management.dart';
 import '../../screens/secondary_package/dev_mode_package/local_data.dart';
 
-
+/// 앱에서 보여줄 하나의 탭(항목)
 class SecondaryInfo {
   final String title;
   final Widget page;
   final Icon icon;
 
+  /// 이 탭이 의미 있으려면 필요한 Capability 집합(비어 있으면 항상 가능)
+  final CapSet requires;
 
-  const SecondaryInfo(this.title, this.page, this.icon);
+  const SecondaryInfo(
+      this.title,
+      this.page,
+      this.icon, {
+        this.requires = const <Capability>{},
+      });
 }
 
+// ── 섹션 정의(역할 정책의 단위) ────────────────────────────────────────────────
+/// 화면에서 의미 있는 "기능 섹션" 단위
+enum Section { user, tablet, monthly, location, bill, area, local, backend }
 
-const _backendController = SecondaryInfo('백엔드 컨트롤러', BackEndController(), Icon(Icons.free_breakfast));
-const _localData = SecondaryInfo('로컬 데이터 관리', LocalData(), Icon(Icons.tab));
-const _userManagement = SecondaryInfo('유저 관리', UserManagement(), Icon(Icons.people));
-const _tabletManagement = SecondaryInfo('태블릿 관리', TabletManagement(), Icon(Icons.military_tech));
-const _locationManagement = SecondaryInfo('구역 관리', LocationManagement(), Icon(Icons.location_on));
-const _billManagement = SecondaryInfo('정산 관리', BillManagement(), Icon(Icons.adjust));
-const _monthlyParking = SecondaryInfo('월 주차 관리', MonthlyParkingManagement(), Icon(Icons.local_parking));
-const _areaManagement = SecondaryInfo('지역 추가', AreaManagement(), Icon(Icons.tab));
+/// 섹션별 Capability 요구 사항(공통은 빈 집합)
+final Map<Section, CapSet> kSectionRequires = {
+  Section.user: const <Capability>{},
+  Section.location: const <Capability>{},
+  Section.tablet: const {Capability.tablet},
+  Section.monthly: const {Capability.monthly},
+  Section.bill: const {Capability.bill},
+  // 개발/로컬/백엔드 섹션은 요구 없음
+  Section.area: const <Capability>{},
+  Section.local: const <Capability>{},
+  Section.backend: const <Capability>{},
+};
 
+// ── 탭 위젯 정의(한 곳에서 재사용) ─────────────────────────────────────────────
+const SecondaryInfo tabLocalData = SecondaryInfo(
+  '로컬 데이터 관리',
+  LocalData(),
+  Icon(Icons.storage),
+);
 
-final List<SecondaryInfo> adminPages = [
-  _backendController,
-  _localData,
-  _userManagement,
-  _locationManagement,
-  _billManagement,
-  _areaManagement,
-];
+const SecondaryInfo tabBackend = SecondaryInfo(
+  '백엔드 컨트롤러',
+  BackEndController(),
+  Icon(Icons.settings_ethernet),
+);
 
+const SecondaryInfo tabUser = SecondaryInfo(
+  '유저 관리',
+  UserManagement(),
+  Icon(Icons.people),
+);
 
-final List<SecondaryInfo> lowUserModePages = [
-  _backendController,
-  _localData,
-  _monthlyParking,
-];
+const SecondaryInfo tabLocation = SecondaryInfo(
+  '구역 관리',
+  LocationManagement(),
+  Icon(Icons.location_on),
+);
 
+const SecondaryInfo tabTablet = SecondaryInfo(
+  '태블릿 관리',
+  TabletManagement(),
+  Icon(Icons.tablet_mac),
+  requires: {Capability.tablet},
+);
 
-final List<SecondaryInfo> middleUserModePages = [
-  _backendController,
-  _locationManagement,
-  _monthlyParking,
-  _localData,
-];
+const SecondaryInfo tabMonthly = SecondaryInfo(
+  '월 주차 관리',
+  MonthlyParkingManagement(),
+  Icon(Icons.local_parking),
+  requires: {Capability.monthly},
+);
 
+const SecondaryInfo tabBill = SecondaryInfo(
+  '정산 관리',
+  BillManagement(),
+  Icon(Icons.receipt_long),
+  requires: {Capability.bill},
+);
 
-final List<SecondaryInfo> highUserModePages = [
-  _backendController,
-  _locationManagement,
-  _monthlyParking,
-  _localData,
-];
+const SecondaryInfo tabAreaManage = SecondaryInfo(
+  '지역 추가',
+  AreaManagement(),
+  Icon(Icons.add_location_alt),
+);
 
+// ── 역할 정책(어떤 섹션을 허용할지) ───────────────────────────────────────────
+// RoleType 은 기존 위치(예: user_role_type_section.dart)에 있다고 가정합니다.
+enum RoleType {
+  dev,
+  adminBillMonthly,
+  adminBill,
+  adminCommon,
+  userLocationMonthly,
+  userMonthly,
+  userCommon,
+  fieldCommon,
+}
 
-final List<SecondaryInfo> managerFieldModePages = [
-  _backendController,
-  _locationManagement,
-  _monthlyParking,
-  _localData,
-];
+extension RoleTypeX on RoleType {
+  static RoleType fromName(String name) {
+    switch (name) {
+      case 'dev':
+        return RoleType.dev;
+      case 'adminBillMonthly':
+        return RoleType.adminBillMonthly;
+      case 'adminBill':
+        return RoleType.adminBill;
+      case 'adminCommon':
+        return RoleType.adminCommon;
+      case 'userLocationMonthly':
+        return RoleType.userLocationMonthly;
+      case 'userMonthly':
+        return RoleType.userMonthly;
+      case 'userCommon':
+        return RoleType.userCommon;
+      case 'fieldCommon':
+        return RoleType.fieldCommon;
+      default:
+        return RoleType.userCommon;
+    }
+  }
+}
 
+/// 역할 → 허용 섹션
+///
+/// 요구사항 반영:
+/// - userCommon / fieldCommon 은 '유저 관리', '구역 관리'가 노출되면 안 됨
+/// - adminCommon 은 공통 탭(유저/구역)만 노출하고 tablet/monthly/bill 제외
+final Map<RoleType, Set<Section>> kRolePolicy = {
+  RoleType.dev: {
+    Section.local,
+    Section.backend,
+    Section.area,     // 개발만 지역 추가
+    Section.user,
+    Section.location,
+    Section.tablet,
+    Section.monthly,
+    Section.bill,
+  },
+  RoleType.adminBillMonthly: {
+    Section.local,
+    Section.backend,
+    Section.user,
+    Section.location,
+    Section.tablet,
+    Section.monthly,
+    Section.bill,
+  },
+  RoleType.adminBill: {
+    Section.local,
+    Section.backend,
+    Section.user,
+    Section.location,
+    Section.tablet,
+    Section.bill,     // monthly 제외
+  },
+  RoleType.adminCommon: {
+    Section.local,
+    Section.backend,
+    Section.user,
+    Section.location, // tablet/monthly/bill 제외
+  },
+  RoleType.userLocationMonthly: {
+    Section.local,
+    Section.backend,
+    Section.location,
+    Section.monthly,
+  },
+  RoleType.userMonthly: {
+    Section.local,
+    Section.backend,
+    Section.monthly,
+  },
+  RoleType.userCommon: {
+    Section.local,
+    Section.backend,  // user/location 숨김
+  },
+  RoleType.fieldCommon: {
+    Section.local,
+    Section.backend,  // user/location 숨김
+  },
+};
 
-final List<SecondaryInfo> lowMiddleManagePages = [
-  _backendController,
-  _userManagement,
-  _tabletManagement,
-  _billManagement,
-];
-
-
-final List<SecondaryInfo> highManagePages = [
-  _backendController,
-  _userManagement,
-  _tabletManagement,
-  _billManagement,
-];
-
-
-final List<SecondaryInfo> devPages = [
-  _backendController,
-  _areaManagement,
-  _localData,
-];
-
-
-
+/// 섹션 → 탭 위젯 매핑
+final Map<Section, SecondaryInfo> kSectionTab = {
+  Section.local: tabLocalData,
+  Section.backend: tabBackend,
+  Section.user: tabUser,
+  Section.location: tabLocation,
+  Section.tablet: tabTablet,
+  Section.monthly: tabMonthly,
+  Section.bill: tabBill,
+  Section.area: tabAreaManage,
+};
