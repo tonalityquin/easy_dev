@@ -1,3 +1,4 @@
+// lib/screens/secondary_package/office_mode_package/tablet_management.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -32,7 +33,7 @@ class _TabletManagementState extends State<TabletManagement> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // ✅ 태블릿 전용 초기 로드
+      // ✅ 태블릿 전용 초기 로드 (캐시 우선)
       context.read<UserState>().loadTabletsOnly();
     });
   }
@@ -88,10 +89,10 @@ class _TabletManagementState extends State<TabletManagement> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      useSafeArea: true,                   // ✅ 안전영역 반영
-      backgroundColor: Colors.transparent, // ✅ 내부 컨테이너가 배경/라운드 담당
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
       builder: (sheetCtx) => FractionallySizedBox(
-        heightFactor: 1,                   // ✅ 화면 높이 100% → 최상단까지
+        heightFactor: 1,
         child: TabletSettingBottomSheet(
           onSave: onSave,
           areaValue: currentArea,
@@ -145,9 +146,8 @@ class _TabletManagementState extends State<TabletManagement> {
             division,
             ) async {
           try {
-            final englishName = await context
-                .read<UserRepository>()
-                .getEnglishNameByArea(area, division);
+            final englishName =
+            await context.read<UserRepository>().getEnglishNameByArea(area, division);
 
             // 🔁 UserModel → TabletModel 로 생성
             final newTablet = TabletModel(
@@ -157,25 +157,26 @@ class _TabletManagementState extends State<TabletManagement> {
               email: email,
               role: role,
               password: password,
-              position: null,      // 축소안: 직책 미사용
+              position: null, // 축소안: 직책 미사용
               areas: [area],
               divisions: [division],
               currentArea: area,
-              selectedArea: area,  // 축소안: selectedArea = area
+              selectedArea: area, // 축소안: selectedArea = area
               englishSelectedAreaName: englishName ?? area,
               isSelected: false,
-              isWorking: false,    // 기본값
-              isSaved: false,      // 기본값
-              startTime: null,     // 축소안
-              endTime: null,       // 축소안
+              isWorking: false, // 기본값
+              isSaved: false, // 기본값
+              startTime: null, // 축소안
+              endTime: null, // 축소안
               fixedHolidays: const [], // 축소안
             );
 
-            // ✅ tablet_accounts에 추가
             await userState.addTabletCard(
               newTablet,
               onError: (msg) => showFailedSnackbar(context, msg),
             );
+            if (!context.mounted) return;
+            showSuccessSnackbar(context, '태블릿 계정이 추가되었습니다.');
           } catch (e) {
             if (!context.mounted) return;
             showFailedSnackbar(context, '계정 생성 실패: $e');
@@ -187,8 +188,7 @@ class _TabletManagementState extends State<TabletManagement> {
 
     // 수정
     if (index == 0 && selectedId != null) {
-      final selectedUser =
-      userState.users.firstWhereOrNull((u) => u.id == selectedId);
+      final selectedUser = userState.tabletUsers.firstWhereOrNull((u) => u.id == selectedId);
       if (selectedUser == null) {
         showFailedSnackbar(context, '선택된 계정을 찾지 못했습니다.');
         return;
@@ -210,12 +210,9 @@ class _TabletManagementState extends State<TabletManagement> {
             division,
             ) async {
           try {
-            final englishName = await context
-                .read<UserRepository>()
-                .getEnglishNameByArea(area, division);
+            final englishName =
+            await context.read<UserRepository>().getEnglishNameByArea(area, division);
 
-            // ⚠️ 현재 예제에서는 UserModel로 업데이트(기존 로직 유지).
-            // tablet_accounts 동기화를 원하면 userState.updateTabletCard 추가 권장.
             final updatedUser = selectedUser.copyWith(
               name: name,
               phone: handle, // handle을 phone 필드에 저장(호환)
@@ -229,7 +226,7 @@ class _TabletManagementState extends State<TabletManagement> {
               englishSelectedAreaName: englishName ?? area,
             );
 
-            await userState.updateLoginUser(updatedUser);
+            await userState.updateLoginTablet(updatedUser);
             if (!context.mounted) return;
             showSuccessSnackbar(context, '수정되었습니다.');
           } catch (e) {
@@ -246,11 +243,12 @@ class _TabletManagementState extends State<TabletManagement> {
       final ok = await _confirmDelete(context);
       if (!ok) return;
 
-      // ✅ tablet_accounts에서 삭제
       await userState.deleteTabletCard(
         [selectedId],
         onError: (msg) => showFailedSnackbar(context, msg),
       );
+      if (!context.mounted) return;
+      showSuccessSnackbar(context, '삭제되었습니다.');
       return;
     }
 
@@ -262,8 +260,8 @@ class _TabletManagementState extends State<TabletManagement> {
   Widget build(BuildContext context) {
     final userState = context.watch<UserState>();
     final areaState = context.watch<AreaState>();
-    final currentArea = areaState.currentArea; // non-nullable 가정
-    final currentDivision = areaState.currentDivision; // non-nullable 가정
+    final currentArea = areaState.currentArea;
+    final currentDivision = areaState.currentDivision;
 
     bool matches(UserModel u) {
       final areas = u.areas;
@@ -273,7 +271,8 @@ class _TabletManagementState extends State<TabletManagement> {
       return areaOk && divisionOk;
     }
 
-    final filteredUsers = userState.users.where(matches).toList();
+    // ✅ 태블릿 전용 리스트 사용 (캐시 우선)
+    final filteredTablets = userState.tabletUsers.where(matches).toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -289,7 +288,7 @@ class _TabletManagementState extends State<TabletManagement> {
             tooltip: '새로고침',
             onPressed: () async {
               try {
-                // ✅ tablet_accounts 기준 새로고침
+                // ✅ tablet_accounts 기준 새로고침 (네트워크 호출은 이때만)
                 await userState.refreshTabletsBySelectedAreaAndCache();
                 if (!context.mounted) return;
                 showSuccessSnackbar(context, '목록이 새로고침되었습니다.');
@@ -303,16 +302,16 @@ class _TabletManagementState extends State<TabletManagement> {
       ),
       body: userState.isLoading
           ? const Center(child: CircularProgressIndicator())
-          : filteredUsers.isEmpty
+          : filteredTablets.isEmpty
           ? Center(
-        child: userState.users.isEmpty
+        child: userState.tabletUsers.isEmpty
             ? const Text('전체 계정 데이터가 없습니다')
             : const Text('현재 지역/사업소에 해당하는 계정이 없습니다'),
       )
           : ListView.builder(
-        itemCount: filteredUsers.length,
+        itemCount: filteredTablets.length,
         itemBuilder: (context, index) {
-          final user = filteredUsers[index];
+          final user = filteredTablets[index];
           final isSelected = userState.selectedUserId == user.id;
 
           return ListTile(

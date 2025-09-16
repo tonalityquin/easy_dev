@@ -1,3 +1,4 @@
+// lib/screens/secondary_package/office_mode_package/user_management.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -33,6 +34,19 @@ class _UserManagementState extends State<UserManagement> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<UserState>().loadUsersOnly();
     });
+  }
+
+  // ▼ 각 파일에 동일하게 두는 갱신 로직 (복제본)
+  Future<void> _refreshUsersForCurrentArea(BuildContext context) async {
+    try {
+      final userState = context.read<UserState>();
+      await userState.refreshUsersBySelectedAreaAndCache();
+      if (!context.mounted) return;
+      showSuccessSnackbar(context, '목록이 새로고침되었습니다.');
+    } catch (e) {
+      if (!context.mounted) return;
+      showFailedSnackbar(context, '새로고침 실패: $e');
+    }
   }
 
   TimeOfDay? _stringToTimeOfDay(String? timeString) {
@@ -80,10 +94,10 @@ class _UserManagementState extends State<UserManagement> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      useSafeArea: true,                   // ✅ 안전영역 반영
-      backgroundColor: Colors.transparent, // ✅ 내부 컨테이너가 배경/라운드 담당
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
       builder: (sheetCtx) => FractionallySizedBox(
-        heightFactor: 1,                   // ✅ 화면 높이 100% → 최상단까지
+        heightFactor: 1,
         child: UserSettingBottomSheet(
           onSave: onSave,
           areaValue: currentArea,
@@ -144,9 +158,8 @@ class _UserManagementState extends State<UserManagement> {
             position,
             ) async {
           try {
-            final englishName = await context
-                .read<UserRepository>()
-                .getEnglishNameByArea(selectedArea, division);
+            final englishName =
+            await context.read<UserRepository>().getEnglishNameByArea(selectedArea, division);
 
             final newUser = UserModel(
               id: '$phone-$area',
@@ -169,10 +182,12 @@ class _UserManagementState extends State<UserManagement> {
               fixedHolidays: fixedHolidays,
             );
 
-            userState.addUserCard(
+            await userState.addUserCard(
               newUser,
               onError: (msg) => showFailedSnackbar(context, msg),
             );
+            if (!context.mounted) return;
+            showSuccessSnackbar(context, '계정이 추가되었습니다.');
           } catch (e) {
             if (!context.mounted) return;
             showFailedSnackbar(context, '계정 생성 실패: $e');
@@ -184,8 +199,7 @@ class _UserManagementState extends State<UserManagement> {
 
     // 수정
     if (index == 0 && selectedId != null) {
-      final selectedUser =
-      userState.users.firstWhereOrNull((u) => u.id == selectedId);
+      final selectedUser = userState.users.firstWhereOrNull((u) => u.id == selectedId);
       if (selectedUser == null) {
         showFailedSnackbar(context, '선택된 계정을 찾지 못했습니다.');
         return;
@@ -211,9 +225,8 @@ class _UserManagementState extends State<UserManagement> {
             position,
             ) async {
           try {
-            final englishName = await context
-                .read<UserRepository>()
-                .getEnglishNameByArea(selectedArea, division);
+            final englishName =
+            await context.read<UserRepository>().getEnglishNameByArea(selectedArea, division);
 
             final updatedUser = selectedUser.copyWith(
               name: name,
@@ -251,10 +264,12 @@ class _UserManagementState extends State<UserManagement> {
       final ok = await _confirmDelete(context);
       if (!ok) return;
 
-      userState.deleteUserCard(
+      await userState.deleteUserCard(
         [selectedId],
         onError: (msg) => showFailedSnackbar(context, msg),
       );
+      if (!context.mounted) return;
+      showSuccessSnackbar(context, '삭제되었습니다.');
       return;
     }
 
@@ -270,14 +285,10 @@ class _UserManagementState extends State<UserManagement> {
     final currentDivision = areaState.currentDivision; // non-nullable 가정
 
     bool matches(UserModel u) {
-      // non-nullable 가정: dead_null_aware_expression 경고 제거
       final areas = u.areas;
       final divisions = u.divisions;
-
-      // unnecessary_null_comparison 경고 제거
       final areaOk = currentArea.isEmpty || areas.contains(currentArea);
-      final divisionOk =
-          currentDivision.isEmpty || divisions.contains(currentDivision);
+      final divisionOk = currentDivision.isEmpty || divisions.contains(currentDivision);
       return areaOk && divisionOk;
     }
 
@@ -288,24 +299,14 @@ class _UserManagementState extends State<UserManagement> {
         backgroundColor: Colors.white,
         elevation: 0,
         foregroundColor: Colors.black87,
-        title:
-        const Text('계정', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('계정', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         automaticallyImplyLeading: false,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: '새로고침',
-            onPressed: () async {
-              try {
-                await userState.refreshUsersBySelectedAreaAndCache();
-                if (!context.mounted) return;
-                showSuccessSnackbar(context, '목록이 새로고침되었습니다.');
-              } catch (e) {
-                if (!context.mounted) return;
-                showFailedSnackbar(context, '새로고침 실패: $e');
-              }
-            },
+            onPressed: () => _refreshUsersForCurrentArea(context),
           ),
         ],
       ),
@@ -333,16 +334,12 @@ class _UserManagementState extends State<UserManagement> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('이메일: ${user.email}'),
-                Text(
-                    '출근: ${formatTime(user.startTime)} / 퇴근: ${formatTime(user.endTime)}'),
+                Text('출근: ${formatTime(user.startTime)} / 퇴근: ${formatTime(user.endTime)}'),
                 Text('역할: ${user.role}'),
-                if (user.position?.isNotEmpty == true)
-                  Text('직책: ${user.position!}'),
+                if (user.position?.isNotEmpty == true) Text('직책: ${user.position!}'),
               ],
             ),
-            trailing: isSelected
-                ? const Icon(Icons.check_circle, color: Colors.green)
-                : null,
+            trailing: isSelected ? const Icon(Icons.check_circle, color: Colors.green) : null,
             selected: isSelected,
             onTap: () => userState.toggleUserCard(user.id),
           );

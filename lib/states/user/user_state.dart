@@ -1,4 +1,6 @@
+// lib/states/user/user_state.dart
 import 'dart:async';
+import 'dart:collection';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -8,8 +10,6 @@ import '../../models/user_model.dart';
 import '../../utils/tts/plate_tts_listener_service.dart';
 import '../../utils/tts/chat_tts_listener_service.dart';
 import '../area/area_state.dart';
-
-// ⬇️ 추가: 오너십 스위치(앱/포그라운드 중 Plate TTS 실행 주체)
 import '../../utils/tts/tts_ownership.dart';
 
 class UserState extends ChangeNotifier {
@@ -17,53 +17,55 @@ class UserState extends ChangeNotifier {
   final AreaState _areaState;
 
   UserModel? _user;
-  List<UserModel> _users = [];
+
+  // ── 분리: 사람/태블릿 전용 리스트 (항상 "복사본"을 보관)
+  List<UserModel> _userList = const [];
+  List<UserModel> _tabletList = const [];
+
   String? _selectedUserId;
   bool _isLoading = true;
 
-  // ✅ 현재 세션이 태블릿 계정 기반인지 여부
+  // 현재 세션 모드(사람/태블릿)
   bool _isTablet = false;
 
   StreamSubscription<List<UserModel>>? _subscription;
-  String _previousSelectedArea = '';
+
+  // ── 게이트를 분리 (사람/태블릿 각각)
+  String _prevAreaUsers = '';
+  String _prevAreaTablets = '';
 
   UserModel? get user => _user;
 
-  List<UserModel> get users => _users;
+  /// 사람 계정 리스트(외부에 변경 불가)
+  UnmodifiableListView<UserModel> get users => UnmodifiableListView(_userList);
+
+  /// 태블릿 계정 리스트(외부에 변경 불가)
+  UnmodifiableListView<UserModel> get tabletUsers => UnmodifiableListView(_tabletList);
+
+  /// 과거 코드 호환용
+  UnmodifiableListView<UserModel> get tablets => tabletUsers;
 
   String? get selectedUserId => _selectedUserId;
-
   bool get isLoggedIn => _user != null;
-
   bool get isWorking => _user?.isWorking ?? false;
-
   bool get isLoading => _isLoading;
-
   bool get isTablet => _isTablet;
 
   String get role => _user?.role ?? '';
-
   String get position => _user?.position ?? '';
-
   String get name => _user?.name ?? '';
-
   String get phone => _user?.phone ?? '';
-
   String get password => _user?.password ?? '';
 
   String get area => _user?.areas.firstOrNull ?? '';
-
   String get division => _user?.divisions.firstOrNull ?? '';
-
   String get currentArea => _user?.currentArea ?? area;
 
   UserState(this._repository, this._areaState) {
     _areaState.addListener(_fetchUsersByAreaWithCache);
   }
 
-  // ==========================
-  // ===== 목록 갱신 (유저) =====
-  // ==========================
+  // ========== 목록 갱신(사람) ==========
   Future<void> refreshUsersBySelectedAreaAndCache() async {
     final selectedArea = _areaState.currentArea.trim();
     _isLoading = true;
@@ -71,8 +73,9 @@ class UserState extends ChangeNotifier {
 
     try {
       final data = await _repository.refreshUsersBySelectedArea(selectedArea);
-      _users = data;
+      _userList = List<UserModel>.of(data, growable: false);
       _selectedUserId = null;
+      _prevAreaUsers = selectedArea;
     } catch (e) {
       debugPrint('🔥 Error refreshing users: $e');
     } finally {
@@ -81,19 +84,17 @@ class UserState extends ChangeNotifier {
     }
   }
 
-  // ============================
-  // ===== 목록 갱신 (태블릿) =====
-  // ============================
+  // ========== 목록 갱신(태블릿) ==========
   Future<void> refreshTabletsBySelectedAreaAndCache() async {
     final selectedArea = _areaState.currentArea.trim();
     _isLoading = true;
     notifyListeners();
 
     try {
-      // tablet_accounts 기반 조회 (UserModel로 매핑되어 반환)
       final data = await _repository.refreshTabletsBySelectedArea(selectedArea);
-      _users = data;
+      _tabletList = List<UserModel>.of(data, growable: false);
       _selectedUserId = null;
+      _prevAreaTablets = selectedArea;
     } catch (e) {
       debugPrint('🔥 Error refreshing tablets: $e');
     } finally {
@@ -102,18 +103,14 @@ class UserState extends ChangeNotifier {
     }
   }
 
-  // =======================
-  // ===== 상태 토글 등 =====
-  // =======================
+  // ========== 상태 토글 ==========
   Future<void> isHeWorking() async {
     if (_user == null) return;
-
     final newStatus = !_user!.isWorking;
 
-    // ✅ 분기: user_accounts vs tablet_accounts
     if (_isTablet) {
       await _repository.updateWorkingTabletStatus(
-        _user!.phone, // tablet 모드에서는 phone 슬롯 = handle
+        _user!.phone,
         _user!.areas.firstOrNull ?? '',
         isWorking: newStatus,
       );
@@ -124,27 +121,30 @@ class UserState extends ChangeNotifier {
         isWorking: newStatus,
       );
     }
-
     _user = _user!.copyWith(isWorking: newStatus);
     notifyListeners();
   }
 
   Future<void> updateLoginUser(UserModel updatedUser) async {
-    _isTablet = false; // ✅ 서비스(사람) 계정
+    _isTablet = false;
     _user = updatedUser;
     notifyListeners();
+
     await _repository.updateUser(updatedUser);
+
+    // 로컬 리스트 교체 및 캐시 갱신(네트워크 호출 없음)
+    final area = _areaState.currentArea.trim();
+    _userList = _replaceItem(_userList, updatedUser);
+    await _repository.updateUsersCache(area, _userList);
+
     await saveCardToUserPhone(updatedUser);
-    await _fetchUsersByAreaWithCache();
   }
 
-  /// ✅ 태블릿 계정용 업데이트(UserModel로 들어오지만 tablet_accounts로 저장)
   Future<void> updateLoginTablet(UserModel updatedUserAsTablet) async {
-    _isTablet = true; // ✅ 태블릿 계정
+    _isTablet = true;
     _user = updatedUserAsTablet;
     notifyListeners();
 
-    // UserModel → TabletModel 매핑 (A안: docId = handle(=phone)-한글지역명)
     final handle = updatedUserAsTablet.phone.trim().toLowerCase();
     final areaName = (updatedUserAsTablet.selectedArea ??
         updatedUserAsTablet.currentArea ??
@@ -167,7 +167,6 @@ class UserState extends ChangeNotifier {
       name: updatedUserAsTablet.name,
       password: updatedUserAsTablet.password,
       handle: handle,
-      // 핵심: phone을 handle로
       position: updatedUserAsTablet.position,
       role: updatedUserAsTablet.role,
       selectedArea: updatedUserAsTablet.selectedArea,
@@ -175,17 +174,22 @@ class UserState extends ChangeNotifier {
     );
 
     await _repository.updateTablet(tablet);
+
+    // 로컬 리스트 교체 및 캐시 갱신(네트워크 호출 없음)
+    final area = _areaState.currentArea.trim();
+    final mappedAsUser = _mapTabletToUser(tablet, currentAreaOverride: area);
+    _tabletList = _replaceItem(_tabletList, mappedAsUser);
+    await _repository.updateTabletsCache(area, _tabletList);
+
     await _saveTabletPrefsFromUser(updatedUserAsTablet);
-    await _fetchTabletsByArea();
   }
 
   Future<void> clearUserToPhone() async {
     if (_user == null) return;
 
-    // ✅ 분기: user_accounts vs tablet_accounts
     if (_isTablet) {
       await _repository.updateLogOutTabletStatus(
-        _user!.phone, // tablet 모드에서는 phone 슬롯 = handle
+        _user!.phone,
         _user!.areas.firstOrNull ?? '',
         isWorking: false,
         isSaved: false,
@@ -210,32 +214,32 @@ class UserState extends ChangeNotifier {
     notifyListeners();
   }
 
-  // =========================
-  // ===== 초기 로드 분기 =====
-  // =========================
+  // ========== 초기 로드 ==========
   Future<void> loadUsersOnly() async {
     _isLoading = true;
-    _previousSelectedArea = '';
+    _resetPrevAreaGateUsers(); // ✅ 사람 게이트만 초기화
     notifyListeners();
     await _fetchUsersByAreaWithCache();
   }
 
-  /// ✅ 태블릿(tablet_accounts) 전용 초기 로드 (캐시 생략, 바로 네트워크)
   Future<void> loadTabletsOnly() async {
     _isLoading = true;
-    _previousSelectedArea = '';
+    _resetPrevAreaGateTablets(); // ✅ 태블릿 게이트만 초기화
     notifyListeners();
-    await _fetchTabletsByArea();
+    await _fetchTabletsByAreaWithCache();
   }
 
-  // ===========================
-  // ===== CRUD 래핑 메서드 =====
-  // ===========================
+  // ========== CRUD 래퍼 ==========
   Future<void> addUserCard(UserModel user, {void Function(String)? onError}) async {
     try {
-      final correctedUser = user.copyWith();
-      await _repository.addUserCard(correctedUser);
-      await _fetchUsersByAreaWithCache();
+      await _repository.addUserCard(user.copyWith());
+
+      // 로컬 반영 + 캐시 갱신
+      final area = _areaState.currentArea.trim();
+      _userList = _insertOrReplace(_userList, user);
+      await _repository.updateUsersCache(area, _userList);
+
+      notifyListeners();
     } catch (e) {
       onError?.call('사용자 추가 실패: $e');
     }
@@ -243,9 +247,15 @@ class UserState extends ChangeNotifier {
 
   Future<void> addTabletCard(TabletModel tablet, {void Function(String)? onError}) async {
     try {
-      final correctedTablet = tablet.copyWith();
-      await _repository.addTabletCard(correctedTablet);
-      await _fetchTabletsByArea();
+      await _repository.addTabletCard(tablet.copyWith());
+
+      // TabletModel → UserModel로 변환 후 로컬 반영 + 캐시 갱신
+      final area = _areaState.currentArea.trim();
+      final asUser = _mapTabletToUser(tablet, currentAreaOverride: area);
+      _tabletList = _insertOrReplace(_tabletList, asUser);
+      await _repository.updateTabletsCache(area, _tabletList);
+
+      notifyListeners();
     } catch (e, st) {
       debugPrint('addTabletCard error: $e\n$st');
       onError?.call('태블릿 계정 추가 실패: $e');
@@ -255,7 +265,13 @@ class UserState extends ChangeNotifier {
   Future<void> deleteUserCard(List<String> ids, {void Function(String)? onError}) async {
     try {
       await _repository.deleteUsers(ids);
-      await _fetchUsersByAreaWithCache();
+
+      // 로컬 반영 + 캐시 갱신
+      final area = _areaState.currentArea.trim();
+      _userList = _userList.where((u) => !ids.contains(u.id)).toList(growable: false);
+      await _repository.updateUsersCache(area, _userList);
+
+      notifyListeners();
     } catch (e) {
       onError?.call('사용자 삭제 실패: $e');
     }
@@ -264,7 +280,13 @@ class UserState extends ChangeNotifier {
   Future<void> deleteTabletCard(List<String> ids, {void Function(String)? onError}) async {
     try {
       await _repository.deleteTablets(ids);
-      await _fetchTabletsByArea();
+
+      // 로컬 반영 + 캐시 갱신
+      final area = _areaState.currentArea.trim();
+      _tabletList = _tabletList.where((u) => !ids.contains(u.id)).toList(growable: false);
+      await _repository.updateTabletsCache(area, _tabletList);
+
+      notifyListeners();
     } catch (e) {
       onError?.call('태블릿 삭제 실패: $e');
     }
@@ -275,9 +297,7 @@ class UserState extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ========================
-  // ===== Prefs 저장 등 =====
-  // ========================
+  // ========== Prefs 저장 ==========
   Future<void> saveCardToUserPhone(UserModel user) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('phone', user.phone);
@@ -288,20 +308,17 @@ class UserState extends ChangeNotifier {
     await prefs.setString('endTime', _timeToString(user.endTime) ?? '');
     await prefs.setStringList('fixedHolidays', user.fixedHolidays);
     await prefs.setString('position', user.position ?? '');
-    debugPrint("📌 SharedPreferences 저장 완료");
   }
 
   Future<void> _saveTabletPrefsFromUser(UserModel asUser) async {
     final prefs = await SharedPreferences.getInstance();
     final handle = asUser.phone.trim().toLowerCase();
-    final areaName = (asUser.selectedArea ?? asUser.currentArea ?? asUser.areas.firstOrNull ?? '').trim();
+    final areaName =
+    (asUser.selectedArea ?? asUser.currentArea ?? asUser.areas.firstOrNull ?? '').trim();
 
     await prefs.setString('handle', handle);
-    await prefs.setString('selectedArea', areaName); // 한글 지역명
-    await prefs.setString(
-      'englishSelectedAreaName',
-      asUser.englishSelectedAreaName ?? areaName, // 값 없으면 한글명 보존
-    );
+    await prefs.setString('selectedArea', areaName);
+    await prefs.setString('englishSelectedAreaName', asUser.englishSelectedAreaName ?? areaName);
     await prefs.setString('division', asUser.divisions.firstOrNull ?? '');
     await prefs.setString('role', asUser.role);
     await prefs.setString('startTime', _timeToString(asUser.startTime) ?? '');
@@ -310,12 +327,8 @@ class UserState extends ChangeNotifier {
     await prefs.setString('position', asUser.position ?? '');
   }
 
-  // ===========================
-  // ===== 자동 로그인(유저) =====
-  // ===========================
+  // ========== 자동 로그인 ==========
   Future<void> loadUserToLogIn() async {
-    debugPrint("loadUserToLogIn, 자동 로그인 시도");
-
     try {
       final prefs = await SharedPreferences.getInstance();
       final phone = prefs.getString('phone')?.trim();
@@ -333,7 +346,7 @@ class UserState extends ChangeNotifier {
       var userData = await _repository.getUserById(userId);
       if (userData == null) return;
 
-      _isTablet = false; // ✅ 사람 계정 세션
+      _isTablet = false;
       final trimmedArea = selectedArea.trim();
 
       await _repository.updateLoadCurrentArea(phone, trimmedArea, trimmedArea);
@@ -352,32 +365,22 @@ class UserState extends ChangeNotifier {
       _user = userData;
       notifyListeners();
 
-      // ✅ Provider의 AreaState 먼저 세팅 (검색/우측 패널이 빈 area로 시작하지 않도록)
       await _areaState.initializeArea(trimmedArea);
 
-      // ✅ 오너십이 app일 때만 앱 내 Plate TTS 시작
       if (await TtsOwnership.isAppOwner()) {
         PlateTtsListenerService.start(trimmedArea);
       }
-      // ✅ 채팅 TTS는 앱 내에서만 동작
       ChatTtsListenerService.start(trimmedArea);
     } catch (e) {
       debugPrint("loadUserToLogIn, 오류: $e");
     }
   }
 
-  // =============================
-  // ===== 자동 로그인(태블릿) =====
-  // =============================
   Future<void> loadTabletToLogIn() async {
-    debugPrint("loadTabletToLogIn, 자동 로그인 시도");
-
     try {
       final prefs = await SharedPreferences.getInstance();
-
-      // A안: 한글 지역명 사용
       final handle = prefs.getString('handle')?.trim().toLowerCase();
-      final selectedArea = prefs.getString('selectedArea')?.trim(); // 한글 지역명
+      final selectedArea = prefs.getString('selectedArea')?.trim();
       final division = prefs.getString('division')?.trim();
       final role = prefs.getString('role')?.trim();
       final startTimeStr = prefs.getString('startTime');
@@ -387,19 +390,13 @@ class UserState extends ChangeNotifier {
 
       if (handle == null || selectedArea == null) return;
 
-      // tablet_accounts에서 조회 (docId = handle-한글지역명)
-      final tablet = await _repository.getTabletByHandleAndAreaName(handle, selectedArea);
+      final tablet =
+      await _repository.getTabletByHandleAndAreaName(handle, selectedArea);
       if (tablet == null) return;
 
-      _isTablet = true; // ✅ 태블릿 계정 세션
+      _isTablet = true;
 
-      // TabletModel → UserModel 매핑 (UI/상태 호환)
-      var userData = _mapTabletToUser(
-        tablet,
-        currentAreaOverride: selectedArea, // 표시 영역은 한글 지역명
-      );
-
-      // 프리퍼런스 값으로 일부 필드 보강(있을 때만)
+      var userData = _mapTabletToUser(tablet, currentAreaOverride: selectedArea);
       userData = userData.copyWith(
         role: role ?? userData.role,
         position: position ?? userData.position,
@@ -413,17 +410,13 @@ class UserState extends ChangeNotifier {
       _user = userData;
       notifyListeners();
 
-      // tablet_accounts의 currentArea를 세션 시작 시 동기화
-      await _repository.updateLoadCurrentAreaTablet(handle, userData.areas.firstOrNull ?? '', selectedArea);
-
-      // ✅ Provider의 AreaState 먼저 세팅
+      await _repository.updateLoadCurrentAreaTablet(
+          handle, userData.areas.firstOrNull ?? '', selectedArea);
       await _areaState.initializeArea(selectedArea);
 
-      // ✅ 오너십이 app일 때만 앱 내 Plate TTS 시작
       if (await TtsOwnership.isAppOwner()) {
         PlateTtsListenerService.start(selectedArea);
       }
-      // ✅ 채팅 TTS는 앱 내에서만 동작
       ChatTtsListenerService.start(selectedArea);
     } catch (e) {
       debugPrint("loadTabletToLogIn, 오류: $e");
@@ -433,15 +426,13 @@ class UserState extends ChangeNotifier {
   Future<void> areaPickerCurrentArea(String newArea) async {
     if (_user == null) return;
 
-    final updatedUser = _user!.copyWith(currentArea: newArea);
-    _user = updatedUser;
+    _user = _user!.copyWith(currentArea: newArea);
     notifyListeners();
 
     try {
-      // ✅ 분기: user_accounts vs tablet_accounts
       if (_isTablet) {
         await _repository.areaPickerCurrentAreaTablet(
-          _user!.phone.trim(), // tablet 모드에서는 phone 슬롯 = handle
+          _user!.phone.trim(),
           _user!.areas.firstOrNull ?? '',
           newArea.trim(),
         );
@@ -456,31 +447,27 @@ class UserState extends ChangeNotifier {
       debugPrint("areaPickerCurrentArea 실패: $e");
     }
 
-    // ✅ Provider AreaState도 동기화 (루트/우측 패널 등 즉시 반영)
     await _areaState.updateArea(newArea, isSyncing: true);
 
-    // ✅ 오너십이 app일 때만 앱 내 Plate TTS 시작(재시작)
     if (await TtsOwnership.isAppOwner()) {
       PlateTtsListenerService.start(newArea);
     }
-    // ✅ 채팅 TTS는 앱 내에서만 동작
     ChatTtsListenerService.start(newArea);
   }
 
-  // ===========================
-  // ===== 내부 리스트 로드 =====
-  // ===========================
-  Future<void> _fetchUsersByAreaWithCache() async {
+  // ========== 내부 로드 ==========
+  Future<void> _fetchUsersByAreaWithCache({bool force = false}) async {
     final selectedArea = _areaState.currentArea.trim();
-    if (selectedArea.isEmpty || _previousSelectedArea == selectedArea) return;
+    if (selectedArea.isEmpty) return;
+    if (!force && _prevAreaUsers == selectedArea) return;
 
-    _previousSelectedArea = selectedArea;
+    _prevAreaUsers = selectedArea;
     _isLoading = true;
     notifyListeners();
 
     try {
       final data = await _repository.getUsersByAreaOnceWithCache(selectedArea);
-      _users = data;
+      _userList = List<UserModel>.of(data, growable: false);
       _selectedUserId = null;
     } catch (e) {
       debugPrint('_fetchUsersByAreaWithCache 실패: $e');
@@ -490,30 +477,55 @@ class UserState extends ChangeNotifier {
     }
   }
 
-  /// tablet_accounts 전용: 캐시 대신 즉시 Firestore 호출
-  Future<void> _fetchTabletsByArea() async {
+  Future<void> _fetchTabletsByAreaWithCache({bool force = false}) async {
     final selectedArea = _areaState.currentArea.trim();
-    if (selectedArea.isEmpty || _previousSelectedArea == selectedArea) return;
+    if (selectedArea.isEmpty) return;
+    if (!force && _prevAreaTablets == selectedArea) return;
 
-    _previousSelectedArea = selectedArea;
+    _prevAreaTablets = selectedArea;
     _isLoading = true;
     notifyListeners();
 
     try {
-      final data = await _repository.refreshTabletsBySelectedArea(selectedArea);
-      _users = data; // UserModel(핸들→phone 매핑) 리스트
+      final data =
+      await _repository.getTabletsByAreaOnceWithCache(selectedArea);
+      _tabletList = List<UserModel>.of(data, growable: false);
       _selectedUserId = null;
     } catch (e) {
-      debugPrint('_fetchTabletsByArea 실패: $e');
+      debugPrint('_fetchTabletsByAreaWithCache 실패: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  // =====================
-  // ===== 유틸 메서드 =====
-  // =====================
+  // ========== 유틸 ==========
+  void _resetPrevAreaGateUsers() => _prevAreaUsers = '';
+  void _resetPrevAreaGateTablets() => _prevAreaTablets = '';
+
+  List<UserModel> _replaceItem(List<UserModel> list, UserModel item) {
+    final idx = list.indexWhere((e) => e.id == item.id);
+    if (idx < 0) {
+      final copied = List<UserModel>.of(list);
+      copied.add(item);
+      return copied;
+    }
+    final copied = List<UserModel>.of(list);
+    copied[idx] = item;
+    return copied;
+  }
+
+  List<UserModel> _insertOrReplace(List<UserModel> list, UserModel item) {
+    final idx = list.indexWhere((e) => e.id == item.id);
+    final copied = List<UserModel>.of(list);
+    if (idx < 0) {
+      copied.add(item);
+    } else {
+      copied[idx] = item;
+    }
+    return copied;
+  }
+
   UserModel _mapTabletToUser(TabletModel t, {String? currentAreaOverride}) {
     return UserModel(
       id: t.id,
@@ -530,13 +542,11 @@ class UserState extends ChangeNotifier {
       name: t.name,
       password: t.password,
       phone: t.handle,
-      // UI 호환: handle → phone 슬롯
       position: t.position,
       role: t.role,
       selectedArea: currentAreaOverride ?? t.selectedArea,
       startTime: t.startTime,
     );
-    // 주의: 캐시/상태 호환을 위해 UserModel로 유지
   }
 
   String? _timeToString(TimeOfDay? time) {

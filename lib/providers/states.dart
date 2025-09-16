@@ -1,3 +1,4 @@
+// (예시 경로) lib/state_providers.dart
 import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
 
@@ -29,6 +30,11 @@ import '../states/plate/filter_plate.dart';
 import '../states/plate/delete_plate.dart';
 import '../states/plate/movement_plate.dart';
 import '../states/user/user_state.dart';
+
+// ▼ Secondary 탭 계산에 필요한 것들
+import '../states/secondary/secondary_state.dart';
+import '../states/secondary/secondary_info.dart';
+import '../models/capability.dart';
 
 final List<SingleChildWidget> stateProviders = [
   ChangeNotifierProvider(
@@ -109,5 +115,51 @@ final List<SingleChildWidget> stateProviders = [
   // ▼ 개발용 Dev 캘린더 모델(CompanyCalendarPage와 동일 패턴의 전역 주입)
   ChangeNotifierProvider(
     create: (_) => DevCalendarModel(DevGoogleCalendarService()),
+  ),
+
+  // ▼▼▼ 여기부터 SecondaryState 전역 주입 (UserState, AreaState 이후여야 함) ▼▼▼
+  ChangeNotifierProxyProvider2<UserState, AreaState, SecondaryState>(
+    create: (_) => SecondaryState(pages: const [tabLocalData, tabBackend]),
+    update: (ctx, userState, areaState, secondaryState) {
+      // role/caps 기반 탭 계산
+      final role = RoleType.fromName(userState.role);
+      final caps = areaState.capabilitiesOfCurrentArea;
+
+      List<SecondaryInfo> computePages(RoleType role, CapSet areaCaps) {
+        final allowedSections = kRolePolicy[role] ?? const <Section>{};
+        if (allowedSections.isEmpty) {
+          // 방어적으로 공통 최소 탭 제공
+          return const [tabLocalData, tabBackend];
+        }
+        final pages = <SecondaryInfo>[];
+        for (final section in allowedSections) {
+          final need = kSectionRequires[section] ?? const <Capability>{};
+          if (Cap.supports(areaCaps, need)) {
+            final info = kSectionTab[section];
+            if (info != null) pages.add(info);
+          }
+        }
+        // 혹시 전부 필터링되어 비면 공통 최소 탭 제공
+        return pages.isEmpty ? const [tabLocalData, tabBackend] : pages;
+      }
+
+      bool sameByTitle(List<SecondaryInfo> a, List<SecondaryInfo> b) {
+        if (identical(a, b)) return true;
+        if (a.length != b.length) return false;
+        for (int i = 0; i < a.length; i++) {
+          if (a[i].title != b[i].title) return false;
+        }
+        return true;
+      }
+
+      final state =
+          secondaryState ?? SecondaryState(pages: const [tabLocalData, tabBackend]);
+      final newPages = computePages(role, caps);
+
+      if (!sameByTitle(state.pages, newPages)) {
+        state.updatePages(newPages, keepIndex: true);
+      }
+      return state;
+    },
   ),
 ];

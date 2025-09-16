@@ -1,3 +1,4 @@
+// lib/repositories/user_repo_services/user_write_service.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:easydev/models/tablet_model.dart';
 import '../../models/user_model.dart';
@@ -20,35 +21,26 @@ class UserWriteService {
     try {
       await docRef.set(user.toMap());
     } on FirebaseException catch (e, st) {
-      // Firestore 에러만 기록
       try {
         await DebugFirestoreLogger().log({
           'op': 'users.add',
           'collection': 'user_accounts',
           'docPath': docRef.path,
           'docId': user.id,
-          'error': {
-            'type': e.runtimeType.toString(),
-            'code': e.code,
-            'message': e.toString(),
-          },
+          'error': {'type': e.runtimeType.toString(), 'code': e.code, 'message': e.toString()},
           'stack': st.toString(),
           'tags': ['users', 'add', 'error'],
         }, level: 'error');
       } catch (_) {}
       rethrow;
     } catch (e, st) {
-      // 기타 예외도 기록(분석용)
       try {
         await DebugFirestoreLogger().log({
           'op': 'users.add.unknown',
           'collection': 'user_accounts',
           'docPath': docRef.path,
           'docId': user.id,
-          'error': {
-            'type': e.runtimeType.toString(),
-            'message': e.toString(),
-          },
+          'error': {'type': e.runtimeType.toString(), 'message': e.toString()},
           'stack': st.toString(),
           'tags': ['users', 'add', 'error'],
         }, level: 'error');
@@ -68,11 +60,7 @@ class UserWriteService {
           'collection': 'tablet_accounts',
           'docPath': docRef.path,
           'docId': tablet.id,
-          'error': {
-            'type': e.runtimeType.toString(),
-            'code': e.code,
-            'message': e.toString(),
-          },
+          'error': {'type': e.runtimeType.toString(), 'code': e.code, 'message': e.toString()},
           'stack': st.toString(),
           'tags': ['tablets', 'add', 'error'],
         }, level: 'error');
@@ -85,10 +73,7 @@ class UserWriteService {
           'collection': 'tablet_accounts',
           'docPath': docRef.path,
           'docId': tablet.id,
-          'error': {
-            'type': e.runtimeType.toString(),
-            'message': e.toString(),
-          },
+          'error': {'type': e.runtimeType.toString(), 'message': e.toString()},
           'stack': st.toString(),
           'tags': ['tablets', 'add', 'error'],
         }, level: 'error');
@@ -109,11 +94,7 @@ class UserWriteService {
           'collection': 'user_accounts',
           'docPath': docRef.path,
           'docId': user.id,
-          'error': {
-            'type': e.runtimeType.toString(),
-            'code': e.code,
-            'message': e.toString(),
-          },
+          'error': {'type': e.runtimeType.toString(), 'code': e.code, 'message': e.toString()},
           'stack': st.toString(),
           'tags': ['users', 'update', 'error'],
         }, level: 'error');
@@ -126,10 +107,7 @@ class UserWriteService {
           'collection': 'user_accounts',
           'docPath': docRef.path,
           'docId': user.id,
-          'error': {
-            'type': e.runtimeType.toString(),
-            'message': e.toString(),
-          },
+          'error': {'type': e.runtimeType.toString(), 'message': e.toString()},
           'stack': st.toString(),
           'tags': ['users', 'update', 'error'],
         }, level: 'error');
@@ -149,11 +127,7 @@ class UserWriteService {
           'collection': 'tablet_accounts',
           'docPath': docRef.path,
           'docId': tablet.id,
-          'error': {
-            'type': e.runtimeType.toString(),
-            'code': e.code,
-            'message': e.toString(),
-          },
+          'error': {'type': e.runtimeType.toString(), 'code': e.code, 'message': e.toString()},
           'stack': st.toString(),
           'tags': ['tablets', 'update', 'error'],
         }, level: 'error');
@@ -166,10 +140,7 @@ class UserWriteService {
           'collection': 'tablet_accounts',
           'docPath': docRef.path,
           'docId': tablet.id,
-          'error': {
-            'type': e.runtimeType.toString(),
-            'message': e.toString(),
-          },
+          'error': {'type': e.runtimeType.toString(), 'message': e.toString()},
           'stack': st.toString(),
           'tags': ['tablets', 'update', 'error'],
         }, level: 'error');
@@ -191,11 +162,7 @@ class UserWriteService {
             'collection': 'user_accounts',
             'docPath': docRef.path,
             'docId': id,
-            'error': {
-              'type': e.runtimeType.toString(),
-              'code': e.code,
-              'message': e.toString(),
-            },
+            'error': {'type': e.runtimeType.toString(), 'code': e.code, 'message': e.toString()},
             'stack': st.toString(),
             'tags': ['users', 'delete', 'error'],
           }, level: 'error');
@@ -208,10 +175,7 @@ class UserWriteService {
             'collection': 'user_accounts',
             'docPath': docRef.path,
             'docId': id,
-            'error': {
-              'type': e.runtimeType.toString(),
-              'message': e.toString(),
-            },
+            'error': {'type': e.runtimeType.toString(), 'message': e.toString()},
             'stack': st.toString(),
             'tags': ['users', 'delete', 'error'],
           }, level: 'error');
@@ -233,11 +197,7 @@ class UserWriteService {
             'collection': 'tablet_accounts',
             'docPath': docRef.path,
             'docId': id,
-            'error': {
-              'type': e.runtimeType.toString(),
-              'code': e.code,
-              'message': e.toString(),
-            },
+            'error': {'type': e.runtimeType.toString(), 'code': e.code, 'message': e.toString()},
             'stack': st.toString(),
             'tags': ['tablets', 'delete', 'error'],
           }, level: 'error');
@@ -250,10 +210,7 @@ class UserWriteService {
             'collection': 'tablet_accounts',
             'docPath': docRef.path,
             'docId': id,
-            'error': {
-              'type': e.runtimeType.toString(),
-              'message': e.toString(),
-            },
+            'error': {'type': e.runtimeType.toString(), 'message': e.toString()},
             'stack': st.toString(),
             'tags': ['tablets', 'delete', 'error'],
           }, level: 'error');
