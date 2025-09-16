@@ -8,10 +8,11 @@ import '../../../states/bill/bill_state.dart';
 import '../../../states/user/user_state.dart';           // ⬅️ 추가
 import '../../../utils/blocking_dialog.dart';           // ⬅️ 추가
 import '../../../utils/tts/tts_user_filters.dart';
+import '../../../utils/sheets_config.dart';             // ⬅️ 추가: 시트 설정 유틸
 
 /// 대시보드 설정: 이 페이지에서 TTS 알림 및 각종 제어를 직접 조절합니다.
 /// - 스위치 변경 즉시: 저장 -> 포그라운드 서비스로 전달 -> 스낵바 안내
-/// - 기본값 복원 / 현재 설정 재적용 / 데이터 새로고침 / 로그아웃 제공
+/// - 기본값 복원 / 현재 설정 재적용 / 데이터 새로고침 / 로그아웃 / 스프레드시트 ID 삽입 제공
 class DashboardSetting extends StatefulWidget {
   const DashboardSetting({super.key});
 
@@ -26,6 +27,9 @@ class _DashboardSettingState extends State<DashboardSetting> {
   // 새로고침 로딩 상태
   bool _refreshing = false;
 
+  // ⬇️ 추가: 업로드용 스프레드시트 ID 표시/관리용 상태
+  String? _commuteSheetId;
+
   @override
   void initState() {
     super.initState();
@@ -34,9 +38,11 @@ class _DashboardSettingState extends State<DashboardSetting> {
 
   Future<void> _load() async {
     final loaded = await TtsUserFilters.load();
+    final sheetId = await SheetsConfig.getCommuteSheetId(); // ⬅️ 추가
     if (!mounted) return;
     setState(() {
       _filters = loaded;
+      _commuteSheetId = sheetId; // ⬅️ 추가
       _loading = false;
     });
   }
@@ -102,7 +108,7 @@ class _DashboardSettingState extends State<DashboardSetting> {
     }
   }
 
-  // ⬇️ 추가: 로그아웃(컨트롤러의 logout 로직 포팅)
+  // ⬇️ 로그아웃
   Future<void> _logout() async {
     try {
       await runWithBlockingDialog(
@@ -126,6 +132,66 @@ class _DashboardSettingState extends State<DashboardSetting> {
         );
       }
     }
+  }
+
+  // ⬇️ 추가: 스프레드시트 ID/URL 삽입(변경) 바텀시트
+  Future<void> _openSetCommuteSheetIdSheet() async {
+    final current = await SheetsConfig.getCommuteSheetId();
+    final textCtrl = TextEditingController(text: current ?? '');
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => Padding(
+        padding: MediaQuery.of(context).viewInsets,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('업로드용 Google Sheets ID 또는 전체 URL', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              TextField(
+                controller: textCtrl,
+                decoration: const InputDecoration(
+                  labelText: '스프레드시트 ID 또는 URL (붙여넣기 가능)',
+                  helperText: 'URL 전체를 붙여넣어도 ID만 자동 추출됩니다.',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.save),
+                onPressed: () async {
+                  final raw = textCtrl.text.trim();
+                  if (raw.isEmpty) return;
+                  final id = SheetsConfig.extractSpreadsheetId(raw);
+                  await SheetsConfig.setCommuteSheetId(id);
+                  if (!mounted) return;
+                  setState(() => _commuteSheetId = id);
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('업로드용 스프레드시트 ID가 저장되었습니다.')),
+                  );
+                },
+                label: const Text('저장'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ⬇️ 추가: 스프레드시트 ID 초기화
+  Future<void> _clearCommuteSheetId() async {
+    await SheetsConfig.clearCommuteSheetId();
+    if (!mounted) return;
+    setState(() => _commuteSheetId = null);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('업로드용 스프레드시트 ID를 초기화했습니다.')),
+    );
   }
 
   @override
@@ -233,6 +299,71 @@ class _DashboardSettingState extends State<DashboardSetting> {
 
           const Divider(height: 24, thickness: 1),
 
+          // ⬇️ 추가: 업로드용 스프레드시트 ID 카드
+          Card(
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              side: const BorderSide(color: Color(0xFFE0E0E0)),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.assignment_outlined),
+                    title: const Text(
+                      '업로드 스프레드시트(ID)',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    subtitle: Text(
+                      _commuteSheetId == null || _commuteSheetId!.isEmpty
+                          ? '(미설정)'
+                          : _commuteSheetId!,
+                    ),
+                    trailing: IconButton(
+                      tooltip: 'ID/URL 삽입 또는 변경',
+                      icon: const Icon(Icons.edit),
+                      onPressed: _openSetCommuteSheetIdSheet,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _openSetCommuteSheetIdSheet,
+                          icon: const Icon(Icons.link),
+                          label: const Text('ID/URL 삽입 또는 변경'),
+                          style: ElevatedButton.styleFrom(
+                            minimumSize: const Size.fromHeight(48),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: (_commuteSheetId == null || _commuteSheetId!.isEmpty)
+                              ? null
+                              : _clearCommuteSheetId,
+                          icon: const Icon(Icons.delete_outline),
+                          label: const Text('초기화'),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size.fromHeight(48),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
           // 데이터 새로고침 카드
           Card(
             elevation: 0,
@@ -280,7 +411,7 @@ class _DashboardSettingState extends State<DashboardSetting> {
 
           const SizedBox(height: 12),
 
-          // ⬇️ 새로 추가: 로그아웃 카드
+          // 로그아웃 카드
           Card(
             elevation: 0,
             shape: RoundedRectangleBorder(

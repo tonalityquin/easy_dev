@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../../../states/user/user_state.dart';
+import '../../../../../../states/secondary/secondary_info.dart'; // 🔎 RoleType 사용
 
 import '../../../../utils/external_openers.dart';
 import 'home_dash_board_controller.dart';
@@ -39,6 +40,10 @@ class _HomeDashBoardBottomSheetState extends State<HomeDashBoardBottomSheet> {
           ),
           child: Consumer<UserState>(
             builder: (context, userState, _) {
+              // ✅ 현재 로그인 유저의 RoleType 감지
+              final roleType = RoleType.fromName(userState.role);
+              final isFieldCommon = roleType == RoleType.fieldCommon;
+
               return SingleChildScrollView(
                 controller: scrollController,
                 padding: const EdgeInsets.all(24),
@@ -83,17 +88,19 @@ class _HomeDashBoardBottomSheetState extends State<HomeDashBoardBottomSheet> {
                           HomeBreakButtonWidget(controller: controller),
                           const SizedBox(height: 16),
 
-                          // 2) 보고 작성
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              icon: const Icon(Icons.assignment),
-                              label: const Text('보고 작성'),
-                              style: _reportBtnStyle(),
-                              onPressed: () => showHomeReportDialog(context),
+                          // 2) 보고 작성 — ❗ fieldCommon 역할이면 숨김
+                          if (!isFieldCommon) ...[
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                icon: const Icon(Icons.assignment),
+                                label: const Text('보고 작성'),
+                                style: _reportBtnStyle(),
+                                onPressed: () => showHomeReportDialog(context),
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 16),
+                            const SizedBox(height: 16),
+                          ],
 
                           // 3) 퇴근하기 (명시 버튼) — 근무 중/아님에 따라 내부에서 처리
                           SizedBox(
