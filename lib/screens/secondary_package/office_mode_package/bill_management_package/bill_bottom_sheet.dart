@@ -62,26 +62,27 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
       final addStdOk = _addStandardValue != null;
 
       final basicAmount = _digitsToInt(_basicAmountController.text);
-      final addAmount = _digitsToInt(_addAmountController.text);
+      final addAmount   = _digitsToInt(_addAmountController.text);
 
+      // ⬇️ 0 허용: <= 0  →  < 0
       if (!countTypeOk ||
           !basicStdOk ||
           !addStdOk ||
-          basicAmount == null ||
-          basicAmount <= 0 ||
-          addAmount == null ||
-          addAmount <= 0) {
-        setState(() => _errorMessage = '모든 항목을 올바르게 입력하세요. 금액은 숫자(>0)만 가능합니다.');
+          basicAmount == null || basicAmount < 0 ||
+          addAmount   == null || addAmount   < 0) {
+        setState(() => _errorMessage = '모든 항목을 올바르게 입력하세요. 금액은 0 이상만 가능합니다.');
         return false;
       }
     } else {
       final nameOk = _regularNameController.text.trim().isNotEmpty;
       final typeOk = _regularType != null;
-      final price = _digitsToInt(_regularPriceController.text);
-      final dur = _digitsToInt(_regularDurationController.text);
+      final price  = _digitsToInt(_regularPriceController.text);
+      final dur    = _digitsToInt(_regularDurationController.text);
 
-      if (!nameOk || !typeOk || price == null || price <= 0 || dur == null || dur <= 0) {
-        setState(() => _errorMessage = '고정 정산 정보를 모두 올바르게 입력하세요. 금액/시간은 숫자(>0)만 가능합니다.');
+      // ⬇️ 고정 요금도 0 허용하려면 price <= 0 → price < 0 로 변경
+      //    (이용 시간은 0 불가 유지: dur <= 0 그대로)
+      if (!nameOk || !typeOk || price == null || price < 0 || dur == null || dur <= 0) {
+        setState(() => _errorMessage = '고정 정산 정보를 확인하세요. 금액은 0 이상, 시간은 1 이상이어야 합니다.');
         return false;
       }
     }
@@ -89,6 +90,7 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
     setState(() => _errorMessage = null);
     return true;
   }
+
 
   void _handleSave() {
     if (!_validateInput()) return;
