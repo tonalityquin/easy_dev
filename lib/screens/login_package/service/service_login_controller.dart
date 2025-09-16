@@ -1,22 +1,30 @@
+// lib/screens/login_package/service/service_login_controller.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart'; // ✅ 추가
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+
 import 'utils/service_login_network_service.dart';
 import 'utils/service_login_validate.dart';
 import '../../../repositories/user_repo_services/user_repository.dart';
 import '../../../states/area/area_state.dart';
 import '../../../states/user/user_state.dart';
 import '../../../utils/snackbar_helper.dart';
-// ⬇️ 추가: TTS 오너십 스위치
 import '../../../utils/tts/tts_ownership.dart';
-// ⬇️ 추가: TTS 사용자 필터
 import '../../../utils/tts/tts_user_filters.dart';
 
 String _ts() => DateTime.now().toIso8601String();
 
 class ServiceLoginController {
+  ServiceLoginController(
+      this.context, {
+        this.onLoginSucceeded, // ✅ 성공 시 화면에서 내비 처리(redirectAfterLogin 반영)
+      });
+
   final BuildContext context;
+
+  // 성공 시 호출되는 콜백(없으면 기본 동작으로 /commute 이동)
+  final VoidCallback? onLoginSucceeded;
 
   final TextEditingController nameController = TextEditingController();
   final TextEditingController phoneController = TextEditingController();
@@ -29,26 +37,34 @@ class ServiceLoginController {
   bool isLoading = false;
   bool obscurePassword = true;
 
-  ServiceLoginController(this.context);
-
+  /// ✅ 자동 로그인 게이트(기존 initState 역할)
+  /// - Firestore로 계정 검증에 성공하면 onLoginSucceeded() 호출 (네비게이션은 화면이 담당)
   void initState() {
     Provider.of<UserState>(context, listen: false).loadUserToLogIn().then((_) {
       final isLoggedIn = Provider.of<UserState>(context, listen: false).isLoggedIn;
       debugPrint('[LOGIN-SERVICE][${_ts()}] autoLogin check → isLoggedIn=$isLoggedIn');
       if (isLoggedIn && context.mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          debugPrint('[LOGIN-SERVICE][${_ts()}] autoLogin → pushReplacementNamed(/commute)');
-          Navigator.pushReplacementNamed(context, '/commute');
+          debugPrint('[LOGIN-SERVICE][${_ts()}] autoLogin → onLoginSucceeded()');
+          // 콜백이 없으면 기존 기본값(/commute)로 이동해 하위 호환 유지
+          if (onLoginSucceeded != null) {
+            onLoginSucceeded!();
+          } else {
+            Navigator.pushReplacementNamed(context, '/commute');
+          }
         });
       }
     });
   }
 
+  /// 수동 로그인
+  /// - 성공 시 onLoginSucceeded() 호출
   Future<void> login(StateSetter setState) async {
     final name = nameController.text.trim();
     final phone = phoneController.text.trim().replaceAll(RegExp(r'\D'), '');
     final password = passwordController.text.trim();
 
+    // 백도어(테스트용) – 기존 동작 유지
     if (name.isEmpty && phone.isEmpty && password == '00000') {
       debugPrint('[LOGIN-SERVICE][${_ts()}] backdoor bypass');
       return;
@@ -125,10 +141,10 @@ class ServiceLoginController {
         final a = context.read<AreaState>().currentArea; // ← '' 방지
         debugPrint('[LOGIN-SERVICE][${_ts()}] send area to FG (currentArea="$a")');
         if (a.isNotEmpty) {
-          final filters = await TtsUserFilters.load(); // ⬅️ 추가
+          final filters = await TtsUserFilters.load();
           FlutterForegroundTask.sendDataToTask({
             'area': a,
-            'ttsFilters': filters.toMap(), // ⬅️ 추가
+            'ttsFilters': filters.toMap(),
           });
           debugPrint('[LOGIN-SERVICE][${_ts()}] sendDataToTask ok (with filters ${filters.toMap()})');
         } else {
@@ -137,8 +153,12 @@ class ServiceLoginController {
 
         if (context.mounted) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            debugPrint('[LOGIN-SERVICE][${_ts()}] navigate → /commute');
-            Navigator.pushReplacementNamed(context, '/commute');
+            debugPrint('[LOGIN-SERVICE][${_ts()}] login success → onLoginSucceeded()');
+            if (onLoginSucceeded != null) {
+              onLoginSucceeded!();
+            } else {
+              Navigator.pushReplacementNamed(context, '/commute'); // 하위 호환
+            }
           });
         }
       } else {
@@ -199,8 +219,7 @@ class ServiceLoginController {
       filled: true,
       fillColor: Colors.grey.shade100,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-      focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16)),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
     );
   }
 

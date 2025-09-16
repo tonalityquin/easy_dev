@@ -39,7 +39,7 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
         _TabletCard(enabled: tabletEnabled),
       ],
       [
-        const _HeadquarterCard(),
+        _HeadquarterCard(enabled: serviceEnabled), // ✅ 리팩토링: 본사도 service 모드에서만
         const _ParkingCard(),
       ],
       [
@@ -636,7 +636,9 @@ class _FaqCard extends StatelessWidget {
 /// - dark: #1565C0 (title)
 /// - light: #64B5F6 (surface tint)
 class _HeadquarterCard extends StatelessWidget {
-  const _HeadquarterCard();
+  const _HeadquarterCard({this.enabled = true});
+
+  final bool enabled;
 
   static const Color _base = Color(0xFF1E88E5);
   static const Color _dark = Color(0xFF1565C0);
@@ -659,7 +661,19 @@ class _HeadquarterCard extends StatelessWidget {
         titleWidget: Text('본사', style: titleStyle, textAlign: TextAlign.center),
         buttonBg: _base,
         buttonFg: Colors.white,
-        onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.headStub),
+        enabled: enabled,
+        disabledHint: '저장된 모드가 service일 때만 선택할 수 있어요',
+        onTap: () {
+          // ✅ 리팩토링 핵심: 본사도 서비스 로그인 검증을 동일하게 거친다
+          Navigator.of(context).pushReplacementNamed(
+            AppRoutes.serviceLogin,
+            arguments: {
+              'redirectAfterLogin': AppRoutes.headStub, // ← 로그인 성공 후 본사(Stub)로 이동
+              // 실제 본사 페이지가 준비됐으면 AppRoutes.headquarterPage 로 교체 가능
+              'requiredMode': 'service',
+            },
+          );
+        },
       ),
     );
   }
