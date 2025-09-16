@@ -1,7 +1,7 @@
 // lib/states/secondary/secondary_info.dart
 //
 // Secondary 탭 정의와 "역할 정책 + capability 요구"를 한 곳에 정리.
-// - 공통 탭(로컬/백엔드)은 항상 표시 가능(별도 Capability 불요)
+// - 공통 탭(대시보드 설정/백엔드)은 항상 표시 가능(별도 Capability 불요)
 // - 선택 탭(태블릿/월주차/정산)은 Capability 필요
 // - 역할(RoleType)별로 어느 섹션(Section)을 허용할지 정책 맵으로 관리
 //
@@ -23,7 +23,8 @@ import '../../screens/secondary_package/office_mode_package/tablet_management.da
 import '../../screens/secondary_package/office_mode_package/user_management.dart';
 import '../../screens/secondary_package/dev_mode_package/back_end_controller.dart';
 import '../../screens/secondary_package/dev_mode_package/area_management.dart';
-import '../../screens/secondary_package/dev_mode_package/local_data.dart';
+// 리팩토링: LocalData 대신 DashboardSetting 사용
+import '../../screens/secondary_package/dev_mode_package/dash_board_setting.dart';
 
 /// 앱에서 보여줄 하나의 탭(항목)
 class SecondaryInfo {
@@ -60,10 +61,11 @@ final Map<Section, CapSet> kSectionRequires = {
 };
 
 // ── 탭 위젯 정의(한 곳에서 재사용) ─────────────────────────────────────────────
+/// 리팩토링: 기존 '로컬 데이터 관리' → '대시보드 설정' + DashboardSetting()
 const SecondaryInfo tabLocalData = SecondaryInfo(
-  '로컬 데이터 관리',
-  LocalData(),
-  Icon(Icons.storage),
+  '대시보드 설정',
+  DashboardSetting(),
+  Icon(Icons.settings),
 );
 
 const SecondaryInfo tabBackend = SecondaryInfo(
@@ -200,10 +202,10 @@ final Map<RoleType, Set<Section>> kRolePolicy = {
   RoleType.dev: {
     Section.local,
     Section.backend,
-    Section.area,     // 개발만 지역 추가
+    Section.area, // 개발만 지역 추가
     Section.user,
     Section.location,
-    Section.tablet,   // 태블릿 O
+    Section.tablet, // 태블릿 O
     Section.monthly,
     Section.bill,
   },
@@ -223,7 +225,7 @@ final Map<RoleType, Set<Section>> kRolePolicy = {
     Section.backend,
     Section.user,
     Section.location,
-    Section.tablet,   // 태블릿 O
+    Section.tablet, // 태블릿 O
     Section.monthly,
     Section.bill,
   },
@@ -242,7 +244,7 @@ final Map<RoleType, Set<Section>> kRolePolicy = {
     Section.backend,
     Section.user,
     Section.location,
-    Section.tablet,   // 태블릿 O
+    Section.tablet, // 태블릿 O
     Section.bill,
   },
 
@@ -258,7 +260,7 @@ final Map<RoleType, Set<Section>> kRolePolicy = {
     Section.backend,
     Section.user,
     Section.location,
-    Section.tablet,   // 태블릿 O
+    Section.tablet, // 태블릿 O
   },
 
   // 유저(공간+정기)

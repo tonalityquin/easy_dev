@@ -91,6 +91,7 @@ class _SwitchTile extends StatelessWidget {
   final String title;
   final bool value;
   final ValueChanged<bool> onChanged;
+
   const _SwitchTile({required this.title, required this.value, required this.onChanged});
 
   @override

@@ -27,19 +27,9 @@ class HqDashBoardPage extends StatelessWidget {
               children: [
                 HomeUserInfoCard(),
                 const SizedBox(height: 16),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.logout),
-                  label: const Text('로그아웃'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.redAccent,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  onPressed: () => controller.logout(context),
-                ),
+
+                // (로그아웃 버튼 제거됨)
+
                 const SizedBox(height: 32),
                 HomeBreakButtonWidget(controller: controller),
                 const SizedBox(height: 16),
