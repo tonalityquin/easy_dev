@@ -1,13 +1,29 @@
 // lib/screens/secondary_page.dart
 //
-// ModeStatus 제거 + 상단 TabBar/TabBarView 전환 버전(심플 타이틀, 칩 없음).
-// - 상단 AppBar: 고정 텍스트 타이틀 + TabBar
-// - 탭 계산은 전역 provider(stateProviders)에서 수행하여 SecondaryState를 주입
-// - 이 파일은 SecondaryState만 소비(Consumer)함
+// 요구사항: "한 번에 두 개의 탭만 보이고, 가로로 스와이프할 때마다 다른 두 개의 탭"이 보이도록.
+// 구현 요약:
+// - 상단 AppBar는 고정 타이틀만 표시.
+// - 본문은 PageView(=청크 페이저)로, 탭들을 2개씩 묶어 페이지화한다(청크 크기 = 2).
+// - 각 청크 페이지 안에는 DefaultTabController + TabBar(최대 2개 탭) + TabBarView(스크롤 비활성)로 구성.
+// - TabBarView는 스와이프 충돌을 방지하기 위해 NeverScrollableScrollPhysics 사용(탭 전환은 탭 클릭으로만).
+// - PageView를 좌우 스와이프하면 다음(또는 이전) 2개 탭 묶음으로 이동.
+// - 외부 SecondaryState.selectedIndex와 양방향 동기화.
 //
+// 동기화 규칙:
+// - PageView로 청크 페이지를 넘기면, 해당 청크의 첫 탭(global index)을 선택 상태로 반영.
+// - 청크 내부 탭을 탭하면, 해당 global index를 SecondaryState에 반영.
+// - 외부에서 selectedIndex가 바뀌면 적절한 청크로 자동 스크롤.
+//
+// 안전 가드:
+// - 탭이 하나도 없을 때 안내 문구 표시
+// - selectedIndex를 pages 길이에 맞게 clamp
+// - PageStorageKey로 각 실제 탭 콘텐츠 상태 보존
+
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../states/secondary/secondary_info.dart';
 import '../states/secondary/secondary_state.dart';
 
 class SecondaryPage extends StatelessWidget {
@@ -15,7 +31,7 @@ class SecondaryPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 🔁 전역에서 이미 SecondaryState가 주입됨: 바로 스캐폴드로 렌더
+    // 전역에서 이미 SecondaryState가 주입됨
     return const _SecondaryScaffold(key: ValueKey('secondary_scaffold'));
   }
 }
@@ -27,114 +43,197 @@ class _SecondaryScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<SecondaryState>(
       builder: (context, state, _) {
-        // DefaultTabController를 pages/selectedIndex 기준으로 교체되도록 key 부여
-        final controllerKey = ValueKey('tabs-${state.pages.length}-${state.selectedIndex}');
+        if (state.pages.isEmpty) {
+          return Scaffold(
+            appBar: _appBar(),
+            body: const Center(child: Text('표시할 탭이 없습니다')),
+          );
+        }
+        // selectedIndex 안전화
+        final int safeIndex =
+        state.selectedIndex.clamp(0, state.pages.length - 1);
 
-        // 현재 인덱스 방어
-        final safeIndex = state.selectedIndex.clamp(
-          0,
-          (state.pages.length - 1).clamp(0, 999),
-        );
-
-        return DefaultTabController(
-          key: controllerKey,
-          length: state.pages.length,
-          initialIndex: safeIndex,
-          child: Scaffold(
-            appBar: AppBar(
-              automaticallyImplyLeading: false,
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.black,
-              elevation: 1,
-              centerTitle: true,
-              // 심플 타이틀
-              title: const Text(
-                '보조 페이지',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-              bottom: TabBar(
-                isScrollable: true,
-                onTap: state.onItemTapped, // 탭 탭 → 상태 반영
-                tabs: state.pages.map((p) => Tab(text: p.title, icon: p.icon)).toList(),
-              ),
-            ),
-            body: Stack(
-              children: [
-                TabBarView(
-                  // 스와이프 시에도 인덱스 연동 필요 → _TabSync로 처리
-                  children: state.pages
-                      .map(
-                        (pageInfo) => _TabSync(
-                          index: state.pages.indexOf(pageInfo),
-                          onPageBecameVisible: (i) {
-                            if (state.selectedIndex != i) {
-                              state.onItemTapped(i);
-                            }
-                          },
-                          child: KeyedSubtree(
-                            key: PageStorageKey<String>('secondary_${pageInfo.title}'),
-                            child: pageInfo.page,
-                          ),
-                        ),
-                      )
-                      .toList(),
-                ),
-                // 로딩 오버레이
-                Positioned.fill(
-                  child: IgnorePointer(
-                    ignoring: !state.isLoading,
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 200),
-                      child:
-                          state.isLoading ? const Center(child: CircularProgressIndicator()) : const SizedBox.shrink(),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+        return _ChunkedTabsRoot(
+          pages: state.pages,
+          selectedIndex: safeIndex,
+          isLoading: state.isLoading,
+          onSelect: state.onItemTapped,
         );
       },
     );
   }
+
+  PreferredSizeWidget _appBar() {
+    return AppBar(
+      automaticallyImplyLeading: false,
+      backgroundColor: Colors.white,
+      foregroundColor: Colors.black,
+      elevation: 1,
+      centerTitle: true,
+      title: const Text(
+        '보조 페이지',
+        style: TextStyle(fontWeight: FontWeight.w600),
+      ),
+    );
+  }
 }
 
-/// TabBarView 페이지 전환 시 현재 보이는 인덱스를 SecondaryState와 동기화하기 위한 헬퍼
-class _TabSync extends StatefulWidget {
-  final int index;
-  final Widget child;
-  final ValueChanged<int> onPageBecameVisible;
+class _ChunkedTabsRoot extends StatefulWidget {
+  final List<SecondaryInfo> pages;
+  final int selectedIndex;
+  final bool isLoading;
+  final ValueChanged<int> onSelect;
 
-  const _TabSync({
-    required this.index,
-    required this.child,
-    required this.onPageBecameVisible,
+  const _ChunkedTabsRoot({
+    required this.pages,
+    required this.selectedIndex,
+    required this.isLoading,
+    required this.onSelect,
   });
 
   @override
-  State<_TabSync> createState() => _TabSyncState();
+  State<_ChunkedTabsRoot> createState() => _ChunkedTabsRootState();
 }
 
-class _TabSyncState extends State<_TabSync> with AutomaticKeepAliveClientMixin {
+class _ChunkedTabsRootState extends State<_ChunkedTabsRoot> {
+  static const int _chunkSize = 2;
+  late final PageController _chunkController;
+  int _currentChunk = 0;
+
+  int get _chunkCount =>
+      (widget.pages.length / _chunkSize).ceil().clamp(1, 9999);
+
+  int _chunkOf(int globalIndex) => globalIndex ~/ _chunkSize;
+
   @override
-  bool get wantKeepAlive => true; // 탭 상태 유지
+  void initState() {
+    super.initState();
+    _currentChunk = _chunkOf(widget.selectedIndex);
+    _chunkController = PageController(initialPage: _currentChunk);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ChunkedTabsRoot oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // 선택 인덱스가 바뀌었으면, 해당하는 청크로 이동
+    final desiredChunk = _chunkOf(widget.selectedIndex);
+    if (desiredChunk != _currentChunk && _chunkController.hasClients) {
+      _currentChunk = desiredChunk;
+      // 애니메이션 이동(컨트롤러가 첫 빌드 중일 수 있으므로 post-frame 보장)
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_chunkController.hasClients) return;
+        _chunkController.animateToPage(
+          _currentChunk,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+        );
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _chunkController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    super.build(context);
-    // 탭 전환 스와이프 감지 → 보이게 될 때 콜백
-    return NotificationListener<ScrollNotification>(
-      onNotification: (n) {
-        // PageView 내부 스크롤이 완료되어 이 위젯이 "완전히 보이는" 시점 감지
-        if (n is ScrollEndNotification) {
-          final controller = DefaultTabController.of(context);
-          if (controller.index == widget.index) {
-            widget.onPageBecameVisible(widget.index);
-          }
-        }
-        return false;
-      },
-      child: widget.child,
+    return Scaffold(
+      appBar: _appBar(),
+      body: Stack(
+        children: [
+          PageView.builder(
+            controller: _chunkController,
+            itemCount: _chunkCount,
+            onPageChanged: (page) {
+              _currentChunk = page;
+              final firstIndexOfChunk = page * _chunkSize;
+              // 현재 선택이 이 청크가 아니면, 청크의 첫 탭으로 선택 전환
+              if (widget.selectedIndex < firstIndexOfChunk ||
+                  widget.selectedIndex >= firstIndexOfChunk + _chunkSize) {
+                widget.onSelect(firstIndexOfChunk);
+              }
+            },
+            itemBuilder: (context, chunk) {
+              final start = chunk * _chunkSize;
+              final end = math.min(start + _chunkSize, widget.pages.length);
+              final items = widget.pages.sublist(start, end);
+              final localInitial =
+              (widget.selectedIndex >= start && widget.selectedIndex < end)
+                  ? widget.selectedIndex - start
+                  : 0;
+
+              return DefaultTabController(
+                length: items.length,
+                initialIndex: localInitial,
+                child: Column(
+                  children: [
+                    // 청크별 탭바 (항상 1~2개만 표시)
+                    Material(
+                      color: Colors.white,
+                      elevation: 1,
+                      child: TabBar(
+                        isScrollable: false,
+                        onTap: (localIdx) {
+                          final globalIdx = start + localIdx;
+                          if (globalIdx != widget.selectedIndex) {
+                            widget.onSelect(globalIdx);
+                          }
+                        },
+                        tabs: [
+                          for (final p in items) Tab(text: p.title, icon: p.icon)
+                        ],
+                      ),
+                    ),
+                    // 콘텐츠: 스와이프 방지(제스처 충돌 방지), 탭 클릭으로만 전환
+                    Expanded(
+                      child: TabBarView(
+                        physics: const NeverScrollableScrollPhysics(),
+                        children: [
+                          for (var i = 0; i < items.length; i++)
+                            KeyedSubtree(
+                              key: PageStorageKey<String>(
+                                  'secondary_${start + i}'),
+                              child: items[i].page,
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+          // 로딩 오버레이
+          Positioned.fill(
+            child: IgnorePointer(
+              ignoring: !widget.isLoading,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                child: widget.isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : const SizedBox.shrink(),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  PreferredSizeWidget _appBar() {
+    return AppBar(
+      automaticallyImplyLeading: false,
+      backgroundColor: Colors.white,
+      foregroundColor: Colors.black,
+      elevation: 1,
+      centerTitle: true,
+      title: const Text(
+        '보조 페이지',
+        style: TextStyle(fontWeight: FontWeight.w600),
+      ),
     );
   }
 }
