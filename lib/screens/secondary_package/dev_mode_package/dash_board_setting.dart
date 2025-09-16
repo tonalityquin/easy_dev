@@ -1,4 +1,3 @@
-// lib/screens/secondary_package/office_mode_package/dashboard_setting.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
@@ -10,6 +9,7 @@ import '../../../states/user/user_state.dart';
 import '../../../utils/blocking_dialog.dart';
 import '../../../utils/tts/tts_user_filters.dart';
 import '../../../utils/sheets_config.dart';
+import '../../../utils/tts/chat_tts_listener_service.dart'; // ✅ 추가
 
 /// 대시보드 설정: 이 페이지에서 TTS 알림 및 각종 제어를 직접 조절합니다.
 /// 잠금 스위치가 켜진 상태(true)면 본문 조작이 차단됩니다.
@@ -27,10 +27,10 @@ class _DashboardSettingState extends State<DashboardSetting> {
   // 새로고침 로딩 상태
   bool _refreshing = false;
 
-  // ⬇️ 업로드용 스프레드시트 ID 표시/관리용 상태
+  // 업로드용 스프레드시트 ID 표시/관리용 상태
   String? _commuteSheetId;
 
-  // ✅ 화면 잠금(기본값 true)
+  // 화면 잠금(기본값 true)
   bool _locked = true;
 
   @override
@@ -42,6 +42,9 @@ class _DashboardSettingState extends State<DashboardSetting> {
   Future<void> _load() async {
     final loaded = await TtsUserFilters.load();
     final sheetId = await SheetsConfig.getCommuteSheetId();
+    // ✅ 시작 시 Chat TTS on/off도 즉시 반영
+    await ChatTtsListenerService.setEnabled(loaded.chat);
+
     if (!mounted) return;
     setState(() {
       _filters = loaded;
@@ -53,6 +56,9 @@ class _DashboardSettingState extends State<DashboardSetting> {
   Future<void> _apply(TtsUserFilters next) async {
     setState(() => _filters = next);
     await _filters.save();
+
+    // ✅ Chat TTS on/off를 즉시 반영
+    await ChatTtsListenerService.setEnabled(_filters.chat);
 
     final area = context.read<AreaState>().currentArea; // 비어있을 수도 있음
     FlutterForegroundTask.sendDataToTask({
@@ -66,6 +72,7 @@ class _DashboardSettingState extends State<DashboardSetting> {
       );
     }
   }
+
   Future<void> _resendToForeground() async {
     final area = context.read<AreaState>().currentArea;
     FlutterForegroundTask.sendDataToTask({
@@ -106,7 +113,7 @@ class _DashboardSettingState extends State<DashboardSetting> {
     }
   }
 
-  // ⬇️ 로그아웃
+  // 로그아웃
   Future<void> _logout() async {
     try {
       await runWithBlockingDialog(
@@ -131,7 +138,7 @@ class _DashboardSettingState extends State<DashboardSetting> {
     }
   }
 
-  // ⬇️ 스프레드시트 ID/URL 삽입(변경) 바텀시트
+  // 스프레드시트 ID/URL 삽입(변경) 바텀시트
   Future<void> _openSetCommuteSheetIdSheet() async {
     final current = await SheetsConfig.getCommuteSheetId();
     final textCtrl = TextEditingController(text: current ?? '');
@@ -182,7 +189,7 @@ class _DashboardSettingState extends State<DashboardSetting> {
     );
   }
 
-  // ⬇️ 스프레드시트 ID 초기화
+  // 스프레드시트 ID 초기화
   Future<void> _clearCommuteSheetId() async {
     await SheetsConfig.clearCommuteSheetId();
     if (!mounted) return;
@@ -226,13 +233,25 @@ class _DashboardSettingState extends State<DashboardSetting> {
               const ListTile(
                 title: Text('TTS 알림 설정',
                     style: TextStyle(fontWeight: FontWeight.w700)),
-                subtitle: Text('스위치를 변경하면 즉시 저장되고 FG 서비스에 적용됩니다.'),
+                subtitle:
+                Text('스위치를 변경하면 즉시 저장되고 FG 서비스에 적용됩니다.'),
               ),
               const Divider(height: 1),
+
+              // ✅ 채팅 TTS on/off
+              SwitchListTile(
+                title: const Text('채팅 읽어주기'),
+                subtitle:
+                const Text('구역 채팅 최신 메시지를 음성으로 읽어줍니다'),
+                value: _filters.chat,
+                onChanged: (v) => _apply(_filters.copyWith(chat: v)),
+              ),
+
               SwitchListTile(
                 title: const Text('입차 요청'),
                 value: _filters.parking,
-                onChanged: (v) => _apply(_filters.copyWith(parking: v)),
+                onChanged: (v) =>
+                    _apply(_filters.copyWith(parking: v)),
               ),
               SwitchListTile(
                 title: const Text('출차 요청'),
@@ -413,8 +432,7 @@ class _DashboardSettingState extends State<DashboardSetting> {
                     '로그아웃',
                     style: TextStyle(fontWeight: FontWeight.w700),
                   ),
-                  subtitle:
-                  Text('포그라운드 서비스를 중지하고 로그인 화면으로 이동합니다.'),
+                  subtitle: Text('포그라운드 서비스를 중지하고 로그인 화면으로 이동합니다.'),
                 ),
                 const SizedBox(height: 8),
                 ElevatedButton.icon(
@@ -464,10 +482,10 @@ class _DashboardSettingState extends State<DashboardSetting> {
       ),
       body: Stack(
         children: [
-          // ✅ 잠금 시 입력 차단
+          // 잠금 시 입력 차단
           IgnorePointer(ignoring: _locked, child: body),
 
-          // ✅ 잠금 상태 시 시각적 오버레이
+          // 잠금 상태 시 시각적 오버레이
           if (_locked)
             Positioned.fill(
               child: Container(

@@ -1,3 +1,5 @@
+// lib/screens/type_page.dart
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -17,6 +19,10 @@ import '../screens/type_package/common_widgets/dashboard_bottom_sheet/home_dash_
 import 'type_package/common_widgets/chats/chat_bottom_sheet.dart';
 import 'secondary_page.dart';
 import '../utils/snackbar_helper.dart';
+
+// ⬇️ 추가: 최근 메시지 저장/재생 기능
+import 'package:shared_preferences/shared_preferences.dart';
+import '../utils/tts/tts_manager.dart';
 
 class TypePage extends StatefulWidget {
   const TypePage({super.key});
@@ -55,11 +61,7 @@ class _TypePageState extends State<TypePage> {
               }
             },
             child: Scaffold(
-              // ✅ 본문은 그대로
               body: const RefreshableBody(),
-
-              // ✅ bottomNavigationBar 내부에
-              // [채팅/대시보드 행] → [네비게이션 바] → [펠리컨 이미지] 순서로 배치
               bottomNavigationBar: SafeArea(
                 top: false,
                 child: Column(
@@ -88,38 +90,98 @@ class _TypePageState extends State<TypePage> {
 class _ChatDashboardBar extends StatelessWidget {
   const _ChatDashboardBar();
 
+  static String _prefsKey(String area) => 'chat.latest_message.$area';
+
+  static Future<void> _saveLatestToPrefs(String area, String message) async {
+    if (area.isEmpty) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_prefsKey(area), message);
+    } catch (e) {
+      debugPrint('⚠️ save latest message failed: $e');
+    }
+  }
+
+  static Future<String?> _readLatestFromPrefs(String area) async {
+    if (area.isEmpty) return null;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_prefsKey(area));
+    } catch (e) {
+      debugPrint('⚠️ read latest message failed: $e');
+      return null;
+    }
+  }
+
+  static Future<void> _replayLatestTts(BuildContext context, String area) async {
+    final text = (await _readLatestFromPrefs(area))?.trim() ?? '';
+    if (text.isEmpty) {
+      showSelectedSnackbar(context, '최근 메시지가 없습니다.');
+      return;
+    }
+    await TtsManager.speak(
+      text,
+      language: 'ko-KR',
+      rate: 0.4,
+      volume: 1.0,
+      pitch: 1.0,
+      preferGoogleOnAndroid: true,
+      openPlayStoreIfMissing: false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final area = context.read<AreaState>().currentArea.trim();
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
       child: Row(
         children: [
+          // ── 채팅: 최근 메시지 저장 + "다시 듣기" 버튼
           Expanded(
-            child: StreamBuilder<String>(
+            child: area.isEmpty
+                ? ElevatedButton(
+              onPressed: null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: Colors.black45,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.volume_up, color: Colors.black45, size: 20),
+                  SizedBox(width: 6),
+                  Text('다시 듣기', style: TextStyle(color: Colors.black45)),
+                ],
+              ),
+            )
+                : StreamBuilder<String>(
+              // 최신 메시지를 스트림으로 받되, 화면에는 “다시 듣기”만 보임
               stream: latestMessageStream(area),
               builder: (context, snapshot) {
-                final latestMessage = snapshot.data ?? '채팅 열기';
+                final latest = (snapshot.data ?? '').trim();
+                if (latest.isNotEmpty) {
+                  // 비동기 저장(중복 호출 무방)
+                  _saveLatestToPrefs(area, latest);
+                }
+
                 return ElevatedButton(
-                  onPressed: () => chatBottomSheet(context),
+                  onPressed: () => _replayLatestTts(context, area),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: Colors.black,
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
-                  child: Row(
+                  child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.message, color: Colors.black, size: 20),
-                      const SizedBox(width: 6),
-                      Text(
-                        latestMessage.length > 20
-                            ? '${latestMessage.substring(0, 20)}...'
-                            : latestMessage,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.black),
-                      ),
+                      Icon(Icons.volume_up, color: Colors.black, size: 20),
+                      SizedBox(width: 6),
+                      Text('다시 듣기', overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.black)),
                     ],
                   ),
                 );
@@ -127,6 +189,8 @@ class _ChatDashboardBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
+
+          // ── 대시보드(기존)
           Expanded(
             child: ElevatedButton(
               onPressed: () {
@@ -168,23 +232,54 @@ class RefreshableBody extends StatefulWidget {
 }
 
 class _RefreshableBodyState extends State<RefreshableBody> {
+  // ── 가로 스와이프(좌/우 페이지 전환)
   double _dragDistance = 0.0;
 
-  void _handleHorizontalDragEnd(BuildContext context, double velocity) {
-    const velocityThreshold = 1000.0;
-    const distanceThreshold = 80.0;
+  // ── 세로 스와이프(아래→위: 채팅 바텀시트)
+  double _vDragDistance = 0.0;
+  double? _vStartDy;
+  bool _chatOpening = false; // 중복 오픈 방지
 
-    if (_dragDistance > distanceThreshold && velocity > velocityThreshold) {
+  // 임계값
+  static const double _hDistanceThreshold = 80.0;
+  static const double _hVelocityThreshold = 1000.0;
+
+  static const double _vDistanceThreshold = 80.0;
+  static const double _vVelocityThreshold = 1000.0;
+
+  void _handleHorizontalDragEnd(BuildContext context, double velocity) {
+    if (_dragDistance > _hDistanceThreshold && velocity > _hVelocityThreshold) {
       Navigator.of(context).push(_slidePage(const InputPlateScreen(), fromLeft: true));
-    } else if (_dragDistance < -distanceThreshold && velocity < -velocityThreshold) {
+    } else if (_dragDistance < -_hDistanceThreshold && velocity < -_hVelocityThreshold) {
       Navigator.of(context).push(_slidePage(const SecondaryPage(), fromLeft: false));
     } else {
+      debugPrint('⏸[H] 거리(${_dragDistance.toStringAsFixed(1)})/속도($velocity) 부족 → 무시');
+    }
+    _dragDistance = 0.0;
+  }
+
+  Future<void> _handleVerticalDragEnd(BuildContext context, DragEndDetails details) async {
+    final vy = details.primaryVelocity ?? 0.0; // 위로 스와이프는 음수
+
+    // 화면 어디서든 위로 빠르게 스와이프하면 실행
+    final fired = _vDragDistance < -_vDistanceThreshold && vy < -_vVelocityThreshold;
+
+    if (fired && !_chatOpening) {
+      _chatOpening = true;
       debugPrint(
-        '⏸ 드래그 거리(${_dragDistance.toStringAsFixed(1)}) 또는 속도($velocity) 부족 → 무시됨',
+        '✅[V] 채팅 오픈 트리거: startDy=${_vStartDy?.toStringAsFixed(1)}, '
+            '거리(${_vDragDistance.toStringAsFixed(1)}), 속도($vy)',
       );
+      // iOS 제스처 충돌 방지용 아주 짧은 디바운스
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      if (mounted) chatBottomSheet(context);
+      _chatOpening = false;
+    } else {
+      debugPrint('⏸[V] 거리(${_vDragDistance.toStringAsFixed(1)}), 속도($vy) → 조건 미충족(무시)');
     }
 
-    _dragDistance = 0.0;
+    _vDragDistance = 0.0;
+    _vStartDy = null;
   }
 
   PageRouteBuilder _slidePage(Widget page, {required bool fromLeft}) {
@@ -203,11 +298,24 @@ class _RefreshableBodyState extends State<RefreshableBody> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      dragStartBehavior: DragStartBehavior.down,
+
+      // ── 가로 스와이프(좌/우 페이지 전환)
       onHorizontalDragUpdate: (details) => _dragDistance += details.delta.dx,
       onHorizontalDragEnd: (details) => _handleHorizontalDragEnd(
         context,
         details.primaryVelocity ?? 0,
       ),
+
+      // ── 세로 스와이프(아래→위: 채팅)
+      onVerticalDragStart: (details) {
+        _vStartDy = details.globalPosition.dy;
+        _vDragDistance = 0.0; // 시작 시 리셋
+      },
+      onVerticalDragUpdate: (details) => _vDragDistance += details.delta.dy, // 위로 음수 누적
+      onVerticalDragEnd: (details) => _handleVerticalDragEnd(context, details),
+
       child: Consumer<PageState>(
         builder: (context, state, child) {
           return Stack(
@@ -290,7 +398,7 @@ class _PageBottomNavigationState extends State<PageBottomNavigation> {
     return Consumer2<PageState, FieldSelectedDateState>(
       builder: (context, pageState, selectedDateState, child) {
         return BottomNavigationBar(
-          elevation: 0, // 그림자 제거(펠리컨 위 그늘 방지)
+          elevation: 0,
           currentIndex: pageState.selectedIndex,
           onTap: (index) {
             pageState.onItemTapped(
