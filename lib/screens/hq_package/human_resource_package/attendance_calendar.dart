@@ -7,8 +7,8 @@ import 'attendances/time_edit_bottom_sheet.dart';
 import 'utils/google_sheets_helper.dart';
 import '../../../states/head_quarter/calendar_selection_state.dart';
 import '../../../../models/user_model.dart';
-import '../../../../states/user/user_state.dart';
 import '../../../../utils/snackbar_helper.dart';
+import '../../../../utils/sheets_config.dart';
 
 class AttendanceCalendar extends StatefulWidget {
   const AttendanceCalendar({super.key});
@@ -21,69 +21,237 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
 
-  String? _selectedArea;
   UserModel? _selectedUser;
-  List<UserModel> _users = [];
 
+  // 사용자가 직접 입력(전화번호 또는 전화번호-지역)
+  final TextEditingController _userInputCtrl = TextEditingController();
+  final FocusNode _userInputFocus = FocusNode();
+
+  // 검색 진행 상태(로더 표시)
+  bool _isSearching = false;
+
+  // 시트 캐시
   Map<int, String> _clockInMap = {};
   Map<int, String> _clockOutMap = {};
-
-  final Map<String, List<UserModel>> _userCache = {};
   final Map<String, Map<int, String>> _inCache = {};
   final Map<String, Map<int, String>> _outCache = {};
+
+  String? _sheetId;
 
   @override
   void initState() {
     super.initState();
+    _loadSheetId();
 
+    // 입력 변화에 따라 suffix 아이콘 갱신
+    _userInputCtrl.addListener(() => setState(() {}));
+
+    // 이전 선택 사용자 복원
     final calendarState = context.read<CalendarSelectionState>();
-    _selectedArea = calendarState.selectedArea;
-    _selectedUser = calendarState.selectedUser;
-
-    if (_selectedArea != null) {
-      _loadUsers(_selectedArea!).then((_) {
-        if (_selectedUser != null) {
-          _loadAttendanceTimes(_selectedUser!);
-        }
-      });
+    final presetUser = calendarState.selectedUser;
+    if (presetUser != null) {
+      _selectedUser = presetUser;
+      final area = presetUser.selectedArea?.trim() ?? '';
+      _userInputCtrl.text =
+      area.isEmpty ? presetUser.phone : '${presetUser.phone}-$area';
+      _loadAttendanceTimes(presetUser);
     }
   }
 
-  Future<void> _loadUsers(String area) async {
-    if (_userCache.containsKey(area)) {
-      debugPrint('[CACHE HIT] 사용자 목록 - area=$area');
-      setState(() {
-        _users = _userCache[area]!;
-      });
-      return;
+  @override
+  void dispose() {
+    _userInputCtrl.dispose();
+    _userInputFocus.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadSheetId() async {
+    final id = await SheetsConfig.getCommuteSheetId();
+    if (!mounted) return;
+    setState(() => _sheetId = id);
+  }
+
+  Future<void> _openSetSheetIdSheet() async {
+    final current = await SheetsConfig.getCommuteSheetId();
+    final textCtrl = TextEditingController(text: current ?? '');
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => Padding(
+        padding: MediaQuery.of(context).viewInsets,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('출근/퇴근/휴게 스프레드시트 ID 입력',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              TextField(
+                controller: textCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Google Sheets ID 또는 전체 URL',
+                  helperText: 'URL 전체를 붙여넣어도 ID만 자동 추출됩니다.',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.save),
+                onPressed: () async {
+                  final raw = textCtrl.text.trim();
+                  if (raw.isEmpty) return;
+                  final id = SheetsConfig.extractSpreadsheetId(raw);
+                  await SheetsConfig.setCommuteSheetId(id);
+                  if (!mounted) return;
+                  setState(() {
+                    _sheetId = id;
+                    _inCache.clear();
+                    _outCache.clear();
+                    _clockInMap.clear();
+                    _clockOutMap.clear();
+                  });
+                  Navigator.pop(context);
+                  showSuccessSnackbar(context, '시트 ID가 저장되었습니다.');
+                  if (_selectedUser != null) {
+                    _loadAttendanceTimes(_selectedUser!);
+                  }
+                },
+                label: const Text('저장'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 전체 지우기(초기화)
+  void _clearAll() {
+    setState(() {
+      _selectedUser = null;
+      _userInputCtrl.clear();
+
+      _clockInMap.clear();
+      _clockOutMap.clear();
+      _inCache.clear();
+      _outCache.clear();
+
+      _selectedDay = null;
+      _focusedDay = DateTime.now();
+    });
+    context.read<CalendarSelectionState>().setUser(null);
+    showSelectedSnackbar(context, '모든 데이터를 초기화했어요.');
+  }
+
+  // 사용자 찾기
+  Future<UserModel?> _findUserByInput(String input) async {
+    final raw = input.trim();
+    if (raw.isEmpty) return null;
+
+    String phone = raw;
+    String? area;
+    final dashIdx = raw.indexOf('-');
+    if (dashIdx != -1) {
+      phone = raw.substring(0, dashIdx).trim();
+      area = raw.substring(dashIdx + 1).trim();
     }
 
-    debugPrint('[CACHE MISS] 사용자 목록 - area=$area → Firestore 요청');
+    final col = FirebaseFirestore.instance.collection('user_accounts');
 
     try {
-      final snapshot =
-          await FirebaseFirestore.instance.collection('user_accounts').where('selectedArea', isEqualTo: area).get();
+      if (area != null && area.isNotEmpty) {
+        // 문서 ID 직조회 (phone-area)
+        final docId = '$phone-$area';
+        final doc = await col.doc(docId).get();
+        if (doc.exists && doc.data() != null) {
+          return UserModel.fromMap(doc.id, doc.data()!);
+        }
+      }
 
-      final users = snapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
+      // phone으로 조회 (여러 명이면 선택)
+      final qs = await col.where('phone', isEqualTo: phone).limit(10).get();
+      if (qs.docs.isEmpty) return null;
+      if (qs.docs.length == 1) {
+        final d = qs.docs.first;
+        return UserModel.fromMap(d.id, d.data());
+      }
 
+      if (!mounted) return null;
+      final picked = await showModalBottomSheet<UserModel>(
+        context: context,
+        isScrollControlled: true,
+        builder: (_) {
+          return SafeArea(
+            child: Material(
+              color: Colors.white,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              child: ListView.separated(
+                shrinkWrap: true,
+                padding: const EdgeInsets.all(16),
+                itemBuilder: (_, i) {
+                  final d = qs.docs[i];
+                  final u = UserModel.fromMap(d.id, d.data());
+                  final area = u.selectedArea ?? '-';
+                  return ListTile(
+                    title: Text('${u.name}  •  $area'),
+                    subtitle: Text(u.phone),
+                    onTap: () => Navigator.pop(context, u),
+                  );
+                },
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemCount: qs.docs.length,
+              ),
+            ),
+          );
+        },
+      );
+      return picked;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _onSearchUserPressed() async {
+    if (_isSearching) return;
+    setState(() => _isSearching = true);
+    try {
+      final user = await _findUserByInput(_userInputCtrl.text);
+      if (user == null) {
+        showFailedSnackbar(context,
+            '사용자를 찾지 못했습니다. 예) 11100000000 또는 11100000000-belivus');
+        return;
+      }
+
+      context.read<CalendarSelectionState>().setUser(user);
       setState(() {
-        _users = users;
-        _userCache[area] = users;
-      });
+        _selectedUser = user;
+        _clockInMap.clear();
+        _clockOutMap.clear();
 
-      showSuccessSnackbar(context, '사용자 ${users.length}명 불러옴');
-    } catch (e) {
-      showFailedSnackbar(context, '사용자 불러오기 실패: $e');
+        final area = user.selectedArea?.trim() ?? '';
+        _userInputCtrl.text = area.isEmpty ? user.phone : '${user.phone}-$area';
+      });
+      _loadAttendanceTimes(user);
+      _userInputFocus.unfocus();
+    } finally {
+      if (mounted) setState(() => _isSearching = false);
     }
   }
 
   Future<void> _loadAttendanceTimes(UserModel user) async {
-    final area = user.selectedArea?.trim() ?? '';
+    if (_sheetId == null || _sheetId!.isEmpty) {
+      showFailedSnackbar(context, '스프레드시트 ID가 설정되지 않았습니다. 우측 상단 버튼으로 설정해 주세요.');
+      return;
+    }
+
+    final area = (user.selectedArea ?? '').trim();
     final userId = '${user.phone}-$area';
     final cacheKey = '$userId-${_focusedDay.year}-${_focusedDay.month}';
 
     if (_inCache.containsKey(cacheKey) && _outCache.containsKey(cacheKey)) {
-      debugPrint('[CACHE HIT] 출퇴근 기록 - key=$cacheKey');
       setState(() {
         _clockInMap = _inCache[cacheKey]!;
         _clockOutMap = _outCache[cacheKey]!;
@@ -91,78 +259,86 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
       return;
     }
 
-    debugPrint('[CACHE MISS] 출퇴근 기록 - key=$cacheKey → Google Sheets 요청');
+    try {
+      final allRows = await GoogleSheetsHelper.loadClockInOutRecordsById(_sheetId!);
 
-    final allRows = await GoogleSheetsHelper.loadClockInOutRecords(area);
+      final inMap = GoogleSheetsHelper.mapToCellData(
+        allRows,
+        statusFilter: '출근',
+        selectedYear: _focusedDay.year,
+        selectedMonth: _focusedDay.month,
+      );
+      final outMap = GoogleSheetsHelper.mapToCellData(
+        allRows,
+        statusFilter: '퇴근',
+        selectedYear: _focusedDay.year,
+        selectedMonth: _focusedDay.month,
+      );
 
-    final inMap = GoogleSheetsHelper.mapToCellData(
-      allRows,
-      statusFilter: '출근',
-      selectedYear: _focusedDay.year,
-      selectedMonth: _focusedDay.month,
-    );
-
-    final outMap = GoogleSheetsHelper.mapToCellData(
-      allRows,
-      statusFilter: '퇴근',
-      selectedYear: _focusedDay.year,
-      selectedMonth: _focusedDay.month,
-    );
-
-    setState(() {
-      _clockInMap = inMap[userId] ?? {};
-      _clockOutMap = outMap[userId] ?? {};
-      _inCache[cacheKey] = _clockInMap;
-      _outCache[cacheKey] = _clockOutMap;
-    });
+      setState(() {
+        _clockInMap = inMap[userId] ?? {};
+        _clockOutMap = outMap[userId] ?? {};
+        _inCache[cacheKey] = _clockInMap;
+        _outCache[cacheKey] = _clockOutMap;
+      });
+    } catch (e) {
+      showFailedSnackbar(context, '출퇴근 기록 로드 실패: $e');
+    }
   }
 
   Future<void> _saveAllChangesToSheets() async {
-    if (_selectedUser == null || _selectedArea == null) return;
+    if (_selectedUser == null) return;
+    if (_sheetId == null || _sheetId!.isEmpty) {
+      showFailedSnackbar(context, '스프레드시트 ID가 설정되지 않았습니다.');
+      return;
+    }
 
     final user = _selectedUser!;
-    final area = _selectedArea!;
+    final area = (user.selectedArea ?? '').trim();
     final userId = '${user.phone}-$area';
     final division = user.divisions.isNotEmpty ? user.divisions.first : '';
 
-    for (final entry in _clockInMap.entries) {
-      final date = DateTime(_focusedDay.year, _focusedDay.month, entry.key);
-      await GoogleSheetsHelper.updateClockInOutRecord(
-        date: date,
-        userId: userId,
-        userName: user.name,
-        area: area,
-        division: division,
-        status: '출근',
-        time: entry.value,
-      );
+    try {
+      for (final entry in _clockInMap.entries) {
+        final date = DateTime(_focusedDay.year, _focusedDay.month, entry.key);
+        await GoogleSheetsHelper.updateClockInOutRecordById(
+          spreadsheetId: _sheetId!,
+          date: date,
+          userId: userId,
+          userName: user.name,
+          area: area,
+          division: division,
+          status: '출근',
+          time: entry.value,
+        );
+      }
+      for (final entry in _clockOutMap.entries) {
+        final date = DateTime(_focusedDay.year, _focusedDay.month, entry.key);
+        await GoogleSheetsHelper.updateClockInOutRecordById(
+          spreadsheetId: _sheetId!,
+          date: date,
+          userId: userId,
+          userName: user.name,
+          area: area,
+          division: division,
+          status: '퇴근',
+          time: entry.value,
+        );
+      }
+
+      showSuccessSnackbar(context, 'Google Sheets에 저장 완료');
+
+      final cacheKey = '$userId-${_focusedDay.year}-${_focusedDay.month}';
+      _inCache[cacheKey] = {..._clockInMap};
+      _outCache[cacheKey] = {..._clockOutMap};
+    } catch (e) {
+      showFailedSnackbar(context, '저장 실패: $e');
     }
-
-    for (final entry in _clockOutMap.entries) {
-      final date = DateTime(_focusedDay.year, _focusedDay.month, entry.key);
-      await GoogleSheetsHelper.updateClockInOutRecord(
-        date: date,
-        userId: userId,
-        userName: user.name,
-        area: area,
-        division: division,
-        status: '퇴근',
-        time: entry.value,
-      );
-    }
-
-    showSuccessSnackbar(context, 'Google Sheets에 저장 완료');
-
-    final cacheKey = '$userId-${_focusedDay.year}-${_focusedDay.month}';
-    _inCache[cacheKey] = {..._clockInMap};
-    _outCache[cacheKey] = {..._clockOutMap};
   }
 
   @override
   Widget build(BuildContext context) {
-    final user = context.watch<UserState>().user;
-    final areaList = user?.areas ?? [];
-    final calendarState = context.watch<CalendarSelectionState>();
+    final suffixWidth = (_userInputCtrl.text.isNotEmpty ? 92.0 : 48.0);
 
     return Scaffold(
       appBar: AppBar(
@@ -172,6 +348,18 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
         title: const Text('출석 캘린더', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         automaticallyImplyLeading: false,
+        actions: [
+          IconButton(
+            tooltip: '전체 지우기',
+            icon: const Icon(Icons.delete_sweep),
+            onPressed: _clearAll,
+          ),
+          IconButton(
+            tooltip: '시트 ID 설정',
+            icon: const Icon(Icons.assignment_add),
+            onPressed: _openSetSheetIdSheet,
+          ),
+        ],
       ),
       body: CustomScrollView(
         slivers: [
@@ -180,58 +368,45 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        flex: 5,
-                        child: DropdownButtonFormField<String>(
-                          value: _selectedArea,
-                          decoration: const InputDecoration(labelText: '지역'),
-                          items: areaList.map((area) {
-                            return DropdownMenuItem(
-                              value: area,
-                              child: Text(area, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14)),
-                            );
-                          }).toList(),
-                          onChanged: (value) async {
-                            if (value != null) {
-                              calendarState.setArea(value);
-                              setState(() {
-                                _selectedArea = value;
-                                _users = [];
-                                _selectedUser = null;
-                              });
-                              await _loadUsers(value);
-                            }
-                          },
-                        ),
+                  // ▶︎ “찾기” 버튼을 텍스트필드 안쪽(suffixIcon)으로 통합
+                  TextField(
+                    controller: _userInputCtrl,
+                    focusNode: _userInputFocus,
+                    onSubmitted: (_) => _onSearchUserPressed(),
+                    decoration: InputDecoration(
+                      labelText: '사용자 (전화번호 또는 전화번호-지역)',
+                      hintText: '예) 11100000000 또는 11100000000-belivus',
+                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.person_search),
+                      suffixIconConstraints: BoxConstraints.tightFor(width: suffixWidth, height: 48),
+                      suffixIcon: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_userInputCtrl.text.isNotEmpty)
+                            IconButton(
+                              tooltip: '입력 지우기',
+                              icon: const Icon(Icons.clear),
+                              onPressed: () => _userInputCtrl.clear(),
+                            ),
+                          _isSearching
+                              ? const Padding(
+                            padding: EdgeInsets.only(right: 8),
+                            child: SizedBox(
+                              width: 20, height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                              : IconButton(
+                            tooltip: '찾기',
+                            icon: const Icon(Icons.search),
+                            onPressed: _onSearchUserPressed,
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        flex: 5,
-                        child: DropdownButtonFormField<UserModel>(
-                          value: _selectedUser,
-                          decoration: const InputDecoration(labelText: '사용자'),
-                          items: _users.map((user) {
-                            return DropdownMenuItem(
-                              value: user,
-                              child: Text(user.name,
-                                  overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14)),
-                            );
-                          }).toList(),
-                          onChanged: (value) {
-                            calendarState.setUser(value);
-                            setState(() => _selectedUser = value);
-                            if (value != null) {
-                              _loadAttendanceTimes(value);
-                            }
-                          },
-                        ),
-                      ),
-                      // 🔥 cloud 아이콘 제거됨
-                    ],
+                    ),
                   ),
                   const SizedBox(height: 8),
+
                   TableCalendar(
                     firstDay: DateTime.utc(2025, 1, 1),
                     lastDay: DateTime.utc(2025, 12, 31),
@@ -269,9 +444,10 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
                       selectedBuilder: _buildCell,
                     ),
                   ),
+
                   const SizedBox(height: 20),
                   ElevatedButton.icon(
-                    onPressed: _selectedUser == null || _selectedArea == null ? null : _saveAllChangesToSheets,
+                    onPressed: _selectedUser == null ? null : _saveAllChangesToSheets,
                     icon: const Icon(Icons.save, size: 20),
                     label: const Text(
                       '변경사항 저장',
@@ -310,8 +486,8 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
         color: isSelected
             ? Colors.orange.withOpacity(0.3)
             : isToday
-                ? Colors.blueAccent.withOpacity(0.2)
-                : Colors.transparent,
+            ? Colors.blueAccent.withOpacity(0.2)
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(

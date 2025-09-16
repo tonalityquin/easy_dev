@@ -20,7 +20,7 @@ class ChatTtsListenerService {
   static Future<void> refreshEnabledFromPrefs() async {
     final f = await TtsUserFilters.load();
     _enabled = f.chat;
-    debugPrint('[ChatTTS] refresh from prefs → enabled=${_enabled}');
+    debugPrint('[ChatTTS] refresh from prefs → enabled=$_enabled');
   }
 
   static void start(String roomId) {

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:googleapis/sheets/v4.dart';
 import 'package:googleapis_auth/auth_io.dart';
@@ -8,22 +7,9 @@ import 'package:intl/intl.dart';
 class GoogleSheetsHelper {
   static const _serviceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
 
-  static String getSpreadsheetId(String area) {
-    const spreadsheetMap = {
-      'belivus': '14qZa34Ha-y5Z6kj7eUqZxcP2CdLlaUQcyTJtLsyU_uo',
-      'pelican': '11VXQiw4bHpZHPmAd1GJHdao4d9C3zU4NmkEe81pv57I',
-    };
-
-    final trimmed = area.trim();
-    final result = spreadsheetMap[trimmed];
-
-    if (result == null) {
-      debugPrint('[ERROR] Unknown area="$area", fallback to belivus');
-    }
-
-    return result ?? spreadsheetMap['belivus']!;
-  }
-
+  // ───────────────────────────────────────────────────────────────────────────
+  // 인증 클라이언트
+  // ───────────────────────────────────────────────────────────────────────────
   static Future<AutoRefreshingAuthClient> _getSheetsClient() async {
     final jsonString = await rootBundle.loadString(_serviceAccountPath);
     final credentials = ServiceAccountCredentials.fromJson(jsonString);
@@ -31,14 +17,19 @@ class GoogleSheetsHelper {
     return await clientViaServiceAccount(credentials, scopes);
   }
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // 공통 유틸
+  // ───────────────────────────────────────────────────────────────────────────
   static List<List<String>> _convertRows(List<List<Object?>>? rawRows) {
     return rawRows?.map((row) => row.map((cell) => cell.toString()).toList()).toList() ?? [];
   }
 
-  static Future<List<List<String>>> loadClockInOutRecords(String area) async {
+  // ───────────────────────────────────────────────────────────────────────────
+  // 읽기 API (ID 직접 주입)
+  // ───────────────────────────────────────────────────────────────────────────
+  static Future<List<List<String>>> loadClockInOutRecordsById(String spreadsheetId) async {
     final client = await _getSheetsClient();
     final sheetsApi = SheetsApi(client);
-    final spreadsheetId = getSpreadsheetId(area);
     final result = await sheetsApi.spreadsheets.values.get(
       spreadsheetId,
       '출퇴근기록!A2:G',
@@ -47,10 +38,9 @@ class GoogleSheetsHelper {
     return _convertRows(result.values);
   }
 
-  static Future<List<List<String>>> loadBreakRecords(String area) async {
+  static Future<List<List<String>>> loadBreakRecordsById(String spreadsheetId) async {
     final client = await _getSheetsClient();
     final sheetsApi = SheetsApi(client);
-    final spreadsheetId = getSpreadsheetId(area);
     final result = await sheetsApi.spreadsheets.values.get(
       spreadsheetId,
       '휴게기록!A2:G',
@@ -59,13 +49,16 @@ class GoogleSheetsHelper {
     return _convertRows(result.values);
   }
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // 가공 유틸 (그대로 사용)
+  // ───────────────────────────────────────────────────────────────────────────
   static Map<String, Map<int, String>> mapToCellData(
-    List<List<String>> rows, {
-    required String statusFilter,
-    int? selectedYear,
-    int? selectedMonth,
-    String suffixForKey = '',
-  }) {
+      List<List<String>> rows, {
+        required String statusFilter,
+        int? selectedYear,
+        int? selectedMonth,
+        String suffixForKey = '',
+      }) {
     final Map<String, Map<int, String>> data = {};
     for (final row in rows) {
       if (row.length < 7) continue;
@@ -96,16 +89,19 @@ class GoogleSheetsHelper {
     return data;
   }
 
-  static Future<void> updateClockInOutRecord({
+  // ───────────────────────────────────────────────────────────────────────────
+  // 쓰기 API (ID 직접 주입)
+  // ───────────────────────────────────────────────────────────────────────────
+  static Future<void> updateClockInOutRecordById({
+    required String spreadsheetId,
     required DateTime date,
     required String userId,
     required String userName,
     required String area,
     required String division,
-    required String status,
+    required String status, // '출근' | '퇴근'
     required String time,
   }) async {
-    final spreadsheetId = getSpreadsheetId(area);
     final client = await _getSheetsClient();
     final sheetsApi = SheetsApi(client);
 
@@ -154,7 +150,8 @@ class GoogleSheetsHelper {
     client.close();
   }
 
-  static Future<void> updateBreakRecord({
+  static Future<void> updateBreakRecordById({
+    required String spreadsheetId,
     required DateTime date,
     required String userId,
     required String userName,
@@ -162,9 +159,6 @@ class GoogleSheetsHelper {
     required String division,
     required String time,
   }) async {
-    final spreadsheetId = getSpreadsheetId(area.trim());
-    debugPrint('[DEBUG] updateBreakRecord: area=$area → spreadsheetId=$spreadsheetId');
-
     final client = await _getSheetsClient();
     final sheetsApi = SheetsApi(client);
 

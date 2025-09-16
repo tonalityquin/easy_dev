@@ -38,7 +38,6 @@ typedef CapSet = Set<Capability>;
 class Cap {
   const Cap._();
 
-  /// 다양한 형태(List, Map<bool>, String, null) → Set<Capability>
   static CapSet fromDynamic(dynamic raw) {
     if (raw == null) return <Capability>{};
     if (raw is CapSet) return Set<Capability>.from(raw);

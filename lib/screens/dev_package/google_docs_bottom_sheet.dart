@@ -2,7 +2,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle, Clipboard, HapticFeedback;
-import 'package:flutter/foundation.dart'; // debugPrint
 import 'package:googleapis/docs/v1.dart' as gdocs;
 import 'package:googleapis_auth/auth_io.dart';
 import 'package:shared_preferences/shared_preferences.dart';

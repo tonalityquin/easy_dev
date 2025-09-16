@@ -40,21 +40,21 @@ class _ManagementState extends State<Management> {
           elevation: 0,
         ),
         body: _selectedIndex == 0
-            ? const Field()
-            : _selectedIndex == 1
             ? const Statistics()
+            : _selectedIndex == 1
+            ? const Field()
             : const Center(child: Text('해당 탭의 콘텐츠는 준비 중입니다.')),
         bottomNavigationBar: HqMiniNavigation(
           height: 56,
           iconSize: 22,
           currentIndex: _selectedIndex, // ⬅️ 추가
           icons: const [
-            Icons.directions_walk,
             Icons.compare_arrows,
+            Icons.directions_walk,
           ],
           labels: const [
-            'Field',
             'InOut',
+            'Field',
           ],
           onIconTapped: (index) {
             setState(() {

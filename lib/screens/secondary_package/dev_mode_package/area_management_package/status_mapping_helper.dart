@@ -177,7 +177,7 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
 
     // 2) 혹시 남아있을지 모르는 ID 호환 처리(신규/구버전 ID 모두 시도)
     final newId = '${area}_$location';
-    final oldId = '${area}__${location}';
+    final oldId = '${area}__$location';
     final newRef = fs.collection('location_limits').doc(newId);
     final oldRef = fs.collection('location_limits').doc(oldId);
 

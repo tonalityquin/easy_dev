@@ -7,9 +7,6 @@ class SheetsConfig {
   /// CommuteInsideScreen에서 설정하는 업로드용 공통 스프레드시트 ID
   static const String _commuteSheetIdKey = 'commute_sheet_id';
 
-  /// TimesheetPage가 사용하는(기존) HQ용 시트 ID — 참조용(여기서는 저장/로드하지 않음)
-  static const String hqSheetIdKey = 'hq_sheet_id';
-
   /// 스프레드시트 URL 전체를 붙여넣어도 중간의 ID만 추출해주는 헬퍼
   /// 예) https://docs.google.com/spreadsheets/d/<ID>/edit → <ID>
   static String extractSpreadsheetId(String input) {
