@@ -13,18 +13,79 @@ class SelectorHubsPage extends StatefulWidget {
 
 class _SelectorHubsPageState extends State<SelectorHubsPage> {
   String? _savedMode; // 'service' | 'tablet' | null(미저장)
+  bool _devAuthorized = false; // ✅ 개발자 전용 로그인 성공 여부 (영구 저장)
+
+  static const _prefsKeyMode = 'mode';
+  static const _prefsKeyDevAuth = 'dev_auth';
+  static const _prefsKeyDevId = 'dev_id';
+  static const _prefsKeyDevPw = 'dev_pw';
 
   @override
   void initState() {
     super.initState();
-    _restoreMode();
+    _restorePrefs();
   }
 
-  Future<void> _restoreMode() async {
+  Future<void> _restorePrefs() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _savedMode = prefs.getString('mode'); // service / outside / tablet / null
+      _savedMode = prefs.getString(_prefsKeyMode); // service / outside / tablet / null
+      _devAuthorized = prefs.getBool(_prefsKeyDevAuth) ?? false;
     });
+  }
+
+  Future<void> _setDevAuthorized(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_prefsKeyDevAuth, value);
+    setState(() => _devAuthorized = value);
+  }
+
+  Future<void> _setDevCredentials(String id, String pw) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_prefsKeyDevId, id);
+    await prefs.setString(_prefsKeyDevPw, pw);
+  }
+
+  Future<void> _resetDevAuthAndCreds() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_prefsKeyDevId);
+    await prefs.remove(_prefsKeyDevPw);
+    await prefs.setBool(_prefsKeyDevAuth, false);
+    setState(() => _devAuthorized = false);
+  }
+
+  /// ✅ 하단 펠리컨 이미지를 눌렀을 때 전용 로그인 BottomSheet 열기
+  Future<void> _handlePelicanTap(BuildContext context) async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => FractionallySizedBox(
+        heightFactor: 1,
+        child: DevLoginBottomSheet(
+          onSuccess: (id, pw) async {
+            await _setDevCredentials(id, pw);
+            await _setDevAuthorized(true);
+            if (mounted) {
+              Navigator.of(ctx).pop(); // 시트 닫기
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('개발자 인증 완료. 이제 개발 카드를 눌러 진입할 수 있습니다.')),
+              );
+            }
+          },
+          onReset: () async {
+            await _resetDevAuthAndCreds();
+            if (mounted) {
+              Navigator.of(ctx).pop(); // 시트 닫기
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('개발자 인증이 초기화되었습니다.')),
+              );
+            }
+          },
+        ),
+      ),
+    );
   }
 
   @override
@@ -33,22 +94,26 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
     final serviceEnabled = _savedMode == null || _savedMode == 'service';
     final tabletEnabled = _savedMode == null || _savedMode == 'tablet';
 
+    // ✅ 개발 카드는 devAuthorized 전에 "아예 보이지 않도록" 제외
     final List<List<Widget>> pages = [
       [
         _ServiceCard(enabled: serviceEnabled),
         _TabletCard(enabled: tabletEnabled),
       ],
       [
-        _HeadquarterCard(enabled: serviceEnabled), // ✅ 리팩토링: 본사도 service 모드에서만
+        _HeadquarterCard(enabled: serviceEnabled), // ✅ 본사도 service 모드에서만
         const _ParkingCard(),
       ],
       [
         const _FaqCard(),
         const _CommunityCard(),
       ],
-      [
-        const _DevCard(),
-      ],
+      if (_devAuthorized)
+        [
+          _DevCard(
+            onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.devStub),
+          ),
+        ],
     ];
 
     // ▶︎ 화면/키보드 상황에 따른 하단 이미지 높이/표시 제어
@@ -120,20 +185,25 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
               ),
             ),
 
-            // ▼ 하단 펠리컨 이미지(바디 내부 고정)
+            // ▼ 하단 펠리컨 이미지(탭 가능, 로그인 시트 트리거)
             Positioned(
               left: 0,
               right: 0,
               bottom: footerBottomPadding,
-              child: IgnorePointer(
-                child: AnimatedOpacity(
-                  opacity: keyboardOpen ? 0.0 : 1.0,
-                  duration: const Duration(milliseconds: 160),
-                  child: SizedBox(
-                    height: footerHeight,
-                    child: Image.asset(
-                      'assets/images/pelican.png',
-                      fit: BoxFit.contain,
+              child: AnimatedOpacity(
+                opacity: keyboardOpen ? 0.0 : 1.0,
+                duration: const Duration(milliseconds: 160),
+                child: SizedBox(
+                  height: footerHeight,
+                  child: Center(
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () => _handlePelicanTap(context),
+                      child: Image.asset(
+                        'assets/images/pelican.png',
+                        fit: BoxFit.contain,
+                        height: footerHeight,
+                      ),
                     ),
                   ),
                 ),
@@ -400,7 +470,7 @@ class _CardBody extends StatefulWidget {
 }
 
 class _CardBodyState extends State<_CardBody> {
-  static const _pressScale = 0.96;                 // 조금 더 눈에 띄게
+  static const _pressScale = 0.96; // 조금 더 눈에 띄게
   static const _duration = Duration(milliseconds: 160);
   static const _frame = Duration(milliseconds: 16);
 
@@ -478,11 +548,6 @@ class _CardBodyState extends State<_CardBody> {
 }
 
 /// 서비스 로그인 카드 — Deep Blue 팔레트
-///
-/// Palette:
-/// - base: #0D47A1 (badge/bg for button)
-/// - dark: #09367D (title)
-/// - light: #5472D3 (surface tint)
 class _ServiceCard extends StatelessWidget {
   final bool enabled;
 
@@ -518,11 +583,6 @@ class _ServiceCard extends StatelessWidget {
 }
 
 /// 태블릿 로그인 카드 — Cyan 팔레트
-///
-/// Palette:
-/// - base: #00ACC1 (badge/button)
-/// - dark: #00838F (title)
-/// - light: #4DD0E1 (surface tint)
 class _TabletCard extends StatelessWidget {
   final bool enabled;
 
@@ -558,11 +618,6 @@ class _TabletCard extends StatelessWidget {
 }
 
 /// 커뮤니티 카드 — Teal 팔레트
-///
-/// Palette:
-/// - base: #26A69A (badge/button)
-/// - dark: #1E8077 (title)
-/// - light: #64D8CB (surface tint)
 class _CommunityCard extends StatelessWidget {
   const _CommunityCard();
 
@@ -594,11 +649,6 @@ class _CommunityCard extends StatelessWidget {
 }
 
 /// FAQ / 문의 카드 — Indigo 팔레트
-///
-/// Palette:
-/// - base: #3949AB (badge/button)
-/// - dark: #283593 (title)
-/// - light: #7986CB (surface tint)
 class _FaqCard extends StatelessWidget {
   const _FaqCard();
 
@@ -630,11 +680,6 @@ class _FaqCard extends StatelessWidget {
 }
 
 /// 본사 카드 — Blue 팔레트
-///
-/// Palette:
-/// - base: #1E88E5 (badge/button)
-/// - dark: #1565C0 (title)
-/// - light: #64B5F6 (surface tint)
 class _HeadquarterCard extends StatelessWidget {
   const _HeadquarterCard({this.enabled = true});
 
@@ -664,12 +709,11 @@ class _HeadquarterCard extends StatelessWidget {
         enabled: enabled,
         disabledHint: '저장된 모드가 service일 때만 선택할 수 있어요',
         onTap: () {
-          // ✅ 리팩토링 핵심: 본사도 서비스 로그인 검증을 동일하게 거친다
+          // ✅ 본사도 서비스 로그인 검증을 동일하게 거친다
           Navigator.of(context).pushReplacementNamed(
             AppRoutes.serviceLogin,
             arguments: {
-              'redirectAfterLogin': AppRoutes.headStub, // ← 로그인 성공 후 본사(Stub)로 이동
-              // 실제 본사 페이지가 준비됐으면 AppRoutes.headquarterPage 로 교체 가능
+              'redirectAfterLogin': AppRoutes.headStub, // 로그인 성공 후 본사(Stub)로 이동
               'requiredMode': 'service',
             },
           );
@@ -679,14 +723,11 @@ class _HeadquarterCard extends StatelessWidget {
   }
 }
 
-/// 개발 카드 — Deep Purple 팔레트
-///
-/// Palette:
-/// - base: #6A1B9A (badge/button)
-/// - dark: #4A148C (title)
-/// - light: #CE93D8 (surface tint)
+/// 개발 카드 — Deep Purple 팔레트 (인증 후에만 보임)
 class _DevCard extends StatelessWidget {
-  const _DevCard();
+  const _DevCard({required this.onTap});
+
+  final VoidCallback onTap;
 
   static const Color _base = Color(0xFF6A1B9A);
   static const Color _dark = Color(0xFF4A148C);
@@ -709,18 +750,13 @@ class _DevCard extends StatelessWidget {
         titleWidget: Text('개발', style: titleStyle, textAlign: TextAlign.center),
         buttonBg: _base,
         buttonFg: Colors.white,
-        onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.devStub), // ✅ DevStub 진입
+        onTap: onTap,
       ),
     );
   }
 }
 
 /// 주차 관제 시스템 카드 — Deep Orange 팔레트(공사중 느낌)
-///
-/// Palette:
-/// - base: #F4511E (badge/button)
-/// - dark: #D84315 (title)
-/// - light: #FFAB91 (surface tint)
 class _ParkingCard extends StatelessWidget {
   const _ParkingCard();
 
@@ -801,6 +837,219 @@ class _HintBanner extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// ============================
+/// Developer-only Login BottomSheet (EN)
+/// ============================
+class DevLoginBottomSheet extends StatefulWidget {
+  const DevLoginBottomSheet({
+    super.key,
+    required this.onSuccess,
+    required this.onReset,
+  });
+
+  final Future<void> Function(String id, String pw) onSuccess;
+  final Future<void> Function() onReset;
+
+  @override
+  State<DevLoginBottomSheet> createState() => _DevLoginBottomSheetState();
+}
+
+class _DevLoginBottomSheetState extends State<DevLoginBottomSheet> {
+  final _idCtrl = TextEditingController();
+  final _pwCtrl = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  bool _obscure = true;
+  String? _error;
+
+  static const _hardId = 'facere';
+  static const _hardPw = '1868';
+
+  @override
+  void dispose() {
+    _idCtrl.dispose();
+    _pwCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final id = _idCtrl.text.trim();
+    final pw = _pwCtrl.text.trim();
+
+    if (id == _hardId && pw == _hardPw) {
+      HapticFeedback.selectionClick();
+      await widget.onSuccess(id, pw);
+    } else {
+      setState(() => _error = 'Invalid ID or password.');
+      HapticFeedback.vibrate();
+    }
+  }
+
+  Future<void> _reset() async {
+    await widget.onReset(); // ✅ prefs 초기화 + 카드 숨김
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final effectiveHeight = screenHeight - bottomInset;
+
+    final cs = Theme.of(context).colorScheme;
+
+    return SafeArea(
+      child: Padding(
+        // keep keyboard inset so content stays visible
+        padding: EdgeInsets.only(bottom: bottomInset),
+        child: SizedBox(
+          height: effectiveHeight,
+          child: Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            child: Column(
+              children: [
+                const SizedBox(height: 16),
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const Text(
+                  'Developer Login',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    'Enter your developer credentials. Once verified, access will persist across app restarts.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 12, color: Colors.black54),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // ⬇️ 버튼을 "더 위"로: 하단 고정 영역 제거하고 폼 바로 아래 배치
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        children: [
+                          TextFormField(
+                            controller: _idCtrl,
+                            decoration: const InputDecoration(
+                              labelText: 'ID', // no hint
+                              border: OutlineInputBorder(),
+                              prefixIcon: Icon(Icons.person_outline),
+                            ),
+                            textInputAction: TextInputAction.next,
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _pwCtrl,
+                            obscureText: _obscure,
+                            decoration: InputDecoration(
+                              labelText: 'Password', // no hint
+                              border: const OutlineInputBorder(),
+                              prefixIcon: const Icon(Icons.lock_outline),
+                              suffixIcon: IconButton(
+                                onPressed: () => setState(() => _obscure = !_obscure),
+                                icon: Icon(_obscure ? Icons.visibility : Icons.visibility_off),
+                                tooltip: _obscure ? 'Show' : 'Hide',
+                              ),
+                            ),
+                            onFieldSubmitted: (_) => _submit(),
+                          ),
+
+                          const SizedBox(height: 12),
+                          if (_error != null)
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: cs.errorContainer,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                _error!,
+                                style: TextStyle(
+                                  color: cs.onErrorContainer,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: () => Navigator.of(context).pop(),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(vertical: 14),
+                                    shape: const StadiumBorder(),
+                                  ),
+                                  child: const Text('Cancel'),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: _submit,
+                                  style: ElevatedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(vertical: 14),
+                                    shape: const StadiumBorder(),
+                                  ),
+                                  icon: const Icon(Icons.login),
+                                  label: const Text(
+                                    'Log in',
+                                    style: TextStyle(fontWeight: FontWeight.w700),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          // ⬇️ 초기화(Reset) 버튼 추가 — prefs의 dev_auth/dev_id/dev_pw 초기화 + 카드 숨김
+                          const SizedBox(height: 12),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton.icon(
+                              onPressed: _reset,
+                              icon: const Icon(Icons.restart_alt),
+                              label: const Text('Reset'), // '초기화'
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.redAccent,
+                              ),
+                            ),
+                          ),
+
+                          // ⬇️ 여백을 조금 둬서 실제 하단과 간격 확보(버튼이 더 위에 보이도록)
+                          const SizedBox(height: 48),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
