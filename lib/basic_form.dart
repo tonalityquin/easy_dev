@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../../widgets/navigation/secondary_mini_navigation.dart'; // 하단 내비게이션 바
 
 class BasicForm extends StatelessWidget {
   const BasicForm({super.key});
@@ -20,13 +19,6 @@ class BasicForm extends StatelessWidget {
       ),
       body: const Center(
         child: Text('body'),
-      ),
-      bottomNavigationBar: const SecondaryMiniNavigation(
-        icons: [
-          Icons.search,
-          Icons.person,
-          Icons.sort,
-        ],
       ),
     );
   }

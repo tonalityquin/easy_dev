@@ -1,3 +1,4 @@
+// lib/screens/secondary_package/office_mode_package/bill_management.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -5,7 +6,7 @@ import 'package:intl/intl.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../states/bill/bill_state.dart';
 import '../../../states/area/area_state.dart';
-import '../../../widgets/navigation/secondary_mini_navigation.dart';
+// import '../../../widgets/navigation/secondary_mini_navigation.dart'; // ❌ 미사용
 import 'bill_management_package/bill_bottom_sheet.dart';
 
 class BillManagement extends StatefulWidget {
@@ -26,6 +27,10 @@ class _BillManagementState extends State<BillManagement> {
       context.read<BillState>().manualBillRefresh();
     });
   }
+
+  // ▼ FAB 위치/간격 조절
+  static const double _fabBottomGap = 48.0; // 하단에서 띄우는 여백
+  static const double _fabSpacing = 10.0;   // 버튼 간 간격
 
   void _showBillSettingBottomSheet(BuildContext context) {
     showModalBottomSheet(
@@ -104,12 +109,19 @@ class _BillManagementState extends State<BillManagement> {
     }
   }
 
+  Future<void> _handleEdit(BuildContext context) async {
+    // 기존 동작: 준비 중 안내
+    showSelectedSnackbar(context, '수정 기능은 준비 중입니다.');
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentArea = context.watch<AreaState>().currentArea.trim();
     final hasSelection = context.select<BillState, bool>((s) => s.selectedBillId != null);
 
     final won = NumberFormat.decimalPattern();
+
+    final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -154,23 +166,17 @@ class _BillManagementState extends State<BillManagement> {
           );
         },
       ),
-      bottomNavigationBar: SecondaryMiniNavigation(
-        icons: hasSelection ? const [Icons.edit, Icons.delete] : const [Icons.add, Icons.delete],
-        onIconTapped: (index) async {
-          if (!hasSelection) {
-            if (index == 0) {
-              _showBillSettingBottomSheet(context);
-            } else if (index == 1) {
-              showFailedSnackbar(context, '삭제할 항목을 선택하세요.');
-            }
-          } else {
-            if (index == 0) {
-              showSelectedSnackbar(context, '수정 기능은 준비 중입니다.');
-            } else if (index == 1) {
-              await _deleteSelectedBill(context);
-            }
-          }
-        },
+
+      // ▼ FAB 세트(현대적 알약형 버튼 + 하단 여백으로 위치 조절)
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      floatingActionButton: _FabStack(
+        bottomGap: _fabBottomGap,
+        spacing: _fabSpacing,
+        hasSelection: hasSelection,
+        onAdd: () => _showBillSettingBottomSheet(context),
+        onEdit: hasSelection ? () => _handleEdit(context) : null,
+        onDelete: hasSelection ? () => _deleteSelectedBill(context) : null,
+        cs: cs,
       ),
     );
   }
@@ -236,6 +242,151 @@ class _BillManagementState extends State<BillManagement> {
       ),
       trailing: isSelected ? const Icon(Icons.check_circle, color: Colors.green) : null,
       onTap: () => state.toggleBillSelection(bill.id),
+    );
+  }
+}
+
+/// 현대적인 FAB 세트(라운드 필 버튼 + 하단 spacer로 위치 조절)
+class _FabStack extends StatelessWidget {
+  const _FabStack({
+    required this.bottomGap,
+    required this.spacing,
+    required this.hasSelection,
+    required this.onAdd,
+    required this.onEdit,
+    required this.onDelete,
+    required this.cs,
+  });
+
+  final double bottomGap;
+  final double spacing;
+  final bool hasSelection;
+  final VoidCallback onAdd;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+  final ColorScheme cs;
+
+  @override
+  Widget build(BuildContext context) {
+    final ButtonStyle primaryStyle = ElevatedButton.styleFrom(
+      backgroundColor: cs.primary,
+      foregroundColor: cs.onPrimary,
+      elevation: 3,
+      shadowColor: cs.shadow.withOpacity(0.25),
+      shape: const StadiumBorder(),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      textStyle: const TextStyle(fontWeight: FontWeight.w700),
+    );
+
+    final ButtonStyle editStyle = ElevatedButton.styleFrom(
+      backgroundColor: cs.secondaryContainer,
+      foregroundColor: cs.onSecondaryContainer,
+      elevation: 3,
+      shadowColor: cs.secondary.withOpacity(0.25),
+      shape: const StadiumBorder(),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      textStyle: const TextStyle(fontWeight: FontWeight.w700),
+    );
+
+    final ButtonStyle deleteStyle = ElevatedButton.styleFrom(
+      backgroundColor: cs.error,
+      foregroundColor: cs.onError,
+      elevation: 3,
+      shadowColor: cs.error.withOpacity(0.35),
+      shape: const StadiumBorder(),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      textStyle: const TextStyle(fontWeight: FontWeight.w700),
+    );
+
+    return Column(
+      mainAxisSize: MainAxisSize.min, // ✅ 소문자 min
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        // 선택 없음 → '추가'만 표시
+        if (!hasSelection) ...[
+          _ElevatedPillButton.icon(
+            icon: Icons.add,
+            label: '추가',
+            style: primaryStyle,
+            onPressed: onAdd,
+          ),
+        ] else ...[
+          // 선택 있음 → '수정'·'삭제' 표시
+          _ElevatedPillButton.icon(
+            icon: Icons.edit,
+            label: '수정',
+            style: editStyle,
+            onPressed: onEdit!,
+          ),
+          SizedBox(height: spacing),
+          _ElevatedPillButton.icon(
+            icon: Icons.delete,
+            label: '삭제',
+            style: deleteStyle,
+            onPressed: onDelete!,
+          ),
+        ],
+        SizedBox(height: bottomGap), // ▼ 하단 여백으로 버튼 위치 올리기
+      ],
+    );
+  }
+}
+
+/// 둥근 알약 형태의 현대적 버튼 래퍼 (ElevatedButton 기반)
+class _ElevatedPillButton extends StatelessWidget {
+  const _ElevatedPillButton({
+    required this.child,
+    required this.onPressed,
+    required this.style,
+    Key? key,
+  }) : super(key: key);
+
+  // ✅ const 생성자 대신 factory로 위임하여 상수 제약(Invalid constant value) 회피
+  factory _ElevatedPillButton.icon({
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+    required ButtonStyle style,
+    Key? key,
+  }) {
+    return _ElevatedPillButton(
+      key: key,
+      onPressed: onPressed,
+      style: style,
+      child: _FabLabel(icon: icon, label: label),
+    );
+  }
+
+  final Widget child;
+  final VoidCallback onPressed;
+  final ButtonStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    return ElevatedButton(
+      onPressed: onPressed,
+      style: style,
+      child: child,
+    );
+  }
+}
+
+/// 아이콘 + 라벨(간격/정렬 최적화)
+class _FabLabel extends StatelessWidget {
+  const _FabLabel({required this.icon, required this.label, Key? key}) : super(key: key);
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 20),
+        const SizedBox(width: 8),
+        Text(label),
+      ],
     );
   }
 }

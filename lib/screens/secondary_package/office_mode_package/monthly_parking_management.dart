@@ -1,10 +1,11 @@
+// lib/screens/secondary_package/office_mode_package/monthly_parking_management.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../states/user/user_state.dart';
-import '../../../widgets/navigation/secondary_mini_navigation.dart';
+// import '../../../widgets/navigation/secondary_mini_navigation.dart'; // ❌ 미사용
 import 'monthly_management_package/monthly_plate_bottom_sheet.dart';
 import '../../../utils/snackbar_helper.dart'; // ✅ 커스텀 스낵바
 
@@ -21,91 +22,119 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
   static const int animationDurationMs = 250;
   final Map<String, GlobalKey> _cardKeys = {};
 
-  /// 하단 미니 네비 아이콘 탭 처리
-  /// index 0: 추가(선택 없음) / 수정(선택 있음)
-  /// index 1: 삭제
-  void _handleIconTap(BuildContext context, int index) {
-    final isEditMode = _selectedDocId != null;
-
-    // 추가 / 수정
-    if (index == 0) {
-      if (!isEditMode) {
-        // 추가
-        showModalBottomSheet(
-          context: context,
-          isScrollControlled: true,
-          useSafeArea: true,                      // ✅ 최상단까지 안전영역 포함
-          backgroundColor: Colors.transparent,    // ✅ 내부 컨테이너가 배경/라운드 담당
-          builder: (context) => const FractionallySizedBox(
-            heightFactor: 1,                     // ✅ 화면 높이 100%
-            child: MonthlyPlateBottomSheet(),
-          ),
-        );
-      } else {
-        // 수정
-        FirebaseFirestore.instance
-            .collection('plate_status')
-            .doc(_selectedDocId!)
-            .get()
-            .then((doc) {
-          if (doc.exists) {
-            final data = doc.data()!;
-            showModalBottomSheet(
-              context: context,
-              isScrollControlled: true,
-              useSafeArea: true,
-              backgroundColor: Colors.transparent,
-              builder: (context) => FractionallySizedBox(
-                heightFactor: 1,
-                child: MonthlyPlateBottomSheet(
-                  isEditMode: true,
-                  initialDocId: _selectedDocId!,
-                  initialData: data,
-                ),
-              ),
-            );
-          } else {
-            showFailedSnackbar(context, '선택한 문서를 찾을 수 없습니다.');
-          }
-        });
-      }
-      return;
-    }
-
-    // 삭제
-    if (index == 1) {
-      if (_selectedDocId == null) {
-        showSelectedSnackbar(context, '삭제할 항목을 선택해주세요.');
-        return;
-      }
-
-      FirebaseFirestore.instance
-          .collection('plate_status')
-          .doc(_selectedDocId)
-          .delete()
-          .then((_) {
-        setState(() => _selectedDocId = null);
-        showSuccessSnackbar(context, '삭제되었습니다.');
-      }).catchError((e) {
-        showFailedSnackbar(context, '삭제 실패: $e');
-      });
-    }
-  }
+  // ▼ 플로팅 버튼 위치/간격 조절
+  static const double _fabBottomGap = 48.0; // 버튼을 화면 하단에서 띄우는 여백
+  static const double _fabSpacing = 10.0;   // 버튼 간 간격
 
   void _scrollToCard(String docId) {
     final key = _cardKeys[docId];
     if (key != null) {
-      Future.delayed(Duration(milliseconds: animationDurationMs), () {
-        final context = key.currentContext;
-        if (context != null) {
+      Future.delayed(const Duration(milliseconds: animationDurationMs), () {
+        final ctx = key.currentContext;
+        if (ctx != null) {
           Scrollable.ensureVisible(
-            context,
+            ctx,
             duration: const Duration(milliseconds: animationDurationMs),
             alignment: 0.2,
             curve: Curves.easeInOut,
           );
         }
       });
+    }
+  }
+
+  Future<void> _handlePrimaryAction(BuildContext context) async {
+    final isEditMode = _selectedDocId != null;
+
+    // index 0: 추가
+    if (!isEditMode) {
+      await showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => const FractionallySizedBox(
+          heightFactor: 1,
+          child: MonthlyPlateBottomSheet(),
+        ),
+      );
+      return;
+    }
+
+    // index 0: 수정
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('plate_status')
+          .doc(_selectedDocId!)
+          .get();
+
+      if (!snap.exists) {
+        if (!mounted) return;
+        showFailedSnackbar(context, '선택한 문서를 찾을 수 없습니다.');
+        return;
+      }
+
+      final data = snap.data()!;
+      if (!mounted) return;
+      await showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => FractionallySizedBox(
+          heightFactor: 1,
+          child: MonthlyPlateBottomSheet(
+            isEditMode: true,
+            initialDocId: _selectedDocId!,
+            initialData: data,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showFailedSnackbar(context, '문서 조회 실패: $e');
+    }
+  }
+
+  Future<void> _handleDelete(BuildContext context) async {
+    if (_selectedDocId == null) {
+      showSelectedSnackbar(context, '삭제할 항목을 선택해주세요.');
+      return;
+    }
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('삭제 확인'),
+        content: const Text('선택한 항목을 삭제하시겠습니까?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    ) ??
+        false;
+
+    if (!ok) return;
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('plate_status')
+          .doc(_selectedDocId)
+          .delete();
+
+      if (!mounted) return;
+      setState(() => _selectedDocId = null);
+      showSuccessSnackbar(context, '삭제되었습니다.');
+    } catch (e) {
+      if (!mounted) return;
+      showFailedSnackbar(context, '삭제 실패: $e');
     }
   }
 
@@ -119,6 +148,7 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
   Widget build(BuildContext context) {
     final currentArea = context.read<UserState>().currentArea.trim();
     final won = NumberFormat.decimalPattern('ko_KR');
+    final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -147,12 +177,9 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
 
           final docs = snapshot.data!.docs;
 
-          // 🔧 사용하지 않는 키 정리(선택)
+          // 🔧 사용하지 않는 키 정리
           final currentIds = docs.map((d) => d.id).toSet();
-          _cardKeys.keys
-              .where((k) => !currentIds.contains(k))
-              .toList()
-              .forEach(_cardKeys.remove);
+          _cardKeys.keys.where((k) => !currentIds.contains(k)).toList().forEach(_cardKeys.remove);
 
           return ListView.separated(
             controller: _scrollController,
@@ -181,18 +208,18 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                   setState(() {
                     _selectedDocId = isSelected ? null : docId;
                   });
-
                   if (!isSelected) {
                     _scrollToCard(docId);
                   }
                 },
-                child: Card(
+                child: Card
+                  (
                   key: _cardKeys[docId],
                   elevation: isSelected ? 6 : 3,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                     side: isSelected
-                        ? const BorderSide(color: Colors.redAccent, width: 2)
+                        ? BorderSide(color: cs.primary, width: 2) // 강조색
                         : BorderSide.none,
                   ),
                   color: Colors.white,
@@ -220,8 +247,9 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                         // 상세 보기
                         AnimatedCrossFade(
                           duration: const Duration(milliseconds: animationDurationMs),
-                          crossFadeState:
-                          isSelected ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+                          crossFadeState: isSelected
+                              ? CrossFadeState.showSecond
+                              : CrossFadeState.showFirst,
                           firstChild: const SizedBox.shrink(),
                           secondChild: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -271,13 +299,13 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     const Text('💳 결제 내역',
-                                        style:
-                                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                                        style: TextStyle(
+                                            fontSize: 16, fontWeight: FontWeight.bold)),
                                     const SizedBox(height: 8),
                                     ...(() {
-                                      final payments =
-                                      List<Map<String, dynamic>>.from(data['payment_history']);
-                                      final reversed = payments.reversed.toList(); // ✅ 한 번만 역순화
+                                      final payments = List<Map<String, dynamic>>.from(
+                                          data['payment_history']);
+                                      final reversed = payments.reversed.toList(); // ✅ 역순 1회
                                       return reversed.map((payment) {
                                         final paidAtRaw = payment['paidAt'] ?? '';
                                         String paidAt;
@@ -384,12 +412,148 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
           );
         },
       ),
-      bottomNavigationBar: SecondaryMiniNavigation(
-        icons: _selectedDocId == null
-            ? const [Icons.add, Icons.delete]
-            : const [Icons.edit, Icons.delete],
-        onIconTapped: (index) => _handleIconTap(context, index),
+
+      // ▼ FAB: 선택 없음 → 추가 / 선택 있음 → 수정·삭제
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      floatingActionButton: _FabStack(
+        bottomGap: _fabBottomGap,
+        spacing: _fabSpacing,
+        hasSelection: _selectedDocId != null,
+        onPrimary: () => _handlePrimaryAction(context), // 추가/수정
+        onDelete: _selectedDocId != null ? () => _handleDelete(context) : null, // 삭제
+        cs: cs,
       ),
+    );
+  }
+}
+
+/// 현대적인 파브 세트(라운드 필 버튼 스타일 + 하단 spacer로 높이 조절)
+class _FabStack extends StatelessWidget {
+  const _FabStack({
+    required this.bottomGap,
+    required this.spacing,
+    required this.hasSelection,
+    required this.onPrimary,
+    required this.onDelete,
+    required this.cs,
+  });
+
+  final double bottomGap;
+  final double spacing;
+  final bool hasSelection;
+  final VoidCallback onPrimary;     // 선택 없음: 추가 / 선택 있음: 수정
+  final VoidCallback? onDelete;     // 선택 있음에서만 사용
+  final ColorScheme cs;
+
+  @override
+  Widget build(BuildContext context) {
+    final ButtonStyle primaryStyle = ElevatedButton.styleFrom(
+      backgroundColor: cs.primary,
+      foregroundColor: cs.onPrimary,
+      elevation: 3,
+      shadowColor: cs.shadow.withOpacity(0.25),
+      shape: const StadiumBorder(),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      textStyle: const TextStyle(fontWeight: FontWeight.w700),
+    );
+
+    final ButtonStyle deleteStyle = ElevatedButton.styleFrom(
+      backgroundColor: cs.error,
+      foregroundColor: cs.onError,
+      elevation: 3,
+      shadowColor: cs.error.withOpacity(0.35),
+      shape: const StadiumBorder(),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      textStyle: const TextStyle(fontWeight: FontWeight.w700),
+    );
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        if (hasSelection) ...[
+          _ElevatedPillButton.icon(
+            icon: Icons.edit,
+            label: '수정',
+            style: primaryStyle,
+            onPressed: onPrimary,
+          ),
+          SizedBox(height: spacing),
+          _ElevatedPillButton.icon(
+            icon: Icons.delete,
+            label: '삭제',
+            style: deleteStyle,
+            onPressed: onDelete!,
+          ),
+        ] else ...[
+          _ElevatedPillButton.icon(
+            icon: Icons.add,
+            label: '추가',
+            style: primaryStyle,
+            onPressed: onPrimary,
+          ),
+        ],
+        SizedBox(height: bottomGap), // ▼ 하단 여백으로 버튼 위치 올리기
+      ],
+    );
+  }
+}
+
+/// 둥근 알약 형태의 현대적 버튼 래퍼 (ElevatedButton 기반)
+class _ElevatedPillButton extends StatelessWidget {
+  const _ElevatedPillButton({
+    required this.child,
+    required this.onPressed,
+    required this.style,
+    Key? key,
+  }) : super(key: key);
+
+  // ✅ const 생성자 대신 factory로 위임(상수 제약 회피)
+  factory _ElevatedPillButton.icon({
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+    required ButtonStyle style,
+    Key? key,
+  }) {
+    return _ElevatedPillButton(
+      key: key,
+      onPressed: onPressed,
+      style: style,
+      child: _FabLabel(icon: icon, label: label),
+    );
+  }
+
+  final Widget child;
+  final VoidCallback onPressed;
+  final ButtonStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    return ElevatedButton(
+      onPressed: onPressed,
+      style: style,
+      child: child,
+    );
+  }
+}
+
+/// 아이콘 + 라벨(간격/정렬 최적화)
+class _FabLabel extends StatelessWidget {
+  const _FabLabel({required this.icon, required this.label, Key? key}) : super(key: key);
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 20),
+        const SizedBox(width: 8),
+        Text(label),
+      ],
     );
   }
 }

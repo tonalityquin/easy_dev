@@ -6,7 +6,7 @@ import '../../../models/user_model.dart';
 import '../../../models/tablet_model.dart';
 import '../../../repositories/user_repo_services/user_repository.dart';
 import '../../../utils/snackbar_helper.dart';
-import '../../../widgets/navigation/secondary_mini_navigation.dart';
+// import '../../../widgets/navigation/secondary_mini_navigation.dart'; // ❌ 미사용
 import 'tablet_management_package/tablet_setting.dart';
 import '../../../states/user/user_state.dart';
 import '../../../states/area/area_state.dart';
@@ -29,6 +29,10 @@ class TabletManagement extends StatefulWidget {
 }
 
 class _TabletManagementState extends State<TabletManagement> {
+  // ▼ 버튼 하단 여백(화면 하단으로부터 띄우는 높이) & 버튼 간격
+  static const double _fabBottomGap = 48.0;
+  static const double _fabSpacing = 10.0;
+
   @override
   void initState() {
     super.initState();
@@ -104,10 +108,6 @@ class _TabletManagementState extends State<TabletManagement> {
     );
   }
 
-  List<IconData> getNavigationIcons(bool hasSelection) {
-    return hasSelection ? [Icons.edit, Icons.delete] : [Icons.add];
-  }
-
   Future<bool> _confirmDelete(BuildContext context) async {
     return await showDialog<bool>(
       context: context,
@@ -129,11 +129,15 @@ class _TabletManagementState extends State<TabletManagement> {
         false;
   }
 
-  void onIconTapped(BuildContext context, int index, UserState userState) async {
+  /// ▼ 기존 onIconTapped() 로직을 FAB로 그대로 매핑
+  /// - 선택 없음: index 0 → 추가
+  /// - 선택 있음: index 0 → 수정, index 1 → 삭제
+  Future<void> _handlePrimaryAction(BuildContext context) async {
+    final userState = context.read<UserState>();
     final selectedId = userState.selectedUserId;
 
-    // 추가
-    if (index == 0 && selectedId == null) {
+    // index 0: 추가 (선택 없음)
+    if (selectedId == null) {
       buildUserBottomSheet(
         context: context,
         onSave: (
@@ -146,8 +150,9 @@ class _TabletManagementState extends State<TabletManagement> {
             division,
             ) async {
           try {
-            final englishName =
-            await context.read<UserRepository>().getEnglishNameByArea(area, division);
+            final englishName = await context
+                .read<UserRepository>()
+                .getEnglishNameByArea(area, division);
 
             // 🔁 UserModel → TabletModel 로 생성
             final newTablet = TabletModel(
@@ -186,74 +191,75 @@ class _TabletManagementState extends State<TabletManagement> {
       return;
     }
 
-    // 수정
-    if (index == 0 && selectedId != null) {
-      final selectedUser = userState.tabletUsers.firstWhereOrNull((u) => u.id == selectedId);
-      if (selectedUser == null) {
-        showFailedSnackbar(context, '선택된 계정을 찾지 못했습니다.');
-        return;
-      }
-
-      // 하단시트는 TabletModel을 사용하므로 변환하여 전달
-      final tabletInitial = _toTabletModel(selectedUser);
-
-      buildUserBottomSheet(
-        context: context,
-        initialUser: tabletInitial,
-        onSave: (
-            name,
-            handle,
-            email,
-            role,
-            password,
-            area,
-            division,
-            ) async {
-          try {
-            final englishName =
-            await context.read<UserRepository>().getEnglishNameByArea(area, division);
-
-            final updatedUser = selectedUser.copyWith(
-              name: name,
-              phone: handle, // handle을 phone 필드에 저장(호환)
-              email: email,
-              role: role,
-              password: password,
-              areas: [area],
-              divisions: [division],
-              currentArea: area,
-              selectedArea: area,
-              englishSelectedAreaName: englishName ?? area,
-            );
-
-            await userState.updateLoginTablet(updatedUser);
-            if (!context.mounted) return;
-            showSuccessSnackbar(context, '수정되었습니다.');
-          } catch (e) {
-            if (!context.mounted) return;
-            showFailedSnackbar(context, '수정 실패: $e');
-          }
-        },
-      );
+    // index 0: 수정 (선택 있음)
+    final selectedUser =
+    userState.tabletUsers.firstWhereOrNull((u) => u.id == selectedId);
+    if (selectedUser == null) {
+      showFailedSnackbar(context, '선택된 계정을 찾지 못했습니다.');
       return;
     }
 
-    // 삭제
-    if (index == 1 && selectedId != null) {
-      final ok = await _confirmDelete(context);
-      if (!ok) return;
+    // 하단시트는 TabletModel을 사용하므로 변환하여 전달
+    final tabletInitial = _toTabletModel(selectedUser);
 
-      await userState.deleteTabletCard(
-        [selectedId],
-        onError: (msg) => showFailedSnackbar(context, msg),
-      );
-      if (!context.mounted) return;
-      showSuccessSnackbar(context, '삭제되었습니다.');
+    buildUserBottomSheet(
+      context: context,
+      initialUser: tabletInitial,
+      onSave: (
+          name,
+          handle,
+          email,
+          role,
+          password,
+          area,
+          division,
+          ) async {
+        try {
+          final englishName = await context
+              .read<UserRepository>()
+              .getEnglishNameByArea(area, division);
+
+          final updatedUser = selectedUser.copyWith(
+            name: name,
+            phone: handle, // handle을 phone 필드에 저장(호환)
+            email: email,
+            role: role,
+            password: password,
+            areas: [area],
+            divisions: [division],
+            currentArea: area,
+            selectedArea: area,
+            englishSelectedAreaName: englishName ?? area,
+          );
+
+          await userState.updateLoginTablet(updatedUser);
+          if (!context.mounted) return;
+          showSuccessSnackbar(context, '수정되었습니다.');
+        } catch (e) {
+          if (!context.mounted) return;
+          showFailedSnackbar(context, '수정 실패: $e');
+        }
+      },
+    );
+  }
+
+  Future<void> _handleDelete(BuildContext context) async {
+    final userState = context.read<UserState>();
+    final selectedId = userState.selectedUserId;
+    if (selectedId == null) {
+      showFailedSnackbar(context, '선택된 계정이 없습니다.');
       return;
     }
 
-    // 그 외
-    showFailedSnackbar(context, '선택된 계정이 없습니다.');
+    final ok = await _confirmDelete(context);
+    if (!ok) return;
+
+    await userState.deleteTabletCard(
+      [selectedId],
+      onError: (msg) => showFailedSnackbar(context, msg),
+    );
+    if (!context.mounted) return;
+    showSuccessSnackbar(context, '삭제되었습니다.');
   }
 
   @override
@@ -273,6 +279,8 @@ class _TabletManagementState extends State<TabletManagement> {
 
     // ✅ 태블릿 전용 리스트 사용 (캐시 우선)
     final filteredTablets = userState.tabletUsers.where(matches).toList();
+    final bool hasSelection = userState.selectedUserId != null;
+    final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -329,16 +337,161 @@ class _TabletManagementState extends State<TabletManagement> {
                 if (user.position?.isNotEmpty == true) Text('직책: ${user.position!}'),
               ],
             ),
-            trailing: isSelected ? const Icon(Icons.check_circle, color: Colors.green) : null,
+            trailing: isSelected
+                ? const Icon(Icons.check_circle, color: Colors.green)
+                : null,
             selected: isSelected,
             onTap: () => userState.toggleUserCard(user.id),
           );
         },
       ),
-      bottomNavigationBar: SecondaryMiniNavigation(
-        icons: getNavigationIcons(userState.selectedUserId != null),
-        onIconTapped: (index) => onIconTapped(context, index, userState),
+
+      // ▼ 현대적인 FAB 세트(알약형 ElevatedButton + 하단 여백으로 위치 조절)
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      floatingActionButton: _FabStack(
+        bottomGap: _fabBottomGap,
+        spacing: _fabSpacing,
+        hasSelection: hasSelection,
+        onPrimary: () => _handlePrimaryAction(context), // 추가/수정
+        onDelete: hasSelection ? () => _handleDelete(context) : null, // 삭제
+        cs: cs,
       ),
+    );
+  }
+}
+
+/// 현대적인 파브 세트(라운드 필 버튼 스타일 + 하단 spacer로 높이 조절)
+class _FabStack extends StatelessWidget {
+  const _FabStack({
+    required this.bottomGap,
+    required this.spacing,
+    required this.hasSelection,
+    required this.onPrimary,
+    required this.onDelete,
+    required this.cs,
+  });
+
+  final double bottomGap;
+  final double spacing;
+  final bool hasSelection;
+  final VoidCallback onPrimary;     // 선택 없음: 추가 / 선택 있음: 수정
+  final VoidCallback? onDelete;     // 선택 있음에서만 사용
+  final ColorScheme cs;
+
+  @override
+  Widget build(BuildContext context) {
+    final ButtonStyle primaryStyle = ElevatedButton.styleFrom(
+      backgroundColor: cs.primary,
+      foregroundColor: cs.onPrimary,
+      elevation: 3,
+      shadowColor: cs.shadow.withOpacity(0.25),
+      shape: const StadiumBorder(),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      textStyle: const TextStyle(fontWeight: FontWeight.w700),
+    );
+
+    final ButtonStyle deleteStyle = ElevatedButton.styleFrom(
+      backgroundColor: cs.error,
+      foregroundColor: cs.onError,
+      elevation: 3,
+      shadowColor: cs.error.withOpacity(0.35),
+      shape: const StadiumBorder(),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      textStyle: const TextStyle(fontWeight: FontWeight.w700),
+    );
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        if (hasSelection) ...[
+          // index 0 → 수정
+          _ElevatedPillButton.icon(
+            icon: Icons.edit,
+            label: '수정',
+            style: primaryStyle,
+            onPressed: onPrimary,
+          ),
+          SizedBox(height: spacing),
+          // index 1 → 삭제
+          _ElevatedPillButton.icon(
+            icon: Icons.delete,
+            label: '삭제',
+            style: deleteStyle,
+            onPressed: onDelete!,
+          ),
+        ] else ...[
+          // index 0 → 추가
+          _ElevatedPillButton.icon(
+            icon: Icons.add,
+            label: '추가',
+            style: primaryStyle,
+            onPressed: onPrimary,
+          ),
+        ],
+
+        // ▼ 하단 여백: 버튼을 위로 띄우는 역할
+        SizedBox(height: bottomGap),
+      ],
+    );
+  }
+}
+
+/// 둥근 알약 형태의 현대적 버튼 래퍼 (ElevatedButton 기반)
+class _ElevatedPillButton extends StatelessWidget {
+  const _ElevatedPillButton({
+    required this.child,
+    required this.onPressed,
+    required this.style,
+    Key? key,
+  }) : super(key: key);
+
+  // ✅ const 생성자 대신 factory로 위임하여 상수 제약/에러 회피
+  factory _ElevatedPillButton.icon({
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+    required ButtonStyle style,
+    Key? key,
+  }) {
+    return _ElevatedPillButton(
+      key: key,
+      onPressed: onPressed,
+      style: style,
+      child: _FabLabel(icon: icon, label: label),
+    );
+  }
+
+  final Widget child;
+  final VoidCallback onPressed;
+  final ButtonStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    return ElevatedButton(
+      onPressed: onPressed,
+      style: style,
+      child: child,
+    );
+  }
+}
+
+/// 아이콘 + 라벨(간격/정렬 최적화)
+class _FabLabel extends StatelessWidget {
+  const _FabLabel({required this.icon, required this.label, Key? key}) : super(key: key);
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 20),
+        const SizedBox(width: 8),
+        Text(label),
+      ],
     );
   }
 }

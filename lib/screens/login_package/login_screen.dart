@@ -1,6 +1,10 @@
 // lib/screens/login_package/login_screen.dart
 import 'package:flutter/material.dart';
-import '../../routes.dart'; // redirect 기본값(AppRoutes.commute) 사용
+import 'package:provider/provider.dart';
+
+import '../../routes.dart'; // 기본 redirect(AppRoutes.commute) 사용
+import '../../states/area/area_state.dart'; // currentArea 확인용
+
 import 'service/service_login_controller.dart';
 import 'service/sections/service_login_form.dart';
 
@@ -44,7 +48,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     } else {
       _loginController = ServiceLoginController(
         context,
-        // 성공 시 내비게이션은 화면에서 처리
+        // 성공 시 내비게이션은 화면에서 처리(redirectAfterLogin 반영)
         onLoginSucceeded: _navigateAfterLogin,
       );
     }
@@ -84,6 +88,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       if (rm is String && rm.isNotEmpty) {
         _requiredMode = rm;
       }
+      // (선택) args['requiredArea']를 쓰고 싶다면 여기에 읽어도 됨.
+      // 이번 요구는 하드코딩으로 'belivus'만 허용이므로 별도 인자 없이 처리합니다.
     }
 
     // ▼ 자동 로그인 게이트: 라우트 인자를 먼저 확보한 뒤 1회만 실행
@@ -97,8 +103,28 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     }
   }
 
+  bool _isHeadTarget() {
+    // 본사 목적지들에 대한 하드코딩된 식별
+    return _redirectAfterLogin == AppRoutes.headStub ||
+        _redirectAfterLogin == AppRoutes.headquarterPage;
+  }
+
   void _navigateAfterLogin() {
-    // 기본값은 기존과 동일하게 /commute
+    // ✅ 본사 진입은 belivus만 허용 (하드코딩)
+    if (_isHeadTarget()) {
+      final currentArea = context.read<AreaState>().currentArea;
+      if (currentArea != 'belivus') {
+        // 접근 차단: 안내 후 허브로 복귀
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('본사 허브는 belivus 지역 사용자만 접근할 수 있습니다.')),
+        );
+        Navigator.of(context).pushReplacementNamed(AppRoutes.selector);
+        return;
+      }
+    }
+
+    // 기본값은 예전과 동일하게 /commute
     final route = _redirectAfterLogin ?? AppRoutes.commute;
     if (!mounted) return;
     Navigator.of(context).pushReplacementNamed(route);
