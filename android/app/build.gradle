@@ -3,10 +3,11 @@ plugins {
     id "kotlin-android"
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id "dev.flutter.flutter-gradle-plugin"
+    id "com.google.gms.google-services"
 }
 
 android {
-    namespace = "com.example.easydev"
+    namespace = "com.quintus.dev"
     compileSdk = 36 // ✅ 35 → 36 으로 올림
 
     compileOptions {
@@ -20,11 +21,11 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.easydev"
+        applicationId = "com.quintus.dev"
         minSdkVersion = flutter.minSdkVersion
         targetSdk = 35 // 그대로 OK (추후 필요 시 36으로 올려도 됨)
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
     }
 
     signingConfigs {

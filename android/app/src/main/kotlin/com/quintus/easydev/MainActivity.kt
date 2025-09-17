@@ -1,4 +1,4 @@
-package com.example.easydev
+package com.quintus.dev
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -315,11 +315,12 @@ class _Header extends StatelessWidget {
         const _HeaderBadge(size: 64, ring: 3),
         const SizedBox(height: 12),
         Text(
-          '환영합니다, 사용자님',
+          '환영합니다',
           style: text.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 6),
+
         Text(
           '화살표 버튼을 누르면 해당 페이지로 진입합니다.',
           style: text.bodyMedium?.copyWith(color: Theme.of(context).hintColor),
