@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'game_package/tetris.dart';
 import 'game_package/minesweeper.dart';
+// TODO: 경로는 프로젝트 구조에 맞게 수정
+import '../../../utils/snackbar_helper.dart';
 
 class GameArcadeBottomSheet extends StatelessWidget {
   final BuildContext rootContext; // 바텀시트 밖으로 네비게이션할 때 사용
@@ -117,9 +119,7 @@ class GameArcadeBottomSheet extends StatelessWidget {
                   );
                   break;
                 case _GameRoute.comingSoon:
-                  ScaffoldMessenger.of(rootContext).showSnackBar(
-                    SnackBar(content: Text('「${g.title}」는 준비 중입니다.')),
-                  );
+                  showSelectedSnackbar(rootContext, '「${g.title}」는 준비 중입니다.');
                   break;
               }
             });

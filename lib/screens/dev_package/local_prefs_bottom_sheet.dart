@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+// ✅ snackbar_helper 사용 (경로는 프로젝트 구조에 맞게 조정)
+import '../../utils/snackbar_helper.dart';
+
 class LocalPrefsBottomSheet extends StatefulWidget {
   const LocalPrefsBottomSheet({super.key});
 
@@ -53,18 +56,16 @@ class _LocalPrefsBottomSheetState extends State<LocalPrefsBottomSheet> {
     final encoded = jsonEncode(_data.map((k, v) => MapEntry(k, v)));
     await Clipboard.setData(ClipboardData(text: encoded));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('모든 항목을 클립보드에 복사했습니다.')),
-    );
+    // ✅ snackbar_helper로 교체
+    showSuccessSnackbar(context, '모든 항목을 클립보드에 복사했습니다.');
   }
 
   Future<void> _copyEntry(String key, Object? value) async {
     final encoded = jsonEncode({key: value});
     await Clipboard.setData(ClipboardData(text: encoded));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('복사됨: $key')),
-    );
+    // ✅ snackbar_helper로 교체
+    showSuccessSnackbar(context, '복사됨: $key');
   }
 
   @override

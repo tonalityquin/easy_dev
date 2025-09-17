@@ -12,6 +12,9 @@ import 'dev_calendar_package/dev_month_calendar_view.dart';
 import 'dev_calendar_package/dev_completed_events_sheet.dart';
 import 'dev_calendar_package/dev_board_kanban_view.dart'; // ✅ 보드 뷰
 
+// ✅ 스낵바 헬퍼
+import '../../utils/snackbar_helper.dart';
+
 // ────────────────────────────────────────────────────────────
 // Dev Calendar 팔레트 (개발 카드와 동일 톤)
 // base: #6A1B9A, dark: #4A148C, light: #CE93D8, fg: white
@@ -182,9 +185,9 @@ class _DevCalendarPageState extends State<DevCalendarPage> {
                     onToggleProgress: _toggleProgress,
                     onMonthRequested: (monthStart, monthEnd) async {
                       await context.read<DevCalendarModel>().loadRange(
-                            timeMin: monthStart,
-                            timeMax: monthEnd,
-                          );
+                        timeMin: monthStart,
+                        timeMax: monthEnd,
+                      );
                     },
                   ),
                   // 1) 목록
@@ -262,9 +265,8 @@ class _DevCalendarPageState extends State<DevCalendarPage> {
 
     final model = pageContext.read<DevCalendarModel>();
     if (model.calendarId.isEmpty) {
-      ScaffoldMessenger.of(pageContext).showSnackBar(
-        const SnackBar(content: Text('먼저 캘린더를 불러오세요.')),
-      );
+      // ✅ snackbar_helper 사용
+      showSelectedSnackbar(pageContext, '먼저 캘린더를 불러오세요.');
       return;
     }
 
@@ -295,7 +297,8 @@ class _DevCalendarPageState extends State<DevCalendarPage> {
   Future<void> _openCreateSheet(BuildContext context) async {
     final model = context.read<DevCalendarModel>();
     if (model.calendarId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('먼저 캘린더를 불러오세요.')));
+      // ✅ snackbar_helper 사용
+      showSelectedSnackbar(context, '먼저 캘린더를 불러오세요.');
       return;
     }
 
@@ -401,7 +404,7 @@ class _DevCalendarPageState extends State<DevCalendarPage> {
     );
   }
 
-  /// ✅ 드래그/메뉴 이동 시 날짜/진행도 보정
+/// ✅ 드래그/메뉴 이동 시 날짜/진행도 보정
 }
 
 // ===== 바텀시트용 보드 래퍼(상단 핸들/닫기 버튼 포함) =====
@@ -523,7 +526,7 @@ class _CalendarIdSection extends StatelessWidget {
       onPressed: loading ? null : onLoad,
       icon: loading
           ? const SizedBox(
-              width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: _CalColors.fg))
+          width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: _CalColors.fg))
           : const Icon(Icons.download_rounded),
       label: const Text('불러오기'),
     );

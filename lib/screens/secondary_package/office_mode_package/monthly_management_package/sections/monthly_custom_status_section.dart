@@ -20,10 +20,12 @@ class MonthlyCustomStatusSection extends StatefulWidget {
   });
 
   @override
-  State<MonthlyCustomStatusSection> createState() => _MonthlyCustomStatusSectionState();
+  State<MonthlyCustomStatusSection> createState() =>
+      _MonthlyCustomStatusSectionState();
 }
 
-class _MonthlyCustomStatusSectionState extends State<MonthlyCustomStatusSection> {
+class _MonthlyCustomStatusSectionState
+    extends State<MonthlyCustomStatusSection> {
   String? _errorMessage;
   bool _deleting = false;
 
@@ -37,15 +39,39 @@ class _MonthlyCustomStatusSectionState extends State<MonthlyCustomStatusSection>
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
 
     return KeyedSubtree(
       key: widget.statusSectionKey,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            '추가 상태 메모 (최대 20자)',
-            style: TextStyle(fontWeight: FontWeight.bold),
+          // 섹션 타이틀
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: cs.primary.withOpacity(.10),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(Icons.sticky_note_2_outlined,
+                    size: 18, color: cs.primary),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                '추가 상태 메모',
+                style: textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '최대 20자',
+                style: textTheme.bodySmall?.copyWith(color: Colors.black54),
+              ),
+            ],
           ),
           const SizedBox(height: 8),
 
@@ -60,74 +86,114 @@ class _MonthlyCustomStatusSectionState extends State<MonthlyCustomStatusSection>
               maxLengthEnforcement: MaxLengthEnforcement.enforced,
               onChanged: (_) => _validateInput(),
               inputFormatters: [
-                // 한글/영문/숫자/공백/기본 구두점 허용 (정책에 맞게 조정 가능)
+                // 한글/영문/숫자/공백/기본 구두점 허용
                 FilteringTextInputFormatter.allow(
                   RegExp(r"[a-zA-Z0-9가-힣\s\.\,\-\(\)\/]"),
                 ),
               ],
+              style: const TextStyle(fontSize: 14.5),
               decoration: InputDecoration(
                 hintText: '예: 뒷범퍼 손상',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                isDense: true,
+                contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                filled: true,
+                fillColor: cs.surface, // ✅ 톤 맞춤
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: cs.outlineVariant),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: cs.primary, width: 1.6),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                errorBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: cs.error, width: 1.4),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                focusedErrorBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: cs.error, width: 1.6),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                counterStyle: TextStyle(
+                  color: _errorMessage != null
+                      ? cs.error
+                      : cs.onSurface.withOpacity(.54),
+                  fontWeight: FontWeight.w600,
+                  fontSize: 11.5,
+                ),
                 errorText: _errorMessage,
               ),
             ),
           ),
 
+          // 자동 저장된 메모 뱃지/카드
           if (widget.fetchedCustomStatus != null)
             Padding(
               padding: const EdgeInsets.only(top: 12),
               child: Container(
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(8),
+                  color: cs.secondaryContainer, // ✅ 토널 배경
+                  border: Border.all(color: cs.outlineVariant),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 padding: const EdgeInsets.all(12),
                 child: Row(
                   children: [
-                    const Icon(Icons.info_outline, size: 20, color: Colors.blueGrey),
+                    Icon(Icons.info_outline_rounded,
+                        size: 20, color: cs.onSecondaryContainer),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         '자동 저장된 메모: "${widget.fetchedCustomStatus}"',
-                        style: const TextStyle(fontSize: 14),
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: cs.onSecondaryContainer,
+                          fontWeight: FontWeight.w600,
+                        ),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     const SizedBox(width: 8),
-                    IconButton(
+                    _deleting
+                        ? SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor:
+                        AlwaysStoppedAnimation<Color>(cs.error),
+                      ),
+                    )
+                        : IconButton(
                       tooltip: '자동 메모 삭제',
-                      icon: _deleting
-                          ? SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: cs.error,
-                        ),
-                      )
-                          : const Icon(Icons.delete_outline, color: Colors.red),
-                      onPressed: _deleting
-                          ? null
-                          : () async {
+                      splashRadius: 20,
+                      icon: Icon(Icons.delete_outline, color: cs.error),
+                      onPressed: () async {
                         FocusScope.of(context).unfocus();
                         setState(() => _deleting = true);
                         try {
-
-
-                          await widget.controller.deleteCustomStatusFromFirestore(context);
+                          await widget.controller
+                              .deleteCustomStatusFromFirestore(context);
 
                           widget.onDeleted();
                           widget.onStatusCleared();
 
-                          showSuccessSnackbar(context, '자동 메모가 삭제되었습니다');
+                          showSuccessSnackbar(
+                              context, '자동 메모가 삭제되었습니다');
                         } catch (e) {
-                          showFailedSnackbar(context, '삭제 실패. 다시 시도해주세요');
+                          showFailedSnackbar(
+                              context, '삭제 실패. 다시 시도해주세요');
                         } finally {
-                          if (mounted) setState(() => _deleting = false);
+                          if (mounted) {
+                            setState(() => _deleting = false);
+                          }
                         }
                       },
-                    )
+                    ),
                   ],
                 ),
               ),

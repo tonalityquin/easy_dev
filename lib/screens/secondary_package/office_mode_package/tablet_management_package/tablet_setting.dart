@@ -8,6 +8,12 @@ import 'sections/tablet_input_section.dart';
 import 'sections/tablet_role_dropdown_section.dart';
 import 'sections/tablet_validation_helpers.dart';
 
+/// 서비스(로그인 카드)와 동일 계열 팔레트
+class _SvcColors {
+  static const base = Color(0xFF0D47A1);  // primary
+  static const dark = Color(0xFF09367D);  // 진한 텍스트/아이콘
+}
+
 class TabletSettingBottomSheet extends StatefulWidget {
   /// 축소안: onSave 시그니처 최소화
   final Function(
@@ -116,13 +122,18 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final cs = theme.colorScheme;
     final isEditMode = widget.isEditMode || (widget.initialUser != null);
 
     // ✅ 최상단까지 차오르도록 높이 고정 + 키보드 여백 반영
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final screenHeight = MediaQuery.of(context).size.height;
     final effectiveHeight = screenHeight - bottomInset;
+
+    final titleStyle = const TextStyle(
+      fontSize: 18,
+      fontWeight: FontWeight.bold,
+      color: _SvcColors.dark, // 서비스 톤 적용
+    );
 
     return SafeArea(
       child: Padding(
@@ -131,9 +142,10 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
           height: effectiveHeight, // 화면 높이(키보드 제외)만큼 고정
           child: Container(
             padding: const EdgeInsets.all(16),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              border: Border.all(color: _SvcColors.base.withOpacity(.06)), // 미세한 톤 라인
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -145,15 +157,28 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
                     height: 4,
                     margin: const EdgeInsets.only(bottom: 16),
                     decoration: BoxDecoration(
-                      color: theme.dividerColor,
+                      color: _SvcColors.base.withOpacity(.25), // 서비스 톤으로 살짝
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
                 ),
 
-                const Text(
-                  '👤 사용자 정보',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                // 헤더
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 26,
+                      height: 26,
+                      decoration: const BoxDecoration(
+                        color: _SvcColors.base,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.tablet_mac_rounded, size: 16, color: Colors.white),
+                    ),
+                    const SizedBox(width: 8),
+                    Text('사용자 정보', style: titleStyle),
+                  ],
                 ),
                 const SizedBox(height: 16),
 
@@ -191,7 +216,10 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
                           alignment: Alignment.centerLeft,
                           child: Text(
                             '현재 지역: ${widget.areaValue}',
-                            style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: _SvcColors.dark, // 포인트 컬러
+                            ),
                           ),
                         ),
 
@@ -216,6 +244,10 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
                     Expanded(
                       child: OutlinedButton(
                         onPressed: () => Navigator.pop(context),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: _SvcColors.base,
+                          side: BorderSide(color: _SvcColors.base.withOpacity(.35)),
+                        ),
                         child: const Text('취소'),
                       ),
                     ),
@@ -250,8 +282,8 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
                           Navigator.pop(context);
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: cs.primary,
-                          foregroundColor: cs.onPrimary,
+                          backgroundColor: _SvcColors.base, // 서비스 톤
+                          foregroundColor: Colors.white,
                         ),
                         child: Text(isEditMode ? '수정' : '생성'),
                       ),

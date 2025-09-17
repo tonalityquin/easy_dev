@@ -6,6 +6,7 @@ import '../../../enums/plate_type.dart';
 import '../../../repositories/area_counts_repository.dart';
 import '../../../states/user/user_state.dart';
 import 'area_detail_screen.dart';
+// ✅ BottomSheet 버전으로 교체
 
 class Field extends StatefulWidget {
   const Field({super.key});
@@ -96,23 +97,11 @@ class _FieldState extends State<Field> {
 
   Widget _buildAreaCard(AreaCount areaCount) {
     return InkWell(
-      onTap: () {
-        showModalBottomSheet(
-          backgroundColor: Colors.white,
+      onTap: () async {
+        // ✅ 기존 AreaDetailScreen → 최상단까지 차오르는 BottomSheet로 변경
+        await showAreaDetailBottomSheet(
           context: context,
-          isScrollControlled: true,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          builder: (context) {
-            final height = MediaQuery.of(context).size.height;
-            return Container(
-              height: height * 0.5,
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              child: AreaDetailScreen(areaName: areaCount.area),
-            );
-          },
+          areaName: areaCount.area,
         );
       },
       child: Card(
@@ -127,7 +116,8 @@ class _FieldState extends State<Field> {
             children: [
               Text(
                 '📍 ${areaCount.area}',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                style:
+                const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
               Row(
@@ -136,12 +126,16 @@ class _FieldState extends State<Field> {
                   final count = areaCount.counts[type] ?? 0;
                   return Column(
                     children: [
-                      Text(type.label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                      Text(type.label,
+                          style: const TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 4),
                       Row(
                         children: [
                           Icon(
-                            count > 0 ? Icons.circle : Icons.remove_circle_outline,
+                            count > 0
+                                ? Icons.circle
+                                : Icons.remove_circle_outline,
                             color: _getColorByCount(count),
                             size: 16,
                           ),

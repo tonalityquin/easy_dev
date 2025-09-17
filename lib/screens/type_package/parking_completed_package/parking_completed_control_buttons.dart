@@ -16,6 +16,12 @@ import 'widgets/parking_completed_status_bottom_sheet.dart';
 import 'widgets/set_departure_request_dialog.dart';
 import '../../../widgets/dialog/plate_remove_dialog.dart';
 
+/// Deep Blue 팔레트(서비스 카드와 동일 계열)
+class _Palette {
+  static const base  = Color(0xFF0D47A1); // primary
+  static const dark  = Color(0xFF09367D); // 강조 텍스트/아이콘
+}
+
 class ParkingCompletedControlButtons extends StatelessWidget {
   final bool isParkingAreaMode;
   final bool isStatusMode;
@@ -52,6 +58,11 @@ class ParkingCompletedControlButtons extends StatelessWidget {
         final selectedPlate = plateState.getSelectedPlate(PlateType.parkingCompleted, userName);
         final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
 
+        // 팔레트 기반 컬러
+        final Color selectedItemColor = _Palette.base;
+        final Color unselectedItemColor = _Palette.dark.withOpacity(.55);
+        final Color muted = _Palette.dark.withOpacity(.60);
+
         return BottomNavigationBar(
           type: BottomNavigationBarType.fixed,
           backgroundColor: Colors.white,
@@ -59,20 +70,20 @@ class ParkingCompletedControlButtons extends StatelessWidget {
           selectedFontSize: 12,
           unselectedFontSize: 12,
           iconSize: 24,
-          selectedItemColor: Theme.of(context).primaryColor,
-          unselectedItemColor: Colors.grey[700],
+          selectedItemColor: selectedItemColor,
+          unselectedItemColor: unselectedItemColor,
           items: isLocationPickerMode || isStatusMode
               ? [
             BottomNavigationBarItem(
-              icon: Icon(isLocked ? Icons.lock : Icons.lock_open),
+              icon: Icon(isLocked ? Icons.lock : Icons.lock_open, color: muted),
               label: '화면 잠금',
             ),
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.search),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.search, color: muted),
               label: '번호판 검색',
             ),
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.directions_car),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.directions_car, color: _Palette.base),
               label: '출차 완료',
             ),
           ]
@@ -80,19 +91,26 @@ class ParkingCompletedControlButtons extends StatelessWidget {
             BottomNavigationBarItem(
               icon: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 300),
-                transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+                transitionBuilder: (child, animation) =>
+                    ScaleTransition(scale: animation, child: child),
                 child: isPlateSelected
                     ? (selectedPlate.isLockedFee
-                    ? const Icon(Icons.lock_open, key: ValueKey('unlock'), color: Colors.grey)
-                    : const Icon(Icons.lock, key: ValueKey('lock'), color: Colors.grey))
-                    : Icon(Icons.refresh, key: const ValueKey('refresh'), color: Colors.grey[700]),
+                    ? const Icon(Icons.lock_open,
+                    key: ValueKey('unlock'), color: Color(0x9909367D)) // muted-ish
+                    : const Icon(Icons.lock,
+                    key: ValueKey('lock'), color: Color(0x9909367D)))
+                    : Icon(Icons.refresh,
+                    key: const ValueKey('refresh'), color: muted),
               ),
-              label: isPlateSelected ? (selectedPlate.isLockedFee ? '정산 취소' : '사전 정산') : '채팅하기',
+              label: isPlateSelected
+                  ? (selectedPlate.isLockedFee ? '정산 취소' : '사전 정산')
+                  : '채팅하기',
             ),
             BottomNavigationBarItem(
               icon: Icon(
                 isPlateSelected ? Icons.check_circle : Icons.search,
-                color: isPlateSelected ? Colors.green[600] : Colors.grey[700],
+                // ✅ 기존 포인트 컬러 유지(초록)
+                color: isPlateSelected ? Colors.green[600] : muted,
               ),
               label: isPlateSelected ? '출차 요청' : '번호판 검색',
             ),
@@ -104,7 +122,7 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                   scaleX: isSorted ? -1 : 1,
                   child: Icon(
                     isPlateSelected ? Icons.settings : Icons.sort,
-                    color: Colors.grey[700],
+                    color: muted,
                   ),
                 ),
               ),

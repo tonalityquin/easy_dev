@@ -139,7 +139,7 @@ class InputPhotoSection extends StatelessWidget {
                                         final urls = snapshot.data ?? [];
 
                                         if (urls.isEmpty) {
-                                          return const Center(child: Text('GCS에 저장된 이미지가 없습니다.'));
+                                          return const Center(child: Text('DB에 저장된 이미지가 없습니다.'));
                                         }
 
                                         return ListView.builder(

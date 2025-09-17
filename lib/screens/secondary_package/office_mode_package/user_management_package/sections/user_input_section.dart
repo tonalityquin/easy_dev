@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+/// 서비스 로그인 카드 팔레트(브랜드 톤)
+class _SvcColors {
+  static const base = Color(0xFF0D47A1); // primary
+  static const dark = Color(0xFF09367D); // 진한 텍스트/아이콘
+  static const light = Color(0xFF5472D3); // 라이트 톤/보더
+}
+
 class UserInputSection extends StatelessWidget {
   final TextEditingController nameController;
   final TextEditingController phoneController;
@@ -26,24 +33,45 @@ class UserInputSection extends StatelessWidget {
   });
 
   InputDecoration _decoration(
-    BuildContext context, {
-    required String label,
-    String? errorText,
-    String? suffixText,
-  }) {
-    final primary = Theme.of(context).colorScheme.primary;
+      BuildContext context, {
+        required String label,
+        String? errorText,
+        String? suffixText,
+      }) {
     return InputDecoration(
       labelText: label,
+      floatingLabelStyle: const TextStyle(
+        color: _SvcColors.dark,
+        fontWeight: FontWeight.w700,
+      ),
       suffixText: suffixText,
+      suffixStyle: const TextStyle(
+        color: _SvcColors.dark,
+        fontWeight: FontWeight.w600,
+      ),
       isDense: true,
+      filled: true,
+      fillColor: _SvcColors.light.withOpacity(.06),
       contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+
+      // 기본 / 포커스 / 에러 보더를 브랜드 톤으로 정리
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: _SvcColors.light.withOpacity(.45)),
+      ),
       focusedBorder: OutlineInputBorder(
-        borderSide: BorderSide(color: primary),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: _SvcColors.base, width: 1.2),
       ),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: Colors.red.shade300),
       ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: Colors.red.shade400, width: 1.2),
+      ),
+
       errorText: errorText,
     );
   }
@@ -81,6 +109,7 @@ class UserInputSection extends StatelessWidget {
           onSubmitted: (_) => FocusScope.of(context).nextFocus(),
           keyboardType: TextInputType.phone,
           autofillHints: const [AutofillHints.telephoneNumber],
+          // ⚠️ const 제거 (요소가 상수가 아님)
           inputFormatters: [
             FilteringTextInputFormatter.digitsOnly,
             LengthLimitingTextInputFormatter(11),

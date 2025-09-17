@@ -40,10 +40,10 @@ class GcsImageUploader {
       );
 
       final url = 'https://storage.googleapis.com/$bucketName/${object.name}';
-      debugPrint('✅ [$purpose] 업로드 완료: $url');
+      debugPrint('✅ [$purpose] 이미지 업로드 완료: $url');
       return url;
     } catch (e, stack) {
-      debugPrint('🔥 [$purpose] GCS 업로드 실패: $e');
+      debugPrint('🔥 [$purpose] 이미지 업로드 실패: $e');
       debugPrint('🔥 Stack Trace: $stack');
       rethrow;
     } finally {

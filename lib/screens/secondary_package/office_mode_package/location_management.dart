@@ -3,11 +3,17 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../utils/snackbar_helper.dart';
-// import '../../../widgets/navigation/secondary_mini_navigation.dart'; // ❌ 미사용
 import 'location_management_package/location_setting.dart';
 import '../../../states/location/location_state.dart';
 import '../../../states/area/area_state.dart';
 import '../../../models/location_model.dart';
+
+/// Service 카드 팔레트 반영 🎨
+const serviceCardBase  = Color(0xFF0D47A1);
+const serviceCardDark  = Color(0xFF09367D);
+const serviceCardLight = Color(0xFF5472D3);
+const serviceCardFg    = Colors.white; // 아이콘/버튼 전경
+const serviceCardBg    = Colors.white; // 카드/바탕
 
 class LocationManagement extends StatefulWidget {
   const LocationManagement({super.key});
@@ -21,7 +27,7 @@ class _LocationManagementState extends State<LocationManagement> {
 
   // ▼ FAB 위치/간격 조절
   static const double _fabBottomGap = 48.0; // 하단에서 띄우기
-  static const double _fabSpacing = 10.0;   // 버튼 간 간격
+  static const double _fabSpacing = 10.0; // 버튼 간 간격
 
   Future<bool> _confirmDelete(BuildContext context) async {
     return await showDialog<bool>(
@@ -90,10 +96,12 @@ class _LocationManagementState extends State<LocationManagement> {
 
                 final subs = (rawSubs is List)
                     ? rawSubs
-                    .map<Map<String, dynamic>>((sub) => {
-                  'name': sub['name']?.toString() ?? '',
-                  'capacity': sub['capacity'] ?? 0,
-                })
+                    .map<Map<String, dynamic>>(
+                      (sub) => {
+                    'name': sub['name']?.toString() ?? '',
+                    'capacity': sub['capacity'] ?? 0,
+                  },
+                )
                     .toList()
                     : <Map<String, dynamic>>[];
 
@@ -161,12 +169,19 @@ class _LocationManagementState extends State<LocationManagement> {
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: serviceCardBg,
         elevation: 0,
         foregroundColor: Colors.black87,
-        title: const Text('주차구역', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(
+          '주차구역',
+          style: const TextStyle(fontWeight: FontWeight.bold).copyWith(color: serviceCardDark),
+        ),
         centerTitle: true,
         automaticallyImplyLeading: false,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(height: 1, color: serviceCardLight.withOpacity(.18)),
+        ),
       ),
       body: locationState.isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -174,27 +189,33 @@ class _LocationManagementState extends State<LocationManagement> {
           ? const Center(child: Text('현재 지역에 주차 구역이 없습니다.'))
           : Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
+          // 필터 칩 영역
+          Container(
+            width: double.infinity,
+            color: cs.surface,
+            padding: const EdgeInsets.symmetric(vertical: 8),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                ChoiceChip(
-                  label: const Text('전체'),
+                _FilterChip(
+                  label: '전체',
                   selected: _filter == 'all',
-                  onSelected: (_) => setState(() => _filter = 'all'),
+                  onSelected: () => setState(() => _filter = 'all'),
+                  cs: cs,
                 ),
                 const SizedBox(width: 8),
-                ChoiceChip(
-                  label: const Text('단일'),
+                _FilterChip(
+                  label: '단일',
                   selected: _filter == 'single',
-                  onSelected: (_) => setState(() => _filter = 'single'),
+                  onSelected: () => setState(() => _filter = 'single'),
+                  cs: cs,
                 ),
                 const SizedBox(width: 8),
-                ChoiceChip(
-                  label: const Text('복합'),
+                _FilterChip(
+                  label: '복합',
                   selected: _filter == 'composite',
-                  onSelected: (_) => setState(() => _filter = 'composite'),
+                  onSelected: () => setState(() => _filter = 'composite'),
+                  cs: cs,
                 ),
               ],
             ),
@@ -238,21 +259,33 @@ class _LocationManagementState extends State<LocationManagement> {
     final tiles = <Widget>[];
 
     if (singles.isNotEmpty) {
-      tiles.add(const Padding(
-        padding: EdgeInsets.all(8.0),
-        child: Text('단일 주차 구역'),
+      tiles.add(Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+        child: Text(
+          '단일 주차 구역',
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+            color: serviceCardDark,
+          ),
+        ),
       ));
       tiles.addAll(_buildSimpleTiles(singles, state, colorScheme));
     }
 
     if (singles.isNotEmpty && grouped.isNotEmpty) {
-      tiles.add(const Divider());
+      tiles.add(Divider(color: serviceCardLight.withOpacity(.30)));
     }
 
     if (grouped.isNotEmpty) {
-      tiles.add(const Padding(
-        padding: EdgeInsets.all(8.0),
-        child: Text('복합 주차 구역'),
+      tiles.add(Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+        child: Text(
+          '복합 주차 구역',
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+            color: serviceCardDark,
+          ),
+        ),
       ));
       tiles.addAll(_buildGroupedTiles(grouped, state, colorScheme));
     }
@@ -269,16 +302,44 @@ class _LocationManagementState extends State<LocationManagement> {
       final loc = list[index];
       final isSelected = state.selectedLocationId == loc.id;
 
-      return ListTile(
-        title: Text(loc.locationName),
-        subtitle: loc.capacity > 0 ? Text('공간 ${loc.capacity}대') : null,
-        leading: Icon(
-          loc.type == 'single' ? Icons.location_on : Icons.maps_home_work,
-          color: cs.onSurfaceVariant,
+      return Card(
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        color: serviceCardBg,
+        elevation: isSelected ? 3 : 1,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+            color: isSelected
+                ? serviceCardBase
+                : serviceCardLight.withOpacity(.28),
+            width: isSelected ? 1.5 : 1,
+          ),
         ),
-        trailing: isSelected ? Icon(Icons.check_circle, color: cs.primary) : null,
-        selected: isSelected,
-        onTap: () => state.toggleLocationSelection(loc.id),
+        child: ListTile(
+          title: Text(
+            loc.locationName,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          subtitle: loc.capacity > 0 ? Text('공간 ${loc.capacity}대') : null,
+          leading: Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: serviceCardLight.withOpacity(.18),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              loc.type == 'single' ? Icons.location_on : Icons.maps_home_work,
+              color: serviceCardBase,
+              size: 20,
+            ),
+          ),
+          trailing: isSelected
+              ? const Icon(Icons.check_circle, color: serviceCardBase)
+              : Icon(Icons.chevron_right, color: cs.outline),
+          selected: isSelected,
+          onTap: () => state.toggleLocationSelection(loc.id),
+        ),
       );
     });
   }
@@ -291,20 +352,47 @@ class _LocationManagementState extends State<LocationManagement> {
     return grouped.entries.map((entry) {
       final totalCapacity = entry.value.fold<int>(0, (sum, loc) => sum + loc.capacity);
 
-      return ExpansionTile(
-        title: Text('상위 구역: ${entry.key} (공간 $totalCapacity대)'),
-        children: entry.value.map((loc) {
-          final isSelected = state.selectedLocationId == loc.id;
+      return Card(
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: serviceCardLight.withOpacity(.28)),
+        ),
+        color: serviceCardBg,
+        elevation: 1,
+        child: Theme(
+          data: Theme.of(context).copyWith(
+            dividerColor: Colors.transparent,
+            expansionTileTheme: ExpansionTileThemeData(
+              iconColor: serviceCardBase,
+              collapsedIconColor: cs.onSurfaceVariant,
+              textColor: cs.onSurface,
+              collapsedTextColor: cs.onSurface,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              collapsedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+          child: ExpansionTile(
+            title: Text(
+              '상위 구역: ${entry.key} (공간 $totalCapacity대)',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            childrenPadding: const EdgeInsets.only(bottom: 8),
+            children: entry.value.map((loc) {
+              final isSelected = state.selectedLocationId == loc.id;
 
-          return ListTile(
-            title: Text(loc.locationName),
-            subtitle: loc.capacity > 0 ? Text('공간 ${loc.capacity}대') : null,
-            leading: const Icon(Icons.subdirectory_arrow_right),
-            trailing: isSelected ? Icon(Icons.check_circle, color: cs.primary) : null,
-            selected: isSelected,
-            onTap: () => state.toggleLocationSelection(loc.id),
-          );
-        }).toList(),
+              return ListTile(
+                title: Text(loc.locationName),
+                subtitle: loc.capacity > 0 ? Text('공간 ${loc.capacity}대') : null,
+                leading: Icon(Icons.subdirectory_arrow_right, color: cs.onSurfaceVariant),
+                trailing:
+                isSelected ? const Icon(Icons.check_circle, color: serviceCardBase) : null,
+                selected: isSelected,
+                onTap: () => state.toggleLocationSelection(loc.id),
+              );
+            }).toList(),
+          ),
+        ),
       );
     }).toList();
   }
@@ -321,16 +409,42 @@ class _LocationManagementState extends State<LocationManagement> {
         final loc = list[index];
         final isSelected = state.selectedLocationId == loc.id;
 
-        return ListTile(
-          title: Text(loc.locationName),
-          subtitle: loc.capacity > 0 ? Text('공간 ${loc.capacity}대') : null,
-          leading: Icon(
-            loc.type == 'single' ? Icons.location_on : Icons.maps_home_work,
-            color: colorScheme.onSurfaceVariant,
+        return Card(
+          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          color: serviceCardBg,
+          elevation: isSelected ? 3 : 1,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(
+              color: isSelected
+                  ? serviceCardBase
+                  : serviceCardLight.withOpacity(.28),
+              width: isSelected ? 1.5 : 1,
+            ),
           ),
-          trailing: isSelected ? Icon(Icons.check_circle, color: colorScheme.primary) : null,
-          selected: isSelected,
-          onTap: () => state.toggleLocationSelection(loc.id),
+          child: ListTile(
+            title: Text(
+              loc.locationName,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            subtitle: loc.capacity > 0 ? Text('공간 ${loc.capacity}대') : null,
+            leading: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: serviceCardLight.withOpacity(.18),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                loc.type == 'single' ? Icons.location_on : Icons.maps_home_work,
+                color: serviceCardBase,
+                size: 20,
+              ),
+            ),
+            trailing: isSelected ? const Icon(Icons.check_circle, color: serviceCardBase) : null,
+            selected: isSelected,
+            onTap: () => state.toggleLocationSelection(loc.id),
+          ),
         );
       },
     );
@@ -344,22 +458,52 @@ class _LocationManagementState extends State<LocationManagement> {
       }) {
     return ListView(
       children: grouped.entries.map((entry) {
-        final totalCapacity = entry.value.fold<int>(0, (sum, loc) => sum + loc.capacity);
+        final totalCapacity =
+        entry.value.fold<int>(0, (sum, loc) => sum + loc.capacity);
 
-        return ExpansionTile(
-          title: Text('상위 구역: ${entry.key} (공간 $totalCapacity대)'),
-          children: entry.value.map((loc) {
-            final isSelected = state.selectedLocationId == loc.id;
+        return Card(
+          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          color: serviceCardBg,
+          elevation: 1,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: serviceCardLight.withOpacity(.28)),
+          ),
+          child: Theme(
+            data: Theme.of(context).copyWith(
+              dividerColor: Colors.transparent,
+              expansionTileTheme: ExpansionTileThemeData(
+                iconColor: serviceCardBase,
+                collapsedIconColor: colorScheme.onSurfaceVariant,
+                textColor: colorScheme.onSurface,
+                collapsedTextColor: colorScheme.onSurface,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                collapsedShape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+            child: ExpansionTile(
+              title: Text(
+                '상위 구역: ${entry.key} (공간 $totalCapacity대)',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              childrenPadding: const EdgeInsets.only(bottom: 8),
+              children: entry.value.map((loc) {
+                final isSelected = state.selectedLocationId == loc.id;
 
-            return ListTile(
-              title: Text(loc.locationName),
-              subtitle: loc.capacity > 0 ? Text('공간 ${loc.capacity}대') : null,
-              leading: const Icon(Icons.subdirectory_arrow_right),
-              trailing: isSelected ? Icon(Icons.check_circle, color: colorScheme.primary) : null,
-              selected: isSelected,
-              onTap: () => state.toggleLocationSelection(loc.id),
-            );
-          }).toList(),
+                return ListTile(
+                  title: Text(loc.locationName),
+                  subtitle: loc.capacity > 0 ? Text('공간 ${loc.capacity}대') : null,
+                  leading:
+                  Icon(Icons.subdirectory_arrow_right, color: colorScheme.onSurfaceVariant),
+                  trailing:
+                  isSelected ? const Icon(Icons.check_circle, color: serviceCardBase) : null,
+                  selected: isSelected,
+                  onTap: () => state.toggleLocationSelection(loc.id),
+                );
+              }).toList(),
+            ),
+          ),
         );
       }).toList(),
     );
@@ -387,8 +531,8 @@ class _FabStack extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ButtonStyle primaryStyle = ElevatedButton.styleFrom(
-      backgroundColor: cs.primary,
-      foregroundColor: cs.onPrimary,
+      backgroundColor: serviceCardBase,
+      foregroundColor: serviceCardFg,
       elevation: 3,
       shadowColor: cs.shadow.withOpacity(0.25),
       shape: const StadiumBorder(),
@@ -407,7 +551,7 @@ class _FabStack extends StatelessWidget {
     );
 
     return Column(
-      mainAxisSize: MainAxisSize.min, // ✅ 소문자 min
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         // 항상 ‘추가’ 노출
@@ -487,6 +631,39 @@ class _FabLabel extends StatelessWidget {
         const SizedBox(width: 8),
         Text(label),
       ],
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  const _FilterChip({
+    required this.label,
+    required this.selected,
+    required this.onSelected,
+    required this.cs,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onSelected;
+  final ColorScheme cs;
+
+  @override
+  Widget build(BuildContext context) {
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      labelStyle: TextStyle(
+        fontWeight: FontWeight.w700,
+        color: selected ? serviceCardBase : cs.onSurfaceVariant,
+      ),
+      selectedColor: serviceCardLight.withOpacity(.22),
+      backgroundColor: serviceCardLight.withOpacity(.10),
+      side: BorderSide(
+        color: selected ? serviceCardBase : cs.outlineVariant.withOpacity(.6),
+      ),
+      onSelected: (_) => onSelected(),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
     );
   }
 }

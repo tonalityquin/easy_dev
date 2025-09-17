@@ -4,6 +4,9 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../routes.dart';
 
+// ✅ snackbar_helper 사용
+import '../utils/snackbar_helper.dart';
+
 class SelectorHubsPage extends StatefulWidget {
   const SelectorHubsPage({super.key});
 
@@ -69,8 +72,10 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
             await _setDevAuthorized(true);
             if (mounted) {
               Navigator.of(ctx).pop(); // 시트 닫기
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('개발자 인증 완료. 이제 개발/주차 카드를 눌러 진입할 수 있습니다.')),
+              // ✅ snackbar_helper로 교체
+              showSuccessSnackbar(
+                context,
+                '개발자 인증 완료. 이제 개발/주차 카드를 눌러 진입할 수 있습니다.',
               );
             }
           },
@@ -78,8 +83,10 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
             await _resetDevAuthAndCreds();
             if (mounted) {
               Navigator.of(ctx).pop(); // 시트 닫기
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('개발자 인증이 초기화되었습니다.')),
+              // ✅ snackbar_helper로 교체 (알림성 메시지: 노란색)
+              showSelectedSnackbar(
+                context,
+                '개발자 인증이 초기화되었습니다.',
               );
             }
           },

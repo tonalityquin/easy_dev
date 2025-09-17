@@ -15,6 +15,12 @@ import '../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
 import '../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 import 'widgets/parking_request_status_bottom_sheet.dart';
 
+/// Deep Blue 팔레트(서비스 카드와 동일 계열)
+class _Palette {
+  static const base  = Color(0xFF0D47A1); // primary
+  static const dark  = Color(0xFF09367D); // 강조 텍스트/아이콘
+}
+
 class ParkingRequestControlButtons extends StatelessWidget {
   final bool isSorted;
   final bool isLocked;
@@ -35,10 +41,6 @@ class ParkingRequestControlButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final onSurface = theme.colorScheme.onSurface;
-    final muted = theme.colorScheme.onSurfaceVariant;
-
     // userName은 변경 가능성이 낮으므로 read
     final userName = context.read<UserState>().name;
 
@@ -48,23 +50,27 @@ class ParkingRequestControlButtons extends StatelessWidget {
     );
     final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
 
+    // 팔레트 기반 컬러
+    final Color selectedItemColor = _Palette.base;
+    final Color unselectedItemColor = _Palette.dark.withOpacity(.55);
+    final Color muted = _Palette.dark.withOpacity(.60);
+
     return BottomNavigationBar(
-      // 액션용으로 사용하므로 시각적 선택 고정이 중요하지 않아 currentIndex 생략
       type: BottomNavigationBarType.fixed,
       backgroundColor: Colors.white,
       elevation: 0,
       selectedFontSize: 12,
       unselectedFontSize: 12,
       iconSize: 24,
-      selectedItemColor: onSurface,
-      unselectedItemColor: muted,
+      selectedItemColor: selectedItemColor,
+      unselectedItemColor: unselectedItemColor,
       items: [
         BottomNavigationBarItem(
           icon: Tooltip(
             message: isPlateSelected ? '정산 관리' : '화면 잠금',
             child: Icon(
               isPlateSelected ? Icons.payments : (isLocked ? Icons.lock : Icons.lock_open),
-              color: muted,
+              color: isPlateSelected ? _Palette.base : muted,
             ),
           ),
           label: isPlateSelected ? '정산 관리' : '화면 잠금',
@@ -73,7 +79,7 @@ class ParkingRequestControlButtons extends StatelessWidget {
           icon: Tooltip(
             message: isPlateSelected ? '입차 완료' : '번호판 검색',
             child: isPlateSelected
-                ? Icon(Icons.check_circle, color: theme.colorScheme.primary)
+                ? Icon(Icons.check_circle, color: _Palette.base)
                 : Icon(Icons.search, color: muted),
           ),
           label: isPlateSelected ? '입차' : '번호판 검색',

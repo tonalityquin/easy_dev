@@ -8,23 +8,31 @@ import 'sections/user_input_section.dart';
 import 'sections/user_role_dropdown_section.dart';
 import 'sections/user_validation_helpers_section.dart';
 
+/// 서비스 로그인 카드 팔레트(브랜드 톤)
+class _SvcColors {
+  static const base = Color(0xFF0D47A1); // primary
+  static const dark = Color(0xFF09367D); // 진한 텍스트/아이콘
+  static const light = Color(0xFF5472D3); // 라이트 톤/보더
+  static const fg = Color(0xFFFFFFFF);
+}
+
 class UserSettingBottomSheet extends StatefulWidget {
   final Function(
-    String name,
-    String phone,
-    String email,
-    String role,
-    String password,
-    String area,
-    String division,
-    bool isWorking,
-    bool isSaved,
-    String selectedArea,
-    String? startTime,
-    String? endTime,
-    List<String> fixedHolidays,
-    String position,
-  ) onSave;
+      String name,
+      String phone,
+      String email,
+      String role,
+      String password,
+      String area,
+      String division,
+      bool isWorking,
+      bool isSaved,
+      String selectedArea,
+      String? startTime,
+      String? endTime,
+      List<String> fixedHolidays,
+      String position,
+      ) onSave;
 
   final String areaValue;
   final String division;
@@ -78,7 +86,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
       _passwordController.text = user.password;
       _positionController.text = user.position ?? '';
       _selectedRole = RoleType.values.firstWhere(
-        (r) => r.name == user.role,
+            (r) => r.name == user.role,
         orElse: () => RoleType.fieldCommon,
       );
       _startTime = user.startTime;
@@ -153,9 +161,15 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
       builder: (ctx, child) {
         // 24시간제 강제(원치 않으면 제거)
         final mq = MediaQuery.of(ctx);
+        // 브랜드 컬러를 다이얼에도 살짝 반영
+        final colorScheme = theme.colorScheme.copyWith(
+          primary: _SvcColors.base,
+          secondary: _SvcColors.light,
+        );
+        final branded = theme.copyWith(colorScheme: colorScheme);
         return MediaQuery(
           data: mq.copyWith(alwaysUse24HourFormat: true),
-          child: Theme(data: theme, child: child!),
+          child: Theme(data: branded, child: child!),
         );
       },
     );
@@ -179,7 +193,9 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
   }
 
   String? _timeToString(TimeOfDay? time) {
-    return time != null ? '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}' : null;
+    return time != null
+        ? '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}'
+        : null;
   }
 
   // --- Build ---
@@ -221,9 +237,31 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                   ),
                 ),
 
-                const Text(
-                  '👤 사용자 정보',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                // 상단 브랜드 배지 느낌의 타이틀
+                Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: _SvcColors.light.withOpacity(.20),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: _SvcColors.light.withOpacity(.45)),
+                      ),
+                      child: const Icon(Icons.person_outline, color: _SvcColors.dark),
+                    ),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Text(
+                        '사용자 정보',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: _SvcColors.dark,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 16),
 
@@ -245,10 +283,18 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                         ),
                         const SizedBox(height: 16),
 
-                        // 권한 드롭다운
-                        UserRoleDropdownSection(
-                          selectedRole: _selectedRole,
-                          onChanged: (value) => setState(() => _selectedRole = value),
+                        // 권한 드롭다운 (브랜드 테두리 감싸기)
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: _SvcColors.light.withOpacity(.06),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: _SvcColors.light.withOpacity(.35)),
+                          ),
+                          child: UserRoleDropdownSection(
+                            selectedRole: _selectedRole,
+                            onChanged: (value) => setState(() => _selectedRole = value),
+                          ),
                         ),
                         const SizedBox(height: 16),
 
@@ -259,14 +305,21 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                           decoration: InputDecoration(
                             labelText: '직책',
                             focusedBorder: OutlineInputBorder(
-                              borderSide: BorderSide(color: cs.primary),
-                              borderRadius: BorderRadius.circular(8),
+                              borderSide: const BorderSide(color: _SvcColors.base, width: 1.2),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(
+                                color: _SvcColors.light.withOpacity(.45),
+                              ),
                             ),
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(10),
                             ),
                             isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                            contentPadding:
+                            const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -275,7 +328,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                         UserPasswordDisplaySection(controller: _passwordController),
                         const SizedBox(height: 16),
 
-                        // 출근/퇴근 시간 선택
+                        // 출근/퇴근 시간 선택 (브랜드 톤 Outlined)
                         Row(
                           children: [
                             Expanded(
@@ -283,6 +336,17 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                                 onPressed: () => _selectTime(isStartTime: true),
                                 icon: const Icon(Icons.schedule),
                                 label: Text('출근: ${_formatTimeOfDay(_startTime)}'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: _SvcColors.dark,
+                                  side: BorderSide(color: _SvcColors.light.withOpacity(.75)),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                    horizontal: 12,
+                                  ),
+                                ),
                               ),
                             ),
                             const SizedBox(width: 12),
@@ -291,6 +355,17 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                                 onPressed: () => _selectTime(isStartTime: false),
                                 icon: const Icon(Icons.schedule),
                                 label: Text('퇴근: ${_formatTimeOfDay(_endTime)}'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: _SvcColors.dark,
+                                  side: BorderSide(color: _SvcColors.light.withOpacity(.75)),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                    horizontal: 12,
+                                  ),
+                                ),
                               ),
                             ),
                           ],
@@ -302,7 +377,10 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                           alignment: Alignment.centerLeft,
                           child: Text(
                             '고정 휴일 선택 (선택사항)',
-                            style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: _SvcColors.dark,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -313,8 +391,8 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                             return FilterChip(
                               label: Text(day),
                               selected: isSelected,
-                              selectedColor: cs.primaryContainer,
-                              checkmarkColor: cs.onPrimaryContainer,
+                              selectedColor: _SvcColors.light.withOpacity(.25),
+                              checkmarkColor: _SvcColors.dark,
                               onSelected: (selected) {
                                 setState(() {
                                   if (selected) {
@@ -329,11 +407,24 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                         ),
                         const SizedBox(height: 16),
 
+                        // 현재 지역 Pill
                         Align(
                           alignment: Alignment.centerLeft,
-                          child: Text(
-                            '현재 지역: ${widget.areaValue}',
-                            style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: _SvcColors.light.withOpacity(.18),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(color: _SvcColors.light.withOpacity(.35)),
+                            ),
+                            child: Text(
+                              '현재 지역: ${widget.areaValue}',
+                              style: const TextStyle(
+                                color: _SvcColors.dark,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12,
+                              ),
+                            ),
                           ),
                         ),
 
@@ -342,7 +433,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                             padding: const EdgeInsets.only(top: 12),
                             child: Text(
                               _errorMessage!,
-                              style: TextStyle(color: theme.colorScheme.error),
+                              style: TextStyle(color: cs.error),
                             ),
                           ),
                       ],
@@ -358,6 +449,12 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                     Expanded(
                       child: OutlinedButton(
                         onPressed: () => Navigator.pop(context),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: _SvcColors.dark,
+                          side: BorderSide(color: _SvcColors.light.withOpacity(.75)),
+                          shape: const StadiumBorder(),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
                         child: const Text('취소'),
                       ),
                     ),
@@ -389,12 +486,9 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                             _passwordController.text,
                             widget.areaValue,
                             widget.division,
-                            false,
-                            // isWorking (초기 정책 유지)
-                            false,
-                            // isSaved   (초기 정책 유지)
-                            widget.areaValue,
-                            // selectedArea
+                            false, // isWorking 초기 정책
+                            false, // isSaved 초기 정책
+                            widget.areaValue, // selectedArea
                             _timeToString(_startTime),
                             _timeToString(_endTime),
                             _selectedHolidays.toList(),
@@ -404,8 +498,10 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                           Navigator.pop(context);
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: cs.primary,
-                          foregroundColor: cs.onPrimary,
+                          backgroundColor: _SvcColors.base,
+                          foregroundColor: _SvcColors.fg,
+                          shape: const StadiumBorder(),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
                         ),
                         child: Text(isEditMode ? '수정' : '생성'),
                       ),

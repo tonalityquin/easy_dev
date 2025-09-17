@@ -1,3 +1,4 @@
+// lib/screens/secondary_package/office_mode_package/monthly_management_package/monthly_plate_bottom_sheet.dart
 import 'package:flutter/material.dart';
 
 import 'monthly_plate_controller.dart';
@@ -12,6 +13,13 @@ import 'sections/monthly_bill_section.dart';
 import 'keypad/num_keypad.dart';
 import 'keypad/kor_keypad.dart';
 import 'monthly_bottom_navigation.dart';
+
+/// 서비스 로그인 카드와 동일 팔레트(Deep Blue)
+class _SvcColors {
+  static const base = Color(0xFF0D47A1);
+  static const dark = Color(0xFF09367D);
+  static const light = Color(0xFF5472D3);
+}
 
 class MonthlyPlateBottomSheet extends StatefulWidget {
   final bool isEditMode;
@@ -171,37 +179,63 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.only(bottom: bottomInset),
-        // ✅ Expanded 사용을 위해 높이를 명시적으로 고정 → 내부 Column이 유한 높이를 가짐
         child: SizedBox(
           height: effectiveHeight,
           child: Container(
             padding: const EdgeInsets.all(16),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: Colors.white, // 바텀시트 배경
-              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              border: Border.all(color: _SvcColors.base.withOpacity(.12)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(.06),
+                  blurRadius: 12,
+                  offset: const Offset(0, -2),
+                ),
+              ],
             ),
             child: Column(
               children: [
-                // 상단 상태/닫기
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        controller.isThreeDigit ? '현재 앞자리: 세자리' : '현재 앞자리: 두자리',
-                        textAlign: TextAlign.right,
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                // 상단 상태/닫기 (토널 바)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: _SvcColors.light.withOpacity(.10),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: _SvcColors.light.withOpacity(.25)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: _SvcColors.base.withOpacity(.12),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.tune_rounded, color: _SvcColors.base, size: 20),
                       ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () {
-                        final nav = Navigator.of(context, rootNavigator: true);
-                        if (nav.canPop()) nav.pop();
-                      },
-                    ),
-                  ],
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          controller.isThreeDigit ? '현재 앞자리: 세자리' : '현재 앞자리: 두자리',
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: '닫기',
+                        icon: const Icon(Icons.close, color: _SvcColors.dark),
+                        onPressed: () {
+                          final nav = Navigator.of(context, rootNavigator: true);
+                          if (nav.canPop()) nav.pop();
+                        },
+                      ),
+                    ],
+                  ),
                 ),
-                const Divider(),
+                const SizedBox(height: 8),
+                Container(height: 1, color: Colors.black.withOpacity(0.06)),
 
                 // 본문 스크롤 영역
                 Expanded(
@@ -209,6 +243,7 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        const SizedBox(height: 16),
                         MonthlyPlateSection(
                           dropdownValue: controller.dropdownValue,
                           regions: MonthlyPlateController.regions,
@@ -231,12 +266,20 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
                         const SizedBox(height: 32),
 
                         // 정산 유형(단일 옵션인 경우 읽기 전용 표시가 자연스러움)
-                        const InputDecorator(
+                        InputDecorator(
                           decoration: InputDecoration(
                             labelText: '정산 유형',
-                            border: OutlineInputBorder(),
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            focusedBorder: OutlineInputBorder(
+                              borderSide: const BorderSide(color: _SvcColors.base),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                           ),
-                          child: Text('정기'),
+                          child: const Text('정기'),
                         ),
 
                         if (widget.isEditMode) ...[
@@ -307,6 +350,18 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
                     mountedContext: mounted,
                     onStateRefresh: () => setState(() {}),
                     isEditMode: widget.isEditMode,
+                    // 버튼 자체는 섹션 내부에서 생성하지만 카드 팔레트에 어울리도록 기본 테마 컬러 활용
+                  ),
+                ),
+
+                // 하단 가벼운 바
+                const SizedBox(height: 6),
+                Container(
+                  height: 4,
+                  width: 64,
+                  decoration: BoxDecoration(
+                    color: _SvcColors.base.withOpacity(.18),
+                    borderRadius: BorderRadius.circular(999),
                   ),
                 ),
               ],

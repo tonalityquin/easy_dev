@@ -17,6 +17,12 @@ import 'widgets/departure_request_status_bottom_sheet.dart';
 import 'widgets/set_departure_completed_dialog.dart';
 import '../../../widgets/dialog/plate_remove_dialog.dart';
 
+/// Deep Blue 팔레트
+class _Palette {
+  static const base  = Color(0xFF0D47A1); // primary
+  static const dark  = Color(0xFF09367D); // 강조 텍스트/아이콘
+}
+
 class DepartureRequestControlButtons extends StatelessWidget {
   final bool isSorted;
   final bool isLocked;
@@ -49,7 +55,10 @@ class DepartureRequestControlButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    // 팔레트 기반 색
+    final Color selectedItemColor = _Palette.base;
+    final Color unselectedItemColor = _Palette.dark.withOpacity(.55);
+    final Color muted = _Palette.dark.withOpacity(.60);
 
     return Consumer<PlateState>(
       builder: (context, plateState, _) {
@@ -67,8 +76,8 @@ class DepartureRequestControlButtons extends StatelessWidget {
           backgroundColor: Colors.white,
           elevation: 0,
           type: BottomNavigationBarType.fixed,
-          selectedItemColor: cs.primary,
-          unselectedItemColor: cs.onSurfaceVariant,
+          selectedItemColor: selectedItemColor,
+          unselectedItemColor: unselectedItemColor,
           selectedFontSize: 12,
           unselectedFontSize: 12,
           iconSize: 24,
@@ -80,7 +89,7 @@ class DepartureRequestControlButtons extends StatelessWidget {
                   isPlateSelected
                       ? Icons.payments
                       : (isLocked ? Icons.lock : Icons.lock_open),
-                  color: cs.onSurfaceVariant,
+                  color: muted,
                 ),
               ),
               label: isPlateSelected ? '정산 관리' : '화면 잠금',
@@ -90,7 +99,8 @@ class DepartureRequestControlButtons extends StatelessWidget {
                 message: isPlateSelected ? '출차 완료' : '번호판 검색',
                 child: Icon(
                   isPlateSelected ? Icons.check_circle : Icons.search,
-                  color: isPlateSelected ? cs.primary : cs.onSurfaceVariant,
+                  // ✅ 기존 스타일과 일관되게 '출차'에는 초록 포인트 유지
+                  color: isPlateSelected ? Colors.green[600] : muted,
                 ),
               ),
               label: isPlateSelected ? '출차' : '검색',
@@ -105,7 +115,7 @@ class DepartureRequestControlButtons extends StatelessWidget {
                     scaleX: isSorted ? -1 : 1,
                     child: Icon(
                       isPlateSelected ? Icons.settings : Icons.sort,
-                      color: cs.onSurfaceVariant,
+                      color: muted,
                     ),
                   ),
                 ),
@@ -133,19 +143,17 @@ class DepartureRequestControlButtons extends StatelessWidget {
             // 선택 상태: plate 스냅샷 고정(레이스 방지)
             final plate = selectedPlate;
             final now = DateTime.now();
-            final currentTime =
-                now.toUtc().millisecondsSinceEpoch ~/ 1000;
-            final entryTime =
-                plate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
+            final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
+            final entryTime = plate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
             final documentId = plate.id;
 
             if (index == 0) {
               // ✅ “0원 자동 잠금” 조건(변동 + 정기 모두)
               final type = (plate.billingType ?? '').trim();
               final isFixed = type == '고정';
-              final isZeroAutoLock = (((plate.basicAmount ?? 0) == 0) &&
-                  ((plate.addAmount ?? 0) == 0)) ||
-                  (isFixed && (plate.regularAmount ?? 0) == 0);
+              final isZeroAutoLock =
+                  (((plate.basicAmount ?? 0) == 0) && ((plate.addAmount ?? 0) == 0)) ||
+                      (isFixed && (plate.regularAmount ?? 0) == 0);
 
               // 0원 + 이미 잠금 -> 해제 금지
               if (isZeroAutoLock && plate.isLockedFee) {

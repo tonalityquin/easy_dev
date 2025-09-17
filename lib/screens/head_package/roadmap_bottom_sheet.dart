@@ -67,7 +67,7 @@ const List<RoadmapItem> _roadmapData = [
       'Prob.동일한 테이블에서 관리하고 있어 이중 데이터 생성 불가능'
           'Goal.동일한 날짜에서 기존 로직에 방해 없이 새롭게 데이터 생성'
     ],
-    status: RoadmapStatus.inProgress,
+    status: RoadmapStatus.done,
   ),
   RoadmapItem(
     load: RoadmapLoad.light,

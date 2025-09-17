@@ -7,6 +7,9 @@ import 'package:intl/intl.dart';
 import 'package:googleapis_auth/auth_io.dart';
 import 'package:flutter/services.dart' show rootBundle;
 
+// ✅ 스낵바 헬퍼
+import '../../../utils/snackbar_helper.dart';
+
 // ---- 서비스계정 JSON 경로(프로젝트에 맞게 유지/수정) ----
 const String _serviceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
 
@@ -228,18 +231,17 @@ Future<void> _deleteCompletedEventsFromGoogleCalendar(
       String? calendarId,
     }) async {
   if (completed.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('삭제할 완료 이벤트가 없습니다.')),
-    );
+    // ✅ snackbar_helper 사용
+    showSelectedSnackbar(context, '삭제할 완료 이벤트가 없습니다.');
     return;
   }
 
   // calendarId 없으면 추정 시도
   final calId = (calendarId ?? _guessCalendarId(completed));
   if (calId == null || calId.trim().isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('캘린더 ID를 확인할 수 없습니다. (organizer/creator 기반 추정 실패)')),
-    );
+    // ✅ snackbar_helper 사용
+    showFailedSnackbar(
+        context, '캘린더 ID를 확인할 수 없습니다. (organizer/creator 기반 추정 실패)');
     return;
   }
 
@@ -318,17 +320,14 @@ Future<void> _deleteCompletedEventsFromGoogleCalendar(
     }
 
     if (context.mounted) {
-      // 바텀시트 유지: 결과만 안내 (원하면 닫으려면 아래 주석 해제)
-      // Navigator.maybePop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('삭제 완료: $success건 / 실패: $failed건')),
-      );
+      // 바텀시트 유지: 결과만 안내
+      // ✅ snackbar_helper 사용
+      showSuccessSnackbar(context, '삭제 완료: $success건 / 실패: $failed건');
     }
   } catch (e) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('삭제 실패: $e')),
-      );
+      // ✅ snackbar_helper 사용
+      showFailedSnackbar(context, '삭제 실패: $e');
     }
   }
 }

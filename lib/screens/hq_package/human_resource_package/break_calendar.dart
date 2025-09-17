@@ -1,3 +1,4 @@
+import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
@@ -18,6 +19,12 @@ class BreakCalendar extends StatefulWidget {
 }
 
 class _BreakCalendarState extends State<BreakCalendar> {
+  // ── Deep Blue Palette
+  static const _base = Color(0xFF0D47A1); // primary
+  static const _dark = Color(0xFF09367D); // emphasized
+  static const _light = Color(0xFF5472D3); // tone/border
+  static const _fg = Color(0xFFFFFFFF);   // foreground
+
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
 
@@ -46,8 +53,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
     if (presetUser != null) {
       _selectedUser = presetUser;
       final area = presetUser.selectedArea?.trim() ?? '';
-      _userInputCtrl.text =
-      area.isEmpty ? presetUser.phone : '${presetUser.phone}-$area';
+      _userInputCtrl.text = area.isEmpty ? presetUser.phone : '${presetUser.phone}-$area';
       _loadBreakTimes(presetUser);
     }
   }
@@ -72,51 +78,76 @@ class _BreakCalendarState extends State<BreakCalendar> {
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (_) => Padding(
-        padding: MediaQuery.of(context).viewInsets,
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text('출근/퇴근/휴게 스프레드시트 ID 입력',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 12),
-              TextField(
-                controller: textCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Google Sheets ID 또는 전체 URL',
-                  helperText: 'URL 전체를 붙여넣어도 ID만 자동 추출됩니다.',
-                  border: OutlineInputBorder(),
+      useSafeArea: true,
+      backgroundColor: Colors.white,
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 1.0,
+          maxChildSize: 1.0,
+          minChildSize: 0.25,
+          builder: (ctx, scrollController) {
+            return SingleChildScrollView(
+              controller: scrollController,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 20,
+                  right: 20,
+                  top: 20,
+                  bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      '출근/퇴근/휴게 스프레드시트 ID 입력',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: textCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Google Sheets ID 또는 전체 URL',
+                        helperText: 'URL 전체를 붙여넣어도 ID만 자동 추출됩니다.',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.url,
+                      textInputAction: TextInputAction.done,
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      icon: const Icon(Icons.save),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _base,
+                        foregroundColor: _fg,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      onPressed: () async {
+                        final raw = textCtrl.text.trim();
+                        if (raw.isEmpty) return;
+                        final id = SheetsConfig.extractSpreadsheetId(raw);
+                        await SheetsConfig.setCommuteSheetId(id);
+                        if (!mounted) return;
+                        setState(() {
+                          _sheetId = id;
+                          _breakTimeCache.clear();
+                          _breakTimeMap.clear();
+                        });
+                        Navigator.pop(context);
+                        showSuccessSnackbar(context, '시트 ID가 저장되었습니다.');
+                        if (_selectedUser != null) {
+                          _loadBreakTimes(_selectedUser!);
+                        }
+                      },
+                      label: const Text('저장'),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 12),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.save),
-                onPressed: () async {
-                  final raw = textCtrl.text.trim();
-                  if (raw.isEmpty) return;
-                  final id = SheetsConfig.extractSpreadsheetId(raw);
-                  await SheetsConfig.setCommuteSheetId(id);
-                  if (!mounted) return;
-                  setState(() {
-                    _sheetId = id;
-                    _breakTimeCache.clear();
-                    _breakTimeMap.clear();
-                  });
-                  Navigator.pop(context);
-                  showSuccessSnackbar(context, '시트 ID가 저장되었습니다.');
-                  if (_selectedUser != null) {
-                    _loadBreakTimes(_selectedUser!);
-                  }
-                },
-                label: const Text('저장'),
-              ),
-            ],
-          ),
-        ),
-      ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -183,6 +214,11 @@ class _BreakCalendarState extends State<BreakCalendar> {
                   final u = UserModel.fromMap(d.id, d.data());
                   final area = u.selectedArea ?? '-';
                   return ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: _light,
+                      foregroundColor: _fg,
+                      child: const Icon(Icons.person),
+                    ),
                     title: Text('${u.name}  •  $area'),
                     subtitle: Text(u.phone),
                     onTap: () => Navigator.pop(context, u),
@@ -207,8 +243,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
     try {
       final user = await _findUserByInput(_userInputCtrl.text);
       if (user == null) {
-        showFailedSnackbar(context,
-            '사용자를 찾지 못했습니다. 예) 11100000000 또는 11100000000-belivus');
+        showFailedSnackbar(context, '사용자를 찾지 못했습니다. 예) 11100000000 또는 11100000000-belivus');
         return;
       }
       context.read<CalendarSelectionState>().setUser(user);
@@ -288,22 +323,39 @@ class _BreakCalendarState extends State<BreakCalendar> {
         );
       }
       showSuccessSnackbar(context, 'Google Sheets에 저장 완료');
+
+      final cacheKey = '$userId-${_focusedDay.year}-${_focusedDay.month}';
+      _breakTimeCache[cacheKey] = {..._breakTimeMap};
     } catch (e) {
       showFailedSnackbar(context, '저장 실패: $e');
     }
   }
 
+  // ── 가변 suffix 영역 폭(오버플로우 방지)
+  double get _suffixWidth {
+    final hasText = _userInputCtrl.text.isNotEmpty;
+    final hasSpinner = _isSearching;
+    double w = 56; // 기본(아이콘 1개)
+    if (hasText) w += 36; // 지우기 버튼
+    if (hasSpinner) {
+      w += 28; // 스피너 여유
+    } else {
+      w += 36; // 검색 버튼
+    }
+    return w.clamp(56, 160).toDouble();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final suffixWidth = (_userInputCtrl.text.isNotEmpty ? 92.0 : 48.0);
-
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
         foregroundColor: Colors.black87,
-        title: const Text('휴식 캘린더', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
+        title: const Text('휴식 캘린더', style: TextStyle(fontWeight: FontWeight.w800)),
         automaticallyImplyLeading: false,
         actions: [
           IconButton(
@@ -317,58 +369,89 @@ class _BreakCalendarState extends State<BreakCalendar> {
             onPressed: _openSetSheetIdSheet,
           ),
         ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(height: 1, color: Colors.black.withOpacity(.06)),
+        ),
       ),
+
+      // ✅ 저장을 FAB로 변경
+      floatingActionButton: _selectedUser == null
+          ? null
+          : FloatingActionButton.extended(
+        onPressed: _saveAllChangesToSheets,
+        backgroundColor: _base,
+        foregroundColor: _fg,
+        icon: const Icon(Icons.save_rounded),
+        label: const Text('변경사항 저장'),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+
       body: CustomScrollView(
         slivers: [
+          // Legend (Wrap)
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  // ▶︎ “찾기” 버튼을 텍스트필드 안쪽(suffixIcon)으로 통합
-                  TextField(
-                    controller: _userInputCtrl,
-                    focusNode: _userInputFocus,
-                    onSubmitted: (_) => _onSearchUserPressed(),
-                    decoration: InputDecoration(
-                      labelText: '사용자 (전화번호 또는 전화번호-지역)',
-                      hintText: '예) 11100000000 또는 11100000000-belivus',
-                      border: const OutlineInputBorder(),
-                      prefixIcon: const Icon(Icons.person_search),
-                      suffixIconConstraints: BoxConstraints.tightFor(width: suffixWidth, height: 48),
-                      suffixIcon: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (_userInputCtrl.text.isNotEmpty)
-                            IconButton(
-                              tooltip: '입력 지우기',
-                              icon: const Icon(Icons.clear),
-                              onPressed: () => _userInputCtrl.clear(),
-                            ),
-                          _isSearching
-                              ? const Padding(
-                            padding: EdgeInsets.only(right: 8),
-                            child: SizedBox(
-                              width: 20, height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          )
-                              : IconButton(
-                            tooltip: '찾기',
-                            icon: const Icon(Icons.search),
-                            onPressed: _onSearchUserPressed,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+              child: _LegendRowBreak(base: _base, light: _light),
+            ),
+          ),
 
-                  TableCalendar(
+          // User Picker
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: _UserPickerCard(
+                controller: _userInputCtrl,
+                focusNode: _userInputFocus,
+                suffixWidth: _suffixWidth,
+                isSearching: _isSearching,
+                onSearch: _onSearchUserPressed,
+                selectedUser: _selectedUser,
+                onClearUser: _clearAll,
+                paletteBase: _base,
+                paletteDark: _dark,
+                paletteLight: _light,
+              ),
+            ),
+          ),
+
+          // Month Selector
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+              child: _MonthSelector(
+                focusedDay: _focusedDay,
+                onPrev: () {
+                  final prev = DateTime(_focusedDay.year, _focusedDay.month - 1, 1);
+                  setState(() => _focusedDay = prev);
+                  if (_selectedUser != null) _loadBreakTimes(_selectedUser!);
+                },
+                onNext: () {
+                  final next = DateTime(_focusedDay.year, _focusedDay.month + 1, 1);
+                  setState(() => _focusedDay = next);
+                  if (_selectedUser != null) _loadBreakTimes(_selectedUser!);
+                },
+                color: _base,
+              ),
+            ),
+          ),
+
+          // Calendar
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Card(
+                elevation: 1,
+                surfaceTintColor: _light,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(6, 8, 6, 10),
+                  child: TableCalendar(
                     firstDay: DateTime.utc(2025, 1, 1),
                     lastDay: DateTime.utc(2025, 12, 31),
                     focusedDay: _focusedDay,
-                    rowHeight: 80,
+                    rowHeight: 84, // 가독성 향상
                     selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
                     onDaySelected: (selectedDay, focusedDay) {
                       setState(() {
@@ -381,23 +464,43 @@ class _BreakCalendarState extends State<BreakCalendar> {
                       }
                     },
                     onPageChanged: (focusedDay) async {
-                      setState(() {
-                        _focusedDay = focusedDay;
-                      });
-
-                      if (_selectedUser != null) {
-                        await _loadBreakTimes(_selectedUser!);
-                      }
+                      setState(() => _focusedDay = focusedDay);
+                      if (_selectedUser != null) await _loadBreakTimes(_selectedUser!);
                     },
                     availableGestures: AvailableGestures.none,
-                    calendarStyle: const CalendarStyle(
+                    calendarStyle: CalendarStyle(
                       outsideDaysVisible: true,
                       isTodayHighlighted: false,
-                      cellMargin: EdgeInsets.all(4),
+                      cellMargin: const EdgeInsets.all(4),
+                      defaultDecoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.black12),
+                      ),
+                      outsideDecoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.black12),
+                        color: Colors.black.withOpacity(.02),
+                      ),
+                      weekendDecoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.black12),
+                        color: _light.withOpacity(.05),
+                      ),
+                      selectedDecoration: BoxDecoration(
+                        color: _base.withOpacity(.10),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: _base, width: 1.6),
+                      ),
+                      todayDecoration: BoxDecoration(
+                        color: Colors.transparent,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: _light, width: 1.2),
+                      ),
                     ),
                     headerStyle: const HeaderStyle(
                       formatButtonVisible: false,
                       titleCentered: true,
+                      headerPadding: EdgeInsets.only(bottom: 6),
                     ),
                     calendarBuilders: CalendarBuilders(
                       defaultBuilder: _buildCell,
@@ -405,58 +508,123 @@ class _BreakCalendarState extends State<BreakCalendar> {
                       selectedBuilder: _buildCell,
                     ),
                   ),
-
-                  const SizedBox(height: 20),
-                  ElevatedButton.icon(
-                    onPressed: _selectedUser == null ? null : _saveAllChangesToSheets,
-                    icon: const Icon(Icons.save, size: 20),
-                    label: const Text(
-                      '변경사항 저장',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(48),
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.black87,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: const BorderSide(color: Colors.grey),
-                      ),
-                      elevation: 2,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
+
+          // FAB와 겹치지 않도록 바닥 여백
+          const SliverToBoxAdapter(child: SizedBox(height: 96)),
         ],
       ),
     );
   }
 
+  // ── Calendar Cell (숫자만, 가변 폰트/간격, 오버플로우 방지)
   Widget _buildCell(BuildContext context, DateTime day, DateTime focusedDay) {
     final isSelected = isSameDay(day, _selectedDay);
     final isToday = isSameDay(day, DateTime.now());
     final breakTime = _breakTimeMap[day.day] ?? '';
+    final hasBreak = breakTime.isNotEmpty;
 
-    return Container(
-      margin: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: isSelected
-            ? Colors.redAccent.withOpacity(0.3)
-            : isToday
-            ? Colors.greenAccent.withOpacity(0.2)
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text('${day.day}', style: const TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 4),
-          Text(breakTime, style: const TextStyle(fontSize: 10)),
-        ],
-      ),
+    final borderColor = isSelected ? _base : (isToday ? _light : Colors.black12);
+
+    return LayoutBuilder(
+      builder: (context, c) {
+        final baseSide = c.maxWidth < c.maxHeight ? c.maxWidth : c.maxHeight;
+
+        // 셀 크기에 따른 가변 값
+        final dayFs = (baseSide * 0.40).clamp(14.0, 22.0);   // 날짜 숫자
+        final timeFs = (baseSide * 0.34).clamp(12.0, 18.0);  // 휴게 시간
+        final smallFs = (baseSide * 0.26).clamp(10.0, 16.0); // 대시
+        final vGap = (baseSide * 0.10).clamp(2.0, 8.0);      // 간격
+        final dot = (baseSide * 0.13).clamp(6.0, 10.0);      // 상태 점
+
+        return Container(
+          margin: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: isSelected ? _base.withOpacity(.06) : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: borderColor,
+              width: isSelected ? 1.6 : (isToday ? 1.2 : 1.0),
+            ),
+            boxShadow: isSelected
+                ? [BoxShadow(color: _base.withOpacity(.06), blurRadius: 8, offset: const Offset(0, 2))]
+                : null,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
+            child: Stack(
+              children: [
+                // 상태 점 (우상단)
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  child: Container(
+                    width: dot,
+                    height: dot,
+                    margin: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: hasBreak ? _base : Colors.black38,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+
+                // 본문 (FittedBox로 축소 허용)
+                Center(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // 날짜
+                        Text(
+                          '${day.day}',
+                          maxLines: 1,
+                          overflow: TextOverflow.fade,
+                          softWrap: false,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            color: isSelected ? _dark : Colors.black87,
+                            fontSize: dayFs,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                        SizedBox(height: vGap),
+
+                        // 휴게 시간 (숫자만)
+                        hasBreak
+                            ? Text(
+                          breakTime,
+                          maxLines: 1,
+                          overflow: TextOverflow.fade,
+                          softWrap: false,
+                          style: TextStyle(
+                            fontSize: timeFs,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.black87,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                            letterSpacing: .2,
+                          ),
+                        )
+                            : Text(
+                          '—',
+                          style: TextStyle(
+                            fontSize: smallFs,
+                            color: Colors.black38,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -481,6 +649,328 @@ class _BreakCalendarState extends State<BreakCalendar> {
           },
         );
       },
+    );
+  }
+}
+
+/// Legend (휴게 전용, Wrap으로 오버플로우 방지)
+class _LegendRowBreak extends StatelessWidget {
+  const _LegendRowBreak({required this.base, required this.light});
+  final Color base;
+  final Color light;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget dot(Color c) => Container(
+      width: 10,
+      height: 10,
+      decoration: BoxDecoration(color: c, shape: BoxShape.circle),
+    );
+
+    Widget itemDot(Color c, String t) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        dot(c),
+        const SizedBox(width: 6),
+        Text(t, style: const TextStyle(fontSize: 12, color: Colors.black87)),
+      ],
+    );
+
+    Widget itemSquare(String t) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 14,
+          height: 14,
+          decoration: BoxDecoration(
+            border: Border.all(color: base, width: 1.6),
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(t, style: const TextStyle(fontSize: 12, color: Colors.black87)),
+      ],
+    );
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: light.withOpacity(.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: light.withOpacity(.24)),
+      ),
+      child: Wrap(
+        spacing: 16,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          itemDot(base, '휴게 기록 있음'),
+          itemDot(Colors.black38, '기록 없음'),
+          itemSquare('선택/오늘 강조'),
+        ],
+      ),
+    );
+  }
+}
+
+/// User Picker Card + Selected User Summary
+class _UserPickerCard extends StatelessWidget {
+  const _UserPickerCard({
+    required this.controller,
+    required this.focusNode,
+    required this.suffixWidth,
+    required this.isSearching,
+    required this.onSearch,
+    required this.selectedUser,
+    required this.onClearUser,
+    required this.paletteBase,
+    required this.paletteDark,
+    required this.paletteLight,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final double suffixWidth;
+  final bool isSearching;
+  final VoidCallback onSearch;
+  final UserModel? selectedUser;
+  final VoidCallback onClearUser;
+  final Color paletteBase;
+  final Color paletteDark;
+  final Color paletteLight;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 1,
+      surfaceTintColor: paletteLight,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+        child: Column(
+          children: [
+            TextField(
+              controller: controller,
+              focusNode: focusNode,
+              onSubmitted: (_) => onSearch(),
+              decoration: InputDecoration(
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                labelText: '사용자 (전화번호 또는 전화번호-지역)',
+                hintText: '예) 11100000000 또는 11100000000-belivus',
+                filled: true,
+                fillColor: paletteLight.withOpacity(.06),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: paletteLight.withOpacity(.35)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: paletteBase, width: 1.6),
+                ),
+                prefixIcon: const Icon(Icons.person_search),
+                // ✅ suffixIcon 대신 suffix + ConstrainedBox (폭 유연)
+                suffix: ConstrainedBox(
+                  constraints: BoxConstraints(minWidth: 56, maxWidth: suffixWidth),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      if (controller.text.isNotEmpty)
+                        IconButton(
+                          tooltip: '입력 지우기',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+                          iconSize: 18,
+                          icon: const Icon(Icons.clear),
+                          onPressed: () => controller.clear(),
+                        ),
+                      if (isSearching)
+                        const Padding(
+                          padding: EdgeInsets.only(left: 6, right: 4),
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      else
+                        IconButton(
+                          tooltip: '찾기',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+                          iconSize: 18,
+                          icon: const Icon(Icons.search),
+                          onPressed: onSearch,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            if (selectedUser != null) ...[
+              const SizedBox(height: 12),
+              _SelectedUserRow(
+                user: selectedUser!,
+                onClear: onClearUser,
+                base: paletteBase,
+                dark: paletteDark,
+                light: paletteLight,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SelectedUserRow extends StatelessWidget {
+  const _SelectedUserRow({
+    required this.user,
+    required this.onClear,
+    required this.base,
+    required this.dark,
+    required this.light,
+  });
+
+  final UserModel user;
+  final VoidCallback onClear;
+  final Color base;
+  final Color dark;
+  final Color light;
+
+  @override
+  Widget build(BuildContext context) {
+    final area = (user.selectedArea ?? '').trim();
+    final division = user.divisions.isNotEmpty ? user.divisions.first : '';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: light.withOpacity(.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: light.withOpacity(.35)),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            backgroundColor: base,
+            foregroundColor: Colors.white,
+            child: const Icon(Icons.person),
+          ),
+          const SizedBox(width: 12),
+
+          // ✅ 칩들을 '가로 스크롤 한 줄'로
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: Row(
+                children: [
+                  _chip(Icons.badge, user.name, bg: Colors.white, fg: Colors.black87),
+                  const SizedBox(width: 8),
+                  _chip(Icons.phone, user.phone, bg: Colors.white, fg: Colors.black87),
+                  if (area.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    _chip(Icons.place, area, bg: light.withOpacity(.18), fg: dark),
+                  ],
+                  if (division.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    _chip(Icons.apartment, division, bg: light.withOpacity(.18), fg: dark),
+                  ],
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 8),
+          OutlinedButton.icon(
+            onPressed: onClear,
+            icon: const Icon(Icons.close),
+            label: const Text('해제'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: dark,
+              side: BorderSide(color: dark.withOpacity(.6)),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              shape: const StadiumBorder(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _chip(IconData icon, String label, {required Color bg, required Color fg}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: Colors.black12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: fg.withOpacity(.85)),
+          const SizedBox(width: 6),
+          // ✅ 한 줄 고정
+          Text(
+            label,
+            softWrap: false,
+            overflow: TextOverflow.fade,
+            style: TextStyle(fontSize: 12, color: fg, fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MonthSelector extends StatelessWidget {
+  const _MonthSelector({
+    required this.focusedDay,
+    required this.onPrev,
+    required this.onNext,
+    required this.color,
+  });
+
+  final DateTime focusedDay;
+  final VoidCallback onPrev;
+  final VoidCallback onNext;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final ym = '${focusedDay.year}.${focusedDay.month.toString().padLeft(2, '0')}';
+    return Container(
+      height: 44,
+      decoration: BoxDecoration(
+        color: color.withOpacity(.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(.24)),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: onPrev,
+            icon: const Icon(Icons.chevron_left),
+            tooltip: '이전 달',
+          ),
+          Expanded(
+            child: Text(
+              ym,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontWeight: FontWeight.w900, color: color),
+            ),
+          ),
+          IconButton(
+            onPressed: onNext,
+            icon: const Icon(Icons.chevron_right),
+            tooltip: '다음 달',
+          ),
+        ],
+      ),
     );
   }
 }

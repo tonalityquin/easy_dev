@@ -8,6 +8,13 @@ import 'sections/bill_standard_and_amount_row_section.dart';
 import 'sections/bill_error_message_text_section.dart';
 import 'sections/bill_bottom_buttons_section.dart';
 
+/// 서비스 카드 팔레트(일관 색상 적용)
+const serviceCardBase = Color(0xFF0D47A1);
+const serviceCardDark = Color(0xFF09367D);
+const serviceCardLight = Color(0xFF5472D3);
+const serviceCardFg = Colors.white; // 버튼/아이콘 전경
+const serviceCardBg = Colors.white; // 카드/시트 배경
+
 class BillSettingBottomSheet extends StatefulWidget {
   final Function(Map<String, dynamic> billData) onSave;
 
@@ -62,25 +69,26 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
       final addStdOk = _addStandardValue != null;
 
       final basicAmount = _digitsToInt(_basicAmountController.text);
-      final addAmount   = _digitsToInt(_addAmountController.text);
+      final addAmount = _digitsToInt(_addAmountController.text);
 
-      // ⬇️ 0 허용: <= 0  →  < 0
+      // 0 허용(음수만 금지)
       if (!countTypeOk ||
           !basicStdOk ||
           !addStdOk ||
-          basicAmount == null || basicAmount < 0 ||
-          addAmount   == null || addAmount   < 0) {
+          basicAmount == null ||
+          basicAmount < 0 ||
+          addAmount == null ||
+          addAmount < 0) {
         setState(() => _errorMessage = '모든 항목을 올바르게 입력하세요. 금액은 0 이상만 가능합니다.');
         return false;
       }
     } else {
       final nameOk = _regularNameController.text.trim().isNotEmpty;
       final typeOk = _regularType != null;
-      final price  = _digitsToInt(_regularPriceController.text);
-      final dur    = _digitsToInt(_regularDurationController.text);
+      final price = _digitsToInt(_regularPriceController.text);
+      final dur = _digitsToInt(_regularDurationController.text);
 
-      // ⬇️ 고정 요금도 0 허용하려면 price <= 0 → price < 0 로 변경
-      //    (이용 시간은 0 불가 유지: dur <= 0 그대로)
+      // 금액 0 허용, 시간은 1 이상
       if (!nameOk || !typeOk || price == null || price < 0 || dur == null || dur <= 0) {
         setState(() => _errorMessage = '고정 정산 정보를 확인하세요. 금액은 0 이상, 시간은 1 이상이어야 합니다.');
         return false;
@@ -90,7 +98,6 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
     setState(() => _errorMessage = null);
     return true;
   }
-
 
   void _handleSave() {
     if (!_validateInput()) return;
@@ -129,6 +136,22 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
     Navigator.pop(context);
   }
 
+  // 공통 InputDecoration(서비스 팔레트 적용)
+  InputDecoration _decoration(String label, {String? hint, String? suffixText}) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      suffixText: suffixText,
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      focusedBorder: OutlineInputBorder(
+        borderSide: const BorderSide(color: serviceCardBase, width: 1.5),
+        borderRadius: BorderRadius.circular(8),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // ✅ 최상단까지 차오르도록 높이 고정 + 키보드 여백 반영
@@ -143,7 +166,7 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
           height: effectiveHeight, // 화면 높이(키보드 제외)만큼 고정
           child: Container(
             decoration: const BoxDecoration(
-              color: Colors.white,
+              color: serviceCardBg,
               borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
             ),
             child: Column(
@@ -167,6 +190,8 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),
+
+                // 토글 버튼(서비스 팔레트 적용)
                 ToggleButtons(
                   isSelected: [_selectedMode == '변동', _selectedMode == '고정'],
                   onPressed: (index) {
@@ -175,6 +200,17 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
                     });
                   },
                   borderRadius: BorderRadius.circular(8),
+                  color: Colors.black87,
+                  // 일반 텍스트
+                  selectedColor: serviceCardFg,
+                  // 선택 텍스트
+                  fillColor: serviceCardBase,
+                  // 선택 배경
+                  borderColor: serviceCardLight,
+                  // 테두리
+                  selectedBorderColor: serviceCardBase,
+                  // 선택 테두리
+                  constraints: const BoxConstraints(minHeight: 40, minWidth: 72),
                   children: const [
                     Padding(
                       padding: EdgeInsets.symmetric(horizontal: 16),
@@ -195,8 +231,11 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
                     child: Column(
                       children: [
                         if (_selectedMode == '변동') ...[
+                          // CountType
                           BillTypeInputSection(controller: _billController),
                           const SizedBox(height: 16),
+
+                          // 기본 기준/금액
                           BillStandardAndAmountRowSection(
                             selectedValue: _basicStandardValue,
                             options: _basicStandardOptions,
@@ -205,8 +244,11 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
                             standardLabel: '기본 시간',
                             amountLabel: '기본 요금',
                             amountInputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                            // 내부 위젯의 InputDecoration이 있다면 동일 팔레트로 스타일링되어 있어야 함
                           ),
                           const SizedBox(height: 16),
+
+                          // 추가 기준/금액
                           BillStandardAndAmountRowSection(
                             selectedValue: _addStandardValue,
                             options: _addStandardOptions,
@@ -220,46 +262,30 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
                         if (_selectedMode == '고정') ...[
                           TextField(
                             controller: _regularNameController,
-                            decoration: const InputDecoration(
-                              labelText: '고정 유형',
-                              hintText: '예: 일일 주차',
-                              border: OutlineInputBorder(),
-                            ),
+                            decoration: _decoration('고정 유형', hint: '예: 일일 주차'),
                           ),
                           const SizedBox(height: 16),
                           DropdownButtonFormField<String>(
                             value: _regularType,
-                            decoration: const InputDecoration(
-                              labelText: '일&월 주차 선택',
-                              border: OutlineInputBorder(),
-                            ),
-                            items: _regularTypeOptions
-                                .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                                .toList(),
+                            decoration: _decoration('일&월 주차 선택'),
+                            items: _regularTypeOptions.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
                             onChanged: (val) => setState(() => _regularType = val),
+                            dropdownColor: serviceCardBg,
+                            iconEnabledColor: serviceCardBase,
                           ),
                           const SizedBox(height: 16),
                           TextField(
                             controller: _regularDurationController,
                             keyboardType: TextInputType.number,
                             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                            decoration: const InputDecoration(
-                              labelText: '주차 가능 시간',
-                              hintText: '예: 720',
-                              suffixText: '시간',
-                              border: OutlineInputBorder(),
-                            ),
+                            decoration: _decoration('주차 가능 시간', hint: '예: 720', suffixText: '시간'),
                           ),
                           const SizedBox(height: 16),
                           TextField(
                             controller: _regularPriceController,
                             keyboardType: TextInputType.number,
                             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                            decoration: const InputDecoration(
-                              labelText: '일일 요금',
-                              hintText: '예: 10000',
-                              border: OutlineInputBorder(),
-                            ),
+                            decoration: _decoration('일일 요금', hint: '예: 10000'),
                           ),
                         ],
                         const SizedBox(height: 16),
@@ -272,9 +298,28 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
                 // ===== 하단 버튼 고정 영역 =====
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  child: BillBottomButtonsSection(
-                    onCancel: () => Navigator.pop(context),
-                    onSave: _handleSave,
+                  child: Theme(
+                    // 하단 공용 섹션 버튼들도 팔레트 느낌 살리기
+                    data: Theme.of(context).copyWith(
+                      elevatedButtonTheme: ElevatedButtonThemeData(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: serviceCardBase,
+                          foregroundColor: serviceCardFg,
+                          shape: const StadiumBorder(),
+                        ),
+                      ),
+                      outlinedButtonTheme: OutlinedButtonThemeData(
+                        style: OutlinedButton.styleFrom(
+                          shape: const StadiumBorder(),
+                          side: const BorderSide(color: serviceCardLight),
+                          foregroundColor: serviceCardDark,
+                        ),
+                      ),
+                    ),
+                    child: BillBottomButtonsSection(
+                      onCancel: () => Navigator.pop(context),
+                      onSave: _handleSave,
+                    ),
                   ),
                 ),
               ],

@@ -8,11 +8,7 @@ import '../../../../utils/snackbar_helper.dart';
 
 /// Firestore 경로 참조 헬퍼: 최근 메시지 도큐먼트
 DocumentReference<Map<String, dynamic>> latestMessageRef(String roomId) =>
-    FirebaseFirestore.instance
-        .collection('chats')
-        .doc(roomId)
-        .collection('state')
-        .doc('latest_message');
+    FirebaseFirestore.instance.collection('chats').doc(roomId).collection('state').doc('latest_message');
 
 /// 최근 메시지를 스트림으로 노출
 /// - 동일 문자열 반복 방지 위해 .distinct() 추가
@@ -25,8 +21,7 @@ Stream<String> latestMessageStream(String roomId) {
     if (data == null) return '';
     final msg = data['message'];
     return (msg is String) ? msg : '';
-  })
-      .distinct();
+  }).distinct();
 }
 
 /// 구역 채팅 바텀시트 열기
@@ -42,30 +37,28 @@ void chatBottomSheet(BuildContext context) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    useSafeArea: true,
-    backgroundColor: Colors.transparent, // 외곽(모달) 배경은 투명
+    useSafeArea: false,
+    // 내부에서 SafeArea 처리
+    backgroundColor: Colors.transparent,
     elevation: 0,
-    barrierColor: Colors.black.withOpacity(0.25), // 살짝 딤
+    barrierColor: Colors.black.withOpacity(0.25),
     builder: (ctx) {
-      final inset = MediaQuery.of(ctx).viewInsets.bottom;
+      final inset = MediaQuery.of(ctx).viewInsets.bottom; // 키보드 패딩
       final size = MediaQuery.of(ctx).size;
-      final maxSheetH = size.height * 0.75; // 세로 최대 높이
 
       return AnimatedPadding(
         duration: const Duration(milliseconds: 150),
         padding: EdgeInsets.only(bottom: inset),
         child: Align(
-          alignment: Alignment.bottomCenter, // ✅ 하단에 붙이기
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: maxSheetH, // 세로만 제한
-            ),
+          alignment: Alignment.bottomCenter,
+          child: SizedBox(
+            height: size.height, // ★ 화면 전체 높이
+            width: double.infinity,
             child: Material(
               color: Colors.transparent,
               child: Container(
-                width: double.infinity,             // ✅ 가로 꽉 채우기
                 decoration: const BoxDecoration(
-                  color: Colors.white,              // ✅ 전면 흰색
+                  color: Colors.white, // ★ 전면 흰 배경
                   borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
                   boxShadow: [
                     BoxShadow(
@@ -75,61 +68,67 @@ void chatBottomSheet(BuildContext context) {
                     ),
                   ],
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // ── 헤더
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 10, 8, 0),
-                      child: Column(
-                        children: [
-                          // 드래그 핸들
-                          Container(
-                            width: 40,
-                            height: 4,
-                            decoration: BoxDecoration(
-                              color: Colors.grey[300],
-                              borderRadius: BorderRadius.circular(2),
+                child: SafeArea(
+                  top: true,
+                  left: false,
+                  right: false,
+                  bottom: false,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.max,
+                    children: [
+                      // ── 헤더
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 10, 8, 0),
+                        child: Column(
+                          children: [
+                            // 드래그 핸들
+                            Container(
+                              width: 40,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: Colors.grey[300],
+                                borderRadius: BorderRadius.circular(2),
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              const SizedBox(width: 4),
-                              const Icon(Icons.forum, size: 20, color: Colors.black87),
-                              const SizedBox(width: 8),
-                              const Expanded(
-                                child: Text(
-                                  '구역 채팅',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black87,
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                const SizedBox(width: 4),
+                                const Icon(Icons.forum, size: 20, color: Colors.black87),
+                                const SizedBox(width: 8),
+                                const Expanded(
+                                  child: Text(
+                                    '구역 채팅',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black87,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                  overflow: TextOverflow.ellipsis,
                                 ),
-                              ),
-                              IconButton(
-                                tooltip: '닫기',
-                                icon: const Icon(Icons.close),
-                                onPressed: () => Navigator.of(ctx).pop(),
-                              ),
-                            ],
-                          ),
-                        ],
+                                IconButton(
+                                  tooltip: '닫기',
+                                  icon: const Icon(Icons.close),
+                                  onPressed: () => Navigator.of(ctx).pop(),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 6),
-                    const Divider(height: 1, thickness: 1, color: Color(0xFFEAEAEA)),
+                      const SizedBox(height: 6),
+                      const Divider(height: 1, thickness: 1, color: Color(0xFFEAEAEA)),
 
-                    // ── 콘텐츠
-                    Flexible(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                        child: ChatPanel(roomId: roomId),
+                      // ── 콘텐츠(가변 영역)
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                          child: ChatPanel(roomId: roomId),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -154,7 +153,7 @@ class ChatOpenButton extends StatelessWidget {
   Widget build(BuildContext context) {
     // currentArea 변경 시 자동으로 리빌드되도록 select 사용
     final roomId = context.select<UserState, String?>(
-          (s) => s.user?.currentArea?.trim(),
+      (s) => s.user?.currentArea?.trim(),
     );
 
     if (roomId == null || roomId.isEmpty) {
@@ -198,7 +197,8 @@ class ChatOpenButton extends StatelessWidget {
           onPressed: () => chatBottomSheet(context),
           style: ElevatedButton.styleFrom(
             elevation: 0,
-            backgroundColor: Colors.white,       // ✅ 버튼 배경도 흰색
+            backgroundColor: Colors.white,
+            // ✅ 버튼 배경도 흰색
             foregroundColor: Colors.black87,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             shape: RoundedRectangleBorder(

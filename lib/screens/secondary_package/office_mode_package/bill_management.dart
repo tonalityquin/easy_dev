@@ -6,8 +6,14 @@ import 'package:intl/intl.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../states/bill/bill_state.dart';
 import '../../../states/area/area_state.dart';
-// import '../../../widgets/navigation/secondary_mini_navigation.dart'; // ❌ 미사용
 import 'bill_management_package/bill_bottom_sheet.dart';
+
+/// 서비스 로그인 카드 팔레트(공통 활용)
+const serviceCardBase = Color(0xFF0D47A1);
+const serviceCardDark = Color(0xFF09367D);
+const serviceCardLight = Color(0xFF5472D3);
+const serviceCardFg = Colors.white; // 버튼/아이콘 전경
+const serviceCardBg = Colors.white; // 카드/시트 배경
 
 class BillManagement extends StatefulWidget {
   const BillManagement({super.key});
@@ -30,14 +36,16 @@ class _BillManagementState extends State<BillManagement> {
 
   // ▼ FAB 위치/간격 조절
   static const double _fabBottomGap = 48.0; // 하단에서 띄우는 여백
-  static const double _fabSpacing = 10.0;   // 버튼 간 간격
+  static const double _fabSpacing = 10.0; // 버튼 간 간격
 
   void _showBillSettingBottomSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      useSafeArea: true,                    // ✅ 안전영역 반영
-      backgroundColor: Colors.transparent,  // ✅ 내부 컨테이너가 배경/라운드 담당
+      useSafeArea: true,
+      // ✅ 안전영역 반영
+      backgroundColor: Colors.transparent,
+      // ✅ 내부 컨테이너가 배경/라운드 담당
       builder: (_) {
         return FractionallySizedBox(
           heightFactor: 1, // ✅ 화면 높이 100% → 최상단까지
@@ -125,12 +133,16 @@ class _BillManagementState extends State<BillManagement> {
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: serviceCardBg, // 화이트 고정
         elevation: 0,
         foregroundColor: Colors.black87,
         title: const Text('정산유형', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         automaticallyImplyLeading: false,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(height: 1, color: Colors.black.withOpacity(.06)),
+        ),
       ),
       body: Consumer<BillState>(
         builder: (context, state, child) {
@@ -148,7 +160,8 @@ class _BillManagementState extends State<BillManagement> {
               if (generalBills.isNotEmpty) ...[
                 const Padding(
                   padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-                  child: Text('변동 정산', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  child:
+                  Text('변동 정산', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
                 const Divider(height: 1.0),
                 ...generalBills.map((bill) => _buildGeneralBillTile(context, state, bill, won)),
@@ -156,7 +169,8 @@ class _BillManagementState extends State<BillManagement> {
               if (regularBills.isNotEmpty) ...[
                 const Padding(
                   padding: EdgeInsets.fromLTRB(16, 24, 16, 8),
-                  child: Text('고정 정산', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  child:
+                  Text('고정 정산', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
                 const Divider(height: 1.0),
                 ...regularBills.map((bill) => _buildRegularBillTile(context, state, bill, won)),
@@ -188,12 +202,13 @@ class _BillManagementState extends State<BillManagement> {
       NumberFormat won,
       ) {
     final isSelected = state.selectedBillId == bill.id;
+    final selectedBg = serviceCardLight.withOpacity(0.12);
 
     return ListTile(
       key: ValueKey(bill.id),
       selected: isSelected,
-      selectedTileColor: Colors.green[50],
-      tileColor: isSelected ? Colors.green[50] : Colors.white,
+      selectedTileColor: selectedBg,
+      tileColor: isSelected ? selectedBg : serviceCardBg,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       title: Text(
         bill.countType,
@@ -208,7 +223,7 @@ class _BillManagementState extends State<BillManagement> {
           Text('추가 기준: ${bill.addStandard}, 추가 금액: ₩${won.format(bill.addAmount)}'),
         ],
       ),
-      trailing: isSelected ? const Icon(Icons.check_circle, color: Colors.green) : null,
+      trailing: isSelected ? const Icon(Icons.check_circle, color: serviceCardBase) : null,
       onTap: () => state.toggleBillSelection(bill.id),
     );
   }
@@ -220,12 +235,13 @@ class _BillManagementState extends State<BillManagement> {
       NumberFormat won,
       ) {
     final isSelected = state.selectedBillId == bill.id;
+    final selectedBg = serviceCardLight.withOpacity(0.12);
 
     return ListTile(
       key: ValueKey(bill.id),
       selected: isSelected,
-      selectedTileColor: Colors.green[50],
-      tileColor: isSelected ? Colors.green[50] : Colors.white,
+      selectedTileColor: selectedBg,
+      tileColor: isSelected ? selectedBg : serviceCardBg,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       title: Text(
         bill.countType,
@@ -240,7 +256,7 @@ class _BillManagementState extends State<BillManagement> {
           Text('요금: ₩${won.format(bill.regularAmount)} · 이용 시간: ${won.format(bill.regularDurationHours)}시간'),
         ],
       ),
-      trailing: isSelected ? const Icon(Icons.check_circle, color: Colors.green) : null,
+      trailing: isSelected ? const Icon(Icons.check_circle, color: serviceCardBase) : null,
       onTap: () => state.toggleBillSelection(bill.id),
     );
   }
@@ -269,20 +285,20 @@ class _FabStack extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ButtonStyle primaryStyle = ElevatedButton.styleFrom(
-      backgroundColor: cs.primary,
-      foregroundColor: cs.onPrimary,
+      backgroundColor: serviceCardBase,
+      foregroundColor: serviceCardFg,
       elevation: 3,
-      shadowColor: cs.shadow.withOpacity(0.25),
+      shadowColor: serviceCardDark.withOpacity(0.28),
       shape: const StadiumBorder(),
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       textStyle: const TextStyle(fontWeight: FontWeight.w700),
     );
 
     final ButtonStyle editStyle = ElevatedButton.styleFrom(
-      backgroundColor: cs.secondaryContainer,
-      foregroundColor: cs.onSecondaryContainer,
+      backgroundColor: serviceCardLight,
+      foregroundColor: serviceCardFg,
       elevation: 3,
-      shadowColor: cs.secondary.withOpacity(0.25),
+      shadowColor: serviceCardLight.withOpacity(0.35),
       shape: const StadiumBorder(),
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       textStyle: const TextStyle(fontWeight: FontWeight.w700),

@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+/// 서비스(로그인 카드)와 동일 계열 팔레트
+class _SvcColors {
+  static const base = Color(0xFF0D47A1); // primary
+}
+
 /// 대문자 입력 시 자동으로 소문자로 변환
 class LowercaseTextFormatter extends TextInputFormatter {
   const LowercaseTextFormatter();
@@ -48,15 +53,21 @@ class TabletInputSection extends StatelessWidget {
         required String label,
         String? errorText,
         String? suffixText,
+        IconData? prefixIcon,
       }) {
-    final primary = Theme.of(context).colorScheme.primary;
     return InputDecoration(
       labelText: label,
       suffixText: suffixText,
       isDense: true,
       contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+      prefixIcon: prefixIcon == null ? null : Icon(prefixIcon),
+      prefixIconColor: _SvcColors.base.withOpacity(.85),
       focusedBorder: OutlineInputBorder(
-        borderSide: BorderSide(color: primary),
+        borderSide: const BorderSide(color: _SvcColors.base),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderSide: BorderSide(color: _SvcColors.base.withOpacity(.28)),
         borderRadius: BorderRadius.circular(8),
       ),
       border: OutlineInputBorder(
@@ -75,7 +86,8 @@ class TabletInputSection extends StatelessWidget {
     final handleError = (errorMessage == '아이디는 소문자 영어 3~20자로 입력하세요' ||
         errorMessage == '아이디를 다시 입력하세요' ||
         errorMessage == '전화번호를 다시 입력하세요')
-        ? errorMessage : null;
+        ? errorMessage
+        : null;
 
     final emailError = errorMessage == '이메일을 입력하세요' ? errorMessage : null;
 
@@ -93,6 +105,7 @@ class TabletInputSection extends StatelessWidget {
             context,
             label: '이름',
             errorText: nameError,
+            prefixIcon: Icons.person_outline,
           ),
         ),
         const SizedBox(height: 16),
@@ -105,15 +118,17 @@ class TabletInputSection extends StatelessWidget {
           onSubmitted: (_) => FocusScope.of(context).nextFocus(),
           keyboardType: TextInputType.visiblePassword,
           autofillHints: const [AutofillHints.username],
+          // ❗ const 리스트 → 일반 리스트로 변경 (RegExp가 const 아님)
           inputFormatters: [
-            const LowercaseTextFormatter(),                      // 대문자 → 소문자
-            FilteringTextInputFormatter.allow(RegExp(r'[a-z]')), // 소문자만
-            LengthLimitingTextInputFormatter(20),                // 최대 20자
+            const LowercaseTextFormatter(),                          // 대문자 → 소문자
+            FilteringTextInputFormatter.allow(RegExp(r'[a-z]')),     // 소문자만
+            LengthLimitingTextInputFormatter(20),                    // 최대 20자
           ],
           decoration: _decoration(
             context,
             label: '아이디(소문자 영문)',
             errorText: handleError,
+            prefixIcon: Icons.tag,
           ),
         ),
         const SizedBox(height: 16),
@@ -130,6 +145,7 @@ class TabletInputSection extends StatelessWidget {
             label: '이메일(구글)',
             suffixText: '@gmail.com', // ✅ Row 대신 suffixText 사용
             errorText: emailError,
+            prefixIcon: Icons.alternate_email,
           ),
         ),
       ],

@@ -1,14 +1,30 @@
 // lib/screens/secondary_package/office_mode_package/user_management.dart
+//
+// 색 반영(UI/UX 리팩터링):
+// - '서비스 로그인' 카드 팔레트(#0D47A1 base / #09367D dark / #5472D3 light) 통일 적용
+// - 상단 그라디언트 헤더 배너
+// - 선택된 항목은 브랜드 톤으로 또렷하게 하이라이트(보더/배경/체크 아이콘)
+// - FAB(추가/수정/삭제) 라운드 필 버튼 일관 스타일
+// - 스낵바는 snackbar_helper 사용 (변경 없음)
+// - 기능/로직은 기존과 동일
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../models/user_model.dart';
 import '../../../repositories/user_repo_services/user_repository.dart';
 import '../../../utils/snackbar_helper.dart';
-// import '../../../widgets/navigation/secondary_mini_navigation.dart'; // ❌ 미사용
 import 'user_management_package/user_setting.dart';
 import '../../../states/user/user_state.dart';
 import '../../../states/area/area_state.dart';
+
+/// 서비스 로그인 카드 팔레트 (일관된 브랜드 톤)
+class _SvcColors {
+  static const base = Color(0xFF0D47A1); // primary
+  static const dark = Color(0xFF09367D); // 강조 텍스트/아이콘
+  static const light = Color(0xFF5472D3); // 톤 변형/보더
+  static const fg = Color(0xFFFFFFFF);
+}
 
 /// Iterable 안전 확장: 조건에 맞는 첫 원소를 찾되 없으면 null
 extension IterableX<T> on Iterable<T> {
@@ -30,7 +46,7 @@ class UserManagement extends StatefulWidget {
 class _UserManagementState extends State<UserManagement> {
   // ▼ 버튼을 아래에서 얼마나 띄울지 조절(요구사항: 버튼 하단에 SizedBox로 높이 조절)
   static const double _fabBottomGap = 48.0; // 필요시 값만 바꿔 간편 조절
-  static const double _fabSpacing = 10.0;   // 버튼간 간격
+  static const double _fabSpacing = 10.0; // 버튼간 간격
 
   @override
   void initState() {
@@ -88,7 +104,8 @@ class _UserManagementState extends State<UserManagement> {
         String? endTime,
         List<String> fixedHolidays,
         String position,
-        ) onSave,
+        )
+    onSave,
     UserModel? initialUser,
   }) {
     final areaState = context.read<AreaState>();
@@ -300,7 +317,6 @@ class _UserManagementState extends State<UserManagement> {
 
     final filteredUsers = userState.users.where(matches).toList();
     final bool hasSelection = userState.selectedUserId != null;
-    final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -310,6 +326,10 @@ class _UserManagementState extends State<UserManagement> {
         title: const Text('계정', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         automaticallyImplyLeading: false,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(height: 1, color: Colors.black.withOpacity(0.06)),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -327,31 +347,75 @@ class _UserManagementState extends State<UserManagement> {
             : const Text('현재 지역/사업소에 해당하는 계정이 없습니다'),
       )
           : ListView.builder(
-        itemCount: filteredUsers.length,
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        itemCount: filteredUsers.length + 1,
         itemBuilder: (context, index) {
-          final user = filteredUsers[index];
+          if (index == 0) const _HeaderBanner();
+          if (index == 0) {
+            return const _HeaderBanner();
+          }
+
+          final user = filteredUsers[index - 1];
           final isSelected = userState.selectedUserId == user.id;
 
-          return ListTile(
-            key: ValueKey(user.id),
-            title: Text(
-              user.name,
-              style: const TextStyle(fontWeight: FontWeight.bold),
+          // 선택 시 브랜드 톤 하이라이트
+          final bg = isSelected
+              ? _SvcColors.light.withOpacity(.10)
+              : Colors.white;
+          final border = isSelected
+              ? Border.all(color: _SvcColors.base, width: 1.25)
+              : Border.all(color: Colors.black.withOpacity(.08));
+
+          return Container(
+            margin: const EdgeInsets.symmetric(vertical: 6),
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.circular(14),
+              border: border,
             ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('이메일: ${user.email}'),
-                Text('출근: ${formatTime(user.startTime)} / 퇴근: ${formatTime(user.endTime)}'),
-                Text('역할: ${user.role}'),
-                if (user.position?.isNotEmpty == true) Text('직책: ${user.position!}'),
-              ],
+            child: ListTile(
+              key: ValueKey(user.id),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 10,
+              ),
+              leading: CircleAvatar(
+                backgroundColor: _SvcColors.light.withOpacity(.25),
+                foregroundColor: _SvcColors.dark,
+                child: const Icon(Icons.person_outline),
+              ),
+              title: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      user.name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                  if (isSelected)
+                    const Icon(Icons.check_circle,
+                        color: _SvcColors.base),
+                ],
+              ),
+              subtitle: Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('이메일: ${user.email}'),
+                    Text(
+                        '출근: ${formatTime(user.startTime)} / 퇴근: ${formatTime(user.endTime)}'),
+                    Text('역할: ${user.role}'),
+                    if (user.position?.isNotEmpty == true)
+                      Text('직책: ${user.position!}'),
+                  ],
+                ),
+              ),
+              onTap: () => userState.toggleUserCard(user.id),
             ),
-            trailing: isSelected
-                ? const Icon(Icons.check_circle, color: Colors.green)
-                : null,
-            selected: isSelected,
-            onTap: () => userState.toggleUserCard(user.id),
           );
         },
       ),
@@ -364,7 +428,47 @@ class _UserManagementState extends State<UserManagement> {
         hasSelection: hasSelection,
         onPrimary: () => _handlePrimaryAction(context), // 추가/수정
         onDelete: hasSelection ? () => _handleDelete(context) : null, // 삭제
-        cs: cs,
+      ),
+    );
+  }
+}
+
+/// 상단 그라디언트 배너(브랜드 톤)
+class _HeaderBanner extends StatelessWidget {
+  const _HeaderBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            _SvcColors.light.withOpacity(.95),
+            _SvcColors.base.withOpacity(.95),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _SvcColors.dark.withOpacity(.16)),
+      ),
+      child: Row(
+        children: const [
+          Icon(Icons.manage_accounts_rounded, color: _SvcColors.fg),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '계정을 추가/수정/삭제할 수 있습니다.\n선택 시 항목이 강조 표시됩니다.',
+              style: TextStyle(
+                color: _SvcColors.fg,
+                fontWeight: FontWeight.w700,
+                height: 1.25,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -378,33 +482,31 @@ class _FabStack extends StatelessWidget {
     required this.hasSelection,
     required this.onPrimary,
     required this.onDelete,
-    required this.cs,
   });
 
   final double bottomGap;
   final double spacing;
   final bool hasSelection;
-  final VoidCallback onPrimary;     // 선택 없음: 추가 / 선택 있음: 수정
-  final VoidCallback? onDelete;     // 선택 있음에서만 사용
-  final ColorScheme cs;
+  final VoidCallback onPrimary; // 선택 없음: 추가 / 선택 있음: 수정
+  final VoidCallback? onDelete; // 선택 있음에서만 사용
 
   @override
   Widget build(BuildContext context) {
     final ButtonStyle primaryStyle = ElevatedButton.styleFrom(
-      backgroundColor: hasSelection ? cs.primary : cs.primary, // 동일 톤 유지
-      foregroundColor: cs.onPrimary,
+      backgroundColor: _SvcColors.base,
+      foregroundColor: _SvcColors.fg,
       elevation: 3,
-      shadowColor: cs.shadow.withOpacity(0.25),
+      shadowColor: _SvcColors.base.withOpacity(0.25),
       shape: const StadiumBorder(),
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       textStyle: const TextStyle(fontWeight: FontWeight.w700),
     );
 
     final ButtonStyle deleteStyle = ElevatedButton.styleFrom(
-      backgroundColor: cs.error,
-      foregroundColor: cs.onError,
+      backgroundColor: Theme.of(context).colorScheme.error,
+      foregroundColor: Theme.of(context).colorScheme.onError,
       elevation: 3,
-      shadowColor: cs.error.withOpacity(0.35),
+      shadowColor: Theme.of(context).colorScheme.error.withOpacity(0.35),
       shape: const StadiumBorder(),
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       textStyle: const TextStyle(fontWeight: FontWeight.w700),
@@ -446,6 +548,7 @@ class _FabStack extends StatelessWidget {
     );
   }
 }
+
 class _ElevatedPillButton extends StatelessWidget {
   const _ElevatedPillButton({
     required this.child,
@@ -485,7 +588,8 @@ class _ElevatedPillButton extends StatelessWidget {
 }
 
 class _FabLabel extends StatelessWidget {
-  const _FabLabel({required this.icon, required this.label, Key? key}) : super(key: key);
+  const _FabLabel({required this.icon, required this.label, Key? key})
+      : super(key: key);
   final IconData icon;
   final String label;
 
@@ -501,4 +605,3 @@ class _FabLabel extends StatelessWidget {
     );
   }
 }
-

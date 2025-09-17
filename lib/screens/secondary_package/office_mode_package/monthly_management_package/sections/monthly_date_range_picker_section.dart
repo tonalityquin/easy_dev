@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class MonthlyDateRangePickerSection extends StatefulWidget {
   final TextEditingController startDateController;
@@ -15,10 +16,12 @@ class MonthlyDateRangePickerSection extends StatefulWidget {
   });
 
   @override
-  State<MonthlyDateRangePickerSection> createState() => _MonthlyDateRangePickerSectionState();
+  State<MonthlyDateRangePickerSection> createState() =>
+      _MonthlyDateRangePickerSectionState();
 }
 
-class _MonthlyDateRangePickerSectionState extends State<MonthlyDateRangePickerSection> {
+class _MonthlyDateRangePickerSectionState
+    extends State<MonthlyDateRangePickerSection> {
   String? _errorText;
 
   void _onStartDateTap() async {
@@ -48,7 +51,8 @@ class _MonthlyDateRangePickerSectionState extends State<MonthlyDateRangePickerSe
       case '주':
         return startDate.add(Duration(days: widget.duration * 7));
       case '월':
-        return DateTime(startDate.year, startDate.month + widget.duration, startDate.day);
+        return DateTime(
+            startDate.year, startDate.month + widget.duration, startDate.day);
       default:
         return startDate.add(const Duration(days: 30)); // fallback
     }
@@ -69,78 +73,168 @@ class _MonthlyDateRangePickerSectionState extends State<MonthlyDateRangePickerSe
     });
   }
 
-  Future<DateTime?> _showManualDateInputSheet({required DateTime initialDate}) async {
+  Future<DateTime?> _showManualDateInputSheet(
+      {required DateTime initialDate}) async {
     final yearCtrl = TextEditingController(text: initialDate.year.toString());
-    final monthCtrl = TextEditingController(text: initialDate.month.toString().padLeft(2, '0'));
-    final dayCtrl = TextEditingController(text: initialDate.day.toString().padLeft(2, '0'));
+    final monthCtrl =
+    TextEditingController(text: initialDate.month.toString().padLeft(2, '0'));
+    final dayCtrl =
+    TextEditingController(text: initialDate.day.toString().padLeft(2, '0'));
 
     String? localError;
 
     return await showModalBottomSheet<DateTime>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
-      builder: (context) {
-        return Padding(
-          padding: MediaQuery.of(context).viewInsets.add(const EdgeInsets.all(16)),
-          child: StatefulBuilder(
-            builder: (context, setModalState) {
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('날짜 입력 (숫자만)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      _buildDateField('년 (YYYY)', yearCtrl),
-                      const SizedBox(width: 12),
-                      _buildDateField('월 (MM)', monthCtrl),
-                      const SizedBox(width: 12),
-                      _buildDateField('일 (DD)', dayCtrl),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  if (localError != null)
-                    Text(localError!, style: const TextStyle(color: Colors.red)),
-                  const SizedBox(height: 12),
-                  ElevatedButton(
-                    onPressed: () {
-                      final year = int.tryParse(yearCtrl.text);
-                      final month = int.tryParse(monthCtrl.text);
-                      final day = int.tryParse(dayCtrl.text);
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+        final insets = MediaQuery.of(ctx).viewInsets;
 
-                      if (year == null || month == null || day == null) {
-                        setModalState(() => localError = '숫자를 정확히 입력해주세요.');
-                        return;
-                      }
+        return SafeArea(
+          top: false,
+          child: Container(
+            decoration: BoxDecoration(
+              color: cs.surface,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              border: Border.all(color: cs.outlineVariant),
+            ),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Padding(
+              padding: insets.add(const EdgeInsets.only(bottom: 16)),
+              child: StatefulBuilder(
+                builder: (context, setModalState) {
+                  return SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Drag handle
+                        Container(
+                          width: 40,
+                          height: 4,
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade300,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        Text(
+                          '날짜 입력 (숫자만)',
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            _buildDateField(context, '년 (YYYY)', yearCtrl,
+                                maxLen: 4),
+                            const SizedBox(width: 12),
+                            _buildDateField(context, '월 (MM)', monthCtrl,
+                                maxLen: 2),
+                            const SizedBox(width: 12),
+                            _buildDateField(context, '일 (DD)', dayCtrl,
+                                maxLen: 2),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        if (localError != null)
+                          Text(
+                            localError!,
+                            style: TextStyle(color: cs.error),
+                          ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () => Navigator.of(context).pop(),
+                                style: OutlinedButton.styleFrom(
+                                  minimumSize: const Size.fromHeight(48),
+                                  shape: const StadiumBorder(),
+                                  side: BorderSide(color: cs.outlineVariant),
+                                  foregroundColor: Colors.black87,
+                                ),
+                                child: const Text('취소'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  final year = int.tryParse(yearCtrl.text);
+                                  final month = int.tryParse(monthCtrl.text);
+                                  final day = int.tryParse(dayCtrl.text);
 
-                      try {
-                        final selectedDate = DateTime(year, month, day);
-                        Navigator.of(context).pop(selectedDate);
-                      } catch (_) {
-                        setModalState(() => localError = '존재하지 않는 날짜입니다.');
-                      }
-                    },
-                    child: const Text('선택 완료'),
-                  ),
-                  const SizedBox(height: 80),
-                ],
-              );
-            },
+                                  if (year == null ||
+                                      month == null ||
+                                      day == null) {
+                                    setModalState(() => localError = '숫자를 정확히 입력해주세요.');
+                                    return;
+                                  }
+
+                                  try {
+                                    final selectedDate = DateTime(year, month, day);
+                                    Navigator.of(context).pop(selectedDate);
+                                  } catch (_) {
+                                    setModalState(
+                                            () => localError = '존재하지 않는 날짜입니다.');
+                                  }
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  minimumSize: const Size.fromHeight(48),
+                                  backgroundColor: cs.primary,
+                                  foregroundColor: cs.onPrimary,
+                                  shape: const StadiumBorder(),
+                                ),
+                                child: const Text('선택 완료'),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
           ),
         );
       },
     );
   }
 
-  Widget _buildDateField(String label, TextEditingController controller) {
+  Widget _buildDateField(BuildContext context, String label,
+      TextEditingController controller,
+      {required int maxLen}) {
+    final cs = Theme.of(context).colorScheme;
+
     return Expanded(
       child: TextField(
         controller: controller,
         keyboardType: TextInputType.number,
+        inputFormatters: [
+          FilteringTextInputFormatter.digitsOnly,
+          LengthLimitingTextInputFormatter(maxLen),
+        ],
         decoration: InputDecoration(
           labelText: label,
-          border: const OutlineInputBorder(),
+          isDense: true,
+          contentPadding:
+          const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          filled: true,
+          fillColor: cs.surface,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          enabledBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: cs.outlineVariant),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: cs.primary, width: 1.6),
+            borderRadius: BorderRadius.circular(10),
+          ),
         ),
       ),
     );
@@ -160,12 +254,33 @@ class _MonthlyDateRangePickerSectionState extends State<MonthlyDateRangePickerSe
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+
+    InputDecoration _pickerDecoration(String label) => InputDecoration(
+      labelText: label,
+      isDense: true,
+      contentPadding:
+      const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      filled: true,
+      fillColor: cs.surface,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+      enabledBorder: OutlineInputBorder(
+        borderSide: BorderSide(color: cs.outlineVariant),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderSide: BorderSide(color: cs.primary, width: 1.6),
+        borderRadius: BorderRadius.circular(10),
+      ),
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           '정기 정산 기간 (${widget.duration}${widget.periodUnit})',
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          style: text.titleMedium?.copyWith(fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 8),
         Row(
@@ -175,10 +290,7 @@ class _MonthlyDateRangePickerSectionState extends State<MonthlyDateRangePickerSe
                 controller: widget.startDateController,
                 readOnly: true,
                 onTap: _onStartDateTap,
-                decoration: const InputDecoration(
-                  labelText: '시작일',
-                  border: OutlineInputBorder(),
-                ),
+                decoration: _pickerDecoration('시작일'),
               ),
             ),
             const SizedBox(width: 16),
@@ -187,10 +299,7 @@ class _MonthlyDateRangePickerSectionState extends State<MonthlyDateRangePickerSe
                 controller: widget.endDateController,
                 readOnly: true,
                 onTap: _onEndDateTap,
-                decoration: const InputDecoration(
-                  labelText: '종료일',
-                  border: OutlineInputBorder(),
-                ),
+                decoration: _pickerDecoration('종료일'),
               ),
             ),
           ],
@@ -199,7 +308,7 @@ class _MonthlyDateRangePickerSectionState extends State<MonthlyDateRangePickerSe
           const SizedBox(height: 8),
           Text(
             _errorText!,
-            style: const TextStyle(color: Colors.red),
+            style: TextStyle(color: cs.error, fontWeight: FontWeight.w600),
           ),
         ],
       ],

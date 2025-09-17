@@ -3,13 +3,20 @@ import 'package:provider/provider.dart';
 
 import '../../../../states/user/user_state.dart';
 
+/// Deep Blue Palette
+class _Palette {
+  static const base = Color(0xFF0D47A1); // primary
+  static const dark = Color(0xFF09367D); // 강조 텍스트/아이콘
+  static const light = Color(0xFF5472D3); // 톤 변형/보더
+  static const fg = Color(0xFFFFFFFF);   // 전경(아이콘/텍스트)
+}
+
 class CommuteInsideUserInfoCardSection extends StatelessWidget {
   const CommuteInsideUserInfoCardSection({super.key});
 
   @override
   Widget build(BuildContext context) {
     final userState = context.watch<UserState>();
-    final primaryColor = Theme.of(context).primaryColor;
 
     return InkWell(
       borderRadius: BorderRadius.circular(12),
@@ -21,7 +28,7 @@ class CommuteInsideUserInfoCardSection extends StatelessWidget {
         color: Colors.white,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: Colors.grey.shade300),
+          side: BorderSide(color: _Palette.light.withOpacity(.45)),
         ),
         margin: const EdgeInsets.symmetric(vertical: 12),
         child: Padding(
@@ -31,13 +38,13 @@ class CommuteInsideUserInfoCardSection extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Icon(Icons.badge, size: 14, color: Colors.grey[600]),
+                  Icon(Icons.badge, size: 14, color: _Palette.dark.withOpacity(.7)),
                   const SizedBox(width: 4),
                   Text(
                     '근무자 카드',
                     style: TextStyle(
                       fontSize: 12,
-                      color: Colors.grey[600],
+                      color: _Palette.dark.withOpacity(.7),
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -49,8 +56,8 @@ class CommuteInsideUserInfoCardSection extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 24,
-                    backgroundColor: primaryColor,
-                    child: const Icon(Icons.person, color: Colors.white),
+                    backgroundColor: _Palette.base,
+                    child: const Icon(Icons.person, color: _Palette.fg),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -69,18 +76,18 @@ class CommuteInsideUserInfoCardSection extends StatelessWidget {
                           userState.position,
                           style: TextStyle(
                             fontSize: 13,
-                            color: Colors.grey[700],
+                            color: _Palette.dark.withOpacity(.7),
                           ),
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Icon(Icons.qr_code, color: Colors.grey[600]),
+                  Icon(Icons.qr_code, color: _Palette.dark.withOpacity(.7)),
                 ],
               ),
               const SizedBox(height: 16),
-              const Divider(),
+              Divider(color: _Palette.light.withOpacity(.35), height: 1),
               const SizedBox(height: 12),
               _infoRow(Icons.phone, 'Tel.', formatPhoneNumber(userState.phone)),
               _infoRow(Icons.location_on, 'Sector.', userState.area),
@@ -96,13 +103,13 @@ class CommuteInsideUserInfoCardSection extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: Colors.grey[700]),
+          Icon(icon, size: 18, color: _Palette.dark.withOpacity(.7)),
           const SizedBox(width: 8),
           Text(
-            label, // ✅ 불필요한 보간 제거
-            style: const TextStyle(
+            label,
+            style: TextStyle(
               fontSize: 13,
-              color: Colors.grey,
+              color: _Palette.dark.withOpacity(.6),
               fontWeight: FontWeight.w600,
             ),
           ),

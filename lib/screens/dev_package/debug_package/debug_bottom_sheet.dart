@@ -6,6 +6,7 @@
 // - 내보내기/복사/전체삭제(회전 포함)
 // - 리스트 스크롤 성능 및 예외 처리
 // - 작은 화면에서도 안전하도록 타이틀/칩 영역 Row → Wrap 적용
+//
 
 import 'dart:convert';
 
@@ -14,8 +15,10 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../utils/snackbar_helper.dart';
 import 'debug_firestore_logger.dart';
 import 'debug_local_logger.dart';
+// ✅ snackbar_helper 경로는 프로젝트 구조에 맞게 조정하세요.
 
 enum _LogSource { firestore, local }
 
@@ -141,14 +144,12 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
       await _loadTail();
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${_labelForSource()} 로그가 삭제되었습니다.')),
-      );
+      // ✅ snackbar_helper 사용
+      showSuccessSnackbar(context, '${_labelForSource()} 로그가 삭제되었습니다.');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('삭제 실패: $e')),
-      );
+      // ✅ snackbar_helper 사용
+      showFailedSnackbar(context, '삭제 실패: $e');
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -160,18 +161,16 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
     final text = _filtered.reversed.map((e) => e.original ?? '').join('\n');
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('클립보드에 복사되었습니다.')),
-    );
+    // ✅ snackbar_helper 사용
+    showSuccessSnackbar(context, '클립보드에 복사되었습니다.');
   }
 
   Future<void> _export() async {
     final files = await _getLogger().getAllLogFilesExisting();
     if (files.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('내보낼 ${_labelForSource()} 로그 파일이 없습니다.')),
-      );
+      // ✅ snackbar_helper 사용
+      showSelectedSnackbar(context, '내보낼 ${_labelForSource()} 로그 파일이 없습니다.');
       return;
     }
     await Share.shareXFiles(

@@ -128,44 +128,96 @@ class _ChatPanelState extends State<ChatPanel> {
 
   Future<void> _addShortcut() async {
     final textCtrl = TextEditingController();
-    final added = await showCupertinoDialog<String>(
+
+    final result = await showModalBottomSheet<String>(
       context: context,
-      builder: (_) => CupertinoAlertDialog(
-        title: const Text('쇼트컷 추가'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: CupertinoTextField(
-                controller: textCtrl,
-                placeholder: '자주 쓰는 문구를 입력하세요',
-                autofocus: true,
-                padding: const EdgeInsets.all(12),
-                minLines: 1,
-                maxLines: 3,
-                onSubmitted: (_) => Navigator.of(context).pop(textCtrl.text.trim()),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          CupertinoDialogAction(
-            isDestructiveAction: true,
-            onPressed: () => Navigator.of(context).pop(null),
-            child: const Text('취소'),
-          ),
-          CupertinoDialogAction(
-            isDefaultAction: true,
-            onPressed: () => Navigator.of(context).pop(textCtrl.text.trim()),
-            child: const Text('추가'),
-          ),
-        ],
-      ),
+      isScrollControlled: true,
+      useSafeArea: true,
+      // 노치/상단 안전영역
+      backgroundColor: Colors.white,
+      // 시트 배경 흰색
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 1.0,
+          // 화면 최상단까지
+          maxChildSize: 1.0,
+          minChildSize: 0.4,
+          builder: (ctx, scrollController) {
+            return StatefulBuilder(
+              builder: (ctx, setLocal) {
+                final value = textCtrl.text.trim();
+                const maxLen = 80;
+                final isDuplicate = _shortcuts.contains(value);
+                final overLimit = value.length > maxLen;
+                final isValid = value.isNotEmpty && !isDuplicate && !overLimit;
+
+                void submitIfValid() {
+                  final v = textCtrl.text.trim();
+                  if (v.isEmpty) return;
+                  Navigator.pop(ctx, v);
+                }
+
+                return SingleChildScrollView(
+                  controller: scrollController,
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      left: 20,
+                      right: 20,
+                      top: 20,
+                      bottom: MediaQuery.of(ctx).viewInsets.bottom + 20, // 키보드 패딩
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          '쇼트컷 추가',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: textCtrl,
+                          autofocus: true,
+                          minLines: 3,
+                          maxLines: 6,
+                          textInputAction: TextInputAction.done,
+                          onChanged: (_) => setLocal(() {}),
+                          onSubmitted: (_) => submitIfValid(),
+                          decoration: InputDecoration(
+                            hintText: '자주 쓰는 문구를 입력하세요',
+                            border: const OutlineInputBorder(),
+                            helperText: isDuplicate ? '이미 같은 쇼트컷이 있습니다.' : '최대 80자',
+                            errorText: overLimit ? '최대 80자까지 입력 가능합니다.' : null,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx),
+                              child: const Text('취소'),
+                            ),
+                            const Spacer(),
+                            ElevatedButton.icon(
+                              icon: const Icon(Icons.add),
+                              onPressed: isValid ? submitIfValid : null,
+                              label: const Text('추가'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
     );
 
-    final value = (added ?? '').trim();
+    final value = (result ?? '').trim();
     if (value.isEmpty) return;
 
     if (_shortcuts.contains(value)) {
@@ -224,8 +276,7 @@ class _ChatPanelState extends State<ChatPanel> {
     final needsSpaceBefore = before.isNotEmpty && !before.endsWith(' ');
     final needsSpaceAfter = after.isNotEmpty && !insert.endsWith(' ');
 
-    final toInsert =
-        '${needsSpaceBefore ? ' ' : ''}$insert${needsSpaceAfter ? ' ' : ''}';
+    final toInsert = '${needsSpaceBefore ? ' ' : ''}$insert${needsSpaceAfter ? ' ' : ''}';
 
     final newText = '$before$toInsert$after';
     final newOffset = before.length + toInsert.length;
@@ -303,8 +354,7 @@ class _ChatPanelState extends State<ChatPanel> {
       } catch (_) {}
     }
 
-    final subtitle =
-    _hasPendingWrites || ts == null ? '동기화 중...' : (timeText.isNotEmpty ? '🕒 $timeText' : '');
+    final subtitle = _hasPendingWrites || ts == null ? '동기화 중...' : (timeText.isNotEmpty ? '🕒 $timeText' : '');
 
     return Column(
       mainAxisSize: MainAxisSize.max,
@@ -321,8 +371,7 @@ class _ChatPanelState extends State<ChatPanel> {
                 )
               else ...[
                 FilledButton.icon(
-                  onPressed:
-                  _selectedShortcutIdx.isNotEmpty ? _insertSelectedShortcuts : null,
+                  onPressed: _selectedShortcutIdx.isNotEmpty ? _insertSelectedShortcuts : null,
                   icon: const Icon(Icons.input),
                   label: Text('삽입(${_selectedShortcutIdx.length})'),
                 ),
@@ -374,7 +423,6 @@ class _ChatPanelState extends State<ChatPanel> {
                     ],
                   ),
                 ),
-
                 if (_shortcuts.isNotEmpty) ...[
                   SizedBox(
                     height: 40,

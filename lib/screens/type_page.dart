@@ -12,8 +12,6 @@ import '../states/area/area_state.dart';
 import '../states/plate/plate_state.dart';
 import '../states/user/user_state.dart';
 
-import '../utils/app_colors.dart';
-
 import '../screens/input_package/input_plate_screen.dart';
 import '../screens/type_package/common_widgets/dashboard_bottom_sheet/home_dash_board_bottom_sheet.dart';
 import 'type_package/common_widgets/chats/chat_bottom_sheet.dart';
@@ -23,6 +21,13 @@ import '../utils/snackbar_helper.dart';
 // ⬇️ 추가: 최근 메시지 저장/재생 기능
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/tts/tts_manager.dart';
+
+/// Deep Blue 팔레트(서비스 카드와 동일 계열)
+class _Palette {
+  static const base = Color(0xFF0D47A1); // primary
+  static const dark = Color(0xFF09367D); // 강조 텍스트/아이콘
+  static const fg = Color(0xFFFFFFFF);   // 전경(흰색)
+}
 
 class TypePage extends StatefulWidget {
   const TypePage({super.key});
@@ -145,16 +150,18 @@ class _ChatDashboardBar extends StatelessWidget {
               onPressed: null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
-                foregroundColor: Colors.black45,
+                foregroundColor: _Palette.dark.withOpacity(.35),
+                disabledBackgroundColor: Colors.white,
+                disabledForegroundColor: _Palette.dark.withOpacity(.35),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
               child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.volume_up, color: Colors.black45, size: 20),
+                  Icon(Icons.volume_up, size: 20),
                   SizedBox(width: 6),
-                  Text('다시 듣기', style: TextStyle(color: Colors.black45)),
+                  Text('다시 듣기'),
                 ],
               ),
             )
@@ -172,16 +179,16 @@ class _ChatDashboardBar extends StatelessWidget {
                   onPressed: () => _replayLatestTts(context, area),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
-                    foregroundColor: Colors.black,
+                    foregroundColor: _Palette.base,
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
                   child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.volume_up, color: Colors.black, size: 20),
+                      Icon(Icons.volume_up, size: 20),
                       SizedBox(width: 6),
-                      Text('다시 듣기', overflow: TextOverflow.ellipsis, style: TextStyle(color: Colors.black)),
+                      Text('다시 듣기', overflow: TextOverflow.ellipsis),
                     ],
                   ),
                 );
@@ -203,10 +210,12 @@ class _ChatDashboardBar extends StatelessWidget {
                 );
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.black87,
-                foregroundColor: Colors.white,
+                backgroundColor: _Palette.base,
+                foregroundColor: _Palette.fg,
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                elevation: 2,
+                shadowColor: _Palette.dark.withOpacity(.25),
               ),
               child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -323,8 +332,17 @@ class _RefreshableBodyState extends State<RefreshableBody> {
               _buildCurrentPage(context, state.selectedIndex),
               if (state.isLoading)
                 Container(
-                  color: Colors.black.withAlpha(51),
-                  child: const Center(child: CircularProgressIndicator()),
+                  color: Colors.white.withOpacity(.35),
+                  child: const Center(
+                    child: SizedBox(
+                      width: 28,
+                      height: 28,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 3,
+                        valueColor: AlwaysStoppedAnimation<Color>(_Palette.base),
+                      ),
+                    ),
+                  ),
                 ),
             ],
           );
@@ -392,8 +410,9 @@ class _PageBottomNavigationState extends State<PageBottomNavigation> {
   Widget build(BuildContext context) {
     _ensureFuturesForCurrentAreaAndPages();
 
-    final selectedColor = AppColors.selectedItemColor;
-    final unselectedColor = Colors.grey;
+    // 팔레트 기반 선택/비선택 색
+    final selectedColor = _Palette.base;
+    final unselectedColor = _Palette.dark.withOpacity(.55);
 
     return Consumer2<PageState, FieldSelectedDateState>(
       builder: (context, pageState, selectedDateState, child) {
@@ -450,6 +469,19 @@ class _PageBottomNavigationState extends State<PageBottomNavigation> {
                   future: future,
                   builder: (context, snapshot) {
                     final count = snapshot.data ?? 0;
+
+                    // ✅ 입차/출차 숫자 색 기존값으로 복원 (비선택 시)
+                    final bool isIn = pageInfo.title == '입차 요청';
+                    final bool isOut = pageInfo.title == '출차 요청';
+                    Color countColor;
+                    if (isIn || isOut) {
+                      countColor = isSelected
+                          ? selectedColor
+                          : (isIn ? Colors.redAccent : Colors.indigoAccent);
+                    } else {
+                      countColor = isSelected ? selectedColor : _Palette.dark.withOpacity(.75);
+                    }
+
                     return Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -458,7 +490,7 @@ class _PageBottomNavigationState extends State<PageBottomNavigation> {
                           style: TextStyle(
                             fontSize: isSelected ? 22 : 18,
                             fontWeight: FontWeight.bold,
-                            color: isSelected ? selectedColor : Colors.redAccent,
+                            color: countColor,
                           ),
                         ),
                         const SizedBox(height: 2),

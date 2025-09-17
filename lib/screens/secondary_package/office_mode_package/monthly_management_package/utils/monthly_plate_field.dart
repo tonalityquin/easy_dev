@@ -1,7 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+/// 서비스 로그인 카드(Deep Blue 팔레트) 톤 참조
+class _SvcColors {
+  static const base = Color(0xFF0D47A1);
+  static const light = Color(0xFF5472D3);
+}
+
 /// 공통 번호판 입력 필드 위젯
+/// - 앱 ColorScheme와 서비스 팔레트 컬러를 반영
+/// - 활성/비활성/포커스 상태별 톤 분리
 class MonthlyPlateField extends StatelessWidget {
   final int frontDigitCount;
   final bool hasMiddleChar;
@@ -31,35 +39,73 @@ class MonthlyPlateField extends StatelessWidget {
     required this.activeController,
     required this.onKeypadStateChanged,
     this.isEditMode = false,
-    this.middleBoxWidth = 56, // 기본 56px (상황에 따라 60~72로 넉넉히)
+    this.middleBoxWidth = 56,
   }) : assert(
   !hasMiddleChar || middleController != null,
   'hasMiddleChar=true이면 middleController가 필요합니다.',
   );
 
+  static const _radius = 10.0;
+  static const _anim = Duration(milliseconds: 180);
+
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        // 앞자리: 남은 공간을 유연하게 사용
+        // 앞자리
         Expanded(
-          flex: frontDigitCount, // 자리수 비율 반영(2 또는 3)
+          flex: frontDigitCount,
           child: _buildDigitInput(context, frontController, maxLen: 4),
         ),
         if (hasMiddleChar) const SizedBox(width: 8),
-        // ✅ 중간 한글: 고정 폭으로 확보
+        // 중간 한글
         if (hasMiddleChar)
           SizedBox(
             width: middleBoxWidth,
             child: _buildMiddleInput(context, middleController!),
           ),
         const SizedBox(width: 8),
-        // 뒷자리: 남은 공간을 유연하게 사용
+        // 뒷자리
         Expanded(
-          flex: backDigitCount, // 4자리 비율 반영
+          flex: backDigitCount,
           child: _buildDigitInput(context, backController, maxLen: 4),
         ),
       ],
+    );
+  }
+
+  InputBorder _underline({
+    required Color color,
+    required double width,
+  }) =>
+      UnderlineInputBorder(
+        borderSide: BorderSide(width: width, color: color),
+      );
+
+  BoxDecoration _fieldBox({
+    required bool isActive,
+    required ColorScheme cs,
+  }) {
+    // 활성 시 토널 하이라이트 + 아주 은은한 그림자
+    final bg = isActive
+        ? cs.primaryContainer.withOpacity(.22)
+        : cs.surface;
+    return BoxDecoration(
+      color: bg,
+      borderRadius: BorderRadius.circular(_radius),
+      boxShadow: isActive
+          ? [
+        BoxShadow(
+          color: _SvcColors.light.withOpacity(.08),
+          blurRadius: 10,
+          offset: const Offset(0, 4),
+        ),
+      ]
+          : const [],
+      border: Border.all(
+        color: isActive ? _SvcColors.base.withOpacity(.28) : cs.outlineVariant.withOpacity(.48),
+        width: 1,
+      ),
     );
   }
 
@@ -70,37 +116,35 @@ class MonthlyPlateField extends StatelessWidget {
       }) {
     final cs = Theme.of(context).colorScheme;
     final isActive = controller == activeController;
+    final enabled = !isEditMode;
 
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
+      duration: _anim,
       margin: const EdgeInsets.symmetric(horizontal: 4.0),
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: isActive ? cs.primaryContainer.withOpacity(0.22) : cs.surface,
-        borderRadius: BorderRadius.circular(8),
-      ),
+      padding: const EdgeInsets.all(6),
+      decoration: _fieldBox(isActive: isActive, cs: cs),
       child: TextField(
         controller: controller,
         keyboardType: TextInputType.none,
         maxLength: maxLen,
         textAlign: TextAlign.center,
         readOnly: true,
-        enabled: !isEditMode,
+        enabled: enabled,
         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-        style: const TextStyle(fontSize: 18),
+        style: TextStyle(
+          fontSize: 18,
+          color: enabled ? cs.onSurface : cs.onSurface.withOpacity(.5),
+          fontWeight: FontWeight.w600,
+          letterSpacing: .5,
+        ),
         decoration: InputDecoration(
           isDense: true,
           counterText: "",
           contentPadding: const EdgeInsets.symmetric(vertical: 8),
-          border: UnderlineInputBorder(
-            borderSide: BorderSide(width: 2.0, color: cs.outline),
-          ),
-          enabledBorder: UnderlineInputBorder(
-            borderSide: BorderSide(width: 2.0, color: cs.outline),
-          ),
-          focusedBorder: UnderlineInputBorder(
-            borderSide: BorderSide(width: 2.0, color: cs.primary),
-          ),
+          border: _underline(color: cs.outline, width: 2),
+          enabledBorder: _underline(color: cs.outline, width: 2),
+          focusedBorder: _underline(color: cs.primary, width: 2.2),
+          disabledBorder: _underline(color: cs.outline.withOpacity(.5), width: 2),
         ),
         onTap: isEditMode ? null : () => onKeypadStateChanged(controller),
       ),
@@ -110,40 +154,38 @@ class MonthlyPlateField extends StatelessWidget {
   Widget _buildMiddleInput(BuildContext context, TextEditingController controller) {
     final cs = Theme.of(context).colorScheme;
     final isActive = controller == activeController;
+    final enabled = !isEditMode;
 
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
+      duration: _anim,
       margin: const EdgeInsets.symmetric(horizontal: 4.0),
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: isActive ? cs.primaryContainer.withOpacity(0.22) : cs.surface,
-        borderRadius: BorderRadius.circular(8),
-      ),
+      padding: const EdgeInsets.all(6),
+      decoration: _fieldBox(isActive: isActive, cs: cs),
       child: TextField(
         controller: controller,
         keyboardType: TextInputType.none,
         maxLength: 1,
         textAlign: TextAlign.center,
         readOnly: true,
-        enabled: !isEditMode,
+        enabled: enabled,
         inputFormatters: [
           // 한글 1자 (키패드 입력 가정)
           FilteringTextInputFormatter.allow(RegExp(r'[ㄱ-ㅎㅏ-ㅣ가-힣]')),
         ],
-        style: const TextStyle(fontSize: 20), // ✅ 가독성 확보
+        style: TextStyle(
+          fontSize: 20,
+          color: enabled ? cs.onSurface : cs.onSurface.withOpacity(.5),
+          fontWeight: FontWeight.w700,
+          letterSpacing: .5,
+        ),
         decoration: InputDecoration(
           isDense: true,
           counterText: "",
           contentPadding: const EdgeInsets.symmetric(vertical: 8),
-          border: UnderlineInputBorder(
-            borderSide: BorderSide(width: 2.0, color: cs.outline),
-          ),
-          enabledBorder: UnderlineInputBorder(
-            borderSide: BorderSide(width: 2.0, color: cs.outline),
-          ),
-          focusedBorder: UnderlineInputBorder(
-            borderSide: BorderSide(width: 2.0, color: cs.primary),
-          ),
+          border: _underline(color: cs.outline, width: 2),
+          enabledBorder: _underline(color: cs.outline, width: 2),
+          focusedBorder: _underline(color: cs.primary, width: 2.2),
+          disabledBorder: _underline(color: cs.outline.withOpacity(.5), width: 2),
         ),
         onTap: isEditMode ? null : () => onKeypadStateChanged(controller),
       ),

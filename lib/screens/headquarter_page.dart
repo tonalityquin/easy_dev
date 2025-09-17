@@ -4,6 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../states/page/page_info.dart';
 
+/// Headquarter 전용 팔레트
+class _HqPalette {
+  static const base = Color(0xFF1E88E5);  // #1E88E5
+  static const dark = Color(0xFF1565C0);  // #1565C0
+}
+
 class HeadquarterPage extends StatelessWidget {
   const HeadquarterPage({super.key});
 
@@ -22,8 +28,7 @@ class HeadquarterPage extends StatelessWidget {
               bottomNavigationBar: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const PageBottomNavigation(), // ↑ 네비게이션 바 먼저
-                  // ↓ 그 아래에 이미지 (SafeArea로 하단 제스처 영역 피함)
+                  const PageBottomNavigation(),
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     child: SafeArea(
@@ -82,9 +87,16 @@ class RefreshableBody extends StatelessWidget {
               ),
               if (state.isLoading)
                 Container(
-                  color: Colors.black.withAlpha(51),
+                  color: Colors.white.withOpacity(.35),
                   child: const Center(
-                    child: CircularProgressIndicator(),
+                    child: SizedBox(
+                      width: 28,
+                      height: 28,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 3,
+                        valueColor: AlwaysStoppedAnimation<Color>(_HqPalette.base),
+                      ),
+                    ),
                   ),
                 ),
             ],
@@ -103,6 +115,7 @@ class PageBottomNavigation extends StatelessWidget {
     return Consumer<HqState>(
       builder: (context, state, child) {
         return BottomNavigationBar(
+          type: BottomNavigationBarType.fixed,
           currentIndex: state.selectedIndex,
           onTap: state.onItemTapped,
           items: state.pages.map((pageInfo) {
@@ -111,10 +124,11 @@ class PageBottomNavigation extends StatelessWidget {
               label: pageInfo.title,
             );
           }).toList(),
-          selectedItemColor: Colors.green,
-          unselectedItemColor: Colors.purple,
+          selectedItemColor: _HqPalette.base,
+          unselectedItemColor: _HqPalette.dark.withOpacity(.55),
           backgroundColor: Colors.white,
-          elevation: 0, // 그림자 제거 → 아래 이미지가 그늘지지 않음
+          elevation: 0,
+          showUnselectedLabels: true,
         );
       },
     );

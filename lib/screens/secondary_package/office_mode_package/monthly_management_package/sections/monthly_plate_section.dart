@@ -34,11 +34,15 @@ class MonthlyPlateSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('번호 입력', style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold)),
+        Text(
+          '번호 입력',
+          style: text.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+        ),
         const SizedBox(height: 8),
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -62,11 +66,15 @@ class MonthlyPlateSection extends StatelessWidget {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: cs.primary,
                   side: BorderSide(color: cs.primary, width: 1),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  backgroundColor: cs.surface,
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 140),
+                  constraints: const BoxConstraints(maxWidth: 160),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -75,11 +83,15 @@ class MonthlyPlateSection extends StatelessWidget {
                           dropdownValue,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                          style: text.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: cs.primary,
+                            letterSpacing: .2,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 6),
-                      const Icon(Icons.expand_more, size: 18),
+                      Icon(Icons.expand_more, size: 18, color: cs.primary),
                     ],
                   ),
                 ),

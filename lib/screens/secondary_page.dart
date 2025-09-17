@@ -9,10 +9,11 @@
 // - PageView를 좌우 스와이프하면 다음(또는 이전) 2개 탭 묶음으로 이동.
 // - 외부 SecondaryState.selectedIndex와 양방향 동기화.
 //
-// 동기화 규칙:
-// - PageView로 청크 페이지를 넘기면, 해당 청크의 첫 탭(global index)을 선택 상태로 반영.
-// - 청크 내부 탭을 탭하면, 해당 global index를 SecondaryState에 반영.
-// - 외부에서 selectedIndex가 바뀌면 적절한 청크로 자동 스크롤.
+// 팔레트(서비스 카드 색상계열) 반영:
+// - base(Primary), dark(텍스트/아이콘 강조), light(보더/톤 변화), fg(전경 흰색)
+// - AppBar 타이틀/아이콘 색은 dark, 하단 헤어라인은 light
+// - TabBar 라벨/인디케이터는 base, 비선택 라벨은 dark의 0.6
+// - 로딩 인디케이터도 base 컬러로 고정
 //
 // 안전 가드:
 // - 탭이 하나도 없을 때 안내 문구 표시
@@ -25,6 +26,13 @@ import 'package:provider/provider.dart';
 
 import '../states/secondary/secondary_info.dart';
 import '../states/secondary/secondary_state.dart';
+
+/// Deep Blue 팔레트(서비스 카드와 동일 톤)
+class _Palette {
+  static const base = Color(0xFF0D47A1); // primary
+  static const dark = Color(0xFF09367D); // 강조 텍스트/아이콘
+  static const light = Color(0xFF5472D3); // 톤 변형/보더
+}
 
 class SecondaryPage extends StatelessWidget {
   const SecondaryPage({super.key});
@@ -67,12 +75,21 @@ class _SecondaryScaffold extends StatelessWidget {
     return AppBar(
       automaticallyImplyLeading: false,
       backgroundColor: Colors.white,
-      foregroundColor: Colors.black,
-      elevation: 1,
+      foregroundColor: _Palette.dark,
+      elevation: 0,
       centerTitle: true,
       title: const Text(
         '보조 페이지',
-        style: TextStyle(fontWeight: FontWeight.w600),
+        style: TextStyle(fontWeight: FontWeight.w600, color: _Palette.dark),
+      ),
+      iconTheme: const IconThemeData(color: _Palette.dark),
+      actionsIconTheme: const IconThemeData(color: _Palette.dark),
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(1),
+        child: Container(
+          height: 1,
+          color: _Palette.light.withOpacity(.18), // 헤어라인
+        ),
       ),
     );
   }
@@ -140,6 +157,11 @@ class _ChunkedTabsRootState extends State<_ChunkedTabsRoot> {
 
   @override
   Widget build(BuildContext context) {
+    final tabLabelStyle = Theme.of(context)
+        .textTheme
+        .titleSmall
+        ?.copyWith(fontWeight: FontWeight.w700);
+
     return Scaffold(
       appBar: _appBar(),
       body: Stack(
@@ -173,18 +195,37 @@ class _ChunkedTabsRootState extends State<_ChunkedTabsRoot> {
                     // 청크별 탭바 (항상 1~2개만 표시)
                     Material(
                       color: Colors.white,
-                      elevation: 1,
-                      child: TabBar(
-                        isScrollable: false,
-                        onTap: (localIdx) {
-                          final globalIdx = start + localIdx;
-                          if (globalIdx != widget.selectedIndex) {
-                            widget.onSelect(globalIdx);
-                          }
-                        },
-                        tabs: [
-                          for (final p in items) Tab(text: p.title, icon: p.icon)
-                        ],
+                      elevation: 0,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(
+                              color: _Palette.light.withOpacity(.18),
+                              width: 1,
+                            ),
+                          ),
+                        ),
+                        child: TabBar(
+                          isScrollable: false,
+                          onTap: (localIdx) {
+                            final globalIdx = start + localIdx;
+                            if (globalIdx != widget.selectedIndex) {
+                              widget.onSelect(globalIdx);
+                            }
+                          },
+                          labelColor: _Palette.base,
+                          unselectedLabelColor: _Palette.dark.withOpacity(.6),
+                          labelStyle: tabLabelStyle,
+                          indicator: UnderlineTabIndicator(
+                            borderSide: const BorderSide(
+                              color: _Palette.base,
+                              width: 2.5,
+                            ),
+                          ),
+                          tabs: [
+                            for (final p in items) Tab(text: p.title, icon: p.icon)
+                          ],
+                        ),
                       ),
                     ),
                     // 콘텐츠: 스와이프 방지(제스처 충돌 방지), 탭 클릭으로만 전환
@@ -194,8 +235,7 @@ class _ChunkedTabsRootState extends State<_ChunkedTabsRoot> {
                         children: [
                           for (var i = 0; i < items.length; i++)
                             KeyedSubtree(
-                              key: PageStorageKey<String>(
-                                  'secondary_${start + i}'),
+                              key: PageStorageKey<String>('secondary_${start + i}'),
                               child: items[i].page,
                             ),
                         ],
@@ -213,7 +253,7 @@ class _ChunkedTabsRootState extends State<_ChunkedTabsRoot> {
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 200),
                 child: widget.isLoading
-                    ? const Center(child: CircularProgressIndicator())
+                    ? const _LoadingOverlay()
                     : const SizedBox.shrink(),
               ),
             ),
@@ -227,12 +267,41 @@ class _ChunkedTabsRootState extends State<_ChunkedTabsRoot> {
     return AppBar(
       automaticallyImplyLeading: false,
       backgroundColor: Colors.white,
-      foregroundColor: Colors.black,
-      elevation: 1,
+      foregroundColor: _Palette.dark,
+      elevation: 0,
       centerTitle: true,
       title: const Text(
         '보조 페이지',
-        style: TextStyle(fontWeight: FontWeight.w600),
+        style: TextStyle(fontWeight: FontWeight.w600, color: _Palette.dark),
+      ),
+      iconTheme: const IconThemeData(color: _Palette.dark),
+      actionsIconTheme: const IconThemeData(color: _Palette.dark),
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(1),
+        child: Container(
+          height: 1,
+          color: _Palette.light.withOpacity(.18),
+        ),
+      ),
+    );
+  }
+}
+
+class _LoadingOverlay extends StatelessWidget {
+  const _LoadingOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.white.withOpacity(.35),
+      alignment: Alignment.center,
+      child: const SizedBox(
+        width: 28,
+        height: 28,
+        child: CircularProgressIndicator(
+          strokeWidth: 3,
+          valueColor: AlwaysStoppedAnimation<Color>(_Palette.base),
+        ),
       ),
     );
   }

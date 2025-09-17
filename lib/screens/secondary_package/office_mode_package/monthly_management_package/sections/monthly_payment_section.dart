@@ -35,7 +35,6 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
 
   @override
   void dispose() {
-    // ✅ 메모리 누수 방지
     _noteController.dispose();
     super.dispose();
   }
@@ -52,31 +51,27 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
   }
 
   Future<void> _handlePayment() async {
-    // ✅ 포커스 해제(키보드 닫기)
     FocusScope.of(context).unfocus();
 
-    // === [추가] 간단 유효성 가드 ===
-    // 번호판 유효성
+    // === 유효성 가드 ===
     if (!widget.controller.isInputValid()) {
       showFailedSnackbar(context, '번호판을 먼저 정확히 입력하세요.');
       return;
     }
-    // 결제 금액 유효성 (없거나 0 이하면 거부)
-    final amount = int.tryParse(widget.controller.amountController?.text.trim() ?? '');
+    final amount =
+    int.tryParse(widget.controller.amountController?.text.trim() ?? '');
     if (amount == null || amount <= 0) {
       showFailedSnackbar(context, '결제 금액을 확인해주세요.');
       return;
     }
-    // === [끝] 간단 유효성 가드 ===
+    // ==================
 
     setState(() => _isPaying = true);
     try {
-      // 컨트롤러로 메모 전달
       widget.controller.specialNote = _noteController.text;
 
       // 파이어스토어에 결제 내역 기록
       await widget.controller.recordPaymentHistory(context);
-
       if (!mounted) return;
 
       // 로컬 로그(낙관적 업데이트)
@@ -97,59 +92,80 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
       widget.controller.isExtended = false;
       widget.onExtendedChanged(false);
 
-      // ✅ 성공 스낵바
       showSuccessSnackbar(context, '결제 내역이 저장되었습니다.');
     } catch (e) {
       if (!mounted) return;
-      // ❌ 실패 스낵바
       showFailedSnackbar(context, '결제 실패: $e');
     } finally {
-      if (mounted) {
-        setState(() => _isPaying = false);
-      }
+      if (mounted) setState(() => _isPaying = false);
     }
   }
+
+  InputDecoration _noteDecoration(ColorScheme cs) => InputDecoration(
+    labelText: '특이사항',
+    isDense: true,
+    contentPadding:
+    const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+    filled: true,
+    fillColor: cs.surface,
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+    enabledBorder: OutlineInputBorder(
+      borderSide: BorderSide(color: cs.outlineVariant),
+      borderRadius: BorderRadius.circular(10),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderSide: BorderSide(color: cs.primary, width: 1.6),
+      borderRadius: BorderRadius.circular(10),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+
+    final ButtonStyle payStyle = ElevatedButton.styleFrom(
+      backgroundColor: cs.primary,
+      foregroundColor: cs.onPrimary,
+      elevation: 0,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      shape: const StadiumBorder(),
+      textStyle: const TextStyle(fontWeight: FontWeight.w700),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 16),
 
-        // 특이사항 입력
+        // 특이사항 입력 (색 반영)
         TextFormField(
           controller: _noteController,
-          decoration: const InputDecoration(
-            labelText: '특이사항',
-            border: OutlineInputBorder(),
-          ),
+          decoration: _noteDecoration(cs),
           maxLines: 2,
         ),
         const SizedBox(height: 16),
 
         // 결제 + 연장여부
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             ElevatedButton.icon(
               onPressed: _isPaying ? null : _handlePayment,
+              style: payStyle,
               icon: _isPaying
-                  ? const SizedBox(
+                  ? SizedBox(
                 width: 18,
                 height: 18,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: Colors.white,
+                  valueColor: AlwaysStoppedAnimation<Color>(cs.onPrimary),
                 ),
               )
                   : const Icon(Icons.payment),
               label: Text(_isPaying ? '처리 중...' : '결제'),
             ),
             const SizedBox(width: 12),
-            // ✅ 접근성/터치타깃 개선 + 내부 즉시 반영
+            // 접근성/터치타깃 개선 + 내부 즉시 반영
             Expanded(
               child: CheckboxListTile(
                 dense: true,
@@ -162,7 +178,10 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
                   });
                   widget.onExtendedChanged(val);
                 },
-                title: const Text('연장 여부'),
+                title: Text(
+                  '연장 여부',
+                  style: text.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                ),
                 activeColor: cs.primary,
               ),
             ),
@@ -172,19 +191,23 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
         const SizedBox(height: 24),
 
         // 최근 결제 내역
-        const Text(
+        Text(
           '최근 결제 내역',
-          style: TextStyle(fontWeight: FontWeight.bold),
+          style: text.titleSmall?.copyWith(fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 8),
         if (_paymentHistoryLog.isEmpty)
-          const Text('결제 내역이 없습니다.', style: TextStyle(color: Colors.grey)),
-        ..._paymentHistoryLog.map(
-              (entry) => Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Text('• $entry'),
+          Text(
+            '결제 내역이 없습니다.',
+            style: text.bodyMedium?.copyWith(color: Colors.grey),
+          )
+        else
+          ..._paymentHistoryLog.map(
+                (entry) => Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Text('• $entry'),
+            ),
           ),
-        ),
       ],
     );
   }

@@ -36,143 +36,147 @@ Future<void> showDepartureRequestStatusBottomSheet({
   await showModalBottomSheet(
     context: context,
     isScrollControlled: true,
+    useSafeArea: true, // ⬅️ 최상단까지 안전하게
     backgroundColor: Colors.transparent,
     builder: (modalCtx) {
-      return DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        minChildSize: 0.4,
-        maxChildSize: 0.95,
-        builder: (sheetCtx, scrollController) {
-          return SafeArea(
-            top: false, // 상단 라운드 유지
-            child: Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-              child: ListView(
-                controller: scrollController,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      margin: const EdgeInsets.only(bottom: 20),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade400,
-                        borderRadius: BorderRadius.circular(4),
+      return FractionallySizedBox(
+        heightFactor: 1, // ⬅️ 화면 높이 100%
+        child: DraggableScrollableSheet(
+          initialChildSize: 1.0, // ⬅️ 시작부터 최대로 펼침
+          maxChildSize: 1.0,      // ⬅️ 최댓값도 전체
+          minChildSize: 0.4,
+          builder: (sheetCtx, scrollController) {
+            return SafeArea(
+              top: false, // ⬅️ 상단 라운딩 유지(노치 영역까지 배경이 차도록)
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                child: ListView(
+                  controller: scrollController,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 20),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade400,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
                       ),
                     ),
-                  ),
-                  Row(
-                    children: const [
-                      Icon(Icons.settings, color: Colors.blueAccent),
-                      SizedBox(width: 8),
-                      Text(
-                        '출차 요청 상태 처리',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    Row(
+                      children: const [
+                        Icon(Icons.settings, color: Colors.blueAccent),
+                        SizedBox(width: 8),
+                        Text(
+                          '출차 요청 상태 처리',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+
+                    // 정보 수정 (하얀색 배경)
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.edit_note_outlined),
+                      label: const Text("정보 수정"),
+                      onPressed: () {
+                        Navigator.pop(sheetCtx); // 시트 닫기
+                        Future.microtask(() {
+                          if (!rootContext.mounted) return;
+                          Navigator.push(
+                            rootContext,
+                            MaterialPageRoute(
+                              builder: (_) => ModifyPlateScreen(
+                                plate: plate,
+                                collectionKey: PlateType.departureRequests,
+                              ),
+                            ),
+                          );
+                        });
+                      },
+                      style: whiteSheetButtonStyle(sheetCtx),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // 로그 확인 (하얀색 배경)
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.history),
+                      label: const Text("로그 확인"),
+                      onPressed: () {
+                        Navigator.pop(sheetCtx); // 시트 닫기
+                        Future.microtask(() {
+                          if (!rootContext.mounted) return;
+                          Navigator.push(
+                            rootContext,
+                            MaterialPageRoute(
+                              builder: (_) => LogViewerBottomSheet(
+                                initialPlateNumber: plateNumber,
+                                division: division,
+                                area: area,
+                                requestTime: plate.requestTime, // non-null이면 그대로 전달
+                              ),
+                            ),
+                          );
+                        });
+                      },
+                      style: whiteSheetButtonStyle(sheetCtx),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // 입차 요청으로 되돌리기
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.assignment_return),
+                      label: const Text("입차 요청으로 되돌리기"),
+                      onPressed: () {
+                        Navigator.pop(sheetCtx);
+                        Future.microtask(onRequestEntry);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 52),
+                        backgroundColor: Colors.orange.shade400,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-
-                  // 정보 수정 (하얀색 배경)
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.edit_note_outlined),
-                    label: const Text("정보 수정"),
-                    onPressed: () {
-                      Navigator.pop(sheetCtx); // 시트 닫기
-                      Future.microtask(() {
-                        if (!rootContext.mounted) return;
-                        Navigator.push(
-                          rootContext,
-                          MaterialPageRoute(
-                            builder: (_) => ModifyPlateScreen(
-                              plate: plate,
-                              collectionKey: PlateType.departureRequests,
-                            ),
-                          ),
-                        );
-                      });
-                    },
-                    style: whiteSheetButtonStyle(sheetCtx),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // 로그 확인 (하얀색 배경)
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.history),
-                    label: const Text("로그 확인"),
-                    onPressed: () {
-                      Navigator.pop(sheetCtx); // 시트 닫기
-                      Future.microtask(() {
-                        if (!rootContext.mounted) return;
-                        Navigator.push(
-                          rootContext,
-                          MaterialPageRoute(
-                            builder: (_) => LogViewerBottomSheet(
-                              initialPlateNumber: plateNumber,
-                              division: division,
-                              area: area,
-                              requestTime: plate.requestTime,
-                            ),
-                          ),
-                        );
-                      });
-                    },
-                    style: whiteSheetButtonStyle(sheetCtx),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // 입차 요청으로 되돌리기
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.assignment_return),
-                    label: const Text("입차 요청으로 되돌리기"),
-                    onPressed: () {
-                      Navigator.pop(sheetCtx);
-                      Future.microtask(onRequestEntry);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 52),
-                      backgroundColor: Colors.orange.shade400,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                  ),
-                  const SizedBox(height: 12),
+                    const SizedBox(height: 12),
 
-                  // 입차 완료 처리
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.check_circle_outline),
-                    label: const Text("입차 완료 처리"),
-                    onPressed: () {
-                      Navigator.pop(sheetCtx);
-                      Future.microtask(onCompleteEntry);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 52),
-                      backgroundColor: Colors.green.shade600,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    // 입차 완료 처리
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.check_circle_outline),
+                      label: const Text("입차 완료 처리"),
+                      onPressed: () {
+                        Navigator.pop(sheetCtx);
+                        Future.microtask(onCompleteEntry);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 52),
+                        backgroundColor: Colors.green.shade600,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
+                    const SizedBox(height: 12),
 
-                  // 삭제
-                  TextButton.icon(
-                    icon: const Icon(Icons.delete_forever, color: Colors.red),
-                    label: const Text("삭제", style: TextStyle(color: Colors.red)),
-                    onPressed: () {
-                      Navigator.pop(sheetCtx);
-                      Future.microtask(onDelete);
-                    },
-                  ),
-                ],
+                    // 삭제
+                    TextButton.icon(
+                      icon: const Icon(Icons.delete_forever, color: Colors.red),
+                      label: const Text("삭제", style: TextStyle(color: Colors.red)),
+                      onPressed: () {
+                        Navigator.pop(sheetCtx);
+                        Future.microtask(onDelete);
+                      },
+                    ),
+                  ],
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       );
     },
   );

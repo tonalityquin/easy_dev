@@ -11,6 +11,13 @@ import 'tablet_management_package/tablet_setting.dart';
 import '../../../states/user/user_state.dart';
 import '../../../states/area/area_state.dart';
 
+/// 서비스 로그인 카드와 동일 톤의 팔레트
+class _SvcColors {
+  static const base = Color(0xFF0D47A1);  // primary
+  static const dark = Color(0xFF09367D);  // 텍스트/아이콘 진한 톤
+  static const light = Color(0xFF5472D3); // 라이트 톤/수면 강조
+}
+
 /// Iterable 안전 확장: 조건에 맞는 첫 원소를 찾되 없으면 null
 extension IterableX<T> on Iterable<T> {
   T? firstWhereOrNull(bool Function(T) test) {
@@ -280,7 +287,6 @@ class _TabletManagementState extends State<TabletManagement> {
     // ✅ 태블릿 전용 리스트 사용 (캐시 우선)
     final filteredTablets = userState.tabletUsers.where(matches).toList();
     final bool hasSelection = userState.selectedUserId != null;
-    final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -307,6 +313,10 @@ class _TabletManagementState extends State<TabletManagement> {
             },
           ),
         ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(height: 1, color: Colors.black.withOpacity(0.06)),
+        ),
       ),
       body: userState.isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -317,31 +327,63 @@ class _TabletManagementState extends State<TabletManagement> {
             : const Text('현재 지역/사업소에 해당하는 계정이 없습니다'),
       )
           : ListView.builder(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
         itemCount: filteredTablets.length,
         itemBuilder: (context, index) {
           final user = filteredTablets[index];
           final isSelected = userState.selectedUserId == user.id;
 
-          return ListTile(
-            key: ValueKey(user.id),
-            title: Text(
-              user.name,
-              style: const TextStyle(fontWeight: FontWeight.bold),
+          return Card(
+            color: Colors.white,
+            elevation: 1,
+            surfaceTintColor: _SvcColors.light,
+            margin: const EdgeInsets.symmetric(vertical: 6),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(
+                color: isSelected
+                    ? _SvcColors.base.withOpacity(.25)
+                    : Colors.black.withOpacity(.06),
+              ),
             ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('이메일: ${user.email}'),
-                Text('출근: ${formatTime(user.startTime)} / 퇴근: ${formatTime(user.endTime)}'),
-                Text('역할: ${user.role}'),
-                if (user.position?.isNotEmpty == true) Text('직책: ${user.position!}'),
-              ],
+            child: ListTile(
+              key: ValueKey(user.id),
+              leading: CircleAvatar(
+                radius: 18,
+                backgroundColor: _SvcColors.base,
+                child: const Icon(Icons.tablet_mac_rounded,
+                    size: 18, color: Colors.white),
+              ),
+              title: Text(
+                user.name,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: _SvcColors.dark,
+                ),
+              ),
+              subtitle: Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('이메일: ${user.email}'),
+                    Text(
+                        '출근: ${formatTime(user.startTime)} / 퇴근: ${formatTime(user.endTime)}'),
+                    Text('역할: ${user.role}'),
+                    if (user.position?.isNotEmpty == true)
+                      Text('직책: ${user.position!}'),
+                  ],
+                ),
+              ),
+              trailing: isSelected
+                  ? const Icon(Icons.check_circle,
+                  color: _SvcColors.base)
+                  : null,
+              selected: isSelected,
+              selectedTileColor:
+              _SvcColors.light.withOpacity(.06), // 토널 하이라이트
+              onTap: () => userState.toggleUserCard(user.id),
             ),
-            trailing: isSelected
-                ? const Icon(Icons.check_circle, color: Colors.green)
-                : null,
-            selected: isSelected,
-            onTap: () => userState.toggleUserCard(user.id),
           );
         },
       ),
@@ -354,7 +396,6 @@ class _TabletManagementState extends State<TabletManagement> {
         hasSelection: hasSelection,
         onPrimary: () => _handlePrimaryAction(context), // 추가/수정
         onDelete: hasSelection ? () => _handleDelete(context) : null, // 삭제
-        cs: cs,
       ),
     );
   }
@@ -368,21 +409,21 @@ class _FabStack extends StatelessWidget {
     required this.hasSelection,
     required this.onPrimary,
     required this.onDelete,
-    required this.cs,
   });
 
   final double bottomGap;
   final double spacing;
   final bool hasSelection;
-  final VoidCallback onPrimary;     // 선택 없음: 추가 / 선택 있음: 수정
-  final VoidCallback? onDelete;     // 선택 있음에서만 사용
-  final ColorScheme cs;
+  final VoidCallback onPrimary; // 선택 없음: 추가 / 선택 있음: 수정
+  final VoidCallback? onDelete; // 선택 있음에서만 사용
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     final ButtonStyle primaryStyle = ElevatedButton.styleFrom(
-      backgroundColor: cs.primary,
-      foregroundColor: cs.onPrimary,
+      backgroundColor: _SvcColors.base,     // 서비스 톤
+      foregroundColor: Colors.white,        // 가독성 확보
       elevation: 3,
       shadowColor: cs.shadow.withOpacity(0.25),
       shape: const StadiumBorder(),
@@ -478,7 +519,8 @@ class _ElevatedPillButton extends StatelessWidget {
 
 /// 아이콘 + 라벨(간격/정렬 최적화)
 class _FabLabel extends StatelessWidget {
-  const _FabLabel({required this.icon, required this.label, Key? key}) : super(key: key);
+  const _FabLabel({required this.icon, required this.label, Key? key})
+      : super(key: key);
 
   final IconData icon;
   final String label;

@@ -5,9 +5,15 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../states/user/user_state.dart';
-// import '../../../widgets/navigation/secondary_mini_navigation.dart'; // ❌ 미사용
 import 'monthly_management_package/monthly_plate_bottom_sheet.dart';
 import '../../../utils/snackbar_helper.dart'; // ✅ 커스텀 스낵바
+
+/// 서비스 로그인 카드와 동일 팔레트(Deep Blue)
+class _SvcColors {
+  static const base = Color(0xFF0D47A1);
+  static const dark = Color(0xFF09367D);
+  static const light = Color(0xFF5472D3);
+}
 
 class MonthlyParkingManagement extends StatefulWidget {
   const MonthlyParkingManagement({super.key});
@@ -158,6 +164,10 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
         title: const Text('정기 주차 관리 페이지', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         automaticallyImplyLeading: false,
+        bottom: PreferredSize( // 얇은 하단 구분선
+          preferredSize: const Size.fromHeight(1),
+          child: Container(height: 1, color: Colors.black.withOpacity(0.06)),
+        ),
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
@@ -212,15 +222,15 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                     _scrollToCard(docId);
                   }
                 },
-                child: Card
-                  (
+                child: Card(
                   key: _cardKeys[docId],
-                  elevation: isSelected ? 6 : 3,
+                  elevation: isSelected ? 6 : 1,
+                  surfaceTintColor: _SvcColors.light, // 카드 톤 살짝
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                     side: isSelected
-                        ? BorderSide(color: cs.primary, width: 2) // 강조색
-                        : BorderSide.none,
+                        ? const BorderSide(color: _SvcColors.base, width: 2) // 강조색(Deep Blue)
+                        : BorderSide(color: Colors.black.withOpacity(0.06)),
                   ),
                   color: Colors.white,
                   child: Padding(
@@ -238,7 +248,7 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                             ),
                             Icon(
                               isSelected ? Icons.expand_less : Icons.expand_more,
-                              color: Colors.grey,
+                              color: Colors.black.withOpacity(0.45),
                             ),
                           ],
                         ),
@@ -255,39 +265,50 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
-                                children: [
-                                  const Icon(Icons.attach_money, size: 20, color: Colors.green),
-                                  const SizedBox(width: 6),
-                                  Text('요금: ₩${won.format(regularAmount)}',
-                                      style: const TextStyle(fontSize: 16)),
+                                children: const [
+                                  _InfoIcon(icon: Icons.attach_money, color: _SvcColors.base),
+                                  SizedBox(width: 6),
+                                  // 텍스트는 아래에서 동적으로
                                 ],
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.only(left: 26),
+                                child: Text('요금: ₩${won.format(regularAmount)}',
+                                    style: const TextStyle(fontSize: 16)),
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: const [
+                                  _InfoIcon(icon: Icons.schedule, color: _SvcColors.dark),
+                                  SizedBox(width: 6),
+                                ],
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.only(left: 26),
+                                child: Text('주차 시간: $duration$periodUnit',
+                                    style: const TextStyle(fontSize: 16)),
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: const [
+                                  _InfoIcon(icon: Icons.calendar_today, color: _SvcColors.light),
+                                  SizedBox(width: 6),
+                                ],
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.only(left: 26),
+                                child: Text('기간: $startDate ~ $endDate',
+                                    style: const TextStyle(fontSize: 16)),
                               ),
                               const SizedBox(height: 6),
                               Row(
                                 children: [
-                                  const Icon(Icons.schedule, size: 20, color: Colors.blueGrey),
+                                  const _InfoIcon(icon: Icons.info_outline, color: _SvcColors.base),
                                   const SizedBox(width: 6),
-                                  Text('주차 시간: $duration$periodUnit',
-                                      style: const TextStyle(fontSize: 16)),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              Row(
-                                children: [
-                                  const Icon(Icons.calendar_today,
-                                      size: 20, color: Colors.deepOrange),
-                                  const SizedBox(width: 6),
-                                  Text('기간: $startDate ~ $endDate',
-                                      style: const TextStyle(fontSize: 16)),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              Row(
-                                children: [
-                                  const Icon(Icons.info_outline, size: 20, color: Colors.purple),
-                                  const SizedBox(width: 6),
-                                  Text('상태 메시지: $customStatus',
-                                      style: const TextStyle(fontSize: 16)),
+                                  Expanded(
+                                    child: Text('상태 메시지: $customStatus',
+                                        style: const TextStyle(fontSize: 16)),
+                                  ),
                                 ],
                               ),
                               const Divider(height: 24),
@@ -298,9 +319,10 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                                 Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Text('💳 결제 내역',
-                                        style: TextStyle(
-                                            fontSize: 16, fontWeight: FontWeight.bold)),
+                                    const Text(
+                                      '💳 결제 내역',
+                                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                    ),
                                     const SizedBox(height: 8),
                                     ...(() {
                                       final payments = List<Map<String, dynamic>>.from(
@@ -325,28 +347,45 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                                           margin: const EdgeInsets.only(bottom: 8),
                                           padding: const EdgeInsets.all(12),
                                           decoration: BoxDecoration(
-                                            color: Colors.grey.shade100,
-                                            borderRadius: BorderRadius.circular(8),
-                                            border: Border.all(color: Colors.grey.shade300),
+                                            color: Colors.white,
+                                            borderRadius: BorderRadius.circular(10),
+                                            border: Border.all(
+                                              color: _SvcColors.base.withOpacity(0.18),
+                                            ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withOpacity(0.04),
+                                                blurRadius: 6,
+                                                offset: const Offset(0, 3),
+                                              ),
+                                            ],
                                           ),
                                           child: Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
                                               Row(
                                                 children: [
-                                                  const Icon(Icons.calendar_today,
-                                                      size: 16, color: Colors.blueGrey),
+                                                  const _InfoIcon(
+                                                      icon: Icons.calendar_today,
+                                                      size: 16,
+                                                      color: _SvcColors.dark),
                                                   const SizedBox(width: 6),
-                                                  Text(paidAt,
-                                                      style: const TextStyle(
-                                                          fontSize: 13, color: Colors.black54)),
+                                                  Text(
+                                                    paidAt,
+                                                    style: TextStyle(
+                                                      fontSize: 13,
+                                                      color: Colors.black.withOpacity(0.55),
+                                                    ),
+                                                  ),
                                                 ],
                                               ),
                                               const SizedBox(height: 4),
                                               Row(
                                                 children: [
-                                                  const Icon(Icons.person,
-                                                      size: 16, color: Colors.teal),
+                                                  const _InfoIcon(
+                                                      icon: Icons.person,
+                                                      size: 16,
+                                                      color: _SvcColors.base),
                                                   const SizedBox(width: 6),
                                                   Text('결제자: $paidBy',
                                                       style: const TextStyle(fontSize: 14)),
@@ -356,26 +395,38 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                                                       padding: const EdgeInsets.symmetric(
                                                           horizontal: 8, vertical: 2),
                                                       decoration: BoxDecoration(
-                                                        color: Colors.orange.shade100,
-                                                        borderRadius: BorderRadius.circular(12),
+                                                        color: _SvcColors.light.withOpacity(.16),
+                                                        borderRadius: BorderRadius.circular(999),
+                                                        border: Border.all(
+                                                          color: _SvcColors.light.withOpacity(.35),
+                                                        ),
                                                       ),
-                                                      child: const Text('연장',
-                                                          style: TextStyle(
-                                                              fontSize: 12,
-                                                              color: Colors.orange)),
+                                                      child: const Text(
+                                                        '연장',
+                                                        style: TextStyle(
+                                                          fontSize: 12,
+                                                          color: _SvcColors.dark,
+                                                          fontWeight: FontWeight.w700,
+                                                        ),
+                                                      ),
                                                     ),
                                                 ],
                                               ),
                                               const SizedBox(height: 4),
                                               Row(
                                                 children: [
-                                                  const Icon(Icons.attach_money,
-                                                      size: 16, color: Colors.green),
+                                                  const _InfoIcon(
+                                                      icon: Icons.attach_money,
+                                                      size: 16,
+                                                      color: _SvcColors.base),
                                                   const SizedBox(width: 6),
-                                                  Text('₩${won.format(amount)}',
-                                                      style: const TextStyle(
-                                                          fontSize: 14,
-                                                          fontWeight: FontWeight.bold)),
+                                                  Text(
+                                                    '₩${won.format(amount)}',
+                                                    style: const TextStyle(
+                                                      fontSize: 14,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
                                                 ],
                                               ),
                                               if (note.isNotEmpty) ...[
@@ -383,12 +434,16 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                                                 Row(
                                                   crossAxisAlignment: CrossAxisAlignment.start,
                                                   children: [
-                                                    const Icon(Icons.note,
-                                                        size: 16, color: Colors.deepPurple),
+                                                    const _InfoIcon(
+                                                        icon: Icons.note,
+                                                        size: 16,
+                                                        color: _SvcColors.dark),
                                                     const SizedBox(width: 6),
                                                     Expanded(
-                                                      child: Text(note,
-                                                          style: const TextStyle(fontSize: 14)),
+                                                      child: Text(
+                                                        note,
+                                                        style: const TextStyle(fontSize: 14),
+                                                      ),
                                                     ),
                                                   ],
                                                 ),
@@ -427,6 +482,23 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
   }
 }
 
+class _InfoIcon extends StatelessWidget {
+  const _InfoIcon({
+    required this.icon,
+    this.size = 20,
+    this.color = _SvcColors.base,
+  });
+
+  final IconData icon;
+  final double size;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Icon(icon, size: size, color: color);
+  }
+}
+
 /// 현대적인 파브 세트(라운드 필 버튼 스타일 + 하단 spacer로 높이 조절)
 class _FabStack extends StatelessWidget {
   const _FabStack({
@@ -448,10 +520,10 @@ class _FabStack extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ButtonStyle primaryStyle = ElevatedButton.styleFrom(
-      backgroundColor: cs.primary,
-      foregroundColor: cs.onPrimary,
+      backgroundColor: _SvcColors.base, // ✅ 서비스 팔레트 반영
+      foregroundColor: Colors.white,
       elevation: 3,
-      shadowColor: cs.shadow.withOpacity(0.25),
+      shadowColor: _SvcColors.dark.withOpacity(0.25),
       shape: const StadiumBorder(),
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       textStyle: const TextStyle(fontWeight: FontWeight.w700),

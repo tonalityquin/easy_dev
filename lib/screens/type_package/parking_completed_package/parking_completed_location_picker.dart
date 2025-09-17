@@ -6,6 +6,13 @@ import '../../../states/location/location_state.dart';
 import '../../../repositories/location_repo_services/location_repository.dart';
 import '../../../utils/snackbar_helper.dart'; // ✅ 커스텀 스낵바 헬퍼 추가
 
+/// Deep Blue 팔레트(서비스 카드와 동일 계열)
+class _Palette {
+  static const base = Color(0xFF0D47A1); // primary
+  static const dark = Color(0xFF09367D); // 강조 텍스트/아이콘
+  static const fg = Color(0xFFFFFFFF);   // 전경(흰색)
+}
+
 class ParkingCompletedLocationPicker extends StatefulWidget {
   final Function(String locationName) onLocationSelected;
   final bool isLocked;
@@ -63,20 +70,21 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
       width: double.infinity,
       child: ElevatedButton.icon(
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.teal,
-          foregroundColor: Colors.white,
+          backgroundColor: _Palette.base,
+          foregroundColor: _Palette.fg,
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          elevation: 0,
+          elevation: 2,
+          shadowColor: _Palette.dark.withOpacity(.25),
         ),
         icon: _isRefreshing
             ? const SizedBox(
           width: 20,
           height: 20,
           child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+            valueColor: AlwaysStoppedAnimation<Color>(_Palette.fg),
             strokeWidth: 2,
           ),
         )
@@ -114,19 +122,19 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 32),
                       decoration: BoxDecoration(
-                        border: Border.all(color: Colors.teal),
+                        border: Border.all(color: _Palette.base),
                         borderRadius: BorderRadius.circular(12),
-                        color: Colors.teal.withOpacity(0.05),
+                        color: _Palette.base.withOpacity(0.06),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: const [
-                          Icon(Icons.refresh, color: Colors.teal),
+                          Icon(Icons.refresh, color: _Palette.base),
                           SizedBox(width: 8),
                           Text(
                             "주차 구역 갱신",
                             style: TextStyle(
-                              color: Colors.teal,
+                              color: _Palette.base,
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
                             ),
@@ -154,7 +162,7 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                           ...children.map((loc) {
                             final displayName = '${loc.parent} - ${loc.locationName}';
                             return ListTile(
-                              leading: const Icon(Icons.subdirectory_arrow_right, color: Colors.teal),
+                              leading: const Icon(Icons.subdirectory_arrow_right, color: _Palette.base),
                               title: Text(displayName),
                               subtitle: Text('입차 ${loc.plateCount} / 공간 ${loc.capacity}'),
                               trailing: const Icon(Icons.chevron_right),
@@ -199,7 +207,7 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                   const Text('단일 주차 구역', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                   const SizedBox(height: 8),
                   ...singles.map((loc) => ListTile(
-                    leading: const Icon(Icons.place, color: Colors.teal),
+                    leading: const Icon(Icons.place, color: _Palette.base),
                     title: Text(loc.locationName),
                     subtitle: Text('입차 ${loc.plateCount} / 공간 ${loc.capacity}'),
                     trailing: const Icon(Icons.chevron_right),
@@ -214,7 +222,7 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                     final totalCount = children.fold(0, (sum, l) => sum + l.plateCount);
 
                     return ListTile(
-                      leading: const Icon(Icons.layers, color: Colors.teal),
+                      leading: const Icon(Icons.layers, color: _Palette.base),
                       title: Text(parent),
                       subtitle: Text('총 입차 $totalCount / 총 공간 $totalCapacity'),
                       trailing: const Icon(Icons.chevron_right),
