@@ -145,11 +145,53 @@ class PlateCreationService {
             debugPrint("🚨 중복된 번호판 등록 시도: $plateNumber (${existingType.name})");
             throw Exception("이미 등록된 번호판입니다: $plateNumber");
           } else {
-            debugPrint("⚠️ ${existingType.name} 상태 중복 등록 허용(트랜잭션): $plateNumber");
-            tx.set(docRef, plateWithLog.toMap(), SetOptions(merge: true));
+            // ✅ departure_completed 상태에서는 기존 logs를 보존하고 새 로그만 append하며
+            //    필요한 필드만 부분 업데이트한다.
+
+            // 1) 기존 logs 안전 변환
+            final List<Map<String, dynamic>> existingLogs = (() {
+              final raw = data?['logs'];
+              if (raw is List) {
+                return raw
+                    .whereType<Map>()
+                    .map((e) => Map<String, dynamic>.from(e))
+                    .toList();
+              }
+              return <Map<String, dynamic>>[];
+            })();
+
+            // 2) 새 로그 목록(현재 생성에서 추가된 로그들)
+            final List<Map<String, dynamic>> newLogs =
+            (plateWithLog.logs ?? []).map((e) => e.toMap()).toList();
+
+            final List<Map<String, dynamic>> mergedLogs = [...existingLogs, ...newLogs];
+
+            // 3) 덮어쓰면 안 되는 필드(request_time 등)는 건드리지 않고,
+            //    값이 있을 때만 부분 업데이트
+            final partial = <String, dynamic>{
+              PlateFields.type: plateType.firestoreValue,
+              PlateFields.updatedAt: Timestamp.now(),
+              // location은 입력이 비어있을 때는 보존
+              if (location.isNotEmpty) PlateFields.location: location,
+              if (endTime != null) PlateFields.endTime: endTime,
+              if (billingType != null && billingType.trim().isNotEmpty)
+                PlateFields.billingType: billingType,
+              // 필요 시 다른 옵션 필드도 '값이 있을 때만' 반영
+              if (imageUrls != null) PlateFields.imageUrls: imageUrls,
+              if (paymentMethod != null) PlateFields.paymentMethod: paymentMethod,
+              if (lockedAtTimeInSeconds != null)
+                PlateFields.lockedAtTimeInSeconds: lockedAtTimeInSeconds,
+              if (lockedFeeAmount != null) PlateFields.lockedFeeAmount: lockedFeeAmount,
+              // isLockedFee는 계산 결과를 그대로 반영(원치 않으면 조건부로)
+              PlateFields.isLockedFee: effectiveIsLockedFee,
+              // ★ logs는 기존+신규 병합본으로 교체(필드 단위 교체이므로 기존 로그 보존됨)
+              PlateFields.logs: mergedLogs,
+            };
+
+            tx.update(docRef, partial);
           }
         } else {
-          // 신규 생성
+          // 신규 생성은 전체 set
           tx.set(docRef, plateWithLog.toMap());
         }
       });
