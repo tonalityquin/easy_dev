@@ -79,8 +79,8 @@ class ParkingCompletedControlButtons extends StatelessWidget {
               label: '화면 잠금',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.search, color: muted),
-              label: '번호판 검색',
+              icon: Icon(Icons.move_down, color: muted),
+              label: '출차 요청',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.directions_car, color: _Palette.base),

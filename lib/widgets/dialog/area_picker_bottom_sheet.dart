@@ -8,6 +8,12 @@ import '../../states/area/area_state.dart';
 import '../../states/plate/plate_state.dart';
 import '../../states/user/user_state.dart';
 
+// ── Deep Blue Palette
+const base = Color(0xFF0D47A1); // primary
+const dark = Color(0xFF09367D); // 강조 텍스트/아이콘
+const light = Color(0xFF5472D3); // 톤 변형/보더
+const fg   = Color(0xFFFFFFFF);  // onPrimary
+
 void areaPickerBottomSheet({
   required BuildContext context,
   required AreaState areaState,
@@ -44,9 +50,17 @@ void areaPickerBottomSheet({
             return SafeArea(
               top: false, // ⬅️ 상단 라운드 유지
               child: Container(
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                  border: Border.all(color: light.withOpacity(.35)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: base.withOpacity(.06),
+                      blurRadius: 20,
+                      offset: const Offset(0, -6),
+                    ),
+                  ],
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                 child: Column(
@@ -57,18 +71,17 @@ void areaPickerBottomSheet({
                       height: 4,
                       margin: const EdgeInsets.only(bottom: 16),
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade300,
+                        color: light.withOpacity(.35),
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
 
-                    const Text(
+                    Text(
                       '지역 선택',
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 20,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black,
-                      ),
+                        fontWeight: FontWeight.w700,
+                      ).copyWith(color: dark),
                     ),
                     const SizedBox(height: 16),
 
@@ -81,6 +94,9 @@ void areaPickerBottomSheet({
                               : 0,
                         ),
                         itemExtent: 48,
+                        magnification: 1.05,
+                        useMagnifier: true,
+                        squeeze: 1.1,
                         onSelectedItemChanged: (index) {
                           tempSelected = userAreas[index];
                         },
@@ -88,72 +104,69 @@ void areaPickerBottomSheet({
                             .map((area) => Center(
                           child: Text(
                             area,
-                            style: const TextStyle(fontSize: 18),
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black87,
+                            ),
                           ),
                         ))
                             .toList(),
                       ),
                     ),
 
-                    const Divider(height: 1),
+                    const SizedBox(height: 12),
+                    Divider(height: 1, color: light.withOpacity(.35)),
                     const SizedBox(height: 16),
 
-                    // 확인 버튼
-                    GestureDetector(
-                      onTap: () async {
-                        Navigator.of(sheetCtx).pop();
-
-                        areaState.updateAreaPicker(tempSelected);
-                        await userState.areaPickerCurrentArea(tempSelected);
-                        plateState.syncWithAreaState();
-
-                        final userDivision = userState.user?.divisions.first ?? '';
-                        final areaDoc = await FirebaseFirestore.instance
-                            .collection('areas')
-                            .doc('$userDivision-$tempSelected')
-                            .get();
-
-                        final data = areaDoc.data();
-                        final isHeadquarter =
-                            data != null && data['isHeadquarter'] == true;
-
-                        debugPrint('📌 선택된 지역: $tempSelected');
-                        debugPrint('📌 조회된 문서 ID: ${areaDoc.id}');
-                        debugPrint('📌 isHeadquarter 필드: ${data?['isHeadquarter']}');
-
-                        if (!rootContext.mounted) return;
-
-                        if (isHeadquarter) {
-                          Navigator.pushReplacementNamed(
-                              rootContext, AppRoutes.headquarterPage);
-                        } else {
-                          Navigator.pushReplacementNamed(
-                              rootContext, AppRoutes.typePage);
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 14),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(30),
-                          border: Border.all(color: Colors.green, width: 2),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Colors.black12,
-                              blurRadius: 8,
-                              offset: Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: const Text(
-                          '확인',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.green,
-                            letterSpacing: 0.5,
+                    // 확인 버튼 (팔레트 적용)
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: base,
+                          foregroundColor: fg,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: const StadiumBorder(),
+                          textStyle: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
+                        icon: const Icon(Icons.check_rounded),
+                        label: const Text('확인'),
+                        onPressed: () async {
+                          Navigator.of(sheetCtx).pop();
+
+                          areaState.updateAreaPicker(tempSelected);
+                          await userState.areaPickerCurrentArea(tempSelected);
+                          plateState.syncWithAreaState();
+
+                          final userDivision =
+                              userState.user?.divisions.first ?? '';
+                          final areaDoc = await FirebaseFirestore.instance
+                              .collection('areas')
+                              .doc('$userDivision-$tempSelected')
+                              .get();
+
+                          final data = areaDoc.data();
+                          final isHeadquarter =
+                              data != null && data['isHeadquarter'] == true;
+
+                          debugPrint('📌 선택된 지역: $tempSelected');
+                          debugPrint('📌 조회된 문서 ID: ${areaDoc.id}');
+                          debugPrint('📌 isHeadquarter 필드: ${data?['isHeadquarter']}');
+
+                          if (!rootContext.mounted) return;
+
+                          if (isHeadquarter) {
+                            Navigator.pushReplacementNamed(
+                                rootContext, AppRoutes.headquarterPage);
+                          } else {
+                            Navigator.pushReplacementNamed(
+                                rootContext, AppRoutes.typePage);
+                          }
+                        },
                       ),
                     ),
                     const SizedBox(height: 24),

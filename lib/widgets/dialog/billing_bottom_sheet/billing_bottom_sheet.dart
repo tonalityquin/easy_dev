@@ -3,6 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'fee_calculator.dart';
 
+// ── Deep Blue Palette
+const base = Color(0xFF0D47A1); // primary
+const dark = Color(0xFF09367D); // 강조 텍스트/아이콘
+const light = Color(0xFF5472D3); // 톤 변형/보더
+const fg   = Color(0xFFFFFFFF);  // onPrimary
+
 class BillResult {
   final String paymentMethod;
   final int lockedFee;
@@ -162,9 +168,17 @@ class _BillingBottomSheetState extends State<BillingBottomSheet> {
           builder: (_, scrollController) {
             return Container(
               padding: const EdgeInsets.all(24),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                border: Border.all(color: light.withOpacity(.35)),
+                boxShadow: [
+                  BoxShadow(
+                    color: base.withOpacity(.06),
+                    blurRadius: 20,
+                    offset: const Offset(0, -6),
+                  ),
+                ],
               ),
               child: ListView(
                 controller: scrollController,
@@ -175,28 +189,36 @@ class _BillingBottomSheetState extends State<BillingBottomSheet> {
                       height: 4,
                       margin: const EdgeInsets.only(bottom: 16),
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade300,
+                        color: light.withOpacity(.35),
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
                   ),
-                  const Row(
+                  Row(
                     children: [
-                      Icon(Icons.receipt_long, color: Colors.green),
-                      SizedBox(width: 8),
-                      Text('정산 정보 확인', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                      Icon(Icons.receipt_long, color: base),
+                      const SizedBox(width: 8),
+                      Text(
+                        '정산 정보 확인',
+                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold).copyWith(color: dark),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 16),
                   Card(
-                    elevation: 1,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(color: light.withOpacity(.35)),
+                    ),
                     child: Padding(
                       padding: const EdgeInsets.all(12),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: isRegular
                             ? [
-                          const Text('고정 주차 정보', style: TextStyle(fontWeight: FontWeight.bold)),
+                          Text('고정 주차 정보',
+                              style: const TextStyle(fontWeight: FontWeight.bold).copyWith(color: dark)),
                           const SizedBox(height: 8),
                           _buildInfoRow('고정 유형', widget.billingType),
                           if (widget.regularAmount != null)
@@ -207,7 +229,8 @@ class _BillingBottomSheetState extends State<BillingBottomSheet> {
                           _buildInfoRow('주차 시간', _getFormattedParkedTime()),
                         ]
                             : [
-                          const Text('요금 기준', style: TextStyle(fontWeight: FontWeight.bold)),
+                          Text('요금 기준',
+                              style: const TextStyle(fontWeight: FontWeight.bold).copyWith(color: dark)),
                           const SizedBox(height: 8),
                           _buildInfoRow('입차 시간', _getFormattedEntryTime()),
                           _buildInfoRow('기본 시간', _formatMinutesToHourMinute(widget.basicStandard)),
@@ -221,32 +244,40 @@ class _BillingBottomSheetState extends State<BillingBottomSheet> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const Text("지불 방법", style: TextStyle(fontSize: 16)),
+
+                  Text("지불 방법", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700).copyWith(color: dark)),
                   const SizedBox(height: 8),
                   Row(
                     children: List.generate(paymentOptions.length, (index) {
+                      final selected = _selectedPaymentIndex == index;
                       return Expanded(
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 4),
                           child: ElevatedButton(
                             onPressed: () => setState(() => _selectedPaymentIndex = index),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: _selectedPaymentIndex == index ? Colors.green : Colors.grey.shade200,
-                              foregroundColor: _selectedPaymentIndex == index ? Colors.white : Colors.black87,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              elevation: 0,
+                              backgroundColor: selected ? base : Colors.white,
+                              foregroundColor: selected ? fg : Colors.black87,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                side: BorderSide(color: selected ? base : light.withOpacity(.45)),
+                              ),
                             ),
-                            child: Text(paymentOptions[index], style: const TextStyle(fontSize: 16)),
+                            child: Text(paymentOptions[index], style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                           ),
                         ),
                       );
                     }),
                   ),
+
                   const SizedBox(height: 24),
-                  const Text("요금 모드", style: TextStyle(fontSize: 16)),
+                  Text("요금 모드", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700).copyWith(color: dark)),
                   const SizedBox(height: 8),
                   Row(
                     children: List.generate(FeeMode.values.length, (index) {
+                      final selected = _feeMode == FeeMode.values[index];
                       return Expanded(
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -261,17 +292,22 @@ class _BillingBottomSheetState extends State<BillingBottomSheet> {
                               });
                             },
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: _feeMode == FeeMode.values[index] ? Colors.green : Colors.grey.shade200,
-                              foregroundColor: _feeMode == FeeMode.values[index] ? Colors.white : Colors.black87,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              elevation: 0,
+                              backgroundColor: selected ? base : Colors.white,
+                              foregroundColor: selected ? fg : Colors.black87,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                side: BorderSide(color: selected ? base : light.withOpacity(.45)),
+                              ),
                             ),
-                            child: Text(modeLabels[index], style: const TextStyle(fontSize: 16)),
+                            child: Text(modeLabels[index], style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                           ),
                         ),
                       );
                     }),
                   ),
+
                   if (_feeMode != FeeMode.normal) ...[
                     const SizedBox(height: 16),
                     TextField(
@@ -281,6 +317,10 @@ class _BillingBottomSheetState extends State<BillingBottomSheet> {
                       decoration: InputDecoration(
                         labelText: _feeMode == FeeMode.plus ? '할증 금액 입력' : '할인 금액 입력',
                         border: const OutlineInputBorder(),
+                        focusedBorder: OutlineInputBorder(
+                          borderSide: BorderSide(color: base, width: 1.6),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
                         suffixText: '₩',
                       ),
                       onChanged: (value) {
@@ -292,10 +332,14 @@ class _BillingBottomSheetState extends State<BillingBottomSheet> {
                     const SizedBox(height: 16),
                     TextField(
                       controller: _reasonController,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: '사유를 입력하세요',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.edit_note),
+                        border: const OutlineInputBorder(),
+                        focusedBorder: OutlineInputBorder(
+                          borderSide: BorderSide(color: base, width: 1.6),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        prefixIcon: Icon(Icons.edit_note, color: dark),
                       ),
                       onChanged: (value) {
                         setState(() {
@@ -304,12 +348,14 @@ class _BillingBottomSheetState extends State<BillingBottomSheet> {
                       },
                     ),
                   ],
+
                   const SizedBox(height: 24),
                   Text(
                     '예상 정산 금액: ₩${formatCurrency.format(lockedFee)}',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold).copyWith(color: dark),
                   ),
                   const SizedBox(height: 32),
+
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -328,7 +374,8 @@ class _BillingBottomSheetState extends State<BillingBottomSheet> {
                         }
                             : null,
                         style: FilledButton.styleFrom(
-                          backgroundColor: Colors.green,
+                          backgroundColor: base,
+                          foregroundColor: fg,
                           padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
@@ -338,7 +385,10 @@ class _BillingBottomSheetState extends State<BillingBottomSheet> {
                       const SizedBox(width: 16),
                       TextButton(
                         onPressed: () => Navigator.of(context).pop(),
-                        child: const Text('취소', style: TextStyle(fontSize: 16)),
+                        style: TextButton.styleFrom(
+                          foregroundColor: dark,
+                        ),
+                        child: const Text('취소', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                       ),
                     ],
                   ),
@@ -358,7 +408,10 @@ class _BillingBottomSheetState extends State<BillingBottomSheet> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: const TextStyle(fontSize: 14, color: Colors.black54)),
-          Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+          ),
         ],
       ),
     );

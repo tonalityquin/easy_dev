@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math'; // ✅ 고유 ID 생성을 위해 추가
+import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -12,23 +12,92 @@ import 'package:provider/provider.dart';
 import '../../../../../../states/area/area_state.dart';
 import '../../../../../../states/user/user_state.dart';
 import '../../../../../repositories/plate_repo_services/plate_count_service.dart';
-import '../../../../../../utils/snackbar_helper.dart'; // ✅ SnackbarHelper 사용
+import '../../../../../../utils/snackbar_helper.dart';
 
 const String kBucketName = 'easydev-image';
 const String kServiceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
 
+/// ── Palette (Deep Blue)
+const kBase = Color(0xFF0D47A1); // primary
+const kDark = Color(0xFF09367D); // 강조 텍스트/아이콘
+const kLight = Color(0xFF5472D3); // 톤 변형/보더
+const kFg = Color(0xFFFFFFFF);   // onPrimary
+
+/// ─────────────────────────────────────────────────────────────────────────
+/// 바텀시트 호출 헬퍼: 화면 최상단까지 꽉 차게 보여줌
+/// ─────────────────────────────────────────────────────────────────────────
+Future<void> showEndWorkReportBottomSheet({
+  required BuildContext context,
+  required Future<void> Function(String reportType, String content) onReport,
+  int? initialVehicleInput,
+  int? initialVehicleOutput,
+}) async {
+  await showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    backgroundColor: Colors.transparent, // 시트 외부는 투명
+    builder: (_) {
+      return FractionallySizedBox(
+        heightFactor: 1, // 최상단까지
+        child: _SheetScaffold(
+          childBuilder: (scrollController) => HomeEndWorkReportContent(
+            onReport: onReport,
+            initialVehicleInput: initialVehicleInput,
+            initialVehicleOutput: initialVehicleOutput,
+            externalScrollController: scrollController,
+          ),
+        ),
+      );
+    },
+  );
+}
+
+/// 시트 공통 프레임(흰 배경/라운드/보더 + SafeArea + 내부 스크롤 컨트롤러 제공)
+class _SheetScaffold extends StatelessWidget {
+  const _SheetScaffold({required this.childBuilder});
+  final Widget Function(ScrollController) childBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    final scrollController = ScrollController();
+
+    return SafeArea(
+      top: false, // 상단 노치 영역까지 확장
+      child: Container(
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: Colors.white, // 내부 흰색
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+          border: Border.all(color: kLight.withOpacity(.35)),
+          boxShadow: [
+            BoxShadow(
+              color: kBase.withOpacity(.06),
+              blurRadius: 20,
+              offset: const Offset(0, -6),
+            ),
+          ],
+        ),
+        child: childBuilder(scrollController),
+      ),
+    );
+  }
+}
+
 class HomeEndWorkReportContent extends StatefulWidget {
   final Future<void> Function(String reportType, String content) onReport;
+  final int? initialVehicleInput;  // 입차
+  final int? initialVehicleOutput; // 출차
 
-  // ✅ 입차/출차 차량 수 초기값
-  final int? initialVehicleInput; // 입차: parking_completed 전체
-  final int? initialVehicleOutput; // 출차: departure_completed && isLockedFee 전체
+  /// 바텀시트의 스크롤과 연동되도록 외부에서 주입
+  final ScrollController? externalScrollController;
 
   const HomeEndWorkReportContent({
     super.key,
     required this.onReport,
     this.initialVehicleInput,
     this.initialVehicleOutput,
+    this.externalScrollController,
   });
 
   @override
@@ -37,7 +106,7 @@ class HomeEndWorkReportContent extends StatefulWidget {
 
 class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
   final _formKey = GlobalKey<FormState>();
-  final _inputCtrl = TextEditingController(); // 입차
+  final _inputCtrl = TextEditingController();  // 입차
   final _outputCtrl = TextEditingController(); // 출차
   final _inputFocus = FocusNode();
   final _outputFocus = FocusNode();
@@ -99,46 +168,56 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
     final area = context.watch<AreaState>().currentArea;
     final division = context.watch<AreaState>().currentDivision;
 
-    return SafeArea(
-      top: false,
+    // 키보드가 올라오면 하단 패딩을 늘려서 스크롤로 모두 접근 가능
+    final bottomPad = MediaQuery.of(context).viewInsets.bottom + 16;
+
+    return SingleChildScrollView(
+      controller: widget.externalScrollController,
+      padding: EdgeInsets.fromLTRB(16, 6, 16, bottomPad),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // ── Drag Handle + Close ──────────────────────────────
+          // Drag handle + Close
           Container(
             width: 44,
             height: 4,
             margin: const EdgeInsets.only(top: 6, bottom: 12),
             decoration: BoxDecoration(
-              color: Colors.black26,
+              color: kLight.withOpacity(.35),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
           Row(
             children: [
-              const Text('업무 종료 보고', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              Text(
+                '업무 종료 보고',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
+                    .copyWith(color: kDark),
+              ),
               const Spacer(),
               IconButton(
                 tooltip: '닫기',
                 icon: const Icon(Icons.close),
+                color: kDark,
                 onPressed: () => Navigator.of(context).maybePop(),
               ),
             ],
           ),
           const SizedBox(height: 6),
 
-          // 메타 정보 Chip (정렬/스타일 개선)
+          // 메타 정보 Chip
           Center(
             child: ChipTheme(
               data: ChipTheme.of(context).copyWith(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                labelStyle: const TextStyle(fontSize: 13),
+                labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
                 shape: StadiumBorder(
-                  side: BorderSide(color: Colors.grey.shade300),
+                  side: BorderSide(color: kLight.withOpacity(.35)),
                 ),
+                backgroundColor: kLight.withOpacity(.06),
               ),
               child: Wrap(
-                alignment: WrapAlignment.center, // 중앙 정렬
+                alignment: WrapAlignment.center,
                 runAlignment: WrapAlignment.center,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 spacing: 8,
@@ -154,7 +233,7 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
           ),
           const SizedBox(height: 12),
 
-          // ── 입력 폼 ───────────────────────────────────────────
+          // 입력 폼
           Form(
             key: _formKey,
             autovalidateMode: AutovalidateMode.onUserInteraction,
@@ -174,11 +253,15 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
                             ? const SizedBox(
                           width: 20,
                           height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation(kBase),
+                          ),
                         )
                             : IconButton(
                           tooltip: '입차 수 재계산',
                           icon: const Icon(Icons.refresh),
+                          color: kDark,
                           onPressed: _refetchInput,
                         ),
                         helper: '현재 지역의 parking_completed 전체 문서 기준 자동 집계',
@@ -197,11 +280,15 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
                             ? const SizedBox(
                           width: 20,
                           height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation(kBase),
+                          ),
                         )
                             : IconButton(
                           tooltip: '출차 수 재계산',
                           icon: const Icon(Icons.refresh),
+                          color: kDark,
                           onPressed: _refetchOutput,
                         ),
                         helper: '현재 지역의 departure_completed & 잠금요금(true) 전체 문서 기준',
@@ -215,11 +302,20 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: kBase,
+                      foregroundColor: kFg,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      textStyle: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
                     icon: _submitting
                         ? const SizedBox(
                       width: 18,
                       height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
                     )
                         : const Icon(Icons.send),
                     label: Text(_submitting ? '제출 중…' : '제출'),
@@ -244,13 +340,13 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
 
   // 칩 렌더 헬퍼
   Widget _infoChip(IconData icon, String text, {Color? color}) {
-    final Color base = color ?? Colors.black87;
+    final Color baseColor = color ?? kDark;
     return Chip(
-      avatar: Icon(icon, size: 16, color: base),
+      avatar: Icon(icon, size: 16, color: baseColor),
       label: Text(text),
-      labelStyle: TextStyle(color: base),
-      backgroundColor: color == null ? null : base.withOpacity(0.08),
-      side: BorderSide(color: (color ?? Colors.grey).withOpacity(0.35)),
+      labelStyle: TextStyle(color: baseColor, fontWeight: FontWeight.w800),
+      backgroundColor: color == null ? kLight.withOpacity(.06) : baseColor.withOpacity(0.08),
+      side: BorderSide(color: (color ?? kLight).withOpacity(0.35)),
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
   }
@@ -303,7 +399,7 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
 
       await widget.onReport('end', jsonEncode(reportMap));
 
-      // ✅ 제출 후 보정치(재생성 카운터) 초기화 & 화면 수치 재조회
+      // 제출 후 보정치 초기화 & 화면 수치 재조회
       await resetDepartureCompletedExtras(area);
       await _refetchOutput();
 
@@ -354,7 +450,20 @@ class _LabeledNumberField extends StatelessWidget {
       decoration: InputDecoration(
         labelText: label,
         helperText: helper,
-        border: const OutlineInputBorder(),
+        filled: true,
+        fillColor: kLight.withOpacity(.06), // 폼 배경: 연한 톤
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: kLight.withOpacity(.35)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: kLight.withOpacity(.35)),
+        ),
+        focusedBorder: const OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+          borderSide: BorderSide(color: kBase, width: 1.6), // 포커스: primary
+        ),
         suffixIcon: suffix,
       ),
     );
@@ -415,7 +524,7 @@ int _extractLockedFeeAmount(Map<String, dynamic> data) {
   return 0;
 }
 
-// ✅ 보정치(재생성 이벤트 카운터) 초기화
+// 보정치(재생성 이벤트 카운터) 초기화
 Future<void> resetDepartureCompletedExtras(String area) async {
   final countersRef = FirebaseFirestore.instance
       .collection('plate_counters')
@@ -427,14 +536,14 @@ Future<void> resetDepartureCompletedExtras(String area) async {
   }, SetOptions(merge: true));
 }
 
-// ✅ 랜덤 ID 생성 헬퍼 (영문소문자+숫자)
+// 랜덤 ID 생성(영문소문자+숫자)
 String _randomId([int length = 10]) {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
   final rnd = Random.secure();
   return List.generate(length, (_) => chars[rnd.nextInt(chars.length)]).join();
 }
 
-// GCS 업로드
+// GCS 업로드: EndWork Report
 Future<String?> uploadEndWorkReportJson({
   required Map<String, dynamic> report,
   required String division,
@@ -442,8 +551,6 @@ Future<String?> uploadEndWorkReportJson({
   required String userName,
 }) async {
   final dateStr = DateTime.now().toIso8601String().split('T').first;
-
-  // ✅ 파일명 앞에 고유 번호(prefix) 부여 → 캐시/덮어쓰기 이슈 방지
   final uid = _randomId(10);
   final fileName = '${uid}_ToDoReports_$dateStr.json';
   final destinationPath = '$division/$area/reports/$fileName';
@@ -482,11 +589,11 @@ Future<String?> uploadEndWorkReportJson({
   );
 
   client.close();
-  // (선택) 임시 파일 삭제: await tempFile.delete();
-
+  // await tempFile.delete();
   return 'https://storage.googleapis.com/$kBucketName/${object.name}';
 }
 
+// GCS 업로드: End Logs
 Future<String?> uploadEndLogJson({
   required Map<String, dynamic> report,
   required String division,
@@ -494,8 +601,6 @@ Future<String?> uploadEndLogJson({
   required String userName,
 }) async {
   final dateStr = DateTime.now().toIso8601String().split('T').first;
-
-  // ✅ 파일명 앞에 고유 번호(prefix) 부여 → 캐시/덮어쓰기 이슈 방지
   final uid = _randomId(10);
   final fileName = '${uid}_ToDoLogs_$dateStr.json';
   final destinationPath = '$division/$area/logs/$fileName';
@@ -534,7 +639,6 @@ Future<String?> uploadEndLogJson({
   );
 
   client.close();
-  // (선택) 임시 파일 삭제: await tempFile.delete();
-
+  // await tempFile.delete();
   return 'https://storage.googleapis.com/$kBucketName/${object.name}';
 }
