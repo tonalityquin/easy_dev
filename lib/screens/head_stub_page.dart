@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../routes.dart';
 import 'head_package/head_memo.dart';
+import 'head_package/roadmap_bottom_sheet.dart'; // 커뮤니티 폴더의 바텀시트를 재사용
 
 class HeadStubPage extends StatelessWidget {
   const HeadStubPage({super.key});
@@ -59,8 +60,8 @@ class HeadStubPage extends StatelessWidget {
                     final crossAxisCount = width >= 1100
                         ? 4
                         : width >= 800
-                            ? 3
-                            : 2;
+                        ? 3
+                        : 2;
 
                     const spacing = 12.0;
                     final textScale = MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
@@ -115,6 +116,25 @@ class HeadStubPage extends StatelessWidget {
                         },
                       ),
 
+                      // ▼ 로드맵 (커뮤니티 → 본사 허브로 이동)
+                      _ActionCard(
+                        icon: Icons.edit_note_rounded,
+                        title: '향후 로드맵',
+                        subtitle: 'After Release',
+                        bg: cs.tertiaryContainer,
+                        fg: cs.onTertiaryContainer,
+                        tintColor: attLight.withOpacity(0.45), // 살짝 하이라이트
+                        titleColor: attDark,
+                        onTap: () {
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (_) => const RoadmapBottomSheet(),
+                          );
+                        },
+                      ),
+
                       // ▼ 신규: 출/퇴근(시트 뷰)
                       _ActionCard(
                         icon: Icons.schedule_rounded,
@@ -162,7 +182,7 @@ class HeadStubPage extends StatelessWidget {
                 child: InkWell(
                   onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
                     '/selector', // AppRoutes.selector
-                    (route) => false,
+                        (route) => false,
                   ),
                   borderRadius: BorderRadius.circular(8),
                   child: SizedBox(

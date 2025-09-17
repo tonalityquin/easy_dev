@@ -27,9 +27,24 @@ const List<RoadmapItem> _roadmapData = [
       'Google Calendar API',
       'Google Excel API',
       'Google Accounts',
-      'Kakao URL',
     ],
-    status: RoadmapStatus.inProgress,
+    status: RoadmapStatus.done,
+  ),
+  RoadmapItem(
+    load: RoadmapLoad.medium,
+    title: '베타 버전 릴리즈',
+    notes: [
+      'Play Console 초기 버전 릴리즈',
+    ],
+    status: RoadmapStatus.done,
+  ),
+  RoadmapItem(
+    load: RoadmapLoad.light,
+    title: '입차 완료 현황 심화 열람 limit 확장',
+    notes: [
+      'Goal.각 주차 구역 별로 limit 지정',
+    ],
+    status: RoadmapStatus.done,
   ),
   RoadmapItem(
     load: RoadmapLoad.light,
@@ -50,14 +65,6 @@ const List<RoadmapItem> _roadmapData = [
   ),
   RoadmapItem(
     load: RoadmapLoad.light,
-    title: '입차 완료 현황 심화 열람 limit 확장',
-    notes: [
-      'Goal.개발자 모드 페이지에서 각 지역 별로 limit 지정',
-    ],
-    status: RoadmapStatus.inProgress,
-  ),
-  RoadmapItem(
-    load: RoadmapLoad.light,
     title: 'Block Dialog 삽입 과정 추가',
     notes: [
       '번호판 생성 수정 등 실시간에 민감한 로직에 방어 코드 삽입',
@@ -66,22 +73,11 @@ const List<RoadmapItem> _roadmapData = [
   ),
   RoadmapItem(
     load: RoadmapLoad.light,
-    title: '디버그 경로 통일',
+    title: '디버그 경로 보완',
     notes: [
-      '커뮤니티 내 디버그 액션 카드로 통일',
-      '문제 발생 시에만 메서드 혹은 함수 알림',
+      'Stress Test 중 발생하는 케이스 define',
     ],
     status: RoadmapStatus.planned,
-  ),
-  RoadmapItem(
-    load: RoadmapLoad.heavy,
-    title: '개발자 용 - 플로팅 버튼 추가',
-    notes: [
-      'Goal.출퇴근 ForeGroundTask 에셋 사전 설계',
-      'Google Docs API 연동',
-      '로컬 저장용 버튼 반응도 조사',
-    ],
-    status: RoadmapStatus.done,
   ),
   RoadmapItem(
     load: RoadmapLoad.heavy,

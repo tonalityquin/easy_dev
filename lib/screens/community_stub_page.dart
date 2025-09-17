@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'community_package/game_arcade_bottom_sheet.dart';
-import 'community_package/roadmap_bottom_sheet.dart';
+// 로드맵은 HeadStubPage로 이동했으므로 import 제거
+// import 'community_package/roadmap_bottom_sheet.dart';
 
 /// ====== 커뮤니티 전용 팔레트 (대비 강화) ======
 /// 버튼/Badge 배경(White와 5.3:1 대비 확보)
@@ -76,8 +77,8 @@ class CommunityStubPage extends StatelessWidget {
                     final crossAxisCount = width >= 1100
                         ? 4
                         : width >= 800
-                            ? 3
-                            : 2;
+                        ? 3
+                        : 2;
                     const spacing = 12.0;
                     final textScale = MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
 
@@ -102,21 +103,7 @@ class CommunityStubPage extends StatelessWidget {
                           );
                         },
                       ),
-                      _ActionCard(
-                        icon: Icons.edit_note_rounded,
-                        title: '로드맵',
-                        subtitle: 'After Release',
-                        bg: cs.tertiaryContainer,
-                        fg: cs.onTertiaryContainer,
-                        onTap: () {
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (_) => const RoadmapBottomSheet(),
-                          );
-                        },
-                      ),
+                      // (이전) 로드맵 카드는 HeadStubPage로 이동
                     ];
 
                     return GridView.builder(
@@ -138,7 +125,7 @@ class CommunityStubPage extends StatelessWidget {
         ),
       ),
 
-      // ✅ Pelican 이미지는 하얀 배경에 최적화 → 탭 시 '/selector'로 이동 로직 복원
+      // ✅ Pelican 이미지는 하얀 배경에 최적화 → 탭 시 '/selector'로 이동 로직 유지
       bottomNavigationBar: SafeArea(
         top: false,
         child: DecoratedBox(
@@ -154,7 +141,7 @@ class CommunityStubPage extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
               onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
                 '/selector',
-                (route) => false,
+                    (route) => false,
               ),
               child: SizedBox(
                 height: 120,
