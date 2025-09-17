@@ -90,8 +90,17 @@ class PlateCountService {
     try {
       final agg =
       await baseQuery.count().get().timeout(const Duration(seconds: 10));
-      final int count = agg.count ?? 0;
-      return count;
+      final int docCount = agg.count ?? 0;
+
+      // 🔹 보정치(재생성 이벤트 카운터) 읽어서 가산
+      final extraSnap = await _firestore
+          .collection('plate_counters')
+          .doc('area_$area')
+          .get();
+      final int extras =
+          (extraSnap.data()?['departureCompletedEvents'] as int?) ?? 0;
+
+      return docCount + extras;
     } catch (e, st) {
       // 실패 시 Firestore 로깅만
       try {

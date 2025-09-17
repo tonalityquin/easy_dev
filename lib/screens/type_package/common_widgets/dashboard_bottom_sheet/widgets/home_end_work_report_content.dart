@@ -283,13 +283,17 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
       }
 
       // 전체 누적 요약 갱신
-      final summaryRef = FirebaseFirestore.instance.collection('fee_summaries').doc('${division}_${area}_all');
+      final summaryRef = FirebaseFirestore.instance
+          .collection('fee_summaries')
+          .doc('${division}_${area}_all');
 
       await updateLockedFeeSummary(division, area);
 
       final summary = await summaryRef.get();
       final data = summary.data();
-      final lockedFee = (data?['totalLockedFee'] ?? 0) is num ? (data?['totalLockedFee'] as num).round() : 0;
+      final lockedFee = (data?['totalLockedFee'] ?? 0) is num
+          ? (data?['totalLockedFee'] as num).round()
+          : 0;
 
       final reportMap = {
         "vehicleInput": entry,
@@ -298,6 +302,11 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
       };
 
       await widget.onReport('end', jsonEncode(reportMap));
+
+      // ✅ 제출 후 보정치(재생성 카운터) 초기화 & 화면 수치 재조회
+      await resetDepartureCompletedExtras(area);
+      await _refetchOutput();
+
       HapticFeedback.mediumImpact();
       showSuccessSnackbar(context, '업무 종료 보고를 제출했습니다.');
     } catch (e) {
@@ -376,7 +385,8 @@ Future<void> updateLockedFeeSummary(String division, String area) async {
     count++;
   }
 
-  final summaryRef = firestore.collection('fee_summaries').doc('${division}_${area}_all');
+  final summaryRef =
+  firestore.collection('fee_summaries').doc('${division}_${area}_all');
 
   await summaryRef.set({
     'division': division,
@@ -403,6 +413,18 @@ int _extractLockedFeeAmount(Map<String, dynamic> data) {
     }
   }
   return 0;
+}
+
+// ✅ 보정치(재생성 이벤트 카운터) 초기화
+Future<void> resetDepartureCompletedExtras(String area) async {
+  final countersRef = FirebaseFirestore.instance
+      .collection('plate_counters')
+      .doc('area_$area');
+
+  await countersRef.set({
+    'departureCompletedEvents': 0,
+    'lastResetAt': FieldValue.serverTimestamp(),
+  }, SetOptions(merge: true));
 }
 
 // ✅ 랜덤 ID 생성 헬퍼 (영문소문자+숫자)

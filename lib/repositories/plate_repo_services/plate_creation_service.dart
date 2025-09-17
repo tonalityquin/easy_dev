@@ -188,6 +188,18 @@ class PlateCreationService {
               PlateFields.logs: mergedLogs,
             };
 
+            // ✅ 재생성 이벤트 카운터 +1 (isLockedFee == true 인 기존 문서만 카운트)
+            final bool wasLocked = (data?['isLockedFee'] == true);
+            if (wasLocked) {
+              final countersRef = _firestore.collection('plate_counters').doc('area_$area');
+              tx.set(
+                countersRef,
+                {'departureCompletedEvents': FieldValue.increment(1)},
+                SetOptions(merge: true),
+              );
+            }
+
+            // 최종 부분 업데이트
             tx.update(docRef, partial);
           }
         } else {
