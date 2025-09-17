@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 enum RoadmapStatus { planned, inProgress, done }
+
 enum RoadmapLoad { light, medium, heavy }
 
 class RoadmapItem {
@@ -43,8 +44,30 @@ const List<RoadmapItem> _roadmapData = [
     title: '입차 완료 현황 심화 열람 limit 확장',
     notes: [
       'Goal.각 주차 구역 별로 limit 지정',
+      '각 주차 구역 별 실시간 입차 번호판 확인 가능 갯수 범위 조절',
     ],
     status: RoadmapStatus.done,
+  ),
+  RoadmapItem(
+    load: RoadmapLoad.medium,
+    title: '사진 촬영 시 불안정한 화소 해결',
+    notes: [
+      'Prob.촬영 후 사진은 정상이나 촬영 시 포커싱에서의 문제가 불특정 기기에서 발생',
+      'Goal.촬영 전과 후의 카메라 페이지가 동일한 성능을 가지도록',
+    ],
+    status: RoadmapStatus.done,
+  ),
+  RoadmapItem(
+    load: RoadmapLoad.medium,
+    title: '중복 번호판 데이터 생성',
+    notes: [
+      'Condition',
+      '1.동일한 날짜',
+      '2.동일한 번호판',
+      'Prob.동일한 테이블에서 관리하고 있어 이중 데이터 생성 불가능'
+          'Goal.동일한 날짜에서 기존 로직에 방해 없이 새롭게 데이터 생성'
+    ],
+    status: RoadmapStatus.inProgress,
   ),
   RoadmapItem(
     load: RoadmapLoad.light,
@@ -69,7 +92,7 @@ const List<RoadmapItem> _roadmapData = [
     notes: [
       '번호판 생성 수정 등 실시간에 민감한 로직에 방어 코드 삽입',
     ],
-    status: RoadmapStatus.inProgress,
+    status: RoadmapStatus.planned,
   ),
   RoadmapItem(
     load: RoadmapLoad.light,
@@ -80,41 +103,10 @@ const List<RoadmapItem> _roadmapData = [
     status: RoadmapStatus.planned,
   ),
   RoadmapItem(
-    load: RoadmapLoad.heavy,
-    title: '기술 조사(출퇴근 로그인)',
-    notes: [
-      'Prob.마이발렛 앱 설계 한계',
-      '- 핸드폰에서 마이발렛을 기본 프로그램으로 인식하지 않음',
-      'Goal.출퇴근 & 휴게시간 저장을 외부에서 할 수 있도록',
-    ],
-    status: RoadmapStatus.planned,
-  ),
-  RoadmapItem(
-    load: RoadmapLoad.medium,
-    title: '중복 번호판 데이터 생성',
-    notes: [
-      'Condition',
-      '1.동일한 날짜',
-      '2.동일한 번호판',
-      'Prob.동일한 테이블에서 관리하고 있어 이중 데이터 생성 불가능'
-          'Goal.동일한 날짜에서 기존 로직에 방해 없이 새롭게 데이터 생성'
-    ],
-    status: RoadmapStatus.planned,
-  ),
-  RoadmapItem(
     load: RoadmapLoad.light,
     title: '가이드북 생성 및 액션 카드 추가',
     notes: [
       '앱에서 캡처 등을 통해 특정 난이도 있는 행동들에 대한 가이드 북 삽입',
-    ],
-    status: RoadmapStatus.planned,
-  ),
-  RoadmapItem(
-    load: RoadmapLoad.medium,
-    title: '사진 촬영 시 불안정한 화소 해결',
-    notes: [
-      'Prob.촬영 후 사진은 정상이나 촬영 시 포커싱에서의 문제가 불특정 기기에서 발생',
-      'Goal.촬영 전과 후의 카메라 페이지가 동일한 성능을 가지도록',
     ],
     status: RoadmapStatus.planned,
   ),
@@ -222,7 +214,7 @@ class RoadmapBottomSheet extends StatelessWidget {
             borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
           ),
           child: SafeArea(
-            top: true,  // 상태바 아래까지 안전하게
+            top: true, // 상태바 아래까지 안전하게
             bottom: false,
             child: Column(
               children: [
@@ -269,8 +261,7 @@ class RoadmapBottomSheet extends StatelessWidget {
                           label: _statusLabel(RoadmapStatus.planned),
                           color: _statusColor(context, RoadmapStatus.planned)),
                       _legendChip(context,
-                          label: _statusLabel(RoadmapStatus.done),
-                          color: _statusColor(context, RoadmapStatus.done)),
+                          label: _statusLabel(RoadmapStatus.done), color: _statusColor(context, RoadmapStatus.done)),
                     ],
                   ),
                 ),
@@ -391,7 +382,7 @@ class _TimelineTile extends StatelessWidget {
                   Text(item.title, style: text.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
                   const SizedBox(height: 6),
                   ...item.notes.map(
-                        (n) => Padding(
+                    (n) => Padding(
                       padding: const EdgeInsets.only(bottom: 4),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,

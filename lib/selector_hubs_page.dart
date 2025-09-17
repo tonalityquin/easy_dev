@@ -70,7 +70,7 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
             if (mounted) {
               Navigator.of(ctx).pop(); // 시트 닫기
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('개발자 인증 완료. 이제 개발 카드를 눌러 진입할 수 있습니다.')),
+                const SnackBar(content: Text('개발자 인증 완료. 이제 개발/주차 카드를 눌러 진입할 수 있습니다.')),
               );
             }
           },
@@ -94,7 +94,7 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
     final serviceEnabled = _savedMode == null || _savedMode == 'service';
     final tabletEnabled = _savedMode == null || _savedMode == 'tablet';
 
-    // ✅ 개발 카드는 devAuthorized 전에 "아예 보이지 않도록" 제외
+    // ✅ 개발/주차 카드는 _devAuthorized 이전에는 생성 자체를 생략
     final List<List<Widget>> pages = [
       [
         _ServiceCard(enabled: serviceEnabled),
@@ -102,11 +102,11 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
       ],
       [
         _HeadquarterCard(enabled: serviceEnabled), // ✅ 본사도 service 모드에서만
-        const _ParkingCard(),
+        const _FaqCard(),
       ],
       [
-        const _FaqCard(),
         const _CommunityCard(),
+        if (_devAuthorized) const _ParkingCard(), // ✅ 현재 위치 유지 + 개발 인증 시에만 노출
       ],
       if (_devAuthorized)
         [
@@ -320,7 +320,6 @@ class _Header extends StatelessWidget {
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 6),
-
         Text(
           '화살표 버튼을 누르면 해당 페이지로 진입합니다.',
           style: text.bodyMedium?.copyWith(color: Theme.of(context).hintColor),
@@ -757,7 +756,7 @@ class _DevCard extends StatelessWidget {
   }
 }
 
-/// 주차 관제 시스템 카드 — Deep Orange 팔레트(공사중 느낌)
+/// 주차 관제 시스템 카드 — Deep Orange 팔레트(개발 인증 후에만 보임: 현재 위치 유지)
 class _ParkingCard extends StatelessWidget {
   const _ParkingCard();
 
@@ -779,7 +778,7 @@ class _ParkingCard extends StatelessWidget {
         icon: Icons.location_city,
         bg: _base,
         iconColor: Colors.white,
-        titleWidget: Text('주차 관제 시스템(공사중)', style: titleStyle, textAlign: TextAlign.center),
+        titleWidget: Text('오프라인 서비스', style: titleStyle, textAlign: TextAlign.center),
         buttonBg: _base,
         buttonFg: Colors.white,
         onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.parking),
