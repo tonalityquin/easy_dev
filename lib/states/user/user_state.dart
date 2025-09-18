@@ -34,6 +34,19 @@ class UserState extends ChangeNotifier {
   String _prevAreaUsers = '';
   String _prevAreaTablets = '';
 
+  // ===== [추가] SharedPreferences 선택 삭제/유지 정책 =====
+  // 사용자(세션/신원) 관련 키만 삭제합니다.
+  static const Set<String> _userSensitiveKeys = <String>{
+    'phone',
+    'handle',
+    'role',
+    'division',
+    'position',
+    'startTime',
+    'endTime',
+    'fixedHolidays',
+  };
+
   UserModel? get user => _user;
 
   /// 사람 계정 리스트(외부에 변경 불가)
@@ -187,31 +200,40 @@ class UserState extends ChangeNotifier {
   Future<void> clearUserToPhone() async {
     if (_user == null) return;
 
-    if (_isTablet) {
-      await _repository.updateLogOutTabletStatus(
-        _user!.phone,
-        _user!.areas.firstOrNull ?? '',
-        isWorking: false,
-        isSaved: false,
-      );
-    } else {
-      await _repository.updateLogOutUserStatus(
-        _user!.phone,
-        _user!.areas.firstOrNull ?? '',
-        isWorking: false,
-        isSaved: false,
-      );
+    try {
+      if (_isTablet) {
+        await _repository.updateLogOutTabletStatus(
+          _user!.phone,
+          _user!.areas.firstOrNull ?? '',
+          isWorking: false,
+          isSaved: false,
+        );
+      } else {
+        await _repository.updateLogOutUserStatus(
+          _user!.phone,
+          _user!.areas.firstOrNull ?? '',
+          isWorking: false,
+          isSaved: false,
+        );
+      }
+
+      // ===== [변경] 전체 삭제 금지 → 선택 삭제로 변경 =====
+      await _clearUserPrefsSelective(keepArea: true);
+    } catch (e) {
+      debugPrint('clearUserToPhone error: $e');
+    } finally {
+      // TTS는 예외와 무관하게 정리
+      try {
+        PlateTtsListenerService.stop();
+      } catch (_) {}
+      try {
+        ChatTtsListenerService.stop();
+      } catch (_) {}
+
+      _user = null;
+      _isTablet = false;
+      notifyListeners();
     }
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
-
-    PlateTtsListenerService.stop();
-    ChatTtsListenerService.stop();
-
-    _user = null;
-    _isTablet = false;
-    notifyListeners();
   }
 
   // ========== 초기 로드 ==========
@@ -570,5 +592,25 @@ class UserState extends ChangeNotifier {
     _subscription?.cancel();
     _areaState.removeListener(_fetchUsersByAreaWithCache);
     super.dispose();
+  }
+
+  // ===== [추가] 선택 삭제 유틸 =====
+  Future<void> _clearUserPrefsSelective({bool keepArea = true}) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    // 1) 사용자 민감 키들만 제거
+    for (final k in _userSensitiveKeys) {
+      await prefs.remove(k);
+    }
+
+    // 2) 영역/디바이스 키 보존
+    if (!keepArea) {
+      // 필요 시 영역 키까지 지우고 싶을 때 호출
+      await prefs.remove('selectedArea');
+      await prefs.remove('englishSelectedAreaName');
+    }
+
+    // 3) 캐시 계열 접두사는 그대로 둡니다(users_ / tablets_ / cached_)
+    //    → 여기선 아무 것도 하지 않음(보존).
   }
 }
