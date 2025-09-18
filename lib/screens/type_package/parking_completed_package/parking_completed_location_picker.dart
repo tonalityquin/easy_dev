@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../states/area/area_state.dart';
 import '../../../states/location/location_state.dart';
 import '../../../repositories/location_repo_services/location_repository.dart';
 import '../../../utils/snackbar_helper.dart'; // ✅ 커스텀 스낵바 헬퍼 추가
@@ -36,7 +35,6 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
   Future<void> _onRefreshPressed(
       LocationState locationState,
       LocationRepository repo,
-      String area,
       ) async {
     final now = DateTime.now();
     if (_lastRefreshedAt != null && now.difference(_lastRefreshedAt!) < _cooldown) {
@@ -64,7 +62,6 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
   Widget _buildRefreshButton(
       LocationState locationState,
       LocationRepository repo,
-      String area,
       ) {
     return SizedBox(
       width: double.infinity,
@@ -93,14 +90,13 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
           "수동 새로고침",
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
-        onPressed: _isRefreshing ? null : () => _onRefreshPressed(locationState, repo, area),
+        onPressed: _isRefreshing ? null : () => _onRefreshPressed(locationState, repo),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final area = context.read<AreaState>().currentArea;
     final locationRepo = context.read<LocationRepository>();
 
     return Scaffold(
@@ -118,7 +114,7 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
               if (locations.isEmpty) {
                 return Center(
                   child: GestureDetector(
-                    onTap: () => _onRefreshPressed(locationState, locationRepo, area),
+                    onTap: () => _onRefreshPressed(locationState, locationRepo),
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 32),
                       decoration: BoxDecoration(
@@ -202,7 +198,7 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
               return ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  _buildRefreshButton(locationState, locationRepo, area),
+                  _buildRefreshButton(locationState, locationRepo),
                   const SizedBox(height: 24),
                   const Text('단일 주차 구역', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                   const SizedBox(height: 8),
