@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 
 import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
 
@@ -21,7 +22,6 @@ class LocationCountService {
 
       return snapshot.count ?? 0;
     } catch (e, st) {
-      // 실패 시 Firestore 로거에만 error 기록
       try {
         final payload = {
           'op': 'plates.count',
@@ -40,9 +40,7 @@ class LocationCountService {
           'tags': ['plates', 'count', 'error'],
         };
         await DebugFirestoreLogger().log(payload, level: 'error');
-      } catch (_) {
-        // 로깅 실패는 무시
-      }
+      } catch (_) {}
       rethrow;
     }
   }
@@ -53,21 +51,29 @@ class LocationCountService {
     String type = 'parking_completed',
   }) async {
     try {
-      final futures = locationNames.map((name) async {
-        final count = await getPlateCount(
-          locationName: name,
-          area: area,
-          type: type,
-        );
-        return MapEntry(name, count);
-      }).toList();
+      final uniq = locationNames.toSet().toList(); // ✅ 중복 제거
+      const window = 10; // ✅ 동시성 제한(버스트 완화)
 
-      final entries = await Future.wait(futures);
-      final result = Map.fromEntries(entries);
+      final result = <String, int>{};
+      for (int i = 0; i < uniq.length; i += window) {
+        final end = (i + window < uniq.length) ? i + window : uniq.length;
+        final slice = uniq.sublist(i, end);
+
+        final entries = await Future.wait(slice.map((name) async {
+          final count = await getPlateCount(
+            locationName: name,
+            area: area,
+            type: type,
+          );
+          return MapEntry(name, count);
+        }));
+
+        result.addEntries(entries);
+        debugPrint('🚚 batch 진행: ${result.length}/${uniq.length} (이번 청크 ${slice.length})');
+      }
 
       return result;
     } catch (e, st) {
-      // 배치 조회 전체 실패 로깅 (개별 getPlateCount 내부에서도 실패 시 로깅함)
       try {
         final payload = {
           'op': 'plates.count.batch',
@@ -89,9 +95,7 @@ class LocationCountService {
           'tags': ['plates', 'count', 'batch', 'error'],
         };
         await DebugFirestoreLogger().log(payload, level: 'error');
-      } catch (_) {
-        // 로깅 실패는 무시
-      }
+      } catch (_) {}
       rethrow;
     }
   }

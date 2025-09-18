@@ -8,16 +8,10 @@ abstract class LocationRepository {
   Future<void> deleteLocations(List<String> ids);
 
   Future<void> addCompositeLocation(
-    String parent,
-    List<Map<String, dynamic>> subs,
-    String area,
-  );
-
-  Future<int> getPlateCount({
-    required String locationName,
-    required String area,
-    String type = 'parking_completed',
-  });
+      String parent,
+      List<Map<String, dynamic>> subs,
+      String area,
+      );
 
   Future<Map<String, int>> getPlateCountsForLocations({
     required List<String> locationNames,
