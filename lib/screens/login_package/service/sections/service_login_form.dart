@@ -21,8 +21,7 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
   @override
   void initState() {
     super.initState();
-    _controller = widget.controller;
-    _controller.initState();
+    _controller = widget.controller; // ✅ init은 상위(LoginScreen)에서만 수행
   }
 
   void _handleLogin() {
@@ -105,10 +104,9 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
               children: [
                 const SizedBox(height: 12),
 
-                // 로고 탭 → 협업 캘린더로 이동
+                // 로고 탭 → 협업 캘린더로 이동(현재는 동작 없음)
                 GestureDetector(
-                  onTap: () {
-                  },
+                  onTap: () {},
                   child: SizedBox(
                     height: 360,
                     child: Image.asset('assets/images/easyvalet_logo_car.png'),
@@ -122,8 +120,8 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
                   controller: _controller.nameController,
                   focusNode: _controller.nameFocus,
                   textInputAction: TextInputAction.next,
-                  onSubmitted: (_) => FocusScope.of(context)
-                      .requestFocus(_controller.phoneFocus),
+                  onSubmitted: (_) =>
+                      FocusScope.of(context).requestFocus(_controller.phoneFocus),
                   decoration: _controller.inputDecoration(
                     label: "이름",
                     icon: Icons.person,
@@ -194,8 +192,7 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
                 // ▼ 펠리컨: 탭하면 LoginSelectorPage로 복귀
                 Center(
                   child: InkWell(
-                    onTap: () => Navigator.of(context)
-                        .pushNamedAndRemoveUntil(
+                    onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
                         AppRoutes.selector, (route) => false),
                     borderRadius: BorderRadius.circular(8),
                     child: SizedBox(

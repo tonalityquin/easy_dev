@@ -183,10 +183,10 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
         title: Text(
           'Pelican Hubs',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.2,
-            color: Theme.of(context).colorScheme.onSurface,
-          ),
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.2,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
         ),
         iconTheme: IconThemeData(color: Theme.of(context).colorScheme.onSurface),
         actionsIconTheme: IconThemeData(color: Theme.of(context).colorScheme.onSurface),

@@ -31,6 +31,9 @@ class TabletLoginController {
   bool isLoading = false;
   bool obscurePassword = true;
 
+  // ✅ 중복 초기화 방지
+  bool _inited = false;
+
   TabletLoginController(this.context);
 
   // ====== Helpers (handle) ======
@@ -49,6 +52,9 @@ class TabletLoginController {
   }
 
   void initState() {
+    if (_inited) return; // ✅ guard
+    _inited = true;
+
     Provider.of<UserState>(context, listen: false).loadTabletToLogIn().then((_) {
       final isLoggedIn = Provider.of<UserState>(context, listen: false).isLoggedIn;
       debugPrint('[LOGIN-TABLET][${_ts()}] autoLogin check → isLoggedIn=$isLoggedIn');
@@ -240,7 +246,8 @@ class TabletLoginController {
       fillColor: Colors.grey.shade100,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
       focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16)),
+        borderRadius: BorderRadius.circular(16),
+      ),
     );
   }
 

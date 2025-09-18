@@ -21,8 +21,7 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
   @override
   void initState() {
     super.initState();
-    _controller = widget.controller;
-    _controller.initState();
+    _controller = widget.controller; // ✅ init은 상위(LoginScreen)에서만
   }
 
   void _handleLogin() {

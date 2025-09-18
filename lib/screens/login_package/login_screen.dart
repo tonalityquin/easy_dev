@@ -1,4 +1,3 @@
-// lib/screens/login_package/login_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -15,7 +14,7 @@ import 'tablet/sections/tablet_login_form.dart';
 // ✅ outside (향후 확장 대비)
 
 class LoginScreen extends StatefulWidget {
-  // ✅ mode: 'service' | 'tablet' | 'outside'
+  // ✅ mode: 'service' | 'tablet'
   const LoginScreen({super.key, this.mode = 'service'});
 
   final String mode;
@@ -45,6 +44,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     // ✅ 모드에 따라 해당 컨트롤러만 초기화
     if (widget.mode == 'tablet') {
       _tabletController = TabletLoginController(context);
+      // 태블릿 자동 초기화는 화면 생성 후 1회만 트리거
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _tabletController!.initState();
+      });
     } else {
       _loginController = ServiceLoginController(
         context,
@@ -88,8 +92,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       if (rm is String && rm.isNotEmpty) {
         _requiredMode = rm;
       }
-      // (선택) args['requiredArea']를 쓰고 싶다면 여기에 읽어도 됨.
-      // 이번 요구는 하드코딩으로 'belivus'만 허용이므로 별도 인자 없이 처리합니다.
+      // (선택) args['requiredArea'] 사용 가능
     }
 
     // ▼ 자동 로그인 게이트: 라우트 인자를 먼저 확보한 뒤 1회만 실행
