@@ -33,6 +33,7 @@ class _Kor1State extends State<Kor1> with TickerProviderStateMixin {
       keyRows,
       widget.onKeyTap,
       state: this,
+      setState: setState,
       controllers: _controllers,
       isPressed: _isPressed,
     );

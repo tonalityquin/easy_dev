@@ -3,7 +3,6 @@ import 'keypad_utils.dart';
 
 class Kor0 extends StatefulWidget {
   final Function(String) onKeyTap;
-
   const Kor0({super.key, required this.onKeyTap});
 
   @override
@@ -34,6 +33,7 @@ class _Kor0State extends State<Kor0> with TickerProviderStateMixin {
       keyRows,
       widget.onKeyTap,
       state: this,
+      setState: setState,
       controllers: _controllers,
       isPressed: _isPressed,
     );

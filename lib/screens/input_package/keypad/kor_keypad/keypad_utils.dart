@@ -9,6 +9,7 @@ class KorKeypadUtils {
       List<List<String>> keyRows,
       void Function(String) onKeyTap, {
         required State state,
+        required StateSetter setState, // ★ 추가: 외부에서 받은 setState 콜백
         Map<String, AnimationController>? controllers,
         Map<String, bool>? isPressed,
       }) {
@@ -27,6 +28,7 @@ class KorKeypadUtils {
                 label,
                 label.isNotEmpty ? () => onKeyTap(label) : null,
                 state,
+                setState, // ★ 전달
                 controllers!,
                 isPressed!,
                 r,
@@ -43,6 +45,7 @@ class KorKeypadUtils {
       String key,
       VoidCallback? onTap,
       State state,
+      StateSetter setState, // ★ 추가
       Map<String, AnimationController> controllers,
       Map<String, bool> isPressed,
       int rowIndex,
@@ -76,18 +79,18 @@ class KorKeypadUtils {
         child: GestureDetector(
           onTapDown: (_) {
             HapticFeedback.selectionClick();
-            state.setState(() => isPressed[id] = true);
+            setState(() => isPressed[id] = true); // ★ state.setState 사용 안 함
             controller.forward();
           },
           onTapUp: (_) {
-            state.setState(() => isPressed[id] = false);
+            setState(() => isPressed[id] = false);
             Future.delayed(const Duration(milliseconds: 100), () {
               if (state.mounted) controller.reverse();
             });
             onTap?.call();
           },
           onTapCancel: () {
-            state.setState(() => isPressed[id] = false);
+            setState(() => isPressed[id] = false);
             controller.reverse();
           },
           child: Semantics(
