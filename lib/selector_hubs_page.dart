@@ -19,7 +19,9 @@ const _DEV_HASH_HEX = '78f0a759b1da2b6570935e8a2b22e7ccde1d30ba91d688672726fcb40
 /// SHA-256(salt || input)을 계산해 상수 해시와 타이밍-세이프 비교
 bool _verifyDevCode(String input) {
   final salt = base64Decode(_DEV_SALT_B64);
-  final bytes = <int>[]..addAll(salt)..addAll(utf8.encode(input));
+  final bytes = <int>[]
+    ..addAll(salt)
+    ..addAll(utf8.encode(input));
   final digestHex = sha256.convert(bytes).toString();
 
   // 타이밍 안전 비교(간단 버전)
@@ -112,7 +114,7 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
               Navigator.of(ctx).pop(); // 시트 닫기
               showSuccessSnackbar(
                 context,
-                '개발자 인증 완료. 이제 개발/오프ライン 서비스 카드를 눌러 진입할 수 있습니다.',
+                '개발자 인증 완료. 이제 개발/오프라인 서비스 카드를 눌러 진입할 수 있습니다.',
               );
             }
           },
@@ -323,68 +325,39 @@ class _CardsPagerState extends State<_CardsPager> {
     final media = MediaQuery.of(context);
     final double cardHeight = media.size.height < 640 ? 200.0 : _baseCardHeight;
 
+    // ▶︎ 항상 가로 2개 스택(두 칼럼) 유지
     return LayoutBuilder(
       builder: (context, cons) {
         final usable = cons.maxWidth;
-        final twoCols = usable >= 600; // ✅ 협소 폭에서는 1열 폴백
         final half = ((usable - _gap) / 2).floorToDouble();
 
-        if (twoCols) {
-          // ▶︎ 2열(기존)
-          return SizedBox(
-            height: cardHeight, // 페이지 높이 = 카드 높이
-            child: PageView.builder(
-              controller: _pageCtrl,
-              itemCount: widget.pages.length,
-              onPageChanged: (i) => _saveLastPage(i),
-              itemBuilder: (context, index) {
-                final page = widget.pages[index];
-                return Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    SizedBox(
-                      width: half,
-                      height: cardHeight,
-                      child: page.isNotEmpty ? page[0] : const SizedBox.shrink(),
-                    ),
-                    const SizedBox(width: _gap),
-                    SizedBox(
-                      width: half,
-                      height: cardHeight,
-                      child: page.length > 1 ? page[1] : const SizedBox.shrink(),
-                    ),
-                  ],
-                );
-              },
-            ),
-          );
-        } else {
-          // ▶︎ 1열 폴백: 각 카드를 "한 페이지에 하나씩" 보여주도록 플래튼
-          final List<Widget> flatCards = [];
-          for (final page in widget.pages) {
-            for (final card in page) {
-              flatCards.add(card);
-            }
-          }
-
-          return SizedBox(
-            height: cardHeight,
-            child: PageView.builder(
-              controller: _pageCtrl,
-              itemCount: flatCards.length,
-              onPageChanged: (i) => _saveLastPage(i),
-              itemBuilder: (context, index) {
-                return Center(
-                  child: SizedBox(
-                    width: usable,
+        return SizedBox(
+          height: cardHeight, // 페이지 높이 = 카드 높이
+          child: PageView.builder(
+            controller: _pageCtrl,
+            itemCount: widget.pages.length,
+            onPageChanged: (i) => _saveLastPage(i),
+            itemBuilder: (context, index) {
+              final page = widget.pages[index];
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: half,
                     height: cardHeight,
-                    child: flatCards[index],
+                    child: page.isNotEmpty ? page[0] : const SizedBox.shrink(),
                   ),
-                );
-              },
-            ),
-          );
-        }
+                  const SizedBox(width: _gap),
+                  SizedBox(
+                    width: half,
+                    height: cardHeight,
+                    child: page.length > 1 ? page[1] : const SizedBox.shrink(),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
       },
     );
   }
@@ -645,8 +618,7 @@ class _ServiceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleStyle =
-    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
+    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
 
     return Card(
       color: Colors.white,
@@ -681,8 +653,7 @@ class _TabletCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleStyle =
-    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
+    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
 
     return Card(
       color: Colors.white,
@@ -715,8 +686,7 @@ class _CommunityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleStyle =
-    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
+    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
 
     return Card(
       color: Colors.white,
@@ -747,8 +717,7 @@ class _FaqCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleStyle =
-    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
+    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
 
     return Card(
       color: Colors.white,
@@ -781,8 +750,7 @@ class _HeadquarterCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleStyle =
-    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
+    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
 
     return Card(
       color: Colors.white,
@@ -826,8 +794,7 @@ class _DevCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleStyle =
-    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
+    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
 
     return Card(
       color: Colors.white,
@@ -858,8 +825,7 @@ class _ParkingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleStyle =
-    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
+    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
 
     return Card(
       color: Colors.white,
