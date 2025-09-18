@@ -1,3 +1,4 @@
+// lib/screens/type_pages/parking_completed_pages/parking_completed_control_buttons.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -16,10 +17,14 @@ import 'widgets/parking_completed_status_bottom_sheet.dart';
 import 'widgets/set_departure_request_dialog.dart';
 import '../../../widgets/dialog/plate_remove_dialog.dart';
 
-/// Deep Blue 팔레트(서비스 카드와 동일 계열)
+/// Deep Blue 팔레트(서비스 카드와 동일 계열) + 상태 색상
 class _Palette {
   static const base  = Color(0xFF0D47A1); // primary
   static const dark  = Color(0xFF09367D); // 강조 텍스트/아이콘
+
+  // ✅ 추가: 상태 강조 색
+  static const danger  = Color(0xFFD32F2F); // 출차 요청(붉은색)
+  static const success = Color(0xFF2E7D32); // 출차 완료(초록색)
 }
 
 class ParkingCompletedControlButtons extends StatelessWidget {
@@ -79,11 +84,13 @@ class ParkingCompletedControlButtons extends StatelessWidget {
               label: '화면 잠금',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.move_down, color: muted),
+              // ✅ 출차 요청 아이콘은 붉은색
+              icon: const Icon(Icons.move_down, color: _Palette.danger),
               label: '출차 요청',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.directions_car, color: _Palette.base),
+              // ✅ 출차 완료 아이콘은 초록색
+              icon: const Icon(Icons.directions_car, color: _Palette.success),
               label: '출차 완료',
             ),
           ]
@@ -107,10 +114,10 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                   : '채팅하기',
             ),
             BottomNavigationBarItem(
+              // ✅ 선택 시(=출차 요청 액션) 붉은색으로 강조
               icon: Icon(
                 isPlateSelected ? Icons.check_circle : Icons.search,
-                // ✅ 기존 포인트 컬러 유지(초록)
-                color: isPlateSelected ? Colors.green[600] : muted,
+                color: isPlateSelected ? _Palette.danger : muted,
               ),
               label: isPlateSelected ? '출차 요청' : '번호판 검색',
             ),

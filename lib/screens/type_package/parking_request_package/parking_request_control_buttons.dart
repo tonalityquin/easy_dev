@@ -15,10 +15,14 @@ import '../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
 import '../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 import 'widgets/parking_request_status_bottom_sheet.dart';
 
-/// Deep Blue 팔레트(서비스 카드와 동일 계열)
+/// Deep Blue 팔레트(서비스 카드와 동일 계열) + 대비 강조 색
 class _Palette {
-  static const base  = Color(0xFF0D47A1); // primary
-  static const dark  = Color(0xFF09367D); // 강조 텍스트/아이콘
+  static const base   = Color(0xFF0D47A1); // primary (Deep Blue)
+  static const dark   = Color(0xFF09367D); // 강조 텍스트/아이콘
+
+  // ✅ 새로 추가: 대비되는 강조 색
+  static const success = Color(0xFF2E7D32); // 입차(완료)용 - Green 800
+  static const accent  = Color(0xFFFF6D00); // 검색 액션용 - Orange 800
 }
 
 class ParkingRequestControlButtons extends StatelessWidget {
@@ -75,15 +79,20 @@ class ParkingRequestControlButtons extends StatelessWidget {
           ),
           label: isPlateSelected ? '정산 관리' : '화면 잠금',
         ),
+
+        // ✅ 두 번째 탭: ‘번호판 검색’ ↔ ‘입차’ 아이콘 색상을 대비 강조 색으로 변경
         BottomNavigationBarItem(
           icon: Tooltip(
             message: isPlateSelected ? '입차 완료' : '번호판 검색',
             child: isPlateSelected
-                ? Icon(Icons.check_circle, color: _Palette.base)
-                : Icon(Icons.search, color: muted),
+            // 입차: 성공/확정의 의미로 선명한 그린
+                ? const Icon(Icons.check_circle, color: _Palette.success)
+            // 번호판 검색: 주목도 높은 오렌지
+                : const Icon(Icons.search, color: _Palette.accent),
           ),
           label: isPlateSelected ? '입차' : '번호판 검색',
         ),
+
         BottomNavigationBarItem(
           icon: Tooltip(
             message: isPlateSelected ? '상태 수정' : '정렬 변경',

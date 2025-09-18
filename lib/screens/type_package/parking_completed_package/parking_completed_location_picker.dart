@@ -63,22 +63,6 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
     }
   }
 
-  /// ▶ 부모 그룹의 자식들만 한 번에 갱신
-  Future<void> _refreshChildrenGroup(
-    LocationState state,
-    LocationRepository repo,
-    String parent,
-  ) async {
-    final composites = state.locations.where((l) => l.type == 'composite').toList();
-    final children = composites.where((l) => l.parent == parent).toList();
-    final names = children.map((loc) => '${loc.parent} - ${loc.locationName}').toList();
-
-    if (names.isEmpty) return;
-
-    debugPrint('👪 [group] "$parent" 자식 ${names.length}개 갱신');
-    await state.updatePlateCountsForNames(repo, names);
-  }
-
   @override
   Widget build(BuildContext context) {
     final locationRepo = context.read<LocationRepository>();
@@ -116,19 +100,6 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                         child: ListView(
                           padding: const EdgeInsets.all(16),
                           children: [
-                            // 그룹 전체 갱신 버튼 (부모 화면 상단에 노출)
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: TextButton.icon(
-                                icon: const Icon(Icons.refresh),
-                                label: const Text('이 그룹만 새로고침'),
-                                onPressed: () => _refreshChildrenGroup(
-                                  locationState,
-                                  locationRepo,
-                                  selectedParent!,
-                                ),
-                              ),
-                            ),
                             const Divider(),
                             ...children.map((loc) {
                               final displayName = '${loc.parent} - ${loc.locationName}';
@@ -141,9 +112,7 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                                   color: _Palette.base,
                                 ),
                                 title: Text(displayName),
-                                subtitle: Text(
-                                  '입차 ${loc.plateCount} / 공간 ${loc.capacity}',
-                                ),
+                                subtitle: Text('입차 ${loc.plateCount} / 공간 ${loc.capacity}'),
                                 trailing: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
@@ -178,10 +147,7 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                           onTap: () => setState(() => selectedParent = null),
                           child: Container(
                             width: double.infinity,
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 16.0,
-                              horizontal: 16.0,
-                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 16.0),
                             decoration: BoxDecoration(
                               color: Colors.grey[100],
                               borderRadius: BorderRadius.circular(8),
@@ -206,8 +172,6 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                 return ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
-                    // ✅ 전체 새로고침 버튼 제거됨
-
                     // 단일 주차 구역
                     const Text(
                       '단일 주차 구역',
@@ -222,9 +186,7 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                         key: ValueKey(displayName),
                         leading: const Icon(Icons.place, color: _Palette.base),
                         title: Text(displayName),
-                        subtitle: Text(
-                          '입차 ${loc.plateCount} / 공간 ${loc.capacity}',
-                        ),
+                        subtitle: Text('입차 ${loc.plateCount} / 공간 ${loc.capacity}'),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -253,7 +215,7 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
 
                     const Divider(),
 
-                    // 복합 주차 구역 (부모)
+                    // 복합 주차 구역 (부모) — 총 입차 수 표시 제거(총 공간만 표시)
                     const Text(
                       '복합 주차 구역',
                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
@@ -262,28 +224,14 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                     ...parentGroups.map((parent) {
                       final children = composites.where((l) => l.parent == parent).toList();
                       final totalCapacity = children.fold(0, (sum, l) => sum + l.capacity);
-                      final totalCount = children.fold(0, (sum, l) => sum + l.plateCount);
 
                       return ListTile(
                         key: ValueKey('parent:$parent'),
                         leading: const Icon(Icons.layers, color: _Palette.base),
                         title: Text(parent),
-                        subtitle: Text('총 입차 $totalCount / 총 공간 $totalCapacity'),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.refresh),
-                              tooltip: '이 그룹만 새로고침',
-                              onPressed: () => _refreshChildrenGroup(
-                                locationState,
-                                locationRepo,
-                                parent,
-                              ),
-                            ),
-                            const Icon(Icons.chevron_right),
-                          ],
-                        ),
+                        subtitle: Text('총 공간 $totalCapacity'),
+                        // ⛔️ 새로고침 버튼 없음 — 진입만 가능
+                        trailing: const Icon(Icons.chevron_right),
                         onTap: () => setState(() => selectedParent = parent),
                       );
                     }),

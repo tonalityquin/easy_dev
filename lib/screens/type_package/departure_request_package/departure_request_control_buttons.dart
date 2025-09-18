@@ -17,10 +17,12 @@ import 'widgets/departure_request_status_bottom_sheet.dart';
 import 'widgets/set_departure_completed_dialog.dart';
 import '../../../widgets/dialog/plate_remove_dialog.dart';
 
-/// Deep Blue 팔레트
+/// Deep Blue 팔레트 + 상태 강조 색
 class _Palette {
   static const base  = Color(0xFF0D47A1); // primary
   static const dark  = Color(0xFF09367D); // 강조 텍스트/아이콘
+  static const danger  = Color(0xFFD32F2F); // 🔴 검색(비선택)
+  static const success = Color(0xFF2E7D32); // 🟢 출차(선택)
 }
 
 class DepartureRequestControlButtons extends StatelessWidget {
@@ -99,8 +101,8 @@ class DepartureRequestControlButtons extends StatelessWidget {
                 message: isPlateSelected ? '출차 완료' : '번호판 검색',
                 child: Icon(
                   isPlateSelected ? Icons.check_circle : Icons.search,
-                  // ✅ 기존 스타일과 일관되게 '출차'에는 초록 포인트 유지
-                  color: isPlateSelected ? Colors.green[600] : muted,
+                  // ✅ 요구사항: 검색=붉은색, 출차=초록색
+                  color: isPlateSelected ? _Palette.success : _Palette.danger,
                 ),
               ),
               label: isPlateSelected ? '출차' : '검색',
@@ -157,8 +159,7 @@ class DepartureRequestControlButtons extends StatelessWidget {
 
               // 0원 + 이미 잠금 -> 해제 금지
               if (isZeroAutoLock && plate.isLockedFee) {
-                showFailedSnackbar(
-                    context, '이 차량은 0원 규칙으로 잠금 상태이며 해제할 수 없습니다.');
+                showFailedSnackbar(context, '이 차량은 0원 규칙으로 잠금 상태이며 해제할 수 없습니다.');
                 return;
               }
 
@@ -200,8 +201,7 @@ class DepartureRequestControlButtons extends StatelessWidget {
               // 일반 흐름: 정산 타입 필요
               final billingType = plate.billingType ?? '';
               if (billingType.trim().isEmpty) {
-                showFailedSnackbar(
-                    context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
+                showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
                 return;
               }
 
@@ -278,8 +278,7 @@ class DepartureRequestControlButtons extends StatelessWidget {
                     'timestamp': now.toIso8601String(),
                     'lockedFee': result.lockedFee,
                     'paymentMethod': result.paymentMethod,
-                    if (result.reason != null &&
-                        result.reason!.trim().isNotEmpty)
+                    if (result.reason != null && result.reason!.trim().isNotEmpty)
                       'reason': result.reason!.trim(),
                   };
 
