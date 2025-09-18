@@ -2,6 +2,8 @@
 import 'package:easydev/screens/dev_stub_page.dart';
 import 'package:easydev/screens/head_stub_page.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'screens/commute_package/commute_inside_screen.dart';
 import 'screens/dev_package/dev_calendar_page.dart';
 import 'screens/head_package/company_calendar_page.dart';
@@ -19,6 +21,7 @@ import 'screens/community_stub_page.dart';
 
 // ▼ 신규 페이지 import
 import 'screens/head_package/timesheet_page.dart';
+
 class AppRoutes {
   static const selector = '/selector';
   static const serviceLogin = '/service_login';
@@ -45,6 +48,80 @@ class AppRoutes {
   static const breakSheet = '/break_sheet';
 }
 
+/// ============================
+/// 간단 라우트 가드: dev_auth + dev_auth_until 검사
+/// ============================
+const _prefsKeyDevAuth = 'dev_auth';
+const _prefsKeyDevAuthUntil = 'dev_auth_until';
+
+Future<bool> _isDevAuthorized() async {
+  final prefs = await SharedPreferences.getInstance();
+  final ok = prefs.getBool(_prefsKeyDevAuth) ?? false;
+  final until = prefs.getInt(_prefsKeyDevAuthUntil);
+  final alive = ok && until != null && DateTime.now().millisecondsSinceEpoch < until;
+  if (!alive) {
+    // 만료/미인증이면 정리(선택)
+    await prefs.remove(_prefsKeyDevAuth);
+    await prefs.remove(_prefsKeyDevAuthUntil);
+  }
+  return alive;
+}
+
+class _DevAuthGate extends StatelessWidget {
+  const _DevAuthGate({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<bool>(
+      future: _isDevAuthorized(),
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (snap.data == true) return child;
+        return const _NotAuthorizedScreen();
+      },
+    );
+  }
+}
+
+class _NotAuthorizedScreen extends StatelessWidget {
+  const _NotAuthorizedScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('권한 필요')),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.lock_outline, size: 48),
+              const SizedBox(height: 12),
+              const Text(
+                '개발자 인증이 필요합니다.\n허브 화면에서 하단 펠리컨을 눌러 개발 코드를 입력하세요.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.selector),
+                icon: const Icon(Icons.home),
+                label: const Text('허브로 이동'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.selector: (context) => const SelectorHubsPage(),
   AppRoutes.serviceLogin: (context) => const LoginScreen(),
@@ -55,10 +132,12 @@ final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.typePage: (context) => const TypePage(),
   AppRoutes.tablet: (context) => const TabletPage(),
   AppRoutes.faq: (context) => const FaqPage(),
-  AppRoutes.parking: (context) => const ParkingPage(),
+
+  // ✅ 개발자 전용(또는 인증 필요) 라우트는 Gate로 감싼다
+  AppRoutes.parking: (context) => const _DevAuthGate(child: ParkingPage()),
   AppRoutes.communityStub: (context) => const CommunityStubPage(),
   AppRoutes.headStub: (context) => const HeadStubPage(),
-  AppRoutes.devStub: (context) => const DevStubPage(),
+  AppRoutes.devStub: (context) => const _DevAuthGate(child: DevStubPage()),
 
   // ▼ 기존 페이지
   AppRoutes.companyCalendar: (context) => const CompanyCalendarPage(),
@@ -66,6 +145,8 @@ final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.laborGuide: (context) => const LaborGuidePage(),
 
   // ▼ 신규 페이지 매핑
-  AppRoutes.attendanceSheet: (context) => const TimesheetPage(initialTab: TimesheetTab.attendance),
-  AppRoutes.breakSheet: (context) => const TimesheetPage(initialTab: TimesheetTab.breakTime),
+  AppRoutes.attendanceSheet: (context) =>
+  const TimesheetPage(initialTab: TimesheetTab.attendance),
+  AppRoutes.breakSheet: (context) =>
+  const TimesheetPage(initialTab: TimesheetTab.breakTime),
 };

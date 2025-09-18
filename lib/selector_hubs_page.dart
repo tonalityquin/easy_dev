@@ -1,4 +1,6 @@
 // lib/screens/selector_hubs_page.dart
+import 'dart:convert'; // base64
+import 'package:crypto/crypto.dart'; // sha256
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,6 +8,28 @@ import '../routes.dart';
 
 // ✅ snackbar_helper 사용
 import '../utils/snackbar_helper.dart';
+
+/// ============================
+/// 초간단 오프라인 Dev 코드 검증 상수/함수
+/// ============================
+/// dev_hash_once.dart 로 생성한 값을 아래에 넣으세요.
+const _DEV_SALT_B64 = 'nWPSmnV2ktkgirphVlVCqw==';
+const _DEV_HASH_HEX = '78f0a759b1da2b6570935e8a2b22e7ccde1d30ba91d688672726fcb40cd67677';
+
+/// SHA-256(salt || input)을 계산해 상수 해시와 타이밍-세이프 비교
+bool _verifyDevCode(String input) {
+  final salt = base64Decode(_DEV_SALT_B64);
+  final bytes = <int>[]..addAll(salt)..addAll(utf8.encode(input));
+  final digestHex = sha256.convert(bytes).toString();
+
+  // 타이밍 안전 비교(간단 버전)
+  if (digestHex.length != _DEV_HASH_HEX.length) return false;
+  var diff = 0;
+  for (var i = 0; i < digestHex.length; i++) {
+    diff |= digestHex.codeUnitAt(i) ^ _DEV_HASH_HEX.codeUnitAt(i);
+  }
+  return diff == 0;
+}
 
 class SelectorHubsPage extends StatefulWidget {
   const SelectorHubsPage({super.key});
@@ -16,12 +40,12 @@ class SelectorHubsPage extends StatefulWidget {
 
 class _SelectorHubsPageState extends State<SelectorHubsPage> {
   String? _savedMode; // 'service' | 'tablet' | null(미저장)
-  bool _devAuthorized = false; // ✅ 개발자 전용 로그인 성공 여부 (영구 저장)
+  bool _devAuthorized = false; // ✅ 개발자 전용 로그인 성공 여부 (TTL 내)
 
   static const _prefsKeyMode = 'mode';
   static const _prefsKeyDevAuth = 'dev_auth';
-  static const _prefsKeyDevId = 'dev_id';
-  static const _prefsKeyDevPw = 'dev_pw';
+  static const _prefsKeyDevAuthUntil = 'dev_auth_until';
+  static const Duration _devTtl = Duration(days: 7); // ✅ 간단 TTL
 
   @override
   void initState() {
@@ -31,30 +55,44 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
 
   Future<void> _restorePrefs() async {
     final prefs = await SharedPreferences.getInstance();
+    final savedMode = prefs.getString(_prefsKeyMode);
+    bool dev = prefs.getBool(_prefsKeyDevAuth) ?? false;
+    final untilMs = prefs.getInt(_prefsKeyDevAuthUntil);
+
+    if (dev) {
+      final alive = untilMs != null && DateTime.now().millisecondsSinceEpoch < untilMs;
+      if (!alive) {
+        // 만료 → 정리
+        await prefs.remove(_prefsKeyDevAuth);
+        await prefs.remove(_prefsKeyDevAuthUntil);
+        dev = false;
+      }
+    }
+
+    if (!mounted) return;
     setState(() {
-      _savedMode = prefs.getString(_prefsKeyMode); // service / outside / tablet / null
-      _devAuthorized = prefs.getBool(_prefsKeyDevAuth) ?? false;
+      _savedMode = savedMode; // service / tablet / null
+      _devAuthorized = dev;
     });
   }
 
   Future<void> _setDevAuthorized(bool value) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_prefsKeyDevAuth, value);
-    setState(() => _devAuthorized = value);
+    if (value) {
+      await prefs.setBool(_prefsKeyDevAuth, true);
+      await prefs.setInt(
+        _prefsKeyDevAuthUntil,
+        DateTime.now().add(_devTtl).millisecondsSinceEpoch,
+      );
+    } else {
+      await prefs.remove(_prefsKeyDevAuth);
+      await prefs.remove(_prefsKeyDevAuthUntil);
+    }
+    if (mounted) setState(() => _devAuthorized = value);
   }
 
-  Future<void> _setDevCredentials(String id, String pw) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_prefsKeyDevId, id);
-    await prefs.setString(_prefsKeyDevPw, pw);
-  }
-
-  Future<void> _resetDevAuthAndCreds() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_prefsKeyDevId);
-    await prefs.remove(_prefsKeyDevPw);
-    await prefs.setBool(_prefsKeyDevAuth, false);
-    setState(() => _devAuthorized = false);
+  Future<void> _resetDevAuth() async {
+    await _setDevAuthorized(false);
   }
 
   /// ✅ 하단 펠리컨 이미지를 눌렀을 때 전용 로그인 BottomSheet 열기
@@ -68,22 +106,20 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
         heightFactor: 1,
         child: DevLoginBottomSheet(
           onSuccess: (id, pw) async {
-            await _setDevCredentials(id, pw);
+            // ✅ 자격 증명은 저장하지 않고 인증 플래그만 유지
             await _setDevAuthorized(true);
             if (mounted) {
               Navigator.of(ctx).pop(); // 시트 닫기
-              // ✅ snackbar_helper로 교체
               showSuccessSnackbar(
                 context,
-                '개발자 인증 완료. 이제 개발/주차 카드를 눌러 진입할 수 있습니다.',
+                '개발자 인증 완료. 이제 개발/오프ライン 서비스 카드를 눌러 진입할 수 있습니다.',
               );
             }
           },
           onReset: () async {
-            await _resetDevAuthAndCreds();
+            await _resetDevAuth();
             if (mounted) {
               Navigator.of(ctx).pop(); // 시트 닫기
-              // ✅ snackbar_helper로 교체 (알림성 메시지: 노란색)
               showSelectedSnackbar(
                 context,
                 '개발자 인증이 초기화되었습니다.',
@@ -101,7 +137,7 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
     final serviceEnabled = _savedMode == null || _savedMode == 'service';
     final tabletEnabled = _savedMode == null || _savedMode == 'tablet';
 
-    // ✅ 개발/주차 카드는 _devAuthorized 이전에는 생성 자체를 생략
+    // ✅ 개발/오프라인(주차) 카드는 _devAuthorized 이전에는 생성 자체를 생략
     final List<List<Widget>> pages = [
       [
         _ServiceCard(enabled: serviceEnabled),
@@ -113,7 +149,7 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
       ],
       [
         const _CommunityCard(),
-        if (_devAuthorized) const _ParkingCard(), // ✅ 현재 위치 유지 + 개발 인증 시에만 노출
+        if (_devAuthorized) const _ParkingCard(), // ✅ 개발 인증 시에만 노출
       ],
       if (_devAuthorized)
         [
@@ -128,7 +164,6 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
     final bool isShort = media.size.height < 640;
     final bool keyboardOpen = media.viewInsets.bottom > 0;
     final double footerHeight = (isShort || keyboardOpen) ? 72 : 120;
-    const double footerBottomPadding = 8;
 
     return Scaffold(
       backgroundColor: Colors.white, // 전체 배경 화이트
@@ -161,65 +196,62 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
           ),
         ),
       ),
+
+      // ✅ Stack 제거: 본문과 하단 이미지를 자연스럽게 분리
       body: SafeArea(
-        child: Stack(
-          children: [
-            // ▼ 본문(스크롤 가능) — 하단에 이미지 높이만큼 여백을 추가하여 겹침 방지
-            SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(
-                24,
-                24,
-                24,
-                24 + footerHeight + footerBottomPadding,
-              ),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 880),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _Header(),
-                      const SizedBox(height: 24),
-                      _CardsPager(pages: pages),
-                      const SizedBox(height: 16),
-                      const _HintBanner(
-                        color: Colors.green, // 배경 초록
-                        iconColor: Colors.white, // 아이콘 흰색
-                      ),
-                    ],
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 24), // 하단 여백은 bottomNavigationBar가 확보
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 880),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _Header(),
+                  const SizedBox(height: 24),
+                  _CardsPager(pages: pages),
+                  const SizedBox(height: 16),
+                  const _HintBanner(
+                    color: Colors.green, // 배경 초록
+                    iconColor: Colors.white, // 아이콘 흰색
                   ),
-                ),
+                ],
               ),
             ),
+          ),
+        ),
+      ),
 
-            // ▼ 하단 펠리컨 이미지(탭 가능, 로그인 시트 트리거)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: footerBottomPadding,
-              child: AnimatedOpacity(
-                opacity: keyboardOpen ? 0.0 : 1.0,
-                duration: const Duration(milliseconds: 160),
-                child: SizedBox(
-                  height: footerHeight,
-                  child: Center(
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(12),
-                      onTap: () => _handlePelicanTap(context),
-                      child: Image.asset(
-                        'assets/images/pelican.png',
-                        fit: BoxFit.contain,
-                        height: footerHeight,
-                      ),
+      // ✅ 하단 펠리컨 이미지를 bottomNavigationBar로 이동 (작은 화면 겹침 해결)
+      bottomNavigationBar: AnimatedOpacity(
+        opacity: keyboardOpen ? 0.0 : 1.0,
+        duration: const Duration(milliseconds: 160),
+        child: SafeArea(
+          top: false,
+          child: SizedBox(
+            height: footerHeight,
+            child: Center(
+              child: Semantics(
+                button: true,
+                label: '개발자 로그인',
+                hint: '개발자 전용 로그인 시트를 엽니다',
+                child: Tooltip(
+                  message: '개발자 로그인',
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () => _handlePelicanTap(context),
+                    child: Image.asset(
+                      'assets/images/pelican.png',
+                      fit: BoxFit.contain,
+                      height: footerHeight,
                     ),
                   ),
                 ),
               ),
             ),
-          ],
+          ),
         ),
       ),
-      // ❌ 기존 bottomNavigationBar 제거 (Stack으로 대체)
     );
   }
 }
@@ -236,7 +268,7 @@ class _CardsPager extends StatefulWidget {
 
 class _CardsPagerState extends State<_CardsPager> {
   static const double _gap = 16.0;
-  static const double _kCardHeight = 240.0; // 모든 카드 동일 높이
+  static const double _baseCardHeight = 240.0; // 기본 카드 높이
   static const String _prefsKey = 'login_selector_last_page';
 
   late final PageController _pageCtrl;
@@ -265,6 +297,19 @@ class _CardsPagerState extends State<_CardsPager> {
   }
 
   @override
+  void didUpdateWidget(covariant _CardsPager oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // ✅ 페이지 수 감소 시 현재 인덱스 범위를 안전하게 클램프
+    if (widget.pages.length != oldWidget.pages.length && _pageCtrl.hasClients) {
+      final curr = _pageCtrl.page?.round() ?? 0;
+      final max = (widget.pages.length - 1).clamp(0, 999);
+      if (curr > max) {
+        _pageCtrl.jumpToPage(max);
+      }
+    }
+  }
+
+  @override
   void dispose() {
     _pageCtrl.dispose();
     super.dispose();
@@ -274,38 +319,72 @@ class _CardsPagerState extends State<_CardsPager> {
   Widget build(BuildContext context) {
     if (widget.pages.isEmpty) return const SizedBox.shrink();
 
+    // 작은 화면(짧은 세로)에서는 카드 높이를 살짝 낮춰 가독성 개선
+    final media = MediaQuery.of(context);
+    final double cardHeight = media.size.height < 640 ? 200.0 : _baseCardHeight;
+
     return LayoutBuilder(
       builder: (context, cons) {
         final usable = cons.maxWidth;
-        final half = ((usable - _gap) / 2).floorToDouble(); // 반폭 고정
+        final twoCols = usable >= 600; // ✅ 협소 폭에서는 1열 폴백
+        final half = ((usable - _gap) / 2).floorToDouble();
 
-        return SizedBox(
-          height: _kCardHeight, // 페이지 높이 = 카드 높이
-          child: PageView.builder(
-            controller: _pageCtrl,
-            itemCount: widget.pages.length,
-            onPageChanged: (i) => _saveLastPage(i),
-            itemBuilder: (context, index) {
-              final page = widget.pages[index];
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  SizedBox(
-                    width: half,
-                    height: _kCardHeight,
-                    child: page.isNotEmpty ? page[0] : const SizedBox.shrink(),
+        if (twoCols) {
+          // ▶︎ 2열(기존)
+          return SizedBox(
+            height: cardHeight, // 페이지 높이 = 카드 높이
+            child: PageView.builder(
+              controller: _pageCtrl,
+              itemCount: widget.pages.length,
+              onPageChanged: (i) => _saveLastPage(i),
+              itemBuilder: (context, index) {
+                final page = widget.pages[index];
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: half,
+                      height: cardHeight,
+                      child: page.isNotEmpty ? page[0] : const SizedBox.shrink(),
+                    ),
+                    const SizedBox(width: _gap),
+                    SizedBox(
+                      width: half,
+                      height: cardHeight,
+                      child: page.length > 1 ? page[1] : const SizedBox.shrink(),
+                    ),
+                  ],
+                );
+              },
+            ),
+          );
+        } else {
+          // ▶︎ 1열 폴백: 각 카드를 "한 페이지에 하나씩" 보여주도록 플래튼
+          final List<Widget> flatCards = [];
+          for (final page in widget.pages) {
+            for (final card in page) {
+              flatCards.add(card);
+            }
+          }
+
+          return SizedBox(
+            height: cardHeight,
+            child: PageView.builder(
+              controller: _pageCtrl,
+              itemCount: flatCards.length,
+              onPageChanged: (i) => _saveLastPage(i),
+              itemBuilder: (context, index) {
+                return Center(
+                  child: SizedBox(
+                    width: usable,
+                    height: cardHeight,
+                    child: flatCards[index],
                   ),
-                  const SizedBox(width: _gap),
-                  SizedBox(
-                    width: half,
-                    height: _kCardHeight,
-                    child: page.length > 1 ? page[1] : const SizedBox.shrink(),
-                  ),
-                ],
-              );
-            },
-          ),
-        );
+                );
+              },
+            ),
+          );
+        }
       },
     );
   }
@@ -566,7 +645,8 @@ class _ServiceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
+    final titleStyle =
+    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
 
     return Card(
       color: Colors.white,
@@ -601,7 +681,8 @@ class _TabletCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
+    final titleStyle =
+    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
 
     return Card(
       color: Colors.white,
@@ -634,7 +715,8 @@ class _CommunityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
+    final titleStyle =
+    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
 
     return Card(
       color: Colors.white,
@@ -665,7 +747,8 @@ class _FaqCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
+    final titleStyle =
+    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
 
     return Card(
       color: Colors.white,
@@ -698,7 +781,8 @@ class _HeadquarterCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
+    final titleStyle =
+    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
 
     return Card(
       color: Colors.white,
@@ -742,7 +826,8 @@ class _DevCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
+    final titleStyle =
+    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
 
     return Card(
       color: Colors.white,
@@ -763,7 +848,7 @@ class _DevCard extends StatelessWidget {
   }
 }
 
-/// 주차 관제 시스템 카드 — Deep Orange 팔레트(개발 인증 후에만 보임: 현재 위치 유지)
+/// 오프라인 서비스(주차) 카드 — Deep Orange 팔레트 (개발 인증 후에만 보임)
 class _ParkingCard extends StatelessWidget {
   const _ParkingCard();
 
@@ -773,7 +858,8 @@ class _ParkingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
+    final titleStyle =
+    Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark);
 
     return Card(
       color: Colors.white,
@@ -850,7 +936,8 @@ class _HintBanner extends StatelessWidget {
 }
 
 /// ============================
-/// Developer-only Login BottomSheet (EN)
+/// Developer-only Login BottomSheet (KR)
+/// → 아이디/비밀번호 대신 "개발 코드" 한 칸만 받는 최소 구현
 /// ============================
 class DevLoginBottomSheet extends StatefulWidget {
   const DevLoginBottomSheet({
@@ -859,6 +946,7 @@ class DevLoginBottomSheet extends StatefulWidget {
     required this.onReset,
   });
 
+  // 시그니처 유지(호환): 사용하지 않지만 기존 콜사이트 깨지지 않도록
   final Future<void> Function(String id, String pw) onSuccess;
   final Future<void> Function() onReset;
 
@@ -867,31 +955,24 @@ class DevLoginBottomSheet extends StatefulWidget {
 }
 
 class _DevLoginBottomSheetState extends State<DevLoginBottomSheet> {
-  final _idCtrl = TextEditingController();
-  final _pwCtrl = TextEditingController();
+  final _codeCtrl = TextEditingController();
   final _formKey = GlobalKey<FormState>();
-  bool _obscure = true;
   String? _error;
-
-  static const _hardId = 'facere';
-  static const _hardPw = '1868';
 
   @override
   void dispose() {
-    _idCtrl.dispose();
-    _pwCtrl.dispose();
+    _codeCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
-    final id = _idCtrl.text.trim();
-    final pw = _pwCtrl.text.trim();
+    final code = _codeCtrl.text.trim();
 
-    if (id == _hardId && pw == _hardPw) {
+    if (_verifyDevCode(code)) {
       HapticFeedback.selectionClick();
-      await widget.onSuccess(id, pw);
+      await widget.onSuccess('dev', 'ok'); // 더미 값(호환용)
     } else {
-      setState(() => _error = 'Invalid ID or password.');
+      setState(() => _error = '개발 코드가 올바르지 않습니다.');
       HapticFeedback.vibrate();
     }
   }
@@ -934,7 +1015,7 @@ class _DevLoginBottomSheetState extends State<DevLoginBottomSheet> {
                   ),
                 ),
                 const Text(
-                  'Developer Login',
+                  '개발자 로그인',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   textAlign: TextAlign.center,
                 ),
@@ -942,14 +1023,14 @@ class _DevLoginBottomSheetState extends State<DevLoginBottomSheet> {
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16),
                   child: Text(
-                    'Enter your developer credentials. Once verified, access will persist across app restarts.',
+                    '개발 전용 코드를 입력하세요. 인증되면 앱을 재시작해도 접근 권한이 유지됩니다.',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 12, color: Colors.black54),
                   ),
                 ),
                 const SizedBox(height: 12),
 
-                // ⬇️ 버튼을 "더 위"로: 하단 고정 영역 제거하고 폼 바로 아래 배치
+                // 폼
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
@@ -958,27 +1039,11 @@ class _DevLoginBottomSheetState extends State<DevLoginBottomSheet> {
                       child: Column(
                         children: [
                           TextFormField(
-                            controller: _idCtrl,
+                            controller: _codeCtrl,
                             decoration: const InputDecoration(
-                              labelText: 'ID', // no hint
+                              labelText: '개발 코드',
                               border: OutlineInputBorder(),
-                              prefixIcon: Icon(Icons.person_outline),
-                            ),
-                            textInputAction: TextInputAction.next,
-                          ),
-                          const SizedBox(height: 16),
-                          TextFormField(
-                            controller: _pwCtrl,
-                            obscureText: _obscure,
-                            decoration: InputDecoration(
-                              labelText: 'Password', // no hint
-                              border: const OutlineInputBorder(),
-                              prefixIcon: const Icon(Icons.lock_outline),
-                              suffixIcon: IconButton(
-                                onPressed: () => setState(() => _obscure = !_obscure),
-                                icon: Icon(_obscure ? Icons.visibility : Icons.visibility_off),
-                                tooltip: _obscure ? 'Show' : 'Hide',
-                              ),
+                              prefixIcon: Icon(Icons.vpn_key_outlined),
                             ),
                             onFieldSubmitted: (_) => _submit(),
                           ),
@@ -1011,7 +1076,7 @@ class _DevLoginBottomSheetState extends State<DevLoginBottomSheet> {
                                     padding: const EdgeInsets.symmetric(vertical: 14),
                                     shape: const StadiumBorder(),
                                   ),
-                                  child: const Text('Cancel'),
+                                  child: const Text('취소'),
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -1024,7 +1089,7 @@ class _DevLoginBottomSheetState extends State<DevLoginBottomSheet> {
                                   ),
                                   icon: const Icon(Icons.login),
                                   label: const Text(
-                                    'Log in',
+                                    '로그인',
                                     style: TextStyle(fontWeight: FontWeight.w700),
                                   ),
                                 ),
@@ -1032,21 +1097,20 @@ class _DevLoginBottomSheetState extends State<DevLoginBottomSheet> {
                             ],
                           ),
 
-                          // ⬇️ 초기화(Reset) 버튼 추가 — prefs의 dev_auth/dev_id/dev_pw 초기화 + 카드 숨김
+                          // 초기화(Reset) 버튼 — dev_auth 초기화 + 카드 숨김
                           const SizedBox(height: 12),
                           Align(
                             alignment: Alignment.centerRight,
                             child: TextButton.icon(
                               onPressed: _reset,
                               icon: const Icon(Icons.restart_alt),
-                              label: const Text('Reset'), // '초기화'
+                              label: const Text('초기화'),
                               style: TextButton.styleFrom(
                                 foregroundColor: Colors.redAccent,
                               ),
                             ),
                           ),
 
-                          // ⬇️ 여백을 조금 둬서 실제 하단과 간격 확보(버튼이 더 위에 보이도록)
                           const SizedBox(height: 48),
                         ],
                       ),
