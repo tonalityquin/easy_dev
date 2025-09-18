@@ -1,10 +1,10 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 class TtsUserFilters {
-  final bool parking;    // 입차 요청
-  final bool departure;  // 출차 요청
-  final bool completed;  // 출차 완료
-  final bool chat;       // ✅ 채팅 읽어주기
+  final bool parking; // 입차 요청
+  final bool departure; // 출차 요청
+  final bool completed; // 출차 완료
+  final bool chat; // ✅ 채팅 읽어주기
 
   const TtsUserFilters({
     required this.parking,
@@ -14,11 +14,11 @@ class TtsUserFilters {
   });
 
   factory TtsUserFilters.defaults() => const TtsUserFilters(
-    parking: true,
-    departure: true,
-    completed: true,
-    chat: true, // ✅ 기본값: 켜짐
-  );
+        parking: true,
+        departure: true,
+        completed: true,
+        chat: true, // ✅ 기본값: 켜짐
+      );
 
   TtsUserFilters copyWith({
     bool? parking,
@@ -35,11 +35,11 @@ class TtsUserFilters {
   }
 
   Map<String, dynamic> toMap() => {
-    'parking': parking,
-    'departure': departure,
-    'completed': completed,
-    'chat': chat,
-  };
+        'parking': parking,
+        'departure': departure,
+        'completed': completed,
+        'chat': chat,
+      };
 
   factory TtsUserFilters.fromMap(Map? m) {
     if (m == null) return TtsUserFilters.defaults();

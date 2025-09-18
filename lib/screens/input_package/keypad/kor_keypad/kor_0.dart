@@ -3,7 +3,6 @@ import 'keypad_utils.dart';
 
 class Kor0 extends StatefulWidget {
   final Function(String) onKeyTap;
-
   const Kor0({super.key, required this.onKeyTap});
 
   @override

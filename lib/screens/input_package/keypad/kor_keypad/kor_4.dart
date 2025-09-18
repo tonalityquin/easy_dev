@@ -3,7 +3,6 @@ import 'keypad_utils.dart';
 
 class Kor4 extends StatefulWidget {
   final Function(String) onKeyTap;
-
   const Kor4({super.key, required this.onKeyTap});
 
   @override
@@ -16,8 +15,8 @@ class _Kor4State extends State<Kor4> with TickerProviderStateMixin {
 
   @override
   void dispose() {
-    for (final controller in _controllers.values) {
-      controller.dispose();
+    for (final c in _controllers.values) {
+      c.dispose();
     }
     super.dispose();
   }
