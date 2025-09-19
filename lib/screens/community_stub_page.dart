@@ -30,122 +30,126 @@ class CommunityStubPage extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        centerTitle: true,
-        systemOverlayStyle: const SystemUiOverlayStyle(
-          statusBarColor: Colors.transparent,
-          statusBarIconBrightness: Brightness.dark,
-          statusBarBrightness: Brightness.light,
-        ),
-        title: Text(
-          '커뮤니티 허브',
-          style: text.titleMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.2,
-            color: cs.onSurface,
+    // ✅ 이 화면에서만 뒤로가기 pop을 막아 앱 종료 방지 (알림 스낵바 없음)
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          centerTitle: true,
+          systemOverlayStyle: const SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: Brightness.dark,
+            statusBarBrightness: Brightness.light,
           ),
-        ),
-        iconTheme: IconThemeData(color: cs.onSurface),
-        actionsIconTheme: IconThemeData(color: cs.onSurface),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: Colors.black.withOpacity(0.06)),
-        ),
-      ),
-      body: SafeArea(
-        child: Container(
-          color: Colors.white,
-          width: double.infinity,
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const _HeaderBanner(),
-              const SizedBox(height: 16),
-
-              // ✅ 반응형 Grid (카드 디자인 변경 없음)
-              Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final width = constraints.maxWidth;
-                    final crossAxisCount = width >= 1100
-                        ? 4
-                        : width >= 800
-                        ? 3
-                        : 2;
-                    const spacing = 12.0;
-                    final textScale = MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
-
-                    final tileWidth = (width - spacing * (crossAxisCount - 1)) / crossAxisCount;
-                    final baseTileHeight = 150.0; // 필요 시 140~170 조정
-                    final tileHeight = baseTileHeight * textScale;
-                    final childAspectRatio = tileWidth / tileHeight;
-
-                    final cards = <Widget>[
-                      _ActionCard(
-                        icon: Icons.videogame_asset_rounded,
-                        title: '아케이드',
-                        subtitle: 'Arcade',
-                        bg: cs.secondaryContainer,
-                        fg: cs.onSecondaryContainer,
-                        onTap: () {
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (_) => GameArcadeBottomSheet(rootContext: context),
-                          );
-                        },
-                      ),
-                      // (이전) 로드맵 카드는 HeadStubPage로 이동
-                    ];
-
-                    return GridView.builder(
-                      padding: EdgeInsets.zero,
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: crossAxisCount,
-                        mainAxisSpacing: spacing,
-                        crossAxisSpacing: spacing,
-                        childAspectRatio: childAspectRatio,
-                      ),
-                      itemCount: cards.length,
-                      itemBuilder: (context, i) => cards[i],
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-
-      // ✅ Pelican 이미지는 하얀 배경에 최적화 → 탭 시 '/selector'로 이동 로직 유지
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border(
-              top: BorderSide(color: Colors.black.withOpacity(0.06), width: 1),
+          title: Text(
+            '커뮤니티 허브',
+            style: text.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.2,
+              color: cs.onSurface,
             ),
           ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(8),
-              onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
-                '/selector',
-                    (route) => false,
+          iconTheme: IconThemeData(color: cs.onSurface),
+          actionsIconTheme: IconThemeData(color: cs.onSurface),
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(1),
+            child: Container(height: 1, color: Colors.black.withOpacity(0.06)),
+          ),
+        ),
+        body: SafeArea(
+          child: Container(
+            color: Colors.white,
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const _HeaderBanner(),
+                const SizedBox(height: 16),
+
+                // ✅ 반응형 Grid (카드 디자인 변경 없음)
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final width = constraints.maxWidth;
+                      final crossAxisCount = width >= 1100
+                          ? 4
+                          : width >= 800
+                          ? 3
+                          : 2;
+                      const spacing = 12.0;
+                      final textScale = MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
+
+                      final tileWidth = (width - spacing * (crossAxisCount - 1)) / crossAxisCount;
+                      final baseTileHeight = 150.0; // 필요 시 140~170 조정
+                      final tileHeight = baseTileHeight * textScale;
+                      final childAspectRatio = tileWidth / tileHeight;
+
+                      final cards = <Widget>[
+                        _ActionCard(
+                          icon: Icons.videogame_asset_rounded,
+                          title: '아케이드',
+                          subtitle: 'Arcade',
+                          bg: cs.secondaryContainer,
+                          fg: cs.onSecondaryContainer,
+                          onTap: () {
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => GameArcadeBottomSheet(rootContext: context),
+                            );
+                          },
+                        ),
+                        // (이전) 로드맵 카드는 HeadStubPage로 이동
+                      ];
+
+                      return GridView.builder(
+                        padding: EdgeInsets.zero,
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: crossAxisCount,
+                          mainAxisSpacing: spacing,
+                          crossAxisSpacing: spacing,
+                          childAspectRatio: childAspectRatio,
+                        ),
+                        itemCount: cards.length,
+                        itemBuilder: (context, i) => cards[i],
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // ✅ Pelican 이미지는 하얀 배경에 최적화 → 탭 시 '/selector'로 이동 로직 유지
+        bottomNavigationBar: SafeArea(
+          top: false,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(
+                top: BorderSide(color: Colors.black.withOpacity(0.06), width: 1),
               ),
-              child: SizedBox(
-                height: 120,
-                child: Image.asset('assets/images/pelican.png'),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
+                  '/selector',
+                      (route) => false,
+                ),
+                child: SizedBox(
+                  height: 120,
+                  child: Image.asset('assets/images/pelican.png'),
+                ),
               ),
             ),
           ),

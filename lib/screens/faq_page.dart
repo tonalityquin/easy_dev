@@ -175,152 +175,156 @@ class _FaqPageState extends State<FaqPage> {
     final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        centerTitle: true,
-        systemOverlayStyle: const SystemUiOverlayStyle(
-          statusBarColor: Colors.transparent,
-          statusBarIconBrightness: Brightness.dark,
-          statusBarBrightness: Brightness.light,
-        ),
-        title: Text(
-          'FAQ / 문의',
-          style: text.titleMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.2,
-            color: cs.onSurface,
+    // ✅ 이 화면에서만 뒤로가기 pop을 막아 앱 종료 방지 (스낵바 안내 없음)
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          centerTitle: true,
+          systemOverlayStyle: const SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: Brightness.dark,
+            statusBarBrightness: Brightness.light,
+          ),
+          title: Text(
+            'FAQ / 문의',
+            style: text.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.2,
+              color: cs.onSurface,
+            ),
+          ),
+          iconTheme: IconThemeData(color: cs.onSurface),
+          actionsIconTheme: IconThemeData(color: cs.onSurface),
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(1),
+            child: Container(height: 1, color: Colors.black.withOpacity(0.06)),
           ),
         ),
-        iconTheme: IconThemeData(color: cs.onSurface),
-        actionsIconTheme: IconThemeData(color: cs.onSurface),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: Colors.black.withOpacity(0.06)),
-        ),
-      ),
-      body: SafeArea(
-        child: Container(
-          color: Colors.white,
-          width: double.infinity,
-          child: ListView(
-            padding: const EdgeInsets.all(24),
-            children: [
-              // 검색바 (FAQ 팔레트 반영)
-              TextField(
-                controller: _searchCtrl,
-                onChanged: (v) => setState(() => _query = v),
-                textInputAction: TextInputAction.search,
-                decoration: InputDecoration(
-                  labelText: '코드 검색 (예: service_area_page_02)',
-                  hintText: 'common_user_00, service_area_page_01 등',
-                  isDense: true,
-                  filled: true,
-                  fillColor: _faqLight.withOpacity(0.08),
-                  prefixIcon: const Icon(Icons.search_rounded, color: _faqBase),
-                  suffixIcon: _query.isEmpty
-                      ? null
-                      : IconButton(
-                    icon: const Icon(Icons.clear_rounded, color: _faqBase),
-                    tooltip: '지우기',
-                    onPressed: () {
-                      _searchCtrl.clear();
-                      setState(() => _query = '');
-                    },
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: _faqLight.withOpacity(0.6)),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide(color: _faqLight.withOpacity(0.6)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: _faqBase, width: 1.6),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // 결과 개수 표시 (FAQ 팔레트 반영)
-              Row(
-                children: [
-                  const Icon(Icons.filter_alt_rounded, size: 16, color: _faqBase),
-                  const SizedBox(width: 6),
-                  Text(
-                    _query.isEmpty ? '전체 ${_allFaqs.length}건' : '검색 결과 ${_filtered.length}건',
-                    style: text.bodySmall?.copyWith(color: _faqDark.withOpacity(0.9)),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-
-              if (_filtered.isEmpty)
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: _faqLight.withOpacity(0.16),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: _faqLight.withOpacity(0.45)),
-                  ),
-                  child: Text(
-                    '검색 결과가 없습니다. 철자를 다시 확인해주세요.',
-                    style: text.bodyMedium?.copyWith(color: Colors.black87),
-                  ),
-                )
-              else
-                ..._filtered.map((e) => _FaqItem(question: e.question, answer: e.answer)),
-
-              const SizedBox(height: 24),
-
-              // 문의하기 버튼 (FAQ 팔레트 반영)
-              FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  backgroundColor: _faqBase,
-                  foregroundColor: Colors.white,
-                ),
-                onPressed: () {
-                  // TODO: 실제 문의 채널(오픈채팅/메일/폼)로 연결
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('문의 채널로 연결됩니다. (구현 필요)')),
-                  );
-                },
-                icon: const Icon(Icons.support_agent_rounded),
-                label: const Text('문의하기'),
-              ),
-            ],
-          ),
-        ),
-      ),
-
-      // ▼ 바텀 펠리컨 이미지 (탭하면 선택화면으로 이동) — 화이트 배경 최적화 + 상단 구분선
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Container(
-          decoration: BoxDecoration(
+        body: SafeArea(
+          child: Container(
             color: Colors.white,
-            border: Border(top: BorderSide(color: Colors.black.withOpacity(0.06))),
+            width: double.infinity,
+            child: ListView(
+              padding: const EdgeInsets.all(24),
+              children: [
+                // 검색바 (FAQ 팔레트 반영)
+                TextField(
+                  controller: _searchCtrl,
+                  onChanged: (v) => setState(() => _query = v),
+                  textInputAction: TextInputAction.search,
+                  decoration: InputDecoration(
+                    labelText: '코드 검색 (예: service_area_page_02)',
+                    hintText: 'common_user_00, service_area_page_01 등',
+                    isDense: true,
+                    filled: true,
+                    fillColor: _faqLight.withOpacity(0.08),
+                    prefixIcon: const Icon(Icons.search_rounded, color: _faqBase),
+                    suffixIcon: _query.isEmpty
+                        ? null
+                        : IconButton(
+                      icon: const Icon(Icons.clear_rounded, color: _faqBase),
+                      tooltip: '지우기',
+                      onPressed: () {
+                        _searchCtrl.clear();
+                        setState(() => _query = '');
+                      },
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: _faqLight.withOpacity(0.6)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: _faqLight.withOpacity(0.6)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: _faqBase, width: 1.6),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // 결과 개수 표시 (FAQ 팔레트 반영)
+                Row(
+                  children: [
+                    const Icon(Icons.filter_alt_rounded, size: 16, color: _faqBase),
+                    const SizedBox(width: 6),
+                    Text(
+                      _query.isEmpty ? '전체 ${_allFaqs.length}건' : '검색 결과 ${_filtered.length}건',
+                      style: text.bodySmall?.copyWith(color: _faqDark.withOpacity(0.9)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                if (_filtered.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: _faqLight.withOpacity(0.16),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: _faqLight.withOpacity(0.45)),
+                    ),
+                    child: Text(
+                      '검색 결과가 없습니다. 철자를 다시 확인해주세요.',
+                      style: text.bodyMedium?.copyWith(color: Colors.black87),
+                    ),
+                  )
+                else
+                  ..._filtered.map((e) => _FaqItem(question: e.question, answer: e.answer)),
+
+                const SizedBox(height: 24),
+
+                // 문의하기 버튼 (FAQ 팔레트 반영)
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _faqBase,
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: () {
+                    // TODO: 실제 문의 채널(오픈채팅/메일/폼)로 연결
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('문의 채널로 연결됩니다. (구현 필요)')),
+                    );
+                  },
+                  icon: const Icon(Icons.support_agent_rounded),
+                  label: const Text('문의하기'),
+                ),
+              ],
+            ),
           ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
-                AppRoutes.selector,
-                    (route) => false,
-              ),
-              borderRadius: BorderRadius.zero,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: SizedBox(
-                  height: 120,
-                  child: Image.asset('assets/images/pelican.png'),
+        ),
+
+        // ▼ 바텀 펠리컨 이미지 (탭하면 선택화면으로 이동) — 화이트 배경 최적화 + 상단 구분선
+        bottomNavigationBar: SafeArea(
+          top: false,
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(top: BorderSide(color: Colors.black.withOpacity(0.06))),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
+                  AppRoutes.selector,
+                      (route) => false,
+                ),
+                borderRadius: BorderRadius.zero,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: SizedBox(
+                    height: 120,
+                    child: Image.asset('assets/images/pelican.png'),
+                  ),
                 ),
               ),
             ),

@@ -39,224 +39,228 @@ class DevStubPage extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        centerTitle: true,
-        systemOverlayStyle: const SystemUiOverlayStyle(
-          statusBarColor: Colors.transparent,
-          statusBarIconBrightness: Brightness.dark,
-          statusBarBrightness: Brightness.light,
-        ),
-        title: Text(
-          '개발 허브',
-          style: text.titleMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.2,
-            color: cs.onSurface,
+    // ✅ 이 화면에서만 뒤로가기 pop을 막아 앱 종료 방지 (알림 스낵바 없음)
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          centerTitle: true,
+          systemOverlayStyle: const SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: Brightness.dark,
+            statusBarBrightness: Brightness.light,
           ),
-        ),
-        iconTheme: IconThemeData(color: cs.onSurface),
-        actionsIconTheme: IconThemeData(color: cs.onSurface),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: Colors.black.withOpacity(0.06)),
-        ),
-      ),
-      body: SafeArea(
-        child: Container(
-          color: Colors.white,
-          width: double.infinity,
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const _HeaderBanner(),
-              const SizedBox(height: 16),
-
-              // ✅ 반응형 Grid
-              Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final width = constraints.maxWidth;
-                    final crossAxisCount = width >= 1100
-                        ? 4
-                        : width >= 800
-                            ? 3
-                            : 2;
-                    const spacing = 12.0;
-                    final textScale = MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
-
-                    final tileWidth = (width - spacing * (crossAxisCount - 1)) / crossAxisCount;
-                    final baseTileHeight = 150.0;
-                    final tileHeight = baseTileHeight * textScale;
-                    final childAspectRatio = tileWidth / tileHeight;
-
-                    final cards = <Widget>[
-                      _ActionCard(
-                        icon: Icons.code,
-                        title: '코드',
-                        subtitle: 'Dev',
-                        bg: cs.primaryContainer,
-                        fg: cs.onPrimaryContainer,
-                        onTap: () {
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (_) => const GithubCodeBrowserBottomSheet(
-                              owner: 'tonalityquin',
-                              repo: 'easy_dev',
-                              defaultBranch: 'main',
-                            ),
-                          );
-                        },
-                      ),
-                      _ActionCard(
-                        icon: Icons.menu_book_rounded,
-                        title: '텍스트',
-                        subtitle: 'Side Project',
-                        bg: cs.primaryContainer,
-                        fg: cs.onPrimaryContainer,
-                        onTap: () {
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (_) => const GithubMarkdownBottomSheet(
-                              owner: 'tonalityquin',
-                              repo: 'side_project',
-                              defaultBranch: 'main',
-                            ),
-                          );
-                        },
-                      ),
-                      // ✅ 로컬 Prefs
-                      _ActionCard(
-                        icon: Icons.computer_rounded,
-                        title: '로컬 컴퓨터',
-                        subtitle: 'SharedPreferences',
-                        bg: cs.surfaceVariant,
-                        fg: cs.onSurfaceVariant,
-                        onTap: () {
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (_) => const LocalPrefsBottomSheet(),
-                          );
-                        },
-                      ),
-                      // ✅ 디버그
-                      _ActionCard(
-                        icon: Icons.bug_report_rounded,
-                        title: '디버그',
-                        subtitle: 'Firestore Logs\nLocal Logs',
-                        bg: cs.errorContainer.withOpacity(.85),
-                        fg: cs.onErrorContainer,
-                        onTap: () {
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (_) => const Material(
-                              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-                              clipBehavior: Clip.antiAlias,
-                              child: SizedBox(
-                                height: 560,
-                                child: DebugBottomSheet(),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                      // ✅ 메모: 카드 탭 → 메모 패널 열기
-                      _ActionCard(
-                        icon: Icons.sticky_note_2_rounded,
-                        title: '메모',
-                        subtitle: '플로팅 버블 · 어디서나 기록',
-                        bg: cs.primaryContainer,
-                        fg: cs.onPrimaryContainer,
-                        tintColor: kDevTint.withOpacity(0.45),
-                        titleColor: kDevDarkText,
-                        onTap: () async {
-                          await DevMemo.openPanel();
-                        },
-                      ),
-                      // ✅ 개인 달력 (그린 팔레트)
-                      _ActionCard(
-                        icon: Icons.calendar_month_rounded,
-                        title: '개인 달력',
-                        subtitle: 'Google Calendar',
-                        bg: calBase,
-                        fg: calFg,
-                        tintColor: calLight,
-                        titleColor: calDark,
-                        onTap: () {
-                          Navigator.of(context).pushNamed(AppRoutes.devCalendar);
-                        },
-                      ),
-
-                      // "구글 독스" 카드 onTap 수정
-                      _ActionCard(
-                        icon: Icons.description_outlined,
-                        title: '구글 독스',
-                        subtitle: '문서 편집 · Docs API',
-                        bg: cs.primaryContainer,
-                        fg: cs.onPrimaryContainer,
-                        tintColor: kDevTint.withOpacity(0.35),
-                        titleColor: kDevDarkText,
-                        onTap: () async {
-                          GoogleDocsDocPanel.enabled.value = true;
-                          await GoogleDocsDocPanel.togglePanel(); // ← 여기로 교체
-                        },
-                      ),
-                    ];
-
-                    return GridView.builder(
-                      padding: EdgeInsets.zero,
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: crossAxisCount,
-                        mainAxisSpacing: spacing,
-                        crossAxisSpacing: spacing,
-                        childAspectRatio: childAspectRatio,
-                      ),
-                      itemCount: cards.length,
-                      itemBuilder: (context, i) => cards[i],
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-
-      // ✅ Pelican 이미지는 하얀 배경에 최적화 → 탭 시 '/selector'로 이동
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border(
-              top: BorderSide(color: Colors.black.withOpacity(0.06), width: 1),
+          title: Text(
+            '개발 허브',
+            style: text.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.2,
+              color: cs.onSurface,
             ),
           ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(8),
-              onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
-                AppRoutes.selector,
-                (route) => false,
+          iconTheme: IconThemeData(color: cs.onSurface),
+          actionsIconTheme: IconThemeData(color: cs.onSurface),
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(1),
+            child: Container(height: 1, color: Colors.black.withOpacity(0.06)),
+          ),
+        ),
+        body: SafeArea(
+          child: Container(
+            color: Colors.white,
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const _HeaderBanner(),
+                const SizedBox(height: 16),
+
+                // ✅ 반응형 Grid
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final width = constraints.maxWidth;
+                      final crossAxisCount = width >= 1100
+                          ? 4
+                          : width >= 800
+                          ? 3
+                          : 2;
+                      const spacing = 12.0;
+                      final textScale = MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
+
+                      final tileWidth = (width - spacing * (crossAxisCount - 1)) / crossAxisCount;
+                      final baseTileHeight = 150.0;
+                      final tileHeight = baseTileHeight * textScale;
+                      final childAspectRatio = tileWidth / tileHeight;
+
+                      final cards = <Widget>[
+                        _ActionCard(
+                          icon: Icons.code,
+                          title: '코드',
+                          subtitle: 'Dev',
+                          bg: cs.primaryContainer,
+                          fg: cs.onPrimaryContainer,
+                          onTap: () {
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => const GithubCodeBrowserBottomSheet(
+                                owner: 'tonalityquin',
+                                repo: 'easy_dev',
+                                defaultBranch: 'main',
+                              ),
+                            );
+                          },
+                        ),
+                        _ActionCard(
+                          icon: Icons.menu_book_rounded,
+                          title: '텍스트',
+                          subtitle: 'Side Project',
+                          bg: cs.primaryContainer,
+                          fg: cs.onPrimaryContainer,
+                          onTap: () {
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => const GithubMarkdownBottomSheet(
+                                owner: 'tonalityquin',
+                                repo: 'side_project',
+                                defaultBranch: 'main',
+                              ),
+                            );
+                          },
+                        ),
+                        // ✅ 로컬 Prefs
+                        _ActionCard(
+                          icon: Icons.computer_rounded,
+                          title: '로컬 컴퓨터',
+                          subtitle: 'SharedPreferences',
+                          bg: cs.surfaceVariant,
+                          fg: cs.onSurfaceVariant,
+                          onTap: () {
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => const LocalPrefsBottomSheet(),
+                            );
+                          },
+                        ),
+                        // ✅ 디버그
+                        _ActionCard(
+                          icon: Icons.bug_report_rounded,
+                          title: '디버그',
+                          subtitle: 'Firestore Logs\nLocal Logs',
+                          bg: cs.errorContainer.withOpacity(.85),
+                          fg: cs.onErrorContainer,
+                          onTap: () {
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => const Material(
+                                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                                clipBehavior: Clip.antiAlias,
+                                child: SizedBox(
+                                  height: 560,
+                                  child: DebugBottomSheet(),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        // ✅ 메모: 카드 탭 → 메모 패널 열기
+                        _ActionCard(
+                          icon: Icons.sticky_note_2_rounded,
+                          title: '메모',
+                          subtitle: '플로팅 버블 · 어디서나 기록',
+                          bg: cs.primaryContainer,
+                          fg: cs.onPrimaryContainer,
+                          tintColor: kDevTint.withOpacity(0.45),
+                          titleColor: kDevDarkText,
+                          onTap: () async {
+                            await DevMemo.openPanel();
+                          },
+                        ),
+                        // ✅ 개인 달력 (그린 팔레트)
+                        _ActionCard(
+                          icon: Icons.calendar_month_rounded,
+                          title: '개인 달력',
+                          subtitle: 'Google Calendar',
+                          bg: calBase,
+                          fg: calFg,
+                          tintColor: calLight,
+                          titleColor: calDark,
+                          onTap: () {
+                            Navigator.of(context).pushNamed(AppRoutes.devCalendar);
+                          },
+                        ),
+
+                        // "구글 독스" 카드 onTap 수정
+                        _ActionCard(
+                          icon: Icons.description_outlined,
+                          title: '구글 독스',
+                          subtitle: '문서 편집 · Docs API',
+                          bg: cs.primaryContainer,
+                          fg: cs.onPrimaryContainer,
+                          tintColor: kDevTint.withOpacity(0.35),
+                          titleColor: kDevDarkText,
+                          onTap: () async {
+                            GoogleDocsDocPanel.enabled.value = true;
+                            await GoogleDocsDocPanel.togglePanel(); // ← 여기로 교체
+                          },
+                        ),
+                      ];
+
+                      return GridView.builder(
+                        padding: EdgeInsets.zero,
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: crossAxisCount,
+                          mainAxisSpacing: spacing,
+                          crossAxisSpacing: spacing,
+                          childAspectRatio: childAspectRatio,
+                        ),
+                        itemCount: cards.length,
+                        itemBuilder: (context, i) => cards[i],
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // ✅ Pelican 이미지는 하얀 배경에 최적화 → 탭 시 '/selector'로 이동
+        bottomNavigationBar: SafeArea(
+          top: false,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(
+                top: BorderSide(color: Colors.black.withOpacity(0.06), width: 1),
               ),
-              child: SizedBox(
-                height: 120,
-                child: Image.asset('assets/images/pelican.png'),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
+                  AppRoutes.selector,
+                      (route) => false,
+                ),
+                child: SizedBox(
+                  height: 120,
+                  child: Image.asset('assets/images/pelican.png'),
+                ),
               ),
             ),
           ),

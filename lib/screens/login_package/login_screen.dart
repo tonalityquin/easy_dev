@@ -1,3 +1,5 @@
+// lib/screens/login/login_screen.dart (예시 경로)
+// ─────────────────────────────────────────────────────────────────────────────
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -117,11 +119,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     if (_isHeadTarget()) {
       final currentArea = context.read<AreaState>().currentArea;
       if (currentArea != 'belivus') {
-        // 접근 차단: 안내 후 허브로 복귀
+        // 접근 차단: 허브로 복귀 (스낵바 안내 제거)
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('본사 허브는 belivus 지역 사용자만 접근할 수 있습니다.')),
-        );
         Navigator.of(context).pushReplacementNamed(AppRoutes.selector);
         return;
       }
@@ -137,22 +136,26 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   Widget build(BuildContext context) {
     // (선택) requiredMode 강제 – 모드가 다르면 접근 차단/안내
     if (_requiredMode != null && _requiredMode != widget.mode) {
-      return Scaffold(
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.lock_outline, size: 40),
-                const SizedBox(height: 12),
-                Text('접근 가능한 모드가 아닙니다. (요청: ${_requiredMode!}, 현재: ${widget.mode})'),
-                const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.selector),
-                  child: const Text('허브로 돌아가기'),
-                ),
-              ],
+      // ✅ 이 화면에서만 뒤로가기 pop을 막아 앱 종료 방지
+      return PopScope(
+        canPop: false,
+        child: Scaffold(
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24), // ← 수정: named parameter 사용
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.lock_outline, size: 40),
+                  const SizedBox(height: 12),
+                  Text('접근 가능한 모드가 아닙니다. (요청: ${_requiredMode!}, 현재: ${widget.mode})'),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.selector),
+                    child: const Text('허브로 돌아가기'),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -164,16 +167,20 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         ? TabletLoginForm(controller: _tabletController!)
         : ServiceLoginForm(controller: _loginController!);
 
-    return Scaffold(
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Center(
-          child: SingleChildScrollView(
-            child: FadeTransition(
-              opacity: _opacityAnimation,
-              child: SlideTransition(
-                position: _offsetAnimation,
-                child: loginForm,
+    // ✅ 이 화면에서만 뒤로가기 pop을 막아 앱 종료 방지 (스낵바 없음)
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        body: Padding(
+          padding: const EdgeInsets.all(20), // ← 수정: named parameter 사용
+          child: Center(
+            child: SingleChildScrollView(
+              child: FadeTransition(
+                opacity: _opacityAnimation,
+                child: SlideTransition(
+                  position: _offsetAnimation,
+                  child: loginForm,
+                ),
               ),
             ),
           ),

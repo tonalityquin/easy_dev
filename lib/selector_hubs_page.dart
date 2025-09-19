@@ -167,85 +167,91 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
     final bool keyboardOpen = media.viewInsets.bottom > 0;
     final double footerHeight = (isShort || keyboardOpen) ? 72 : 120;
 
-    return Scaffold(
-      backgroundColor: Colors.white, // 전체 배경 화이트
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        centerTitle: true,
-        systemOverlayStyle: const SystemUiOverlayStyle(
-          statusBarColor: Colors.transparent,
-          statusBarIconBrightness: Brightness.dark,
-          statusBarBrightness: Brightness.light,
-        ),
-        title: Text(
-          'Pelican Hubs',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.2,
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
-        ),
-        iconTheme: IconThemeData(color: Theme.of(context).colorScheme.onSurface),
-        actionsIconTheme: IconThemeData(color: Theme.of(context).colorScheme.onSurface),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(
-            height: 1,
-            color: Colors.black.withOpacity(0.06),
+    // ✅ 이 화면에서만 뒤로가기 pop을 막아 앱 종료를 방지
+    return PopScope(
+      canPop: false, // 루트에서 뒤로가기로 pop되지 않도록 고정
+      onPopInvoked: (didPop) {
+      },
+      child: Scaffold(
+        backgroundColor: Colors.white, // 전체 배경 화이트
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          centerTitle: true,
+          systemOverlayStyle: const SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: Brightness.dark,
+            statusBarBrightness: Brightness.light,
+          ),
+          title: Text(
+            'Pelican Hubs',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.2,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+          iconTheme: IconThemeData(color: Theme.of(context).colorScheme.onSurface),
+          actionsIconTheme: IconThemeData(color: Theme.of(context).colorScheme.onSurface),
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(1),
+            child: Container(
+              height: 1,
+              color: Colors.black.withOpacity(0.06),
+            ),
           ),
         ),
-      ),
 
-      // ✅ Stack 제거: 본문과 하단 이미지를 자연스럽게 분리
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 24), // 하단 여백은 bottomNavigationBar가 확보
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 880),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _Header(),
-                  const SizedBox(height: 24),
-                  _CardsPager(pages: pages),
-                  const SizedBox(height: 16),
-                  const _HintBanner(
-                    color: Colors.green, // 배경 초록
-                    iconColor: Colors.white, // 아이콘 흰색
-                  ),
-                ],
+        // ✅ Stack 제거: 본문과 하단 이미지를 자연스럽게 분리
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 24), // 하단 여백은 bottomNavigationBar가 확보
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 880),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _Header(),
+                    const SizedBox(height: 24),
+                    _CardsPager(pages: pages),
+                    const SizedBox(height: 16),
+                    const _HintBanner(
+                      color: Colors.green, // 배경 초록
+                      iconColor: Colors.white, // 아이콘 흰색
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         ),
-      ),
 
-      // ✅ 하단 펠리컨 이미지를 bottomNavigationBar로 이동 (작은 화면 겹침 해결)
-      bottomNavigationBar: AnimatedOpacity(
-        opacity: keyboardOpen ? 0.0 : 1.0,
-        duration: const Duration(milliseconds: 160),
-        child: SafeArea(
-          top: false,
-          child: SizedBox(
-            height: footerHeight,
-            child: Center(
-              child: Semantics(
-                button: true,
-                label: '개발자 로그인',
-                hint: '개발자 전용 로그인 시트를 엽니다',
-                child: Tooltip(
-                  message: '개발자 로그인',
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () => _handlePelicanTap(context),
-                    child: Image.asset(
-                      'assets/images/pelican.png',
-                      fit: BoxFit.contain,
-                      height: footerHeight,
+        // ✅ 하단 펠리컨 이미지를 bottomNavigationBar로 이동 (작은 화면 겹침 해결)
+        bottomNavigationBar: AnimatedOpacity(
+          opacity: keyboardOpen ? 0.0 : 1.0,
+          duration: const Duration(milliseconds: 160),
+          child: SafeArea(
+            top: false,
+            child: SizedBox(
+              height: footerHeight,
+              child: Center(
+                child: Semantics(
+                  button: true,
+                  label: '개발자 로그인',
+                  hint: '개발자 전용 로그인 시트를 엽니다',
+                  child: Tooltip(
+                    message: '개발자 로그인',
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () => _handlePelicanTap(context),
+                      child: Image.asset(
+                        'assets/images/pelican.png',
+                        fit: BoxFit.contain,
+                        height: footerHeight,
+                      ),
                     ),
                   ),
                 ),

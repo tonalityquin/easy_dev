@@ -188,126 +188,130 @@ class _CommuteInsideScreenState extends State<CommuteInsideScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Consumer<UserState>(
-        builder: (context, userState, _) {
-          if (userState.isWorking) {
-            controller.redirectIfWorking(context, userState);
-          }
+    // ✅ 이 화면에서만 뒤로가기로 앱 종료되지 않도록 차단 (스낵바 안내 없음)
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        body: Consumer<UserState>(
+          builder: (context, userState, _) {
+            if (userState.isWorking) {
+              controller.redirectIfWorking(context, userState);
+            }
 
-          return SafeArea(
-            child: Stack(
-              children: [
-                SingleChildScrollView(
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        children: [
-                          const CommuteInsideHeaderWidgetSection(),
-                          const CommuteInsideUserInfoCardSection(),
-                          const SizedBox(height: 6),
-                          Row(
+            return SafeArea(
+              child: Stack(
+                children: [
+                  SingleChildScrollView(
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          children: [
+                            const CommuteInsideHeaderWidgetSection(),
+                            const CommuteInsideUserInfoCardSection(),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: CommuteInsideReportButtonSection(
+                                    loadingUrl: loadingUrl,
+                                    kakaoUrl: kakaoUrl,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: CommuteInsideWorkButtonSection(
+                                    controller: controller,
+                                    onLoadingChanged: (value) {
+                                      setState(() {
+                                        _isLoading = value;
+                                      });
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 1),
+                            Center(
+                              child: SizedBox(
+                                height: 80,
+                                child: Image.asset('assets/images/pelican.png'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 16,
+                    right: 16,
+                    child: PopupMenuButton<String>(
+                      onSelected: (value) {
+                        switch (value) {
+                          case 'logout':
+                            _handleLogout(context);
+                            break;
+                          case 'changeUrl':
+                            _handleChangeUrl(context);
+                            break;
+                          case 'setCommuteSheet':
+                            _handleSetCommuteSheetId(context);
+                            break;
+                        }
+                      },
+                      itemBuilder: (context) => const [
+                        PopupMenuItem(
+                          value: 'logout',
+                          child: Row(
                             children: [
-                              Expanded(
-                                child: CommuteInsideReportButtonSection(
-                                  loadingUrl: loadingUrl,
-                                  kakaoUrl: kakaoUrl,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: CommuteInsideWorkButtonSection(
-                                  controller: controller,
-                                  onLoadingChanged: (value) {
-                                    setState(() {
-                                      _isLoading = value;
-                                    });
-                                  },
-                                ),
-                              ),
+                              Icon(Icons.logout, color: Colors.redAccent),
+                              SizedBox(width: 8),
+                              Text('로그아웃'),
                             ],
                           ),
-                          const SizedBox(height: 1),
-                          Center(
-                            child: SizedBox(
-                              height: 80,
-                              child: Image.asset('assets/images/pelican.png'),
-                            ),
+                        ),
+                        PopupMenuItem(
+                          value: 'changeUrl',
+                          child: Row(
+                            children: [
+                              Icon(Icons.edit_location_alt, color: Colors.blueAccent),
+                              SizedBox(width: 8),
+                              Text('경로 변경'),
+                            ],
                           ),
-                        ],
-                      ),
+                        ),
+                        PopupMenuItem(
+                          value: 'setCommuteSheet',
+                          child: Row(
+                            children: [
+                              Icon(Icons.assignment_add, color: Colors.green),
+                              SizedBox(width: 8),
+                              Text('출근 시트 삽입'),
+                            ],
+                          ),
+                        ),
+                      ],
+                      icon: const Icon(Icons.more_vert),
                     ),
                   ),
-                ),
-                Positioned(
-                  top: 16,
-                  right: 16,
-                  child: PopupMenuButton<String>(
-                    onSelected: (value) {
-                      switch (value) {
-                        case 'logout':
-                          _handleLogout(context);
-                          break;
-                        case 'changeUrl':
-                          _handleChangeUrl(context);
-                          break;
-                        case 'setCommuteSheet':
-                          _handleSetCommuteSheetId(context);
-                          break;
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(
-                        value: 'logout',
-                        child: Row(
-                          children: [
-                            Icon(Icons.logout, color: Colors.redAccent),
-                            SizedBox(width: 8),
-                            Text('로그아웃'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'changeUrl',
-                        child: Row(
-                          children: [
-                            Icon(Icons.edit_location_alt, color: Colors.blueAccent),
-                            SizedBox(width: 8),
-                            Text('경로 변경'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'setCommuteSheet',
-                        child: Row(
-                          children: [
-                            Icon(Icons.assignment_add, color: Colors.green),
-                            SizedBox(width: 8),
-                            Text('출근 시트 삽입'),
-                          ],
-                        ),
-                      ),
-                    ],
-                    icon: const Icon(Icons.more_vert),
-                  ),
-                ),
-                if (_isLoading || userState.isWorking)
-                  Positioned.fill(
-                    child: AbsorbPointer(
-                      absorbing: true,
-                      child: Container(
-                        color: Colors.black.withOpacity(0.2),
-                        child: const Center(
-                          child: CircularProgressIndicator(),
+                  if (_isLoading || userState.isWorking)
+                    Positioned.fill(
+                      child: AbsorbPointer(
+                        absorbing: true,
+                        child: Container(
+                          color: Colors.black.withOpacity(0.2),
+                          child: const Center(
+                            child: CircularProgressIndicator(),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-              ],
-            ),
-          );
-        },
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }

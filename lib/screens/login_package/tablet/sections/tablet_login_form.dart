@@ -1,3 +1,5 @@
+// lib/screens/login/tablet/sections/tablet_login_form.dart
+// ─────────────────────────────────────────────────────────────────────────────
 import 'package:flutter/material.dart';
 import '../../../../routes.dart';
 import '../tablet_login_controller.dart';
@@ -67,7 +69,8 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
           borderSide: const BorderSide(color: Colors.redAccent, width: 1.8),
         ),
         // 내용 패딩 기본값
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        contentPadding:
+        const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       ),
       // 버튼 계열 대비(아이콘 버튼 등) 미세 톤
       iconTheme: const IconThemeData(color: _base),
@@ -110,7 +113,8 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
                   controller: _controller.nameController,
                   focusNode: _controller.nameFocus,
                   textInputAction: TextInputAction.next,
-                  onSubmitted: (_) => FocusScope.of(context).requestFocus(_controller.phoneFocus),
+                  onSubmitted: (_) =>
+                      FocusScope.of(context).requestFocus(_controller.phoneFocus),
                   decoration: _controller.inputDecoration(
                     label: "이름",
                     icon: Icons.person,
@@ -127,8 +131,10 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
                   autocorrect: false, // ← 자동 교정 끔
                   enableSuggestions: false, // ← 추천 끔
                   textInputAction: TextInputAction.next,
-                  onChanged: (value) => _controller.formatPhoneNumber(value, setState),
-                  onSubmitted: (_) => FocusScope.of(context).requestFocus(_controller.passwordFocus),
+                  onChanged: (value) =>
+                      _controller.formatPhoneNumber(value, setState),
+                  onSubmitted: (_) => FocusScope.of(context)
+                      .requestFocus(_controller.passwordFocus),
                   decoration: _controller.inputDecoration(
                     label: "영어 아이디(핸들)", // ← 라벨 명확화
                     icon: Icons.alternate_email, // ← 핸들 느낌 아이콘
@@ -150,9 +156,12 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
                         foregroundColor: _base, // 눈아이콘 컬러 톤 맞춤
                       ),
                       icon: Icon(
-                        _controller.obscurePassword ? Icons.visibility_off : Icons.visibility,
+                        _controller.obscurePassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
                       ),
-                      onPressed: () => setState(() => _controller.togglePassword()),
+                      onPressed: () =>
+                          setState(() => _controller.togglePassword()),
                     ),
                   ),
                 ),
