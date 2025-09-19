@@ -88,9 +88,13 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         if (mounted && data != null) {
           final fetchedStatus = data['customStatus'] as String?;
           final fetchedList =
-              (data['statusList'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
+              (data['statusList'] as List<dynamic>?)
+                  ?.map((e) => e.toString())
+                  .toList() ??
+                  [];
 
-          final String? fetchedCountType = (data['countType'] as String?)?.trim();
+          final String? fetchedCountType =
+          (data['countType'] as String?)?.trim();
 
           setState(() {
             controller.fetchedCustomStatus = fetchedStatus;
@@ -118,7 +122,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       await billState.loadFromBillCache();
       if (!mounted) return;
       setState(() {
-        controller.isLocationSelected = controller.locationController.text.isNotEmpty;
+        controller.isLocationSelected =
+            controller.locationController.text.isNotEmpty;
       });
     });
 
@@ -132,14 +137,19 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
   @override
   void dispose() {
+    // ✅ (1) 컨트롤러 정리
+    _sheetController.dispose();
     controller.dispose();
     super.dispose();
   }
 
-  Future<Map<String, dynamic>?> _fetchPlateStatus(String plateNumber, String area) async {
+  Future<Map<String, dynamic>?> _fetchPlateStatus(
+      String plateNumber, String area) async {
     final docId = '${plateNumber}_$area';
-    final doc =
-    await FirebaseFirestore.instance.collection('plate_status').doc(docId).get();
+    final doc = await FirebaseFirestore.instance
+        .collection('plate_status')
+        .doc(docId)
+        .get();
     if (doc.exists) {
       return doc.data();
     }
@@ -163,8 +173,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     }
 
     final front = m.group(1)!; // 2 or 3 digits
-    final mid = m.group(2)!;   // 한글 1글자
-    final back = m.group(3)!;  // 4 digits
+    final mid = m.group(2)!; // 한글 1글자
+    final back = m.group(3)!; // 4 digits
 
     setState(() {
       controller.setFrontDigitMode(front.length == 3);
@@ -185,8 +195,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         key: const ValueKey('frontKeypad'),
         controller: controller.controllerFrontDigit,
         maxLength: controller.isThreeDigit ? 3 : 2,
-        onComplete: () =>
-            setState(() => controller.setActiveController(controller.controllerMidDigit)),
+        onComplete: () => setState(
+                () => controller.setActiveController(controller.controllerMidDigit)),
         onChangeFrontDigitMode: (defaultThree) {
           setState(() {
             controller.setFrontDigitMode(defaultThree);
@@ -200,8 +210,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       return KorKeypad(
         key: const ValueKey('midKeypad'),
         controller: controller.controllerMidDigit,
-        onComplete: () =>
-            setState(() => controller.setActiveController(controller.controllerBackDigit)),
+        onComplete: () => setState(
+                () => controller.setActiveController(controller.controllerBackDigit)),
       );
     }
 
@@ -243,8 +253,10 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 시트/키패드가 가리는 영역을 고려해 상단 콘텐츠에 하단 패딩 부여
-    final bottomSafePadding = controller.showKeypad ? 280.0 : 140.0;
+    // ✅ (2) 키보드/인셋을 반영하여 하단 패딩 보정
+    final viewInset = MediaQuery.of(context).viewInsets.bottom;
+    final bottomSafePadding =
+        (controller.showKeypad ? 280.0 : 140.0) + viewInset;
 
     return Scaffold(
       appBar: AppBar(
@@ -257,7 +269,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
           alignment: Alignment.centerRight,
           child: Text(
             controller.isThreeDigit ? '현재 앞자리: 세자리' : '현재 앞자리: 두자리',
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black),
+            style: const TextStyle(
+                fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black),
           ),
         ),
         actions: [
@@ -273,10 +286,13 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         builder: (context, constraints) {
           return Stack(
             children: [
-              // 상단(기본) 콘텐츠: 번호판/위치/사진 섹션까지만 — 사용자 스크롤 금지
+              // 상단(기본) 콘텐츠: 번호판/위치/사진 섹션 — ✅ 세로 스크롤 가능
               Positioned.fill(
                 child: SingleChildScrollView(
-                  physics: const NeverScrollableScrollPhysics(),
+                  // 🔹 작은 폰 보완: 항상 세로 스크롤 가능 + 드래그 시 키보드 닫기
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  keyboardDismissBehavior:
+                  ScrollViewKeyboardDismissBehavior.onDrag,
                   padding: EdgeInsets.fromLTRB(16, 16, 16, bottomSafePadding),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -293,7 +309,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                         onKeypadStateChanged: (_) {
                           setState(() {
                             controller.clearInput();
-                            controller.setActiveController(controller.controllerFrontDigit);
+                            controller.setActiveController(
+                                controller.controllerFrontDigit);
                             // 필요 시 아래 라인 활성화하면 탭 시 항상 하단 키패드+도크가 열립니다.
                             // controller.showKeypad = true;
                           });
@@ -306,13 +323,15 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                         isThreeDigit: controller.isThreeDigit,
                       ),
                       const SizedBox(height: 16),
-                      InputLocationSection(locationController: controller.locationController),
+                      InputLocationSection(
+                          locationController: controller.locationController),
                       const SizedBox(height: 16),
                       InputPhotoSection(
                         capturedImages: controller.capturedImages,
                         plateNumber: controller.buildPlateNumber(),
                       ),
-                      // 안내 문구
+                      // 필요 시 추가 안내/여백
+                      const SizedBox(height: 8),
                     ],
                   ),
                 ),
@@ -327,90 +346,120 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                 snap: true,
                 snapSizes: const [_sheetClosed, _sheetOpened],
                 builder: (context, scrollController) {
+                  // 메인 배경(화이트)과 구분되는 아주 옅은 톤
+                  const sheetBg =
+                  Color(0xFFF6F8FF); // subtle blue-tinted light gray
+
                   return Container(
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-                      boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, -4))],
+                    decoration: BoxDecoration(
+                      color: sheetBg, // 기존: Colors.white
+                      borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(16)),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Colors.black26,
+                          blurRadius: 10,
+                          offset: Offset(0, -4),
+                        ),
+                      ],
                     ),
-                    child: ListView(
-                      controller: scrollController,
-                      physics: const NeverScrollableScrollPhysics(), // 내부 리스트 사용자 스크롤 금지(요청 유지)
-                      padding: EdgeInsets.fromLTRB(
-                        16,
-                        8,
-                        16,
-                        16 + (controller.showKeypad ? 260 : 100),
-                      ),
-                      children: [
-                        // 헤더(탭으로 열고 닫기 + 애니메이션)
-                        GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: _toggleSheet,
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 8, bottom: 12),
-                            child: Column(
-                              children: [
-                                Container(
-                                  width: 40,
-                                  height: 4,
-                                  decoration: BoxDecoration(
-                                    color: Colors.black26,
-                                    borderRadius: BorderRadius.circular(2),
+                    // ✅ SafeArea: 상단만 보호 / 하단은 우리가 직접 패딩 관리
+                    child: SafeArea(
+                      top: true,
+                      bottom: false,
+                      child: ListView(
+                        controller: scrollController,
+                        physics:
+                        const NeverScrollableScrollPhysics(), // 내부 스크롤 금지(요청 유지)
+                        padding: EdgeInsets.fromLTRB(
+                          16,
+                          8,
+                          16,
+                          16 + (controller.showKeypad ? 260 : 100) + viewInset,
+                        ),
+                        children: [
+                          // 헤더(탭으로 열고 닫기 + 애니메이션)
+                          GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: _toggleSheet,
+                            child: Padding(
+                              padding:
+                              const EdgeInsets.only(top: 8, bottom: 12),
+                              child: Column(
+                                children: [
+                                  Container(
+                                    width: 40,
+                                    height: 4,
+                                    decoration: BoxDecoration(
+                                      // 핸들 색도 살짝 진하게 해서 대비 ↑ (선택)
+                                      color: Colors.black38, // 기존: Colors.black26
+                                      borderRadius: BorderRadius.circular(2),
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: 8),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      _sheetOpen ? '정산 유형 / 메모 카드 닫기' : '정산 유형 / 메모 카드 열기',
-                                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                                    ),
-                                    Text(
-                                      controller.buildPlateNumber(),
-                                      style: const TextStyle(color: Colors.black54),
-                                    ),
-                                  ],
-                                ),
-                              ],
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        _sheetOpen
+                                            ? '정산 유형 / 메모 카드 닫기'
+                                            : '정산 유형 / 메모 카드 열기',
+                                        style: const TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w700),
+                                      ),
+                                      Text(
+                                        controller.buildPlateNumber(),
+                                        style: const TextStyle(
+                                            color: Colors.black54),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 12),
+                          const SizedBox(height: 12),
 
-                        // ⬇️ 정산 영역
-                        InputBillSection(
-                          selectedBill: controller.selectedBill,
-                          onChanged: (value) => setState(() => controller.selectedBill = value),
-                          selectedBillType: selectedBillType,
-                          onTypeChanged: (newType) => setState(() => selectedBillType = newType),
-                          countTypeController: controller.countTypeController,
-                        ),
+                          // ⬇️ 정산 영역
+                          InputBillSection(
+                            selectedBill: controller.selectedBill,
+                            onChanged: (value) =>
+                                setState(() => controller.selectedBill = value),
+                            selectedBillType: selectedBillType,
+                            onTypeChanged: (newType) =>
+                                setState(() => selectedBillType = newType),
+                            countTypeController:
+                            controller.countTypeController,
+                          ),
 
-                        const SizedBox(height: 24),
+                          const SizedBox(height: 24),
 
-                        InputCustomStatusSection(
-                          controller: controller,
-                          fetchedCustomStatus: controller.fetchedCustomStatus,
-                          selectedStatusNames: selectedStatusNames,
-                          statusSectionKey: statusSectionKey,
-                          onDeleted: () {
-                            setState(() {
-                              controller.fetchedCustomStatus = null;
-                              controller.customStatusController.clear();
-                            });
-                          },
-                          onStatusCleared: () {
-                            setState(() {
-                              selectedStatusNames = [];
-                              statusSectionKey = UniqueKey();
-                            });
-                          },
-                        ),
+                          // 차량 상태 토글은 제거, 메모 섹션만 유지
+                          InputCustomStatusSection(
+                            controller: controller,
+                            fetchedCustomStatus:
+                            controller.fetchedCustomStatus,
+                            selectedStatusNames: selectedStatusNames,
+                            statusSectionKey: statusSectionKey,
+                            onDeleted: () {
+                              setState(() {
+                                controller.fetchedCustomStatus = null;
+                                controller.customStatusController.clear();
+                              });
+                            },
+                            onStatusCleared: () {
+                              setState(() {
+                                selectedStatusNames = [];
+                                statusSectionKey = UniqueKey();
+                              });
+                            },
+                          ),
 
-                        const SizedBox(height: 8),
-                      ],
+                          const SizedBox(height: 8),
+                        ],
+                      ),
                     ),
                   );
                 },
@@ -424,7 +473,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         children: [
           InputBottomNavigation(
             showKeypad: controller.showKeypad,
-            keypad: _buildDockAndKeypad(), // ★ 도크 + 키패드 묶음 (그대로 유지)
+            keypad:
+            _buildDockAndKeypad(), // ★ 도크 + 키패드 묶음 (그대로 유지, 키패드가 있으면 위에 도크 표시)
             actionButton: InputBottomActionSection(
               controller: controller,
               mountedContext: mounted,
@@ -457,7 +507,8 @@ class _PlateDock extends StatelessWidget {
   InputDecoration _dec(BuildContext context, bool active) {
     return InputDecoration(
       isDense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      contentPadding:
+      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       filled: true,
       fillColor: active ? Colors.yellow.shade50 : Colors.white,
       counterText: '',
@@ -480,9 +531,12 @@ class _PlateDock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isFrontActive = controller.activeController == controller.controllerFrontDigit;
-    final isMidActive = controller.activeController == controller.controllerMidDigit;
-    final isBackActive = controller.activeController == controller.controllerBackDigit;
+    final isFrontActive =
+        controller.activeController == controller.controllerFrontDigit;
+    final isMidActive =
+        controller.activeController == controller.controllerMidDigit;
+    final isBackActive =
+        controller.activeController == controller.controllerBackDigit;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12),
@@ -490,7 +544,10 @@ class _PlateDock extends StatelessWidget {
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, -2))],
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black12, blurRadius: 8, offset: Offset(0, -2)),
+        ],
       ),
       child: Row(
         children: [
@@ -505,7 +562,8 @@ class _PlateDock extends StatelessWidget {
                   readOnly: true,
                   maxLength: controller.isThreeDigit ? 3 : 2,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                  style: const TextStyle(
+                      fontSize: 20, fontWeight: FontWeight.w700),
                   decoration: _dec(context, isFrontActive),
                 ),
               ),
@@ -524,7 +582,8 @@ class _PlateDock extends StatelessWidget {
                   readOnly: true,
                   maxLength: 1,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                  style: const TextStyle(
+                      fontSize: 20, fontWeight: FontWeight.w700),
                   decoration: _dec(context, isMidActive),
                 ),
               ),
@@ -543,7 +602,8 @@ class _PlateDock extends StatelessWidget {
                   readOnly: true,
                   maxLength: 4,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                  style: const TextStyle(
+                      fontSize: 20, fontWeight: FontWeight.w700),
                   decoration: _dec(context, isBackActive),
                 ),
               ),
