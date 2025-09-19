@@ -8,11 +8,13 @@ plugins {
 
 android {
     namespace = "com.quintus.dev"
-    compileSdk = 36 // ✅ 35 → 36 으로 올림
+    compileSdk = 36
 
     compileOptions {
+        // Java 17
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // 최신 날짜/시간 API 등 desugaring 사용
         coreLibraryDesugaringEnabled true
     }
 
@@ -22,8 +24,8 @@ android {
 
     defaultConfig {
         applicationId = "com.quintus.dev"
-        minSdkVersion = flutter.minSdkVersion
-        targetSdk = 35 // 그대로 OK (추후 필요 시 36으로 올려도 됨)
+        minSdkVersion = flutter.minSdkVersion   // Flutter 기본 21 이상 권장
+        targetSdk = 36                          // 35 → 36로 상향 정렬
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
@@ -45,8 +47,20 @@ android {
     buildTypes {
         release {
             signingConfig signingConfigs.release
+            // 필요 시 최적화 활성화: 아래 두 옵션을 true로 바꾸고 proguard-rules.pro 구성
             minifyEnabled false
             shrinkResources false
+        }
+        debug {
+            minifyEnabled false
+            shrinkResources false
+        }
+    }
+
+    // 번들 라이브러리(Ml Kit 등)와 충돌할 수 있는 META-INF 정리
+    packagingOptions {
+        resources {
+            excludes += ["META-INF/*"]
         }
     }
 }
@@ -56,8 +70,16 @@ flutter {
 }
 
 dependencies {
+    // Firebase (BOM)
     implementation platform('com.google.firebase:firebase-bom:33.12.0')
     implementation 'com.google.firebase:firebase-auth'
     implementation 'com.google.firebase:firebase-firestore'
+
+    // Java 17 desugaring
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
+
+    // ✅ ML Kit Text Recognition — 한국어 오프라인 번들(설치 즉시 오프라인 동작)
+    implementation 'com.google.mlkit:text-recognition-korean:16.0.1'
+    // (선택) 라틴 문자 같이 쓰면 필요
+    // implementation 'com.google.mlkit:text-recognition:16.0.1'
 }

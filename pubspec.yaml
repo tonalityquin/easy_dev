@@ -69,6 +69,8 @@ dependencies:
 
   crypto: ^3.0.6
 
+  google_mlkit_text_recognition: ^0.15.0
+
 
 
 dev_dependencies:

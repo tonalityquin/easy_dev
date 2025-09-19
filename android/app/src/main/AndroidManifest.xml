@@ -1,45 +1,45 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+<manifest
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     package="com.quintus.dev">
 
     <!-- 네트워크 통신(HTTP/HTTPS) 사용 -->
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <!-- 네트워크 연결 상태 확인(온라인 여부 체크 등) -->
+    <!-- 네트워크 연결 상태 확인 -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!-- 포그라운드 서비스 기본 권한(API 28+) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
-    <!-- (API 34+) 포그라운드 서비스: 데이터 동기화 유형 사용(실시간 Firestore/백그라운드 동작 유지) -->
+    <!-- (API 34+) 포그라운드 서비스 유형: 데이터 동기화 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
-    <!-- (API 34+) 포그라운드 서비스: 미디어 재생 유형 사용(TTS 오디오 출력) -->
+    <!-- (API 34+) 포그라운드 서비스 유형: 미디어 재생(TTS) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
-    <!-- 배터리 최적화 제외 요청(백그라운드 동작 안정화; 사용자 승인 필요) -->
+    <!-- 배터리 최적화 제외 요청(사용자 승인 필요) -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
-    <!-- 기기 깨우기 유지(서비스 동작 중 화면/CPU 슬립 방지에 사용 가능) -->
+    <!-- 기기 깨우기/유지 -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
-    <!-- 부팅 완료 브로드캐스트 수신(재부팅 후 서비스 자동 재시작 옵션 대응) -->
+    <!-- 부팅 완료 브로드캐스트 수신 -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
-    <!-- (Android 13+) 알림 표시 권한(포그라운드 서비스 알림/일반 알림 표시) -->
+    <!-- Android 13+ 알림 권한 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- ✅ 위치 권한 (앱 사용 중) : 코드에서 Permission.locationWhenInUse 요청 시 반드시 필요 -->
+    <!-- ✅ 카메라 권한(번호판 촬영/OCR) -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- ✅ 위치 권한 (앱 사용 중) -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
-    <!--
-      ⚠️ 아래 권한/설정은 '정말 필요할 때만' 추가하세요.
-      - ACCESS_BACKGROUND_LOCATION (백그라운드 위치가 필요한 경우)
-      - FOREGROUND_SERVICE_LOCATION + service의 foregroundServiceType에 location 추가
-      - READ/WRITE_EXTERNAL_STORAGE, MANAGE_EXTERNAL_STORAGE (스토리지 접근이 필요한 경우)
-    -->
+    <!-- 카메라 하드웨어 기능 선언(필수 단말만 설치 가능하게 할 경우 required=true) -->
+    <uses-feature android:name="android.hardware.camera.any" android:required="true" />
 
     <application
         android:name="${applicationName}"
@@ -69,16 +69,14 @@
             </intent-filter>
         </activity>
 
-        <!-- 플러그인 포그라운드 서비스 선언: 데이터 동기화 + TTS 오디오 재생 용도 -->
+        <!-- 플러그인 포그라운드 서비스 선언: 데이터 동기화 + TTS 오디오 재생 -->
         <service
             android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
             android:exported="false"
             android:foregroundServiceType="dataSync|mediaPlayback" />
-        <!--
-          위치를 서비스에서 실제로 사용할 때만:
-          android:foregroundServiceType="dataSync|mediaPlayback|location"
-          그리고 매니페스트 상단에 FOREGROUND_SERVICE_LOCATION 권한도 추가
-        -->
+        <!-- 위치를 서비스에서 실제로 사용할 때만:
+             android:foregroundServiceType="dataSync|mediaPlayback|location"
+             + 매니페스트 상단에 FOREGROUND_SERVICE_LOCATION 권한 추가 필요 -->
 
         <!-- Flutter 엔진 등록 -->
         <meta-data
@@ -86,7 +84,7 @@
             android:value="2" />
     </application>
 
-    <!-- 외부 앱/인텐트 조회 허용 (필요한 대상만 제한적으로 명시) -->
+    <!-- 외부 앱/인텐트 조회 허용 (필요 대상만 제한적으로 명시) -->
     <queries>
         <!-- 특정 외부 앱 실행 허용(예: 마이발렛 Biz) -->
         <package android:name="com.myvalet.b2b.android" />
