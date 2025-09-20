@@ -10,7 +10,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../../utils/snackbar_helper.dart';
 
-/// 자동 스틸샷 OCR 버전
+/// 자동 스틸샷 OCR 버전 (ROI 관련 로직 제거)
 /// - startImageStream 미사용
 /// - 초기화 후 일정 간격으로 자동 촬영 → OCR → 번호판 감지 시 즉시 pop(plate)
 /// - AF/AE 중앙 맞춤, 탭-투-포커스 지원, 토치 토글
@@ -316,20 +316,6 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
                   child: CameraPreview(_controller!),
                 ),
               ),
-              // 가이드 박스(ROI 시각 가이드만 제공)
-              Positioned.fill(
-                child: LayoutBuilder(
-                  builder: (context, c2) {
-                    final w = c2.maxWidth * 0.9;
-                    final h = c2.maxHeight * 0.30;
-                    final l = (c2.maxWidth - w) / 2;
-                    final t = (c2.maxHeight - h) / 2;
-                    final roi = Rect.fromLTWH(l, t, w, h);
-                    return IgnorePointer(
-                        child: CustomPaint(painter: _RoiPainter(roi: roi)));
-                  },
-                ),
-              ),
               // 디버그 텍스트
               if (_debugText != null || _lastText != null)
                 Positioned(
@@ -368,28 +354,4 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
       floatingActionButton: null,
     );
   }
-}
-
-class _RoiPainter extends CustomPainter {
-  final Rect roi;
-  _RoiPainter({required this.roi});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final overlay = Paint()..color = Colors.black.withOpacity(0.35);
-    final full = Path()..addRect(Rect.fromLTWH(0, 0, size.width, size.height));
-    final hole = Path()..addRect(roi);
-    canvas.drawPath(
-        Path.combine(PathOperation.difference, full, hole), overlay);
-
-    final border = Paint()
-      ..color = Colors.yellow
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.5;
-    canvas.drawRect(roi, border);
-  }
-
-  @override
-  bool shouldRepaint(covariant _RoiPainter oldDelegate) =>
-      roi != oldDelegate.roi;
 }
