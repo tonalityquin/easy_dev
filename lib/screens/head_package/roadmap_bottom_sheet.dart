@@ -70,6 +70,23 @@ const List<RoadmapItem> _roadmapData = [
     status: RoadmapStatus.done,
   ),
   RoadmapItem(
+    load: RoadmapLoad.heavy,
+    title: '기술 조사(서비스 - 번호판 생성 - OCR)',
+    notes: [
+      '촬영한 사진에 적혀 있는 번호판 데이터가 번호판 컨트롤러에 삽입',
+      'Requirement.로컬 AI 모델 사용',
+    ],
+    status: RoadmapStatus.done,
+  ),
+  RoadmapItem(
+    load: RoadmapLoad.light,
+    title: '뒤로가기 앱 꺼짐 방지 로직 재삽입',
+    notes: [
+      '모든 화면에서 뒤로가기 시 앱 꺼짐 로직 방지 코드 점검 및 삽입',
+    ],
+    status: RoadmapStatus.done,
+  ),
+  RoadmapItem(
     load: RoadmapLoad.light,
     title: 'FAQ 키워드 단어 페이지 별 삽입',
     notes: [
@@ -80,11 +97,21 @@ const List<RoadmapItem> _roadmapData = [
   ),
   RoadmapItem(
     load: RoadmapLoad.light,
-    title: '뒤로가기 앱 꺼짐 방지 로직 재삽입',
+    title: '근무지 현황 카드 리팩토링',
     notes: [
-      '모든 화면에서 뒤로가기 시 앱 꺼짐 로직 방지 코드 점검 및 삽입',
+      '지역 별 최근 출근 찍은 직원들 목록 나열'
+          '\n지역 별 현재 근무 차량 수 표기',
     ],
-    status: RoadmapStatus.inProgress,
+    status: RoadmapStatus.planned,
+  ),
+  RoadmapItem(
+    load: RoadmapLoad.light,
+    title: '회사 노무 카드 개발',
+    notes: [
+      '서류 별 양식 시각적 확인'
+          '\n필요 형식 직관적 확인',
+    ],
+    status: RoadmapStatus.planned,
   ),
   RoadmapItem(
     load: RoadmapLoad.light,
@@ -119,23 +146,7 @@ const List<RoadmapItem> _roadmapData = [
     ],
     status: RoadmapStatus.planned,
   ),
-  RoadmapItem(
-    load: RoadmapLoad.heavy,
-    title: '기술 조사(서비스 - 번호판 생성 - 음성 인식)',
-    notes: [
-      '음성 인식으로 번호판 컨트롤러에 데이터 삽입',
-    ],
-    status: RoadmapStatus.planned,
-  ),
-  RoadmapItem(
-    load: RoadmapLoad.heavy,
-    title: '기술 조사(서비스 - 번호판 생성 - OCR)',
-    notes: [
-      '촬영한 사진에 적혀 있는 번호판 데이터가 번호판 컨트롤러에 삽입',
-      'Requirement.로컬 AI 모델 사용',
-    ],
-    status: RoadmapStatus.planned,
-  ),
+
   RoadmapItem(
     load: RoadmapLoad.medium,
     title: '로컬에 저장한 출근, 퇴근 시간 알림 기능',

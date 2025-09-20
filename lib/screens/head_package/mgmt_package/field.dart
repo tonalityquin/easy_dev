@@ -18,7 +18,7 @@ class Field extends StatelessWidget {
         automaticallyImplyLeading: false,
       ),
       body: const Center(
-        child: Text('body'),
+        child: Text('under construction'),
       ),
     );
   }
