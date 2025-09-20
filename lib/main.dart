@@ -10,7 +10,7 @@ import 'providers/providers.dart';
 import 'screens/dev_package/dev_memo.dart';
 import 'screens/head_package/head_memo.dart';
 import 'theme.dart';
-import 'utils/init/dev_initializer.dart';
+// import 'utils/init/dev_initializer.dart'; // 비상용 개발 지역 계정 임시 비활성화
 import 'utils/tts/foreground_task_handler.dart';
 import 'utils/app_navigator.dart';
 
@@ -93,9 +93,9 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
     debugPrint('[MAIN][${_ts()}] Firebase.initializeApp');
     await Firebase.initializeApp();
 
-    // ✅ 개발용 리소스 등록
-    debugPrint('[MAIN][${_ts()}] registerDevResources');
-    await registerDevResources();
+    // ✅ 개발용 리소스 등록 (비용 방지: 현재 비활성화)
+    // debugPrint('[MAIN][${_ts()}] registerDevResources');
+    // await registerDevResources();
 
     // ✅ 권한 요청
     debugPrint('[MAIN][${_ts()}] request permissions');
