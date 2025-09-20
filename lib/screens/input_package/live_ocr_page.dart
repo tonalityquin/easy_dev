@@ -1,5 +1,6 @@
 // lib/screens/input_package/live_ocr_page.dart
 import 'dart:async';
+import 'dart:io'; // ⬅️ 임시 파일 삭제를 위해 추가
 
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart'; // kDebugMode
@@ -36,7 +37,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
   static const int _hintEvery = 10; // n회 연속 실패 시 힌트 노출
 
   String? _debugText; // blocks/plate 등 디버그 표시
-  String? _lastText;  // 최근 인식 텍스트 일부
+  String? _lastText; // 최근 인식 텍스트 일부
   Timer? _firstHintTimer;
 
   // 미터링(탭-투-포커스)용
@@ -60,7 +61,9 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
   Future<void> _initCamera() async {
     final cam = await Permission.camera.request();
     if (!cam.isGranted) {
-      if (mounted) showFailedSnackbar(context, '카메라 권한이 필요합니다. 설정에서 허용해 주세요.');
+      if (mounted) {
+        showFailedSnackbar(context, '카메라 권한이 필요합니다. 설정에서 허용해 주세요.');
+      }
       Navigator.pop(context);
       return;
     }
@@ -140,9 +143,11 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
       }
 
       _shooting = true;
+      XFile? shot; // ⬅️ 촬영 파일을 finally에서 정리하기 위해 스코프 바깥에 선언
       try {
-        final file = await _controller!.takePicture(); // 미리보기 유지됨
-        final input = InputImage.fromFilePath(file.path);
+        shot = await _controller!.takePicture(); // 미리보기 유지됨
+
+        final input = InputImage.fromFilePath(shot.path);
         final result = await _recognizer.processImage(input);
 
         final allText = result.text;
@@ -177,6 +182,14 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
         }
       } finally {
         _shooting = false;
+        // ⬇️ 임시 촬영 파일 안전 삭제 (누수 방지)
+        if (shot != null) {
+          try {
+            await File(shot.path).delete();
+          } catch (_) {
+            // 파일이 이미 정리됐거나 접근 불가인 경우 무시
+          }
+        }
       }
 
       await Future.delayed(const Duration(milliseconds: _autoIntervalMs));
@@ -312,7 +325,8 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
                     final l = (c2.maxWidth - w) / 2;
                     final t = (c2.maxHeight - h) / 2;
                     final roi = Rect.fromLTWH(l, t, w, h);
-                    return IgnorePointer(child: CustomPaint(painter: _RoiPainter(roi: roi)));
+                    return IgnorePointer(
+                        child: CustomPaint(painter: _RoiPainter(roi: roi)));
                   },
                 ),
               ),
@@ -327,7 +341,8 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
                       if (_debugText != null)
                         Text(
                           _debugText!,
-                          style: const TextStyle(color: Colors.white, fontSize: 14),
+                          style:
+                          const TextStyle(color: Colors.white, fontSize: 14),
                           textAlign: TextAlign.center,
                         ),
                       if (_lastText != null && _lastText!.isNotEmpty)
@@ -335,7 +350,8 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
                           padding: const EdgeInsets.only(top: 6),
                           child: Text(
                             _lastText!,
-                            style: const TextStyle(color: Colors.white70, fontSize: 12),
+                            style: const TextStyle(
+                                color: Colors.white70, fontSize: 12),
                             textAlign: TextAlign.center,
                             maxLines: 3,
                             overflow: TextOverflow.ellipsis,
@@ -363,7 +379,8 @@ class _RoiPainter extends CustomPainter {
     final overlay = Paint()..color = Colors.black.withOpacity(0.35);
     final full = Path()..addRect(Rect.fromLTWH(0, 0, size.width, size.height));
     final hole = Path()..addRect(roi);
-    canvas.drawPath(Path.combine(PathOperation.difference, full, hole), overlay);
+    canvas.drawPath(
+        Path.combine(PathOperation.difference, full, hole), overlay);
 
     final border = Paint()
       ..color = Colors.yellow
@@ -373,5 +390,6 @@ class _RoiPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _RoiPainter oldDelegate) => roi != oldDelegate.roi;
+  bool shouldRepaint(covariant _RoiPainter oldDelegate) =>
+      roi != oldDelegate.roi;
 }
