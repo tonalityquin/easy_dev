@@ -1,3 +1,5 @@
+// lib/screens/head_package/hr_package/attendance_calendar.dart
+import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
@@ -6,9 +8,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'attendances/time_edit_bottom_sheet.dart';
 import 'utils/google_sheets_helper.dart';
 import '../../../states/head_quarter/calendar_selection_state.dart';
-import '../../../../models/user_model.dart';
-import '../../../../utils/snackbar_helper.dart';
-import '../../../../utils/sheets_config.dart';
+import '../../../models/user_model.dart';
+import '../../../utils/snackbar_helper.dart';
+import '../../../utils/sheets_config.dart';
 
 class AttendanceCalendar extends StatefulWidget {
   const AttendanceCalendar({super.key});
@@ -55,7 +57,8 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
     if (presetUser != null) {
       _selectedUser = presetUser;
       final area = presetUser.selectedArea?.trim() ?? '';
-      _userInputCtrl.text = area.isEmpty ? presetUser.phone : '${presetUser.phone}-$area';
+      _userInputCtrl.text =
+      area.isEmpty ? presetUser.phone : '${presetUser.phone}-$area';
       _loadAttendanceTimes(presetUser);
     }
   }
@@ -252,7 +255,8 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
     try {
       final user = await _findUserByInput(_userInputCtrl.text);
       if (user == null) {
-        showFailedSnackbar(context, '사용자를 찾지 못했습니다. 예) 11100000000 또는 11100000000-belivus');
+        showFailedSnackbar(context,
+            '사용자를 찾지 못했습니다. 예) 11100000000 또는 11100000000-belivus');
         return;
       }
 
@@ -263,7 +267,8 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
         _clockOutMap.clear();
 
         final area = user.selectedArea?.trim() ?? '';
-        _userInputCtrl.text = area.isEmpty ? user.phone : '${user.phone}-$area';
+        _userInputCtrl.text =
+        area.isEmpty ? user.phone : '${user.phone}-$area';
       });
       _loadAttendanceTimes(user);
       _userInputFocus.unfocus();
@@ -274,7 +279,8 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
 
   Future<void> _loadAttendanceTimes(UserModel user) async {
     if (_sheetId == null || _sheetId!.isEmpty) {
-      showFailedSnackbar(context, '스프레드시트 ID가 설정되지 않았습니다. 우측 상단 버튼으로 설정해 주세요.');
+      showFailedSnackbar(
+          context, '스프레드시트 ID가 설정되지 않았습니다. 우측 상단 버튼으로 설정해 주세요.');
       return;
     }
 
@@ -291,7 +297,8 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
     }
 
     try {
-      final allRows = await GoogleSheetsHelper.loadClockInOutRecordsById(_sheetId!);
+      final allRows =
+      await GoogleSheetsHelper.loadClockInOutRecordsById(_sheetId!);
 
       final inMap = GoogleSheetsHelper.mapToCellData(
         allRows,
@@ -415,12 +422,12 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
       floatingActionButton: _selectedUser == null
           ? null
           : FloatingActionButton.extended(
-              onPressed: _saveAllChangesToSheets,
-              backgroundColor: _base,
-              foregroundColor: _fg,
-              icon: const Icon(Icons.save_rounded),
-              label: const Text('변경사항 저장'),
-            ),
+        onPressed: _saveAllChangesToSheets,
+        backgroundColor: _base,
+        foregroundColor: _fg,
+        icon: const Icon(Icons.save_rounded),
+        label: const Text('변경사항 저장'),
+      ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
 
       body: CustomScrollView(
@@ -464,12 +471,14 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
               child: _MonthSelector(
                 focusedDay: _focusedDay,
                 onPrev: () {
-                  final prev = DateTime(_focusedDay.year, _focusedDay.month - 1, 1);
+                  final prev =
+                  DateTime(_focusedDay.year, _focusedDay.month - 1, 1);
                   setState(() => _focusedDay = prev);
                   if (_selectedUser != null) _loadAttendanceTimes(_selectedUser!);
                 },
                 onNext: () {
-                  final next = DateTime(_focusedDay.year, _focusedDay.month + 1, 1);
+                  final next =
+                  DateTime(_focusedDay.year, _focusedDay.month + 1, 1);
                   setState(() => _focusedDay = next);
                   if (_selectedUser != null) _loadAttendanceTimes(_selectedUser!);
                 },
@@ -481,11 +490,13 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
           // ── Calendar
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: Card(
                 elevation: 1,
                 surfaceTintColor: _light,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(6, 8, 6, 10),
                   child: TableCalendar(
@@ -493,7 +504,6 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
                     lastDay: DateTime.utc(2025, 12, 31),
                     focusedDay: _focusedDay,
                     rowHeight: 84,
-                    // 가독성 향상
                     selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
                     onDaySelected: (selectedDay, focusedDay) {
                       setState(() {
@@ -563,9 +573,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
     );
   }
 
-  // ── Calendar Cell with adaptive sizing (가독성↑, 오버플로우 방지)
-  // ⬇️ _buildCell 교체
-  // 숫자만 크게 렌더링 (칩 제거)
+  // ── Calendar Cell with adaptive sizing
   Widget _buildCell(BuildContext context, DateTime day, DateTime focusedDay) {
     final isSelected = isSameDay(day, _selectedDay);
     final isToday = isSameDay(day, DateTime.now());
@@ -579,10 +587,11 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
     final Color statusColor = (hasIn && hasOut)
         ? _success
         : (hasIn || hasOut)
-            ? _warning
-            : Colors.black38;
+        ? _warning
+        : Colors.black38;
 
-    final Color borderColor = isSelected ? _base : (isToday ? _light : Colors.black12);
+    final Color borderColor =
+    isSelected ? _base : (isToday ? _light : Colors.black12);
 
     return LayoutBuilder(
       builder: (context, c) {
@@ -594,23 +603,21 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
         final smallFs = (baseSide * 0.26).clamp(10.0, 16.0); // 축약/대시
         final vGap = (baseSide * 0.10).clamp(2.0, 8.0);
 
-        // 너무 좁으면 두 줄 대신 한 줄로 축약
         final bool singleLineCompact = baseSide < 50;
 
         Text _timeText(String t, {bool strong = true}) => Text(
-              t,
-              maxLines: 1,
-              overflow: TextOverflow.fade,
-              softWrap: false,
-              style: TextStyle(
-                fontSize: timeFs,
-                fontWeight: strong ? FontWeight.w800 : FontWeight.w700,
-                color: strong ? Colors.black87 : Colors.black45,
-                // 선택: 숫자 폭 균일화
-                fontFeatures: const [FontFeature.tabularFigures()],
-                letterSpacing: .2,
-              ),
-            );
+          t,
+          maxLines: 1,
+          overflow: TextOverflow.fade,
+          softWrap: false,
+          style: TextStyle(
+            fontSize: timeFs,
+            fontWeight: strong ? FontWeight.w800 : FontWeight.w700,
+            color: strong ? Colors.black87 : Colors.black45,
+            fontFeatures: const [FontFeature.tabularFigures()],
+            letterSpacing: .2,
+          ),
+        );
 
         return Container(
           margin: const EdgeInsets.all(4),
@@ -622,7 +629,12 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
               width: isSelected ? 1.6 : (isToday ? 1.2 : 1.0),
             ),
             boxShadow: isSelected
-                ? [BoxShadow(color: _base.withOpacity(.06), blurRadius: 8, offset: const Offset(0, 2))]
+                ? [
+              BoxShadow(
+                  color: _base.withOpacity(.06),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2))
+            ]
                 : null,
           ),
           child: Padding(
@@ -637,7 +649,8 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
                     width: (baseSide * 0.13).clamp(6.0, 10.0),
                     height: (baseSide * 0.13).clamp(6.0, 10.0),
                     margin: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle),
+                    decoration: BoxDecoration(
+                        color: statusColor, shape: BoxShape.circle),
                   ),
                 ),
 
@@ -666,7 +679,6 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
 
                         if (hasIn || hasOut) ...[
                           if (singleLineCompact)
-                            // 좁으면 한 줄: "09:30 · 18:10"
                             Text(
                               '${hasIn ? inTime : '—'} · ${hasOut ? outTime : '—'}',
                               maxLines: 1,
@@ -681,7 +693,6 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
                               ),
                             )
                           else ...[
-                            // 보통: 두 줄 숫자만
                             _timeText(hasIn ? inTime : '—', strong: hasIn),
                             const SizedBox(height: 2),
                             _timeText(hasOut ? outTime : '—', strong: hasOut),
@@ -689,7 +700,8 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
                         ] else
                           Text(
                             '—',
-                            style: TextStyle(fontSize: smallFs, color: Colors.black38),
+                            style:
+                            TextStyle(fontSize: smallFs, color: Colors.black38),
                           ),
                       ],
                     ),
@@ -748,35 +760,35 @@ class _LegendRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget dot(Color c) => Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(color: c, shape: BoxShape.circle),
-        );
+      width: 10,
+      height: 10,
+      decoration: BoxDecoration(color: c, shape: BoxShape.circle),
+    );
 
     Widget itemDot(Color c, String t) => Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            dot(c),
-            const SizedBox(width: 6),
-            Text(t, style: const TextStyle(fontSize: 12, color: Colors.black87)),
-          ],
-        );
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        dot(c),
+        const SizedBox(width: 6),
+        Text(t, style: const TextStyle(fontSize: 12, color: Colors.black87)),
+      ],
+    );
 
     Widget itemSquare(String t) => Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 14,
-              height: 14,
-              decoration: BoxDecoration(
-                border: Border.all(color: base, width: 1.6),
-                borderRadius: BorderRadius.circular(4),
-              ),
-            ),
-            const SizedBox(width: 6),
-            Text(t, style: const TextStyle(fontSize: 12, color: Colors.black87)),
-          ],
-        );
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 14,
+          height: 14,
+          decoration: BoxDecoration(
+            border: Border.all(color: base, width: 1.6),
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(t, style: const TextStyle(fontSize: 12, color: Colors.black87)),
+      ],
+    );
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -842,7 +854,8 @@ class _UserPickerCard extends StatelessWidget {
               onSubmitted: (_) => onSearch(),
               decoration: InputDecoration(
                 isDense: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 labelText: '사용자 (전화번호 또는 전화번호-지역)',
                 hintText: '예) 11100000000 또는 11100000000-belivus',
                 filled: true,
@@ -858,7 +871,8 @@ class _UserPickerCard extends StatelessWidget {
                 prefixIcon: const Icon(Icons.person_search),
                 // suffixIcon 대신 suffix + ConstrainedBox (폭 유연)
                 suffix: ConstrainedBox(
-                  constraints: BoxConstraints(minWidth: 56, maxWidth: suffixWidth),
+                  constraints:
+                  BoxConstraints(minWidth: 56, maxWidth: suffixWidth),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.end,
@@ -867,7 +881,8 @@ class _UserPickerCard extends StatelessWidget {
                         IconButton(
                           tooltip: '입력 지우기',
                           padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+                          constraints: const BoxConstraints.tightFor(
+                              width: 32, height: 32),
                           iconSize: 18,
                           icon: const Icon(Icons.clear),
                           onPressed: () => controller.clear(),
@@ -885,7 +900,8 @@ class _UserPickerCard extends StatelessWidget {
                         IconButton(
                           tooltip: '찾기',
                           padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+                          constraints: const BoxConstraints.tightFor(
+                              width: 32, height: 32),
                           iconSize: 18,
                           icon: const Icon(Icons.search),
                           onPressed: onSearch,
@@ -955,16 +971,20 @@ class _SelectedUserRow extends StatelessWidget {
               physics: const BouncingScrollPhysics(),
               child: Row(
                 children: [
-                  _chip(Icons.badge, user.name, bg: Colors.white, fg: Colors.black87),
+                  _chip(Icons.badge, user.name,
+                      bg: Colors.white, fg: Colors.black87),
                   const SizedBox(width: 8),
-                  _chip(Icons.phone, user.phone, bg: Colors.white, fg: Colors.black87),
+                  _chip(Icons.phone, user.phone,
+                      bg: Colors.white, fg: Colors.black87),
                   if (area.isNotEmpty) ...[
                     const SizedBox(width: 8),
-                    _chip(Icons.place, area, bg: light.withOpacity(.18), fg: dark),
+                    _chip(Icons.place, area,
+                        bg: light.withOpacity(.18), fg: dark),
                   ],
                   if (division.isNotEmpty) ...[
                     const SizedBox(width: 8),
-                    _chip(Icons.apartment, division, bg: light.withOpacity(.18), fg: dark),
+                    _chip(Icons.apartment, division,
+                        bg: light.withOpacity(.18), fg: dark),
                   ],
                 ],
               ),
@@ -979,7 +999,8 @@ class _SelectedUserRow extends StatelessWidget {
             style: OutlinedButton.styleFrom(
               foregroundColor: dark,
               side: BorderSide(color: dark.withOpacity(.6)),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               shape: const StadiumBorder(),
             ),
           ),
@@ -988,7 +1009,8 @@ class _SelectedUserRow extends StatelessWidget {
     );
   }
 
-  Widget _chip(IconData icon, String label, {required Color bg, required Color fg}) {
+  Widget _chip(IconData icon, String label,
+      {required Color bg, required Color fg}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -1006,7 +1028,8 @@ class _SelectedUserRow extends StatelessWidget {
             label,
             softWrap: false,
             overflow: TextOverflow.fade,
-            style: TextStyle(fontSize: 12, color: fg, fontWeight: FontWeight.w700),
+            style:
+            TextStyle(fontSize: 12, color: fg, fontWeight: FontWeight.w700),
           ),
         ],
       ),
@@ -1029,7 +1052,8 @@ class _MonthSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ym = '${focusedDay.year}.${focusedDay.month.toString().padLeft(2, '0')}';
+    final ym =
+        '${focusedDay.year}.${focusedDay.month.toString().padLeft(2, '0')}';
     return Container(
       height: 44,
       decoration: BoxDecoration(

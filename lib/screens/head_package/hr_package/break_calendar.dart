@@ -1,3 +1,4 @@
+// lib/screens/head_package/hr_package/break_calendar.dart
 import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -7,9 +8,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'breaks/break_edit_bottom_sheet.dart';
 import 'utils/google_sheets_helper.dart';
 import '../../../states/head_quarter/calendar_selection_state.dart';
-import '../../../../models/user_model.dart';
-import '../../../../utils/snackbar_helper.dart';
-import '../../../../utils/sheets_config.dart';
+import '../../../models/user_model.dart';
+import '../../../utils/snackbar_helper.dart';
+import '../../../utils/sheets_config.dart';
 
 class BreakCalendar extends StatefulWidget {
   const BreakCalendar({super.key});
@@ -23,7 +24,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
   static const _base = Color(0xFF0D47A1); // primary
   static const _dark = Color(0xFF09367D); // emphasized
   static const _light = Color(0xFF5472D3); // tone/border
-  static const _fg = Color(0xFFFFFFFF);   // foreground
+  static const _fg = Color(0xFFFFFFFF); // foreground
 
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
@@ -53,7 +54,8 @@ class _BreakCalendarState extends State<BreakCalendar> {
     if (presetUser != null) {
       _selectedUser = presetUser;
       final area = presetUser.selectedArea?.trim() ?? '';
-      _userInputCtrl.text = area.isEmpty ? presetUser.phone : '${presetUser.phone}-$area';
+      _userInputCtrl.text =
+      area.isEmpty ? presetUser.phone : '${presetUser.phone}-$area';
       _loadBreakTimes(presetUser);
     }
   }
@@ -243,7 +245,8 @@ class _BreakCalendarState extends State<BreakCalendar> {
     try {
       final user = await _findUserByInput(_userInputCtrl.text);
       if (user == null) {
-        showFailedSnackbar(context, '사용자를 찾지 못했습니다. 예) 11100000000 또는 11100000000-belivus');
+        showFailedSnackbar(context,
+            '사용자를 찾지 못했습니다. 예) 11100000000 또는 11100000000-belivus');
         return;
       }
       context.read<CalendarSelectionState>().setUser(user);
@@ -252,7 +255,8 @@ class _BreakCalendarState extends State<BreakCalendar> {
         _breakTimeMap.clear();
 
         final area = user.selectedArea?.trim() ?? '';
-        _userInputCtrl.text = area.isEmpty ? user.phone : '${user.phone}-$area';
+        _userInputCtrl.text =
+        area.isEmpty ? user.phone : '${user.phone}-$area';
       });
       _loadBreakTimes(user);
       _userInputFocus.unfocus();
@@ -423,12 +427,14 @@ class _BreakCalendarState extends State<BreakCalendar> {
               child: _MonthSelector(
                 focusedDay: _focusedDay,
                 onPrev: () {
-                  final prev = DateTime(_focusedDay.year, _focusedDay.month - 1, 1);
+                  final prev =
+                  DateTime(_focusedDay.year, _focusedDay.month - 1, 1);
                   setState(() => _focusedDay = prev);
                   if (_selectedUser != null) _loadBreakTimes(_selectedUser!);
                 },
                 onNext: () {
-                  final next = DateTime(_focusedDay.year, _focusedDay.month + 1, 1);
+                  final next =
+                  DateTime(_focusedDay.year, _focusedDay.month + 1, 1);
                   setState(() => _focusedDay = next);
                   if (_selectedUser != null) _loadBreakTimes(_selectedUser!);
                 },
@@ -440,11 +446,13 @@ class _BreakCalendarState extends State<BreakCalendar> {
           // Calendar
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: Card(
                 elevation: 1,
                 surfaceTintColor: _light,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(6, 8, 6, 10),
                   child: TableCalendar(
@@ -755,7 +763,8 @@ class _UserPickerCard extends StatelessWidget {
               onSubmitted: (_) => onSearch(),
               decoration: InputDecoration(
                 isDense: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 labelText: '사용자 (전화번호 또는 전화번호-지역)',
                 hintText: '예) 11100000000 또는 11100000000-belivus',
                 filled: true,
@@ -771,7 +780,8 @@ class _UserPickerCard extends StatelessWidget {
                 prefixIcon: const Icon(Icons.person_search),
                 // ✅ suffixIcon 대신 suffix + ConstrainedBox (폭 유연)
                 suffix: ConstrainedBox(
-                  constraints: BoxConstraints(minWidth: 56, maxWidth: suffixWidth),
+                  constraints:
+                  BoxConstraints(minWidth: 56, maxWidth: suffixWidth),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.end,
@@ -780,7 +790,8 @@ class _UserPickerCard extends StatelessWidget {
                         IconButton(
                           tooltip: '입력 지우기',
                           padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+                          constraints: const BoxConstraints.tightFor(
+                              width: 32, height: 32),
                           iconSize: 18,
                           icon: const Icon(Icons.clear),
                           onPressed: () => controller.clear(),
@@ -798,7 +809,8 @@ class _UserPickerCard extends StatelessWidget {
                         IconButton(
                           tooltip: '찾기',
                           padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+                          constraints: const BoxConstraints.tightFor(
+                              width: 32, height: 32),
                           iconSize: 18,
                           icon: const Icon(Icons.search),
                           onPressed: onSearch,
@@ -868,16 +880,20 @@ class _SelectedUserRow extends StatelessWidget {
               physics: const BouncingScrollPhysics(),
               child: Row(
                 children: [
-                  _chip(Icons.badge, user.name, bg: Colors.white, fg: Colors.black87),
+                  _chip(Icons.badge, user.name,
+                      bg: Colors.white, fg: Colors.black87),
                   const SizedBox(width: 8),
-                  _chip(Icons.phone, user.phone, bg: Colors.white, fg: Colors.black87),
+                  _chip(Icons.phone, user.phone,
+                      bg: Colors.white, fg: Colors.black87),
                   if (area.isNotEmpty) ...[
                     const SizedBox(width: 8),
-                    _chip(Icons.place, area, bg: light.withOpacity(.18), fg: dark),
+                    _chip(Icons.place, area,
+                        bg: light.withOpacity(.18), fg: dark),
                   ],
                   if (division.isNotEmpty) ...[
                     const SizedBox(width: 8),
-                    _chip(Icons.apartment, division, bg: light.withOpacity(.18), fg: dark),
+                    _chip(Icons.apartment, division,
+                        bg: light.withOpacity(.18), fg: dark),
                   ],
                 ],
               ),
@@ -892,7 +908,8 @@ class _SelectedUserRow extends StatelessWidget {
             style: OutlinedButton.styleFrom(
               foregroundColor: dark,
               side: BorderSide(color: dark.withOpacity(.6)),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               shape: const StadiumBorder(),
             ),
           ),
@@ -901,7 +918,8 @@ class _SelectedUserRow extends StatelessWidget {
     );
   }
 
-  Widget _chip(IconData icon, String label, {required Color bg, required Color fg}) {
+  Widget _chip(IconData icon, String label,
+      {required Color bg, required Color fg}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -919,7 +937,8 @@ class _SelectedUserRow extends StatelessWidget {
             label,
             softWrap: false,
             overflow: TextOverflow.fade,
-            style: TextStyle(fontSize: 12, color: fg, fontWeight: FontWeight.w700),
+            style:
+            TextStyle(fontSize: 12, color: fg, fontWeight: FontWeight.w700),
           ),
         ],
       ),
@@ -942,7 +961,8 @@ class _MonthSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ym = '${focusedDay.year}.${focusedDay.month.toString().padLeft(2, '0')}';
+    final ym =
+        '${focusedDay.year}.${focusedDay.month.toString().padLeft(2, '0')}';
     return Container(
       height: 44,
       decoration: BoxDecoration(

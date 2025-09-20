@@ -1,4 +1,4 @@
-// File: lib/screens/area/area_detail_bottom_sheet.dart
+// lib/screens/head_package/mgmt_package/area_detail_bottom_sheet.dart
 import 'package:flutter/material.dart';
 import '../../../repositories/area_user_repository.dart';
 
@@ -284,7 +284,7 @@ class _UserTile extends StatelessWidget {
     final statusColor = user.isWorking ? Colors.green[800]! : cs.onSurfaceVariant;
 
     return Card(
-      color: Colors.white, // ✅ 카드 배경 하얀색
+      color: Colors.white,
       elevation: 0,
       margin: const EdgeInsets.symmetric(vertical: 6),
       shape: RoundedRectangleBorder(
@@ -298,9 +298,8 @@ class _UserTile extends StatelessWidget {
         ),
         title: const Text(
           ' ',
-          style: TextStyle(height: 0), // (ListTile 타이틀 높이 안정화용 빈 라인)
+          style: TextStyle(height: 0),
         ),
-        // 타이틀에 이름 굵게 표시
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -396,7 +395,7 @@ class _SearchFieldState extends State<_SearchField> {
           icon: const Icon(Icons.clear),
         ),
         filled: true,
-        fillColor: Colors.white, // ✅ 입력창 배경 하얀색
+        fillColor: Colors.white,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: cs.outlineVariant),

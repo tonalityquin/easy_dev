@@ -1,3 +1,4 @@
+// lib/screens/head_package/hr_package/attendances/time_edit_bottom_sheet.dart
 import 'package:flutter/material.dart';
 
 typedef OnTimeSaved = void Function(String inTime, String outTime);
@@ -56,8 +57,10 @@ class TimeEditBottomSheet extends StatelessWidget {
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
               onPressed: () {
-                final inTime = '${inHourController.text.padLeft(2, '0')}:${inMinController.text.padLeft(2, '0')}';
-                final outTime = '${outHourController.text.padLeft(2, '0')}:${outMinController.text.padLeft(2, '0')}';
+                final inTime =
+                    '${inHourController.text.padLeft(2, '0')}:${inMinController.text.padLeft(2, '0')}';
+                final outTime =
+                    '${outHourController.text.padLeft(2, '0')}:${outMinController.text.padLeft(2, '0')}';
                 onSave(inTime, outTime);
                 Navigator.pop(context);
               },
@@ -112,7 +115,8 @@ class _TimeInputRow extends StatelessWidget {
             ),
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 8),
-              child: Text(':', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              child:
+              Text(':', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             ),
             Flexible(
               child: TextField(

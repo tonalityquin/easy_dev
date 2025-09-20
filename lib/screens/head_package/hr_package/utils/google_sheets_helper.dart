@@ -1,3 +1,4 @@
+// lib/screens/head_package/hr_package/utils/google_sheets_helper.dart
 import 'dart:async';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:googleapis/sheets/v4.dart';
@@ -5,7 +6,8 @@ import 'package:googleapis_auth/auth_io.dart';
 import 'package:intl/intl.dart';
 
 class GoogleSheetsHelper {
-  static const _serviceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
+  static const _serviceAccountPath =
+      'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
 
   // ───────────────────────────────────────────────────────────────────────────
   // 인증 클라이언트
@@ -21,36 +23,37 @@ class GoogleSheetsHelper {
   // 공통 유틸
   // ───────────────────────────────────────────────────────────────────────────
   static List<List<String>> _convertRows(List<List<Object?>>? rawRows) {
-    return rawRows?.map((row) => row.map((cell) => cell.toString()).toList()).toList() ?? [];
+    return rawRows
+        ?.map((row) => row.map((cell) => cell.toString()).toList())
+        .toList() ??
+        [];
   }
 
   // ───────────────────────────────────────────────────────────────────────────
   // 읽기 API (ID 직접 주입)
   // ───────────────────────────────────────────────────────────────────────────
-  static Future<List<List<String>>> loadClockInOutRecordsById(String spreadsheetId) async {
+  static Future<List<List<String>>> loadClockInOutRecordsById(
+      String spreadsheetId) async {
     final client = await _getSheetsClient();
     final sheetsApi = SheetsApi(client);
-    final result = await sheetsApi.spreadsheets.values.get(
-      spreadsheetId,
-      '출퇴근기록!A2:G',
-    );
+    final result = await sheetsApi.spreadsheets.values
+        .get(spreadsheetId, '출퇴근기록!A2:G');
     client.close();
     return _convertRows(result.values);
   }
 
-  static Future<List<List<String>>> loadBreakRecordsById(String spreadsheetId) async {
+  static Future<List<List<String>>> loadBreakRecordsById(
+      String spreadsheetId) async {
     final client = await _getSheetsClient();
     final sheetsApi = SheetsApi(client);
-    final result = await sheetsApi.spreadsheets.values.get(
-      spreadsheetId,
-      '휴게기록!A2:G',
-    );
+    final result =
+    await sheetsApi.spreadsheets.values.get(spreadsheetId, '휴게기록!A2:G');
     client.close();
     return _convertRows(result.values);
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // 가공 유틸 (그대로 사용)
+  // 가공 유틸
   // ───────────────────────────────────────────────────────────────────────────
   static Map<String, Map<int, String>> mapToCellData(
       List<List<String>> rows, {
@@ -163,7 +166,8 @@ class GoogleSheetsHelper {
     final sheetsApi = SheetsApi(client);
 
     final range = '휴게기록!A2:G';
-    final response = await sheetsApi.spreadsheets.values.get(spreadsheetId, range);
+    final response =
+    await sheetsApi.spreadsheets.values.get(spreadsheetId, range);
     final rows = response.values ?? [];
 
     final targetDate = DateFormat('yyyy-MM-dd').format(date);
@@ -178,7 +182,9 @@ class GoogleSheetsHelper {
       final rowUserId = row[2];
       final rowStatus = row[6];
 
-      if (rowDate == targetDate && rowUserId == userId && rowStatus == status) {
+      if (rowDate == targetDate &&
+          rowUserId == userId &&
+          rowStatus == status) {
         final cellRange = '휴게기록!B${i + 2}';
         await sheetsApi.spreadsheets.values.update(
           ValueRange(values: [

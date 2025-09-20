@@ -1,3 +1,4 @@
+// lib/screens/head_package/mgmt_package/statistics_chart_page.dart
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
@@ -239,20 +240,20 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
   }
 
   FlGridData _buildGrid() => FlGridData(
-        show: true,
-        drawVerticalLine: true,
-        drawHorizontalLine: true,
-        getDrawingHorizontalLine: (value) => FlLine(color: Colors.grey.withOpacity(0.2), strokeWidth: 1),
-        getDrawingVerticalLine: (value) => FlLine(color: Colors.grey.withOpacity(0.2), strokeWidth: 1),
-      );
+    show: true,
+    drawVerticalLine: true,
+    drawHorizontalLine: true,
+    getDrawingHorizontalLine: (value) => FlLine(color: Colors.grey.withOpacity(0.2), strokeWidth: 1),
+    getDrawingVerticalLine: (value) => FlLine(color: Colors.grey.withOpacity(0.2), strokeWidth: 1),
+  );
 
   FlBorderData _buildBorder() => FlBorderData(
-        show: true,
-        border: const Border(
-          left: BorderSide(color: Colors.black),
-          bottom: BorderSide(color: Colors.black),
-        ),
-      );
+    show: true,
+    border: const Border(
+      left: BorderSide(color: Colors.black),
+      bottom: BorderSide(color: Colors.black),
+    ),
+  );
 
   LineTouchData _buildTouchData(List<String> labels, {required String type}) {
     return LineTouchData(

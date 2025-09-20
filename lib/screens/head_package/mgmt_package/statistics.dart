@@ -1,3 +1,4 @@
+// lib/screens/head_package/mgmt_package/statistics.dart
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -119,12 +120,12 @@ class _StatisticsState extends State<Statistics> {
                     ),
                     onPressed: _savedReports.isNotEmpty
                         ? () {
-                            setState(() {
-                              _savedReports.clear();
-                            });
-                            // ✅ 기본 SnackBar → 커스텀 스낵바
-                            showSuccessSnackbar(context, "🗑️ 보관된 통계가 초기화되었습니다.");
-                          }
+                      setState(() {
+                        _savedReports.clear();
+                      });
+                      // ✅ 기본 SnackBar → 커스텀 스낵바
+                      showSuccessSnackbar(context, "🗑️ 보관된 통계가 초기화되었습니다.");
+                    }
                         : null,
                   ),
                   const SizedBox(width: 8),
@@ -182,7 +183,7 @@ class _StatisticsState extends State<Statistics> {
               else if (_reportData != null)
                 _buildReportCard(_reportData!)
               else if (_selectedDate != null)
-                const Text('👭 해당 날짜의 보고 내용이 없습니다.', style: TextStyle(color: Colors.grey)),
+                  const Text('👭 해당 날짜의 보고 내용이 없습니다.', style: TextStyle(color: Colors.grey)),
             ],
           ),
         ),
@@ -329,7 +330,7 @@ class _StatisticsState extends State<Statistics> {
       // 최신(updated) 기준으로 정렬 후 마지막 선택
       candidates.sort((a, b) {
         final au = a.updated ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final bu = b.updated ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bu = b.updated ?? DateTime.fromMillisecondsSinceEpoch(0); // ← ‘the’ 제거
         return au.compareTo(bu);
       });
       final target = candidates.last.name!;

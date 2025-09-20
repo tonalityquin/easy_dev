@@ -1,11 +1,13 @@
-// File: lib/screens/field/field.dart
+// lib/screens/head_package/mgmt_package/field.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../enums/plate_type.dart';
 import '../../../repositories/area_counts_repository.dart';
 import '../../../states/user/user_state.dart';
-import 'area_detail_bottom_sheet.dart'; // ✅ 실제 경로 기준(../area)
+
+// ▶︎ 동일 폴더의 바텀시트 참조
+import './area_detail_bottom_sheet.dart';
 
 class Field extends StatefulWidget {
   const Field({super.key});
@@ -37,7 +39,10 @@ class _FieldState extends State<Field> {
 
     try {
       final userState = context.read<UserState>();
-      final division = userState.user?.divisions.first;
+
+      // ✅ 안전 접근 (빈 배열 대비)
+      final divisions = userState.user?.divisions;
+      final division = (divisions != null && divisions.isNotEmpty) ? divisions.first : null;
 
       if (division == null || division.isEmpty) {
         throw Exception('division 정보가 없습니다.');
@@ -70,11 +75,11 @@ class _FieldState extends State<Field> {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: Colors.white, // ✅ 배경 하얀색
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text('필드 별 업무/근퇴 현황'),
         centerTitle: true,
-        backgroundColor: Colors.white, // ✅ AppBar 배경 하얀색
+        backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
         actions: [
@@ -170,7 +175,7 @@ class _AreaCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         child: Ink(
           decoration: BoxDecoration(
-            color: Colors.white, // ✅ 카드 배경 하얀색
+            color: Colors.white,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: cs.outlineVariant.withOpacity(.6)),
           ),
@@ -179,7 +184,6 @@ class _AreaCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 헤더
                 Row(
                   children: [
                     const Text('📍', style: TextStyle(fontSize: 18)),
@@ -200,7 +204,6 @@ class _AreaCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 10),
-                // 통계 Chip (자동 줄바꿈)
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -330,7 +333,11 @@ class _SearchBarState extends State<_SearchBar> {
     _c = TextEditingController(text: widget.initialText);
   }
 
-  @override  void dispose() { _c.dispose(); super.dispose(); }
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -353,7 +360,7 @@ class _SearchBarState extends State<_SearchBar> {
           icon: const Icon(Icons.clear),
         ),
         filled: true,
-        fillColor: Colors.white, // ✅ 입력창 배경도 화이트 톤
+        fillColor: Colors.white,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: cs.outlineVariant),

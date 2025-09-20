@@ -5,8 +5,6 @@ import '../../screens/type_package/parking_request_page.dart';
 import '../../screens/type_package/parking_completed_page.dart';
 import '../../screens/type_package/departure_request_page.dart';
 
-import '../../screens/hq_package/management.dart';
-import '../../screens/hq_package/human_resource.dart';
 import '../../screens/hq_package/dash_board.dart';
 
 import '../../enums/plate_type.dart';
@@ -61,7 +59,5 @@ class HqPageInfo {
 }
 
 final List<HqPageInfo> hqPage = [
-  const HqPageInfo('HR', HumanResource(), Icon(Icons.people)),
   const HqPageInfo('DashBoard', DashBoard(), Icon(Icons.apartment)),
-  const HqPageInfo('MGMT', Management(), Icon(Icons.manage_accounts)),
 ];

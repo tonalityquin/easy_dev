@@ -1,3 +1,4 @@
+// lib/screens/head_package/hr_package/breaks/break_edit_bottom_sheet.dart
 import 'package:flutter/material.dart';
 
 typedef TimeSaveCallback = void Function(String hhmm);
@@ -49,7 +50,8 @@ class BreakEditBottomSheet extends StatelessWidget {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             onPressed: () {
-              final time = '${hourController.text.padLeft(2, '0')}:${minController.text.padLeft(2, '0')}';
+              final time =
+                  '${hourController.text.padLeft(2, '0')}:${minController.text.padLeft(2, '0')}';
               onSave(time);
               Navigator.pop(context);
             },
@@ -57,7 +59,8 @@ class BreakEditBottomSheet extends StatelessWidget {
               backgroundColor: Theme.of(context).primaryColor,
               foregroundColor: Colors.white,
               minimumSize: const Size.fromHeight(48),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               elevation: 0,
             ),
           ),
@@ -98,7 +101,8 @@ class _TimeInputRow extends StatelessWidget {
             ),
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 8),
-              child: Text(':', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              child: Text(':',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             ),
             Flexible(
               child: TextField(

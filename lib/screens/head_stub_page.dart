@@ -3,7 +3,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../routes.dart';
 import 'head_package/head_memo.dart';
-import 'head_package/roadmap_bottom_sheet.dart'; // 커뮤니티 폴더의 바텀시트를 재사용
+import 'head_package/roadmap_bottom_sheet.dart';
+
+// ▼ 근무지 현황
+import 'head_package/mgmt_package/field.dart' as mgmt;
+
+// ▼ 통계 비교
+import 'head_package/mgmt_package/statistics.dart' as mgmt_stats;
+
+// ▼ 출/퇴근(출석) · 휴게 관리
+import 'head_package/hr_package/attendance_calendar.dart' as hr_att;
+import 'head_package/hr_package/break_calendar.dart' as hr_break;
 
 class HeadStubPage extends StatelessWidget {
   const HeadStubPage({super.key});
@@ -55,7 +65,7 @@ class HeadStubPage extends StatelessWidget {
                 const _HeaderBanner(),
                 const SizedBox(height: 16),
 
-                // ✅ 반응형 Grid: 화면 너비/텍스트배율에 따라 열 수와 타일 비율 계산
+                // ✅ 반응형 Grid
                 Expanded(
                   child: LayoutBuilder(
                     builder: (context, constraints) {
@@ -63,21 +73,18 @@ class HeadStubPage extends StatelessWidget {
                       final crossAxisCount = width >= 1100
                           ? 4
                           : width >= 800
-                          ? 3
-                          : 2;
+                              ? 3
+                              : 2;
 
                       const spacing = 12.0;
                       final textScale = MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
 
                       final tileWidth = (width - spacing * (crossAxisCount - 1)) / crossAxisCount;
-
-                      // 타일 기준 높이(컨텐츠에 여유), 텍스트 배율 반영
                       final baseTileHeight = 150.0;
                       final tileHeight = baseTileHeight * textScale;
                       final childAspectRatio = tileWidth / tileHeight;
 
-                      // ── 팔레트 정의 (base/dark/light) ─────────────────────────
-
+                      // ── 팔레트 정의 ─────────────────────────
                       // Company Calendar — Green
                       const calBase = Color(0xFF43A047);
                       const calDark = Color(0xFF2E7D32);
@@ -88,16 +95,31 @@ class HeadStubPage extends StatelessWidget {
                       const laborDark = Color(0xFFE65100);
                       const laborLight = Color(0xFFFFCC80);
 
-                      // Attendance Sheet — Indigo
+                      // Attendance Sheet(과거) — Indigo
                       const attBase = Color(0xFF3949AB);
                       const attDark = Color(0xFF283593);
                       const attLight = Color(0xFF7986CB);
 
+                      // 근무지 현황 — Teal
+                      const hubBase = Color(0xFF00897B); // teal 600
+                      const hubDark = Color(0xFF00695C); // teal 800
+                      const hubLight = Color(0xFF80CBC4); // teal 200
+
+                      // 통계 비교 — Deep Purple
+                      const statBase = Color(0xFF6A1B9A); // deep purple 700
+                      const statDark = Color(0xFF4A148C); // deep purple 900
+                      const statLight = Color(0xFFCE93D8); // deep purple 200
+
+                      // HR(관리) — Blue
+                      const hrBase = Color(0xFF1565C0); // blue 800
+                      const hrDark = Color(0xFF0D47A1); // blue 900
+                      const hrLight = Color(0xFF90CAF9); // blue 200
+
                       final cards = <Widget>[
                         _ActionCard(
                           icon: Icons.calendar_month_rounded,
-                          title: '회사 달력',
-                          subtitle: 'Google Calendar\nGoogle Sheets',
+                          title: '본사 달력',
+                          subtitle: 'Google Calendar\nSpread Sheets',
                           bg: calBase,
                           fg: Colors.white,
                           tintColor: calLight,
@@ -119,14 +141,50 @@ class HeadStubPage extends StatelessWidget {
                           },
                         ),
 
-                        // ▼ 로드맵 (커뮤니티 → 본사 허브로 이동)
+                        // ▼ 출/퇴근 → 출석 캘린더(AttendanceCalendar)로 바로 이동
+                        _ActionCard(
+                          icon: Icons.how_to_reg_rounded,
+                          title: '출/퇴근',
+                          subtitle: 'Spread Sheets',
+                          bg: hrBase,
+                          fg: Colors.white,
+                          tintColor: hrLight,
+                          titleColor: hrDark,
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const hr_att.AttendanceCalendar(),
+                              ),
+                            );
+                          },
+                        ),
+
+                        // ▼ 휴게 관리 → 휴식 캘린더(BreakCalendar)
+                        _ActionCard(
+                          icon: Icons.free_breakfast_rounded,
+                          title: '휴게 관리',
+                          subtitle: 'Spread Sheets',
+                          bg: attBase,
+                          fg: Colors.white,
+                          tintColor: attLight,
+                          titleColor: attDark,
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const hr_break.BreakCalendar(),
+                              ),
+                            );
+                          },
+                        ),
+
+                        // ▼ 로드맵
                         _ActionCard(
                           icon: Icons.edit_note_rounded,
                           title: '향후 로드맵',
                           subtitle: 'After Release',
                           bg: cs.tertiaryContainer,
                           fg: cs.onTertiaryContainer,
-                          tintColor: attLight.withOpacity(0.45), // 살짝 하이라이트
+                          tintColor: attLight.withOpacity(0.45),
                           titleColor: attDark,
                           onTap: () {
                             showModalBottomSheet(
@@ -138,19 +196,7 @@ class HeadStubPage extends StatelessWidget {
                           },
                         ),
 
-                        // ▼ 신규: 출/퇴근(시트 뷰)
-                        _ActionCard(
-                          icon: Icons.schedule_rounded,
-                          title: '출/퇴근',
-                          subtitle: 'Google Sheets',
-                          bg: attBase,
-                          fg: Colors.white,
-                          tintColor: attLight,
-                          titleColor: attDark,
-                          onTap: () {
-                            Navigator.of(context).pushNamed(AppRoutes.attendanceSheet);
-                          },
-                        ),
+                        // ▼ 메모
                         _ActionCard(
                           icon: Icons.sticky_note_2_rounded,
                           title: '메모',
@@ -160,8 +206,43 @@ class HeadStubPage extends StatelessWidget {
                           tintColor: calLight.withOpacity(0.45),
                           titleColor: calDark,
                           onTap: () async {
-                            // 카드에서는 온오프를 건드리지 않음. 패널에서 스위치로 제어.
                             await HeadMemo.openPanel();
+                          },
+                        ),
+
+                        // ▼ 근무지 현황 (mgmt.Field로 이동)
+                        _ActionCard(
+                          icon: Icons.map_rounded,
+                          title: '근무지 현황',
+                          subtitle: 'Division별 지역 · 인원',
+                          bg: hubBase,
+                          fg: Colors.white,
+                          tintColor: hubLight,
+                          titleColor: hubDark,
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const mgmt.Field(),
+                              ),
+                            );
+                          },
+                        ),
+
+                        // ▼ 통계 비교 (mgmt_stats.Statistics로 이동)
+                        _ActionCard(
+                          icon: Icons.stacked_line_chart_rounded,
+                          title: '통계 비교',
+                          subtitle: '입·출차/정산 추이',
+                          bg: statBase,
+                          fg: Colors.white,
+                          tintColor: statLight,
+                          titleColor: statDark,
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const mgmt_stats.Statistics(),
+                              ),
+                            );
                           },
                         ),
                       ];
@@ -185,7 +266,7 @@ class HeadStubPage extends StatelessWidget {
                   child: InkWell(
                     onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
                       '/selector', // AppRoutes.selector
-                          (route) => false,
+                      (route) => false,
                     ),
                     borderRadius: BorderRadius.circular(8),
                     child: SizedBox(
@@ -207,10 +288,9 @@ class HeadStubPage extends StatelessWidget {
 class _HeaderBanner extends StatelessWidget {
   const _HeaderBanner();
 
-  // 본사 카드 팔레트(고정값)
-  static const Color _base = Color(0xFF1E88E5); // 배너 테두리 틴트
-  static const Color _dark = Color(0xFF1565C0); // 텍스트/아이콘
-  static const Color _light = Color(0xFF64B5F6); // 배경 계열
+  static const Color _base = Color(0xFF1E88E5);
+  static const Color _dark = Color(0xFF1565C0);
+  static const Color _light = Color(0xFF64B5F6);
 
   @override
   Widget build(BuildContext context) {
@@ -261,11 +341,11 @@ class _ActionCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
-  final Color bg; // 배지 배경(base)
-  final Color fg; // 배지 아이콘(onBase)
-  final Color? tintColor; // 카드 surfaceTint(light)
-  final Color? titleColor; // 제목 색(dark)
-  final VoidCallback? onTap; // 카드 아무 곳이나 탭
+  final Color bg;
+  final Color fg;
+  final Color? tintColor;
+  final Color? titleColor;
+  final VoidCallback? onTap;
 
   const _ActionCard({
     required this.icon,
