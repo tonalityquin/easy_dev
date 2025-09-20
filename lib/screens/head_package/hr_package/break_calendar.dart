@@ -1,16 +1,15 @@
-// lib/screens/head_package/hr_package/break_calendar.dart
 import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import 'breaks/break_edit_bottom_sheet.dart';
 import 'utils/google_sheets_helper.dart';
 import '../../../states/head_quarter/calendar_selection_state.dart';
 import '../../../models/user_model.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../utils/sheets_config.dart';
+import 'widgets/time_edit_sheet.dart';
 
 class BreakCalendar extends StatefulWidget {
   const BreakCalendar({super.key});
@@ -41,10 +40,18 @@ class _BreakCalendarState extends State<BreakCalendar> {
 
   String? _sheetId;
 
+  // 안전한 스낵바 호출(빌드 이후에만)
+  void _showFailedAfterBuild(String msg) {
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showFailedSnackbar(context, msg);
+    });
+  }
+
   @override
   void initState() {
     super.initState();
-    _loadSheetId();
 
     _userInputCtrl.addListener(() => setState(() {}));
 
@@ -54,9 +61,18 @@ class _BreakCalendarState extends State<BreakCalendar> {
     if (presetUser != null) {
       _selectedUser = presetUser;
       final area = presetUser.selectedArea?.trim() ?? '';
-      _userInputCtrl.text =
-      area.isEmpty ? presetUser.phone : '${presetUser.phone}-$area';
-      _loadBreakTimes(presetUser);
+      _userInputCtrl.text = area.isEmpty ? presetUser.phone : '${presetUser.phone}-$area';
+
+      // 시트 ID 로드 및 초기 데이터 로드는 첫 프레임 이후에
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await _loadSheetId();
+        if (!mounted) return;
+        await _loadBreakTimes(presetUser);
+      });
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await _loadSheetId();
+      });
     }
   }
 
@@ -245,8 +261,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
     try {
       final user = await _findUserByInput(_userInputCtrl.text);
       if (user == null) {
-        showFailedSnackbar(context,
-            '사용자를 찾지 못했습니다. 예) 11100000000 또는 11100000000-belivus');
+        _showFailedAfterBuild('사용자를 찾지 못했습니다. 예) 11100000000 또는 11100000000-belivus');
         return;
       }
       context.read<CalendarSelectionState>().setUser(user);
@@ -255,8 +270,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
         _breakTimeMap.clear();
 
         final area = user.selectedArea?.trim() ?? '';
-        _userInputCtrl.text =
-        area.isEmpty ? user.phone : '${user.phone}-$area';
+        _userInputCtrl.text = area.isEmpty ? user.phone : '${user.phone}-$area';
       });
       _loadBreakTimes(user);
       _userInputFocus.unfocus();
@@ -267,7 +281,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
 
   Future<void> _loadBreakTimes(UserModel user) async {
     if (_sheetId == null || _sheetId!.isEmpty) {
-      showFailedSnackbar(context, '스프레드시트 ID가 설정되지 않았습니다. 우측 상단 버튼으로 설정해 주세요.');
+      _showFailedAfterBuild('스프레드시트 ID가 설정되지 않았습니다. 우측 상단 버튼으로 설정해 주세요.');
       return;
     }
 
@@ -297,14 +311,14 @@ class _BreakCalendarState extends State<BreakCalendar> {
         _breakTimeCache[cacheKey] = _breakTimeMap;
       });
     } catch (e) {
-      showFailedSnackbar(context, '휴게 기록 로드 실패: $e');
+      _showFailedAfterBuild('휴게 기록 로드 실패: $e');
     }
   }
 
   Future<void> _saveAllChangesToSheets() async {
     if (_selectedUser == null) return;
     if (_sheetId == null || _sheetId!.isEmpty) {
-      showFailedSnackbar(context, '스프레드시트 ID가 설정되지 않았습니다.');
+      _showFailedAfterBuild('스프레드시트 ID가 설정되지 않았습니다.');
       return;
     }
 
@@ -314,10 +328,10 @@ class _BreakCalendarState extends State<BreakCalendar> {
     final division = user.divisions.isNotEmpty ? user.divisions.first : '';
 
     try {
-      for (final entry in _breakTimeMap.entries) {
+      // 변경된 모든 날짜를 BreakRow로 변환해 배치 업서트
+      final List<BreakRow> rows = _breakTimeMap.entries.map((entry) {
         final date = DateTime(_focusedDay.year, _focusedDay.month, entry.key);
-        await GoogleSheetsHelper.updateBreakRecordById(
-          spreadsheetId: _sheetId!,
+        return BreakRow(
           date: date,
           userId: userId,
           userName: user.name,
@@ -325,13 +339,19 @@ class _BreakCalendarState extends State<BreakCalendar> {
           division: division,
           time: entry.value,
         );
-      }
+      }).toList();
+
+      await GoogleSheetsHelper.upsertBreakBatchById(
+        spreadsheetId: _sheetId!,
+        rows: rows,
+      );
+
       showSuccessSnackbar(context, 'Google Sheets에 저장 완료');
 
       final cacheKey = '$userId-${_focusedDay.year}-${_focusedDay.month}';
       _breakTimeCache[cacheKey] = {..._breakTimeMap};
     } catch (e) {
-      showFailedSnackbar(context, '저장 실패: $e');
+      _showFailedAfterBuild('저장 실패: $e');
     }
   }
 
@@ -379,16 +399,16 @@ class _BreakCalendarState extends State<BreakCalendar> {
         ),
       ),
 
-      // ✅ 저장을 FAB로 변경
+      // 저장 FAB
       floatingActionButton: _selectedUser == null
           ? null
           : FloatingActionButton.extended(
-        onPressed: _saveAllChangesToSheets,
-        backgroundColor: _base,
-        foregroundColor: _fg,
-        icon: const Icon(Icons.save_rounded),
-        label: const Text('변경사항 저장'),
-      ),
+              onPressed: _saveAllChangesToSheets,
+              backgroundColor: _base,
+              foregroundColor: _fg,
+              icon: const Icon(Icons.save_rounded),
+              label: const Text('변경사항 저장'),
+            ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
 
       body: CustomScrollView(
@@ -427,14 +447,12 @@ class _BreakCalendarState extends State<BreakCalendar> {
               child: _MonthSelector(
                 focusedDay: _focusedDay,
                 onPrev: () {
-                  final prev =
-                  DateTime(_focusedDay.year, _focusedDay.month - 1, 1);
+                  final prev = DateTime(_focusedDay.year, _focusedDay.month - 1, 1);
                   setState(() => _focusedDay = prev);
                   if (_selectedUser != null) _loadBreakTimes(_selectedUser!);
                 },
                 onNext: () {
-                  final next =
-                  DateTime(_focusedDay.year, _focusedDay.month + 1, 1);
+                  final next = DateTime(_focusedDay.year, _focusedDay.month + 1, 1);
                   setState(() => _focusedDay = next);
                   if (_selectedUser != null) _loadBreakTimes(_selectedUser!);
                 },
@@ -446,34 +464,35 @@ class _BreakCalendarState extends State<BreakCalendar> {
           // Calendar
           SliverToBoxAdapter(
             child: Padding(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: Card(
                 elevation: 1,
                 surfaceTintColor: _light,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(6, 8, 6, 10),
                   child: TableCalendar(
                     firstDay: DateTime.utc(2025, 1, 1),
                     lastDay: DateTime.utc(2025, 12, 31),
                     focusedDay: _focusedDay,
-                    rowHeight: 84, // 가독성 향상
+                    rowHeight: 84,
+                    // 가독성 향상
                     selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-                    onDaySelected: (selectedDay, focusedDay) {
+                    onDaySelected: (selectedDay, focusedDay) async {
                       setState(() {
                         _selectedDay = selectedDay;
                         _focusedDay = focusedDay;
                       });
 
                       if (_selectedUser != null) {
-                        _showEditBottomSheet(selectedDay);
+                        await _showEditBottomSheet(selectedDay);
                       }
                     },
                     onPageChanged: (focusedDay) async {
                       setState(() => _focusedDay = focusedDay);
-                      if (_selectedUser != null) await _loadBreakTimes(_selectedUser!);
+                      if (_selectedUser != null) {
+                        await _loadBreakTimes(_selectedUser!);
+                      }
                     },
                     availableGestures: AvailableGestures.none,
                     calendarStyle: CalendarStyle(
@@ -528,7 +547,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
     );
   }
 
-  // ── Calendar Cell (숫자만, 가변 폰트/간격, 오버플로우 방지)
+  // Calendar Cell (숫자만, 가변 폰트/간격, 오버플로우 방지)
   Widget _buildCell(BuildContext context, DateTime day, DateTime focusedDay) {
     final isSelected = isSameDay(day, _selectedDay);
     final isToday = isSameDay(day, DateTime.now());
@@ -542,11 +561,11 @@ class _BreakCalendarState extends State<BreakCalendar> {
         final baseSide = c.maxWidth < c.maxHeight ? c.maxWidth : c.maxHeight;
 
         // 셀 크기에 따른 가변 값
-        final dayFs = (baseSide * 0.40).clamp(14.0, 22.0);   // 날짜 숫자
-        final timeFs = (baseSide * 0.34).clamp(12.0, 18.0);  // 휴게 시간
+        final dayFs = (baseSide * 0.40).clamp(14.0, 22.0); // 날짜 숫자
+        final timeFs = (baseSide * 0.34).clamp(12.0, 18.0); // 휴게 시간
         final smallFs = (baseSide * 0.26).clamp(10.0, 16.0); // 대시
-        final vGap = (baseSide * 0.10).clamp(2.0, 8.0);      // 간격
-        final dot = (baseSide * 0.13).clamp(6.0, 10.0);      // 상태 점
+        final vGap = (baseSide * 0.10).clamp(2.0, 8.0); // 간격
+        final dot = (baseSide * 0.13).clamp(6.0, 10.0); // 상태 점
 
         return Container(
           margin: const EdgeInsets.all(4),
@@ -605,25 +624,25 @@ class _BreakCalendarState extends State<BreakCalendar> {
                         // 휴게 시간 (숫자만)
                         hasBreak
                             ? Text(
-                          breakTime,
-                          maxLines: 1,
-                          overflow: TextOverflow.fade,
-                          softWrap: false,
-                          style: TextStyle(
-                            fontSize: timeFs,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.black87,
-                            fontFeatures: const [FontFeature.tabularFigures()],
-                            letterSpacing: .2,
-                          ),
-                        )
+                                breakTime,
+                                maxLines: 1,
+                                overflow: TextOverflow.fade,
+                                softWrap: false,
+                                style: TextStyle(
+                                  fontSize: timeFs,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.black87,
+                                  fontFeatures: const [FontFeature.tabularFigures()],
+                                  letterSpacing: .2,
+                                ),
+                              )
                             : Text(
-                          '—',
-                          style: TextStyle(
-                            fontSize: smallFs,
-                            color: Colors.black38,
-                          ),
-                        ),
+                                '—',
+                                style: TextStyle(
+                                  fontSize: smallFs,
+                                  color: Colors.black38,
+                                ),
+                              ),
                       ],
                     ),
                   ),
@@ -636,69 +655,62 @@ class _BreakCalendarState extends State<BreakCalendar> {
     );
   }
 
-  void _showEditBottomSheet(DateTime day) {
+  Future<void> _showEditBottomSheet(DateTime day) async {
     final dayKey = day.day;
     final initialTime = _breakTimeMap[dayKey] ?? '00:00';
 
-    showModalBottomSheet(
+    final newTime = await showBreakTimeSheet(
       context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return BreakEditBottomSheet(
-          date: day,
-          initialTime: initialTime,
-          onSave: (newTime) {
-            setState(() {
-              _breakTimeMap[dayKey] = newTime;
-            });
-          },
-        );
-      },
+      date: day,
+      initialTime: initialTime,
     );
+    if (newTime == null) return;
+
+    setState(() {
+      _breakTimeMap[dayKey] = newTime;
+    });
   }
 }
 
 /// Legend (휴게 전용, Wrap으로 오버플로우 방지)
 class _LegendRowBreak extends StatelessWidget {
   const _LegendRowBreak({required this.base, required this.light});
+
   final Color base;
   final Color light;
 
   @override
   Widget build(BuildContext context) {
     Widget dot(Color c) => Container(
-      width: 10,
-      height: 10,
-      decoration: BoxDecoration(color: c, shape: BoxShape.circle),
-    );
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: c, shape: BoxShape.circle),
+        );
 
     Widget itemDot(Color c, String t) => Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        dot(c),
-        const SizedBox(width: 6),
-        Text(t, style: const TextStyle(fontSize: 12, color: Colors.black87)),
-      ],
-    );
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            dot(c),
+            const SizedBox(width: 6),
+            Text(t, style: const TextStyle(fontSize: 12, color: Colors.black87)),
+          ],
+        );
 
     Widget itemSquare(String t) => Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 14,
-          height: 14,
-          decoration: BoxDecoration(
-            border: Border.all(color: base, width: 1.6),
-            borderRadius: BorderRadius.circular(4),
-          ),
-        ),
-        const SizedBox(width: 6),
-        Text(t, style: const TextStyle(fontSize: 12, color: Colors.black87)),
-      ],
-    );
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 14,
+              height: 14,
+              decoration: BoxDecoration(
+                border: Border.all(color: base, width: 1.6),
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(t, style: const TextStyle(fontSize: 12, color: Colors.black87)),
+          ],
+        );
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -763,8 +775,7 @@ class _UserPickerCard extends StatelessWidget {
               onSubmitted: (_) => onSearch(),
               decoration: InputDecoration(
                 isDense: true,
-                contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 labelText: '사용자 (전화번호 또는 전화번호-지역)',
                 hintText: '예) 11100000000 또는 11100000000-belivus',
                 filled: true,
@@ -778,10 +789,9 @@ class _UserPickerCard extends StatelessWidget {
                   borderSide: BorderSide(color: paletteBase, width: 1.6),
                 ),
                 prefixIcon: const Icon(Icons.person_search),
-                // ✅ suffixIcon 대신 suffix + ConstrainedBox (폭 유연)
+                // suffixIcon 대신 suffix + ConstrainedBox (폭 유연)
                 suffix: ConstrainedBox(
-                  constraints:
-                  BoxConstraints(minWidth: 56, maxWidth: suffixWidth),
+                  constraints: BoxConstraints(minWidth: 56, maxWidth: suffixWidth),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.end,
@@ -790,8 +800,7 @@ class _UserPickerCard extends StatelessWidget {
                         IconButton(
                           tooltip: '입력 지우기',
                           padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints.tightFor(
-                              width: 32, height: 32),
+                          constraints: const BoxConstraints.tightFor(width: 32, height: 32),
                           iconSize: 18,
                           icon: const Icon(Icons.clear),
                           onPressed: () => controller.clear(),
@@ -809,8 +818,7 @@ class _UserPickerCard extends StatelessWidget {
                         IconButton(
                           tooltip: '찾기',
                           padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints.tightFor(
-                              width: 32, height: 32),
+                          constraints: const BoxConstraints.tightFor(width: 32, height: 32),
                           iconSize: 18,
                           icon: const Icon(Icons.search),
                           onPressed: onSearch,
@@ -873,27 +881,23 @@ class _SelectedUserRow extends StatelessWidget {
           ),
           const SizedBox(width: 12),
 
-          // ✅ 칩들을 '가로 스크롤 한 줄'로
+          // 칩들을 '가로 스크롤 한 줄'로
           Expanded(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               physics: const BouncingScrollPhysics(),
               child: Row(
                 children: [
-                  _chip(Icons.badge, user.name,
-                      bg: Colors.white, fg: Colors.black87),
+                  _chip(Icons.badge, user.name, bg: Colors.white, fg: Colors.black87),
                   const SizedBox(width: 8),
-                  _chip(Icons.phone, user.phone,
-                      bg: Colors.white, fg: Colors.black87),
+                  _chip(Icons.phone, user.phone, bg: Colors.white, fg: Colors.black87),
                   if (area.isNotEmpty) ...[
                     const SizedBox(width: 8),
-                    _chip(Icons.place, area,
-                        bg: light.withOpacity(.18), fg: dark),
+                    _chip(Icons.place, area, bg: light.withOpacity(.18), fg: dark),
                   ],
                   if (division.isNotEmpty) ...[
                     const SizedBox(width: 8),
-                    _chip(Icons.apartment, division,
-                        bg: light.withOpacity(.18), fg: dark),
+                    _chip(Icons.apartment, division, bg: light.withOpacity(.18), fg: dark),
                   ],
                 ],
               ),
@@ -908,8 +912,7 @@ class _SelectedUserRow extends StatelessWidget {
             style: OutlinedButton.styleFrom(
               foregroundColor: dark,
               side: BorderSide(color: dark.withOpacity(.6)),
-              padding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               shape: const StadiumBorder(),
             ),
           ),
@@ -918,8 +921,7 @@ class _SelectedUserRow extends StatelessWidget {
     );
   }
 
-  Widget _chip(IconData icon, String label,
-      {required Color bg, required Color fg}) {
+  Widget _chip(IconData icon, String label, {required Color bg, required Color fg}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -932,13 +934,12 @@ class _SelectedUserRow extends StatelessWidget {
         children: [
           Icon(icon, size: 14, color: fg.withOpacity(.85)),
           const SizedBox(width: 6),
-          // ✅ 한 줄 고정
+          // 한 줄 고정
           Text(
             label,
             softWrap: false,
             overflow: TextOverflow.fade,
-            style:
-            TextStyle(fontSize: 12, color: fg, fontWeight: FontWeight.w700),
+            style: TextStyle(fontSize: 12, color: fg, fontWeight: FontWeight.w700),
           ),
         ],
       ),
@@ -961,8 +962,7 @@ class _MonthSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ym =
-        '${focusedDay.year}.${focusedDay.month.toString().padLeft(2, '0')}';
+    final ym = '${focusedDay.year}.${focusedDay.month.toString().padLeft(2, '0')}';
     return Container(
       height: 44,
       decoration: BoxDecoration(

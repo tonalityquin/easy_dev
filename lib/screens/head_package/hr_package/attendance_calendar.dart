@@ -1,16 +1,15 @@
-// lib/screens/head_package/hr_package/attendance_calendar.dart
 import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import 'attendances/time_edit_bottom_sheet.dart';
 import 'utils/google_sheets_helper.dart';
 import '../../../states/head_quarter/calendar_selection_state.dart';
 import '../../../models/user_model.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../utils/sheets_config.dart';
+import 'widgets/time_edit_sheet.dart';
 
 class AttendanceCalendar extends StatefulWidget {
   const AttendanceCalendar({super.key});
@@ -45,21 +44,41 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
 
   String? _sheetId;
 
+  // 안전한 스낵바 호출(빌드 이후에만)
+  void _showFailedAfterBuild(String msg) {
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showFailedSnackbar(context, msg);
+    });
+  }
+
   @override
   void initState() {
     super.initState();
-    _loadSheetId();
 
     _userInputCtrl.addListener(() => setState(() {}));
 
     final calendarState = context.read<CalendarSelectionState>();
     final presetUser = calendarState.selectedUser;
+
     if (presetUser != null) {
       _selectedUser = presetUser;
       final area = presetUser.selectedArea?.trim() ?? '';
       _userInputCtrl.text =
       area.isEmpty ? presetUser.phone : '${presetUser.phone}-$area';
-      _loadAttendanceTimes(presetUser);
+
+      // 시트 ID 로드 및 초기 데이터 로드는 첫 프레임 이후에
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await _loadSheetId();
+        if (!mounted) return;
+        await _loadAttendanceTimes(presetUser);
+      });
+    } else {
+      // 프리셋 유저가 없다면 시트 ID만 먼저 로드
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await _loadSheetId();
+      });
     }
   }
 
@@ -217,7 +236,8 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
           return SafeArea(
             child: Material(
               color: Colors.white,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              borderRadius:
+              const BorderRadius.vertical(top: Radius.circular(16)),
               child: ListView.separated(
                 shrinkWrap: true,
                 padding: const EdgeInsets.all(16),
@@ -255,7 +275,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
     try {
       final user = await _findUserByInput(_userInputCtrl.text);
       if (user == null) {
-        showFailedSnackbar(context,
+        _showFailedAfterBuild(
             '사용자를 찾지 못했습니다. 예) 11100000000 또는 11100000000-belivus');
         return;
       }
@@ -279,8 +299,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
 
   Future<void> _loadAttendanceTimes(UserModel user) async {
     if (_sheetId == null || _sheetId!.isEmpty) {
-      showFailedSnackbar(
-          context, '스프레드시트 ID가 설정되지 않았습니다. 우측 상단 버튼으로 설정해 주세요.');
+      _showFailedAfterBuild('스프레드시트 ID가 설정되지 않았습니다. 우측 상단 버튼으로 설정해 주세요.');
       return;
     }
 
@@ -320,14 +339,15 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
         _outCache[cacheKey] = _clockOutMap;
       });
     } catch (e) {
-      showFailedSnackbar(context, '출퇴근 기록 로드 실패: $e');
+      _showFailedAfterBuild('출퇴근 기록 로드 실패: $e');
     }
   }
 
+  // 저장: 배치 기반(1회 GET + batchUpdate + append)
   Future<void> _saveAllChangesToSheets() async {
     if (_selectedUser == null) return;
     if (_sheetId == null || _sheetId!.isEmpty) {
-      showFailedSnackbar(context, '스프레드시트 ID가 설정되지 않았습니다.');
+      _showFailedAfterBuild('스프레드시트 ID가 설정되지 않았습니다.');
       return;
     }
 
@@ -336,33 +356,45 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
     final userId = '${user.phone}-$area';
     final division = user.divisions.isNotEmpty ? user.divisions.first : '';
 
+    // 수정된 출근/퇴근을 모두 ClockRow로 수집
+    final List<ClockRow> changes = [];
+
+    _clockInMap.forEach((day, time) {
+      final date = DateTime(_focusedDay.year, _focusedDay.month, day);
+      changes.add(ClockRow(
+        date: date,
+        userId: userId,
+        userName: user.name,
+        area: area,
+        division: division,
+        status: '출근',
+        time: time,
+      ));
+    });
+
+    _clockOutMap.forEach((day, time) {
+      final date = DateTime(_focusedDay.year, _focusedDay.month, day);
+      changes.add(ClockRow(
+        date: date,
+        userId: userId,
+        userName: user.name,
+        area: area,
+        division: division,
+        status: '퇴근',
+        time: time,
+      ));
+    });
+
+    if (changes.isEmpty) {
+      showSelectedSnackbar(context, '변경된 내용이 없습니다.');
+      return;
+    }
+
     try {
-      for (final entry in _clockInMap.entries) {
-        final date = DateTime(_focusedDay.year, _focusedDay.month, entry.key);
-        await GoogleSheetsHelper.updateClockInOutRecordById(
-          spreadsheetId: _sheetId!,
-          date: date,
-          userId: userId,
-          userName: user.name,
-          area: area,
-          division: division,
-          status: '출근',
-          time: entry.value,
-        );
-      }
-      for (final entry in _clockOutMap.entries) {
-        final date = DateTime(_focusedDay.year, _focusedDay.month, entry.key);
-        await GoogleSheetsHelper.updateClockInOutRecordById(
-          spreadsheetId: _sheetId!,
-          date: date,
-          userId: userId,
-          userName: user.name,
-          area: area,
-          division: division,
-          status: '퇴근',
-          time: entry.value,
-        );
-      }
+      await GoogleSheetsHelper.upsertClockInOutBatchById(
+        spreadsheetId: _sheetId!,
+        rows: changes,
+      );
 
       showSuccessSnackbar(context, 'Google Sheets에 저장 완료');
 
@@ -370,7 +402,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
       _inCache[cacheKey] = {..._clockInMap};
       _outCache[cacheKey] = {..._clockOutMap};
     } catch (e) {
-      showFailedSnackbar(context, '저장 실패: $e');
+      _showFailedAfterBuild('저장 실패: $e');
     }
   }
 
@@ -398,7 +430,8 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
         elevation: 0,
         foregroundColor: Colors.black87,
         centerTitle: true,
-        title: const Text('출석 캘린더', style: TextStyle(fontWeight: FontWeight.w800)),
+        title: const Text('출석 캘린더',
+            style: TextStyle(fontWeight: FontWeight.w800)),
         automaticallyImplyLeading: false,
         actions: [
           IconButton(
@@ -412,13 +445,13 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
             onPressed: _openSetSheetIdSheet,
           ),
         ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: Colors.black.withOpacity(.06)),
+        bottom: const PreferredSize(
+          preferredSize: Size.fromHeight(1),
+          child: Divider(height: 1),
         ),
       ),
 
-      // ✅ 저장을 FAB로 변경
+      // 저장 FAB
       floatingActionButton: _selectedUser == null
           ? null
           : FloatingActionButton.extended(
@@ -432,7 +465,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
 
       body: CustomScrollView(
         slivers: [
-          // ── Legend
+          // Legend
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
@@ -445,7 +478,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
             ),
           ),
 
-          // ── User Picker
+          // User Picker
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
@@ -464,7 +497,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
             ),
           ),
 
-          // ── Month Navigator
+          // Month Navigator
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
@@ -487,11 +520,10 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
             ),
           ),
 
-          // ── Calendar
+          // Calendar
           SliverToBoxAdapter(
             child: Padding(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: Card(
                 elevation: 1,
                 surfaceTintColor: _light,
@@ -505,13 +537,13 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
                     focusedDay: _focusedDay,
                     rowHeight: 84,
                     selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-                    onDaySelected: (selectedDay, focusedDay) {
+                    onDaySelected: (selectedDay, focusedDay) async {
                       setState(() {
                         _selectedDay = selectedDay;
                         _focusedDay = focusedDay;
                       });
                       if (_selectedUser != null) {
-                        _showEditBottomSheet(selectedDay);
+                        await _showEditBottomSheet(selectedDay);
                       }
                     },
                     onPageChanged: (focusedDay) {
@@ -573,7 +605,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
     );
   }
 
-  // ── Calendar Cell with adaptive sizing
+  // Calendar Cell with adaptive sizing
   Widget _buildCell(BuildContext context, DateTime day, DateTime focusedDay) {
     final isSelected = isSameDay(day, _selectedDay);
     final isToday = isSameDay(day, DateTime.now());
@@ -597,7 +629,6 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
       builder: (context, c) {
         final baseSide = c.maxWidth < c.maxHeight ? c.maxWidth : c.maxHeight;
 
-        // 폰트/간격을 셀 크기에 따라 자동 조절
         final dayFs = (baseSide * 0.40).clamp(14.0, 22.0); // 날짜 숫자
         final timeFs = (baseSide * 0.32).clamp(12.0, 18.0); // 시간 숫자
         final smallFs = (baseSide * 0.26).clamp(10.0, 16.0); // 축약/대시
@@ -688,7 +719,8 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
                                 fontSize: smallFs,
                                 fontWeight: FontWeight.w800,
                                 color: Colors.black87,
-                                fontFeatures: const [FontFeature.tabularFigures()],
+                                fontFeatures:
+                                const [FontFeature.tabularFigures()],
                                 letterSpacing: .2,
                               ),
                             )
@@ -700,8 +732,8 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
                         ] else
                           Text(
                             '—',
-                            style:
-                            TextStyle(fontSize: smallFs, color: Colors.black38),
+                            style: TextStyle(
+                                fontSize: smallFs, color: Colors.black38),
                           ),
                       ],
                     ),
@@ -715,31 +747,23 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
     );
   }
 
-  void _showEditBottomSheet(DateTime day) {
+  Future<void> _showEditBottomSheet(DateTime day) async {
     final dayKey = day.day;
     final inTime = _clockInMap[dayKey] ?? '00:00';
     final outTime = _clockOutMap[dayKey] ?? '00:00';
 
-    showModalBottomSheet(
+    final res = await showAttendanceTimeSheet(
       context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return TimeEditBottomSheet(
-          date: day,
-          initialInTime: inTime,
-          initialOutTime: outTime,
-          onSave: (newIn, newOut) {
-            setState(() {
-              _clockInMap[dayKey] = newIn;
-              _clockOutMap[dayKey] = newOut;
-            });
-          },
-        );
-      },
+      date: day,
+      initialInTime: inTime,
+      initialOutTime: outTime,
     );
+    if (res == null) return;
+
+    setState(() {
+      _clockInMap[dayKey] = res.inTime;
+      _clockOutMap[dayKey] = res.outTime;
+    });
   }
 }
 
@@ -862,7 +886,8 @@ class _UserPickerCard extends StatelessWidget {
                 fillColor: paletteLight.withOpacity(.06),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: paletteLight.withOpacity(.35)),
+                  borderSide:
+                  BorderSide(color: paletteLight.withOpacity(.35)),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -964,7 +989,7 @@ class _SelectedUserRow extends StatelessWidget {
           ),
           const SizedBox(width: 12),
 
-          // ✅ 칩들을 '가로 스크롤 한 줄'로
+          // 칩들을 '가로 스크롤 한 줄'로
           Expanded(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -1023,7 +1048,7 @@ class _SelectedUserRow extends StatelessWidget {
         children: [
           Icon(icon, size: 14, color: fg.withOpacity(.85)),
           const SizedBox(width: 6),
-          // ✅ 한 줄 고정
+          // 한 줄 고정
           Text(
             label,
             softWrap: false,
