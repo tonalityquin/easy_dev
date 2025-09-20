@@ -48,9 +48,11 @@ class _TypePageState extends State<TypePage> {
           final userName = context.read<UserState>().name;
 
           return PopScope(
-            canPop: true,
+            // ✅ 이 화면에서만 뒤로가기(pop) 차단 → 앱 종료 방지
+            canPop: false,
+            // 뒤로가기를 시도했지만 팝이 막힌 경우(didPop=false)에만 선택 해제 로직 수행
             onPopInvoked: (didPop) async {
-              if (!didPop) return;
+              if (didPop) return; // 실제로 팝된 경우는 없음(canPop:false)
 
               final currentPage = pageState.pages[pageState.selectedIndex];
               final collection = currentPage.collectionKey;
@@ -64,6 +66,7 @@ class _TypePageState extends State<TypePage> {
                   onError: (msg) => debugPrint(msg),
                 );
               }
+              // ☆ 여기서 스낵바 안내는 하지 않음(요청사항)
             },
             child: Scaffold(
               body: const RefreshableBody(),

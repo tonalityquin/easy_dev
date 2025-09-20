@@ -22,7 +22,8 @@ class HeadquarterPage extends StatelessWidget {
       child: Builder(
         builder: (context) {
           return PopScope(
-            canPop: true,
+            // ✅ 이 화면에서만 뒤로가기(pop) 차단 → 앱 종료 방지
+            canPop: false,
             child: Scaffold(
               body: const RefreshableBody(),
               bottomNavigationBar: Column(
