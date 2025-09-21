@@ -21,11 +21,11 @@ class FirestorePlateRepository implements PlateRepository {
 
   @override
   Stream<List<PlateModel>> streamToCurrentArea(
-    PlateType type,
-    String area, {
-    bool descending = true,
-    String? location,
-  }) {
+      PlateType type,
+      String area, {
+        bool descending = true,
+        String? location,
+      }) {
     return _streamService.streamToCurrentArea(
       type,
       area,
@@ -36,9 +36,9 @@ class FirestorePlateRepository implements PlateRepository {
 
   @override
   Stream<QuerySnapshot<Map<String, dynamic>>> departureUnpaidSnapshots(
-    String area, {
-    bool descending = true,
-  }) {
+      String area, {
+        bool descending = true,
+      }) {
     return _streamService.departureUnpaidSnapshots(
       area: area,
       descending: descending,
@@ -52,10 +52,10 @@ class FirestorePlateRepository implements PlateRepository {
 
   @override
   Future<void> updatePlate(
-    String documentId,
-    Map<String, dynamic> updatedFields, {
-    PlateLogModel? log,
-  }) {
+      String documentId,
+      Map<String, dynamic> updatedFields, {
+        PlateLogModel? log,
+      }) {
     return _writeService.updatePlate(documentId, updatedFields, log: log);
   }
 
@@ -166,21 +166,10 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
-  Future<bool> checkDuplicatePlate({
-    required String plateNumber,
-    required String area,
-  }) {
-    return _queryService.checkDuplicatePlate(
-      plateNumber: plateNumber,
-      area: area,
-    );
-  }
-
-  @override
   Future<int> getPlateCountForTypePage(
-    PlateType type,
-    String area,
-  ) {
+      PlateType type,
+      String area,
+      ) {
     return _countService.getPlateCountForTypePage(type, area);
   }
 

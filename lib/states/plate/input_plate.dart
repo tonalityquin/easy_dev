@@ -13,13 +13,6 @@ class InputPlate with ChangeNotifier {
 
   InputPlate(this._plateRepository, this._logState);
 
-  Future<bool> isPlateNumberDuplicated(String plateNumber, String area) async {
-    return await _plateRepository.checkDuplicatePlate(
-      plateNumber: plateNumber,
-      area: area,
-    );
-  }
-
   Future<bool> registerPlateEntry({
     required BuildContext context,
     required String plateNumber,
@@ -44,13 +37,6 @@ class InputPlate with ChangeNotifier {
   }) async {
     final correctedLocation = location.isEmpty ? '미지정' : location;
     final plateType = isLocationSelected ? PlateType.parkingCompleted : PlateType.parkingRequests;
-
-    if (plateType != PlateType.departureCompleted &&
-        await isPlateNumberDuplicated(plateNumber, areaState.currentArea)) {
-      if (!context.mounted) return false;
-      showFailedSnackbar(context, '이미 등록된 번호판입니다: $plateNumber');
-      return false;
-    }
 
     try {
       await _plateRepository.addPlate(

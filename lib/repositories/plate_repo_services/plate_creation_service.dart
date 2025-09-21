@@ -235,7 +235,7 @@ class PlateCreationService {
       rethrow;
     }
 
-    // (기존) 커스텀 상태 업서트 로직 유지 + 실패 로깅
+    // ✅ (리팩터링) 커스텀 상태 upsert: 항상 set(merge:true) 1회
     if (customStatus != null && customStatus.trim().isNotEmpty) {
       final statusDocRef = _firestore.collection('plate_status').doc(documentId);
       final now = Timestamp.now();
@@ -250,49 +250,25 @@ class PlateCreationService {
       };
 
       try {
-        await statusDocRef.update(payload);
+        await statusDocRef.set(payload, SetOptions(merge: true));
       } on FirebaseException catch (e, st) {
-        if (e.code == 'not-found') {
-          // 없으면 생성 시도
-          try {
-            await statusDocRef.set(payload, SetOptions(merge: true));
-          } catch (e2, st2) {
-            try {
-              await DebugFirestoreLogger().log({
-                'op': 'plateStatus.upsert.set',
-                'collection': 'plate_status',
-                'docPath': statusDocRef.path,
-                'docId': documentId,
-                'error': {
-                  'type': e2.runtimeType.toString(),
-                  if (e2 is FirebaseException) 'code': e2.code,
-                  'message': e2.toString(),
-                },
-                'stack': st2.toString(),
-                'tags': ['plateStatus', 'upsert', 'set', 'error'],
-              }, level: 'error');
-            } catch (_) {}
-            rethrow;
-          }
-        } else {
-          // update 실패 로깅
-          try {
-            await DebugFirestoreLogger().log({
-              'op': 'plateStatus.upsert.update',
-              'collection': 'plate_status',
-              'docPath': statusDocRef.path,
-              'docId': documentId,
-              'error': {
-                'type': e.runtimeType.toString(),
-                'code': e.code,
-                'message': e.toString(),
-              },
-              'stack': st.toString(),
-              'tags': ['plateStatus', 'upsert', 'update', 'error'],
-            }, level: 'error');
-          } catch (_) {}
-          rethrow;
-        }
+        // set 실패 로깅
+        try {
+          await DebugFirestoreLogger().log({
+            'op': 'plateStatus.upsert.set',
+            'collection': 'plate_status',
+            'docPath': statusDocRef.path,
+            'docId': documentId,
+            'error': {
+              'type': e.runtimeType.toString(),
+              'code': e.code,
+              'message': e.toString(),
+            },
+            'stack': st.toString(),
+            'tags': ['plateStatus', 'upsert', 'set', 'error'],
+          }, level: 'error');
+        } catch (_) {}
+        rethrow;
       } catch (e, st) {
         // FirebaseException 이외 예외도 로깅(네트워크/플랫폼 등)
         try {

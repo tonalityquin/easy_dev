@@ -6,17 +6,17 @@ import '../../models/plate_model.dart';
 abstract class PlateRepository {
   // ========= Streams =========
   Stream<List<PlateModel>> streamToCurrentArea(
-    PlateType type,
-    String area, {
-    bool descending = true,
-    String? location,
-  });
+      PlateType type,
+      String area, {
+        bool descending = true,
+        String? location,
+      });
 
   /// 출차 완료(미정산) 원본 스냅샷 스트림 (docChanges 사용용)
   Stream<QuerySnapshot<Map<String, dynamic>>> departureUnpaidSnapshots(
-    String area, {
-    bool descending,
-  });
+      String area, {
+        bool descending,
+      });
 
   // ========= Counts =========
   Future<int> getPlateCountForTypePage(PlateType type, String area);
@@ -42,29 +42,24 @@ abstract class PlateRepository {
     required String area,
   });
 
-  Future<bool> checkDuplicatePlate({
-    required String plateNumber,
-    required String area,
-  });
-
   Future<PlateModel?> getPlate(String documentId);
 
   // ========= Writes =========
   Future<void> addOrUpdatePlate(String documentId, PlateModel plate);
 
   Future<void> updatePlate(
-    String documentId,
-    Map<String, dynamic> updatedFields, {
-    PlateLogModel? log,
-  });
+      String documentId,
+      Map<String, dynamic> updatedFields, {
+        PlateLogModel? log,
+      });
 
   Future<void> deletePlate(String documentId);
 
   Future<void> recordWhoPlateClick(
-    String id,
-    bool isSelected, {
-    String? selectedBy,
-  });
+      String id,
+      bool isSelected, {
+        String? selectedBy,
+      });
 
   Future<void> addPlate({
     required String plateNumber,
@@ -90,7 +85,6 @@ abstract class PlateRepository {
   });
 
   // ========= Plate Status =========
-
   Future<void> setPlateStatus({
     required String plateNumber,
     required String area,

@@ -126,54 +126,6 @@ class PlateQueryService {
     );
   }
 
-  Future<bool> checkDuplicatePlate({
-    required String plateNumber,
-    required String area,
-  }) async {
-    try {
-      final querySnapshot = await _firestore
-          .collection('plates')
-          .where('plate_number', isEqualTo: plateNumber)
-          .where('area', isEqualTo: area)
-          .where('type', whereIn: [
-        PlateType.parkingRequests.firestoreValue,
-        PlateType.parkingCompleted.firestoreValue,
-        PlateType.departureRequests.firestoreValue,
-      ])
-          .limit(1)
-          .get()
-          .timeout(const Duration(seconds: 10)); // ⏱ 타임아웃
-
-      return querySnapshot.docs.isNotEmpty;
-    } catch (e, st) {
-      // Firestore(및 타임아웃 등) 실패만 로깅
-      try {
-        await DebugFirestoreLogger().log({
-          'op': 'plates.checkDuplicate',
-          'collection': 'plates',
-          'filters': {
-            'plate_number': plateNumber,
-            'area': area,
-            'type_in': [
-              PlateType.parkingRequests.firestoreValue,
-              PlateType.parkingCompleted.firestoreValue,
-              PlateType.departureRequests.firestoreValue,
-            ],
-          },
-          'meta': {'limit': 1, 'timeoutSec': 10},
-          'error': {
-            'type': e.runtimeType.toString(),
-            if (e is FirebaseException) 'code': e.code,
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': ['plates', 'checkDuplicate', 'error'],
-        }, level: 'error');
-      } catch (_) {}
-      rethrow;
-    }
-  }
-
   // -------- 공통 쿼리 실행부(파이어스토어 실패만 로깅) --------
   Future<List<PlateModel>> _queryPlates(
       Query<Map<String, dynamic>> query, {
