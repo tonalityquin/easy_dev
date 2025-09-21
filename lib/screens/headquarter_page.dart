@@ -1,8 +1,13 @@
+// lib/screens/headquarter_page.dart
 import 'package:easydev/screens/secondary_page.dart';
 import 'package:easydev/states/page/hq_state.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+
+import '../routes.dart';
 import '../states/page/page_info.dart';
+import 'head_package/shared/hq_switch_fab.dart';
 
 /// Headquarter 전용 팔레트
 class _HqPalette {
@@ -28,10 +33,18 @@ class HeadquarterPage extends StatelessWidget {
               body: const RefreshableBody(),
               // ✅ 하단 영역: 탭이 2개 이상이면 BottomNavigationBar + 브랜드 푸터,
               //    1개 이하이면 브랜드 푸터만 노출
-              bottomNavigationBar: SafeArea(
+              bottomNavigationBar: const SafeArea(
                 top: false,
                 child: _BottomArea(),
               ),
+              // ✅ 두 페이지에서 동일 위치(endFloat)에 노출되는 상호 이동 FAB
+              floatingActionButton: HqSwitchFab(
+                label: '본사 허브',
+                icon: Icons.dashboard_customize_rounded,
+                onPressed: () => Navigator.of(context)
+                    .pushReplacementNamed(AppRoutes.headStub),
+              ),
+              floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
             ),
           );
         },
@@ -41,6 +54,8 @@ class HeadquarterPage extends StatelessWidget {
 }
 
 class _BottomArea extends StatelessWidget {
+  const _BottomArea();
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<HqState>();
@@ -58,7 +73,7 @@ class _BottomArea extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: const [
         PageBottomNavigation(),
-        footer,
+        _BrandFooter(),
       ],
     );
   }
@@ -73,7 +88,11 @@ class _BrandFooter extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: SizedBox(
         height: 48,
-        child: Image.asset('assets/images/pelican.png'),
+        child: Semantics(
+          label: 'Pelican 브랜드 로고',
+          image: true,
+          child: Image.asset('assets/images/pelican.png'),
+        ),
       ),
     );
   }
@@ -82,9 +101,11 @@ class _BrandFooter extends StatelessWidget {
 class RefreshableBody extends StatelessWidget {
   const RefreshableBody({super.key});
 
+  static const _kSwipeVelocityThreshold = 300; // px/s
+
   void _handleDrag(BuildContext context, double velocity) {
-    // 왼쪽으로 스와이프(velocity < 0) 시 보조 페이지로 전환
-    if (velocity < 0) {
+    // 왼쪽으로 스와이프(velocity < -threshold) 시 보조 페이지로 전환
+    if (velocity < -_kSwipeVelocityThreshold) {
       Navigator.of(context).push(_slidePage(const SecondaryPage(), fromLeft: false));
     }
   }
@@ -112,7 +133,7 @@ class RefreshableBody extends StatelessWidget {
         builder: (context, state, child) {
           final pages = state.pages;
 
-          // ✅ 안전 인덱스(범위 클램프)
+          // ✅ 안전 인덱스(범위 클램프) — int 캐스팅
           final safeIndex = pages.isEmpty
               ? 0
               : state.selectedIndex.clamp(0, pages.length - 1);
@@ -164,9 +185,8 @@ class PageBottomNavigation extends StatelessWidget {
           return const SizedBox.shrink();
         }
 
-        // ✅ 안전 인덱스 적용
-        final currentIndex =
-        state.selectedIndex.clamp(0, pages.length - 1);
+        // ✅ 안전 인덱스 적용 — int 캐스팅
+        final currentIndex = state.selectedIndex.clamp(0, pages.length - 1);
 
         return BottomNavigationBar(
           type: BottomNavigationBarType.fixed,

@@ -1,6 +1,7 @@
 // lib/screens/head_stub_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../routes.dart';
 import 'head_package/head_memo.dart';
 import 'head_package/roadmap_bottom_sheet.dart';
@@ -14,6 +15,9 @@ import 'head_package/mgmt_package/statistics.dart' as mgmt_stats;
 // ▼ 출/퇴근(출석) · 휴게 관리
 import 'head_package/hr_package/attendance_calendar.dart' as hr_att;
 import 'head_package/hr_package/break_calendar.dart' as hr_break;
+
+// 공용 FAB
+import 'head_package/shared/hq_switch_fab.dart';
 
 class HeadStubPage extends StatelessWidget {
   const HeadStubPage({super.key});
@@ -73,14 +77,14 @@ class HeadStubPage extends StatelessWidget {
                       final crossAxisCount = width >= 1100
                           ? 4
                           : width >= 800
-                              ? 3
-                              : 2;
+                          ? 3
+                          : 2;
 
                       const spacing = 12.0;
                       final textScale = MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
 
                       final tileWidth = (width - spacing * (crossAxisCount - 1)) / crossAxisCount;
-                      final baseTileHeight = 150.0;
+                      const baseTileHeight = 150.0;
                       final tileHeight = baseTileHeight * textScale;
                       final childAspectRatio = tileWidth / tileHeight;
 
@@ -265,13 +269,17 @@ class HeadStubPage extends StatelessWidget {
                 Center(
                   child: InkWell(
                     onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
-                      '/selector', // AppRoutes.selector
-                      (route) => false,
+                      AppRoutes.selector,
+                          (route) => false,
                     ),
                     borderRadius: BorderRadius.circular(8),
                     child: SizedBox(
                       height: 80,
-                      child: Image.asset('assets/images/pelican.png'),
+                      child: Semantics(
+                        label: '허브 선택 화면으로 돌아가기',
+                        button: true,
+                        child: Image.asset('assets/images/pelican.png'),
+                      ),
                     ),
                   ),
                 ),
@@ -280,6 +288,14 @@ class HeadStubPage extends StatelessWidget {
             ),
           ),
         ),
+        // ✅ 두 페이지에서 동일 위치(endFloat)에 노출되는 상호 이동 FAB
+        floatingActionButton: HqSwitchFab(
+          label: '본사 기능',
+          icon: Icons.apartment_rounded,
+          onPressed: () => Navigator.of(context)
+              .pushReplacementNamed(AppRoutes.headquarterPage),
+        ),
+        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       ),
     );
   }
@@ -324,7 +340,7 @@ class _HeaderBanner extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              '본사 허브 입니다.',
+              '본사 허브입니다.',
               style: text.bodyMedium?.copyWith(
                 color: _dark,
                 fontWeight: FontWeight.w600,
@@ -372,21 +388,19 @@ class _ActionCard extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: onTap,
-                  customBorder: const CircleBorder(),
-                  child: Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: bg,
-                      shape: BoxShape.circle,
-                    ),
-                    alignment: Alignment.center,
-                    child: Icon(icon, color: fg, size: 26),
+              // 아이콘은 외곽 카드 탭에 제스처를 위임(스크린리더 중복 방지)
+              Semantics(
+                button: true,
+                label: title,
+                child: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: bg,
+                    shape: BoxShape.circle,
                   ),
+                  alignment: Alignment.center,
+                  child: Icon(icon, color: fg, size: 26),
                 ),
               ),
               const SizedBox(height: 8),
