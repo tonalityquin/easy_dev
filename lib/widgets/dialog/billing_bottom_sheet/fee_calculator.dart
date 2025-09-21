@@ -3,69 +3,48 @@ import 'package:flutter/material.dart';
 /// 요금 계산 방식 열거형
 enum FeeMode { normal, plus, minus }
 
-/// 정산 유형 열거형 (한글 대신 영문으로 작성)
+/// 정산 유형 열거형 (호환성 유지용)
+/// - 'fixed' 값은 과거 참조를 깨지 않기 위해 남겨두지만, 로직에서는 더 이상 사용하지 않습니다.
 enum BillType { general, fixed }
 
 /// 문자열 → Enum 변환 함수
+/// - '고정' / '정기' 등은 더 이상 인식하지 않고 항상 변동으로 처리합니다.
 BillType billTypeFromString(String? value) {
-  if (value == null) return BillType.general;
-
-  final normalized = value.toLowerCase(); // 소문자 처리
-
-  if (normalized.contains('고정') ||
-      normalized.contains('fixed') ||
-      normalized.contains('daily') ||
-      normalized.contains('일일') ||
-      normalized.contains('정기')) {
-    return BillType.fixed;
-  }
-
+  // '고정' 및 '정기' 인식 제거 → 항상 변동으로 간주
   return BillType.general;
 }
 
-/// Enum → 문자열 변환 함수 (필요 시 UI용)
+/// Enum → 문자열 변환 함수 (UI 표시용)
+/// - 항상 '변동'으로 반환하여 '고정' 레이블을 노출하지 않음
 String billTypeToString(BillType type) {
-  return type == BillType.fixed ? '고정' : '변동';
+  return '변동';
 }
 
-/// 통합된 요금 계산 함수 (고정/변동 주차 포함)
+/// 통합 요금 계산 (변동만 처리)
+/// - 기존 '고정' 분기(regularAmount 사용)는 완전히 제거
+/// - billingType/regularAmount 파라미터는 호환성 위해 남겨두되 미사용
 int calculateFee({
   required int entryTimeInSeconds,
   required int currentTimeInSeconds,
   required int basicStandard, // 분 단위
   required int basicAmount,
-  required int addStandard, // 분 단위
+  required int addStandard,   // 분 단위
   required int addAmount,
   int userAdjustment = 0,
   FeeMode mode = FeeMode.normal,
 
-  // 고정 정산용 필드
-  String? billingType, // e.g., '고정' 또는 '변동'
-  int? regularAmount,
+  // (구) 고정 정산 관련 파라미터 — 더 이상 사용하지 않음(호환성 목적)
+  String? billingType, // e.g., '고정' 또는 '변동' (무시됨)
+  int? regularAmount,  // 무시됨
 }) {
-  final billType = billTypeFromString(billingType);
-  final isRegular = billType == BillType.fixed;
+  // 모든 경우를 변동(시간제) 정산으로 처리합니다.
 
-  // 1. 고정 정산
-  if (isRegular) {
-    final base = regularAmount ?? 0;
-
-    switch (mode) {
-      case FeeMode.normal:
-        return base;
-      case FeeMode.plus:
-        return base + userAdjustment;
-      case FeeMode.minus:
-        final adjusted = base - userAdjustment;
-        return adjusted < 0 ? 0 : adjusted;
-    }
-  }
-
-  // 2. 변동 정산
+  // 1) 경과 시간 계산
   final parkedSeconds = currentTimeInSeconds - entryTimeInSeconds;
   final basicSec = basicStandard * 60;
   final addSec = addStandard * 60;
 
+  // 2) 기본/추가 요금 계산
   int baseFee;
   if (parkedSeconds <= basicSec) {
     baseFee = basicAmount;
@@ -80,7 +59,7 @@ int calculateFee({
     baseFee = basicAmount + (extraUnits * addAmount);
   }
 
-  // 3. 조정 적용
+  // 3) 조정 적용
   switch (mode) {
     case FeeMode.normal:
       return baseFee;

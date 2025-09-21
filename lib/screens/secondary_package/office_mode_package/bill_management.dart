@@ -85,8 +85,7 @@ class _BillManagementState extends State<BillManagement> {
           ),
         ],
       ),
-    ) ??
-        false;
+    ) ?? false;
   }
 
   Future<void> _deleteSelectedBill(BuildContext context) async {
@@ -148,10 +147,8 @@ class _BillManagementState extends State<BillManagement> {
         builder: (context, state, child) {
           final generalBills =
           state.generalBills.where((bill) => bill.area.trim() == currentArea).toList();
-          final regularBills =
-          state.regularBills.where((bill) => bill.area.trim() == currentArea).toList();
 
-          if (generalBills.isEmpty && regularBills.isEmpty) {
+          if (generalBills.isEmpty) {
             return const Center(child: Text('현재 지역에 해당하는 정산 데이터가 없습니다.'));
           }
 
@@ -160,20 +157,10 @@ class _BillManagementState extends State<BillManagement> {
               if (generalBills.isNotEmpty) ...[
                 const Padding(
                   padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-                  child:
-                  Text('변동 정산', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  child: Text('변동 정산', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
                 const Divider(height: 1.0),
                 ...generalBills.map((bill) => _buildGeneralBillTile(context, state, bill, won)),
-              ],
-              if (regularBills.isNotEmpty) ...[
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(16, 24, 16, 8),
-                  child:
-                  Text('고정 정산', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                ),
-                const Divider(height: 1.0),
-                ...regularBills.map((bill) => _buildRegularBillTile(context, state, bill, won)),
               ],
               const SizedBox(height: 12),
             ],
@@ -221,39 +208,6 @@ class _BillManagementState extends State<BillManagement> {
         children: [
           Text('기본 기준: ${bill.basicStandard}, 기본 금액: ₩${won.format(bill.basicAmount)}'),
           Text('추가 기준: ${bill.addStandard}, 추가 금액: ₩${won.format(bill.addAmount)}'),
-        ],
-      ),
-      trailing: isSelected ? const Icon(Icons.check_circle, color: serviceCardBase) : null,
-      onTap: () => state.toggleBillSelection(bill.id),
-    );
-  }
-
-  Widget _buildRegularBillTile(
-      BuildContext context,
-      BillState state,
-      dynamic bill,
-      NumberFormat won,
-      ) {
-    final isSelected = state.selectedBillId == bill.id;
-    final selectedBg = serviceCardLight.withOpacity(0.12);
-
-    return ListTile(
-      key: ValueKey(bill.id),
-      selected: isSelected,
-      selectedTileColor: selectedBg,
-      tileColor: isSelected ? selectedBg : serviceCardBg,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      title: Text(
-        bill.countType,
-        style: const TextStyle(fontWeight: FontWeight.bold),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('고정 유형: ${bill.regularType}'),
-          Text('요금: ₩${won.format(bill.regularAmount)} · 이용 시간: ${won.format(bill.regularDurationHours)}시간'),
         ],
       ),
       trailing: isSelected ? const Icon(Icons.check_circle, color: serviceCardBase) : null,

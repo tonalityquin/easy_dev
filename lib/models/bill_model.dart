@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 
+/// 고정 제거 정책:
+///  - '고정' 문자열 입력은 더 이상 지원하지 않으므로 안전하게 '변동'으로 치환
+///  - '정기'는 기존 의미(월정기 등) 유지
 enum BillType { general, regular }
 
 BillType billTypeFromString(String? value) {
   switch (value) {
-    case '고정':
+    case '정기':
       return BillType.regular;
+    case '고정':
+      return BillType.general;
     case '변동':
     default:
       return BillType.general;
@@ -15,7 +20,7 @@ BillType billTypeFromString(String? value) {
 String billTypeToString(BillType type) {
   switch (type) {
     case BillType.regular:
-      return '고정';
+      return '정기';
     case BillType.general:
       return '변동';
   }
@@ -31,6 +36,7 @@ class BillModel {
   final int? basicStandard;
   final BillType type;
 
+  // 정기(월정기 등) 관련 값은 유지
   final int? regularAmount;
   final int? regularDurationHours;
 
@@ -53,12 +59,16 @@ class BillModel {
       return BillModel(
         id: id,
         countType: data['CountType'] ?? '',
-        addAmount: (data['addAmount'] is int) ? data['addAmount'] : int.tryParse(data['addAmount']?.toString() ?? ''),
-        addStandard:
-            (data['addStandard'] is int) ? data['addStandard'] : int.tryParse(data['addStandard']?.toString() ?? ''),
+        addAmount: (data['addAmount'] is int)
+            ? data['addAmount']
+            : int.tryParse(data['addAmount']?.toString() ?? ''),
+        addStandard: (data['addStandard'] is int)
+            ? data['addStandard']
+            : int.tryParse(data['addStandard']?.toString() ?? ''),
         area: data['area'] ?? '',
-        basicAmount:
-            (data['basicAmount'] is int) ? data['basicAmount'] : int.tryParse(data['basicAmount']?.toString() ?? ''),
+        basicAmount: (data['basicAmount'] is int)
+            ? data['basicAmount']
+            : int.tryParse(data['basicAmount']?.toString() ?? ''),
         basicStandard: (data['basicStandard'] is int)
             ? data['basicStandard']
             : int.tryParse(data['basicStandard']?.toString() ?? ''),
@@ -86,7 +96,7 @@ class BillModel {
       'basicStandard': basicStandard,
       'regularAmount': regularAmount,
       'regularDurationHours': regularDurationHours,
-      'type': billTypeToString(type),
+      'type': billTypeToString(type), // '고정'이 아닌 '정기'/'변동'만 저장
     };
   }
 
@@ -101,7 +111,7 @@ class BillModel {
       'basicStandard': basicStandard,
       'regularAmount': regularAmount,
       'regularDurationHours': regularDurationHours,
-      'type': billTypeToString(type),
+      'type': billTypeToString(type), // '고정' 미출력
     };
   }
 
@@ -116,7 +126,7 @@ class BillModel {
       basicStandard: data['basicStandard'],
       regularAmount: data['regularAmount'],
       regularDurationHours: data['regularDurationHours'],
-      type: billTypeFromString(data['type']),
+      type: billTypeFromString(data['type']), // '고정' 들어와도 general 로 안전 치환
     );
   }
 
