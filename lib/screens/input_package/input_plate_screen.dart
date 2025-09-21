@@ -11,8 +11,6 @@ import 'sections/input_bill_section.dart';
 import 'sections/input_location_section.dart';
 import 'sections/input_photo_section.dart';
 import 'sections/input_plate_section.dart';
-// 🔻 차량 상태 토글 제거: 아래 import 삭제
-// import 'sections/input_status_on_tap_section.dart';
 import 'sections/input_bottom_action_section.dart';
 import 'sections/input_custom_status_section.dart';
 
@@ -78,6 +76,20 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   void initState() {
     super.initState();
 
+    // ⬇️ 추가: 시트 사이즈 변화에 따라 _sheetOpen 동기화 (드래그로 여닫을 때도 반영)
+    _sheetController.addListener(() {
+      try {
+        final s = _sheetController.size; // 0.0~1.0
+        // 닫힘(0.16)과 열림(1.0) 중간값(≈0.58)을 기준으로 열림/닫힘 판정
+        final bool openNow = s >= ((_sheetClosed + _sheetOpened) / 2);
+        if (openNow != _sheetOpen && mounted) {
+          setState(() => _sheetOpen = openNow);
+        }
+      } catch (_) {
+        // attach 전 접근 등은 무시
+      }
+    });
+
     controller.controllerBackDigit.addListener(() async {
       final text = controller.controllerBackDigit.text;
       if (text.length == 4 && controller.isInputValid()) {
@@ -87,11 +99,10 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
         if (mounted && data != null) {
           final fetchedStatus = data['customStatus'] as String?;
-          final fetchedList =
-              (data['statusList'] as List<dynamic>?)
-                  ?.map((e) => e.toString())
-                  .toList() ??
-                  [];
+          final fetchedList = (data['statusList'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+              [];
 
           final String? fetchedCountType =
           (data['countType'] as String?)?.trim();
@@ -195,8 +206,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         key: const ValueKey('frontKeypad'),
         controller: controller.controllerFrontDigit,
         maxLength: controller.isThreeDigit ? 3 : 2,
-        onComplete: () => setState(
-                () => controller.setActiveController(controller.controllerMidDigit)),
+        onComplete: () => setState(() =>
+            controller.setActiveController(controller.controllerMidDigit)),
         onChangeFrontDigitMode: (defaultThree) {
           setState(() {
             controller.setFrontDigitMode(defaultThree);
@@ -210,8 +221,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       return KorKeypad(
         key: const ValueKey('midKeypad'),
         controller: controller.controllerMidDigit,
-        onComplete: () => setState(
-                () => controller.setActiveController(controller.controllerBackDigit)),
+        onComplete: () => setState(() =>
+            controller.setActiveController(controller.controllerBackDigit)),
       );
     }
 
@@ -258,237 +269,246 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     final bottomSafePadding =
         (controller.showKeypad ? 280.0 : 140.0) + viewInset;
 
-    return Scaffold(
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 1,
-        title: Align(
-          alignment: Alignment.centerRight,
-          child: Text(
-            controller.isThreeDigit ? '현재 앞자리: 세자리' : '현재 앞자리: 두자리',
-            style: const TextStyle(
-                fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black),
+    // 🔽 뒤로가기 처리: 시트가 열려 있으면 먼저 닫고, 닫혀 있으면 pop 허용
+    return PopScope(
+      canPop: !_sheetOpen,
+      onPopInvoked: (didPop) async {
+        if (didPop) return; // 이미 pop된 경우
+        if (_sheetOpen) {
+          await _animateSheet(open: false); // 시트 먼저 닫기
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
+          centerTitle: true,
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
+          elevation: 1,
+          title: Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              controller.isThreeDigit ? '현재 앞자리: 세자리' : '현재 앞자리: 두자리',
+              style: const TextStyle(
+                  fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black),
+            ),
           ),
+          actions: [
+            // 수동으로도 다시 열 수 있도록 버튼 유지
+            IconButton(
+              tooltip: '실시간 OCR 스캔',
+              onPressed: _openLiveScanner,
+              icon: const Icon(Icons.auto_awesome_motion),
+            ),
+          ],
         ),
-        actions: [
-          // 수동으로도 다시 열 수 있도록 버튼 유지
-          IconButton(
-            tooltip: '실시간 OCR 스캔',
-            onPressed: _openLiveScanner,
-            icon: const Icon(Icons.auto_awesome_motion),
-          ),
-        ],
-      ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          return Stack(
-            children: [
-              // 상단(기본) 콘텐츠: 번호판/위치/사진 섹션 — ✅ 세로 스크롤 가능
-              Positioned.fill(
-                child: SingleChildScrollView(
-                  // 🔹 작은 폰 보완: 항상 세로 스크롤 가능 + 드래그 시 키보드 닫기
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  keyboardDismissBehavior:
-                  ScrollViewKeyboardDismissBehavior.onDrag,
-                  padding: EdgeInsets.fromLTRB(16, 16, 16, bottomSafePadding),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // ⚠️ 업종 드롭다운은 보통 InputPlateSection 내부에 있으므로
-                      // 그 파일에서 숨겨야 UI에서 완전히 사라집니다.
-                      InputPlateSection(
-                        dropdownValue: controller.dropdownValue,
-                        regions: controller.regions,
-                        controllerFrontDigit: controller.controllerFrontDigit,
-                        controllerMidDigit: controller.controllerMidDigit,
-                        controllerBackDigit: controller.controllerBackDigit,
-                        activeController: controller.activeController,
-                        onKeypadStateChanged: (_) {
-                          setState(() {
-                            controller.clearInput();
-                            controller.setActiveController(
-                                controller.controllerFrontDigit);
-                            // 필요 시 아래 라인 활성화하면 탭 시 항상 하단 키패드+도크가 열립니다.
-                            // controller.showKeypad = true;
-                          });
-                        },
-                        onRegionChanged: (region) {
-                          setState(() {
-                            controller.dropdownValue = region;
-                          });
-                        },
-                        isThreeDigit: controller.isThreeDigit,
-                      ),
-                      const SizedBox(height: 16),
-                      InputLocationSection(
-                          locationController: controller.locationController),
-                      const SizedBox(height: 16),
-                      InputPhotoSection(
-                        capturedImages: controller.capturedImages,
-                        plateNumber: controller.buildPlateNumber(),
-                      ),
-                      // 필요 시 추가 안내/여백
-                      const SizedBox(height: 8),
-                    ],
-                  ),
-                ),
-              ),
-
-              // 하단 시트: 컨트롤러로 열고 닫을 때 애니메이션 + 최상단까지 열림
-              DraggableScrollableSheet(
-                controller: _sheetController,
-                initialChildSize: _sheetClosed,
-                minChildSize: _sheetClosed,
-                maxChildSize: _sheetOpened, // ★ 1.0 = 최상단까지
-                snap: true,
-                snapSizes: const [_sheetClosed, _sheetOpened],
-                builder: (context, scrollController) {
-                  // 메인 배경(화이트)과 구분되는 아주 옅은 톤
-                  const sheetBg =
-                  Color(0xFFF6F8FF); // subtle blue-tinted light gray
-
-                  return Container(
-                    decoration: BoxDecoration(
-                      color: sheetBg, // 기존: Colors.white
-                      borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(16)),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Colors.black26,
-                          blurRadius: 10,
-                          offset: Offset(0, -4),
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            return Stack(
+              children: [
+                // 상단(기본) 콘텐츠: 번호판/위치/사진 섹션 — ✅ 세로 스크롤 가능
+                Positioned.fill(
+                  child: SingleChildScrollView(
+                    // 🔹 작은 폰 보완: 항상 세로 스크롤 가능 + 드래그 시 키보드 닫기
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                    padding: EdgeInsets.fromLTRB(16, 16, 16, bottomSafePadding),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // ⚠️ 업종 드롭다운은 보통 InputPlateSection 내부에 있으므로
+                        // 그 파일에서 숨겨야 UI에서 완전히 사라집니다.
+                        InputPlateSection(
+                          dropdownValue: controller.dropdownValue,
+                          regions: controller.regions,
+                          controllerFrontDigit: controller.controllerFrontDigit,
+                          controllerMidDigit: controller.controllerMidDigit,
+                          controllerBackDigit: controller.controllerBackDigit,
+                          activeController: controller.activeController,
+                          onKeypadStateChanged: (_) {
+                            setState(() {
+                              controller.clearInput();
+                              controller.setActiveController(
+                                  controller.controllerFrontDigit);
+                              // 필요 시 아래 라인 활성화하면 탭 시 항상 하단 키패드+도크가 열립니다.
+                              // controller.showKeypad = true;
+                            });
+                          },
+                          onRegionChanged: (region) {
+                            setState(() {
+                              controller.dropdownValue = region;
+                            });
+                          },
+                          isThreeDigit: controller.isThreeDigit,
                         ),
+                        const SizedBox(height: 16),
+                        InputLocationSection(
+                            locationController: controller.locationController),
+                        const SizedBox(height: 16),
+                        InputPhotoSection(
+                          capturedImages: controller.capturedImages,
+                          plateNumber: controller.buildPlateNumber(),
+                        ),
+                        // 필요 시 추가 안내/여백
+                        const SizedBox(height: 8),
                       ],
                     ),
-                    // ✅ SafeArea: 상단만 보호 / 하단은 우리가 직접 패딩 관리
-                    child: SafeArea(
-                      top: true,
-                      bottom: false,
-                      child: ListView(
-                        controller: scrollController,
-                        physics:
-                        const NeverScrollableScrollPhysics(), // 내부 스크롤 금지(요청 유지)
-                        padding: EdgeInsets.fromLTRB(
-                          16,
-                          8,
-                          16,
-                          16 + (controller.showKeypad ? 260 : 100) + viewInset,
-                        ),
-                        children: [
-                          // 헤더(탭으로 열고 닫기 + 애니메이션)
-                          GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: _toggleSheet,
-                            child: Padding(
-                              padding:
-                              const EdgeInsets.only(top: 8, bottom: 12),
-                              child: Column(
-                                children: [
-                                  Container(
-                                    width: 40,
-                                    height: 4,
-                                    decoration: BoxDecoration(
-                                      // 핸들 색도 살짝 진하게 해서 대비 ↑ (선택)
-                                      color: Colors.black38, // 기존: Colors.black26
-                                      borderRadius: BorderRadius.circular(2),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Row(
-                                    mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        _sheetOpen
-                                            ? '정산 유형 / 메모 카드 닫기'
-                                            : '정산 유형 / 메모 카드 열기',
-                                        style: const TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w700),
-                                      ),
-                                      Text(
-                                        controller.buildPlateNumber(),
-                                        style: const TextStyle(
-                                            color: Colors.black54),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
+                  ),
+                ),
+
+                // 하단 시트: 컨트롤러로 열고 닫을 때 애니메이션 + 최상단까지 열림
+                DraggableScrollableSheet(
+                  controller: _sheetController,
+                  initialChildSize: _sheetClosed,
+                  minChildSize: _sheetClosed,
+                  maxChildSize: _sheetOpened, // ★ 1.0 = 최상단까지
+                  snap: true,
+                  snapSizes: const [_sheetClosed, _sheetOpened],
+                  builder: (context, scrollController) {
+                    // 메인 배경(화이트)과 구분되는 아주 옅은 톤
+                    const sheetBg =
+                    Color(0xFFF6F8FF); // subtle blue-tinted light gray
+
+                    return Container(
+                      decoration: const BoxDecoration(
+                        color: sheetBg, // 기존: Colors.white
+                        borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(16)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black26,
+                            blurRadius: 10,
+                            offset: Offset(0, -4),
                           ),
-                          const SizedBox(height: 12),
-
-                          // ⬇️ 정산 영역
-                          InputBillSection(
-                            selectedBill: controller.selectedBill,
-                            onChanged: (value) =>
-                                setState(() => controller.selectedBill = value),
-                            selectedBillType: selectedBillType,
-                            onTypeChanged: (newType) =>
-                                setState(() => selectedBillType = newType),
-                            countTypeController:
-                            controller.countTypeController,
-                          ),
-
-                          const SizedBox(height: 24),
-
-                          // 차량 상태 토글은 제거, 메모 섹션만 유지
-                          InputCustomStatusSection(
-                            controller: controller,
-                            fetchedCustomStatus:
-                            controller.fetchedCustomStatus,
-                            selectedStatusNames: selectedStatusNames,
-                            statusSectionKey: statusSectionKey,
-                            onDeleted: () {
-                              setState(() {
-                                controller.fetchedCustomStatus = null;
-                                controller.customStatusController.clear();
-                              });
-                            },
-                            onStatusCleared: () {
-                              setState(() {
-                                selectedStatusNames = [];
-                                statusSectionKey = UniqueKey();
-                              });
-                            },
-                          ),
-
-                          const SizedBox(height: 8),
                         ],
                       ),
-                    ),
-                  );
-                },
+                      // ✅ SafeArea: 상단만 보호 / 하단은 우리가 직접 패딩 관리
+                      child: SafeArea(
+                        top: true,
+                        bottom: false,
+                        child: ListView(
+                          controller: scrollController,
+                          physics:
+                          const NeverScrollableScrollPhysics(), // 내부 스크롤 금지(요청 유지)
+                          padding: EdgeInsets.fromLTRB(
+                            16,
+                            8,
+                            16,
+                            16 + (controller.showKeypad ? 260 : 100) + viewInset,
+                          ),
+                          children: [
+                            // 헤더(탭으로 열고 닫기 + 애니메이션)
+                            GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: _toggleSheet,
+                              child: Padding(
+                                padding:
+                                const EdgeInsets.only(top: 8, bottom: 12),
+                                child: Column(
+                                  children: [
+                                    Container(
+                                      width: 40,
+                                      height: 4,
+                                      decoration: BoxDecoration(
+                                        // 핸들 색도 살짝 진하게 해서 대비 ↑ (선택)
+                                        color: Colors.black38, // 기존: Colors.black26
+                                        borderRadius: BorderRadius.circular(2),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          _sheetOpen
+                                              ? '정산 유형 / 메모 카드 닫기'
+                                              : '정산 유형 / 메모 카드 열기',
+                                          style: const TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w700),
+                                        ),
+                                        Text(
+                                          controller.buildPlateNumber(),
+                                          style: const TextStyle(
+                                              color: Colors.black54),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+
+                            // ⬇️ 정산 영역
+                            InputBillSection(
+                              selectedBill: controller.selectedBill,
+                              onChanged: (value) => setState(
+                                      () => controller.selectedBill = value),
+                              selectedBillType: selectedBillType,
+                              onTypeChanged: (newType) => setState(
+                                      () => selectedBillType = newType),
+                              countTypeController: controller.countTypeController,
+                            ),
+
+                            const SizedBox(height: 24),
+
+                            // 차량 상태 토글은 제거, 메모 섹션만 유지
+                            InputCustomStatusSection(
+                              controller: controller,
+                              fetchedCustomStatus:
+                              controller.fetchedCustomStatus,
+                              selectedStatusNames: selectedStatusNames,
+                              statusSectionKey: statusSectionKey,
+                              onDeleted: () {
+                                setState(() {
+                                  controller.fetchedCustomStatus = null;
+                                  controller.customStatusController.clear();
+                                });
+                              },
+                              onStatusCleared: () {
+                                setState(() {
+                                  selectedStatusNames = [];
+                                  statusSectionKey = UniqueKey();
+                                });
+                              },
+                            ),
+
+                            const SizedBox(height: 8),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            );
+          },
+        ),
+        bottomNavigationBar: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            InputBottomNavigation(
+              showKeypad: controller.showKeypad,
+              keypad:
+              _buildDockAndKeypad(), // ★ 도크 + 키패드 묶음 (그대로 유지, 키패드가 있으면 위에 도크 표시)
+              actionButton: InputBottomActionSection(
+                controller: controller,
+                mountedContext: mounted,
+                onStateRefresh: () => setState(() {}),
               ),
-            ],
-          );
-        },
-      ),
-      bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          InputBottomNavigation(
-            showKeypad: controller.showKeypad,
-            keypad:
-            _buildDockAndKeypad(), // ★ 도크 + 키패드 묶음 (그대로 유지, 키패드가 있으면 위에 도크 표시)
-            actionButton: InputBottomActionSection(
-              controller: controller,
-              mountedContext: mounted,
-              onStateRefresh: () => setState(() {}),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: SizedBox(
-              height: 48,
-              child: Image.asset('assets/images/pelican.png'),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: SizedBox(
+                height: 48,
+                child: Image.asset('assets/images/pelican.png'),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -26,7 +26,7 @@ import '../utils/tts/tts_manager.dart';
 class _Palette {
   static const base = Color(0xFF0D47A1); // primary
   static const dark = Color(0xFF09367D); // 강조 텍스트/아이콘
-  static const fg = Color(0xFFFFFFFF);   // 전경(흰색)
+  static const fg = Color(0xFFFFFFFF); // 전경(흰색)
 }
 
 class TypePage extends StatefulWidget {
@@ -150,53 +150,53 @@ class _ChatDashboardBar extends StatelessWidget {
           Expanded(
             child: area.isEmpty
                 ? ElevatedButton(
-              onPressed: null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: _Palette.dark.withOpacity(.35),
-                disabledBackgroundColor: Colors.white,
-                disabledForegroundColor: _Palette.dark.withOpacity(.35),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.volume_up, size: 20),
-                  SizedBox(width: 6),
-                  Text('다시 듣기'),
-                ],
-              ),
-            )
+                    onPressed: null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: _Palette.dark.withOpacity(.35),
+                      disabledBackgroundColor: Colors.white,
+                      disabledForegroundColor: _Palette.dark.withOpacity(.35),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.volume_up, size: 20),
+                        SizedBox(width: 6),
+                        Text('다시 듣기'),
+                      ],
+                    ),
+                  )
                 : StreamBuilder<String>(
-              // 최신 메시지를 스트림으로 받되, 화면에는 “다시 듣기”만 보임
-              stream: latestMessageStream(area),
-              builder: (context, snapshot) {
-                final latest = (snapshot.data ?? '').trim();
-                if (latest.isNotEmpty) {
-                  // 비동기 저장(중복 호출 무방)
-                  _saveLatestToPrefs(area, latest);
-                }
+                    // 최신 메시지를 스트림으로 받되, 화면에는 “다시 듣기”만 보임
+                    stream: latestMessageStream(area),
+                    builder: (context, snapshot) {
+                      final latest = (snapshot.data ?? '').trim();
+                      if (latest.isNotEmpty) {
+                        // 비동기 저장(중복 호출 무방)
+                        _saveLatestToPrefs(area, latest);
+                      }
 
-                return ElevatedButton(
-                  onPressed: () => _replayLatestTts(context, area),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: _Palette.base,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      return ElevatedButton(
+                        onPressed: () => _replayLatestTts(context, area),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: _Palette.base,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.volume_up, size: 20),
+                            SizedBox(width: 6),
+                            Text('다시 듣기', overflow: TextOverflow.ellipsis),
+                          ],
+                        ),
+                      );
+                    },
                   ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.volume_up, size: 20),
-                      SizedBox(width: 6),
-                      Text('다시 듣기', overflow: TextOverflow.ellipsis),
-                    ],
-                  ),
-                );
-              },
-            ),
           ),
           const SizedBox(width: 8),
 
@@ -280,7 +280,7 @@ class _RefreshableBodyState extends State<RefreshableBody> {
       _chatOpening = true;
       debugPrint(
         '✅[V] 채팅 오픈 트리거: startDy=${_vStartDy?.toStringAsFixed(1)}, '
-            '거리(${_vDragDistance.toStringAsFixed(1)}), 속도($vy)',
+        '거리(${_vDragDistance.toStringAsFixed(1)}), 속도($vy)',
       );
       // iOS 제스처 충돌 방지용 아주 짧은 디바운스
       await Future<void>.delayed(const Duration(milliseconds: 10));
@@ -325,7 +325,8 @@ class _RefreshableBodyState extends State<RefreshableBody> {
         _vStartDy = details.globalPosition.dy;
         _vDragDistance = 0.0; // 시작 시 리셋
       },
-      onVerticalDragUpdate: (details) => _vDragDistance += details.delta.dy, // 위로 음수 누적
+      onVerticalDragUpdate: (details) => _vDragDistance += details.delta.dy,
+      // 위로 음수 누적
       onVerticalDragEnd: (details) => _handleVerticalDragEnd(context, details),
 
       child: Consumer<PageState>(
@@ -436,7 +437,7 @@ class _PageBottomNavigationState extends State<PageBottomNavigation> {
           backgroundColor: Colors.white,
           items: List.generate(
             pageState.pages.length,
-                (index) {
+            (index) {
               final pageInfo = pageState.pages[index];
               final isSelected = pageState.selectedIndex == index;
 
@@ -478,9 +479,7 @@ class _PageBottomNavigationState extends State<PageBottomNavigation> {
                     final bool isOut = pageInfo.title == '출차 요청';
                     Color countColor;
                     if (isIn || isOut) {
-                      countColor = isSelected
-                          ? selectedColor
-                          : (isIn ? Colors.redAccent : Colors.indigoAccent);
+                      countColor = isSelected ? selectedColor : (isIn ? Colors.redAccent : Colors.indigoAccent);
                     } else {
                       countColor = isSelected ? selectedColor : _Palette.dark.withOpacity(.75);
                     }
