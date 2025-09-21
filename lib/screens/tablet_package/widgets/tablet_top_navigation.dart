@@ -1,19 +1,17 @@
-// lib/screens/tablet_pages/widgets/tablet_top_navigation.dart
+// lib/screens/tablet_package/widgets/tablet_top_navigation.dart
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
-import '../../../routes.dart';
 import '../../../states/area/area_state.dart';
-import '../../../states/user/user_state.dart';
-import '../../../utils/blocking_dialog.dart';
-import '../../../utils/snackbar_helper.dart';
 import '../../../widgets/tts_filter_sheet.dart';
 import '../states/tablet_pad_mode_state.dart';
 
-// ⬇️ 추가: TTS 사용자 필터 & 필터 시트
+// ⬇️ TTS 사용자 필터
 import '../../../utils/tts/tts_user_filters.dart';
+// ⬇️ 로그아웃 공통 헬퍼
+import '../../../utils/logout_helper.dart';
 
 class TabletTopNavigation extends StatelessWidget {
   final bool isAreaSelectable;
@@ -327,26 +325,11 @@ class TabletTopNavigation extends StatelessWidget {
   }
 
   Future<void> _logout(BuildContext context) async {
-    try {
-      await runWithBlockingDialog(
-        context: context,
-        message: '로그아웃 중입니다...',
-        task: () async {
-          final userState = Provider.of<UserState>(context, listen: false);
-          await FlutterForegroundTask.stopService();
-          await userState.isHeWorking();
-          await Future.delayed(const Duration(seconds: 1));
-          await userState.clearUserToPhone();
-        },
-      );
-
-      if (!context.mounted) return;
-      Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.serviceLogin, (route) => false);
-      showSuccessSnackbar(context, '로그아웃 되었습니다.');
-    } catch (e) {
-      if (context.mounted) {
-        showFailedSnackbar(context, '로그아웃 실패: $e');
-      }
-    }
+    await LogoutHelper.logoutAndGoToLogin(
+      context,
+      checkWorking: true,
+      delay: const Duration(seconds: 1),
+      // 목적지 미지정 → 기본(허브 선택)으로 이동
+    );
   }
 }

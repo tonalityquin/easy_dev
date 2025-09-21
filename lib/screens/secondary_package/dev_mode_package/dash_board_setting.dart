@@ -1,4 +1,4 @@
-// lib/screens/.../dashboard_setting.dart
+// lib/screens/secondary_package/dev_mode_package/dash_board_setting.dart
 //
 // 최신 트렌드(UI/UX)로 깔끔하게 리팩터링 + '서비스 로그인' 팔레트 적용:
 // - 상단 Large 스타일 헤더 느낌(섹션 배너) + 얇은 구분선
@@ -21,12 +21,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../states/area/area_state.dart';
 import '../../../states/location/location_state.dart';
 import '../../../states/bill/bill_state.dart';
-import '../../../states/user/user_state.dart';
-import '../../../utils/blocking_dialog.dart';
 import '../../../utils/tts/tts_user_filters.dart';
 import '../../../utils/sheets_config.dart';
 import '../../../utils/tts/chat_tts_listener_service.dart';
 import '../../../utils/snackbar_helper.dart';
+import '../../../utils/logout_helper.dart';
 
 /// 서비스 로그인 카드 팔레트 (일관된 브랜드 톤 적용)
 class _SvcColors {
@@ -178,26 +177,12 @@ class _DashboardSettingState extends State<DashboardSetting> {
 
   // 로그아웃
   Future<void> _logout() async {
-    try {
-      await runWithBlockingDialog(
-        context: context,
-        message: '로그아웃 중입니다...',
-        task: () async {
-          final userState = context.read<UserState>();
-          await FlutterForegroundTask.stopService();
-          await Future.delayed(const Duration(seconds: 1));
-          await userState.clearUserToPhone();
-        },
-      );
-
-      if (!mounted) return;
-      Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
-    } catch (e) {
-      debugPrint('로그아웃 실패: $e');
-      if (mounted) {
-        showFailedSnackbar(context, '로그아웃 실패: $e');
-      }
-    }
+    await LogoutHelper.logoutAndGoToLogin(
+      context,
+      checkWorking: false,
+      delay: const Duration(seconds: 1),
+      // 목적지 미지정 → 기본(허브 선택)으로 이동
+    );
   }
 
   // 스프레드시트 ID/URL 삽입(변경) 바텀시트 - 풀스크린 흰 배경/키보드 패딩
@@ -508,7 +493,7 @@ class _DashboardSettingState extends State<DashboardSetting> {
         title: '로그아웃',
         icon: Icons.logout_rounded,
         tone: _Tone.danger,
-        subtitle: '포그라운드 서비스를 중지하고 로그인 화면으로 이동합니다.',
+        subtitle: '포그라운드 서비스를 중지하고 로그인 화면(허브 선택 경유)으로 이동합니다.',
         child: Row(
           children: [
             Expanded(

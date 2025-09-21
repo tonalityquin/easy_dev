@@ -1,13 +1,12 @@
-// lib/screens/.../CommuteInsideScreen.dart
+// lib/screens/commute_package/commute_inside_screen.dart
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../states/user/user_state.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../utils/sheets_config.dart';
+import '../../../utils/logout_helper.dart';
 import 'commute_inside_package/commute_inside_controller.dart';
 import 'commute_inside_package/sections/commute_inside_report_button_section.dart';
 import 'commute_inside_package/sections/commute_inside_work_button_section.dart';
@@ -173,17 +172,12 @@ class _CommuteInsideScreenState extends State<CommuteInsideScreen> {
   }
 
   Future<void> _handleLogout(BuildContext context) async {
-    try {
-      final userState = context.read<UserState>();
-      await FlutterForegroundTask.stopService();
-      await userState.clearUserToPhone();
-      await Future.delayed(const Duration(milliseconds: 500));
-      SystemChannels.platform.invokeMethod('SystemNavigator.pop');
-    } catch (e) {
-      if (context.mounted) {
-        showFailedSnackbar(context, '로그아웃 실패: $e');
-      }
-    }
+    // 앱 종료 대신 공통 정책: 허브(Selector)로 이동 + prefs('mode') 초기화
+    await LogoutHelper.logoutAndGoToLogin(
+      context,
+      checkWorking: false,
+      delay: const Duration(milliseconds: 500),
+    );
   }
 
   @override
