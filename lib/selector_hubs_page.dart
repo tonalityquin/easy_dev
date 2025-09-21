@@ -9,6 +9,9 @@ import '../routes.dart';
 // ✅ snackbar_helper 사용
 import '../utils/snackbar_helper.dart';
 
+// ✅ 업데이트 시트 분리 파일 임포트
+import 'screens/update_bottom_sheet.dart';
+
 /// ============================
 /// 초간단 오프라인 Dev 코드 검증 상수/함수
 /// ============================
@@ -105,10 +108,9 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
       useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => FractionallySizedBox(
-        heightFactor: 1,
+        heightFactor: 1, // 최상단까지
         child: DevLoginBottomSheet(
           onSuccess: (id, pw) async {
-            // ✅ 자격 증명은 저장하지 않고 인증 플래그만 유지
             await _setDevAuthorized(true);
             if (mounted) {
               Navigator.of(ctx).pop(); // 시트 닫기
@@ -129,6 +131,20 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
             }
           },
         ),
+      ),
+    );
+  }
+
+  /// ✅ "업데이트 보기" 알림바를 눌렀을 때 — 풀스크린 바텀 시트
+  Future<void> _handleUpdateTap(BuildContext context) async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => const FractionallySizedBox(
+        heightFactor: 1, // 최상단까지
+        child: UpdateBottomSheet(),
       ),
     );
   }
@@ -167,13 +183,14 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
     final bool keyboardOpen = media.viewInsets.bottom > 0;
     final double footerHeight = (isShort || keyboardOpen) ? 72 : 120;
 
+    final cs = Theme.of(context).colorScheme;
+
     // ✅ 이 화면에서만 뒤로가기 pop을 막아 앱 종료를 방지
     return PopScope(
       canPop: false, // 루트에서 뒤로가기로 pop되지 않도록 고정
-      onPopInvoked: (didPop) {
-      },
+      onPopInvoked: (didPop) {},
       child: Scaffold(
-        backgroundColor: Colors.white, // 전체 배경 화이트
+        backgroundColor: Colors.white, // 전체 배경 화이트 (앱 테마에 맞춰 조정 가능)
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           surfaceTintColor: Colors.transparent,
@@ -188,10 +205,10 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
           title: Text(
             'Pelican Hubs',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.2,
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.2,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
           ),
           iconTheme: IconThemeData(color: Theme.of(context).colorScheme.onSurface),
           actionsIconTheme: IconThemeData(color: Theme.of(context).colorScheme.onSurface),
@@ -218,9 +235,12 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
                     const SizedBox(height: 24),
                     _CardsPager(pages: pages),
                     const SizedBox(height: 16),
-                    const _HintBanner(
-                      color: Colors.green, // 배경 초록
-                      iconColor: Colors.white, // 아이콘 흰색
+                    // 🔔 _HintBanner → 업데이트 보기 알림바 버튼으로 교체
+                    _UpdateAlertBar(
+                      onTap: () => _handleUpdateTap(context),
+                      // 기본 컬러는 테마 기반으로 계산, 필요 시 지정 가능
+                      background: cs.primary,
+                      foreground: cs.onPrimary,
                     ),
                   ],
                 ),
@@ -412,12 +432,15 @@ class _HeaderBadge extends StatelessWidget {
       child: SizedBox(
         width: size,
         height: size,
-        child: const DecoratedBox(
-          decoration: BoxDecoration(
+        child: DecoratedBox(
+          decoration: const BoxDecoration(
             shape: BoxShape.circle,
             color: Colors.black, // 검은색 링
           ),
-          child: _HeaderBadgeInner(),
+          child: Padding(
+            padding: EdgeInsets.all(ring), // 전달된 ring 반영
+            child: const _HeaderBadgeInner(),
+          ),
         ),
       ),
     );
@@ -432,7 +455,7 @@ class _HeaderBadgeInner extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, cons) {
         return Padding(
-          padding: const EdgeInsets.all(3), // 링 두께
+          padding: const EdgeInsets.all(0), // 링은 바깥에서 처리
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: Colors.white, // 화이트 바디
@@ -871,37 +894,58 @@ class _LeadingIcon extends StatelessWidget {
   }
 }
 
-/// 하단 힌트 배너
-class _HintBanner extends StatelessWidget {
-  final Color color;
-  final Color iconColor;
+/// 🔔 업데이트 알림바 버튼 (배너 스타일)
+class _UpdateAlertBar extends StatelessWidget {
+  const _UpdateAlertBar({
+    required this.onTap,
+    this.background,
+    this.foreground,
+  });
 
-  const _HintBanner({required this.color, required this.iconColor});
+  final VoidCallback onTap;
+  final Color? background;
+  final Color? foreground;
 
   @override
   Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.info_outline_rounded, color: iconColor),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              '저장된 로그인 모드가 있으면 해당 모드만 선택할 수 있어요. (로그아웃 후, 변경 가능)',
-              style: text.bodySmall?.copyWith(
-                color: Colors.white, // 흰색
-                fontWeight: FontWeight.w700, // 진하게
-              ),
+    final cs = Theme.of(context).colorScheme;
+    final bg = background ?? cs.primary;
+    final fg = foreground ?? cs.onPrimary;
+
+    return Semantics(
+      button: true,
+      label: '업데이트 보기',
+      hint: '최신 업데이트 내용을 확인합니다',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.new_releases_rounded, color: fg),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '업데이트 보기',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: fg,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ),
+                Icon(Icons.keyboard_arrow_up_rounded, color: fg),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -918,7 +962,7 @@ class DevLoginBottomSheet extends StatefulWidget {
     required this.onReset,
   });
 
-  // 시그니처 유지(호환): 사용하지 않지만 기존 콜사이트 깨지지 않도록
+  // 시그니처 유지(호환)
   final Future<void> Function(String id, String pw) onSuccess;
   final Future<void> Function() onReset;
 
@@ -942,7 +986,7 @@ class _DevLoginBottomSheetState extends State<DevLoginBottomSheet> {
 
     if (_verifyDevCode(code)) {
       HapticFeedback.selectionClick();
-      await widget.onSuccess('dev', 'ok'); // 더미 값(호환용)
+      await widget.onSuccess('dev', 'ok'); // 부모가 pop/snackbar 처리
     } else {
       setState(() => _error = '개발 코드가 올바르지 않습니다.');
       HapticFeedback.vibrate();
@@ -950,7 +994,7 @@ class _DevLoginBottomSheetState extends State<DevLoginBottomSheet> {
   }
 
   Future<void> _reset() async {
-    await widget.onReset(); // ✅ prefs 초기화 + 카드 숨김
+    await widget.onReset(); // 부모가 pop/snackbar 처리
   }
 
   @override
@@ -1017,6 +1061,10 @@ class _DevLoginBottomSheetState extends State<DevLoginBottomSheet> {
                               border: OutlineInputBorder(),
                               prefixIcon: Icon(Icons.vpn_key_outlined),
                             ),
+                            obscureText: true,
+                            enableSuggestions: false,
+                            autocorrect: false,
+                            textInputAction: TextInputAction.done,
                             onFieldSubmitted: (_) => _submit(),
                           ),
 
