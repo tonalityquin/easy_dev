@@ -17,7 +17,7 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
   late final ServiceLoginController _controller;
 
   // Deep Blue 팔레트
-  static const Color _base = Color(0xFF0D47A1);  // 버튼/포커스/배지
+  static const Color _base = Color(0xFF0D47A1); // 버튼/포커스/배지
   static const Color _light = Color(0xFF5472D3); // 서피스 틴트/선택
 
   @override
@@ -82,17 +82,12 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
                 borderRadius: BorderRadius.circular(10),
               ),
               prefixIconColor: MaterialStateColor.resolveWith(
-                    (states) => states.contains(MaterialState.focused)
-                    ? _base
-                    : Colors.black54,
+                (states) => states.contains(MaterialState.focused) ? _base : Colors.black54,
               ),
               suffixIconColor: MaterialStateColor.resolveWith(
-                    (states) => states.contains(MaterialState.focused)
-                    ? _base
-                    : Colors.black54,
+                (states) => states.contains(MaterialState.focused) ? _base : Colors.black54,
               ),
-              contentPadding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             ),
             textSelectionTheme: TextSelectionThemeData(
               cursorColor: _base,
@@ -122,8 +117,7 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
                   controller: _controller.nameController,
                   focusNode: _controller.nameFocus,
                   textInputAction: TextInputAction.next,
-                  onSubmitted: (_) =>
-                      FocusScope.of(context).requestFocus(_controller.phoneFocus),
+                  onSubmitted: (_) => FocusScope.of(context).requestFocus(_controller.phoneFocus),
                   decoration: _controller.inputDecoration(
                     label: "이름",
                     icon: Icons.person,
@@ -137,10 +131,8 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
                   focusNode: _controller.phoneFocus,
                   keyboardType: TextInputType.phone,
                   textInputAction: TextInputAction.next,
-                  onChanged: (value) =>
-                      _controller.formatPhoneNumber(value, setState),
-                  onSubmitted: (_) => FocusScope.of(context)
-                      .requestFocus(_controller.passwordFocus),
+                  onChanged: (value) => _controller.formatPhoneNumber(value, setState),
+                  onSubmitted: (_) => FocusScope.of(context).requestFocus(_controller.passwordFocus),
                   decoration: _controller.inputDecoration(
                     label: "전화번호",
                     icon: Icons.phone,
@@ -159,11 +151,8 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
                     label: "비밀번호(5자리 이상)",
                     icon: Icons.lock,
                     suffixIcon: IconButton(
-                      icon: Icon(_controller.obscurePassword
-                          ? Icons.visibility_off
-                          : Icons.visibility),
-                      onPressed: () =>
-                          setState(() => _controller.togglePassword()),
+                      icon: Icon(_controller.obscurePassword ? Icons.visibility_off : Icons.visibility),
+                      onPressed: () => setState(() => _controller.togglePassword()),
                       tooltip: _controller.obscurePassword ? '표시' : '숨기기',
                     ),
                   ),
@@ -184,8 +173,7 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
                         letterSpacing: 1.1,
                       ),
                     ),
-                    onPressed:
-                    _controller.isLoading ? null : _onLoginButtonPressed,
+                    onPressed: _controller.isLoading ? null : _onLoginButtonPressed,
                   ),
                 ),
 
@@ -194,8 +182,7 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
                 // ▼ 펠리컨: 탭하면 LoginSelectorPage로 복귀
                 Center(
                   child: InkWell(
-                    onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
-                        AppRoutes.selector, (route) => false),
+                    onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.selector, (route) => false),
                     borderRadius: BorderRadius.circular(8),
                     child: SizedBox(
                       height: 80,

@@ -33,16 +33,21 @@ class AreaState with ChangeNotifier {
   final Map<String, CapSet> _areaCaps = {};
 
   String get currentArea => _currentArea;
+
   String get currentDivision => _currentDivision;
+
   String get selectedArea => _selectedArea;
+
   String get selectedDivision => _selectedDivision;
+
   List<String> get availableAreas => _availableAreas.toList();
+
   bool get isLocked => _isLocked;
+
   Map<String, List<String>> get divisionAreaMap => _divisionAreaMap;
 
   /// 현재 지역의 Capability 집합
-  CapSet get capabilitiesOfCurrentArea =>
-      _areaCaps[_currentArea] ?? <Capability>{};
+  CapSet get capabilitiesOfCurrentArea => _areaCaps[_currentArea] ?? <Capability>{};
 
   AreaState();
 
@@ -81,16 +86,14 @@ class AreaState with ChangeNotifier {
 
   /// Firestore 문서 데이터(Map)에서 division/capabilities 파싱 후 상태 반영
   void _applyDocDataToState(
-      Map<String, dynamic>? data, {
-        required String areaName,
-      }) {
+    Map<String, dynamic>? data, {
+    required String areaName,
+  }) {
     final divisionRaw = data?['division'] as String?;
     final capsRaw = data?['capabilities'];
 
     _currentArea = areaName;
-    _currentDivision = (divisionRaw != null && divisionRaw.trim().isNotEmpty)
-        ? divisionRaw.trim()
-        : 'default';
+    _currentDivision = (divisionRaw != null && divisionRaw.trim().isNotEmpty) ? divisionRaw.trim() : 'default';
 
     // Capability 파싱(없으면 빈 집합)
     final caps = Cap.fromDynamic(capsRaw);
@@ -102,17 +105,33 @@ class AreaState with ChangeNotifier {
       ..add(areaName);
   }
 
+  /// 현재 메모리 상태에 동일 area에 대한 "쓸만한" 캐시가 있는지 판단
+  bool _hasValidCacheFor(String area) {
+    final trimmed = area.trim();
+    if (trimmed.isEmpty) return false;
+
+    final sameArea = (_currentArea == trimmed);
+    final caps = _areaCaps[trimmed];
+    final hasCaps = caps != null && caps.isNotEmpty;
+    final hasDivision = _currentDivision.trim().isNotEmpty;
+
+    // 동일 지역이 이미 셋업되어 있고, 기능셋 또는 division이 유효하면 캐시 히트로 간주
+    if (sameArea && (hasCaps || hasDivision)) return true;
+
+    // 혹시 선행 로드로 _areaCaps만 채워진 케이스
+    if (_availableAreas.contains(trimmed) && hasCaps) return true;
+
+    return false;
+  }
+
   Future<void> loadAreasForDivision(String userDivision) async {
     try {
-      final q = _firestore
-          .collection('areas')
-          .where('division', isEqualTo: userDivision);
+      final q = _firestore.collection('areas').where('division', isEqualTo: userDivision);
 
       final snapshot = await q.get();
 
       // 🔎 READ 계측
-      _reportRead('AreaState.loadAreasForDivision.areas.get',
-          area: 'division:$userDivision');
+      _reportRead('AreaState.loadAreasForDivision.areas.get', area: 'division:$userDivision');
 
       _divisionAreaMap.clear();
 
@@ -138,32 +157,50 @@ class AreaState with ChangeNotifier {
     }
   }
 
-  Future<void> initializeArea(String userArea) async {
+  /// ✅ A(멱등화): 같은 area가 이미 메모리에 유효하게 로드돼 있으면 네트워크 READ를 **스킵**
+  ///    필요 시 강제 새로고침하려면 [forceRefresh]를 true로 전달
+  Future<void> initializeArea(String userArea, {bool forceRefresh = false}) async {
+    final area = userArea.trim();
+    if (area.isEmpty) {
+      debugPrint('⚠️ initializeArea: 빈 area 입력 → 스킵');
+      return;
+    }
+
+    // 캐시 히트 시 네트워크 쿼리 생략
+    if (!forceRefresh && _hasValidCacheFor(area)) {
+      debugPrint('ℹ️ initializeArea: cache hit → query skip for "$area"');
+      // 상태/리스너 정합성 보장
+      _currentArea = area;
+      if (_currentDivision.trim().isEmpty) {
+        _currentDivision = 'default';
+      }
+      notifyListeners();
+      _notifyForegroundWithArea();
+      return;
+    }
+
     try {
-      final q = _firestore
-          .collection('areas')
-          .where('name', isEqualTo: userArea)
-          .limit(1);
+      final q = _firestore.collection('areas').where('name', isEqualTo: area).limit(1);
 
       final snapshot = await q.get();
 
-      // 🔎 READ 계측
-      _reportRead('AreaState.initializeArea.areas.get', area: userArea);
+      // 🔎 READ 계측 (네트워크로 실제 get을 수행한 경우에만 보고)
+      _reportRead('AreaState.initializeArea.areas.get', area: area);
 
       if (snapshot.docs.isNotEmpty) {
         final data = snapshot.docs.first.data() as Map<String, dynamic>?;
-        _applyDocDataToState(data, areaName: userArea);
+        _applyDocDataToState(data, areaName: area);
 
         notifyListeners();
         debugPrint(
           '✅ 사용자 지역 초기화 완료 → $_currentArea / $_currentDivision'
-              ' / caps: ${Cap.human(capabilitiesOfCurrentArea)}',
+          ' / caps: ${Cap.human(capabilitiesOfCurrentArea)}',
         );
 
         // ✅ FG에도 반드시 통지
         _notifyForegroundWithArea();
       } else {
-        debugPrint('⚠️ Firestore에 해당 지역이 존재하지 않음: $userArea');
+        debugPrint('⚠️ Firestore에 해당 지역이 존재하지 않음: $area');
         _currentArea = '';
         _currentDivision = '';
         notifyListeners();
@@ -196,10 +233,7 @@ class AreaState with ChangeNotifier {
     }
 
     try {
-      final q = _firestore
-          .collection('areas')
-          .where('name', isEqualTo: newArea)
-          .limit(1);
+      final q = _firestore.collection('areas').where('name', isEqualTo: newArea).limit(1);
 
       final snapshot = await q.get();
 

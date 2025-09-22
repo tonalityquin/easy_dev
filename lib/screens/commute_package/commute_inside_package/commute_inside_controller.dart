@@ -11,15 +11,24 @@ import 'utils/commute_inside_clock_in_log_uploader.dart';
 import '../../../utils/usage_reporter.dart'; // ✅ 비용 보고
 
 class CommuteInsideController {
+  /// ✅ B(화면 조건부): 이미 같은 area가 유효하게 초기화돼 있으면 initializeArea 호출 **스킵**
   void initialize(BuildContext context) {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final userState = context.read<UserState>();
       final areaState = context.read<AreaState>();
-      final areaToInit = userState.area;
+      final areaToInit = userState.area.trim();
 
-      await areaState.initializeArea(areaToInit);
+      final alreadyInitialized =
+          areaState.currentArea == areaToInit &&
+              areaState.capabilitiesOfCurrentArea.isNotEmpty;
 
-      debugPrint('[GoToWork] 초기화 area: $areaToInit');
+      if (!alreadyInitialized) {
+        await areaState.initializeArea(areaToInit);
+        debugPrint('[GoToWork] initializeArea 호출: $areaToInit');
+      } else {
+        debugPrint('[GoToWork] 초기화 스킵 (이미 준비됨): $areaToInit');
+      }
+
       debugPrint('[GoToWork] currentArea: ${areaState.currentArea}');
     });
   }
@@ -99,7 +108,8 @@ class CommuteInsideController {
         area: area.isNotEmpty ? area : 'unknown',
         action: 'read',
         n: 1,
-        source: 'CommuteInsideController._navigateToProperPageIfWorking/areas.doc.get',
+        source:
+        'CommuteInsideController._navigateToProperPageIfWorking/areas.doc.get',
       );
 
       if (!context.mounted) return;
