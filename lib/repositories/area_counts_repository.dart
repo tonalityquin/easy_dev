@@ -1,9 +1,10 @@
-// File: lib/repositories/area_counts_repository.dart
+// lib/repositories/area_counts_repository.dart
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../enums/plate_type.dart';
 import '../screens/dev_package/debug_package/debug_firestore_logger.dart';
+import '../utils/usage_reporter.dart';
 
 class AreaCount {
   final String area;
@@ -24,10 +25,17 @@ class AreaCountsRepository {
   Future<List<AreaCount>> fetchAreaCountsByDivision(String division) async {
     try {
       // areas 조회
-      final areaSnapshot = await _firestore
-          .collection('areas')
-          .where('division', isEqualTo: division)
-          .get();
+      final areaSnapshot =
+      await _firestore.collection('areas').where('division', isEqualTo: division).get();
+
+      // read 보고 (areas 쿼리 자체는 테넌트 매핑 애매 → unknown으로)
+      final areasCount = areaSnapshot.docs.isEmpty ? 1 : areaSnapshot.docs.length;
+      await UsageReporter.instance.report(
+        area: 'unknown',
+        action: 'read',
+        n: areasCount,
+        source: 'AreaCountsRepository.fetchAreaCountsByDivision/areas',
+      );
 
       final areas = areaSnapshot.docs
           .map((doc) => (doc['name'] as String))
@@ -43,7 +51,6 @@ class AreaCountsRepository {
       final results = await Future.wait(areaFutures);
       results.sort((a, b) => a.area.compareTo(b.area));
       return results;
-
     } on FirebaseException catch (e, st) {
       // 🔴 파이어스토어 실패만 로깅
       try {
@@ -75,13 +82,20 @@ class AreaCountsRepository {
             .get()
             .timeout(countTimeout);
 
+        // count() 1회당 read 1로 간주
+        await UsageReporter.instance.report(
+          area: area,
+          action: 'read',
+          n: 1,
+          source: 'AreaCountsRepository._fetchCountsForArea(${type.firestoreValue})',
+        );
+
         final count = agg.count ?? 0;
         return MapEntry(type, count);
       }).toList();
 
       final entries = await Future.wait(futures);
       return Map<PlateType, int>.fromEntries(entries);
-
     } on FirebaseException catch (e, st) {
       // 🔴 파이어스토어 실패만 로깅
       try {

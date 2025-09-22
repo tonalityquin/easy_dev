@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
 import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
-import '../../utils/usage_reporter.dart'; // ✅ 추가
+import '../../utils/usage_reporter.dart'; // ✅
 
 class PlateQueryService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -19,7 +19,12 @@ class PlateQueryService {
 
       // ✅ 단건 읽기 → read 1
       final area = doc.data()?['area'] as String? ?? 'unknown';
-      await UsageReporter.instance.report(area: area, action: 'read', n: 1);
+      await UsageReporter.instance.report(
+        area: area,
+        action: 'read',
+        n: 1,
+        source: 'PlateQueryService.getPlate',
+      );
 
       if (!doc.exists) {
         return null;
@@ -144,7 +149,12 @@ class PlateQueryService {
       // ✅ read 보고: 문서 수 기반(없으면 1로 보정)
       final area = filters['area'] as String? ?? 'unknown';
       final n = results.isEmpty ? 1 : results.length;
-      await UsageReporter.instance.report(area: area, action: 'read', n: n);
+      await UsageReporter.instance.report(
+        area: area,
+        action: 'read',
+        n: n,
+        source: 'PlateQueryService.$op',
+      );
 
       return results;
     } catch (e, st) {

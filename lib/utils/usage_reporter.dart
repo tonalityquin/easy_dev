@@ -14,9 +14,8 @@ class UsageReporter {
   final _db = FirebaseFirestore.instance;
 
   String? _installId;
-  Future<void>? _initFuture; // ✅ hot restart/중복 초기화 대비
+  Future<void>? _initFuture;
 
-  /// 내부 초기화: installId 생성·보관
   Future<void> init() async {
     final sp = await SharedPreferences.getInstance();
     var id = sp.getString('installId');
@@ -27,12 +26,10 @@ class UsageReporter {
     _installId = id;
   }
 
-  /// ✅ 안전 초기화: 중복 호출 시 동일 Future 반환
   Future<void> ensureInitialized() {
     return _initFuture ??= init();
   }
 
-  /// ✅ 비동기로 installId 얻기 (ensure 포함)
   Future<String> getInstallId() async {
     await ensureInitialized();
     final id = _installId;
@@ -42,7 +39,6 @@ class UsageReporter {
     return id;
   }
 
-  /// (동기) installId 접근 — 초기화 전이면 예외
   String get installId {
     final id = _installId;
     if (id == null) {
@@ -51,18 +47,36 @@ class UsageReporter {
     return id;
   }
 
+  /// 메서드/화면명을 slug로 변환해 문서 ID로 안전하게 사용
+  String _slug(String s) {
+    final lower = s.trim().toLowerCase();
+    // 영문/숫자/언더스코어/하이픈/점만 남기고 나머지는 하이픈으로
+    final cleaned = lower.replaceAll(RegExp(r'[^a-z0-9_\-\.]+'), '-');
+    // 길이 과도 방지(문서 ID 제한 충분히 넉넉하지만 안전 차원)
+    return cleaned.length > 120 ? cleaned.substring(0, 120) : cleaned;
+  }
+
   /// 사용량 보고
-  /// [area]: 테넌트/기업 식별자, [action]: "read"|"write"|"delete", [n]: 문서 개수
+  /// [area]: 테넌트/기업 식별자
+  /// [action]: "read"|"write"|"delete"
+  /// [n]: 문서/연산 개수
+  /// [source]: 비용 발생 지점(메서드/화면명). 예) "PlateQueryService.getPlate"
+  ///
+  /// 보고 경로:
+  /// usage_daily/{YYYY-MM-DD}/tenants/{area}/users/{installId__[slug(source)]}
   Future<void> report({
     required String area,
     required String action,
     int n = 1,
+    String? source,
   }) async {
     assert(action == 'read' || action == 'write' || action == 'delete');
 
-    // ✅ 항상 초기화 보장
     await ensureInitialized();
-    final id = installId;
+    final baseId = installId;
+    final userKey = (source == null || source.trim().isEmpty)
+        ? baseId
+        : '${baseId}__${_slug(source)}';
 
     final date = DateTime.now().toUtc().toIso8601String().substring(0, 10); // YYYY-MM-DD
     final eventId = const Uuid().v4();
@@ -70,32 +84,30 @@ class UsageReporter {
     final countRef = _db
         .collection('usage_daily').doc(date)
         .collection('tenants').doc(area)
-        .collection('users').doc(id);
+        .collection('users').doc(userKey);
 
     final eventRef = countRef.collection('events').doc(eventId);
 
     await _db.runTransaction((tx) async {
       final evt = await tx.get(eventRef);
-      if (evt.exists) {
-        return; // 멱등: 이미 처리됨
-      }
+      if (evt.exists) return; // 멱등
 
-      // 1) 이벤트 기록
+      // 이벤트 기록(규칙상 허용 키만)
       tx.set(eventRef, {
         'action': action,
         'n': n,
         'at': FieldValue.serverTimestamp(),
       });
 
-      // 2) 카운터 증가
       final incField = '${action}s'; // reads/writes/deletes
       tx.set(countRef, {
         'date': date,
         'tenantId': area,
-        'userId': id,
+        'userId': userKey,
         incField: FieldValue.increment(n),
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     });
   }
 }
+

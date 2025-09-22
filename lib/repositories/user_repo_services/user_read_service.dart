@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/tablet_model.dart';
 import '../../models/user_model.dart';
 import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
+import '../../utils/usage_reporter.dart';
 
 class UserReadService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -25,6 +26,25 @@ class UserReadService {
 
   // ----- Helpers -----
   String _normalizeHandle(String h) => h.trim().toLowerCase();
+
+  // userId / tabletId는 '<handle-or-phone>-<area>' 규칙 가정
+  String _inferAreaFromHyphenId(String id) {
+    final idx = id.lastIndexOf('-');
+    if (idx <= 0 || idx >= id.length - 1) return 'unknown';
+    return id.substring(idx + 1);
+  }
+
+  String _areaFromDoc(Map<String, dynamic>? data, String id) {
+    // 우선순위: currentArea → selectedArea → id suffix
+    final d = data ?? const <String, dynamic>{};
+    final ca = d['currentArea'] as String?;
+    final sa = d['selectedArea'] as String?;
+    return (ca?.trim().isNotEmpty == true)
+        ? ca!.trim()
+        : (sa?.trim().isNotEmpty == true)
+        ? sa!.trim()
+        : _inferAreaFromHyphenId(id);
+  }
 
   // TabletModel -> UserModel 매핑 (phone <= handle)
   UserModel _tabletToUser(TabletModel t) {
@@ -52,12 +72,20 @@ class UserReadService {
 
   // ----- In-memory cache for englishName -----
   static final Map<String, String?> _englishNameMemCache = {};
-
   String _enKey(String division, String area) => 'englishName_${division}_$area';
 
-  // ----- Streams (optional) -----
+  // ----- Streams -----
   Stream<List<UserModel>> watchUsersBySelectedArea(String selectedArea) {
     final q = _getUserCollectionRef().where('selectedArea', isEqualTo: selectedArea);
+
+    // 구독 시작 비용은 간단히 read 1로 보고
+    // ignore: unawaited_futures
+    UsageReporter.instance.report(
+      area: selectedArea.isNotEmpty ? selectedArea : 'unknown',
+      action: 'read',
+      n: 1,
+      source: 'UserReadService.watchUsersBySelectedArea',
+    );
 
     return q.snapshots().handleError((e, st) async {
       try {
@@ -78,6 +106,16 @@ class UserReadService {
     debugPrint("getUserById 호출 → ID: $userId");
     try {
       final doc = await _getUserCollectionRef().doc(userId).get();
+
+      // read 1회 보고 (존재 여부에 상관없이)
+      final area = _areaFromDoc(doc.data(), userId);
+      await UsageReporter.instance.report(
+        area: area,
+        action: 'read',
+        n: 1,
+        source: 'UserReadService.getUserById',
+      );
+
       if (!doc.exists) {
         debugPrint("DB 문서 없음 → userId=$userId");
         return null;
@@ -103,6 +141,19 @@ class UserReadService {
     try {
       final querySnapshot =
       await _getUserCollectionRef().where('phone', isEqualTo: phone).limit(1).get();
+
+      // read 보고: 결과가 0이어도 1로 보정
+      final n = querySnapshot.docs.isEmpty ? 1 : querySnapshot.docs.length;
+      final area = querySnapshot.docs.isNotEmpty
+          ? _areaFromDoc(querySnapshot.docs.first.data(), querySnapshot.docs.first.id)
+          : 'unknown';
+      await UsageReporter.instance.report(
+        area: area,
+        action: 'read',
+        n: n,
+        source: 'UserReadService.getUserByPhone',
+      );
+
       if (querySnapshot.docs.isNotEmpty) {
         final doc = querySnapshot.docs.first;
         return UserModel.fromMap(doc.id, doc.data());
@@ -129,11 +180,21 @@ class UserReadService {
     final h = _normalizeHandle(handle);
     debugPrint("getUserByHandle, 조회 시작 - handle: $h");
     try {
-      var qs =
-      await _getUserCollectionRef().where('handle', isEqualTo: h).limit(1).get();
+      var qs = await _getUserCollectionRef().where('handle', isEqualTo: h).limit(1).get();
       if (qs.docs.isEmpty) {
         qs = await _getUserCollectionRef().where('phone', isEqualTo: h).limit(1).get();
       }
+
+      final n = qs.docs.isEmpty ? 1 : qs.docs.length;
+      final area =
+      qs.docs.isNotEmpty ? _areaFromDoc(qs.docs.first.data(), qs.docs.first.id) : 'unknown';
+      await UsageReporter.instance.report(
+        area: area,
+        action: 'read',
+        n: n,
+        source: 'UserReadService.getUserByHandle',
+      );
+
       if (qs.docs.isNotEmpty) {
         final doc = qs.docs.first;
         return UserModel.fromMap(doc.id, doc.data());
@@ -166,6 +227,15 @@ class UserReadService {
 
     try {
       final snap = await _getTabletCollectionRef().doc(docId).get();
+
+      // read 1회 보고
+      await UsageReporter.instance.report(
+        area: _inferAreaFromHyphenId(docId),
+        action: 'read',
+        n: 1,
+        source: 'UserReadService.getTabletByHandleAndAreaName',
+      );
+
       if (snap.exists && snap.data() != null) {
         return TabletModel.fromMap(snap.id, snap.data()!);
       }
@@ -194,6 +264,17 @@ class UserReadService {
 
     try {
       final qs = await _getTabletCollectionRef().where('handle', isEqualTo: h).limit(1).get();
+
+      final n = qs.docs.isEmpty ? 1 : qs.docs.length;
+      final area =
+      qs.docs.isNotEmpty ? _inferAreaFromHyphenId(qs.docs.first.id) : 'unknown';
+      await UsageReporter.instance.report(
+        area: area,
+        action: 'read',
+        n: n,
+        source: 'UserReadService.getTabletByHandle',
+      );
+
       if (qs.docs.isNotEmpty) {
         final doc = qs.docs.first;
         return TabletModel.fromMap(doc.id, doc.data());
@@ -262,6 +343,15 @@ class UserReadService {
       final users =
       querySnapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
 
+      // read 보고: 결과 수(없으면 1)
+      final n = users.isEmpty ? 1 : users.length;
+      await UsageReporter.instance.report(
+        area: selectedArea,
+        action: 'read',
+        n: n,
+        source: 'UserReadService.refreshUsersBySelectedArea',
+      );
+
       await updateCacheWithUsers(selectedArea, users);
       return users;
     } on FirebaseException catch (e, st) {
@@ -290,6 +380,14 @@ class UserReadService {
       final tablets =
       querySnapshot.docs.map((doc) => TabletModel.fromMap(doc.id, doc.data())).toList();
       final users = tablets.map(_tabletToUser).toList();
+
+      final n = users.isEmpty ? 1 : users.length;
+      await UsageReporter.instance.report(
+        area: selectedArea,
+        action: 'read',
+        n: n,
+        source: 'UserReadService.refreshTabletsBySelectedArea',
+      );
 
       await updateCacheWithTablets(selectedArea, users);
       return users;
@@ -332,6 +430,14 @@ class UserReadService {
       if (doc.exists) {
         name = doc.data()?['englishName'] as String?;
       }
+
+      // read 1회
+      await UsageReporter.instance.report(
+        area: area.isNotEmpty ? area : 'unknown',
+        action: 'read',
+        n: 1,
+        source: 'UserReadService.getEnglishNameByArea',
+      );
 
       // 캐시 저장(널도 저장해 둬서 재쿼리 방지)
       _englishNameMemCache[key] = name;

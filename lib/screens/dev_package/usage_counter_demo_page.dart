@@ -53,7 +53,12 @@ class _UsageCounterDemoBodyState extends State<_UsageCounterDemoBody> {
       final q = _db.collection('bills').where('area', isEqualTo: _area);
       final snap = await q.get();
       final n = snap.docs.isEmpty ? 1 : snap.docs.length;
-      await UsageReporter.instance.report(area: _area, action: 'read', n: n);
+      await UsageReporter.instance.report(
+        area: _area,
+        action: 'read',
+        n: n,
+        source: 'UsageCounterDemoPage._read',
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('READ: docs=${snap.docs.length} → 카운트 +$n')),
@@ -71,7 +76,12 @@ class _UsageCounterDemoBodyState extends State<_UsageCounterDemoBody> {
         'updatedAt': FieldValue.serverTimestamp(),
         'demo': true,
       }, SetOptions(merge: true));
-      await UsageReporter.instance.report(area: _area, action: 'write', n: 1);
+      await UsageReporter.instance.report(
+        area: _area,
+        action: 'write',
+        n: 1,
+        source: 'UsageCounterDemoPage._write',
+      );
       _toast('WRITE 완료');
     } catch (e) {
       _toast('WRITE 실패: $e');
@@ -82,7 +92,12 @@ class _UsageCounterDemoBodyState extends State<_UsageCounterDemoBody> {
     try {
       final ref = _db.collection('bills').doc(_docId);
       await ref.delete();
-      await UsageReporter.instance.report(area: _area, action: 'delete', n: 1);
+      await UsageReporter.instance.report(
+        area: _area,
+        action: 'delete',
+        n: 1,
+        source: 'UsageCounterDemoPage._delete',
+      );
       _toast('DELETE 완료');
     } catch (e) {
       _toast('DELETE 실패: $e');
@@ -113,7 +128,7 @@ class _UsageCounterDemoBodyState extends State<_UsageCounterDemoBody> {
               padding: const EdgeInsets.all(12),
               child: Text(
                 'installId: $installId\n'
-                    '경로: usage_daily/{YYYY-MM-DD}/tenants/{area}/users/{installId}',
+                    '경로: usage_daily/{YYYY-MM-DD}/tenants/{area}/users/{installId}__{source}',
                 style: const TextStyle(fontSize: 12),
               ),
             ),

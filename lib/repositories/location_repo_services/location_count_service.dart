@@ -1,11 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-
 import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
+import '../../utils/usage_reporter.dart';
 
 class LocationCountService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  /// 특정 location/area/type 조합의 plates 집계 수
   Future<int> getPlateCount({
     required String locationName,
     required String area,
@@ -19,6 +20,14 @@ class LocationCountService {
           .where('type', isEqualTo: type)
           .count()
           .get();
+
+      // Aggregation read는 1회로 단순 보고
+      await UsageReporter.instance.report(
+        area: area,
+        action: 'read',
+        n: 1,
+        source: 'LocationCountService.getPlateCount',
+      );
 
       return snapshot.count ?? 0;
     } catch (e, st) {
@@ -45,6 +54,8 @@ class LocationCountService {
     }
   }
 
+  /// 여러 location에 대해 병렬로 카운트
+  /// - 내부에서 getPlateCount를 호출하므로 read 보고는 중복 없이 각 호출에서 수행됩니다.
   Future<Map<String, int>> getPlateCountsForLocations({
     required List<String> locationNames,
     required String area,

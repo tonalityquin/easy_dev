@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart'; // kDebugMode, debugPrint
 import '../../models/location_model.dart';
 import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
+import '../../utils/usage_reporter.dart';
 
 class LocationReadService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -32,6 +33,15 @@ class LocationReadService {
       } catch (_) {/* 로깅 실패는 무시 */}
       rethrow;
     }
+
+    // ✅ 읽기 비용 보고(문서수 기준, 0이면 1로 보정)
+    final readN = snapshot.docs.isEmpty ? 1 : snapshot.docs.length;
+    await UsageReporter.instance.report(
+      area: area,
+      action: 'read',
+      n: readN,
+      source: 'LocationReadService.getLocationsOnce',
+    );
 
     final results = <LocationModel>[];
 

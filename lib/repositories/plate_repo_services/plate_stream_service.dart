@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
 import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
-import '../../utils/usage_reporter.dart'; // ✅ 추가
+import '../../utils/usage_reporter.dart'; // ✅
 
 class PlateStreamService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -22,12 +22,17 @@ class PlateStreamService {
       descending: descending,
     );
 
-    // ✅ 단순화: 구독 시작 시 read 1회 보고
-    // (정확한 per-event 카운팅은 복잡하므로 초심자 단계에선 시작 1회로)
+    // ✅ 구독 시작 시 read 1회 보고
     // ignore: unawaited_futures
-    UsageReporter.instance.report(area: area, action: 'read', n: 1);
+    UsageReporter.instance.report(
+      area: area,
+      action: 'read',
+      n: 1,
+      source: 'PlateStreamService.streamToCurrentArea',
+    );
 
-    return query.snapshots()
+    return query
+        .snapshots()
     // Firestore 스트림 실패만 로깅 + 재전파
         .handleError((e, st) {
       // ignore: unawaited_futures
@@ -114,7 +119,12 @@ class PlateStreamService {
 
     // ✅ 구독 시작 시 read 1회
     // ignore: unawaited_futures
-    UsageReporter.instance.report(area: area, action: 'read', n: 1);
+    UsageReporter.instance.report(
+      area: area,
+      action: 'read',
+      n: 1,
+      source: 'PlateStreamService.departureUnpaidSnapshots',
+    );
 
     return query.snapshots().handleError((e, st) {
       // ignore: unawaited_futures

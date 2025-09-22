@@ -1,5 +1,8 @@
+// lib/repositories/area_user_repository.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+
 import '../screens/dev_package/debug_package/debug_firestore_logger.dart';
+import '../utils/usage_reporter.dart';
 
 class UserStatus {
   final String name;
@@ -27,10 +30,17 @@ class AreaUserRepository {
     }
 
     try {
-      final snapshot = await _firestore
-          .collection('user_accounts')
-          .where('currentArea', isEqualTo: area)
-          .get();
+      final snapshot =
+      await _firestore.collection('user_accounts').where('currentArea', isEqualTo: area).get();
+
+      // read 보고: 결과 수(없으면 1)
+      final n = snapshot.docs.isEmpty ? 1 : snapshot.docs.length;
+      await UsageReporter.instance.report(
+        area: area,
+        action: 'read',
+        n: n,
+        source: 'AreaUserRepository.getUsersForArea',
+      );
 
       final result = snapshot.docs.map((doc) {
         final data = doc.data();

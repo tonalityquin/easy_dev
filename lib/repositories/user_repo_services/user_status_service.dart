@@ -1,7 +1,7 @@
 // lib/repositories/user_repo_services/user_status_service.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
-
 import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
+import '../../utils/usage_reporter.dart';
 
 class UserStatusService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -15,21 +15,44 @@ class UserStatusService {
     return _firestore.collection('tablet_accounts');
   }
 
+  String _inferAreaFromHyphenId(String id) {
+    final idx = id.lastIndexOf('-');
+    if (idx <= 0 || idx >= id.length - 1) return 'unknown';
+    return id.substring(idx + 1);
+  }
+
   // ---- safe update helper (update → if NOT_FOUND then set(merge)) ----
   Future<void> _safeUpdate(
       CollectionReference<Map<String, dynamic>> col,
       String docId,
       Map<String, dynamic> updates, {
-        String opName = '',
+        required String opName,
       }) async {
     final docRef = col.doc(docId);
+    final area = _inferAreaFromHyphenId(docId);
 
     try {
       await docRef.update(updates);
+
+      // write 1
+      await UsageReporter.instance.report(
+        area: area,
+        action: 'write',
+        n: 1,
+        source: 'UserStatusService.$opName.update',
+      );
     } on FirebaseException catch (e, st) {
       if (e.code == 'not-found') {
         try {
           await docRef.set(updates, SetOptions(merge: true));
+
+          // write 1 (upsert)
+          await UsageReporter.instance.report(
+            area: area,
+            action: 'write',
+            n: 1,
+            source: 'UserStatusService.$opName.upsert',
+          );
         } on FirebaseException catch (e2, st2) {
           try {
             await DebugFirestoreLogger().log({
@@ -38,7 +61,11 @@ class UserStatusService {
               'docId': docId,
               'updateKeys': updates.keys.take(30).toList(),
               'updateLen': updates.length,
-              'error': {'type': e2.runtimeType.toString(), 'code': e2.code, 'message': e2.toString()},
+              'error': {
+                'type': e2.runtimeType.toString(),
+                'code': e2.code,
+                'message': e2.toString()
+              },
               'stack': st2.toString(),
               'tags': ['userStatus', opName, 'upsert', 'error'],
             }, level: 'error');

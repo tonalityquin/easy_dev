@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../enums/plate_type.dart';
 import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
-import '../../utils/usage_reporter.dart'; // ✅ 추가
+import '../../utils/usage_reporter.dart'; // ✅
 
 class PlateCountService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -22,7 +22,12 @@ class PlateCountService {
       final count = aggregateQuerySnapshot.count ?? 0;
 
       // ✅ Aggregation read는 1회로 단순 보고
-      await UsageReporter.instance.report(area: area, action: 'read', n: 1);
+      await UsageReporter.instance.report(
+        area: area,
+        action: 'read',
+        n: 1,
+        source: 'PlateCountService.getPlateCountForTypePage',
+      );
 
       return count;
     } catch (e, st) {
@@ -61,7 +66,12 @@ class PlateCountService {
       final int count = agg.count ?? 0;
 
       // ✅ Aggregation read = 1
-      await UsageReporter.instance.report(area: area, action: 'read', n: 1);
+      await UsageReporter.instance.report(
+        area: area,
+        action: 'read',
+        n: 1,
+        source: 'PlateCountService.getParkingCompletedCountAll',
+      );
 
       return count;
     } catch (e, st) {
@@ -106,7 +116,12 @@ class PlateCountService {
           (extraSnap.data()?['departureCompletedEvents'] as int?) ?? 0;
 
       // ✅ 총 2번의 read가 있었음: count() 1, counters 1
-      await UsageReporter.instance.report(area: area, action: 'read', n: 2);
+      await UsageReporter.instance.report(
+        area: area,
+        action: 'read',
+        n: 2,
+        source: 'PlateCountService.getDepartureCompletedCountAll',
+      );
 
       return docCount + extras;
     } catch (e, st) {

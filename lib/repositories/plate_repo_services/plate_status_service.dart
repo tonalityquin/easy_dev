@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
-import '../../utils/usage_reporter.dart'; // ✅ 추가
+import '../../utils/usage_reporter.dart'; // ✅
 
 class PlateStatusService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -31,10 +31,20 @@ class PlateStatusService {
           if (snap.exists) {
             await ref.delete().timeout(const Duration(seconds: 10));
             // ✅ delete 1회
-            await UsageReporter.instance.report(area: area, action: 'delete', n: 1);
+            await UsageReporter.instance.report(
+              area: area,
+              action: 'delete',
+              n: 1,
+              source: 'PlateStatusService.setPlateStatus.delete',
+            );
           }
           // get 1회 읽음
-          await UsageReporter.instance.report(area: area, action: 'read', n: 1);
+          await UsageReporter.instance.report(
+            area: area,
+            action: 'read',
+            n: 1,
+            source: 'PlateStatusService.setPlateStatus.prefetch',
+          );
         }
         return;
       }
@@ -57,8 +67,18 @@ class PlateStatusService {
       }).timeout(const Duration(seconds: 10));
 
       // ✅ 트랜잭션: read 1 + write 1
-      await UsageReporter.instance.report(area: area, action: 'read', n: 1);
-      await UsageReporter.instance.report(area: area, action: 'write', n: 1);
+      await UsageReporter.instance.report(
+        area: area,
+        action: 'read',
+        n: 1,
+        source: 'PlateStatusService.setPlateStatus.tx',
+      );
+      await UsageReporter.instance.report(
+        area: area,
+        action: 'write',
+        n: 1,
+        source: 'PlateStatusService.setPlateStatus.tx',
+      );
     } on FirebaseException catch (e, st) {
       try {
         await DebugFirestoreLogger().log({
@@ -153,9 +173,19 @@ class PlateStatusService {
           final snap = await ref.get().timeout(const Duration(seconds: 10));
           if (snap.exists) {
             await ref.delete().timeout(const Duration(seconds: 10));
-            await UsageReporter.instance.report(area: area, action: 'delete', n: 1);
+            await UsageReporter.instance.report(
+              area: area,
+              action: 'delete',
+              n: 1,
+              source: 'PlateStatusService.setMonthlyPlateStatus.delete',
+            );
           }
-          await UsageReporter.instance.report(area: area, action: 'read', n: 1);
+          await UsageReporter.instance.report(
+            area: area,
+            action: 'read',
+            n: 1,
+            source: 'PlateStatusService.setMonthlyPlateStatus.prefetch',
+          );
         }
         return;
       }
@@ -187,8 +217,18 @@ class PlateStatusService {
       }).timeout(const Duration(seconds: 10));
 
       // ✅ read + write
-      await UsageReporter.instance.report(area: area, action: 'read', n: 1);
-      await UsageReporter.instance.report(area: area, action: 'write', n: 1);
+      await UsageReporter.instance.report(
+        area: area,
+        action: 'read',
+        n: 1,
+        source: 'PlateStatusService.setMonthlyPlateStatus.tx',
+      );
+      await UsageReporter.instance.report(
+        area: area,
+        action: 'write',
+        n: 1,
+        source: 'PlateStatusService.setMonthlyPlateStatus.tx',
+      );
     } on FirebaseException catch (e, st) {
       try {
         await DebugFirestoreLogger().log({
@@ -267,7 +307,12 @@ class PlateStatusService {
       await ref.delete();
 
       // ✅ delete 1회
-      await UsageReporter.instance.report(area: area, action: 'delete', n: 1);
+      await UsageReporter.instance.report(
+        area: area,
+        action: 'delete',
+        n: 1,
+        source: 'PlateStatusService.deletePlateStatus',
+      );
     } on FirebaseException catch (e, st) {
       try {
         await DebugFirestoreLogger().log({

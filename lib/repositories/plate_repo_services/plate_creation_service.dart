@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../../models/plate_model.dart';
 import '../../enums/plate_type.dart';
 import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
-import '../../utils/usage_reporter.dart'; // ✅ 추가
+import '../../utils/usage_reporter.dart'; // ✅
 
 class PlateCreationService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -43,7 +43,12 @@ class PlateCreationService {
         await _firestore.collection('bill').doc('${billingType}_$area').get();
 
         // ✅ bill read 1회
-        await UsageReporter.instance.report(area: area, action: 'read', n: 1);
+        await UsageReporter.instance.report(
+          area: area,
+          action: 'read',
+          n: 1,
+          source: 'PlateCreationService.addPlate.billRead',
+        );
 
         if (billDoc.exists) {
           final billData = billDoc.data()!;
@@ -187,7 +192,8 @@ class PlateCreationService {
 
             final bool wasLocked = (data?['isLockedFee'] == true);
             if (wasLocked) {
-              final countersRef = _firestore.collection('plate_counters').doc('area_$area');
+              final countersRef =
+              _firestore.collection('plate_counters').doc('area_$area');
               tx.set(
                 countersRef,
                 {'departureCompletedEvents': FieldValue.increment(1)},
@@ -207,10 +213,20 @@ class PlateCreationService {
 
       // ✅ 트랜잭션에서 발생한 read/write 집계 보고
       if (reads > 0) {
-        await UsageReporter.instance.report(area: area, action: 'read', n: reads);
+        await UsageReporter.instance.report(
+          area: area,
+          action: 'read',
+          n: reads,
+          source: 'PlateCreationService.addPlate.tx',
+        );
       }
       if (writes > 0) {
-        await UsageReporter.instance.report(area: area, action: 'write', n: writes);
+        await UsageReporter.instance.report(
+          area: area,
+          action: 'write',
+          n: writes,
+          source: 'PlateCreationService.addPlate.tx',
+        );
       }
     } catch (e, st) {
       try {
@@ -256,7 +272,12 @@ class PlateCreationService {
 
       try {
         await statusDocRef.set(payload, SetOptions(merge: true));
-        await UsageReporter.instance.report(area: area, action: 'write', n: 1); // ✅
+        await UsageReporter.instance.report(
+          area: area,
+          action: 'write',
+          n: 1,
+          source: 'PlateCreationService.addPlate.statusUpsert',
+        );
       } on FirebaseException catch (e, st) {
         try {
           await DebugFirestoreLogger().log({

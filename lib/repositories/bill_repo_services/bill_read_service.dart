@@ -1,8 +1,9 @@
-import 'package:flutter/foundation.dart'; // debugPrint, kDebugMode
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart'; // debugPrint, kDebugMode
 import '../../models/bill_model.dart';
 import '../../models/regular_bill_model.dart';
 import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
+import '../../utils/usage_reporter.dart';
 
 class BillReadService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -34,11 +35,18 @@ class BillReadService {
           'tags': ['bill', 'read', 'error'],
         };
         await DebugFirestoreLogger().log(payload, level: 'error');
-      } catch (_) {
-        // 로깅 실패는 무시
-      }
+      } catch (_) {}
       rethrow;
     }
+
+    // ✅ 읽기 비용 보고(문서수 기준, 0이면 1로 보정)
+    final readN = snapshot.docs.isEmpty ? 1 : snapshot.docs.length;
+    await UsageReporter.instance.report(
+      area: area,
+      action: 'read',
+      n: readN,
+      source: 'BillReadService.getBillOnce',
+    );
 
     final List<BillModel> generalBills = [];
     final List<RegularBillModel> regularBills = [];
@@ -69,7 +77,6 @@ class BillReadService {
           },
           'stack': st.toString(),
           'tags': ['bill', 'parse', 'error'],
-          // 과도한 로그 방지를 위해 원본은 일부만
           if (raw != null) 'rawKeys': raw.keys.take(20).toList(),
         }, level: 'error');
         return null;
