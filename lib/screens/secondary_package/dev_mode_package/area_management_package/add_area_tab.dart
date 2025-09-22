@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../../utils/snackbar_helper.dart';
+// ✅ UsageReporter 계측 추가
+import '../../../../utils/usage_reporter.dart';
 
 class AddAreaTab extends StatefulWidget {
   final String? selectedDivision;
@@ -78,9 +80,14 @@ class _AddAreaTabState extends State<AddAreaTab> {
       final fs = FirebaseFirestore.instance;
       final ref = fs.collection('areas').doc(areaId);
 
+      int reads = 0;
+      int writes = 0;
+
       // 중복 생성/경합 방지: 트랜잭션으로 존재 확인 후 생성
       await fs.runTransaction((tx) async {
         final snap = await tx.get(ref);
+        reads += 1; // ✅ Firestore READ
+
         if (snap.exists) {
           throw Exception('이미 존재하는 지역입니다.');
         }
@@ -90,7 +97,28 @@ class _AddAreaTabState extends State<AddAreaTab> {
           'division': division,
           'createdAt': FieldValue.serverTimestamp(),
         });
+        writes += 1; // ✅ Firestore WRITE
       });
+
+      // ✅ 계측: 트랜잭션 내 read/write 각각 보고
+      try {
+        if (reads > 0) {
+          await UsageReporter.instance.report(
+            area: division,
+            action: 'read',
+            n: reads,
+            source: 'AddAreaTab._addArea.areas.tx.get:$areaId',
+          );
+        }
+        if (writes > 0) {
+          await UsageReporter.instance.report(
+            area: division,
+            action: 'write',
+            n: writes,
+            source: 'AddAreaTab._addArea.areas.tx.set:$areaId',
+          );
+        }
+      } catch (_) {}
 
       if (!mounted) return;
 
@@ -121,7 +149,22 @@ class _AddAreaTabState extends State<AddAreaTab> {
         .collection('areas')
         .where('division', isEqualTo: division)
         .get(const GetOptions(source: Source.serverAndCache));
-    final list = snapshot.docs.map((e) => (e['name'] as String?)?.trim()).whereType<String>().toList()
+
+    // ✅ 계측: areas read (결과 0이어도 최소 1로 보고)
+    final readN = snapshot.docs.isEmpty ? 1 : snapshot.docs.length;
+    try {
+      await UsageReporter.instance.report(
+        area: division,
+        action: 'read',
+        n: readN,
+        source: 'AddAreaTab._loadAreas.areas.query',
+      );
+    } catch (_) {}
+
+    final list = snapshot.docs
+        .map((e) => (e['name'] as String?)?.trim())
+        .whereType<String>()
+        .toList()
       ..sort((a, b) => a.compareTo(b)); // 정렬 일관성
     return list;
   }
@@ -158,6 +201,16 @@ class _AddAreaTabState extends State<AddAreaTab> {
       final areaId = '$division-$areaName';
       await FirebaseFirestore.instance.collection('areas').doc(areaId).delete();
 
+      // ✅ 계측: areas delete 1
+      try {
+        await UsageReporter.instance.report(
+          area: division,
+          action: 'delete',
+          n: 1,
+          source: 'AddAreaTab._deleteArea.areas.delete:$areaId',
+        );
+      } catch (_) {}
+
       if (!mounted) return;
       setState(() {
         _areasFuture = _loadAreas(); // 목록 재로딩 (Future 캐시 갱신)
@@ -189,12 +242,12 @@ class _AddAreaTabState extends State<AddAreaTab> {
             onChanged: busy
                 ? null
                 : (val) {
-                    // 부모 콜백 호출 + 로컬 Future 캐시 갱신
-                    widget.onDivisionChanged(val);
-                    setState(() {
-                      _areasFuture = _loadAreas();
-                    });
-                  },
+              // 부모 콜백 호출 + 로컬 Future 캐시 갱신
+              widget.onDivisionChanged(val);
+              setState(() {
+                _areasFuture = _loadAreas();
+              });
+            },
             decoration: const InputDecoration(labelText: '회사 선택'),
           ),
           const SizedBox(height: 12),
@@ -228,41 +281,41 @@ class _AddAreaTabState extends State<AddAreaTab> {
             child: widget.selectedDivision == null
                 ? const Center(child: Text('📌 회사를 먼저 선택하세요.'))
                 : FutureBuilder<List<String>>(
-                    future: _areasFuture,
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
+              future: _areasFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-                      final areas = snapshot.data ?? const <String>[];
-                      if (areas.isEmpty) {
-                        return const Center(child: Text('등록된 지역이 없습니다.'));
-                      }
+                final areas = snapshot.data ?? const <String>[];
+                if (areas.isEmpty) {
+                  return const Center(child: Text('등록된 지역이 없습니다.'));
+                }
 
-                      return ListView.builder(
-                        itemCount: areas.length,
-                        itemBuilder: (context, index) {
-                          final areaName = areas[index];
-                          final deleting = _deletingAreaName == areaName;
-                          return ListTile(
-                            key: ValueKey(areaName), // 리빌드 안정성
-                            title: Text(areaName),
-                            trailing: deleting
-                                ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
-                                  )
-                                : IconButton(
-                                    tooltip: '지역 삭제',
-                                    icon: const Icon(Icons.delete_outline),
-                                    onPressed: busy ? null : () => _deleteArea(areaName),
-                                  ),
-                          );
-                        },
-                      );
-                    },
-                  ),
+                return ListView.builder(
+                  itemCount: areas.length,
+                  itemBuilder: (context, index) {
+                    final areaName = areas[index];
+                    final deleting = _deletingAreaName == areaName;
+                    return ListTile(
+                      key: ValueKey(areaName), // 리빌드 안정성
+                      title: Text(areaName),
+                      trailing: deleting
+                          ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                          : IconButton(
+                        tooltip: '지역 삭제',
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: busy ? null : () => _deleteArea(areaName),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
           ),
         ],
       ),

@@ -13,6 +13,8 @@ import '../../../../../../states/area/area_state.dart';
 import '../../../../../../states/user/user_state.dart';
 import '../../../../../repositories/plate_repo_services/plate_count_service.dart';
 import '../../../../../../utils/snackbar_helper.dart';
+// ✅ UsageReporter — 파이어베이스 발생 로직만 계측(READ/WRITE/DELETE)
+import '../../../../../../utils/usage_reporter.dart';
 
 const String kBucketName = 'easydev-image';
 const String kServiceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
@@ -21,7 +23,7 @@ const String kServiceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json'
 const kBase = Color(0xFF0D47A1); // primary
 const kDark = Color(0xFF09367D); // 강조 텍스트/아이콘
 const kLight = Color(0xFF5472D3); // 톤 변형/보더
-const kFg = Color(0xFFFFFFFF);   // onPrimary
+const kFg = Color(0xFFFFFFFF); // onPrimary
 
 /// ─────────────────────────────────────────────────────────────────────────
 /// 바텀시트 호출 헬퍼: 화면 최상단까지 꽉 차게 보여줌
@@ -36,10 +38,10 @@ Future<void> showEndWorkReportBottomSheet({
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    backgroundColor: Colors.transparent, // 시트 외부는 투명
+    backgroundColor: Colors.transparent,
     builder: (_) {
       return FractionallySizedBox(
-        heightFactor: 1, // 최상단까지
+        heightFactor: 1,
         child: _SheetScaffold(
           childBuilder: (scrollController) => HomeEndWorkReportContent(
             onReport: onReport,
@@ -56,6 +58,7 @@ Future<void> showEndWorkReportBottomSheet({
 /// 시트 공통 프레임(흰 배경/라운드/보더 + SafeArea + 내부 스크롤 컨트롤러 제공)
 class _SheetScaffold extends StatelessWidget {
   const _SheetScaffold({required this.childBuilder});
+
   final Widget Function(ScrollController) childBuilder;
 
   @override
@@ -63,11 +66,11 @@ class _SheetScaffold extends StatelessWidget {
     final scrollController = ScrollController();
 
     return SafeArea(
-      top: false, // 상단 노치 영역까지 확장
+      top: false,
       child: Container(
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          color: Colors.white, // 내부 흰색
+          color: Colors.white,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
           border: Border.all(color: kLight.withOpacity(.35)),
           boxShadow: [
@@ -86,7 +89,7 @@ class _SheetScaffold extends StatelessWidget {
 
 class HomeEndWorkReportContent extends StatefulWidget {
   final Future<void> Function(String reportType, String content) onReport;
-  final int? initialVehicleInput;  // 입차
+  final int? initialVehicleInput; // 입차
   final int? initialVehicleOutput; // 출차
 
   /// 바텀시트의 스크롤과 연동되도록 외부에서 주입
@@ -106,7 +109,7 @@ class HomeEndWorkReportContent extends StatefulWidget {
 
 class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
   final _formKey = GlobalKey<FormState>();
-  final _inputCtrl = TextEditingController();  // 입차
+  final _inputCtrl = TextEditingController(); // 입차
   final _outputCtrl = TextEditingController(); // 출차
   final _inputFocus = FocusNode();
   final _outputFocus = FocusNode();
@@ -141,6 +144,18 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
     try {
       final v = await PlateCountService().getParkingCompletedCountAll(area);
       _inputCtrl.text = v.toString();
+
+      // ✅ Firestore READ (aggregate count)
+      try {
+        await UsageReporter.instance.report(
+          area: area,
+          action: 'read',
+          n: v,
+          source:
+          'HomeEndWorkReportContent._refetchInput.parking_completed.aggregate',
+        );
+      } catch (_) {}
+
       HapticFeedback.selectionClick();
     } catch (_) {
       // no-op
@@ -155,6 +170,18 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
     try {
       final v = await PlateCountService().getDepartureCompletedCountAll(area);
       _outputCtrl.text = v.toString();
+
+      // ✅ Firestore READ (aggregate count)
+      try {
+        await UsageReporter.instance.report(
+          area: area,
+          action: 'read',
+          n: v,
+          source:
+          'HomeEndWorkReportContent._refetchOutput.departure_completed.aggregate',
+        );
+      } catch (_) {}
+
       HapticFeedback.selectionClick();
     } catch (_) {
       // no-op
@@ -168,7 +195,6 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
     final area = context.watch<AreaState>().currentArea;
     final division = context.watch<AreaState>().currentDivision;
 
-    // 키보드가 올라오면 하단 패딩을 늘려서 스크롤로 모두 접근 가능
     final bottomPad = MediaQuery.of(context).viewInsets.bottom + 16;
 
     return SingleChildScrollView(
@@ -209,8 +235,10 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
           Center(
             child: ChipTheme(
               data: ChipTheme.of(context).copyWith(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                labelStyle:
+                const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
                 shape: StadiumBorder(
                   side: BorderSide(color: kLight.withOpacity(.35)),
                 ),
@@ -224,9 +252,12 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
                 runSpacing: 8,
                 children: [
                   _infoChip(Icons.place, area.isEmpty ? '지역 미지정' : area),
-                  _infoChip(Icons.domain, division.isEmpty ? '부서 미지정' : division),
-                  if (widget.initialVehicleInput != null || widget.initialVehicleOutput != null)
-                    _infoChip(Icons.auto_awesome, '자동 채움 완료', color: Colors.green),
+                  _infoChip(
+                      Icons.domain, division.isEmpty ? '부서 미지정' : division),
+                  if (widget.initialVehicleInput != null ||
+                      widget.initialVehicleOutput != null)
+                    _infoChip(Icons.auto_awesome, '자동 채움 완료',
+                        color: Colors.green),
                 ],
               ),
             ),
@@ -247,7 +278,8 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
                         controller: _inputCtrl,
                         focusNode: _inputFocus,
                         textInputAction: TextInputAction.next,
-                        onFieldSubmitted: (_) => FocusScope.of(context).requestFocus(_outputFocus),
+                        onFieldSubmitted: (_) =>
+                            FocusScope.of(context).requestFocus(_outputFocus),
                         validator: _numberValidator,
                         suffix: _reloadingInput
                             ? const SizedBox(
@@ -255,7 +287,8 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation(kBase),
+                            valueColor:
+                            AlwaysStoppedAnimation(kBase),
                           ),
                         )
                             : IconButton(
@@ -264,7 +297,8 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
                           color: kDark,
                           onPressed: _refetchInput,
                         ),
-                        helper: '현재 지역의 parking_completed 전체 문서 기준 자동 집계',
+                        helper:
+                        '현재 지역의 parking_completed 전체 문서 기준 자동 집계',
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -274,7 +308,8 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
                         controller: _outputCtrl,
                         focusNode: _outputFocus,
                         textInputAction: TextInputAction.done,
-                        onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
+                        onFieldSubmitted: (_) =>
+                            FocusScope.of(context).unfocus(),
                         validator: _numberValidator,
                         suffix: _reloadingOutput
                             ? const SizedBox(
@@ -282,7 +317,8 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation(kBase),
+                            valueColor:
+                            AlwaysStoppedAnimation(kBase),
                           ),
                         )
                             : IconButton(
@@ -291,7 +327,8 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
                           color: kDark,
                           onPressed: _refetchOutput,
                         ),
-                        helper: '현재 지역의 departure_completed & 잠금요금(true) 전체 문서 기준',
+                        helper:
+                        '현재 지역의 departure_completed & 잠금요금(true) 전체 문서 기준',
                       ),
                     ),
                   ],
@@ -306,7 +343,8 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
                       backgroundColor: kBase,
                       foregroundColor: kFg,
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      textStyle: const TextStyle(fontWeight: FontWeight.w800),
+                      textStyle:
+                      const TextStyle(fontWeight: FontWeight.w800),
                     ),
                     icon: _submitting
                         ? const SizedBox(
@@ -322,7 +360,8 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
                     onPressed: _submitting
                         ? null
                         : () async {
-                      if (!(_formKey.currentState?.validate() ?? false)) {
+                      if (!(_formKey.currentState?.validate() ??
+                          false)) {
                         HapticFeedback.lightImpact();
                         return;
                       }
@@ -344,8 +383,10 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
     return Chip(
       avatar: Icon(icon, size: 16, color: baseColor),
       label: Text(text),
-      labelStyle: TextStyle(color: baseColor, fontWeight: FontWeight.w800),
-      backgroundColor: color == null ? kLight.withOpacity(.06) : baseColor.withOpacity(0.08),
+      labelStyle:
+      TextStyle(color: baseColor, fontWeight: FontWeight.w800),
+      backgroundColor:
+      color == null ? kLight.withOpacity(.06) : baseColor.withOpacity(0.08),
       side: BorderSide(color: (color ?? kLight).withOpacity(0.35)),
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
@@ -386,10 +427,21 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
       await updateLockedFeeSummary(division, area);
 
       final summary = await summaryRef.get();
+
+      // ✅ Firestore READ (fee_summaries doc 1건)
+      try {
+        await UsageReporter.instance.report(
+          area: area,
+          action: 'read',
+          n: 1,
+          source:
+          'HomeEndWorkReportContent._handleSubmit.fee_summaries.get',
+        );
+      } catch (_) {}
+
       final data = summary.data();
-      final lockedFee = (data?['totalLockedFee'] ?? 0) is num
-          ? (data?['totalLockedFee'] as num).round()
-          : 0;
+      final lockedFee =
+      (data?['totalLockedFee'] ?? 0) is num ? (data?['totalLockedFee'] as num).round() : 0;
 
       final reportMap = {
         "vehicleInput": entry,
@@ -451,7 +503,7 @@ class _LabeledNumberField extends StatelessWidget {
         labelText: label,
         helperText: helper,
         filled: true,
-        fillColor: kLight.withOpacity(.06), // 폼 배경: 연한 톤
+        fillColor: kLight.withOpacity(.06),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: kLight.withOpacity(.35)),
@@ -462,7 +514,7 @@ class _LabeledNumberField extends StatelessWidget {
         ),
         focusedBorder: const OutlineInputBorder(
           borderRadius: BorderRadius.all(Radius.circular(12)),
-          borderSide: BorderSide(color: kBase, width: 1.6), // 포커스: primary
+          borderSide: BorderSide(color: kBase, width: 1.6),
         ),
         suffixIcon: suffix,
       ),
@@ -483,6 +535,17 @@ Future<void> updateLockedFeeSummary(String division, String area) async {
       .where('area', isEqualTo: area)
       .where('isLockedFee', isEqualTo: true)
       .get();
+
+  // ✅ Firestore READ: plates 쿼리
+  try {
+    await UsageReporter.instance.report(
+      area: area,
+      action: 'read',
+      n: snapshot.docs.length,
+      source:
+      'updateLockedFeeSummary.plates.query(departure_completed&lockedFee)',
+    );
+  } catch (_) {}
 
   int total = 0;
   int count = 0;
@@ -505,6 +568,16 @@ Future<void> updateLockedFeeSummary(String division, String area) async {
     'lockedVehicleCount': count,
     'lastUpdated': FieldValue.serverTimestamp(),
   }, SetOptions(merge: true));
+
+  // ✅ Firestore WRITE: fee_summaries upsert 1건
+  try {
+    await UsageReporter.instance.report(
+      area: area,
+      action: 'write',
+      n: 1,
+      source: 'updateLockedFeeSummary.fee_summaries.upsert',
+    );
+  } catch (_) {}
 }
 
 int _extractLockedFeeAmount(Map<String, dynamic> data) {
@@ -526,14 +599,23 @@ int _extractLockedFeeAmount(Map<String, dynamic> data) {
 
 // 보정치(재생성 이벤트 카운터) 초기화
 Future<void> resetDepartureCompletedExtras(String area) async {
-  final countersRef = FirebaseFirestore.instance
-      .collection('plate_counters')
-      .doc('area_$area');
+  final countersRef =
+  FirebaseFirestore.instance.collection('plate_counters').doc('area_$area');
 
   await countersRef.set({
     'departureCompletedEvents': 0,
     'lastResetAt': FieldValue.serverTimestamp(),
   }, SetOptions(merge: true));
+
+  // ✅ Firestore WRITE: plate_counters 1건
+  try {
+    await UsageReporter.instance.report(
+      area: area,
+      action: 'write',
+      n: 1,
+      source: 'resetDepartureCompletedExtras.plate_counters.set',
+    );
+  } catch (_) {}
 }
 
 // 랜덤 ID 생성(영문소문자+숫자)
@@ -544,6 +626,7 @@ String _randomId([int length = 10]) {
 }
 
 // GCS 업로드: EndWork Report
+// ⚠️ Firebase가 아니므로 UsageReporter 계측(READ/WRITE/DELETE)을 **하지 않습니다**.
 Future<String?> uploadEndWorkReportJson({
   required Map<String, dynamic> report,
   required String division,
@@ -562,7 +645,8 @@ Future<String?> uploadEndWorkReportJson({
   await tempFile.writeAsString(jsonString, encoding: utf8);
 
   final credentialsJson = await rootBundle.loadString(kServiceAccountPath);
-  final accountCredentials = ServiceAccountCredentials.fromJson(credentialsJson);
+  final accountCredentials =
+  ServiceAccountCredentials.fromJson(credentialsJson);
   final client = await clientViaServiceAccount(
     accountCredentials,
     [StorageApi.devstorageFullControlScope],
@@ -590,10 +674,12 @@ Future<String?> uploadEndWorkReportJson({
 
   client.close();
   // await tempFile.delete();
+
   return 'https://storage.googleapis.com/$kBucketName/${object.name}';
 }
 
 // GCS 업로드: End Logs
+// ⚠️ Firebase가 아니므로 UsageReporter 계측(READ/WRITE/DELETE)을 **하지 않습니다**.
 Future<String?> uploadEndLogJson({
   required Map<String, dynamic> report,
   required String division,
@@ -612,7 +698,8 @@ Future<String?> uploadEndLogJson({
   await tempFile.writeAsString(jsonString, encoding: utf8);
 
   final credentialsJson = await rootBundle.loadString(kServiceAccountPath);
-  final accountCredentials = ServiceAccountCredentials.fromJson(credentialsJson);
+  final accountCredentials =
+  ServiceAccountCredentials.fromJson(credentialsJson);
   final client = await clientViaServiceAccount(
     accountCredentials,
     [StorageApi.devstorageFullControlScope],
@@ -640,5 +727,6 @@ Future<String?> uploadEndLogJson({
 
   client.close();
   // await tempFile.delete();
+
   return 'https://storage.googleapis.com/$kBucketName/${object.name}';
 }

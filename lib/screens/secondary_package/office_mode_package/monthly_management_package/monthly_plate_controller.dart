@@ -8,6 +8,7 @@ import '../../../../utils/snackbar_helper.dart';
 import '../../../../repositories/plate_repo_services/firestore_plate_repository.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../../states/area/area_state.dart';
+import '../../../../utils/usage_reporter.dart'; // ✅ UsageReporter 계측
 
 class MonthlyPlateController {
   // ─────────────────────────────────────────────────────────────────────────────
@@ -337,6 +338,16 @@ class MonthlyPlateController {
         },
         SetOptions(merge: true),
       );
+
+      // ✅ UsageReporter: write 1회
+      try {
+        await UsageReporter.instance.report(
+          area: area.isNotEmpty ? area : 'unknown',
+          action: 'write',
+          n: 1,
+          source: 'MonthlyPlateController.recordPaymentHistory.set',
+        );
+      } catch (_) {}
     } catch (e) {
       rethrow;
     }
@@ -350,6 +361,16 @@ class MonthlyPlateController {
       await _plateRepo.deletePlateStatus(plateNumber, area);
       fetchedCustomStatus = null;
       fetchedStatusList = [];
+
+      // ✅ UsageReporter: delete 1회
+      try {
+        await UsageReporter.instance.report(
+          area: area.isNotEmpty ? area : 'unknown',
+          action: 'delete',
+          n: 1,
+          source: 'MonthlyPlateController.deleteCustomStatusFromFirestore.delete',
+        );
+      } catch (_) {}
     } catch (e) {
       rethrow;
     }
@@ -357,9 +378,9 @@ class MonthlyPlateController {
 
   /// 기존 문서 데이터 로딩(편집 진입 시)
   Future<void> loadExistingData(
-    Map<String, dynamic> data, {
-    required String docId,
-  }) async {
+      Map<String, dynamic> data, {
+        required String docId,
+      }) async {
     isEditMode = true;
     docIdToEdit = docId;
 
@@ -390,9 +411,9 @@ class MonthlyPlateController {
   // 등록/수정 (UI와의 호환 유지)
   // ─────────────────────────────────────────────────────────────────────────────
   Future<void> updatePlateEntry(
-    BuildContext context,
-    VoidCallback refreshUI,
-  ) async {
+      BuildContext context,
+      VoidCallback refreshUI,
+      ) async {
     if (!_validateBeforeWrite(context)) return;
 
     // await 전에 필요한 핸들러를 확보해 두면 lint를 더 쉽게 피할 수 있습니다.
@@ -438,6 +459,16 @@ class MonthlyPlateController {
         isExtended: isExtended,
       );
 
+      // ✅ UsageReporter: write 2회 (plate_status + monthly plate_status)
+      try {
+        await UsageReporter.instance.report(
+          area: area.isNotEmpty ? area : 'unknown',
+          action: 'write',
+          n: 2,
+          source: 'MonthlyPlateController.updatePlateEntry.write',
+        );
+      } catch (_) {}
+
       await extendDatesIfNeeded();
 
       // ✅ async gap 이후엔 BuildContext 생존 확인
@@ -460,9 +491,9 @@ class MonthlyPlateController {
   }
 
   Future<void> submitPlateEntry(
-    BuildContext context,
-    VoidCallback refreshUI,
-  ) async {
+      BuildContext context,
+      VoidCallback refreshUI,
+      ) async {
     if (!_validateBeforeWrite(context)) return;
 
     // await 이전에 핸들러 캐싱
@@ -508,6 +539,16 @@ class MonthlyPlateController {
         specialNote: specialNote,
         isExtended: isExtended,
       );
+
+      // ✅ UsageReporter: write 2회 (plate_status + monthly plate_status)
+      try {
+        await UsageReporter.instance.report(
+          area: area.isNotEmpty ? area : 'unknown',
+          action: 'write',
+          n: 2,
+          source: 'MonthlyPlateController.submitPlateEntry.write',
+        );
+      } catch (_) {}
 
       // ✅ async gap 이후 BuildContext 생존 여부 확인
       if (!context.mounted) return;

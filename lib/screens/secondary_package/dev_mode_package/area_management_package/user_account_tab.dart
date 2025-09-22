@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../../utils/snackbar_helper.dart';
+// ✅ UsageReporter 계측
+import '../../../../utils/usage_reporter.dart';
 
 class UserAccountsTab extends StatefulWidget {
   final String? selectedDivision;
@@ -40,11 +42,26 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
     'createdAt': d['createdAt'],
   };
 
+  // ─────────────────────────────────────────────────────────
+  // Firestore fetch helpers (+ UsageReporter 계측)
+  // ─────────────────────────────────────────────────────────
+
   Future<List<String>> fetchDivisions() async {
     // 기존 로직 유지: areas에서 division을 파생 (정렬 추가)
     final snapshot = await FirebaseFirestore.instance
         .collection('areas')
         .get(const GetOptions(source: Source.server));
+
+    // ✅ 계측: areas 전수 조회 (division 파생) — read, n 최소 1 보정
+    try {
+      final n = snapshot.docs.isEmpty ? 1 : snapshot.docs.length;
+      await UsageReporter.instance.report(
+        area: 'unknown',
+        action: 'read',
+        n: n,
+        source: 'UserAccountsTab.fetchDivisions.areas.get',
+      );
+    } catch (_) {}
 
     return snapshot.docs
         .map((doc) => doc['division'] as String)
@@ -66,11 +83,65 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
           .collection('areas')
           .where('division', whereIn: chunk)
           .get(const GetOptions(source: Source.server));
+
+      // ✅ 계측: chunk read — n 최소 1 보정
+      try {
+        final n = qs.docs.isEmpty ? 1 : qs.docs.length;
+        await UsageReporter.instance.report(
+          area: 'unknown',
+          action: 'read',
+          n: n,
+          source: 'UserAccountsTab.getAreasByDivisions.chunk(${chunk.length})',
+        );
+      } catch (_) {}
+
       for (final d in qs.docs) {
         set.add(d['name'] as String);
       }
     }
     return set.toList()..sort();
+  }
+
+  Future<QuerySnapshot<Map<String, dynamic>>> _fetchAreasForDivision(
+      String division) async {
+    final qs = await FirebaseFirestore.instance
+        .collection('areas')
+        .where('division', isEqualTo: division)
+        .get(const GetOptions(source: Source.server));
+
+    // ✅ 계측: 해당 division의 area 목록 read — n 최소 1 보정
+    try {
+      final n = qs.docs.isEmpty ? 1 : qs.docs.length;
+      await UsageReporter.instance.report(
+        area: 'unknown',
+        action: 'read',
+        n: n,
+        source: 'UserAccountsTab._fetchAreasForDivision.get',
+      );
+    } catch (_) {}
+
+    return qs;
+  }
+
+  Future<QuerySnapshot<Map<String, dynamic>>> _fetchUsersForArea(
+      String area) async {
+    final qs = await FirebaseFirestore.instance
+        .collection('user_accounts')
+        .where('areas', arrayContains: area)
+        .get(const GetOptions(source: Source.server));
+
+    // ✅ 계측: 해당 area의 user_accounts read — n 최소 1 보정
+    try {
+      final n = qs.docs.isEmpty ? 1 : qs.docs.length;
+      await UsageReporter.instance.report(
+        area: area,
+        action: 'read',
+        n: n,
+        source: 'UserAccountsTab._fetchUsersForArea.get',
+      );
+    } catch (_) {}
+
+    return qs;
   }
 
   // 비즈니스 로직 유지: newId = '${oldData.phone}-${newData.areas[0] or default}'
@@ -82,12 +153,18 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
     final String newId = '$phone-$newArea';
 
     final fs = FirebaseFirestore.instance;
+    bool didCreate = false;
+    bool didUpdate = false;
+    bool didDelete = false;
+    int readOps = 0; // ✅ 트랜잭션 내부 read 계수
+
     try {
       await fs.runTransaction((tx) async {
         final oldRef = fs.collection('user_accounts').doc(oldId);
         final newRef = fs.collection('user_accounts').doc(newId);
 
         final oldSnap = await tx.get(oldRef);
+        readOps += 1; // ✅ READ 1회
         if (!oldSnap.exists) {
           throw Exception('원본 계정이 존재하지 않습니다.');
         }
@@ -99,15 +176,55 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
 
         if (newId == oldId) {
           tx.update(oldRef, payload);
+          didUpdate = true;
         } else {
           final newSnap = await tx.get(newRef);
+          readOps += 1; // ✅ 중복 체크 READ 1회
           if (newSnap.exists) {
             throw Exception('동일 ID가 이미 존재합니다: $newId');
           }
           tx.set(newRef, payload);
           tx.delete(oldRef);
+          didCreate = true;
+          didDelete = true;
         }
       });
+
+      // ✅ 계측: 트랜잭션에서 발생한 read/write/delete
+      try {
+        if (readOps > 0) {
+          await UsageReporter.instance.report(
+            area: newArea,
+            action: 'read',
+            n: readOps,
+            source: 'UserAccountsTab._saveChanges.tx.get',
+          );
+        }
+        if (didUpdate) {
+          await UsageReporter.instance.report(
+            area: newArea,
+            action: 'write',
+            n: 1,
+            source: 'UserAccountsTab._saveChanges.update',
+          );
+        }
+        if (didCreate) {
+          await UsageReporter.instance.report(
+            area: newArea,
+            action: 'write',
+            n: 1,
+            source: 'UserAccountsTab._saveChanges.create',
+          );
+        }
+        if (didDelete) {
+          await UsageReporter.instance.report(
+            area: newArea,
+            action: 'delete',
+            n: 1,
+            source: 'UserAccountsTab._saveChanges.deleteOld',
+          );
+        }
+      } catch (_) {}
 
       if (!mounted) return;
       showSuccessSnackbar(context, '✅ ${newData['name']} 정보 저장 완료'); // ✅ 커스텀 스낵바
@@ -156,11 +273,8 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
               const SizedBox(height: 12),
               selectedDivision == null
                   ? const Text('회사를 먼저 선택하세요.')
-                  : FutureBuilder<QuerySnapshot>(
-                future: FirebaseFirestore.instance
-                    .collection('areas')
-                    .where('division', isEqualTo: selectedDivision)
-                    .get(const GetOptions(source: Source.server)),
+                  : FutureBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                future: _fetchAreasForDivision(selectedDivision),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator());
@@ -192,11 +306,8 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
               Expanded(
                 child: widget.selectedArea == null
                     ? const Center(child: Text('지역을 선택하세요.'))
-                    : FutureBuilder<QuerySnapshot>(
-                  future: FirebaseFirestore.instance
-                      .collection('user_accounts')
-                      .where('areas', arrayContains: widget.selectedArea)
-                      .get(),
+                    : FutureBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  future: _fetchUsersForArea(widget.selectedArea!),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator());
@@ -211,7 +322,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
                       itemCount: docs.length,
                       itemBuilder: (context, index) {
                         final doc = docs[index];
-                        final data = doc.data() as Map<String, dynamic>;
+                        final data = doc.data();
                         final id = doc.id;
 
                         // 깊은 복사 기반 로컬 편집 상태
@@ -252,7 +363,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
                                     ActionChip(
                                       label: const Text('+ 추가'),
                                       onPressed: () async {
-                                        // 🔽 재조회 제거: 상단에서 로드한 divisionList 재사용
+                                        // 🔽 상단에서 로드한 divisionList 재사용
                                         final allDivisions = divisionList;
 
                                         final toAdd =

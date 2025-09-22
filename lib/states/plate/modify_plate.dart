@@ -3,9 +3,13 @@ import 'package:flutter/material.dart';
 import '../../models/plate_model.dart';
 import '../../models/plate_log_model.dart';
 import '../../utils/snackbar_helper.dart';
+import '../../utils/usage_reporter.dart';
 import '../area/area_state.dart';
 import '../user/user_state.dart';
 import '../../repositories/plate_repo_services/plate_repository.dart';
+
+// ✅ UsageReporter 계측
+
 
 class ModifyPlate with ChangeNotifier {
   final PlateRepository _plateRepository;
@@ -61,7 +65,14 @@ class ModifyPlate with ChangeNotifier {
         regularDurationHours: regularDurationHours ?? plate.regularDurationHours,
       );
 
+      // 🔵 WRITE: addOrUpdatePlate
       await _plateRepository.addOrUpdatePlate(documentId, updatedPlate);
+      UsageReporter.instance.report(
+        area: plate.area,
+        action: 'write',
+        n: 1,
+        source: 'ModifyPlate.modifyPlateInfo.addOrUpdatePlate',
+      );
 
       final updatedFields = <String, dynamic>{};
 
@@ -116,6 +127,7 @@ class ModifyPlate with ChangeNotifier {
           updatedFields: updatedFields,
         );
 
+        // 🔵 WRITE: updatePlate (필드 일부 & 로그 추가)
         await _plateRepository.updatePlate(
           documentId,
           {
@@ -125,6 +137,12 @@ class ModifyPlate with ChangeNotifier {
             'updatedAt': Timestamp.now(),
           },
           log: log,
+        );
+        UsageReporter.instance.report(
+          area: plate.area,
+          action: 'write',
+          n: 1,
+          source: 'ModifyPlate.modifyPlateInfo.updatePlate',
         );
       }
 

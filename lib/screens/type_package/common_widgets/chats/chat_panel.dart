@@ -7,6 +7,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../utils/snackbar_helper.dart';
 
+// ✅ UsageReporter: "파이어베이스에서만" 계측 (READ / WRITE / DELETE 구분)
+//    - 이 파일에서는 latest_message 리스닝(READ)과 메시지 전송(WRITE)만 보고합니다.
+import '../../../../utils/usage_reporter.dart';
+
 class ChatPanel extends StatefulWidget {
   final String roomId;
 
@@ -21,7 +25,7 @@ class _ChatPanelState extends State<ChatPanel> {
 
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
-  StreamSubscription<DocumentSnapshot>? _chatSubscription;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _chatSubscription;
 
   String latestMessage = '';
   Timestamp? latestTimestamp;
@@ -35,6 +39,18 @@ class _ChatPanelState extends State<ChatPanel> {
   final Set<int> _selectedShortcutIdx = {};
 
   String get _prefsKey => 'chat_shortcuts_${widget.roomId}';
+
+  /// ────────────────────────────────────────────────────────────────────────────
+  /// UsageReporter 헬퍼 (파이어베이스 작업만 호출)
+  /// ────────────────────────────────────────────────────────────────────────────
+  Future<void> _report(String action, {int n = 1, required String source}) async {
+    try {
+      await UsageReporter.instance
+          .report(area: widget.roomId, action: action, n: n, source: source);
+    } catch (_) {
+      // 계측 실패는 기능에 영향 주지 않음
+    }
+  }
 
   @override
   void initState() {
@@ -63,6 +79,7 @@ class _ChatPanelState extends State<ChatPanel> {
     }
   }
 
+  /// Firestore READ 계측 지점
   void _listenToLatestMessage() {
     _chatSubscription = FirebaseFirestore.instance
         .collection('chats')
@@ -86,9 +103,15 @@ class _ChatPanelState extends State<ChatPanel> {
         final ts = data['timestamp'];
         latestTimestamp = ts is Timestamp ? ts : null;
       });
+
+      // 🔎 Firestore READ: 서버 동기화된 스냅샷 수신 시에만 계측
+      if (!docSnapshot.metadata.hasPendingWrites) {
+        _report('read', source: 'chat.latest_message.listen');
+      }
     });
   }
 
+  /// Firestore WRITE 계측 지점
   Future<void> _sendMessage() async {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
@@ -104,6 +127,9 @@ class _ChatPanelState extends State<ChatPanel> {
         'timestamp': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
+      // 📝 Firestore WRITE
+      _report('write', source: 'chat.latest_message.set');
+
       _controller.clear();
       _focusNode.requestFocus();
     } catch (e, st) {
@@ -113,6 +139,7 @@ class _ChatPanelState extends State<ChatPanel> {
     }
   }
 
+  /// 로컬(SharedPreferences) — 파이어베이스 아님 → 계측 제외
   Future<void> _loadShortcuts() async {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
@@ -121,11 +148,13 @@ class _ChatPanelState extends State<ChatPanel> {
     });
   }
 
+  /// 로컬(SharedPreferences) — 파이어베이스 아님 → 계측 제외
   Future<void> _saveShortcuts() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(_prefsKey, _shortcuts);
   }
 
+  /// 로컬(SharedPreferences) — 파이어베이스 아님 → 계측 제외
   Future<void> _addShortcut() async {
     final textCtrl = TextEditingController();
 
@@ -133,14 +162,11 @@ class _ChatPanelState extends State<ChatPanel> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      // 노치/상단 안전영역
       backgroundColor: Colors.white,
-      // 시트 배경 흰색
       builder: (ctx) {
         return DraggableScrollableSheet(
           expand: false,
           initialChildSize: 1.0,
-          // 화면 최상단까지
           maxChildSize: 1.0,
           minChildSize: 0.4,
           builder: (ctx, scrollController) {
@@ -165,7 +191,7 @@ class _ChatPanelState extends State<ChatPanel> {
                       left: 20,
                       right: 20,
                       top: 20,
-                      bottom: MediaQuery.of(ctx).viewInsets.bottom + 20, // 키보드 패딩
+                      bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -235,6 +261,7 @@ class _ChatPanelState extends State<ChatPanel> {
     await _saveShortcuts();
   }
 
+  /// 로컬(SharedPreferences) — 파이어베이스 아님 → 계측 제외
   Future<void> _removeShortcut(String value) async {
     final ok = await showCupertinoDialog<bool>(
       context: context,
@@ -354,7 +381,8 @@ class _ChatPanelState extends State<ChatPanel> {
       } catch (_) {}
     }
 
-    final subtitle = _hasPendingWrites || ts == null ? '동기화 중...' : (timeText.isNotEmpty ? '🕒 $timeText' : '');
+    final subtitle =
+    _hasPendingWrites || ts == null ? '동기화 중...' : (timeText.isNotEmpty ? '🕒 $timeText' : '');
 
     return Column(
       mainAxisSize: MainAxisSize.max,
@@ -478,12 +506,13 @@ class _ChatPanelState extends State<ChatPanel> {
                   hintText: '메시지를 입력하세요...',
                   filled: true,
                   fillColor: Colors.grey[200],
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide.none,
                   ),
-                  // ✅ 입력 전체 지우기 버튼
+                  // 입력 전체 지우기 버튼
                   suffixIcon: IconButton(
                     tooltip: '입력 지우기',
                     icon: const Icon(Icons.clear),

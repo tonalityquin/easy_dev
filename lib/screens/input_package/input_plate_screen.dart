@@ -22,6 +22,9 @@ import 'widgets/input_bottom_navigation.dart';
 // 🔽 실시간 스캐너 페이지
 import 'live_ocr_page.dart';
 
+// ✅ Firestore 사용량 보고 (계측)
+import '../../utils/usage_reporter.dart';
+
 class InputPlateScreen extends StatefulWidget {
   const InputPlateScreen({super.key});
 
@@ -154,17 +157,37 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     super.dispose();
   }
 
+  /// plate_status 단건 조회
+  /// ✅ UsageReporter: area 기준 read 1회 보고(성공/실패 불문)
   Future<Map<String, dynamic>?> _fetchPlateStatus(
       String plateNumber, String area) async {
     final docId = '${plateNumber}_$area';
-    final doc = await FirebaseFirestore.instance
-        .collection('plate_status')
-        .doc(docId)
-        .get();
-    if (doc.exists) {
-      return doc.data();
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('plate_status')
+          .doc(docId)
+          .get();
+
+      if (doc.exists) {
+        return doc.data();
+      }
+      return null;
+    } on FirebaseException catch (e) {
+      // 필요 시 UI 로그/스낵바 등 처리 가능
+      debugPrint('[_fetchPlateStatus] FirebaseException: ${e.code} ${e.message}');
+      return null;
+    } catch (e) {
+      debugPrint('[_fetchPlateStatus] error: $e');
+      return null;
+    } finally {
+      // 🔸 실제 호출 시도 자체를 read 1회로 집계
+      await UsageReporter.instance.report(
+        area: (area.isEmpty ? 'unknown' : area),
+        action: 'read',
+        n: 1,
+        source: 'InputPlateScreen._fetchPlateStatus/plate_status.doc.get',
+      );
     }
-    return null;
   }
 
   // 🔽 스캐너로 이동 → 성공 시 입력칸 자동 채우기 (사용자가 닫으면 plate == null)
@@ -206,8 +229,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         key: const ValueKey('frontKeypad'),
         controller: controller.controllerFrontDigit,
         maxLength: controller.isThreeDigit ? 3 : 2,
-        onComplete: () => setState(() =>
-            controller.setActiveController(controller.controllerMidDigit)),
+        onComplete: () => setState(
+                () => controller.setActiveController(controller.controllerMidDigit)),
         onChangeFrontDigitMode: (defaultThree) {
           setState(() {
             controller.setFrontDigitMode(defaultThree);
@@ -221,8 +244,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       return KorKeypad(
         key: const ValueKey('midKeypad'),
         controller: controller.controllerMidDigit,
-        onComplete: () => setState(() =>
-            controller.setActiveController(controller.controllerBackDigit)),
+        onComplete: () => setState(
+                () => controller.setActiveController(controller.controllerBackDigit)),
       );
     }
 
@@ -366,7 +389,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                   snap: true,
                   snapSizes: const [_sheetClosed, _sheetOpened],
                   builder: (context, scrollController) {
-                    // 메인 배경(화이트)과 구분되는 아주 옅은 톤
+                    // 메인 배경(화이트)와 구분되는 아주 옅은 톤
                     const sheetBg =
                     Color(0xFFF6F8FF); // subtle blue-tinted light gray
 

@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 
 import '../../models/plate_log_model.dart';
 
+// ✅ 사용량 계측
+import '../../utils/usage_reporter.dart';
+
 class LogViewerBottomSheet extends StatefulWidget {
   /// plateNumber (문서 ID 폴백 조합에 사용)
   final String? initialPlateNumber;
@@ -28,8 +31,7 @@ class LogViewerBottomSheet extends StatefulWidget {
     this.plateId,
   });
 
-  static Future<void> show(
-    BuildContext context, {
+  static Future<void> show(BuildContext context, {
     required String division,
     required String area,
     required DateTime requestTime,
@@ -64,9 +66,12 @@ class LogViewerBottomSheet extends StatefulWidget {
         );
       },
       transitionBuilder: (_, animation, __, child) {
-        final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+        final curved =
+        CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
         return SlideTransition(
-          position: Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero).animate(curved),
+          position:
+          Tween<Offset>(begin: const Offset(0, 1), end: Offset.zero)
+              .animate(curved),
           child: FadeTransition(opacity: curved, child: child),
         );
       },
@@ -114,7 +119,10 @@ class _LogViewerBottomSheetState extends State<LogViewerBottomSheet> {
 
     try {
       final docId = _buildDocId();
-      final snap = await FirebaseFirestore.instance.collection('plates').doc(docId).get();
+      final snap = await FirebaseFirestore.instance
+          .collection('plates')
+          .doc(docId)
+          .get();
 
       if (!snap.exists) {
         setState(() {
@@ -142,17 +150,40 @@ class _LogViewerBottomSheetState extends State<LogViewerBottomSheet> {
       }
 
       // 현재 원하는 정렬(_desc)에 맞춰 "한 번만" 정렬하고 상태 플래그 갱신
-      logs.sort((a, b) => _desc ? b.timestamp.compareTo(a.timestamp) : a.timestamp.compareTo(b.timestamp));
+      logs.sort((a, b) =>
+      _desc
+          ? b.timestamp.compareTo(a.timestamp)
+          : a.timestamp.compareTo(b.timestamp));
 
       setState(() {
         _logs = logs;
         _isLoading = false;
       });
+    } on FirebaseException catch (e) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage =
+        '로그를 불러오는 중 오류가 발생했습니다. (${e.code}: ${e.message})';
+      });
     } catch (e) {
       setState(() {
         _isLoading = false;
-        _errorMessage = e is StateError ? e.message : '로그를 불러오는 중 오류가 발생했습니다. ($e)';
+        _errorMessage = e is StateError
+            ? e.message
+            : '로그를 불러오는 중 오류가 발생했습니다. ($e)';
       });
+    } finally {
+      // ✅ Firestore read 1회 계측 (성공/실패 무관)
+      try {
+        await UsageReporter.instance.report(
+          area: (widget.area.isEmpty ? 'unknown' : widget.area),
+          action: 'read',
+          n: 1,
+          source: 'LogViewerBottomSheet._loadLogs/plates.doc.get',
+        );
+      } catch (_) {
+        // 계측 실패는 사용자 플로우에 영향 주지 않음
+      }
     }
   }
 
@@ -209,10 +240,14 @@ class _LogViewerBottomSheetState extends State<LogViewerBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final plateTitle = widget.initialPlateNumber != null ? '${widget.initialPlateNumber} 로그' : '번호판 로그';
+    final plateTitle = widget.initialPlateNumber != null
+        ? '${widget.initialPlateNumber} 로그'
+        : '번호판 로그';
 
     // ★ 풀스크린 화이트 시트
-    final size = MediaQuery.of(context).size;
+    final size = MediaQuery
+        .of(context)
+        .size;
 
     return SafeArea(
       child: Material(
@@ -235,7 +270,8 @@ class _LogViewerBottomSheetState extends State<LogViewerBottomSheet> {
                 ],
               ),
               child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(16)),
                 child: Column(
                   children: [
                     // 드래그 핸들 + 헤더
@@ -257,7 +293,8 @@ class _LogViewerBottomSheetState extends State<LogViewerBottomSheet> {
                           Expanded(
                             child: Text(
                               plateTitle,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 18),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -269,11 +306,13 @@ class _LogViewerBottomSheetState extends State<LogViewerBottomSheet> {
                                 _logs = _logs.reversed.toList(); // 리스트 뒤집기만
                               });
                             },
-                            icon: Icon(_desc ? Icons.south : Icons.north, size: 18),
+                            icon: Icon(_desc ? Icons.south : Icons.north,
+                                size: 18),
                             label: Text(_desc ? '최신순' : '오래된순'),
                             style: TextButton.styleFrom(
                               foregroundColor: Colors.grey[800],
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              padding:
+                              const EdgeInsets.symmetric(horizontal: 8),
                             ),
                           ),
                           IconButton(
@@ -290,72 +329,104 @@ class _LogViewerBottomSheetState extends State<LogViewerBottomSheet> {
                       child: _isLoading
                           ? const Center(child: CircularProgressIndicator())
                           : (_errorMessage != null)
-                              ? _ErrorState(message: _errorMessage!)
-                              : (_logs.isEmpty)
-                                  ? const _EmptyState(text: '📭 로그가 없습니다.')
-                                  : ListView.separated(
-                                      itemCount: _logs.length,
-                                      separatorBuilder: (_, __) => const Divider(height: 1),
-                                      itemBuilder: (_, index) {
-                                        final log = _logs[index];
-                                        final tsText = _formatTs(log.timestamp);
-                                        final color = _actionColor(log.action);
+                          ? _ErrorState(message: _errorMessage!)
+                          : (_logs.isEmpty)
+                          ? const _EmptyState(text: '📭 로그가 없습니다.')
+                          : ListView.separated(
+                        itemCount: _logs.length,
+                        separatorBuilder: (_, __) =>
+                        const Divider(height: 1),
+                        itemBuilder: (_, index) {
+                          final log = _logs[index];
+                          final tsText =
+                          _formatTs(log.timestamp);
+                          final color =
+                          _actionColor(log.action);
 
-                                        final String? feeText =
-                                            (log.lockedFee != null) ? _formatWon(log.lockedFee) : null;
-                                        final String? payText =
-                                            (log.paymentMethod != null && log.paymentMethod!.trim().isNotEmpty)
-                                                ? log.paymentMethod
-                                                : null;
-                                        final String? reasonText =
-                                            (log.reason != null && log.reason!.trim().isNotEmpty) ? log.reason : null;
+                          final String? feeText =
+                          (log.lockedFee != null)
+                              ? _formatWon(log.lockedFee)
+                              : null;
+                          final String? payText = (log
+                              .paymentMethod !=
+                              null &&
+                              log.paymentMethod!
+                                  .trim()
+                                  .isNotEmpty)
+                              ? log.paymentMethod
+                              : null;
+                          final String? reasonText =
+                          (log.reason != null &&
+                              log.reason!
+                                  .trim()
+                                  .isNotEmpty)
+                              ? log.reason
+                              : null;
 
-                                        return ListTile(
-                                          leading: Icon(_actionIcon(log.action), color: color),
-                                          title: Text(
-                                            log.action,
-                                            style: TextStyle(color: color),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                          subtitle: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              if (log.from.isNotEmpty || log.to.isNotEmpty)
-                                                Text(
-                                                  '${log.from} → ${log.to}',
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                              if (log.performedBy.isNotEmpty) const SizedBox(height: 2),
-                                              if (log.performedBy.isNotEmpty)
-                                                Text(
-                                                  '담당자: ${log.performedBy}',
-                                                  style: const TextStyle(fontSize: 12),
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
+                          return ListTile(
+                            leading: Icon(
+                                _actionIcon(log.action),
+                                color: color),
+                            title: Text(
+                              log.action,
+                              style: TextStyle(color: color),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment:
+                              CrossAxisAlignment.start,
+                              children: [
+                                if (log.from.isNotEmpty ||
+                                    log.to.isNotEmpty)
+                                  Text(
+                                    '${log.from} → ${log.to}',
+                                    maxLines: 1,
+                                    overflow:
+                                    TextOverflow.ellipsis,
+                                  ),
+                                if (log.performedBy.isNotEmpty)
+                                  const SizedBox(height: 2),
+                                if (log.performedBy.isNotEmpty)
+                                  Text(
+                                    '담당자: ${log.performedBy}',
+                                    style: const TextStyle(
+                                        fontSize: 12),
+                                    maxLines: 1,
+                                    overflow:
+                                    TextOverflow.ellipsis,
+                                  ),
 
-                                              // 사전 정산 관련 정보 (있을 때만 표시)
-                                              if (feeText != null || payText != null || reasonText != null)
-                                                const SizedBox(height: 2),
-                                              if (feeText != null)
-                                                Text('확정요금: $feeText', style: const TextStyle(fontSize: 12)),
-                                              if (payText != null)
-                                                Text('결제수단: $payText', style: const TextStyle(fontSize: 12)),
-                                              if (reasonText != null)
-                                                Text('사유: $reasonText',
-                                                    style: const TextStyle(fontSize: 12),
-                                                    maxLines: 2,
-                                                    overflow: TextOverflow.ellipsis),
-                                            ],
-                                          ),
-                                          trailing: Text(tsText, style: const TextStyle(fontSize: 12)),
-                                          isThreeLine: true,
-                                          dense: true,
-                                        );
-                                      },
-                                    ),
+                                // 사전 정산 관련 정보 (있을 때만 표시)
+                                if (feeText != null ||
+                                    payText != null ||
+                                    reasonText != null)
+                                  const SizedBox(height: 2),
+                                if (feeText != null)
+                                  Text('확정요금: $feeText',
+                                      style: const TextStyle(
+                                          fontSize: 12)),
+                                if (payText != null)
+                                  Text('결제수단: $payText',
+                                      style: const TextStyle(
+                                          fontSize: 12)),
+                                if (reasonText != null)
+                                  Text('사유: $reasonText',
+                                      style: const TextStyle(
+                                          fontSize: 12),
+                                      maxLines: 2,
+                                      overflow:
+                                      TextOverflow.ellipsis),
+                              ],
+                            ),
+                            trailing: Text(tsText,
+                                style: const TextStyle(
+                                    fontSize: 12)),
+                            isThreeLine: true,
+                            dense: true,
+                          );
+                        },
+                      ),
                     ),
 
                     // 하단 액션

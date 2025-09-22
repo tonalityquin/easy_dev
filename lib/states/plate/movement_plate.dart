@@ -4,6 +4,7 @@ import '../../models/plate_model.dart';
 import '../../repositories/plate_repo_services/plate_repository.dart';
 import '../../enums/plate_type.dart';
 import '../../models/plate_log_model.dart';
+import '../../utils/usage_reporter.dart';
 
 class MovementPlate {
   final PlateRepository _repository;
@@ -78,8 +79,22 @@ class MovementPlate {
 
       await _repository.updatePlate(documentId, updateFields, log: log);
 
+      // 🧭 UsageReporter: Firestore 쓰기 1회 기록
+      UsageReporter.instance.report(
+        area: plate.area,
+        action: 'write',
+        n: 1,
+        source: 'MovementPlate.setDepartureCompleted',
+      );
     } catch (e) {
       debugPrint('출차 완료 이동 실패: $e');
+      // 실패 계측(선택)
+      // UsageReporter.instance.report(
+      //   area: plate.area,
+      //   action: 'write_failed',
+      //   n: 1,
+      //   source: 'MovementPlate.setDepartureCompleted',
+      // );
       rethrow;
     }
   }
@@ -101,7 +116,7 @@ class MovementPlate {
         timestamp: DateTime.now(),
       );
 
-      // 상태 전환
+      // 상태 전환 (WRITE 1)
       await _repository.transitionPlateState(
         documentId: documentId,
         toType: PlateType.departureCompleted,
@@ -111,16 +126,37 @@ class MovementPlate {
         log: log,
       );
 
-      // ✅ 선택 해제(핵심) — 전환 직후 보강 업데이트
+      UsageReporter.instance.report(
+        area: plate.area,
+        action: 'write',
+        n: 1,
+        source: 'MovementPlate.jumpingDepartureCompleted.transition',
+      );
+
+      // ✅ 선택 해제(핵심) — 전환 직후 보강 업데이트 (WRITE 1)
       await _repository.updatePlate(documentId, {
         PlateFields.isSelected: false,
         PlateFields.selectedBy: FieldValue.delete(),
         PlateFields.updatedAt: Timestamp.now(),
       });
 
+      UsageReporter.instance.report(
+        area: plate.area,
+        action: 'write',
+        n: 1,
+        source: 'MovementPlate.jumpingDepartureCompleted.unselect',
+      );
+
       debugPrint("출차 완료 상태로 업데이트 완료: $documentId");
     } catch (e) {
       debugPrint('출차 완료 업데이트 실패: $e');
+      // 실패 계측(선택)
+      // UsageReporter.instance.report(
+      //   area: plate.area,
+      //   action: 'write_failed',
+      //   n: 1,
+      //   source: 'MovementPlate.jumpingDepartureCompleted',
+      // );
       rethrow;
     }
   }
@@ -176,7 +212,15 @@ class MovementPlate {
     final documentId = '${plateNumber}_$area';
 
     try {
+      // READ 1: 현재 문서 가져오기
       final document = await _repository.getPlate(documentId);
+      UsageReporter.instance.report(
+        area: area,
+        action: 'read',
+        n: 1,
+        source: 'MovementPlate._transferData.getPlate',
+      );
+
       if (document == null) {
         return false;
       }
@@ -186,16 +230,16 @@ class MovementPlate {
       // 이동 로그
       final log = PlateLogModel(
         plateNumber: plateNumber,
-        type: toType.firestoreValue,     // e.g. 'parking_completed' / 'departure_completed'
+        type: toType.firestoreValue, // e.g. 'parking_completed' / 'departure_completed'
         area: area,
-        from: fromType.label,            // 사람이 읽는 전 상태
-        to: toType.label,                // 사람이 읽는 후 상태
+        from: fromType.label, // 사람이 읽는 전 상태
+        to: toType.label, // 사람이 읽는 후 상태
         action: '${fromType.label} → ${toType.label}',
         performedBy: selectedBy,
         timestamp: DateTime.now(),
       );
 
-      // 상태 전환
+      // 상태 전환 (WRITE 1)
       await _repository.transitionPlateState(
         documentId: documentId,
         toType: toType,
@@ -205,7 +249,14 @@ class MovementPlate {
         log: log,
       );
 
-      // ✅ 도착 상태가 '출차 완료'라면, 선택 해제 보장(핵심 수정)
+      UsageReporter.instance.report(
+        area: area,
+        action: 'write',
+        n: 1,
+        source: 'MovementPlate._transferData.transition',
+      );
+
+      // ✅ 도착 상태가 '출차 완료'라면, 선택 해제 보장(추가 WRITE 1)
       if (toType == PlateType.departureCompleted) {
         try {
           await _repository.updatePlate(documentId, {
@@ -213,14 +264,36 @@ class MovementPlate {
             PlateFields.selectedBy: FieldValue.delete(),
             PlateFields.updatedAt: Timestamp.now(),
           });
+
+          UsageReporter.instance.report(
+            area: area,
+            action: 'write',
+            n: 1,
+            source: 'MovementPlate._transferData.unselect',
+          );
         } catch (e) {
-          // 선택 해제 보강 실패는 치명적이지 않으므로 warn로깅
+          // 선택 해제 보강 실패는 치명적이지 않으므로 warn 로깅
+          debugPrint('선택 해제 보강 실패: $e');
+          // 실패 계측(선택)
+          // UsageReporter.instance.report(
+          //   area: area,
+          //   action: 'write_failed',
+          //   n: 1,
+          //   source: 'MovementPlate._transferData.unselect',
+          // );
         }
       }
 
       return true;
     } catch (e) {
       debugPrint('문서 상태 이동 오류: $e');
+      // 실패 계측(선택)
+      // UsageReporter.instance.report(
+      //   area: area,
+      //   action: 'write_failed',
+      //   n: 1,
+      //   source: 'MovementPlate._transferData',
+      // );
       return false;
     }
   }

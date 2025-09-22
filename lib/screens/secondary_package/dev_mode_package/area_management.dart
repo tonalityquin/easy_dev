@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
 import '../../../utils/snackbar_helper.dart';
 import 'area_management_package/add_area_tab.dart';
 import 'area_management_package/division_management_tab.dart';
 import 'area_management_package/user_account_tab.dart';
 import 'area_management_package/status_mapping_helper.dart';
+
+// ✅ UsageReporter 계측
+import '../../../utils/usage_reporter.dart';
 
 class AreaManagement extends StatefulWidget {
   const AreaManagement({super.key});
@@ -43,11 +47,18 @@ class _AreaManagementState extends State<AreaManagement> with SingleTickerProvid
     try {
       final fs = FirebaseFirestore.instance;
       final snap = await fs.collection('divisions').get();
-      final divisions = snap.docs
-          .map((e) => (e['name'] as String?)?.trim())
-          .whereType<String>()
-          .toList()
-        ..sort();
+
+      // ✅ 계측: divisions read
+      try {
+        await UsageReporter.instance.report(
+          area: 'divisions',
+          action: 'read',
+          n: snap.docs.length,
+          source: 'AreaManagement._loadDivisions.divisions.get',
+        );
+      } catch (_) {}
+
+      final divisions = snap.docs.map((e) => (e['name'] as String?)?.trim()).whereType<String>().toList()..sort();
 
       if (!mounted) return;
       setState(() {
@@ -84,6 +95,16 @@ class _AreaManagementState extends State<AreaManagement> with SingleTickerProvid
         'createdAt': FieldValue.serverTimestamp(),
       });
 
+      // ✅ 계측: divisions write 1
+      try {
+        await UsageReporter.instance.report(
+          area: trimmed,
+          action: 'write',
+          n: 1,
+          source: 'AreaManagement._addDivision.divisions.set',
+        );
+      } catch (_) {}
+
       await _loadDivisions();
 
       if (!mounted) return;
@@ -112,6 +133,16 @@ class _AreaManagementState extends State<AreaManagement> with SingleTickerProvid
       final divRef = fs.collection('divisions').doc(name);
       final areasSnap = await fs.collection('areas').where('division', isEqualTo: name).get();
 
+      // ✅ 계측: areas read for cascade
+      try {
+        await UsageReporter.instance.report(
+          area: name,
+          action: 'read',
+          n: areasSnap.docs.length,
+          source: 'AreaManagement._deleteDivision.areas.queryForCascade',
+        );
+      } catch (_) {}
+
       // 대량 삭제 원자성/성능: WriteBatch로 청크 커밋
       WriteBatch batch = fs.batch();
       int ops = 0;
@@ -122,14 +153,32 @@ class _AreaManagementState extends State<AreaManagement> with SingleTickerProvid
       for (final doc in areasSnap.docs) {
         batch.delete(doc.reference);
         ops++;
-        if (ops >= 450) { // 500 제한 여유 버퍼
+        if (ops >= 450) {
           await batch.commit();
+          // ✅ 계측: 중간 커밋 delete ops
+          try {
+            await UsageReporter.instance.report(
+              area: name,
+              action: 'delete',
+              n: ops,
+              source: 'AreaManagement._deleteDivision.batch.commit.partial',
+            );
+          } catch (_) {}
           batch = fs.batch();
           ops = 0;
         }
       }
       if (ops > 0) {
         await batch.commit();
+        // ✅ 계측: 마지막 커밋 delete ops
+        try {
+          await UsageReporter.instance.report(
+            area: name,
+            action: 'delete',
+            n: ops,
+            source: 'AreaManagement._deleteDivision.batch.commit.final',
+          );
+        } catch (_) {}
       }
 
       await _loadDivisions();
@@ -159,7 +208,6 @@ class _AreaManagementState extends State<AreaManagement> with SingleTickerProvid
       }
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -214,10 +262,8 @@ class _AreaManagementState extends State<AreaManagement> with SingleTickerProvid
       body: Stack(
         children: [
           body,
-          if (_isDeletingDivision)
-            ModalBarrier(color: Colors.black26, dismissible: false),
-          if (_isDeletingDivision)
-            const Center(child: CircularProgressIndicator()),
+          if (_isDeletingDivision) ModalBarrier(color: Colors.black26, dismissible: false),
+          if (_isDeletingDivision) const Center(child: CircularProgressIndicator()),
           if (_isDeletingDivision && _deletingDivisionName != null)
             Positioned(
               bottom: 24,

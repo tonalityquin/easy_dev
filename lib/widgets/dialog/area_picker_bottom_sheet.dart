@@ -8,11 +8,13 @@ import '../../states/area/area_state.dart';
 import '../../states/plate/plate_state.dart';
 import '../../states/user/user_state.dart';
 
+import '../../utils/usage_reporter.dart';
+
 // ── Deep Blue Palette
 const base = Color(0xFF0D47A1); // primary
 const dark = Color(0xFF09367D); // 강조 텍스트/아이콘
 const light = Color(0xFF5472D3); // 톤 변형/보더
-const fg   = Color(0xFFFFFFFF);  // onPrimary
+const fg = Color(0xFFFFFFFF); // onPrimary
 
 void areaPickerBottomSheet({
   required BuildContext context,
@@ -30,14 +32,13 @@ void areaPickerBottomSheet({
   // pop 이후 push 시 안전하게 쓰기 위한 루트 컨텍스트
   final rootContext = context;
 
-  String tempSelected = areaState.currentArea.isNotEmpty
-      ? areaState.currentArea
-      : userAreas.first;
+  String tempSelected = areaState.currentArea.isNotEmpty ? areaState.currentArea : userAreas.first;
 
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    useSafeArea: true, // ⬅️ 최상단까지 확장
+    useSafeArea: true,
+    // ⬅️ 최상단까지 확장
     backgroundColor: Colors.transparent,
     builder: (modalCtx) {
       return FractionallySizedBox(
@@ -89,9 +90,7 @@ void areaPickerBottomSheet({
                     Expanded(
                       child: CupertinoPicker(
                         scrollController: FixedExtentScrollController(
-                          initialItem: userAreas.contains(tempSelected)
-                              ? userAreas.indexOf(tempSelected)
-                              : 0,
+                          initialItem: userAreas.contains(tempSelected) ? userAreas.indexOf(tempSelected) : 0,
                         ),
                         itemExtent: 48,
                         magnification: 1.05,
@@ -102,15 +101,15 @@ void areaPickerBottomSheet({
                         },
                         children: userAreas
                             .map((area) => Center(
-                          child: Text(
-                            area,
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black87,
-                            ),
-                          ),
-                        ))
+                                  child: Text(
+                                    area,
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                ))
                             .toList(),
                       ),
                     ),
@@ -142,29 +141,39 @@ void areaPickerBottomSheet({
                           await userState.areaPickerCurrentArea(tempSelected);
                           plateState.syncWithAreaState();
 
-                          final userDivision =
-                              userState.user?.divisions.first ?? '';
-                          final areaDoc = await FirebaseFirestore.instance
-                              .collection('areas')
-                              .doc('$userDivision-$tempSelected')
-                              .get();
+                          final userDivision = userState.user?.divisions.first ?? '';
+                          try {
+                            final areaDoc = await FirebaseFirestore.instance
+                                .collection('areas')
+                                .doc('$userDivision-$tempSelected')
+                                .get();
 
-                          final data = areaDoc.data();
-                          final isHeadquarter =
-                              data != null && data['isHeadquarter'] == true;
+                            // 🔎 UsageReporter: Firestore READ 1건 계측
+                            UsageReporter.instance.report(
+                              area: tempSelected,
+                              action: 'read',
+                              n: 1,
+                              source: 'AreaPickerBottomSheet.getAreaDoc',
+                            );
 
-                          debugPrint('📌 선택된 지역: $tempSelected');
-                          debugPrint('📌 조회된 문서 ID: ${areaDoc.id}');
-                          debugPrint('📌 isHeadquarter 필드: ${data?['isHeadquarter']}');
+                            final data = areaDoc.data();
+                            final isHeadquarter = data != null && data['isHeadquarter'] == true;
 
-                          if (!rootContext.mounted) return;
+                            debugPrint('📌 선택된 지역: $tempSelected');
+                            debugPrint('📌 조회된 문서 ID: ${areaDoc.id}');
+                            debugPrint('📌 isHeadquarter 필드: ${data?['isHeadquarter']}');
 
-                          if (isHeadquarter) {
-                            Navigator.pushReplacementNamed(
-                                rootContext, AppRoutes.headquarterPage);
-                          } else {
-                            Navigator.pushReplacementNamed(
-                                rootContext, AppRoutes.typePage);
+                            if (!rootContext.mounted) return;
+
+                            if (isHeadquarter) {
+                              Navigator.pushReplacementNamed(rootContext, AppRoutes.headquarterPage);
+                            } else {
+                              Navigator.pushReplacementNamed(rootContext, AppRoutes.typePage);
+                            }
+                          } catch (e, st) {
+                            // (읽기 실패 시에도 READ 시도 자체는 1건으로 간주할 수 있으나,
+                            // 실패 시점에 중복 계측을 피하기 위해 위에서만 기록)
+                            debugPrint('❌ areas 문서 조회 실패: $e\n$st');
                           }
                         },
                       ),

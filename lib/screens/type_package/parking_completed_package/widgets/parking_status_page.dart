@@ -6,6 +6,12 @@ import 'package:provider/provider.dart';
 import '../../../../states/location/location_state.dart';
 import '../../../../states/area/area_state.dart';
 
+// ✅ UsageReporter: "파이어베이스가 발생하는 로직만" 계측 (읽기/쓰기/삭제 중 '읽기'만 사용)
+import '../../../../utils/usage_reporter.dart';
+
+/// 주차 현황 페이지
+/// - Firestore Aggregate COUNT 1회 수행 (parking_completed 문서 수)
+/// - ✅ 계측은 Firestore 작업(읽기) 시점에만 수행
 class ParkingStatusPage extends StatefulWidget {
   final bool isLocked;
 
@@ -18,32 +24,58 @@ class ParkingStatusPage extends StatefulWidget {
 class _ParkingStatusPageState extends State<ParkingStatusPage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  int _occupiedCount = 0;     // 영역 전체의 주차 완료 총합
+  int _occupiedCount = 0;      // 영역 전체의 주차 완료 총합
   bool _isCountLoading = true; // 총합 집계 로딩 상태
 
   @override
   void initState() {
     super.initState();
-    // ⚠️ 위치별 카운트 갱신(비용 L회) 호출 제거
-    // ✅ 영역별 총합 1회 집계만 수행
+
+    // 첫 프레임 이후 영역 읽고 Firestore 집계 1회 수행
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+
       final area = context.read<AreaState>().currentArea.trim();
 
       try {
-        final snap = await _firestore
+        final aggQuery = _firestore
             .collection('plates')
             .where('area', isEqualTo: area)
             .where('type', isEqualTo: 'parking_completed')
-            .count()
-            .get();
+            .count();
+
+        final snap = await aggQuery.get();
+        final cnt = (snap.count ?? 0);
+
+        // ✅ 계측: Firestore READ (aggregate count)
+        try {
+          await UsageReporter.instance.report(
+            area: area,
+            action: 'read', // 읽기
+            n: cnt,
+            source: 'parkingStatus.count.query(parking_completed).aggregate',
+          );
+        } catch (_) {
+          // 계측 실패는 UX에 영향 없음
+        }
 
         if (!mounted) return;
         setState(() {
-          _occupiedCount = (snap.count ?? 0);
+          _occupiedCount = cnt;
           _isCountLoading = false;
         });
       } catch (e) {
-        // 실패 시 0으로 표기하고 넘어감(로깅은 필요 시 추가)
+        // ✅ 계측: Firestore READ 실패도 읽기 시도로 기록(n=0)
+        try {
+          await UsageReporter.instance.report(
+            area: area,
+            action: 'read',
+            n: 0,
+            source:
+            'parkingStatus.count.query(parking_completed).aggregate.error',
+          );
+        } catch (_) {}
+
         if (!mounted) return;
         setState(() {
           _occupiedCount = 0;
@@ -66,12 +98,15 @@ class _ParkingStatusPageState extends State<ParkingStatusPage> {
                 return const Center(child: CircularProgressIndicator());
               }
 
-              // capacity 합계는 기존처럼 로컬에 있는 locations로 계산
-              final totalCapacity = locationState.locations.fold<int>(0, (sum, l) => sum + l.capacity);
+              // capacity 합계는 로컬 state로 계산
+              final totalCapacity = locationState.locations
+                  .fold<int>(0, (sum, l) => sum + l.capacity);
               final occupiedCount = _occupiedCount;
 
-              final double usageRatio = totalCapacity == 0 ? 0 : occupiedCount / totalCapacity;
-              final String usagePercent = (usageRatio * 100).toStringAsFixed(1);
+              final double usageRatio =
+              totalCapacity == 0 ? 0 : occupiedCount / totalCapacity;
+              final String usagePercent =
+              (usageRatio * 100).toStringAsFixed(1);
 
               return ListView(
                 padding: const EdgeInsets.all(20),
@@ -99,7 +134,8 @@ class _ParkingStatusPageState extends State<ParkingStatusPage> {
                   const SizedBox(height: 12),
                   Text(
                     '$usagePercent% 사용 중',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.w600),
                     textAlign: TextAlign.center,
                   ),
                 ],

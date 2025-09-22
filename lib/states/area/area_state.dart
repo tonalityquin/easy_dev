@@ -1,22 +1,13 @@
 // lib/states/area/area_state.dart
 //
-// - Firestore 'areas' 컬렉션에서 name, division, capabilities 를 읽어
-//   현재 지역(currentArea/currentDivision)과 지역별 Capability 를 관리합니다.
-// - FlutterForegroundTask 로 currentArea 를 전달합니다.
-// - capabilitiesOfCurrentArea 게터 추가: UI/가드에서 바로 사용.
-//
-// 참고: Firestore 문서 스키마 예시
-//   areas/{docId} = {
-//     name: "강남A",
-//     division: "seoul",
-//     capabilities: ["monthly","tablet","bill"] // 또는 {monthly: true, tablet: false} 등
-//   }
-//
+// Firestore 읽기 동작만 UsageReporter로 계측합니다 (action='read').
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../../models/capability.dart';
+import '../../utils/usage_reporter.dart'; // ← 프로젝트 경로에 맞게 유지
 
 enum AreaType {
   dev;
@@ -55,6 +46,29 @@ class AreaState with ChangeNotifier {
 
   AreaState();
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // UsageReporter 헬퍼 (파이어베이스 동작만 계측: 이 파일은 모두 READ)
+  // ───────────────────────────────────────────────────────────────────────────
+  void _reportRead(String source, {String? area, int n = 1}) {
+    try {
+      final a = (area?.trim().isNotEmpty ?? false)
+          ? area!.trim()
+          : (_currentArea.isNotEmpty ? _currentArea : '(unspecified)');
+
+      // ✅ report 는 이름있는 매개변수만 받습니다.
+      //    required: area, action / optional: n, source (프로젝트 정의에 따라 다를 수 있음)
+      UsageReporter.instance.report(
+        area: a,
+        action: 'read',
+        n: n,
+        source: source,
+      );
+    } catch (e) {
+      // 계측 실패는 앱 흐름에 영향 주지 않음
+      debugPrint('UsageReporter(read) error: $e');
+    }
+  }
+
   /// ✅ 공통: 현재 설정된 _currentArea를 FG(Service)에 통지
   void _notifyForegroundWithArea() {
     if (_currentArea.isNotEmpty) {
@@ -66,14 +80,15 @@ class AreaState with ChangeNotifier {
   }
 
   /// Firestore 문서 데이터(Map)에서 division/capabilities 파싱 후 상태 반영
-  void _applyDocDataToState(Map<String, dynamic>? data,
-      {required String areaName}) {
+  void _applyDocDataToState(
+      Map<String, dynamic>? data, {
+        required String areaName,
+      }) {
     final divisionRaw = data?['division'] as String?;
     final capsRaw = data?['capabilities'];
 
     _currentArea = areaName;
-    _currentDivision =
-    (divisionRaw != null && divisionRaw.trim().isNotEmpty)
+    _currentDivision = (divisionRaw != null && divisionRaw.trim().isNotEmpty)
         ? divisionRaw.trim()
         : 'default';
 
@@ -89,10 +104,15 @@ class AreaState with ChangeNotifier {
 
   Future<void> loadAreasForDivision(String userDivision) async {
     try {
-      final snapshot = await _firestore
+      final q = _firestore
           .collection('areas')
-          .where('division', isEqualTo: userDivision)
-          .get();
+          .where('division', isEqualTo: userDivision);
+
+      final snapshot = await q.get();
+
+      // 🔎 READ 계측
+      _reportRead('AreaState.loadAreasForDivision.areas.get',
+          area: 'division:$userDivision');
 
       _divisionAreaMap.clear();
 
@@ -120,19 +140,25 @@ class AreaState with ChangeNotifier {
 
   Future<void> initializeArea(String userArea) async {
     try {
-      final snapshot = await _firestore
+      final q = _firestore
           .collection('areas')
           .where('name', isEqualTo: userArea)
-          .limit(1)
-          .get();
+          .limit(1);
+
+      final snapshot = await q.get();
+
+      // 🔎 READ 계측
+      _reportRead('AreaState.initializeArea.areas.get', area: userArea);
 
       if (snapshot.docs.isNotEmpty) {
         final data = snapshot.docs.first.data() as Map<String, dynamic>?;
         _applyDocDataToState(data, areaName: userArea);
 
         notifyListeners();
-        debugPrint('✅ 사용자 지역 초기화 완료 → $_currentArea / $_currentDivision'
-            ' / caps: ${Cap.human(capabilitiesOfCurrentArea)}');
+        debugPrint(
+          '✅ 사용자 지역 초기화 완료 → $_currentArea / $_currentDivision'
+              ' / caps: ${Cap.human(capabilitiesOfCurrentArea)}',
+        );
 
         // ✅ FG에도 반드시 통지
         _notifyForegroundWithArea();
@@ -158,8 +184,7 @@ class AreaState with ChangeNotifier {
     await _updateAreaCommon(newArea, isSyncing: isSyncing);
   }
 
-  Future<void> _updateAreaCommon(String newArea,
-      {required bool isSyncing}) async {
+  Future<void> _updateAreaCommon(String newArea, {required bool isSyncing}) async {
     if (_isLocked && !isSyncing) {
       debugPrint('⛔ currentArea는 보호 중 → 변경 무시됨 (입력: $newArea)');
       return;
@@ -171,11 +196,15 @@ class AreaState with ChangeNotifier {
     }
 
     try {
-      final snapshot = await _firestore
+      final q = _firestore
           .collection('areas')
           .where('name', isEqualTo: newArea)
-          .limit(1)
-          .get();
+          .limit(1);
+
+      final snapshot = await q.get();
+
+      // 🔎 READ 계측
+      _reportRead('AreaState.updateArea.areas.get', area: newArea);
 
       if (snapshot.docs.isNotEmpty) {
         final data = snapshot.docs.first.data() as Map<String, dynamic>?;

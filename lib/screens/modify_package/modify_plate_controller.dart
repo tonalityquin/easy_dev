@@ -16,6 +16,8 @@ import '../../utils/snackbar_helper.dart';
 import 'utils/modify_plate_service.dart';
 
 import '../../repositories/plate_repo_services/firestore_plate_repository.dart';
+// ✅ UsageReporter 계측
+import '../../utils/usage_reporter.dart';
 
 class ModifyPlateController {
   final BuildContext context;
@@ -209,6 +211,16 @@ class ModifyPlateController {
 
     try {
       await _plateRepo.deletePlateStatus(plateNumber, area);
+      // ✅ 계측: plate_status 삭제 1회
+      try {
+        await UsageReporter.instance.report(
+          area: area.isEmpty ? 'unknown' : area,
+          action: 'delete',
+          n: 1,
+          source:
+          'ModifyPlateController.deleteCustomStatusFromFirestore/_plateRepo.deletePlateStatus',
+        );
+      } catch (_) {}
       fetchedCustomStatus = null;
     } catch (e) {
       debugPrint('❌ customStatus 삭제 실패: $e');
@@ -216,7 +228,10 @@ class ModifyPlateController {
     }
   }
 
-  Future<void> handleAction(VoidCallback onSuccess, List<String> selectedStatuses) async {
+  Future<void> handleAction(
+      VoidCallback onSuccess,
+      List<String> selectedStatuses,
+      ) async {
     final billState = context.read<BillState>();
     final allBills = [...billState.generalBills, ...billState.regularBills];
 
@@ -251,9 +266,13 @@ class ModifyPlateController {
     final newBillingType = selectedBill;
     final updatedCustomStatus = customStatusController.text.trim();
 
+    // area 미리 확보(계측에 사용)
+    final area = context.read<AreaState>().currentArea;
 
+    // (Storage 업로드 — 계측대상 아님)
     final mergedImageUrls = await service.uploadAndMergeImages(plateNumber);
 
+    // plates 문서 업데이트 (ModifyPlateService 내부 write 1회 가정)
     final success = await service.updatePlateInfo(
       plateNumber: plateNumber,
       imageUrls: mergedImageUrls,
@@ -262,9 +281,17 @@ class ModifyPlateController {
     );
 
     if (success) {
-      final area = context.read<AreaState>().currentArea;
+      // ✅ 계측: plates 업데이트(write) 1회
+      try {
+        await UsageReporter.instance.report(
+          area: area.isEmpty ? 'unknown' : area,
+          action: 'write',
+          n: 1,
+          source: 'ModifyPlateController.handleAction/updatePlateInfo',
+        );
+      } catch (_) {}
 
-
+      // plate_status upsert (write 1회)
       await _plateRepo.setPlateStatus(
         plateNumber: plateNumber,
         area: area,
@@ -272,12 +299,33 @@ class ModifyPlateController {
         statusList: selectedStatuses,
         createdBy: 'devAdmin020',
       );
+      // ✅ 계측: plate_status write 1회
+      try {
+        await UsageReporter.instance.report(
+          area: area.isEmpty ? 'unknown' : area,
+          action: 'write',
+          n: 1,
+          source: 'ModifyPlateController.handleAction/setPlateStatus',
+        );
+      } catch (_) {}
 
-
-      await FirebaseFirestore.instance.collection('plates').doc(plate.id).update({
+      // plates 문서 추가 업데이트(write 1회)
+      await FirebaseFirestore.instance
+          .collection('plates')
+          .doc(plate.id)
+          .update({
         'customStatus': updatedCustomStatus,
         'statusList': selectedStatuses,
       });
+      // ✅ 계측: plates write 1회
+      try {
+        await UsageReporter.instance.report(
+          area: area.isEmpty ? 'unknown' : area,
+          action: 'write',
+          n: 1,
+          source: 'ModifyPlateController.handleAction/plates.doc.update',
+        );
+      } catch (_) {}
 
       final updatedPlate = plate.copyWith(
         billingType: newBillingType,
@@ -301,15 +349,14 @@ class ModifyPlateController {
         collection: collectionKey,
         plateNumber: plateNumber,
         userName: plate.userName,
-        onError: (error) async {
-        },
+        onError: (error) async {},
       );
 
       await plateState.updatePlateLocally(collectionKey, updatedPlate);
 
-
       onSuccess();
     } else {
+      // 실패 시 UI만 처리(계측 없음)
     }
   }
 

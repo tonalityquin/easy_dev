@@ -6,6 +6,8 @@ import 'location_repository.dart';
 import 'location_read_service.dart';
 import 'location_write_service.dart';
 import 'location_count_service.dart';
+// ✅ UsageReporter: 파이어베이스(읽기/쓰기/삭제) 발생 지점만 계측
+import '../../utils/usage_reporter.dart';
 
 class FirestoreLocationRepository implements LocationRepository {
   final LocationReadService _readService = LocationReadService();
@@ -31,26 +33,57 @@ class FirestoreLocationRepository implements LocationRepository {
 
   @override
   Future<void> addCompositeLocation(
-    String parent,
-    List<Map<String, dynamic>> subs,
-    String area,
-  ) {
+      String parent,
+      List<Map<String, dynamic>> subs,
+      String area,
+      ) {
     return _writeService.addCompositeLocation(parent, subs, area);
   }
 
-  // 집계 캐시 문서 1회 읽기
+  // 집계 캐시 문서 1회 읽기 (+ UsageReporter: READ 계측)
   Future<Map<String, int>> _getCachedCounts({
     required String area,
     required String type,
   }) async {
-    final doc = await _firestore.collection('areas').doc(area).collection('locationCounts').doc(type).get();
+    final docRef =
+    _firestore.collection('areas').doc(area).collection('locationCounts').doc(type);
 
-    if (!doc.exists) return {};
-    final data = doc.data();
-    if (data == null) return {};
+    try {
+      final doc = await docRef.get();
 
-    final raw = Map<String, dynamic>.from(data['counts'] ?? {});
-    return raw.map((k, v) => MapEntry(k, (v as num).toInt()));
+      // ✅ 계측: READ (성공 시)
+      try {
+        final data = doc.data();
+        final raw = (data == null) ? const <String, dynamic>{} : (Map<String, dynamic>.from(data['counts'] ?? {}));
+        await UsageReporter.instance.report(
+          area: area,
+          action: 'read',
+          n: raw.length, // 읽어온 카운트 키 개수
+          source: 'FirestoreLocationRepository._getCachedCounts.areas/$area/locationCounts/$type.get',
+        );
+      } catch (_) {
+        // 계측 실패는 무시
+      }
+
+      if (!doc.exists) return {};
+      final data = doc.data();
+      if (data == null) return {};
+
+      final raw = Map<String, dynamic>.from(data['counts'] ?? {});
+      return raw.map((k, v) => MapEntry(k, (v as num).toInt()));
+    } catch (e) {
+      // ✅ 계측: READ (오류 시도)
+      try {
+        await UsageReporter.instance.report(
+          area: area,
+          action: 'read',
+          n: 0,
+          source:
+          'FirestoreLocationRepository._getCachedCounts.areas/$area/locationCounts/$type.get.error',
+        );
+      } catch (_) {}
+      return {};
+    }
   }
 
   @override

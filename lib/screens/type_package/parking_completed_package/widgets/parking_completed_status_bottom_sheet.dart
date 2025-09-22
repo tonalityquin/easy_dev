@@ -1,3 +1,4 @@
+// lib/screens/type_pages/parking_completed_pages/parking_completed_control_buttons.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -10,12 +11,14 @@ import '../../../../states/plate/movement_plate.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../../enums/plate_type.dart';
 
-// 추가된 의존성
 import '../../../../repositories/plate_repo_services/plate_repository.dart';
 import '../../../../states/plate/plate_state.dart';
 import '../../../../utils/snackbar_helper.dart';
 import '../../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
 import '../../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
+
+// ✅ Firebase 작업만 계측
+import '../../../../utils/usage_reporter.dart';
 
 Future<void> showParkingCompletedStatusBottomSheet({
   required BuildContext context,
@@ -33,7 +36,7 @@ Future<void> showParkingCompletedStatusBottomSheet({
     useSafeArea: true,
     backgroundColor: Colors.transparent,
     builder: (_) => FractionallySizedBox(
-      heightFactor: 1, // ✅ 최상단까지
+      heightFactor: 1, // 최상단까지
       child: _FullHeightSheet(
         plate: plate,
         plateNumber: plateNumber,
@@ -66,7 +69,7 @@ class _FullHeightSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      top: false, // ✅ 상단까지 차오르게
+      top: false,
       child: Container(
         decoration: const BoxDecoration(
           color: Colors.white,
@@ -75,7 +78,7 @@ class _FullHeightSheet extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         child: ListView(
           children: [
-            // 그립바
+            // grip
             Center(
               child: Container(
                 width: 40,
@@ -146,7 +149,17 @@ class _FullHeightSheet extends StatelessWidget {
 
                 try {
                   await repo.addOrUpdatePlate(plate.id, updatedPlate);
-                  await plateState.updatePlateLocally(PlateType.parkingCompleted, updatedPlate);
+                  _reportDbSafe(
+                    area: plate.area,
+                    action: 'write',
+                    source: 'parkingCompletedStatus.prebill.repo.addOrUpdatePlate',
+                    n: 1,
+                  );
+
+                  await plateState.updatePlateLocally(
+                    PlateType.parkingCompleted,
+                    updatedPlate,
+                  );
 
                   final log = {
                     'action': '사전 정산',
@@ -160,6 +173,13 @@ class _FullHeightSheet extends StatelessWidget {
                   await firestore.collection('plates').doc(plate.id).update({
                     'logs': FieldValue.arrayUnion([log])
                   });
+                  _reportDbSafe(
+                    area: plate.area,
+                    action: 'write',
+                    source:
+                    'parkingCompletedStatus.prebill.plates.update.logs.arrayUnion',
+                    n: 1,
+                  );
 
                   if (!context.mounted) return;
                   showSuccessSnackbar(
@@ -216,7 +236,18 @@ class _FullHeightSheet extends StatelessWidget {
 
                 try {
                   await repo.addOrUpdatePlate(plate.id, updatedPlate);
-                  await plateState.updatePlateLocally(PlateType.parkingCompleted, updatedPlate);
+                  _reportDbSafe(
+                    area: plate.area,
+                    action: 'write',
+                    source:
+                    'parkingCompletedStatus.unlock.repo.addOrUpdatePlate',
+                    n: 1,
+                  );
+
+                  await plateState.updatePlateLocally(
+                    PlateType.parkingCompleted,
+                    updatedPlate,
+                  );
 
                   final cancelLog = {
                     'action': '사전 정산 취소',
@@ -226,6 +257,13 @@ class _FullHeightSheet extends StatelessWidget {
                   await firestore.collection('plates').doc(plate.id).update({
                     'logs': FieldValue.arrayUnion([cancelLog])
                   });
+                  _reportDbSafe(
+                    area: plate.area,
+                    action: 'write',
+                    source:
+                    'parkingCompletedStatus.unlock.plates.update.logs.arrayUnion',
+                    n: 1,
+                  );
 
                   if (!context.mounted) return;
                   showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
@@ -249,12 +287,13 @@ class _FullHeightSheet extends StatelessWidget {
             const SizedBox(height: 24),
 
             // =========================
-            // 기존 액션들
+            // 기존 액션들 (Firebase는 내부/다른 모듈에서 수행)
             // =========================
             ElevatedButton.icon(
               icon: const Icon(Icons.exit_to_app),
               label: const Text("출차 요청으로 이동"),
               onPressed: () async {
+                // ⚠️ Firestore 작업은 MovementPlate 내부에서 수행/계측
                 final movementPlate = context.read<MovementPlate>();
                 final performedBy = context.read<UserState>().name;
 
@@ -344,6 +383,7 @@ class _FullHeightSheet extends StatelessWidget {
               icon: const Icon(Icons.assignment_return),
               label: const Text("입차 요청으로 되돌리기"),
               onPressed: () async {
+                // ⚠️ Firestore 작업은 MovementPlate 내부에서 수행/계측
                 final movementPlate = context.read<MovementPlate>();
                 final performedBy = context.read<UserState>().name;
 
@@ -374,6 +414,7 @@ class _FullHeightSheet extends StatelessWidget {
               icon: const Icon(Icons.delete_forever, color: Colors.red),
               label: const Text("삭제", style: TextStyle(color: Colors.red)),
               onPressed: () {
+                // ⚠️ 실제 삭제 Firestore 작업은 onDelete(상위/별도 모듈)에서 수행/계측
                 Navigator.pop(context);
                 onDelete();
               },
@@ -385,7 +426,31 @@ class _FullHeightSheet extends StatelessWidget {
   }
 }
 
-Future<void> handleEntryParkingRequest(BuildContext context, String plateNumber, String area) async {
+/// UsageReporter: 파이어베이스 DB 작업만 계측 (read / write / delete)
+void _reportDbSafe({
+  required String area,
+  required String action, // 'read' | 'write' | 'delete'
+  required String source,
+  int n = 1,
+}) {
+  try {
+    UsageReporter.instance.report(
+      area: area.trim(),
+      action: action,
+      n: n,
+      source: source,
+    );
+  } catch (_) {
+    // no-op
+  }
+}
+
+Future<void> handleEntryParkingRequest(
+    BuildContext context,
+    String plateNumber,
+    String area,
+    ) async {
+  // ⚠️ Firestore 작업은 MovementPlate 내부에서 수행/계측
   final movementPlate = context.read<MovementPlate>();
   final performedBy = context.read<UserState>().name;
 

@@ -6,25 +6,50 @@ import '../../../../states/user/user_state.dart';
 import 'chat_panel.dart';
 import '../../../../utils/snackbar_helper.dart';
 
+// ✅ UsageReporter: 파이어베이스 사용량 계측(이 파일에서는 READ만 발생)
+import '../../../../utils/usage_reporter.dart';
+
 /// Firestore 경로 참조 헬퍼: 최근 메시지 도큐먼트
 DocumentReference<Map<String, dynamic>> latestMessageRef(String roomId) =>
-    FirebaseFirestore.instance.collection('chats').doc(roomId).collection('state').doc('latest_message');
+    FirebaseFirestore.instance
+        .collection('chats')
+        .doc(roomId)
+        .collection('state')
+        .doc('latest_message');
 
 /// 최근 메시지를 스트림으로 노출
-/// - 동일 문자열 반복 방지 위해 .distinct() 추가
-/// - 메타데이터 변화까지 필요 없으면 기본 스냅샷 사용
-Stream<String> latestMessageStream(String roomId) {
-  return latestMessageRef(roomId)
-      .snapshots() // includeMetadataChanges: false (기본)
-      .map((snapshot) {
+/// - Firestore READ 계측: 스냅샷 수신마다 1회
+/// - 동일 문자열 반복 방지
+Stream<String> latestMessageStream(String roomId) async* {
+  final ref = latestMessageRef(roomId);
+
+  String? lastEmitted;
+  await for (final snapshot in ref.snapshots()) {
+    // 🔎 UsageReporter: Firestore READ 1건 계측
+    try {
+      await UsageReporter.instance.report(
+        area: roomId,
+        action: 'read', // READ
+        n: 1,
+        source: 'chat.latest_message.snapshots',
+      );
+    } catch (_) {
+      // 계측 실패는 기능에 영향 주지 않음
+    }
+
     final data = snapshot.data();
-    if (data == null) return '';
-    final msg = data['message'];
-    return (msg is String) ? msg : '';
-  }).distinct();
+    final msg = (data == null) ? '' : (data['message'] is String ? data['message'] as String : '');
+
+    // distinct() 동작을 수동 구현
+    if (msg != lastEmitted) {
+      lastEmitted = msg;
+      yield msg;
+    }
+  }
 }
 
 /// 구역 채팅 바텀시트 열기
+/// (⚠️ 이 함수에서는 Firestore 작업이 없으므로 UsageReporter 계측 없음)
 void chatBottomSheet(BuildContext context) {
   final currentUser = context.read<UserState>().user;
   final String? roomId = currentUser?.currentArea?.trim();
@@ -37,8 +62,7 @@ void chatBottomSheet(BuildContext context) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    useSafeArea: false,
-    // 내부에서 SafeArea 처리
+    useSafeArea: false, // 내부에서 SafeArea 처리
     backgroundColor: Colors.transparent,
     elevation: 0,
     barrierColor: Colors.black.withOpacity(0.25),
@@ -153,7 +177,7 @@ class ChatOpenButton extends StatelessWidget {
   Widget build(BuildContext context) {
     // currentArea 변경 시 자동으로 리빌드되도록 select 사용
     final roomId = context.select<UserState, String?>(
-      (s) => s.user?.currentArea?.trim(),
+          (s) => s.user?.currentArea?.trim(),
     );
 
     if (roomId == null || roomId.isEmpty) {
@@ -197,8 +221,7 @@ class ChatOpenButton extends StatelessWidget {
           onPressed: () => chatBottomSheet(context),
           style: ElevatedButton.styleFrom(
             elevation: 0,
-            backgroundColor: Colors.white,
-            // ✅ 버튼 배경도 흰색
+            backgroundColor: Colors.white, // ✅ 버튼 배경도 흰색
             foregroundColor: Colors.black87,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             shape: RoundedRectangleBorder(

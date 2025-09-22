@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
+// ✅ 사용량 계측
+import 'package:easydev/utils/usage_reporter.dart';
+
 String _formatAnyDate(dynamic v) {
   if (v == null) return '시간 정보 없음';
   if (v is Timestamp) return DateFormat('yyyy-MM-dd HH:mm:ss').format(v.toDate());
@@ -46,12 +49,32 @@ Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
     String area,
     ) async {
   final docId = '${plateNumber}_$area';
-  final docSnapshot = await FirebaseFirestore.instance
-      .collection('plate_status')
-      .doc(docId)
-      .get();
 
-  if (!docSnapshot.exists) return null;
+  DocumentSnapshot<Map<String, dynamic>>? docSnapshot;
+  try {
+    docSnapshot = await FirebaseFirestore.instance
+        .collection('plate_status')
+        .doc(docId)
+        .get();
+  } on FirebaseException catch (e) {
+    // 필요 시 로깅/스낵바 등 추가 가능
+    debugPrint('[inputCustomStatusBottomSheet] FirebaseException: ${e.code} ${e.message}');
+    // 아래 finally에서 read 1회 보고는 그대로 수행됨
+    docSnapshot = null;
+  } catch (e) {
+    debugPrint('[inputCustomStatusBottomSheet] error: $e');
+    docSnapshot = null;
+  } finally {
+    // ✅ Firestore read 1회 계측 (성공/실패 무관)
+    await UsageReporter.instance.report(
+      area: (area.isEmpty ? 'unknown' : area),
+      action: 'read',
+      n: 1,
+      source: 'inputCustomStatusBottomSheet/plate_status.doc.get',
+    );
+  }
+
+  if (docSnapshot == null || !docSnapshot.exists) return null;
 
   final data = docSnapshot.data() ?? {};
 
@@ -172,7 +195,10 @@ Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
                     children: statusList
                         .map(
                           (s) => Chip(
-                        label: Text(s, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                        label: Text(
+                          s,
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                        ),
                         backgroundColor: Colors.orange.withOpacity(0.15),
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       ),
@@ -219,8 +245,10 @@ Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: ListTile(
-                        title: Text('금액: ${amount ?? '-'}',
-                            style: const TextStyle(fontWeight: FontWeight.w600)),
+                        title: Text(
+                          '금액: ${amount ?? '-'}',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [

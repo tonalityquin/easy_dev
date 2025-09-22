@@ -11,6 +11,8 @@ import '../../../../utils/snackbar_helper.dart';
 import '../../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
 import '../../../log_package/log_viewer_bottom_sheet.dart';
 import '../../../modify_package/modify_plate_screen.dart';
+// ✅ UsageReporter 계측 (파이어베이스 접근 지점만)
+import '../../../../utils/usage_reporter.dart';
 
 Future<void> showDepartureCompletedStatusBottomSheet({
   required BuildContext context,
@@ -73,7 +75,7 @@ Future<void> showDepartureCompletedStatusBottomSheet({
                     const SizedBox(height: 24),
 
                     // =========================
-                    // [추가] 정산(사전 정산) 버튼
+                    // 정산(사전 정산)
                     // =========================
                     ElevatedButton.icon(
                       icon: const Icon(Icons.receipt_long),
@@ -84,7 +86,7 @@ Future<void> showDepartureCompletedStatusBottomSheet({
                         final plateState = rootContext.read<PlateState>();
                         final firestore = FirebaseFirestore.instance;
 
-                        // 사전 조건: 정산 타입 확인
+                        // 사전 조건: 정산 타입 확인 (Firebase 아님 → 계측 제외)
                         final billingType = (plate.billingType ?? '').trim();
                         if (billingType.isEmpty) {
                           showFailedSnackbar(rootContext, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
@@ -95,7 +97,7 @@ Future<void> showDepartureCompletedStatusBottomSheet({
                         final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
                         final entryTime = plate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
 
-                        // 정산 바텀시트 호출 → 사용자 선택 결과 수집
+                        // 정산 바텀시트 호출 (Firebase 아님 → 계측 제외)
                         final result = await showOnTapBillingBottomSheet(
                           context: rootContext,
                           entryTimeInSeconds: entryTime,
@@ -108,9 +110,11 @@ Future<void> showDepartureCompletedStatusBottomSheet({
                           regularAmount: plate.regularAmount,
                           regularDurationHours: plate.regularDurationHours,
                         );
-                        if (result == null) return;
+                        if (result == null) {
+                          return;
+                        }
 
-                        // Plate 업데이트(잠금/금액/결제수단)
+                        // Plate 업데이트용 데이터
                         final updatedPlate = plate.copyWith(
                           isLockedFee: true,
                           lockedAtTimeInSeconds: currentTime,
@@ -119,11 +123,20 @@ Future<void> showDepartureCompletedStatusBottomSheet({
                         );
 
                         try {
+                          // 🔵 Firestore write (레포지토리 경유)
                           await repo.addOrUpdatePlate(plate.id, updatedPlate);
-                          // 출차 완료 컬렉션에 맞게 로컬 상태 갱신
+                          // 계측: WRITE 1 (repo.addOrUpdatePlate)
+                          _reportDbSafe(
+                            area: area,
+                            action: 'write',
+                            source: 'departureCompleted.prebill.repo.addOrUpdatePlate',
+                            n: 1,
+                          );
+
+                          // 로컬 상태 갱신 (Firebase 아님 → 계측 제외)
                           await plateState.updatePlateLocally(PlateType.departureCompleted, updatedPlate);
 
-                          // 로그 기록
+                          // 🔵 Firestore write: logs 배열에 추가
                           final log = {
                             'action': '사전 정산',
                             'performedBy': userName,
@@ -131,14 +144,24 @@ Future<void> showDepartureCompletedStatusBottomSheet({
                             'lockedFee': result.lockedFee,
                             'paymentMethod': result.paymentMethod,
                             if (result.reason != null && result.reason!.trim().isNotEmpty)
-                              'reason': result.reason!.trim(), // ★ 사유 저장
+                              'reason': result.reason!.trim(),
                           };
                           await firestore.collection('plates').doc(plate.id).update({
                             'logs': FieldValue.arrayUnion([log])
                           });
+                          // 계측: WRITE 1 (plates.update logs arrayUnion)
+                          _reportDbSafe(
+                            area: area,
+                            action: 'write',
+                            source: 'departureCompleted.prebill.plates.update.logs.arrayUnion',
+                            n: 1,
+                          );
 
                           if (!rootContext.mounted) return;
-                          showSuccessSnackbar(rootContext, '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
+                          showSuccessSnackbar(
+                            rootContext,
+                            '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})',
+                          );
                         } catch (e) {
                           if (!rootContext.mounted) return;
                           showFailedSnackbar(rootContext, '사전 정산 중 오류가 발생했습니다: $e');
@@ -156,7 +179,7 @@ Future<void> showDepartureCompletedStatusBottomSheet({
 
                     const SizedBox(height: 12),
 
-                    // ===== 기존 버튼들 =====
+                    // ===== 정보 수정 (네비게이션만 — Firebase 아님)
                     ElevatedButton.icon(
                       icon: const Icon(Icons.edit_note_outlined),
                       label: const Text("정보 수정"),
@@ -189,6 +212,7 @@ Future<void> showDepartureCompletedStatusBottomSheet({
 
                     const SizedBox(height: 12),
 
+                    // ===== 로그 확인 (네비게이션만 — Firebase 아님)
                     ElevatedButton.icon(
                       icon: const Icon(Icons.history),
                       label: const Text("로그 확인"),
@@ -203,7 +227,7 @@ Future<void> showDepartureCompletedStatusBottomSheet({
                                 initialPlateNumber: plateNumber,
                                 division: division,
                                 area: area,
-                                requestTime: plate.requestTime, // 필요 타입이 DateTime이면 그대로 전달
+                                requestTime: plate.requestTime,
                               ),
                             ),
                           );
@@ -229,4 +253,23 @@ Future<void> showDepartureCompletedStatusBottomSheet({
       );
     },
   );
+}
+
+/// UsageReporter: 파이어베이스 DB 작업만 계측
+void _reportDbSafe({
+  required String area,
+  required String action, // 'read' | 'write' | 'delete' 등
+  required String source,
+  int n = 1,
+}) {
+  try {
+    UsageReporter.instance.report(
+      area: area,
+      action: action,
+      n: n,
+      source: source,
+    );
+  } catch (_) {
+    // 계측 실패는 기능에 영향 X
+  }
 }

@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../../states/user/user_state.dart';
 import 'monthly_management_package/monthly_plate_bottom_sheet.dart';
 import '../../../utils/snackbar_helper.dart'; // ✅ 커스텀 스낵바
+import '../../../utils/usage_reporter.dart'; // ✅ UsageReporter 계측
 
 /// 서비스 로그인 카드와 동일 팔레트(Deep Blue)
 class _SvcColors {
@@ -30,7 +31,7 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
 
   // ▼ 플로팅 버튼 위치/간격 조절
   static const double _fabBottomGap = 48.0; // 버튼을 화면 하단에서 띄우는 여백
-  static const double _fabSpacing = 10.0;   // 버튼 간 간격
+  static const double _fabSpacing = 10.0; // 버튼 간 간격
 
   void _scrollToCard(String docId) {
     final key = _cardKeys[docId];
@@ -69,10 +70,26 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
 
     // index 0: 수정
     try {
-      final snap = await FirebaseFirestore.instance
-          .collection('plate_status')
-          .doc(_selectedDocId!)
-          .get();
+      final docRef = FirebaseFirestore.instance.collection('plate_status').doc(_selectedDocId!);
+      final snap = await docRef.get();
+
+      // ✅ 계측: read 1회 (가능한 정확한 area로 보고)
+      try {
+        final data = snap.data();
+        final areaFromData = (data?['area'] as String?)?.trim();
+        final areaFromId = _inferAreaFromPlateStatusDocId(_selectedDocId!);
+        final area = (areaFromData?.isNotEmpty == true)
+            ? areaFromData!
+            : (areaFromId.isNotEmpty ? areaFromId : (context.read<UserState>().currentArea.trim().isNotEmpty
+            ? context.read<UserState>().currentArea.trim()
+            : 'unknown'));
+        await UsageReporter.instance.report(
+          area: area,
+          action: 'read',
+          n: 1,
+          source: 'MonthlyParkingManagement._handlePrimaryAction.docGet',
+        );
+      } catch (_) {}
 
       if (!snap.exists) {
         if (!mounted) return;
@@ -129,11 +146,26 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
 
     if (!ok) return;
 
+    // 삭제 전에 area를 도출(문서가 plateNumber_area 규칙)
+    final areaForReport = _inferAreaFromPlateStatusDocId(_selectedDocId!);
+
     try {
-      await FirebaseFirestore.instance
-          .collection('plate_status')
-          .doc(_selectedDocId)
-          .delete();
+      await FirebaseFirestore.instance.collection('plate_status').doc(_selectedDocId).delete();
+
+      // ✅ 계측: delete 1회
+      try {
+        final area = areaForReport.isNotEmpty
+            ? areaForReport
+            : (context.read<UserState>().currentArea.trim().isNotEmpty
+            ? context.read<UserState>().currentArea.trim()
+            : 'unknown');
+        await UsageReporter.instance.report(
+          area: area,
+          action: 'delete',
+          n: 1,
+          source: 'MonthlyParkingManagement._handleDelete.delete',
+        );
+      } catch (_) {}
 
       if (!mounted) return;
       setState(() => _selectedDocId = null);
@@ -164,7 +196,8 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
         title: const Text('정기 주차 관리 페이지', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         automaticallyImplyLeading: false,
-        bottom: PreferredSize( // 얇은 하단 구분선
+        bottom: PreferredSize(
+          // 얇은 하단 구분선
           preferredSize: const Size.fromHeight(1),
           child: Container(height: 1, color: Colors.black.withOpacity(0.06)),
         ),
@@ -225,7 +258,8 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                 child: Card(
                   key: _cardKeys[docId],
                   elevation: isSelected ? 6 : 1,
-                  surfaceTintColor: _SvcColors.light, // 카드 톤 살짝
+                  surfaceTintColor: _SvcColors.light,
+                  // 카드 톤 살짝
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                     side: isSelected
@@ -257,9 +291,7 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                         // 상세 보기
                         AnimatedCrossFade(
                           duration: const Duration(milliseconds: animationDurationMs),
-                          crossFadeState: isSelected
-                              ? CrossFadeState.showSecond
-                              : CrossFadeState.showFirst,
+                          crossFadeState: isSelected ? CrossFadeState.showSecond : CrossFadeState.showFirst,
                           firstChild: const SizedBox.shrink(),
                           secondChild: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -273,8 +305,7 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                               ),
                               Padding(
                                 padding: const EdgeInsets.only(left: 26),
-                                child: Text('요금: ₩${won.format(regularAmount)}',
-                                    style: const TextStyle(fontSize: 16)),
+                                child: Text('요금: ₩${won.format(regularAmount)}', style: const TextStyle(fontSize: 16)),
                               ),
                               const SizedBox(height: 6),
                               Row(
@@ -285,8 +316,7 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                               ),
                               Padding(
                                 padding: const EdgeInsets.only(left: 26),
-                                child: Text('주차 시간: $duration$periodUnit',
-                                    style: const TextStyle(fontSize: 16)),
+                                child: Text('주차 시간: $duration$periodUnit', style: const TextStyle(fontSize: 16)),
                               ),
                               const SizedBox(height: 6),
                               Row(
@@ -297,8 +327,7 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                               ),
                               Padding(
                                 padding: const EdgeInsets.only(left: 26),
-                                child: Text('기간: $startDate ~ $endDate',
-                                    style: const TextStyle(fontSize: 16)),
+                                child: Text('기간: $startDate ~ $endDate', style: const TextStyle(fontSize: 16)),
                               ),
                               const SizedBox(height: 6),
                               Row(
@@ -306,16 +335,14 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                                   const _InfoIcon(icon: Icons.info_outline, color: _SvcColors.base),
                                   const SizedBox(width: 6),
                                   Expanded(
-                                    child: Text('상태 메시지: $customStatus',
-                                        style: const TextStyle(fontSize: 16)),
+                                    child: Text('상태 메시지: $customStatus', style: const TextStyle(fontSize: 16)),
                                   ),
                                 ],
                               ),
                               const Divider(height: 24),
 
                               // 결제 내역
-                              if (data['payment_history'] != null &&
-                                  data['payment_history'] is List)
+                              if (data['payment_history'] != null && data['payment_history'] is List)
                                 Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -325,15 +352,13 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                                     ),
                                     const SizedBox(height: 8),
                                     ...(() {
-                                      final payments = List<Map<String, dynamic>>.from(
-                                          data['payment_history']);
+                                      final payments = List<Map<String, dynamic>>.from(data['payment_history']);
                                       final reversed = payments.reversed.toList(); // ✅ 역순 1회
                                       return reversed.map((payment) {
                                         final paidAtRaw = payment['paidAt'] ?? '';
                                         String paidAt;
                                         try {
-                                          paidAt = DateFormat('yyyy.MM.dd HH:mm')
-                                              .format(DateTime.parse(paidAtRaw));
+                                          paidAt = DateFormat('yyyy.MM.dd HH:mm').format(DateTime.parse(paidAtRaw));
                                         } catch (_) {
                                           paidAt = paidAtRaw;
                                         }
@@ -366,9 +391,7 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                                               Row(
                                                 children: [
                                                   const _InfoIcon(
-                                                      icon: Icons.calendar_today,
-                                                      size: 16,
-                                                      color: _SvcColors.dark),
+                                                      icon: Icons.calendar_today, size: 16, color: _SvcColors.dark),
                                                   const SizedBox(width: 6),
                                                   Text(
                                                     paidAt,
@@ -382,18 +405,13 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                                               const SizedBox(height: 4),
                                               Row(
                                                 children: [
-                                                  const _InfoIcon(
-                                                      icon: Icons.person,
-                                                      size: 16,
-                                                      color: _SvcColors.base),
+                                                  const _InfoIcon(icon: Icons.person, size: 16, color: _SvcColors.base),
                                                   const SizedBox(width: 6),
-                                                  Text('결제자: $paidBy',
-                                                      style: const TextStyle(fontSize: 14)),
+                                                  Text('결제자: $paidBy', style: const TextStyle(fontSize: 14)),
                                                   if (extended)
                                                     Container(
                                                       margin: const EdgeInsets.only(left: 8),
-                                                      padding: const EdgeInsets.symmetric(
-                                                          horizontal: 8, vertical: 2),
+                                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                                       decoration: BoxDecoration(
                                                         color: _SvcColors.light.withOpacity(.16),
                                                         borderRadius: BorderRadius.circular(999),
@@ -416,9 +434,7 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                                               Row(
                                                 children: [
                                                   const _InfoIcon(
-                                                      icon: Icons.attach_money,
-                                                      size: 16,
-                                                      color: _SvcColors.base),
+                                                      icon: Icons.attach_money, size: 16, color: _SvcColors.base),
                                                   const SizedBox(width: 6),
                                                   Text(
                                                     '₩${won.format(amount)}',
@@ -434,10 +450,7 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                                                 Row(
                                                   crossAxisAlignment: CrossAxisAlignment.start,
                                                   children: [
-                                                    const _InfoIcon(
-                                                        icon: Icons.note,
-                                                        size: 16,
-                                                        color: _SvcColors.dark),
+                                                    const _InfoIcon(icon: Icons.note, size: 16, color: _SvcColors.dark),
                                                     const SizedBox(width: 6),
                                                     Expanded(
                                                       child: Text(
@@ -474,8 +487,10 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
         bottomGap: _fabBottomGap,
         spacing: _fabSpacing,
         hasSelection: _selectedDocId != null,
-        onPrimary: () => _handlePrimaryAction(context), // 추가/수정
-        onDelete: _selectedDocId != null ? () => _handleDelete(context) : null, // 삭제
+        onPrimary: () => _handlePrimaryAction(context),
+        // 추가/수정
+        onDelete: _selectedDocId != null ? () => _handleDelete(context) : null,
+        // 삭제
         cs: cs,
       ),
     );
@@ -513,14 +528,15 @@ class _FabStack extends StatelessWidget {
   final double bottomGap;
   final double spacing;
   final bool hasSelection;
-  final VoidCallback onPrimary;     // 선택 없음: 추가 / 선택 있음: 수정
-  final VoidCallback? onDelete;     // 선택 있음에서만 사용
+  final VoidCallback onPrimary; // 선택 없음: 추가 / 선택 있음: 수정
+  final VoidCallback? onDelete; // 선택 있음에서만 사용
   final ColorScheme cs;
 
   @override
   Widget build(BuildContext context) {
     final ButtonStyle primaryStyle = ElevatedButton.styleFrom(
-      backgroundColor: _SvcColors.base, // ✅ 서비스 팔레트 반영
+      backgroundColor: _SvcColors.base,
+      // ✅ 서비스 팔레트 반영
       foregroundColor: Colors.white,
       elevation: 3,
       shadowColor: _SvcColors.dark.withOpacity(0.25),
@@ -628,4 +644,12 @@ class _FabLabel extends StatelessWidget {
       ],
     );
   }
+}
+
+/// plate_status 문서 ID에서 area 추출: 규칙이 'plateNumber_area' 라고 가정.
+/// 규칙이 다르면 'unknown' 반환.
+String _inferAreaFromPlateStatusDocId(String docId) {
+  final idx = docId.lastIndexOf('_');
+  if (idx <= 0 || idx >= docId.length - 1) return 'unknown';
+  return docId.substring(idx + 1);
 }

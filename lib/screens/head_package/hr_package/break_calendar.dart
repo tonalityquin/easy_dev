@@ -10,6 +10,7 @@ import '../../../models/user_model.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../utils/sheets_config.dart';
 import 'widgets/time_edit_sheet.dart';
+import '../../../utils/usage_reporter.dart'; // ✅ Firestore 사용량 보고
 
 class BreakCalendar extends StatefulWidget {
   const BreakCalendar({super.key});
@@ -185,6 +186,17 @@ class _BreakCalendarState extends State<BreakCalendar> {
     showSelectedSnackbar(context, '모든 데이터를 초기화했어요.');
   }
 
+  // ✅ area 추론: selectedArea > docId(phone-area)의 suffix > 'unknown'
+  String _inferAreaFromUserDoc(String docId, Map<String, dynamic>? data) {
+    final a = (data?['selectedArea'] as String?)?.trim();
+    if (a != null && a.isNotEmpty) return a;
+    final idx = docId.lastIndexOf('-');
+    if (idx > 0 && idx < docId.length - 1) {
+      return docId.substring(idx + 1).trim();
+    }
+    return 'unknown';
+  }
+
   Future<UserModel?> _findUserByInput(String input) async {
     final raw = input.trim();
     if (raw.isEmpty) return null;
@@ -200,15 +212,52 @@ class _BreakCalendarState extends State<BreakCalendar> {
     final col = FirebaseFirestore.instance.collection('user_accounts');
 
     try {
+      // 1) 정확한 문서ID로 조회
       if (area != null && area.isNotEmpty) {
         final docId = '$phone-$area';
         final doc = await col.doc(docId).get();
+
+        // ✅ Firestore read 보고 (정확한 area로 +1)
+        await UsageReporter.instance.report(
+          area: area,
+          action: 'read',
+          n: 1,
+          source: 'BreakCalendar._findUserByInput/user_accounts.doc.get',
+        );
+
         if (doc.exists && doc.data() != null) {
           return UserModel.fromMap(doc.id, doc.data()!);
         }
       }
 
+      // 2) phone으로 다건 조회
       final qs = await col.where('phone', isEqualTo: phone).limit(10).get();
+
+      // ✅ 결과 문서 수만큼 area 버킷으로 read 집계 (없으면 unknown +1)
+      if (qs.docs.isEmpty) {
+        await UsageReporter.instance.report(
+          area: 'unknown',
+          action: 'read',
+          n: 1,
+          source: 'BreakCalendar._findUserByInput/user_accounts.where(phone).get',
+        );
+      } else {
+        final buckets = <String, int>{};
+        for (final d in qs.docs) {
+          final areaGuess = _inferAreaFromUserDoc(d.id, d.data());
+          buckets.update(areaGuess, (v) => v + 1, ifAbsent: () => 1);
+        }
+        for (final e in buckets.entries) {
+          await UsageReporter.instance.report(
+            area: e.key,
+            action: 'read',
+            n: e.value,
+            source:
+            'BreakCalendar._findUserByInput/user_accounts.where(phone).get',
+          );
+        }
+      }
+
       if (qs.docs.isEmpty) return null;
       if (qs.docs.length == 1) {
         final d = qs.docs.first;
@@ -403,12 +452,12 @@ class _BreakCalendarState extends State<BreakCalendar> {
       floatingActionButton: _selectedUser == null
           ? null
           : FloatingActionButton.extended(
-              onPressed: _saveAllChangesToSheets,
-              backgroundColor: _base,
-              foregroundColor: _fg,
-              icon: const Icon(Icons.save_rounded),
-              label: const Text('변경사항 저장'),
-            ),
+        onPressed: _saveAllChangesToSheets,
+        backgroundColor: _base,
+        foregroundColor: _fg,
+        icon: const Icon(Icons.save_rounded),
+        label: const Text('변경사항 저장'),
+      ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
 
       body: CustomScrollView(
@@ -624,25 +673,25 @@ class _BreakCalendarState extends State<BreakCalendar> {
                         // 휴게 시간 (숫자만)
                         hasBreak
                             ? Text(
-                                breakTime,
-                                maxLines: 1,
-                                overflow: TextOverflow.fade,
-                                softWrap: false,
-                                style: TextStyle(
-                                  fontSize: timeFs,
-                                  fontWeight: FontWeight.w800,
-                                  color: Colors.black87,
-                                  fontFeatures: const [FontFeature.tabularFigures()],
-                                  letterSpacing: .2,
-                                ),
-                              )
+                          breakTime,
+                          maxLines: 1,
+                          overflow: TextOverflow.fade,
+                          softWrap: false,
+                          style: TextStyle(
+                            fontSize: timeFs,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.black87,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                            letterSpacing: .2,
+                          ),
+                        )
                             : Text(
-                                '—',
-                                style: TextStyle(
-                                  fontSize: smallFs,
-                                  color: Colors.black38,
-                                ),
-                              ),
+                          '—',
+                          style: TextStyle(
+                            fontSize: smallFs,
+                            color: Colors.black38,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -682,35 +731,35 @@ class _LegendRowBreak extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget dot(Color c) => Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(color: c, shape: BoxShape.circle),
-        );
+      width: 10,
+      height: 10,
+      decoration: BoxDecoration(color: c, shape: BoxShape.circle),
+    );
 
     Widget itemDot(Color c, String t) => Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            dot(c),
-            const SizedBox(width: 6),
-            Text(t, style: const TextStyle(fontSize: 12, color: Colors.black87)),
-          ],
-        );
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        dot(c),
+        const SizedBox(width: 6),
+        Text(t, style: const TextStyle(fontSize: 12, color: Colors.black87)),
+      ],
+    );
 
     Widget itemSquare(String t) => Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 14,
-              height: 14,
-              decoration: BoxDecoration(
-                border: Border.all(color: base, width: 1.6),
-                borderRadius: BorderRadius.circular(4),
-              ),
-            ),
-            const SizedBox(width: 6),
-            Text(t, style: const TextStyle(fontSize: 12, color: Colors.black87)),
-          ],
-        );
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 14,
+          height: 14,
+          decoration: BoxDecoration(
+            border: Border.all(color: base, width: 1.6),
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(t, style: const TextStyle(fontSize: 12, color: Colors.black87)),
+      ],
+    );
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

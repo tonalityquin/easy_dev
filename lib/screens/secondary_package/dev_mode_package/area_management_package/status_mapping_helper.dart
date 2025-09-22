@@ -3,52 +3,33 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-
 // 🔧 전역 리미트 설정값(최소/최대/기본값, prefsKey)을 단일 소스로 관리
 import '../../../../utils/plate_limit/plate_limit_config.dart';
+// ✅ UsageReporter 계측
+import '../../../../utils/usage_reporter.dart';
 
-
-/// 지역별(location 단위) 리미트 관리 탭
-/// - 상단: Division/Area 선택
-/// - 중단: 선택한 Area의 location 목록(= location_limits 문서들)과 개별 리미트 조절 UI
-/// - 하단: location 리미트 추가(없는 location 수동 등록)
-///
-/// 변경점:
-/// - 슬라이더를 드래그할 때마다 write 하지 않음.
-/// - 값 변경 후 '저장' 버튼을 눌러야 Firestore에 반영됨(쓰기 비용 절감).
-///
-/// 저장 스키마:
-///   collection('location_limits').doc('$area_$location') = {
-///     area, location, limit(PlateLimitConfig.min~max), updatedAt
-///   }
 class StatusMappingHelper extends StatefulWidget {
   const StatusMappingHelper({super.key});
-
 
   @override
   State<StatusMappingHelper> createState() => _StatusMappingHelperState();
 }
-
 
 class _StatusMappingHelperState extends State<StatusMappingHelper> {
   // 선택 상태
   String? _selectedDivision;
   String? _selectedArea;
 
-
   // 드롭다운 소스
   List<String> _divisions = [];
   List<String> _areas = [];
-
 
   // 새 location 추가 입력
   final TextEditingController _newLocCtrl = TextEditingController();
   bool _busy = false;
 
-
   // 전역 기본값(표시 목적): SharedPreferences(PlateLimitConfig.prefsKey) [디바이스 단위 기본]
   int _globalDefault = PlateLimitConfig.defaultLimit;
-
 
   @override
   void initState() {
@@ -57,13 +38,11 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
     _loadGlobalDefault();
   }
 
-
   @override
   void dispose() {
     _newLocCtrl.dispose();
     super.dispose();
   }
-
 
   Future<void> _loadGlobalDefault() async {
     try {
@@ -76,10 +55,20 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
     }
   }
 
-
   Future<void> _loadDivisions() async {
     final fs = FirebaseFirestore.instance;
     final snap = await fs.collection('divisions').get();
+
+    // ✅ UsageReporter: read (divisions)
+    try {
+      await UsageReporter.instance.report(
+        area: 'unknown',
+        action: 'read',
+        n: snap.docs.length,
+        source: 'StatusMappingHelper._loadDivisions.get',
+      );
+    } catch (_) {}
+
     final list = snap.docs
         .map((d) => (d['name'] as String?)?.trim())
         .whereType<String>()
@@ -93,7 +82,6 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
     await _loadAreas(); // division 선택 후 area 로딩
   }
 
-
   Future<void> _loadAreas() async {
     _areas = [];
     _selectedArea = null;
@@ -102,10 +90,18 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
       return;
     }
     final fs = FirebaseFirestore.instance;
-    final snap = await fs
-        .collection('areas')
-        .where('division', isEqualTo: _selectedDivision)
-        .get();
+    final snap = await fs.collection('areas').where('division', isEqualTo: _selectedDivision).get();
+
+    // ✅ UsageReporter: read (areas by division)
+    try {
+      await UsageReporter.instance.report(
+        area: 'unknown',
+        action: 'read',
+        n: snap.docs.length,
+        source: 'StatusMappingHelper._loadAreas.get',
+      );
+    } catch (_) {}
+
     final list = snap.docs
         .map((d) => (d['name'] as String?)?.trim())
         .whereType<String>()
@@ -118,10 +114,8 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
     });
   }
 
-
   /// area + location 필드로 기존 문서 ref를 찾는다. 없으면 null.
-  Future<DocumentReference<Map<String, dynamic>>?> _findLimitDocRef(
-      String area, String location) async {
+  Future<DocumentReference<Map<String, dynamic>>?> _findLimitDocRef(String area, String location) async {
     final fs = FirebaseFirestore.instance;
     final qs = await fs
         .collection('location_limits')
@@ -129,15 +123,24 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
         .where('location', isEqualTo: location)
         .limit(1)
         .get();
+
+    // ✅ UsageReporter: read (find existing limit doc)
+    try {
+      await UsageReporter.instance.report(
+        area: area.isNotEmpty ? area : 'unknown',
+        action: 'read',
+        n: qs.docs.length,
+        source: 'StatusMappingHelper._findLimitDocRef.query',
+      );
+    } catch (_) {}
+
     if (qs.docs.isEmpty) return null;
     return qs.docs.first.reference;
   }
 
-
   Future<void> _upsertLimit(String area, String location, int limit) async {
     final clamped = limit.clamp(PlateLimitConfig.min, PlateLimitConfig.max);
     final fs = FirebaseFirestore.instance;
-
 
     // 1) area+location 조합으로 기존 문서를 찾는다(과거 __, 현재 _ 모두 커버).
     final existRef = await _findLimitDocRef(area, location);
@@ -148,9 +151,19 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
         'limit': clamped,
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
+
+      // ✅ UsageReporter: write (update)
+      try {
+        await UsageReporter.instance.report(
+          area: area.isNotEmpty ? area : 'unknown',
+          action: 'write',
+          n: 1,
+          source: 'StatusMappingHelper._upsertLimit.update',
+        );
+      } catch (_) {}
+
       return;
     }
-
 
     // 2) 없으면 새 문서 생성 → 단일 언더스코어 ID 사용
     final newId = '${area}_$location';
@@ -160,20 +173,37 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
       'limit': clamped,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
-  }
 
+    // ✅ UsageReporter: write (create)
+    try {
+      await UsageReporter.instance.report(
+        area: area.isNotEmpty ? area : 'unknown',
+        action: 'write',
+        n: 1,
+        source: 'StatusMappingHelper._upsertLimit.create',
+      );
+    } catch (_) {}
+  }
 
   Future<void> _deleteLimit(String area, String location) async {
     final fs = FirebaseFirestore.instance;
-
 
     // 1) area+location 조합으로 기존 문서를 찾는다.
     final existRef = await _findLimitDocRef(area, location);
     if (existRef != null) {
       await existRef.delete();
+
+      // ✅ UsageReporter: delete (by query)
+      try {
+        await UsageReporter.instance.report(
+          area: area.isNotEmpty ? area : 'unknown',
+          action: 'delete',
+          n: 1,
+          source: 'StatusMappingHelper._deleteLimit.deleteByQuery',
+        );
+      } catch (_) {}
       return;
     }
-
 
     // 2) 혹시 남아있을지 모르는 ID 호환 처리(신규/구버전 ID 모두 시도)
     final newId = '${area}_$location';
@@ -181,18 +211,57 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
     final newRef = fs.collection('location_limits').doc(newId);
     final oldRef = fs.collection('location_limits').doc(oldId);
 
-
     final newSnap = await newRef.get();
+    // ✅ UsageReporter: read (newId)
+    try {
+      await UsageReporter.instance.report(
+        area: area.isNotEmpty ? area : 'unknown',
+        action: 'read',
+        n: newSnap.exists ? 1 : 0,
+        source: 'StatusMappingHelper._deleteLimit.getNewId',
+      );
+    } catch (_) {}
+
     if (newSnap.exists) {
       await newRef.delete();
+
+      // ✅ UsageReporter: delete (by newId)
+      try {
+        await UsageReporter.instance.report(
+          area: area.isNotEmpty ? area : 'unknown',
+          action: 'delete',
+          n: 1,
+          source: 'StatusMappingHelper._deleteLimit.deleteByNewId',
+        );
+      } catch (_) {}
       return;
     }
+
     final oldSnap = await oldRef.get();
+    // ✅ UsageReporter: read (oldId)
+    try {
+      await UsageReporter.instance.report(
+        area: area.isNotEmpty ? area : 'unknown',
+        action: 'read',
+        n: oldSnap.exists ? 1 : 0,
+        source: 'StatusMappingHelper._deleteLimit.getOldId',
+      );
+    } catch (_) {}
+
     if (oldSnap.exists) {
       await oldRef.delete();
+
+      // ✅ UsageReporter: delete (by oldId)
+      try {
+        await UsageReporter.instance.report(
+          area: area.isNotEmpty ? area : 'unknown',
+          action: 'delete',
+          n: 1,
+          source: 'StatusMappingHelper._deleteLimit.deleteByOldId',
+        );
+      } catch (_) {}
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -228,7 +297,6 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
       ),
     );
 
-
     final areaDropdown = DropdownButtonFormField<String>(
       value: _selectedArea,
       isExpanded: true,
@@ -253,7 +321,6 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
       ),
     );
 
-
     return AbsorbPointer(
       absorbing: _busy,
       child: Padding(
@@ -270,7 +337,6 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
               ),
             ),
             const SizedBox(height: 12),
-
 
             // 선택 영역
             LayoutBuilder(
@@ -297,7 +363,6 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
             ),
             const SizedBox(height: 16),
 
-
             Expanded(
               child: _selectedArea == null
                   ? const Center(child: Text('지역을 선택하세요.'))
@@ -311,7 +376,22 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
                   if (snap.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator());
                   }
+
                   final docs = snap.data?.docs ?? [];
+
+                  // ✅ UsageReporter: read (stream of location_limits for selected area)
+                  if (_selectedArea != null && snap.hasData) {
+                    try {
+                      // 스트림마다 들어오는 스냅샷 크기를 그대로 기록
+                      UsageReporter.instance.report(
+                        area: _selectedArea!,
+                        action: 'read',
+                        n: docs.length,
+                        source: 'StatusMappingHelper.location_limits.stream',
+                      );
+                    } catch (_) {}
+                  }
+
                   if (docs.isEmpty) {
                     return const Center(
                       child: Text('등록된 location 리미트가 없습니다. 아래에서 추가하세요.'),
@@ -326,7 +406,6 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
                       int limit = (data['limit'] ?? _globalDefault) as int;
                       limit = limit.clamp(PlateLimitConfig.min, PlateLimitConfig.max);
 
-
                       return _LimitTile(
                         area: _selectedArea!,
                         location: loc,
@@ -339,7 +418,6 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
                 },
               ),
             ),
-
 
             const SizedBox(height: 12),
             // 새 location 추가
@@ -396,14 +474,12 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
   }
 }
 
-
 class _LimitTile extends StatefulWidget {
   final String area;
   final String location;
   final int limit;
   final ValueChanged<int> onSave; // ✅ 저장 시에만 write
   final VoidCallback onDelete;
-
 
   const _LimitTile({
     required this.area,
@@ -413,17 +489,14 @@ class _LimitTile extends StatefulWidget {
     required this.onDelete,
   });
 
-
   @override
   State<_LimitTile> createState() => _LimitTileState();
 }
-
 
 class _LimitTileState extends State<_LimitTile> {
   late int _value;
   late int _initial;
   bool _saving = false;
-
 
   @override
   void initState() {
@@ -432,11 +505,9 @@ class _LimitTileState extends State<_LimitTile> {
     _initial = _value;
   }
 
-
   void _onSlider(int v) {
     setState(() => _value = v.clamp(PlateLimitConfig.min, PlateLimitConfig.max));
   }
-
 
   Future<void> _onSavePressed() async {
     if (_value == _initial) return;
@@ -462,11 +533,9 @@ class _LimitTileState extends State<_LimitTile> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     final dirty = _value != _initial;
-
 
     return ListTile(
       leading: const Icon(Icons.place, color: Colors.teal),
@@ -527,6 +596,3 @@ class _LimitTileState extends State<_LimitTile> {
     );
   }
 }
-
-
-

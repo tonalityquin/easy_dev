@@ -10,6 +10,7 @@ import '../../../models/user_model.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../utils/sheets_config.dart';
 import 'widgets/time_edit_sheet.dart';
+import '../../../utils/usage_reporter.dart'; // ✅ Firestore 사용량 보고
 
 class AttendanceCalendar extends StatefulWidget {
   const AttendanceCalendar({super.key});
@@ -198,6 +199,17 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
     showSelectedSnackbar(context, '모든 데이터를 초기화했어요.');
   }
 
+  // ✅ user_accounts 문서에서 area 추정: selectedArea > docId suffix > 'unknown'
+  String _inferAreaFromUserDoc(String docId, Map<String, dynamic>? data) {
+    final a = (data?['selectedArea'] as String?)?.trim();
+    if (a != null && a.isNotEmpty) return a;
+    final idx = docId.lastIndexOf('-');
+    if (idx > 0 && idx < docId.length - 1) {
+      return docId.substring(idx + 1).trim();
+    }
+    return 'unknown';
+  }
+
   Future<UserModel?> _findUserByInput(String input) async {
     final raw = input.trim();
     if (raw.isEmpty) return null;
@@ -213,15 +225,53 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
     final col = FirebaseFirestore.instance.collection('user_accounts');
 
     try {
+      // 1) 정확한 docId가 주어진 경우 우선 조회
       if (area != null && area.isNotEmpty) {
         final docId = '$phone-$area';
         final doc = await col.doc(docId).get();
+
+        // ✅ Firestore read 보고 (정확한 area)
+        await UsageReporter.instance.report(
+          area: area,
+          action: 'read',
+          n: 1,
+          source: 'AttendanceCalendar._findUserByInput/user_accounts.doc.get',
+        );
+
         if (doc.exists && doc.data() != null) {
           return UserModel.fromMap(doc.id, doc.data()!);
         }
       }
 
+      // 2) phone으로 다건 조회
       final qs = await col.where('phone', isEqualTo: phone).limit(10).get();
+
+      // ✅ Firestore read 보고 (결과 문서들을 area별로 분배, 비어있으면 unknown +1)
+      if (qs.docs.isEmpty) {
+        await UsageReporter.instance.report(
+          area: 'unknown',
+          action: 'read',
+          n: 1,
+          source:
+          'AttendanceCalendar._findUserByInput/user_accounts.where(phone).get',
+        );
+      } else {
+        final buckets = <String, int>{};
+        for (final d in qs.docs) {
+          final areaGuess = _inferAreaFromUserDoc(d.id, d.data());
+          buckets.update(areaGuess, (v) => v + 1, ifAbsent: () => 1);
+        }
+        for (final e in buckets.entries) {
+          await UsageReporter.instance.report(
+            area: e.key,
+            action: 'read',
+            n: e.value,
+            source:
+            'AttendanceCalendar._findUserByInput/user_accounts.where(phone).get',
+          );
+        }
+      }
+
       if (qs.docs.isEmpty) return null;
       if (qs.docs.length == 1) {
         final d = qs.docs.first;
@@ -430,8 +480,8 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
         elevation: 0,
         foregroundColor: Colors.black87,
         centerTitle: true,
-        title: const Text('출석 캘린더',
-            style: TextStyle(fontWeight: FontWeight.w800)),
+        title:
+        const Text('출석 캘린더', style: TextStyle(fontWeight: FontWeight.w800)),
         automaticallyImplyLeading: false,
         actions: [
           IconButton(
