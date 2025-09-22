@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
 import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
+import '../../utils/usage_reporter.dart'; // ✅ 추가
 
 class PlateStreamService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -21,8 +22,12 @@ class PlateStreamService {
       descending: descending,
     );
 
-    return query
-        .snapshots()
+    // ✅ 단순화: 구독 시작 시 read 1회 보고
+    // (정확한 per-event 카운팅은 복잡하므로 초심자 단계에선 시작 1회로)
+    // ignore: unawaited_futures
+    UsageReporter.instance.report(area: area, action: 'read', n: 1);
+
+    return query.snapshots()
     // Firestore 스트림 실패만 로깅 + 재전파
         .handleError((e, st) {
       // ignore: unawaited_futures
@@ -45,14 +50,11 @@ class PlateStreamService {
       }, level: 'error');
 
       Error.throwWithStackTrace(e, st);
-    })
-        .map((snapshot) {
-      final results = snapshot.docs
-          .map((doc) {
+    }).map((snapshot) {
+      final results = snapshot.docs.map((doc) {
         try {
           return PlateModel.fromDocument(doc);
         } catch (e, st) {
-          // 파싱 실패도 Firestore 로거에 error 기록(동기 컨텍스트 → await 없음)
           // ignore: unawaited_futures
           DebugFirestoreLogger().log({
             'op': 'plates.stream.parse',
@@ -65,14 +67,11 @@ class PlateStreamService {
             },
             'stack': st.toString(),
             'tags': ['plates', 'stream', 'parse', 'error'],
-            // 과도한 로그 방지: 키만 일부 기록
             'rawKeys': doc.data().keys.take(30).toList(),
           }, level: 'error');
           return null;
         }
-      })
-          .whereType<PlateModel>()
-          .toList();
+      }).whereType<PlateModel>().toList();
 
       return results;
     });
@@ -111,9 +110,12 @@ class PlateStreamService {
         .where('type', isEqualTo: PlateType.departureCompleted.firestoreValue)
         .where('area', isEqualTo: area)
         .where('isLockedFee', isEqualTo: false)
-        .orderBy(PlateFields.requestTime, descending: descending); // ← 상수화
+        .orderBy(PlateFields.requestTime, descending: descending);
 
-    // 스트림 에러 Firestore 로깅 + 전파
+    // ✅ 구독 시작 시 read 1회
+    // ignore: unawaited_futures
+    UsageReporter.instance.report(area: area, action: 'read', n: 1);
+
     return query.snapshots().handleError((e, st) {
       // ignore: unawaited_futures
       DebugFirestoreLogger().log({
@@ -134,7 +136,7 @@ class PlateStreamService {
         'tags': ['plates', 'stream', 'departureUnpaid', 'error'],
       }, level: 'error');
 
-      Error.throwWithStackTrace(e, st); // 전파
+      Error.throwWithStackTrace(e, st);
     });
   }
 }

@@ -10,6 +10,9 @@ import 'dev_package/local_prefs_bottom_sheet.dart';
 import 'dev_package/dev_memo.dart';
 import 'dev_package/google_docs_bottom_sheet.dart';
 
+// ✅ 스모크 테스트 페이지 import
+import 'dev_package/usage_counter_demo_page.dart';
+
 /// ====== 개발 전용 팔레트 (개발 카드와 동일 톤) ======
 /// 버튼/Badge 배경
 const kDevPrimary = Color(0xFF6A1B9A); // Deep Purple
@@ -177,6 +180,7 @@ class DevStubPage extends StatelessWidget {
                             );
                           },
                         ),
+
                         // ✅ 메모: 카드 탭 → 메모 패널 열기
                         _ActionCard(
                           icon: Icons.sticky_note_2_rounded,
@@ -190,6 +194,7 @@ class DevStubPage extends StatelessWidget {
                             await DevMemo.openPanel();
                           },
                         ),
+
                         // ✅ 개인 달력 (그린 팔레트)
                         _ActionCard(
                           icon: Icons.calendar_month_rounded,
@@ -204,7 +209,7 @@ class DevStubPage extends StatelessWidget {
                           },
                         ),
 
-                        // "구글 독스" 카드 onTap 수정
+                        // ✅ 구글 독스: 패널 토글
                         _ActionCard(
                           icon: Icons.description_outlined,
                           title: '구글 독스',
@@ -215,7 +220,26 @@ class DevStubPage extends StatelessWidget {
                           titleColor: kDevDarkText,
                           onTap: () async {
                             GoogleDocsDocPanel.enabled.value = true;
-                            await GoogleDocsDocPanel.togglePanel(); // ← 여기로 교체
+                            await GoogleDocsDocPanel.togglePanel();
+                          },
+                        ),
+
+                        // ✅ (새로 추가) 사용량 카운터 스모크 테스트
+                        _ActionCard(
+                          icon: Icons.analytics_outlined,
+                          title: '사용량 카운터',
+                          subtitle: 'READ / WRITE / DELETE',
+                          bg: Colors.indigo.shade600,
+                          fg: Colors.white,
+                          tintColor: Colors.indigo.shade100,
+                          titleColor: Colors.indigo.shade900,
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const UsageCounterDemoPage(),
+                                fullscreenDialog: true,
+                              ),
+                            );
                           },
                         ),
                       ];

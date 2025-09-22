@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
 import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
+import '../../utils/usage_reporter.dart'; // ✅ 추가
 
 class PlateQueryService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -16,13 +17,15 @@ class PlateQueryService {
           .get()
           .timeout(const Duration(seconds: 10));
 
+      // ✅ 단건 읽기 → read 1
+      final area = doc.data()?['area'] as String? ?? 'unknown';
+      await UsageReporter.instance.report(area: area, action: 'read', n: 1);
+
       if (!doc.exists) {
         return null;
       }
-
       return PlateModel.fromDocument(doc);
     } catch (e, st) {
-      // Firestore(및 타임아웃 등) 실패만 로깅
       try {
         await DebugFirestoreLogger().log({
           'op': 'plates.get',
@@ -135,7 +138,15 @@ class PlateQueryService {
       }) async {
     try {
       final querySnapshot = await query.get();
-      return querySnapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList();
+      final results =
+      querySnapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList();
+
+      // ✅ read 보고: 문서 수 기반(없으면 1로 보정)
+      final area = filters['area'] as String? ?? 'unknown';
+      final n = results.isEmpty ? 1 : results.length;
+      await UsageReporter.instance.report(area: area, action: 'read', n: n);
+
+      return results;
     } catch (e, st) {
       try {
         await DebugFirestoreLogger().log({

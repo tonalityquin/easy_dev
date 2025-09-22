@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../enums/plate_type.dart';
 import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
+import '../../utils/usage_reporter.dart'; // ✅ 추가
 
 class PlateCountService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -19,9 +20,12 @@ class PlateCountService {
           .get();
 
       final count = aggregateQuerySnapshot.count ?? 0;
+
+      // ✅ Aggregation read는 1회로 단순 보고
+      await UsageReporter.instance.report(area: area, action: 'read', n: 1);
+
       return count;
     } catch (e, st) {
-      // 실패 시 Firestore 로깅만
       try {
         final typeName = type.toString().split('.').last;
         await DebugFirestoreLogger().log({
@@ -55,9 +59,12 @@ class PlateCountService {
       final agg =
       await baseQuery.count().get().timeout(const Duration(seconds: 10));
       final int count = agg.count ?? 0;
+
+      // ✅ Aggregation read = 1
+      await UsageReporter.instance.report(area: area, action: 'read', n: 1);
+
       return count;
     } catch (e, st) {
-      // 실패 시 Firestore 로깅만
       try {
         await DebugFirestoreLogger().log({
           'op': 'plates.count.parkingCompletedAll',
@@ -92,17 +99,17 @@ class PlateCountService {
       await baseQuery.count().get().timeout(const Duration(seconds: 10));
       final int docCount = agg.count ?? 0;
 
-      // 🔹 보정치(재생성 이벤트 카운터) 읽어서 가산
-      final extraSnap = await _firestore
-          .collection('plate_counters')
-          .doc('area_$area')
-          .get();
+      // 🔹 보정치(재생성 이벤트 카운터) 문서 읽기 → read +1
+      final extraSnap =
+      await _firestore.collection('plate_counters').doc('area_$area').get();
       final int extras =
           (extraSnap.data()?['departureCompletedEvents'] as int?) ?? 0;
 
+      // ✅ 총 2번의 read가 있었음: count() 1, counters 1
+      await UsageReporter.instance.report(area: area, action: 'read', n: 2);
+
       return docCount + extras;
     } catch (e, st) {
-      // 실패 시 Firestore 로깅만
       try {
         await DebugFirestoreLogger().log({
           'op': 'plates.count.departureCompletedAll',

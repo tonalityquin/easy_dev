@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
+import '../../utils/usage_reporter.dart'; // ✅ 추가
 
 class PlateStatusService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -29,12 +30,15 @@ class PlateStatusService {
           final snap = await ref.get().timeout(const Duration(seconds: 10));
           if (snap.exists) {
             await ref.delete().timeout(const Duration(seconds: 10));
+            // ✅ delete 1회
+            await UsageReporter.instance.report(area: area, action: 'delete', n: 1);
           }
+          // get 1회 읽음
+          await UsageReporter.instance.report(area: area, action: 'read', n: 1);
         }
         return;
       }
 
-      // upsert payload (extra 먼저 전개 → 보호 필드가 최종 우선권)
       final data = <String, dynamic>{
         ...?extra,
         'customStatus': customStatus.trim(),
@@ -42,10 +46,8 @@ class PlateStatusService {
         'updatedAt': FieldValue.serverTimestamp(),
         'createdBy': createdBy,
         'area': area,
-        // expireAt는 Cloud Functions에서 설정
       };
 
-      // 트랜잭션 upsert + 타임아웃
       await _firestore.runTransaction((tx) async {
         final snap = await tx.get(ref).timeout(const Duration(seconds: 10));
         if (!snap.exists) {
@@ -53,8 +55,11 @@ class PlateStatusService {
         }
         tx.set(ref, data, SetOptions(merge: true));
       }).timeout(const Duration(seconds: 10));
+
+      // ✅ 트랜잭션: read 1 + write 1
+      await UsageReporter.instance.report(area: area, action: 'read', n: 1);
+      await UsageReporter.instance.report(area: area, action: 'write', n: 1);
     } on FirebaseException catch (e, st) {
-      // Firestore 오류 로깅만
       try {
         await DebugFirestoreLogger().log({
           'op': 'plateStatus.set',
@@ -66,7 +71,7 @@ class PlateStatusService {
             'area': area,
             'customStatusLen': customStatus.length,
             'statusListLen': statusList.length,
-            'deleteWhenEmpty': deleteWhenEmpty,
+            'deleteWhenEmpty': false,
             if (extra != null) 'extraKeys': extra.keys.take(30).toList(),
           },
           'error': {
@@ -89,7 +94,7 @@ class PlateStatusService {
           'inputs': {
             'plateNumber': plateNumber,
             'area': area,
-            'deleteWhenEmpty': deleteWhenEmpty,
+            'deleteWhenEmpty': false,
           },
           'error': {
             'type': e.runtimeType.toString(),
@@ -143,19 +148,18 @@ class PlateStatusService {
     final ref = _docRef(plateNumber, area);
 
     try {
-      // ── 빈 입력 처리 ─────────────────────────────────────────
       if (_isEmptyInput(customStatus, statusList)) {
         if (deleteWhenEmpty) {
           final snap = await ref.get().timeout(const Duration(seconds: 10));
           if (snap.exists) {
             await ref.delete().timeout(const Duration(seconds: 10));
+            await UsageReporter.instance.report(area: area, action: 'delete', n: 1);
           }
+          await UsageReporter.instance.report(area: area, action: 'read', n: 1);
         }
         return;
       }
 
-      // ── 업서트 payload ───────────────────────────────────────
-      // ⚠️ expireAt는 클라이언트에서 설정하지 않습니다. (Cloud Functions에서 설정)
       final base = <String, dynamic>{
         'customStatus': customStatus.trim(),
         'statusList': statusList,
@@ -174,7 +178,6 @@ class PlateStatusService {
         if (isExtended != null) 'isExtended': isExtended,
       };
 
-      // ── 트랜잭션 upsert + 타임아웃 ───────────────────────────
       await _firestore.runTransaction((tx) async {
         final snap = await tx.get(ref).timeout(const Duration(seconds: 10));
         if (!snap.exists) {
@@ -182,6 +185,10 @@ class PlateStatusService {
         }
         tx.set(ref, base, SetOptions(merge: true));
       }).timeout(const Duration(seconds: 10));
+
+      // ✅ read + write
+      await UsageReporter.instance.report(area: area, action: 'read', n: 1);
+      await UsageReporter.instance.report(area: area, action: 'write', n: 1);
     } on FirebaseException catch (e, st) {
       try {
         await DebugFirestoreLogger().log({
@@ -258,6 +265,9 @@ class PlateStatusService {
     final ref = _docRef(plateNumber, area);
     try {
       await ref.delete();
+
+      // ✅ delete 1회
+      await UsageReporter.instance.report(area: area, action: 'delete', n: 1);
     } on FirebaseException catch (e, st) {
       try {
         await DebugFirestoreLogger().log({

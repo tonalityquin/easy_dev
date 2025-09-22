@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../../models/plate_model.dart';
 import '../../enums/plate_type.dart';
 import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
+import '../../utils/usage_reporter.dart'; // ✅ 추가
 
 class PlateCreationService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -33,13 +34,17 @@ class PlateCreationService {
   }) async {
     final documentId = '${plateNumber}_$area';
 
-    // (기존) 정산 정보 로딩/세팅 로직 유지 + 실패 로깅
     int? regularAmount;
     int? regularDurationHours;
 
     if (selectedBillType != '정기' && billingType != null && billingType.isNotEmpty) {
       try {
-        final billDoc = await _firestore.collection('bill').doc('${billingType}_$area').get();
+        final billDoc =
+        await _firestore.collection('bill').doc('${billingType}_$area').get();
+
+        // ✅ bill read 1회
+        await UsageReporter.instance.report(area: area, action: 'read', n: 1);
+
         if (billDoc.exists) {
           final billData = billDoc.data()!;
 
@@ -54,7 +59,6 @@ class PlateCreationService {
           throw Exception('Firestore에서 정산 데이터를 찾을 수 없음');
         }
       } catch (e, st) {
-        // Firestore 로딩 실패 로깅만
         try {
           await DebugFirestoreLogger().log({
             'op': 'bill.read.forPlateCreation',
@@ -87,8 +91,8 @@ class PlateCreationService {
     final plateFourDigit =
     plateNumber.length >= 4 ? plateNumber.substring(plateNumber.length - 4) : plateNumber;
 
-    // 도메인 의도: billingType 비어 있으면 잠금요금으로 간주
-    final effectiveIsLockedFee = isLockedFee || (billingType == null || billingType.trim().isEmpty);
+    final effectiveIsLockedFee =
+        isLockedFee || (billingType == null || billingType.trim().isEmpty);
 
     final plate = PlateModel(
       id: documentId,
@@ -126,12 +130,15 @@ class PlateCreationService {
       to: location.isNotEmpty ? location : '미지정',
     );
 
-    // 🔒 트랜잭션으로 중복 불가 보장 (레이스 컨디션 방지)
     final docRef = _firestore.collection('plates').doc(documentId);
 
     try {
+      int writes = 0;
+      int reads = 0;
+
       await _firestore.runTransaction((tx) async {
         final snap = await tx.get(docRef);
+        reads += 1; // ✅ tx.get → read 1
 
         if (snap.exists) {
           final data = snap.data();
@@ -145,10 +152,7 @@ class PlateCreationService {
             debugPrint("🚨 중복된 번호판 등록 시도: $plateNumber (${existingType.name})");
             throw Exception("이미 등록된 번호판입니다: $plateNumber");
           } else {
-            // ✅ departure_completed 상태에서는 기존 logs를 보존하고 새 로그만 append하며
-            //    필요한 필드만 부분 업데이트한다.
-
-            // 1) 기존 logs 안전 변환
+            // 기존 logs 보존 + 신규 로그 append
             final List<Map<String, dynamic>> existingLogs = (() {
               final raw = data?['logs'];
               if (raw is List) {
@@ -160,35 +164,27 @@ class PlateCreationService {
               return <Map<String, dynamic>>[];
             })();
 
-            // 2) 새 로그 목록(현재 생성에서 추가된 로그들)
             final List<Map<String, dynamic>> newLogs =
             (plateWithLog.logs ?? []).map((e) => e.toMap()).toList();
 
             final List<Map<String, dynamic>> mergedLogs = [...existingLogs, ...newLogs];
 
-            // 3) 덮어쓰면 안 되는 필드(request_time 등)는 건드리지 않고,
-            //    값이 있을 때만 부분 업데이트
             final partial = <String, dynamic>{
               PlateFields.type: plateType.firestoreValue,
               PlateFields.updatedAt: Timestamp.now(),
-              // location은 입력이 비어있을 때는 보존
               if (location.isNotEmpty) PlateFields.location: location,
               if (endTime != null) PlateFields.endTime: endTime,
               if (billingType != null && billingType.trim().isNotEmpty)
                 PlateFields.billingType: billingType,
-              // 필요 시 다른 옵션 필드도 '값이 있을 때만' 반영
               if (imageUrls != null) PlateFields.imageUrls: imageUrls,
               if (paymentMethod != null) PlateFields.paymentMethod: paymentMethod,
               if (lockedAtTimeInSeconds != null)
                 PlateFields.lockedAtTimeInSeconds: lockedAtTimeInSeconds,
               if (lockedFeeAmount != null) PlateFields.lockedFeeAmount: lockedFeeAmount,
-              // isLockedFee는 계산 결과를 그대로 반영(원치 않으면 조건부로)
               PlateFields.isLockedFee: effectiveIsLockedFee,
-              // ★ logs는 기존+신규 병합본으로 교체(필드 단위 교체이므로 기존 로그 보존됨)
               PlateFields.logs: mergedLogs,
             };
 
-            // ✅ 재생성 이벤트 카운터 +1 (isLockedFee == true 인 기존 문서만 카운트)
             final bool wasLocked = (data?['isLockedFee'] == true);
             if (wasLocked) {
               final countersRef = _firestore.collection('plate_counters').doc('area_$area');
@@ -197,18 +193,26 @@ class PlateCreationService {
                 {'departureCompletedEvents': FieldValue.increment(1)},
                 SetOptions(merge: true),
               );
+              writes += 1; // counters set
             }
 
-            // 최종 부분 업데이트
             tx.update(docRef, partial);
+            writes += 1; // plates update
           }
         } else {
-          // 신규 생성은 전체 set
           tx.set(docRef, plateWithLog.toMap());
+          writes += 1; // plates set
         }
       });
+
+      // ✅ 트랜잭션에서 발생한 read/write 집계 보고
+      if (reads > 0) {
+        await UsageReporter.instance.report(area: area, action: 'read', n: reads);
+      }
+      if (writes > 0) {
+        await UsageReporter.instance.report(area: area, action: 'write', n: writes);
+      }
     } catch (e, st) {
-      // Firestore 트랜잭션 실패 로깅만 (도메인 예외 포함하되 code가 있으면 함께 기록)
       try {
         await DebugFirestoreLogger().log({
           'op': 'plate.create.transaction',
@@ -235,11 +239,12 @@ class PlateCreationService {
       rethrow;
     }
 
-    // ✅ (리팩터링) 커스텀 상태 upsert: 항상 set(merge:true) 1회
+    // ✅ plate_status upsert → write 1
     if (customStatus != null && customStatus.trim().isNotEmpty) {
       final statusDocRef = _firestore.collection('plate_status').doc(documentId);
       final now = Timestamp.now();
-      final expireAt = Timestamp.fromDate(DateTime.now().add(const Duration(days: 1)));
+      final expireAt =
+      Timestamp.fromDate(DateTime.now().add(const Duration(days: 1)));
 
       final payload = <String, dynamic>{
         'customStatus': customStatus.trim(),
@@ -251,8 +256,8 @@ class PlateCreationService {
 
       try {
         await statusDocRef.set(payload, SetOptions(merge: true));
+        await UsageReporter.instance.report(area: area, action: 'write', n: 1); // ✅
       } on FirebaseException catch (e, st) {
-        // set 실패 로깅
         try {
           await DebugFirestoreLogger().log({
             'op': 'plateStatus.upsert.set',
@@ -270,7 +275,6 @@ class PlateCreationService {
         } catch (_) {}
         rethrow;
       } catch (e, st) {
-        // FirebaseException 이외 예외도 로깅(네트워크/플랫폼 등)
         try {
           await DebugFirestoreLogger().log({
             'op': 'plateStatus.upsert.unknown',

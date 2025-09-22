@@ -6,6 +6,7 @@ import 'dart:developer' as dev;
 import '../../models/plate_log_model.dart';
 import '../../models/plate_model.dart';
 import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
+import '../../utils/usage_reporter.dart'; // ✅ 추가
 
 class PlateWriteService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -17,14 +18,16 @@ class PlateWriteService {
       final docSnapshot =
       await docRef.get().timeout(const Duration(seconds: 10));
 
+      // ✅ read 1회 (prefetch)
+      final preArea = (docSnapshot.data()?['area'] ?? plate.area ?? 'unknown') as String;
+      await UsageReporter.instance.report(area: preArea, action: 'read', n: 1);
+
       var newData = plate.toMap();
-      newData =
-          _enforceZeroFeeLock(newData, existing: docSnapshot.data());
+      newData = _enforceZeroFeeLock(newData, existing: docSnapshot.data());
 
       final exists = docSnapshot.exists;
       if (exists) {
-        final existingData =
-            docSnapshot.data() ?? const <String, dynamic>{};
+        final existingData = docSnapshot.data() ?? const <String, dynamic>{};
 
         final compOld = Map<String, dynamic>.from(existingData)
           ..remove(PlateFields.logs);
@@ -41,6 +44,14 @@ class PlateWriteService {
       await docRef
           .set(newData, SetOptions(merge: true))
           .timeout(const Duration(seconds: 10));
+
+      final area = (newData[PlateFields.area] ??
+          docSnapshot.data()?['area'] ??
+          plate.area ??
+          'unknown') as String;
+
+      // ✅ write 1회
+      await UsageReporter.instance.report(area: area, action: 'write', n: 1);
     } on TimeoutException catch (e, st) {
       try {
         await DebugFirestoreLogger().log({
@@ -103,7 +114,12 @@ class PlateWriteService {
 
     Map<String, dynamic>? current;
     try {
-      current = (await docRef.get().timeout(const Duration(seconds: 10))).data();
+      current =
+          (await docRef.get().timeout(const Duration(seconds: 10))).data();
+
+      // ✅ prefetch read 1회
+      final areaPref = (current?['area'] as String?) ?? 'unknown';
+      await UsageReporter.instance.report(area: areaPref, action: 'read', n: 1);
     } on FirebaseException catch (e, st) {
       try {
         await DebugFirestoreLogger().log({
@@ -152,6 +168,12 @@ class PlateWriteService {
     try {
       await docRef.update(fields);
       debugPrint("✅ 문서 업데이트 완료: $documentId");
+
+      final area = (fields[PlateFields.area] ??
+          current?['area'] ??
+          'unknown') as String;
+      // ✅ write 1회
+      await UsageReporter.instance.report(area: area, action: 'write', n: 1);
     } on FirebaseException catch (e, st) {
       debugPrint("🔥 문서 업데이트 실패: $e");
       try {
@@ -204,8 +226,16 @@ class PlateWriteService {
     final docRef = _firestore.collection('plates').doc(documentId);
 
     try {
+      // area 확보를 위해 한 번 읽어 정확한 테넌트에 누적 (원하지 않으면 'unknown'으로도 가능)
+      final snap = await docRef.get();
+      final area = (snap.data()?['area'] as String?) ?? 'unknown';
+      await UsageReporter.instance.report(area: area, action: 'read', n: 1); // prefetch read
+
       await docRef.delete();
       dev.log("🗑️ 문서 삭제 완료: $documentId", name: "Firestore");
+
+      // ✅ delete 1회
+      await UsageReporter.instance.report(area: area, action: 'delete', n: 1);
     } on FirebaseException catch (e, st) {
       if (e.code == 'not-found') {
         debugPrint("⚠️ 삭제 시 문서 없음 (무시): $documentId");
@@ -259,6 +289,9 @@ class PlateWriteService {
         'isSelected': isSelected,
         'selectedBy': isSelected ? selectedBy : null,
       });
+
+      // ✅ area를 읽지 않고, 단순 write 1회로만 보고(테넌트별 정밀 분할 필요하면 area fetch 추가)
+      await UsageReporter.instance.report(area: 'unknown', action: 'write', n: 1);
     } on FirebaseException catch (e, st) {
       if (e.code == 'not-found') {
         debugPrint("번호판 문서를 찾을 수 없습니다: $id");
