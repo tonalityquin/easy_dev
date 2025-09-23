@@ -110,12 +110,13 @@ class UserWriteService {
     try {
       await docRef.set(user.toMap());
 
-      await UsageReporter.instance.report(
+      /// Usage 계측 완료
+      /*await UsageReporter.instance.report(
         area: _inferAreaFromHyphenId(user.id),
         action: 'write',
         n: 1,
         source: 'UserWriteService.updateUser',
-      );
+      );*/
     } on FirebaseException catch (e, st) {
       try {
         await DebugFirestoreLogger().log({

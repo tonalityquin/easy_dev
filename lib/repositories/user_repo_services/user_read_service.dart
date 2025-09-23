@@ -42,8 +42,8 @@ class UserReadService {
     return (ca?.trim().isNotEmpty == true)
         ? ca!.trim()
         : (sa?.trim().isNotEmpty == true)
-        ? sa!.trim()
-        : _inferAreaFromHyphenId(id);
+            ? sa!.trim()
+            : _inferAreaFromHyphenId(id);
   }
 
   // TabletModel -> UserModel 매핑 (phone <= handle)
@@ -62,7 +62,8 @@ class UserReadService {
       isWorking: t.isWorking,
       name: t.name,
       password: t.password,
-      phone: t.handle, // 🔑 handle을 phone 슬롯에 매핑
+      phone: t.handle,
+      // 🔑 handle을 phone 슬롯에 매핑
       position: t.position,
       role: t.role,
       selectedArea: t.selectedArea,
@@ -72,6 +73,7 @@ class UserReadService {
 
   // ----- In-memory cache for englishName -----
   static final Map<String, String?> _englishNameMemCache = {};
+
   String _enKey(String division, String area) => 'englishName_${division}_$area';
 
   // ----- Streams -----
@@ -139,11 +141,10 @@ class UserReadService {
   Future<UserModel?> getUserByPhone(String phone) async {
     debugPrint("getUserByPhone, 조회 시작 - phone: $phone");
     try {
-      final querySnapshot =
-      await _getUserCollectionRef().where('phone', isEqualTo: phone).limit(1).get();
+      final querySnapshot = await _getUserCollectionRef().where('phone', isEqualTo: phone).limit(1).get();
 
-      // read 보고: 결과가 0이어도 1로 보정
-      final n = querySnapshot.docs.isEmpty ? 1 : querySnapshot.docs.length;
+      /// Usage 테스트 계측 완료
+      /*final n = querySnapshot.docs.isEmpty ? 1 : querySnapshot.docs.length;
       final area = querySnapshot.docs.isNotEmpty
           ? _areaFromDoc(querySnapshot.docs.first.data(), querySnapshot.docs.first.id)
           : 'unknown';
@@ -152,7 +153,7 @@ class UserReadService {
         action: 'read',
         n: n,
         source: 'UserReadService.getUserByPhone',
-      );
+      );*/
 
       if (querySnapshot.docs.isNotEmpty) {
         final doc = querySnapshot.docs.first;
@@ -186,8 +187,7 @@ class UserReadService {
       }
 
       final n = qs.docs.isEmpty ? 1 : qs.docs.length;
-      final area =
-      qs.docs.isNotEmpty ? _areaFromDoc(qs.docs.first.data(), qs.docs.first.id) : 'unknown';
+      final area = qs.docs.isNotEmpty ? _areaFromDoc(qs.docs.first.data(), qs.docs.first.id) : 'unknown';
       await UsageReporter.instance.report(
         area: area,
         action: 'read',
@@ -266,8 +266,7 @@ class UserReadService {
       final qs = await _getTabletCollectionRef().where('handle', isEqualTo: h).limit(1).get();
 
       final n = qs.docs.isEmpty ? 1 : qs.docs.length;
-      final area =
-      qs.docs.isNotEmpty ? _inferAreaFromHyphenId(qs.docs.first.id) : 'unknown';
+      final area = qs.docs.isNotEmpty ? _inferAreaFromHyphenId(qs.docs.first.id) : 'unknown';
       await UsageReporter.instance.report(
         area: area,
         action: 'read',
@@ -337,11 +336,9 @@ class UserReadService {
     debugPrint('🔥 Firestore 호출 시작 (users) → $selectedArea');
 
     try {
-      final querySnapshot =
-      await _getUserCollectionRef().where('areas', arrayContains: selectedArea).get();
+      final querySnapshot = await _getUserCollectionRef().where('areas', arrayContains: selectedArea).get();
 
-      final users =
-      querySnapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
+      final users = querySnapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
 
       // read 보고: 결과 수(없으면 1)
       final n = users.isEmpty ? 1 : users.length;
@@ -373,12 +370,10 @@ class UserReadService {
     debugPrint('🔥 Firestore 호출 시작 (tablet) → $selectedArea');
 
     try {
-      final querySnapshot =
-      await _getTabletCollectionRef().where('areas', arrayContains: selectedArea).get();
+      final querySnapshot = await _getTabletCollectionRef().where('areas', arrayContains: selectedArea).get();
 
       // TabletModel → UserModel 변환
-      final tablets =
-      querySnapshot.docs.map((doc) => TabletModel.fromMap(doc.id, doc.data())).toList();
+      final tablets = querySnapshot.docs.map((doc) => TabletModel.fromMap(doc.id, doc.data())).toList();
       final users = tablets.map(_tabletToUser).toList();
 
       final n = users.isEmpty ? 1 : users.length;
