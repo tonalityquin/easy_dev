@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'app_navigator.dart'; // ✅ 전역 navigatorKey 사용
 
 Future<T> runWithBlockingDialog<T>({
   required BuildContext context,
@@ -33,13 +34,17 @@ Future<T> runWithBlockingDialog<T>({
   );
 
   try {
-    // 2) 실제 작업 수행
+    // 2) 실제 작업 수행 (⚠️ 여기선 라우팅하지 않음)
     final result = await task();
     return result;
   } finally {
-    // 3) 작업 끝나면 모달 닫기
-    if (context.mounted) {
-      Navigator.of(context, rootNavigator: true).pop();
+    // 3) 모달 닫기 — 화면 전환으로 context가 unmounted여도 안전하게 닫힘
+    final nav = AppNavigator.nav;
+    if (nav?.canPop() ?? false) {
+      nav!.pop();
+    } else if (context.mounted) {
+      final rnav = Navigator.of(context, rootNavigator: true);
+      if (rnav.canPop()) rnav.pop();
     }
   }
 }

@@ -1,4 +1,3 @@
-// lib/screens/commute_package/commute_inside_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -31,8 +30,15 @@ class _CommuteInsideScreenState extends State<CommuteInsideScreen> {
     super.initState();
     controller.initialize(context);
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadCustomKakaoUrl();
+    // OPTION A: 자동 라우팅은 최초 진입 시 1회만 수행
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _loadCustomKakaoUrl();
+      if (!mounted) return;
+
+      final userState = context.read<UserState>();
+      if (userState.isWorking) {
+        controller.redirectIfWorking(context, userState);
+      }
     });
   }
 
@@ -59,7 +65,8 @@ class _CommuteInsideScreenState extends State<CommuteInsideScreen> {
       builder: (sheetCtx) {
         return DraggableScrollableSheet(
           expand: false,
-          initialChildSize: 1.0, // 최상단까지
+          initialChildSize: 1.0,
+          // 최상단까지
           minChildSize: 0.25,
           maxChildSize: 1.0,
           builder: (ctx, scrollController) {
@@ -188,9 +195,7 @@ class _CommuteInsideScreenState extends State<CommuteInsideScreen> {
       child: Scaffold(
         body: Consumer<UserState>(
           builder: (context, userState, _) {
-            if (userState.isWorking) {
-              controller.redirectIfWorking(context, userState);
-            }
+            // 자동 라우팅은 initState의 addPostFrameCallback에서 1회 수행
 
             return SafeArea(
               child: Stack(
