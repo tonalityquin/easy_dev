@@ -28,15 +28,20 @@ class MyTaskHandler implements TaskHandler {
       debugPrint('[HANDLER][${_ts()}] Firebase init error: $e\n$st');
     }
 
+    // 핸들러는 PlateTTS를 직접 시작하지 않습니다. (앱에서 시작)
+    // 초기에는 안전하게 정리만 수행.
     PlateTtsListenerService.stop();
   }
 
   @override
-  Future<void> onRepeatEvent(DateTime timestamp) async {}
+  Future<void> onRepeatEvent(DateTime timestamp) async {
+    // no-op: 반복 이벤트에서도 PlateTTS 구독/시작을 건드리지 않습니다.
+  }
 
   @override
   Future<void> onDestroy(DateTime timestamp, bool isServiceDetached) async {
     debugPrint('[HANDLER][${_ts()}] onDestroy: detached=$isServiceDetached → stop listener (area=$_listeningArea)');
+    // 서비스 종료 시에는 안전하게 정리
     PlateTtsListenerService.stop();
     _listeningArea = null;
   }
@@ -78,7 +83,7 @@ class MyTaskHandler implements TaskHandler {
       debugPrint('[HANDLER][${_ts()}] unsupported data type=${data.runtimeType}');
     }
 
-    // 필터 들어오면 즉시 반영(리스타트 불필요)
+    // 필터 들어오면 즉시 반영(구독 자체는 앱이 관리)
     if (incomingFilters != null) {
       PlateTtsListenerService.updateFilters(incomingFilters);
     }
@@ -91,13 +96,9 @@ class MyTaskHandler implements TaskHandler {
       return;
     }
 
-    debugPrint('[HANDLER][${_ts()}] RESUBSCRIBE: $_listeningArea → $area');
-    PlateTtsListenerService.stop();
-    try {
-      PlateTtsListenerService.start(area, force: true);
-      _listeningArea = area;
-    } catch (e, st) {
-      debugPrint('[HANDLER][${_ts()}] start error: $e\n$st');
-    }
+    // 🔁 기존: stop → start(area, force:true)
+    // ✅ 변경: 핸들러는 시작/재구독을 하지 않음. 앱(UserState)에서만 시작하도록 위임.
+    _listeningArea = area;
+    debugPrint('[HANDLER][${_ts()}] area updated to "$area" (app-driven start only; handler no-op)');
   }
 }

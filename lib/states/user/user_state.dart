@@ -10,7 +10,6 @@ import '../../models/user_model.dart';
 import '../../utils/tts/plate_tts_listener_service.dart';
 import '../../utils/tts/chat_tts_listener_service.dart';
 import '../area/area_state.dart';
-import '../../utils/tts/tts_ownership.dart';
 
 class UserState extends ChangeNotifier {
   final UserRepository _repository;
@@ -389,9 +388,8 @@ class UserState extends ChangeNotifier {
 
       await _areaState.initializeArea(trimmedArea);
 
-      if (await TtsOwnership.isAppOwner()) {
-        PlateTtsListenerService.start(trimmedArea);
-      }
+      // ✅ PlateTTS도 ChatTTS와 동일한 시작 지점에서 무조건 시작
+      PlateTtsListenerService.start(trimmedArea);
       ChatTtsListenerService.start(trimmedArea);
     } catch (e) {
       debugPrint("loadUserToLogIn, 오류: $e");
@@ -436,9 +434,8 @@ class UserState extends ChangeNotifier {
           handle, userData.areas.firstOrNull ?? '', selectedArea);
       await _areaState.initializeArea(selectedArea);
 
-      if (await TtsOwnership.isAppOwner()) {
-        PlateTtsListenerService.start(selectedArea);
-      }
+      // ✅ PlateTTS도 ChatTTS와 동일한 시작 지점에서 무조건 시작
+      PlateTtsListenerService.start(selectedArea);
       ChatTtsListenerService.start(selectedArea);
     } catch (e) {
       debugPrint("loadTabletToLogIn, 오류: $e");
@@ -471,9 +468,8 @@ class UserState extends ChangeNotifier {
 
     await _areaState.updateArea(newArea, isSyncing: true);
 
-    if (await TtsOwnership.isAppOwner()) {
-      PlateTtsListenerService.start(newArea);
-    }
+    // ✅ 지역 변경 시에도 Plate/Chat TTS 모두 동일 타이밍으로 시작
+    PlateTtsListenerService.start(newArea);
     ChatTtsListenerService.start(newArea);
   }
 

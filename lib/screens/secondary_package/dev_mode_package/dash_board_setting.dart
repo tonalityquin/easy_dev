@@ -24,6 +24,7 @@ import '../../../states/bill/bill_state.dart';
 import '../../../utils/tts/tts_user_filters.dart';
 import '../../../utils/sheets_config.dart';
 import '../../../utils/tts/chat_tts_listener_service.dart';
+import '../../../utils/tts/plate_tts_listener_service.dart'; // ✅ PlateTTS setEnabled 호출을 위해 추가
 import '../../../utils/snackbar_helper.dart';
 import '../../../utils/logout_helper.dart';
 
@@ -99,6 +100,15 @@ class _DashboardSettingState extends State<DashboardSetting> {
       debugPrint('ChatTtsListenerService.setEnabled 초기화 실패: $e');
     }
 
+    // ✅ PlateTTS: parking/departure/completed 중 하나라도 켜져 있으면 전체 활성화
+    try {
+      await PlateTtsListenerService.setEnabled(
+        loaded.parking || loaded.departure || loaded.completed,
+      );
+    } catch (e) {
+      debugPrint('PlateTtsListenerService.setEnabled 초기화 실패: $e');
+    }
+
     if (!mounted) return;
     setState(() {
       _filters = loaded;
@@ -119,6 +129,11 @@ class _DashboardSettingState extends State<DashboardSetting> {
 
       // Chat TTS on/off 즉시 반영
       await ChatTtsListenerService.setEnabled(_filters.chat);
+
+      // ✅ PlateTTS: parking/departure/completed 값 합성하여 마스터 on/off 즉시 반영
+      await PlateTtsListenerService.setEnabled(
+        _filters.parking || _filters.departure || _filters.completed,
+      );
 
       final area = context.read<AreaState>().currentArea; // 비어있을 수도 있음
       FlutterForegroundTask.sendDataToTask({

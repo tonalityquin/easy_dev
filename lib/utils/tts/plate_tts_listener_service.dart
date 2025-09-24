@@ -25,6 +25,15 @@ String _ts() => DateTime.now().toIso8601String();
 class PlateTtsListenerService {
   static StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _subscription;
 
+  // ===== Global master ON/OFF (ChatTTS와 동일한 가드) =====
+  static bool _enabled = true;
+
+  /// 대시보드에서 즉시 반영할 수 있도록 공개 가드
+  static Future<void> setEnabled(bool v) async {
+    _enabled = v;
+    _log('master enabled=$_enabled');
+  }
+
   // 타입 전환 감지용
   static final Map<String, String?> _lastTypes = {};
 
@@ -84,6 +93,7 @@ class PlateTtsListenerService {
 
   static bool _isEnabledForType(String? type) {
     if (type == null) return false;
+    if (!_enabled) return false; // ✅ 마스터 가드: OFF면 모두 스킵
     if (type == PlateType.parkingRequests.firestoreValue) return _filters.parking;
     if (type == PlateType.departureRequests.firestoreValue) return _filters.departure;
     if (type == PlateType.departureCompleted.firestoreValue) return _filters.completed;
