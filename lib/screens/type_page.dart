@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../enums/plate_type.dart';
+
 // 🔁 리팩터링: 카운트 조회에 Repository가 더 이상 필요하지 않으므로 제거
 // import '../repositories/plate_repo_services/plate_repository.dart';
 import '../states/calendar/field_calendar_state.dart';
@@ -38,6 +39,17 @@ class TypePage extends StatefulWidget {
 }
 
 class _TypePageState extends State<TypePage> {
+  @override
+  void initState() {
+    super.initState();
+    // ✅ 필드 페이지 진입 시 PlateState 활성화 + 동기화
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final plateState = context.read<PlateState>();
+      plateState.enableForTypePages();
+      plateState.syncWithAreaState();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(

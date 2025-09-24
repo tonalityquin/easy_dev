@@ -1,3 +1,4 @@
+// lib/widgets/dialog/area_picker_bottom_sheet.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -101,15 +102,15 @@ void areaPickerBottomSheet({
                         },
                         children: userAreas
                             .map((area) => Center(
-                                  child: Text(
-                                    area,
-                                    style: const TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.black87,
-                                    ),
-                                  ),
-                                ))
+                          child: Text(
+                            area,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black87,
+                            ),
+                          ),
+                        ))
                             .toList(),
                       ),
                     ),
@@ -137,9 +138,9 @@ void areaPickerBottomSheet({
                         onPressed: () async {
                           Navigator.of(sheetCtx).pop();
 
+                          // 지역 상태/유저 상태 업데이트 (구독 판단 전 선반영)
                           areaState.updateAreaPicker(tempSelected);
                           await userState.areaPickerCurrentArea(tempSelected);
-                          plateState.syncWithAreaState();
 
                           final userDivision = userState.user?.divisions.first ?? '';
                           try {
@@ -166,8 +167,13 @@ void areaPickerBottomSheet({
                             if (!rootContext.mounted) return;
 
                             if (isHeadquarter) {
+                              // ✅ HQ 전환: 모든 구독 해제 → HQ 페이지로
+                              plateState.disableAll();
                               Navigator.pushReplacementNamed(rootContext, AppRoutes.headquarterPage);
                             } else {
+                              // ✅ 필드 전환: 구독 활성화 + 동기화 → 필드 페이지로
+                              plateState.enableForTypePages();
+                              plateState.syncWithAreaState();
                               Navigator.pushReplacementNamed(rootContext, AppRoutes.typePage);
                             }
                           } catch (e, st) {

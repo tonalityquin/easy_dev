@@ -7,7 +7,6 @@ import 'plate_repository.dart';
 import 'plate_stream_service.dart';
 import 'plate_write_service.dart';
 import 'plate_query_service.dart';
-import 'plate_count_service.dart';
 import 'plate_creation_service.dart';
 import 'plate_status_service.dart';
 

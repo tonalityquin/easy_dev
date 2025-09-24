@@ -1,3 +1,4 @@
+// lib/states/plate/plate_state.dart
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -13,6 +14,9 @@ import '../../utils/usage_reporter.dart';
 class PlateState extends ChangeNotifier {
   final PlateRepository _repository;
   final AreaState _areaState;
+
+  // ✅ 필드 페이지에서만 스트림을 켜기 위한 스위치 (HQ에서는 false 유지)
+  bool _enabled = false;
 
   final Map<String, bool> previousIsLockedFee = {};
 
@@ -46,7 +50,8 @@ class PlateState extends ChangeNotifier {
 
   PlateState(this._repository, this._areaState) {
     _areaState.addListener(_onAreaChanged);
-    _initDefaultSubscriptions();
+    // ❌ 자동 구독 제거: 필드 페이지(TypePage)에서 명시적으로 enableForTypePages() 호출
+    // _initDefaultSubscriptions();
   }
 
   String get currentArea => _areaState.currentArea;
@@ -58,6 +63,23 @@ class PlateState extends ChangeNotifier {
   bool isSubscribed(PlateType type) => _desiredSubscriptions.contains(type);
 
   String? getSubscribedArea(PlateType type) => _subscribedAreas[type];
+
+  // ─────────────────────────────────────────────────────────────
+  // 공개 스위치: 필드 페이지에서만 구독 활성화/비활성화
+  // ─────────────────────────────────────────────────────────────
+  void enableForTypePages() {
+    if (_enabled) return;
+    _enabled = true;
+    debugPrint('🔔 PlateState enabled (Type pages)');
+    _initDefaultSubscriptions();
+  }
+
+  void disableAll() {
+    if (!_enabled && _subscriptions.isEmpty) return;
+    _enabled = false;
+    debugPrint('🔕 PlateState disabled (HQ or leaving type pages)');
+    _cancelAllSubscriptions();
+  }
 
   // ─────────────────────────────────────────────────────────────
   // UsageReporter helpers (이 파일에서 발생하는 Firebase 동작만 계측)
@@ -95,6 +117,12 @@ class PlateState extends ChangeNotifier {
   // ─────────────────────────────────────────────────────────────
 
   void subscribeType(PlateType type) {
+    // ✅ HQ 등 비활성 상태면 아무 것도 하지 않음 (비용 방지)
+    if (!_enabled) {
+      debugPrint('🔕 PlateState disabled → subscribeType 무시: $type');
+      return;
+    }
+
     _desiredSubscriptions.add(type);
 
     final descending = _isSortedMap[type] ?? true;
@@ -126,8 +154,9 @@ class PlateState extends ChangeNotifier {
         area: area,
       );
 
-      final sub = _repository.departureUnpaidSnapshots(area, descending: descending).listen(
-          (QuerySnapshot<Map<String, dynamic>> snapshot) async {
+      final sub = _repository
+          .departureUnpaidSnapshots(area, descending: descending)
+          .listen((QuerySnapshot<Map<String, dynamic>> snapshot) async {
         // 📈 Firebase READ: 스냅샷 수신 (문서 수만큼 1회 집계)
         _reportRead(
           'PlateState.subscribeType.departureUnpaidSnapshots.onData',
@@ -137,13 +166,13 @@ class PlateState extends ChangeNotifier {
 
         final results = snapshot.docs
             .map((doc) {
-              try {
-                return PlateModel.fromDocument(doc);
-              } catch (e) {
-                debugPrint('❌ departureCompleted parsing error: $e');
-                return null;
-              }
-            })
+          try {
+            return PlateModel.fromDocument(doc);
+          } catch (e) {
+            debugPrint('❌ departureCompleted parsing error: $e');
+            return null;
+          }
+        })
             .whereType<PlateModel>()
             .toList();
         _data[type] = results;
@@ -164,7 +193,8 @@ class PlateState extends ChangeNotifier {
             final data = fresh.data();
             if (data == null) continue;
 
-            final isDepartureCompleted = data['type'] == PlateType.departureCompleted.firestoreValue;
+            final isDepartureCompleted =
+                data['type'] == PlateType.departureCompleted.firestoreValue;
             final sameArea = data['area'] == area;
             final isLockedFeeTrue = data['isLockedFee'] == true;
 
@@ -282,7 +312,7 @@ class PlateState extends ChangeNotifier {
 
     try {
       return plates.firstWhere(
-        (plate) => plate.isSelected && plate.selectedBy == userName,
+            (plate) => plate.isSelected && plate.selectedBy == userName,
       );
     } catch (_) {
       return null;
@@ -317,27 +347,29 @@ class PlateState extends ChangeNotifier {
         return;
       }
 
-      final alreadySelected = _data.entries.expand((entry) => entry.value).firstWhere(
+      final alreadySelected = _data.entries
+          .expand((entry) => entry.value)
+          .firstWhere(
             (p) => p.isSelected && p.selectedBy == userName && p.id != plateId,
-            orElse: () => PlateModel(
-              id: '',
-              plateNumber: '',
-              plateFourDigit: '',
-              type: '',
-              requestTime: DateTime.now(),
-              location: '',
-              area: '',
-              userName: '',
-              isSelected: false,
-              statusList: [],
-            ),
-          );
+        orElse: () => PlateModel(
+          id: '',
+          plateNumber: '',
+          plateFourDigit: '',
+          type: '',
+          requestTime: DateTime.now(),
+          location: '',
+          area: '',
+          userName: '',
+          isSelected: false,
+          statusList: [],
+        ),
+      );
 
       if (alreadySelected.id.isNotEmpty && !plate.isSelected) {
         onError(
           '⚠️ 이미 다른 번호판을 선택한 상태입니다.\n'
-          '• 선택된 번호판: ${alreadySelected.plateNumber}\n'
-          '선택을 해제한 후 다시 시도해 주세요.',
+              '• 선택된 번호판: ${alreadySelected.plateNumber}\n'
+              '선택을 해제한 후 다시 시도해 주세요.',
         );
         return;
       }
@@ -401,6 +433,10 @@ class PlateState extends ChangeNotifier {
   }
 
   void syncWithAreaState() {
+    if (!_enabled) {
+      debugPrint("🔕 PlateState disabled → syncWithAreaState 무시");
+      return;
+    }
     debugPrint("🔄 syncWithAreaState : 지역 변경 감지 및 상태 갱신 호출됨");
     _cancelAllSubscriptions();
     for (final t in _desiredSubscriptions) {
@@ -420,6 +456,10 @@ class PlateState extends ChangeNotifier {
   }
 
   void _onAreaChanged() {
+    if (!_enabled) {
+      debugPrint("🔕 PlateState disabled → _onAreaChanged 무시");
+      return;
+    }
     debugPrint("🔄 지역 변경 감지됨: ${_areaState.currentArea}");
     _cancelAllSubscriptions();
     for (final t in _desiredSubscriptions) {
