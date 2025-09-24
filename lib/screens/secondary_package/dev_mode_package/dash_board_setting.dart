@@ -24,7 +24,7 @@ import '../../../states/bill/bill_state.dart';
 import '../../../utils/tts/tts_user_filters.dart';
 import '../../../utils/sheets_config.dart';
 import '../../../utils/tts/chat_tts_listener_service.dart';
-import '../../../utils/tts/plate_tts_listener_service.dart'; // ✅ PlateTTS setEnabled 호출을 위해 추가
+import '../../../utils/tts/plate_tts_listener_service.dart'; // ✅ PlateTTS setEnabled / updateFilters
 import '../../../utils/snackbar_helper.dart';
 import '../../../utils/logout_helper.dart';
 
@@ -102,12 +102,22 @@ class _DashboardSettingState extends State<DashboardSetting> {
 
     // ✅ PlateTTS: parking/departure/completed 중 하나라도 켜져 있으면 전체 활성화
     try {
-      await PlateTtsListenerService.setEnabled(
-        loaded.parking || loaded.departure || loaded.completed,
-      );
+      final masterOn = loaded.parking || loaded.departure || loaded.completed;
+      await PlateTtsListenerService.setEnabled(masterOn);
+      // ✅ 앱 isolate에서도 즉시 반영(중요): 타입별 필터 상태를 직접 주입
+      PlateTtsListenerService.updateFilters(loaded);
     } catch (e) {
-      debugPrint('PlateTtsListenerService.setEnabled 초기화 실패: $e');
+      debugPrint('PlateTtsListenerService 초기화 실패: $e');
     }
+
+    // ✅ FG isolate에도 동기화: 필터 & area 전달(필요 시)
+    try {
+      final area = context.read<AreaState>().currentArea;
+      FlutterForegroundTask.sendDataToTask({
+        'area': area,
+        'ttsFilters': loaded.toMap(),
+      });
+    } catch (_) {}
 
     if (!mounted) return;
     setState(() {
@@ -130,11 +140,14 @@ class _DashboardSettingState extends State<DashboardSetting> {
       // Chat TTS on/off 즉시 반영
       await ChatTtsListenerService.setEnabled(_filters.chat);
 
-      // ✅ PlateTTS: parking/departure/completed 값 합성하여 마스터 on/off 즉시 반영
-      await PlateTtsListenerService.setEnabled(
-        _filters.parking || _filters.departure || _filters.completed,
-      );
+      // ✅ PlateTTS: parking/departure/completed 합성하여 마스터 on/off 즉시 반영
+      final masterOn = _filters.parking || _filters.departure || _filters.completed;
+      await PlateTtsListenerService.setEnabled(masterOn);
 
+      // ✅ 앱 isolate 필터 즉시 반영(핵심)
+      PlateTtsListenerService.updateFilters(_filters);
+
+      // ✅ FG isolate에도 최신 필터 전달
       final area = context.read<AreaState>().currentArea; // 비어있을 수도 있음
       FlutterForegroundTask.sendDataToTask({
         'area': area,
@@ -156,6 +169,8 @@ class _DashboardSettingState extends State<DashboardSetting> {
 
   Future<void> _resendToForeground() async {
     final area = context.read<AreaState>().currentArea;
+    // ✅ 재전송 시에도 앱 isolate 필터 싱크를 보수적으로 맞춰줌
+    PlateTtsListenerService.updateFilters(_filters);
     FlutterForegroundTask.sendDataToTask({
       'area': area,
       'ttsFilters': _filters.toMap(),
