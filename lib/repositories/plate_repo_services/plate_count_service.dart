@@ -7,53 +7,6 @@ import '../../utils/usage_reporter.dart'; // ✅
 class PlateCountService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  Future<int> getPlateCountForTypePage(
-      PlateType type,
-      String area,
-      ) async {
-    try {
-      final aggregateQuerySnapshot = await _firestore
-          .collection('plates')
-          .where('type', isEqualTo: type.firestoreValue)
-          .where('area', isEqualTo: area)
-          .count()
-          .get();
-
-      final count = aggregateQuerySnapshot.count ?? 0;
-
-      // ✅ Aggregation read는 1회로 단순 보고
-      await UsageReporter.instance.report(
-        area: area,
-        action: 'read',
-        n: 1,
-        source: 'PlateCountService.getPlateCountForTypePage',
-      );
-
-      return count;
-    } catch (e, st) {
-      try {
-        final typeName = type.toString().split('.').last;
-        await DebugFirestoreLogger().log({
-          'op': 'plates.count.typePage',
-          'collection': 'plates',
-          'filters': {
-            'type': type.firestoreValue,
-            'typeEnum': typeName,
-            'area': area,
-          },
-          'error': {
-            'type': e.runtimeType.toString(),
-            if (e is FirebaseException) 'code': e.code,
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': ['plates', 'count', 'typePage', 'error'],
-        }, level: 'error');
-      } catch (_) {}
-      rethrow;
-    }
-  }
-
   Future<int> getParkingCompletedCountAll(String area) async {
     final baseQuery = _firestore
         .collection('plates')

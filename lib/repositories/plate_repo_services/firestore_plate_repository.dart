@@ -15,7 +15,6 @@ class FirestorePlateRepository implements PlateRepository {
   final PlateStreamService _streamService = PlateStreamService();
   final PlateWriteService _writeService = PlateWriteService();
   final PlateQueryService _queryService = PlateQueryService();
-  final PlateCountService _countService = PlateCountService();
   final PlateCreationService _creationService = PlateCreationService();
   final PlateStatusService _statusService = PlateStatusService();
 
@@ -163,14 +162,6 @@ class FirestorePlateRepository implements PlateRepository {
       plateFourDigit: plateFourDigit,
       area: area,
     );
-  }
-
-  @override
-  Future<int> getPlateCountForTypePage(
-      PlateType type,
-      String area,
-      ) {
-    return _countService.getPlateCountForTypePage(type, area);
   }
 
   @override

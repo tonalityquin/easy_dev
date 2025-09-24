@@ -18,9 +18,6 @@ abstract class PlateRepository {
         bool descending,
       });
 
-  // ========= Counts =========
-  Future<int> getPlateCountForTypePage(PlateType type, String area);
-
   // ========= Queries =========
   Future<List<PlateModel>> fourDigitCommonQuery({
     required String plateFourDigit,

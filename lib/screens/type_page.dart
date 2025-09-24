@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../enums/plate_type.dart';
-import '../repositories/plate_repo_services/plate_repository.dart';
+// 🔁 리팩터링: 카운트 조회에 Repository가 더 이상 필요하지 않으므로 제거
+// import '../repositories/plate_repo_services/plate_repository.dart';
 import '../states/calendar/field_calendar_state.dart';
 import '../states/page/page_state.dart';
 import '../states/page/page_info.dart';
@@ -150,53 +151,53 @@ class _ChatDashboardBar extends StatelessWidget {
           Expanded(
             child: area.isEmpty
                 ? ElevatedButton(
-                    onPressed: null,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: _Palette.dark.withOpacity(.35),
-                      disabledBackgroundColor: Colors.white,
-                      disabledForegroundColor: _Palette.dark.withOpacity(.35),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.volume_up, size: 20),
-                        SizedBox(width: 6),
-                        Text('다시 듣기'),
-                      ],
-                    ),
-                  )
+              onPressed: null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: _Palette.dark.withOpacity(.35),
+                disabledBackgroundColor: Colors.white,
+                disabledForegroundColor: _Palette.dark.withOpacity(.35),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.volume_up, size: 20),
+                  SizedBox(width: 6),
+                  Text('다시 듣기'),
+                ],
+              ),
+            )
                 : StreamBuilder<String>(
-                    // 최신 메시지를 스트림으로 받되, 화면에는 “다시 듣기”만 보임
-                    stream: latestMessageStream(area),
-                    builder: (context, snapshot) {
-                      final latest = (snapshot.data ?? '').trim();
-                      if (latest.isNotEmpty) {
-                        // 비동기 저장(중복 호출 무방)
-                        _saveLatestToPrefs(area, latest);
-                      }
+              // 최신 메시지를 스트림으로 받되, 화면에는 “다시 듣기”만 보임
+              stream: latestMessageStream(area),
+              builder: (context, snapshot) {
+                final latest = (snapshot.data ?? '').trim();
+                if (latest.isNotEmpty) {
+                  // 비동기 저장(중복 호출 무방)
+                  _saveLatestToPrefs(area, latest);
+                }
 
-                      return ElevatedButton(
-                        onPressed: () => _replayLatestTts(context, area),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: _Palette.base,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.volume_up, size: 20),
-                            SizedBox(width: 6),
-                            Text('다시 듣기', overflow: TextOverflow.ellipsis),
-                          ],
-                        ),
-                      );
-                    },
+                return ElevatedButton(
+                  onPressed: () => _replayLatestTts(context, area),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: _Palette.base,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.volume_up, size: 20),
+                      SizedBox(width: 6),
+                      Text('다시 듣기', overflow: TextOverflow.ellipsis),
+                    ],
+                  ),
+                );
+              },
+            ),
           ),
           const SizedBox(width: 8),
 
@@ -280,7 +281,7 @@ class _RefreshableBodyState extends State<RefreshableBody> {
       _chatOpening = true;
       debugPrint(
         '✅[V] 채팅 오픈 트리거: startDy=${_vStartDy?.toStringAsFixed(1)}, '
-        '거리(${_vDragDistance.toStringAsFixed(1)}), 속도($vy)',
+            '거리(${_vDragDistance.toStringAsFixed(1)}), 속도($vy)',
       );
       // iOS 제스처 충돌 방지용 아주 짧은 디바운스
       await Future<void>.delayed(const Duration(milliseconds: 10));
@@ -375,44 +376,22 @@ class PageBottomNavigation extends StatefulWidget {
 }
 
 class _PageBottomNavigationState extends State<PageBottomNavigation> {
-  String? _area; // 현재 area 캐시
-  final Map<PlateType, Future<int>> _countFutures = {};
-
-  void _ensureFuturesForCurrentAreaAndPages() {
-    final areaNow = context.read<AreaState>().currentArea.trim();
-    final repo = context.read<PlateRepository>();
-    final pages = context.read<PageState>().pages;
-
-    final desiredTypes = <PlateType>{
-      for (final p in pages)
-        if (p.title != '홈') p.collectionKey,
-    };
-
-    final areaChanged = _area != areaNow;
-    if (areaChanged) {
-      _area = areaNow;
-      _countFutures.clear();
-    }
-
-    final removeKeys = _countFutures.keys.where((k) => !desiredTypes.contains(k)).toList();
-    for (final k in removeKeys) {
-      _countFutures.remove(k);
-    }
-
-    for (final type in desiredTypes) {
-      _countFutures.putIfAbsent(type, () => repo.getPlateCountForTypePage(type, _area!));
-    }
-  }
+  // 🔁 리팩터링: 단발 카운트 Future 캐시 제거
+  // String? _area;
+  // final Map<PlateType, Future<int>> _countFutures = {};
+  // void _ensureFuturesForCurrentAreaAndPages() { ... }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _ensureFuturesForCurrentAreaAndPages();
+    // 🔁 리팩터링: 더 이상 준비할 Future가 없으므로 호출 제거
+    // _ensureFuturesForCurrentAreaAndPages();
   }
 
   @override
   Widget build(BuildContext context) {
-    _ensureFuturesForCurrentAreaAndPages();
+    // 🔁 리팩터링: Future 준비 로직 제거
+    // _ensureFuturesForCurrentAreaAndPages();
 
     // 팔레트 기반 선택/비선택 색
     final selectedColor = _Palette.base;
@@ -437,7 +416,7 @@ class _PageBottomNavigationState extends State<PageBottomNavigation> {
           backgroundColor: Colors.white,
           items: List.generate(
             pageState.pages.length,
-            (index) {
+                (index) {
               final pageInfo = pageState.pages[index];
               final isSelected = pageState.selectedIndex == index;
 
@@ -466,14 +445,14 @@ class _PageBottomNavigationState extends State<PageBottomNavigation> {
               }
 
               final PlateType type = pageInfo.collectionKey;
-              final future = _countFutures[type];
 
+              // 🔁 리팩터링 핵심:
+              //   - FutureBuilder<int> → Selector<PlateState, int>
+              //   - PlateState의 실시간 목록 길이로 카운트 표시
               return BottomNavigationBarItem(
-                icon: FutureBuilder<int>(
-                  future: future,
-                  builder: (context, snapshot) {
-                    final count = snapshot.data ?? 0;
-
+                icon: Selector<PlateState, int>(
+                  selector: (_, s) => s.dataOfType(type).length,
+                  builder: (context, count, _) {
                     // ✅ 입차/출차 숫자 색 기존값으로 복원 (비선택 시)
                     final bool isIn = pageInfo.title == '입차 요청';
                     final bool isOut = pageInfo.title == '출차 요청';
