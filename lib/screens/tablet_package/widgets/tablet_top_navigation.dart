@@ -13,6 +13,10 @@ import '../../../utils/tts/tts_user_filters.dart';
 // ⬇️ 로그아웃 공통 헬퍼
 import '../../../utils/logout_helper.dart';
 
+// ✅ 추가: 앱 isolate/Chat/Plate TTS 동기화를 위해 서비스 임포트
+import '../../../utils/tts/chat_tts_listener_service.dart';
+import '../../../utils/tts/plate_tts_listener_service.dart';
+
 class TabletTopNavigation extends StatelessWidget {
   final bool isAreaSelectable;
 
@@ -258,10 +262,24 @@ class TabletTopNavigation extends StatelessWidget {
                         // 시트 열기
                         await _openTtsFilterSheet(context);
 
-                        // 시트에서 저장된 최신 필터를 FG로 즉시 전달
+                        // ✅ 시트에서 저장된 최신 필터를 앱/FG 둘 다에 즉시 동기화
                         final currentArea = context.read<AreaState>().currentArea;
+                        final filters = await TtsUserFilters.load();
+
+                        // ✅ Chat TTS 마스터 on/off 반영
+                        try {
+                          await ChatTtsListenerService.setEnabled(filters.chat);
+                        } catch (_) {}
+
+                        // ✅ Plate TTS 마스터 on/off + 앱 isolate 필터 즉시 반영
+                        try {
+                          final masterOn = filters.parking || filters.departure || filters.completed;
+                          await PlateTtsListenerService.setEnabled(masterOn);
+                          PlateTtsListenerService.updateFilters(filters); // (앱 isolate)
+                        } catch (_) {}
+
+                        // ✅ FG isolate에도 최신 필터 전달
                         if (currentArea.isNotEmpty) {
-                          final filters = await TtsUserFilters.load();
                           FlutterForegroundTask.sendDataToTask({
                             'area': currentArea,
                             'ttsFilters': filters.toMap(),
