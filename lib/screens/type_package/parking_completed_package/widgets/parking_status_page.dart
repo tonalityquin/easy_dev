@@ -12,6 +12,8 @@ import '../../../../utils/usage_reporter.dart';
 /// 주차 현황 페이지
 /// - Firestore Aggregate COUNT 1회 수행 (parking_completed 문서 수)
 /// - ✅ 계측은 Firestore 작업(읽기) 시점에만 수행
+/// - ✅ UI에 **실제 표시될 때만** 집계 수행하여 reads 노이즈 감소
+/// - ✅ 계측 n 값은 “항상 1”로 고정
 class ParkingStatusPage extends StatefulWidget {
   final bool isLocked;
 
@@ -27,66 +29,93 @@ class _ParkingStatusPageState extends State<ParkingStatusPage> {
   int _occupiedCount = 0;      // 영역 전체의 주차 완료 총합
   bool _isCountLoading = true; // 총합 집계 로딩 상태
 
+  // 🔒 UI 표시 시점에만 1회 집계하도록 제어
+  bool _didCountRun = false;
+
   @override
   void initState() {
     super.initState();
+    // 첫 프레임 이후에 라우트 가시성 확인 → 표시 중일 때만 집계
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeRunCount());
+  }
 
-    // 첫 프레임 이후 영역 읽고 Firestore 집계 1회 수행
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 라우트 바인딩이 늦게 잡히는 경우를 대비해 한 번 더 시도
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeRunCount());
+  }
 
-      final area = context.read<AreaState>().currentArea.trim();
+  void _maybeRunCount() {
+    if (_didCountRun) return;
+    // 현재 라우트가 실제로 화면에 표시될 때만 실행
+    final route = ModalRoute.of(context);
+    final isVisible = route == null ? true : (route.isCurrent || route.isActive);
+    if (!isVisible) return;
+    _didCountRun = true;
+    _runAggregateCount();
+  }
 
-      try {
-        final aggQuery = _firestore
-            .collection('plates')
-            .where('area', isEqualTo: area)
-            .where('type', isEqualTo: 'parking_completed')
-            .count();
+  Future<void> _runAggregateCount() async {
+    if (!mounted) return;
 
-        final snap = await aggQuery.get();
-        final cnt = (snap.count ?? 0);
+    final area = context.read<AreaState>().currentArea.trim();
 
-        // ✅ 계측: Firestore READ (aggregate count)
-        try {
-          await UsageReporter.instance.report(
-            area: area,
-            action: 'read', // 읽기
-            n: cnt,
-            source: 'parkingStatus.count.query(parking_completed).aggregate',
-          );
-        } catch (_) {
-          // 계측 실패는 UX에 영향 없음
-        }
-
-        if (!mounted) return;
-        setState(() {
-          _occupiedCount = cnt;
-          _isCountLoading = false;
-        });
-      } catch (e) {
-        // ✅ 계측: Firestore READ 실패도 읽기 시도로 기록(n=0)
-        try {
-          await UsageReporter.instance.report(
-            area: area,
-            action: 'read',
-            n: 0,
-            source:
-            'parkingStatus.count.query(parking_completed).aggregate.error',
-          );
-        } catch (_) {}
-
-        if (!mounted) return;
-        setState(() {
-          _occupiedCount = 0;
-          _isCountLoading = false;
-        });
-      }
+    setState(() {
+      _isCountLoading = true;
     });
+
+    try {
+      final aggQuery = _firestore
+          .collection('plates')
+          .where('area', isEqualTo: area)
+          .where('type', isEqualTo: 'parking_completed')
+          .count();
+
+      final snap = await aggQuery.get();
+      final cnt = (snap.count ?? 0);
+
+      // ✅ 계측: Firestore READ (aggregate count) — n은 항상 1로 고정
+      try {
+        await UsageReporter.instance.report(
+          area: area,
+          action: 'read', // 읽기
+          n: 1,           // ← 고정(집계 1회당 read 1회)
+          source: 'parkingStatus.count.query(parking_completed).aggregate',
+        );
+      } catch (_) {
+        // 계측 실패는 UX에 영향 없음
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _occupiedCount = cnt;
+        _isCountLoading = false;
+      });
+    } catch (e) {
+      // ✅ 실패도 집계 시도 자체를 1회로 기록 (n=1 고정)
+      try {
+        await UsageReporter.instance.report(
+          area: context.read<AreaState>().currentArea.trim(),
+          action: 'read',
+          n: 1, // ← 실패여도 1회 시도로 고정
+          source: 'parkingStatus.count.query(parking_completed).aggregate.error',
+        );
+      } catch (_) {}
+
+      if (!mounted) return;
+      setState(() {
+        _occupiedCount = 0;
+        _isCountLoading = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    // 빌드 후에도 가시성 변화가 있으면 한 번 더 시도(이미 실행되었으면 무시됨)
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeRunCount());
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: Stack(
