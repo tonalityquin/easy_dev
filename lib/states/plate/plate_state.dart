@@ -148,67 +148,57 @@ class PlateState extends ChangeNotifier {
     notifyListeners();
 
     if (type == PlateType.departureCompleted) {
-      /*      // 📈 Firebase READ: unpaid snapshots listen 시작
-      _reportRead(
-        'PlateState.subscribeType.departureUnpaidSnapshots.listen.start',
-        area: area,
-      );*/
+      final sub = _repository
+          .departureUnpaidSnapshots(area, descending: descending)
+          .listen((QuerySnapshot<Map<String, dynamic>> snapshot) async {
+        // ⛔️ 여기서는 더 이상 onData로 read 계측하지 않음 (서비스 계층으로 이관)
 
-      final sub = _repository.departureUnpaidSnapshots(area, descending: descending).listen(
-              (QuerySnapshot<Map<String, dynamic>> snapshot) async {
-            // 📈 Firebase READ: 스냅샷 수신 (문서 수만큼 1회 집계)
+        final results = snapshot.docs
+            .map((doc) {
+          try {
+            return PlateModel.fromDocument(doc);
+          } catch (e) {
+            debugPrint('❌ departureCompleted parsing error: $e');
+            return null;
+          }
+        })
+            .whereType<PlateModel>()
+            .toList();
+        _data[type] = results;
+        notifyListeners();
+
+        for (final change in snapshot.docChanges) {
+          if (change.type != DocumentChangeType.removed) continue;
+          try {
+            final ref = change.doc.reference;
+
+            // 📈 Firebase READ: removed 문서 최신 상태 확인 (server get)
+            final fresh = await ref.get(const GetOptions(source: Source.server));
             _reportRead(
-              'PlateState.subscribeType.departureUnpaidSnapshots.onData',
-              area: area,
-              n: snapshot.docs.length,
+              'PlateState.departureCompleted.removed.ref.get(server)',
+              area: fresh.data()?['area']?.toString() ?? area,
             );
 
-            final results = snapshot.docs
-                .map((doc) {
-              try {
-                return PlateModel.fromDocument(doc);
-              } catch (e) {
-                debugPrint('❌ departureCompleted parsing error: $e');
-                return null;
-              }
-            })
-                .whereType<PlateModel>()
-                .toList();
-            _data[type] = results;
-            notifyListeners();
+            final data = fresh.data();
+            if (data == null) continue;
 
-            for (final change in snapshot.docChanges) {
-              if (change.type != DocumentChangeType.removed) continue;
-              try {
-                final ref = change.doc.reference;
+            final isDepartureCompleted = data['type'] == PlateType.departureCompleted.firestoreValue;
+            final sameArea = data['area'] == area;
+            final isLockedFeeTrue = data['isLockedFee'] == true;
 
-                // 📈 Firebase READ: removed 문서 최신 상태 확인 (server get)
-                final fresh = await ref.get(const GetOptions(source: Source.server));
-                _reportRead(
-                  'PlateState.departureCompleted.removed.ref.get(server)',
-                  area: fresh.data()?['area']?.toString() ?? area,
-                );
+            if (isDepartureCompleted && sameArea && isLockedFeeTrue) {
+              debugPrint('✅ 정산 전이 감지: doc=${fresh.id}, plate=${data['plateNumber']}');
 
-                final data = fresh.data();
-                if (data == null) continue;
-
-                final isDepartureCompleted = data['type'] == PlateType.departureCompleted.firestoreValue;
-                final sameArea = data['area'] == area;
-                final isLockedFeeTrue = data['isLockedFee'] == true;
-
-                if (isDepartureCompleted && sameArea && isLockedFeeTrue) {
-                  debugPrint('✅ 정산 전이 감지: doc=${fresh.id}, plate=${data['plateNumber']}');
-
-                  final key = (data['id'] ?? fresh.id).toString();
-                  previousIsLockedFee[key] = true;
-                }
-              } catch (e) {
-                debugPrint('⚠️ [출차 완료 전이 감지] removed 처리 실패: $e');
-              }
+              final key = (data['id'] ?? fresh.id).toString();
+              previousIsLockedFee[key] = true;
             }
+          } catch (e) {
+            debugPrint('⚠️ [출차 완료 전이 감지] removed 처리 실패: $e');
+          }
+        }
 
-            _isLoading = false;
-          }, onError: (error) {
+        _isLoading = false;
+      }, onError: (error) {
         debugPrint('🔥 [출차 완료] 스냅샷 스트림 에러: $error');
         _isLoading = false;
         notifyListeners();
@@ -219,12 +209,6 @@ class PlateState extends ChangeNotifier {
       return;
     }
 
-    /*    // 📈 Firebase READ: 일반 타입 스트림 listen 시작
-    _reportRead(
-      'PlateState.subscribeType.streamToCurrentArea.listen.start',
-      area: area,
-    );*/
-
     final stream = _repository.streamToCurrentArea(
       type,
       area,
@@ -234,15 +218,10 @@ class PlateState extends ChangeNotifier {
     bool firstDataReceived = false;
 
     final subscription = stream.listen((filteredData) async {
-      // 📈 Firebase READ: 스냅샷 수신 (문서 수만큼 1회 집계)
-      _reportRead(
-        'PlateState.streamToCurrentArea.onData.${_getTypeLabel(type)}',
-        area: area,
-        n: filteredData.length,
-      );
+      // ⛔️ 여기서는 더 이상 onData로 read 계측하지 않음 (서비스 계층으로 이관)
 
       // ─────────────────────────────────────────────────────────
-      // (추가) departureRequests에 대해 "사라진 항목" 감지 → 1회 이벤트 발행
+      // (추가) departureRequests에 대해 "사라진 문서" 감지 이벤트
       // ─────────────────────────────────────────────────────────
       if (type == PlateType.departureRequests) {
         final lastMap = _lastByType[type] ?? {};
@@ -379,7 +358,7 @@ class PlateState extends ChangeNotifier {
         selectedBy: newSelectedBy,
       );
 
-      // 📈 Firebase WRITE: 선택 토글 기록
+      // 📈 Firebase WRITE: 선택 토글 기록 (유지)
       _reportWrite(
         'PlateState.recordWhoPlateClick.toggleSelected',
         area: currentArea,

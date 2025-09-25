@@ -1,3 +1,4 @@
+// lib/repositories/plate_repo_services/plate_stream_service.dart
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -10,11 +11,11 @@ class PlateStreamService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   Stream<List<PlateModel>> streamToCurrentArea(
-      PlateType type,
-      String area, {
-        bool descending = true,
-        String? location,
-      }) {
+    PlateType type,
+    String area, {
+    bool descending = true,
+    String? location,
+  }) {
     final query = _buildPlateQuery(
       type: type,
       area: area,
@@ -22,18 +23,9 @@ class PlateStreamService {
       descending: descending,
     );
 
-    // ✅ 구독 시작 시 read 1회 보고
-    // ignore: unawaited_futures
-    UsageReporter.instance.report(
-      area: area,
-      action: 'read',
-      n: 1,
-      source: 'PlateStreamService.streamToCurrentArea',
-    );
-
     return query
         .snapshots()
-    // Firestore 스트림 실패만 로깅 + 재전파
+        // Firestore 스트림 실패만 로깅 + 재전파
         .handleError((e, st) {
       // ignore: unawaited_futures
       DebugFirestoreLogger().log({
@@ -56,27 +48,46 @@ class PlateStreamService {
 
       Error.throwWithStackTrace(e, st);
     }).map((snapshot) {
-      final results = snapshot.docs.map((doc) {
-        try {
-          return PlateModel.fromDocument(doc);
-        } catch (e, st) {
+      // ✅ 서버 확정 스냅샷만 집계 (로컬 보류 스냅샷 제외)
+      if (!snapshot.metadata.hasPendingWrites) {
+        final added = snapshot.docChanges.where((c) => c.type == DocumentChangeType.added).length;
+        final modified = snapshot.docChanges.where((c) => c.type == DocumentChangeType.modified).length;
+        final n = added + modified;
+        if (n > 0) {
           // ignore: unawaited_futures
-          DebugFirestoreLogger().log({
-            'op': 'plates.stream.parse',
-            'collection': 'plates',
-            'docPath': doc.reference.path,
-            'docId': doc.id,
-            'error': {
-              'type': e.runtimeType.toString(),
-              'message': e.toString(),
-            },
-            'stack': st.toString(),
-            'tags': ['plates', 'stream', 'parse', 'error'],
-            'rawKeys': doc.data().keys.take(30).toList(),
-          }, level: 'error');
-          return null;
+          UsageReporter.instance.report(
+            area: area,
+            action: 'read',
+            n: n,
+            source: 'PlateStreamService.streamToCurrentArea.onData',
+          );
         }
-      }).whereType<PlateModel>().toList();
+      }
+
+      final results = snapshot.docs
+          .map((doc) {
+            try {
+              return PlateModel.fromDocument(doc);
+            } catch (e, st) {
+              // ignore: unawaited_futures
+              DebugFirestoreLogger().log({
+                'op': 'plates.stream.parse',
+                'collection': 'plates',
+                'docPath': doc.reference.path,
+                'docId': doc.id,
+                'error': {
+                  'type': e.runtimeType.toString(),
+                  'message': e.toString(),
+                },
+                'stack': st.toString(),
+                'tags': ['plates', 'stream', 'parse', 'error'],
+                'rawKeys': doc.data().keys.take(30).toList(),
+              }, level: 'error');
+              return null;
+            }
+          })
+          .whereType<PlateModel>()
+          .toList();
 
       return results;
     });
@@ -88,10 +99,8 @@ class PlateStreamService {
     String? location,
     bool descending = true,
   }) {
-    Query<Map<String, dynamic>> query = _firestore
-        .collection('plates')
-        .where('type', isEqualTo: type.firestoreValue)
-        .where('area', isEqualTo: area);
+    Query<Map<String, dynamic>> query =
+        _firestore.collection('plates').where('type', isEqualTo: type.firestoreValue).where('area', isEqualTo: area);
 
     if (type == PlateType.departureCompleted) {
       query = query.where('isLockedFee', isEqualTo: false);
@@ -117,15 +126,6 @@ class PlateStreamService {
         .where('isLockedFee', isEqualTo: false)
         .orderBy(PlateFields.requestTime, descending: descending);
 
-    // ✅ 구독 시작 시 read 1회
-    // ignore: unawaited_futures
-    UsageReporter.instance.report(
-      area: area,
-      action: 'read',
-      n: 1,
-      source: 'PlateStreamService.departureUnpaidSnapshots',
-    );
-
     return query.snapshots().handleError((e, st) {
       // ignore: unawaited_futures
       DebugFirestoreLogger().log({
@@ -147,6 +147,23 @@ class PlateStreamService {
       }, level: 'error');
 
       Error.throwWithStackTrace(e, st);
+    }).map((snapshot) {
+      // ✅ 서버 확정 스냅샷만 집계 (로컬 보류 스냅샷 제외)
+      if (!snapshot.metadata.hasPendingWrites) {
+        final added = snapshot.docChanges.where((c) => c.type == DocumentChangeType.added).length;
+        final modified = snapshot.docChanges.where((c) => c.type == DocumentChangeType.modified).length;
+        final n = added + modified;
+        if (n > 0) {
+          // ignore: unawaited_futures
+          UsageReporter.instance.report(
+            area: area,
+            action: 'read',
+            n: n,
+            source: 'PlateStreamService.departureUnpaidSnapshots.onData',
+          );
+        }
+      }
+      return snapshot;
     });
   }
 }

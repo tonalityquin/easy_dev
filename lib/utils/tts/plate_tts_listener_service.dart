@@ -3,7 +3,9 @@
 // 변경 요약:
 // - (B) 서버 기준선 1건 조회 → request_time & __name__(docId) 기준으로 startAfter 커서 설정
 // - 초기 스냅샷부터 백로그 문서가 결과에 포함되지 않도록 보장
-// - read 카운터(추정) + UsageReporter 계측 추가: baseline 조회 / 초기 스냅샷 / 이후 added/modified/removed
+// - read 카운터(추정) + UsageReporter 계측 추가: baseline 조회 / 초기 스냅샷 / 이후 added/modified
+// - ✅ pendingWrites(로컬 보류) 스냅샷은 건너뜀
+// - ✅ removed는 read에서 제외(보수적)
 //
 // 필요 인덱스(예): area + type(whereIn) + request_time + __name__ (ASC)
 // 에러 메시지의 "Create index" 링크로 생성하세요.
@@ -64,7 +66,7 @@ class PlateTtsListenerService {
   static int _readsInitialSnapshotDocs = 0; // 리스너 초기 스냅샷에서 전달된 문서 수
   static int _readsAdded = 0; // 이후 added 이벤트 read 수
   static int _readsModified = 0; // 이후 modified 이벤트 read 수
-  static int _readsRemoved = 0; // 이후 removed 이벤트 read 수
+  static int _readsRemoved = 0; // (제외 방침) 이후 removed 이벤트 read 수
 
   static void _resetReadCounters() {
     _readsBaselineDocs = 0;
@@ -177,6 +179,12 @@ class PlateTtsListenerService {
       }
 
       _subscription = query.snapshots().listen((snapshot) {
+        // ✅ 로컬 보류 스냅샷은 과금 기준이 아님 → 건너뜀
+        if (snapshot.metadata.hasPendingWrites) {
+          _log('skip local pendingWrites snapshot');
+          return;
+        }
+
         final isFirstEmission = !_initialEmissionDone;
         if (isFirstEmission) {
           _initialEmissionDone = true;
@@ -202,9 +210,10 @@ class PlateTtsListenerService {
               _log('READ++ (modified) → $_readsModified');
               _reportRead(n: 1, source: 'PlateTtsListenerService.snap.modified');
             } else if (change.type == DocumentChangeType.removed) {
-              _readsRemoved += 1;
-              _log('READ++ (removed) → $_readsRemoved');
-              _reportRead(n: 1, source: 'PlateTtsListenerService.snap.removed');
+              // 보수적으로 read에서 제외 (필요 시 정책에 맞춰 복원 가능)
+              _readsRemoved += 0;
+              _log('ignore removed for read counting');
+              // _reportRead(n: 1, source: 'PlateTtsListenerService.snap.removed'); // ← 제외
             }
           }
 
@@ -220,8 +229,7 @@ class PlateTtsListenerService {
             final newType = data['type'] as String?;
             final location = (data['location'] ?? '') as String;
             final plateNumber = (data['plate_number'] ?? '') as String;
-            final Timestamp? requestTime =
-            data['request_time'] as Timestamp?;
+            final Timestamp? requestTime = data['request_time'] as Timestamp?;
             final prevType = _lastTypes[docId];
 
             final tail = plateNumber.length >= 4
@@ -229,8 +237,7 @@ class PlateTtsListenerService {
                 : plateNumber;
             final spokenTail = _convertToKoreanDigits(_digitsOnly(tail));
 
-            _log(
-                'change: id=$docId type=${change.type} newType=$newType prevType=$prevType reqTime=${requestTime?.toDate()}');
+            _log('change: id=$docId type=${change.type} newType=$newType prevType=$prevType reqTime=${requestTime?.toDate()}');
 
             bool didSpeak = false;
 
@@ -246,24 +253,18 @@ class PlateTtsListenerService {
               if (_dedup(docId)) {
                 if (newType == PlateType.parkingRequests.firestoreValue) {
                   final utter = '입차 요청';
-                  _log(
-                      'SPEAK(added): $utter (id=$docId, area=$_currentArea)');
+                  _log('SPEAK(added): $utter (id=$docId, area=$_currentArea)');
                   _safeSpeak(utter);
                   didSpeak = true;
-                } else if (newType ==
-                    PlateType.departureRequests.firestoreValue) {
+                } else if (newType == PlateType.departureRequests.firestoreValue) {
                   final utter = '출차 요청 $spokenTail, $location';
-                  _log(
-                      'SPEAK(added): $utter (id=$docId, area=$_currentArea)');
+                  _log('SPEAK(added): $utter (id=$docId, area=$_currentArea)');
                   _safeSpeak(utter);
                   didSpeak = true;
-                } else if (newType ==
-                    PlateType.departureCompleted.firestoreValue) {
+                } else if (newType == PlateType.departureCompleted.firestoreValue) {
                   final utter = '$spokenTail, 출차 완료 되었습니다.';
-                  _log(
-                      'SPEAK(added×$_completionRepeat): $utter (id=$docId, area=$_currentArea)');
-                  _speakRepeated(utter,
-                      times: _completionRepeat, gap: _completionRepeatGap);
+                  _log('SPEAK(added×$_completionRepeat): $utter (id=$docId, area=$_currentArea)');
+                  _speakRepeated(utter, times: _completionRepeat, gap: _completionRepeatGap);
                   didSpeak = true;
                 }
               } else {
@@ -271,30 +272,23 @@ class PlateTtsListenerService {
               }
             } else if (change.type == DocumentChangeType.modified) {
               // 타입 변경에 대해서만 낭독
-              final typeChanged =
-                  prevType != null && prevType != newType;
+              final typeChanged = prevType != null && prevType != newType;
 
               if (typeChanged && _dedup(docId)) {
                 if (newType == PlateType.parkingRequests.firestoreValue) {
                   final utter = '입차 요청';
-                  _log(
-                      'SPEAK(modified→type change): $utter (id=$docId, area=$_currentArea)');
+                  _log('SPEAK(modified→type change): $utter (id=$docId, area=$_currentArea)');
                   _safeSpeak(utter);
                   didSpeak = true;
-                } else if (newType ==
-                    PlateType.departureRequests.firestoreValue) {
+                } else if (newType == PlateType.departureRequests.firestoreValue) {
                   final utter = '출차 요청 $spokenTail, $location';
-                  _log(
-                      'SPEAK(modified→type change): $utter (id=$docId, area=$_currentArea)');
+                  _log('SPEAK(modified→type change): $utter (id=$docId, area=$_currentArea)');
                   _safeSpeak(utter);
                   didSpeak = true;
-                } else if (newType ==
-                    PlateType.departureCompleted.firestoreValue) {
+                } else if (newType == PlateType.departureCompleted.firestoreValue) {
                   final utter = '$spokenTail, 출차 완료 되었습니다.';
-                  _log(
-                      'SPEAK(modified→type change×$_completionRepeat): $utter (id=$docId, area=$_currentArea)');
-                  _speakRepeated(utter,
-                      times: _completionRepeat, gap: _completionRepeatGap);
+                  _log('SPEAK(modified→type change×$_completionRepeat): $utter (id=$docId, area=$_currentArea)');
+                  _speakRepeated(utter, times: _completionRepeat, gap: _completionRepeatGap);
                   didSpeak = true;
                 }
               } else {
@@ -328,7 +322,9 @@ class PlateTtsListenerService {
   }
 
   static Future<void> _fetchBaseline(
-      String area, List<String> typesToMonitor) async {
+      String area,
+      List<String> typesToMonitor,
+      ) async {
     try {
       final qs = await FirebaseFirestore.instance
           .collection('plates')
@@ -353,8 +349,7 @@ class PlateTtsListenerService {
         final d = qs.docs.first;
         _baselineTs = d.data()['request_time'] as Timestamp?;
         _baselineDocId = d.id;
-        _log(
-            'baseline: ts=${_baselineTs?.toDate().toUtc()} id=$_baselineDocId (reads+${qs.docs.length})');
+        _log('baseline: ts=${_baselineTs?.toDate().toUtc()} id=$_baselineDocId (reads+${qs.docs.length})');
       }
       _printReadSummary(prefix: 'READ SUMMARY (after baseline)');
     } catch (e, st) {
@@ -429,6 +424,5 @@ class PlateTtsListenerService {
     return digits.split('').map((d) => koreanDigits[d] ?? d).join(', ');
   }
 
-  static String _digitsOnly(String s) =>
-      s.replaceAll(RegExp(r'[^0-9]'), '');
+  static String _digitsOnly(String s) => s.replaceAll(RegExp(r'[^0-9]'), '');
 }

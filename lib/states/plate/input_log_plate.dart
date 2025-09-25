@@ -32,13 +32,6 @@ class InputLogPlate with ChangeNotifier {
       debugPrint("✅ 로그가 Firestore에 저장되었습니다.");
     } catch (e) {
       debugPrint("❌ Firestore 로그 저장 실패: $e");
-      // (선택) 실패도 계측하고 싶다면 아래를 사용하세요.
-      // UsageReporter.instance.report(
-      //   area: area,
-      //   action: 'write_failed',
-      //   n: 1,
-      //   source: 'InputLogPlate.saveLog',
-      // );
     }
   }
 }
