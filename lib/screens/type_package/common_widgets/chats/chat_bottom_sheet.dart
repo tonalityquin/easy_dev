@@ -11,11 +11,7 @@ import '../../../../utils/usage_reporter.dart';
 
 /// Firestore 경로 참조 헬퍼: 최근 메시지 도큐먼트
 DocumentReference<Map<String, dynamic>> latestMessageRef(String roomId) =>
-    FirebaseFirestore.instance
-        .collection('chats')
-        .doc(roomId)
-        .collection('state')
-        .doc('latest_message');
+    FirebaseFirestore.instance.collection('chats').doc(roomId).collection('state').doc('latest_message');
 
 /// 최근 메시지를 스트림으로 노출
 /// - Firestore READ 계측: 스냅샷 수신마다 1회
@@ -62,7 +58,8 @@ void chatBottomSheet(BuildContext context) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    useSafeArea: false, // 내부에서 SafeArea 처리
+    useSafeArea: false,
+    // 내부에서 SafeArea 처리
     backgroundColor: Colors.transparent,
     elevation: 0,
     barrierColor: Colors.black.withOpacity(0.25),
@@ -177,7 +174,7 @@ class ChatOpenButton extends StatelessWidget {
   Widget build(BuildContext context) {
     // currentArea 변경 시 자동으로 리빌드되도록 select 사용
     final roomId = context.select<UserState, String?>(
-          (s) => s.user?.currentArea?.trim(),
+      (s) => s.user?.currentArea?.trim(),
     );
 
     if (roomId == null || roomId.isEmpty) {
@@ -221,7 +218,8 @@ class ChatOpenButton extends StatelessWidget {
           onPressed: () => chatBottomSheet(context),
           style: ElevatedButton.styleFrom(
             elevation: 0,
-            backgroundColor: Colors.white, // ✅ 버튼 배경도 흰색
+            backgroundColor: Colors.white,
+            // ✅ 버튼 배경도 흰색
             foregroundColor: Colors.black87,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             shape: RoundedRectangleBorder(

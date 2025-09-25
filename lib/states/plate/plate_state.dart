@@ -148,69 +148,67 @@ class PlateState extends ChangeNotifier {
     notifyListeners();
 
     if (type == PlateType.departureCompleted) {
-      // 📈 Firebase READ: unpaid snapshots listen 시작
+      /*      // 📈 Firebase READ: unpaid snapshots listen 시작
       _reportRead(
         'PlateState.subscribeType.departureUnpaidSnapshots.listen.start',
         area: area,
-      );
+      );*/
 
-      final sub = _repository
-          .departureUnpaidSnapshots(area, descending: descending)
-          .listen((QuerySnapshot<Map<String, dynamic>> snapshot) async {
-        // 📈 Firebase READ: 스냅샷 수신 (문서 수만큼 1회 집계)
-        _reportRead(
-          'PlateState.subscribeType.departureUnpaidSnapshots.onData',
-          area: area,
-          n: snapshot.docs.length,
-        );
-
-        final results = snapshot.docs
-            .map((doc) {
-          try {
-            return PlateModel.fromDocument(doc);
-          } catch (e) {
-            debugPrint('❌ departureCompleted parsing error: $e');
-            return null;
-          }
-        })
-            .whereType<PlateModel>()
-            .toList();
-        _data[type] = results;
-        notifyListeners();
-
-        for (final change in snapshot.docChanges) {
-          if (change.type != DocumentChangeType.removed) continue;
-          try {
-            final ref = change.doc.reference;
-
-            // 📈 Firebase READ: removed 문서 최신 상태 확인 (server get)
-            final fresh = await ref.get(const GetOptions(source: Source.server));
+      final sub = _repository.departureUnpaidSnapshots(area, descending: descending).listen(
+              (QuerySnapshot<Map<String, dynamic>> snapshot) async {
+            // 📈 Firebase READ: 스냅샷 수신 (문서 수만큼 1회 집계)
             _reportRead(
-              'PlateState.departureCompleted.removed.ref.get(server)',
-              area: fresh.data()?['area']?.toString() ?? area,
+              'PlateState.subscribeType.departureUnpaidSnapshots.onData',
+              area: area,
+              n: snapshot.docs.length,
             );
 
-            final data = fresh.data();
-            if (data == null) continue;
+            final results = snapshot.docs
+                .map((doc) {
+              try {
+                return PlateModel.fromDocument(doc);
+              } catch (e) {
+                debugPrint('❌ departureCompleted parsing error: $e');
+                return null;
+              }
+            })
+                .whereType<PlateModel>()
+                .toList();
+            _data[type] = results;
+            notifyListeners();
 
-            final isDepartureCompleted =
-                data['type'] == PlateType.departureCompleted.firestoreValue;
-            final sameArea = data['area'] == area;
-            final isLockedFeeTrue = data['isLockedFee'] == true;
+            for (final change in snapshot.docChanges) {
+              if (change.type != DocumentChangeType.removed) continue;
+              try {
+                final ref = change.doc.reference;
 
-            if (isDepartureCompleted && sameArea && isLockedFeeTrue) {
-              debugPrint('✅ 정산 전이 감지: doc=${fresh.id}, plate=${data['plateNumber']}');
+                // 📈 Firebase READ: removed 문서 최신 상태 확인 (server get)
+                final fresh = await ref.get(const GetOptions(source: Source.server));
+                _reportRead(
+                  'PlateState.departureCompleted.removed.ref.get(server)',
+                  area: fresh.data()?['area']?.toString() ?? area,
+                );
 
-              final key = (data['id'] ?? fresh.id).toString();
-              previousIsLockedFee[key] = true;
+                final data = fresh.data();
+                if (data == null) continue;
+
+                final isDepartureCompleted = data['type'] == PlateType.departureCompleted.firestoreValue;
+                final sameArea = data['area'] == area;
+                final isLockedFeeTrue = data['isLockedFee'] == true;
+
+                if (isDepartureCompleted && sameArea && isLockedFeeTrue) {
+                  debugPrint('✅ 정산 전이 감지: doc=${fresh.id}, plate=${data['plateNumber']}');
+
+                  final key = (data['id'] ?? fresh.id).toString();
+                  previousIsLockedFee[key] = true;
+                }
+              } catch (e) {
+                debugPrint('⚠️ [출차 완료 전이 감지] removed 처리 실패: $e');
+              }
             }
-          } catch (e) {
-            debugPrint('⚠️ [출차 완료 전이 감지] removed 처리 실패: $e');
-          }
-        }
 
-        _isLoading = false;
-      }, onError: (error) {
+            _isLoading = false;
+          }, onError: (error) {
         debugPrint('🔥 [출차 완료] 스냅샷 스트림 에러: $error');
         _isLoading = false;
         notifyListeners();
@@ -221,11 +219,11 @@ class PlateState extends ChangeNotifier {
       return;
     }
 
-    // 📈 Firebase READ: 일반 타입 스트림 listen 시작
+    /*    // 📈 Firebase READ: 일반 타입 스트림 listen 시작
     _reportRead(
       'PlateState.subscribeType.streamToCurrentArea.listen.start',
       area: area,
-    );
+    );*/
 
     final stream = _repository.streamToCurrentArea(
       type,
@@ -347,9 +345,7 @@ class PlateState extends ChangeNotifier {
         return;
       }
 
-      final alreadySelected = _data.entries
-          .expand((entry) => entry.value)
-          .firstWhere(
+      final alreadySelected = _data.entries.expand((entry) => entry.value).firstWhere(
             (p) => p.isSelected && p.selectedBy == userName && p.id != plateId,
         orElse: () => PlateModel(
           id: '',
@@ -437,6 +433,19 @@ class PlateState extends ChangeNotifier {
       debugPrint("🔕 PlateState disabled → syncWithAreaState 무시");
       return;
     }
+
+    // 🚧 중복 방지 가드:
+    // 현재 구독된 타입/지역이 원하는 구독 셋(_desiredSubscriptions)과 모두 같고,
+    // 모두 현 currentArea에 붙어 있다면 재구독 생략.
+    final desired = _desiredSubscriptions.toSet();
+    final subscribedTypes = _subscriptions.keys.toSet();
+    final sameTypes = desired.length == subscribedTypes.length && desired.containsAll(subscribedTypes);
+    final sameAreaAll = _subscribedAreas.values.every((a) => a == currentArea);
+    if (sameTypes && sameAreaAll) {
+      debugPrint("ℹ️ syncWithAreaState: 동일 구성/지역 → 재구독 생략");
+      return;
+    }
+
     debugPrint("🔄 syncWithAreaState : 지역 변경 감지 및 상태 갱신 호출됨");
     _cancelAllSubscriptions();
     for (final t in _desiredSubscriptions) {

@@ -139,6 +139,7 @@ void areaPickerBottomSheet({
                           Navigator.of(sheetCtx).pop();
 
                           // 지역 상태/유저 상태 업데이트 (구독 판단 전 선반영)
+                          final __beforeArea = areaState.currentArea; // 👈 변경 전 지역 기록(가드)
                           areaState.updateAreaPicker(tempSelected);
                           await userState.areaPickerCurrentArea(tempSelected);
 
@@ -171,9 +172,11 @@ void areaPickerBottomSheet({
                               plateState.disableAll();
                               Navigator.pushReplacementNamed(rootContext, AppRoutes.headquarterPage);
                             } else {
-                              // ✅ 필드 전환: 구독 활성화 + 동기화 → 필드 페이지로
+                              // ✅ 필드 전환: 구독 활성화(최초 진입) + [지역 변경 시에만] 동기화 → 필드 페이지
                               plateState.enableForTypePages();
-                              plateState.syncWithAreaState();
+                              if (__beforeArea != areaState.currentArea) {
+                                plateState.syncWithAreaState(); // 👈 실제 변경된 경우에만 재구독
+                              }
                               Navigator.pushReplacementNamed(rootContext, AppRoutes.typePage);
                             }
                           } catch (e, st) {

@@ -42,11 +42,11 @@ class _TypePageState extends State<TypePage> {
   @override
   void initState() {
     super.initState();
-    // ✅ 필드 페이지 진입 시 PlateState 활성화 + 동기화
+    // ✅ 필드 페이지 진입: PlateState 활성화만 (즉시 재구독 호출 제거)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final plateState = context.read<PlateState>();
       plateState.enableForTypePages();
-      plateState.syncWithAreaState();
+      // ❌ plateState.syncWithAreaState(); // 초기 진입 직후 재구독 제거
     });
   }
 
