@@ -109,14 +109,13 @@ class UserReadService {
     try {
       final doc = await _getUserCollectionRef().doc(userId).get();
 
-      // read 1회 보고 (존재 여부에 상관없이)
-      final area = _areaFromDoc(doc.data(), userId);
+      /*final area = _areaFromDoc(doc.data(), userId);
       await UsageReporter.instance.report(
         area: area,
         action: 'read',
         n: 1,
         source: 'UserReadService.getUserById',
-      );
+      );*/
 
       if (!doc.exists) {
         debugPrint("DB 문서 없음 → userId=$userId");
@@ -143,8 +142,7 @@ class UserReadService {
     try {
       final querySnapshot = await _getUserCollectionRef().where('phone', isEqualTo: phone).limit(1).get();
 
-      /// Usage 테스트 계측 완료
-      final n = querySnapshot.docs.isEmpty ? 1 : querySnapshot.docs.length;
+      /*final n = querySnapshot.docs.isEmpty ? 1 : querySnapshot.docs.length;
       final area = querySnapshot.docs.isNotEmpty
           ? _areaFromDoc(querySnapshot.docs.first.data(), querySnapshot.docs.first.id)
           : 'unknown';
@@ -153,7 +151,7 @@ class UserReadService {
         action: 'read',
         n: n,
         source: 'UserReadService.getUserByPhone',
-      );
+      );*/
 
       if (querySnapshot.docs.isNotEmpty) {
         final doc = querySnapshot.docs.first;

@@ -36,10 +36,7 @@ class DebugFirestoreLogger {
         await _logFile!.create(recursive: true);
       }
 
-      // 초기화 로그는 error 레벨이 아니므로 기록하지 않음
-      // 필요하다면 아래 주석 해제 가능
-      /*
-      await log({
+      /*await log({
         'ts': DateTime.now().toIso8601String(),
         'level': 'info',
         'message': 'logger initialized',

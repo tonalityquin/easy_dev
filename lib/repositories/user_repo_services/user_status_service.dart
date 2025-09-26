@@ -130,10 +130,11 @@ class UserStatusService {
         bool? isWorking,
         bool? isSaved,
       }) async {
-    final userId = '$phone-$area';
+
     final updates = <String, dynamic>{};
     if (isWorking != null) updates['isWorking'] = isWorking;
     if (isSaved != null) updates['isSaved'] = isSaved;
+    /*final userId = '$phone-$area';
 
     await _safeUpdate(
       _getUserCollectionRef(),
@@ -141,6 +142,7 @@ class UserStatusService {
       updates,
       opName: 'updateWorkingUserStatus',
     );
+    */
   }
 
   Future<void> updateLoadCurrentArea(
@@ -148,13 +150,13 @@ class UserStatusService {
       String area,
       String currentArea,
       ) async {
-    final userId = '$phone-$area';
+    /*final userId = '$phone-$area';
     await _safeUpdate(
       _getUserCollectionRef(),
       userId,
       {'currentArea': currentArea},
       opName: 'updateLoadCurrentArea',
-    );
+    );*/
   }
 
   Future<void> areaPickerCurrentArea(

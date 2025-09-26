@@ -122,13 +122,12 @@ class CommuteInsideController {
     if (!context.mounted) return;
 
     if (success) {
-      // ✅ Sheets append에 대한 사용량 보고
-      await UsageReporter.instance.report(
+      /*await UsageReporter.instance.report(
         area: area,
         action: 'write',
         n: 1,
         source: 'CommuteInsideController._uploadAttendanceSilently',
-      );
+      );*/
       showSuccessSnackbar(context, '출근 기록 업로드 완료');
     } else {
       showFailedSnackbar(context, '출근 기록 업로드 실패');
