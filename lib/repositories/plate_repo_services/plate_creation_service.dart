@@ -10,6 +10,49 @@ import '../../utils/usage_reporter.dart'; // ✅
 class PlateCreationService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  // 🔹 bill 캐시 (메모리, 10분 TTL)
+  static final Map<String, Map<String, dynamic>> _billCache = {};
+  static final Map<String, DateTime> _billCacheExpiry = {};
+  static const Duration _billTtl = Duration(minutes: 10);
+
+  Future<Map<String, dynamic>?> _getBillCached({
+    required String? billingType,
+    required String area,
+  }) async {
+    if (billingType == null || billingType.trim().isEmpty) return null;
+    final key = '${billingType}_$area';
+    final now = DateTime.now();
+
+    final exp = _billCacheExpiry[key];
+    final cached = _billCache[key];
+    if (cached != null && exp != null && exp.isAfter(now)) {
+      // 캐시 히트 → Firestore .get() 미수행, READ 미계측
+      return cached;
+    }
+
+    // 캐시 미스 → Firestore 1회 get
+    final billDoc = await _firestore.collection('bill').doc(key).get();
+
+    // ✅ 캐시 미스에서만 READ 1회 계측
+    await UsageReporter.instance.report(
+      area: area,
+      action: 'read',
+      n: 1,
+      source: 'PlateCreationService.addPlate.billRead',
+    );
+
+    if (billDoc.exists) {
+      final data = billDoc.data()!;
+      _billCache[key] = data;
+      _billCacheExpiry[key] = now.add(_billTtl);
+      return data;
+    } else {
+      _billCache.remove(key);
+      _billCacheExpiry.remove(key);
+      return null;
+    }
+  }
+
   Future<void> addPlate({
     required String plateNumber,
     required String location,
@@ -37,32 +80,19 @@ class PlateCreationService {
     int? regularAmount;
     int? regularDurationHours;
 
+    // ── bill 캐시 사용 (정기 아닌 경우만)
     if (selectedBillType != '정기' && billingType != null && billingType.isNotEmpty) {
       try {
-        final billDoc =
-        await _firestore.collection('bill').doc('${billingType}_$area').get();
-
-        // ✅ bill read 1회
-        await UsageReporter.instance.report(
-          area: area,
-          action: 'read',
-          n: 1,
-          source: 'PlateCreationService.addPlate.billRead',
-        );
-
-        if (billDoc.exists) {
-          final billData = billDoc.data()!;
-
-          basicStandard = billData['basicStandard'] ?? 0;
-          basicAmount = billData['basicAmount'] ?? 0;
-          addStandard = billData['addStandard'] ?? 0;
-          addAmount = billData['addAmount'] ?? 0;
-
-          regularAmount = billData['regularAmount'];
-          regularDurationHours = billData['regularDurationHours'];
-        } else {
+        final billData = await _getBillCached(billingType: billingType, area: area);
+        if (billData == null) {
           throw Exception('Firestore에서 정산 데이터를 찾을 수 없음');
         }
+        basicStandard = billData['basicStandard'] ?? 0;
+        basicAmount = billData['basicAmount'] ?? 0;
+        addStandard = billData['addStandard'] ?? 0;
+        addAmount = billData['addAmount'] ?? 0;
+        regularAmount = billData['regularAmount'];
+        regularDurationHours = billData['regularDurationHours'];
       } catch (e, st) {
         try {
           await DebugFirestoreLogger().log({
@@ -87,6 +117,7 @@ class PlateCreationService {
         throw Exception("Firestore 정산 정보 로드 실패: $e");
       }
     } else if (selectedBillType == '정기') {
+      // 정기 과금은 기본/추가 0으로
       basicStandard = 0;
       basicAmount = 0;
       addStandard = 0;
@@ -96,10 +127,11 @@ class PlateCreationService {
     final plateFourDigit =
     plateNumber.length >= 4 ? plateNumber.substring(plateNumber.length - 4) : plateNumber;
 
+    // billingType이 없으면 요금 잠금 처리
     final effectiveIsLockedFee =
         isLockedFee || (billingType == null || billingType.trim().isEmpty);
 
-    final plate = PlateModel(
+    final base = PlateModel(
       id: documentId,
       plateNumber: plateNumber,
       plateFourDigit: plateFourDigit,
@@ -128,11 +160,19 @@ class PlateCreationService {
       regularDurationHours: regularDurationHours,
     );
 
-    final plateWithLog = plate.addLog(
+    // ✅ 로그 병합(트랜잭션 안에서 한꺼번에 기록)
+    PlateModel plateWithLog = base.addLog(
       action: '생성',
       performedBy: userName,
       from: '',
-      to: location.isNotEmpty ? location : '미지정',
+      to: base.location,
+    );
+    final entryLabel = (plateType == PlateType.parkingRequests) ? '입차 요청' : plateType.label;
+    plateWithLog = plateWithLog.addLog(
+      action: entryLabel,
+      performedBy: userName,
+      from: '-',
+      to: entryLabel,
     );
 
     final docRef = _firestore.collection('plates').doc(documentId);
@@ -171,13 +211,12 @@ class PlateCreationService {
 
             final List<Map<String, dynamic>> newLogs =
             (plateWithLog.logs ?? []).map((e) => e.toMap()).toList();
-
             final List<Map<String, dynamic>> mergedLogs = [...existingLogs, ...newLogs];
 
             final partial = <String, dynamic>{
               PlateFields.type: plateType.firestoreValue,
               PlateFields.updatedAt: Timestamp.now(),
-              if (location.isNotEmpty) PlateFields.location: location,
+              if (base.location.isNotEmpty) PlateFields.location: base.location,
               if (endTime != null) PlateFields.endTime: endTime,
               if (billingType != null && billingType.trim().isNotEmpty)
                 PlateFields.billingType: billingType,
@@ -206,12 +245,13 @@ class PlateCreationService {
             writes += 1; // plates update
           }
         } else {
+          // 신규 set: 로그 2건 포함
           tx.set(docRef, plateWithLog.toMap());
           writes += 1; // plates set
         }
       });
 
-      // ✅ 트랜잭션에서 발생한 read/write 집계 보고
+      // ✅ 트랜잭션 read/write 집계 보고
       if (reads > 0) {
         await UsageReporter.instance.report(
           area: area,
@@ -255,7 +295,7 @@ class PlateCreationService {
       rethrow;
     }
 
-    // ✅ plate_status upsert → write 1
+    // ✅ plate_status upsert → write 1 (customStatus 있을 때만)
     if (customStatus != null && customStatus.trim().isNotEmpty) {
       final statusDocRef = _firestore.collection('plate_status').doc(documentId);
       final now = Timestamp.now();
@@ -317,6 +357,7 @@ class PlateCreationService {
   }
 
   bool _isAllowedDuplicate(PlateType type) {
+    // ✅ 출차 완료(departureCompleted)는 중복 허용
     return type == PlateType.departureCompleted;
   }
 }

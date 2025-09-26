@@ -6,14 +6,8 @@ import 'package:provider/provider.dart';
 import '../../../../states/location/location_state.dart';
 import '../../../../states/area/area_state.dart';
 
-// ✅ UsageReporter: "파이어베이스가 발생하는 로직만" 계측 (읽기/쓰기/삭제 중 '읽기'만 사용)
-import '../../../../utils/usage_reporter.dart';
+// import '../../../../utils/usage_reporter.dart';
 
-/// 주차 현황 페이지
-/// - Firestore Aggregate COUNT 1회 수행 (parking_completed 문서 수)
-/// - ✅ 계측은 Firestore 작업(읽기) 시점에만 수행
-/// - ✅ UI에 **실제 표시될 때만** 집계 수행하여 reads 노이즈 감소
-/// - ✅ 계측 n 값은 “항상 1”로 고정
 class ParkingStatusPage extends StatefulWidget {
   final bool isLocked;
 
@@ -75,14 +69,13 @@ class _ParkingStatusPageState extends State<ParkingStatusPage> {
       final snap = await aggQuery.get();
       final cnt = (snap.count ?? 0);
 
-      // ✅ 계측: Firestore READ (aggregate count) — n은 항상 1로 고정
       try {
-        await UsageReporter.instance.report(
+        /*await UsageReporter.instance.report(
           area: area,
           action: 'read', // 읽기
           n: 1,           // ← 고정(집계 1회당 read 1회)
           source: 'parkingStatus.count.query(parking_completed).aggregate',
-        );
+        );*/
       } catch (_) {
         // 계측 실패는 UX에 영향 없음
       }
@@ -93,14 +86,13 @@ class _ParkingStatusPageState extends State<ParkingStatusPage> {
         _isCountLoading = false;
       });
     } catch (e) {
-      // ✅ 실패도 집계 시도 자체를 1회로 기록 (n=1 고정)
       try {
-        await UsageReporter.instance.report(
+        /*await UsageReporter.instance.report(
           area: context.read<AreaState>().currentArea.trim(),
           action: 'read',
           n: 1, // ← 실패여도 1회 시도로 고정
           source: 'parkingStatus.count.query(parking_completed).aggregate.error',
-        );
+        );*/
       } catch (_) {}
 
       if (!mounted) return;

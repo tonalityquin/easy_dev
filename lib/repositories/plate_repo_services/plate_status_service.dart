@@ -13,6 +13,24 @@ class PlateStatusService {
   bool _isEmptyInput(String customStatus, List<String> statusList) =>
       customStatus.trim().isEmpty && statusList.isEmpty;
 
+  // ✅ [유지] 번호판 입력 즉시 메모를 보여주기 위한 prefetch(get)
+  Future<Map<String, dynamic>?> prefetch({
+    required String plateNumber,
+    required String area,
+    Duration timeout = const Duration(seconds: 10),
+  }) async {
+    final ref = _docRef(plateNumber, area);
+    final snap = await ref.get().timeout(timeout);
+    await UsageReporter.instance.report(
+      area: area,
+      action: 'read',
+      n: 1,
+      source: 'PlateStatusService.prefetch',
+    );
+    return snap.data();
+  }
+
+  // ✅ 수정/삭제 경로: 불필요한 선조회 제거(삭제는 blind delete, 업서트는 tx.get 1회만)
   Future<void> setPlateStatus({
     required String plateNumber,
     required String area,
@@ -25,30 +43,21 @@ class PlateStatusService {
     final ref = _docRef(plateNumber, area);
 
     try {
+      // ── [삭제 경로] 문서 존재 여부와 무관하게 delete → READ 0 / DELETE 1
       if (_isEmptyInput(customStatus, statusList)) {
         if (deleteWhenEmpty) {
-          final snap = await ref.get().timeout(const Duration(seconds: 10));
-          if (snap.exists) {
-            await ref.delete().timeout(const Duration(seconds: 10));
-            // ✅ delete 1회
-            await UsageReporter.instance.report(
-              area: area,
-              action: 'delete',
-              n: 1,
-              source: 'PlateStatusService.setPlateStatus.delete',
-            );
-          }
-          // get 1회 읽음
+          await ref.delete().timeout(const Duration(seconds: 10));
           await UsageReporter.instance.report(
             area: area,
-            action: 'read',
+            action: 'delete',
             n: 1,
-            source: 'PlateStatusService.setPlateStatus.prefetch',
+            source: 'PlateStatusService.setPlateStatus.delete',
           );
         }
         return;
       }
 
+      // ── [업서트 경로] 최초 생성 시 createdAt을 1회만 넣기 위해 tx.get 유지(READ 1 / WRITE 1)
       final data = <String, dynamic>{
         ...?extra,
         'customStatus': customStatus.trim(),
@@ -66,7 +75,6 @@ class PlateStatusService {
         tx.set(ref, data, SetOptions(merge: true));
       }).timeout(const Duration(seconds: 10));
 
-      // ✅ 트랜잭션: read 1 + write 1
       await UsageReporter.instance.report(
         area: area,
         action: 'read',
@@ -91,7 +99,7 @@ class PlateStatusService {
             'area': area,
             'customStatusLen': customStatus.length,
             'statusListLen': statusList.length,
-            'deleteWhenEmpty': false,
+            'deleteWhenEmpty': deleteWhenEmpty,
             if (extra != null) 'extraKeys': extra.keys.take(30).toList(),
           },
           'error': {
@@ -114,7 +122,7 @@ class PlateStatusService {
           'inputs': {
             'plateNumber': plateNumber,
             'area': area,
-            'deleteWhenEmpty': false,
+            'deleteWhenEmpty': deleteWhenEmpty,
           },
           'error': {
             'type': e.runtimeType.toString(),
@@ -168,23 +176,15 @@ class PlateStatusService {
     final ref = _docRef(plateNumber, area);
 
     try {
+      // ── [삭제 경로] 선조회 없이 delete
       if (_isEmptyInput(customStatus, statusList)) {
         if (deleteWhenEmpty) {
-          final snap = await ref.get().timeout(const Duration(seconds: 10));
-          if (snap.exists) {
-            await ref.delete().timeout(const Duration(seconds: 10));
-            await UsageReporter.instance.report(
-              area: area,
-              action: 'delete',
-              n: 1,
-              source: 'PlateStatusService.setMonthlyPlateStatus.delete',
-            );
-          }
+          await ref.delete().timeout(const Duration(seconds: 10));
           await UsageReporter.instance.report(
             area: area,
-            action: 'read',
+            action: 'delete',
             n: 1,
-            source: 'PlateStatusService.setMonthlyPlateStatus.prefetch',
+            source: 'PlateStatusService.setMonthlyPlateStatus.delete',
           );
         }
         return;
@@ -216,7 +216,6 @@ class PlateStatusService {
         tx.set(ref, base, SetOptions(merge: true));
       }).timeout(const Duration(seconds: 10));
 
-      // ✅ read + write
       await UsageReporter.instance.report(
         area: area,
         action: 'read',
@@ -305,8 +304,6 @@ class PlateStatusService {
     final ref = _docRef(plateNumber, area);
     try {
       await ref.delete();
-
-      // ✅ delete 1회
       await UsageReporter.instance.report(
         area: area,
         action: 'delete',

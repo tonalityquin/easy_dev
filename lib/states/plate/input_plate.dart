@@ -4,14 +4,11 @@ import '../../utils/snackbar_helper.dart';
 import '../area/area_state.dart';
 import '../user/user_state.dart';
 import '../../repositories/plate_repo_services/plate_repository.dart';
-import 'input_log_plate.dart';
-import '../../models/plate_log_model.dart';
 
 class InputPlate with ChangeNotifier {
   final PlateRepository _plateRepository;
-  final InputLogPlate _logState;
 
-  InputPlate(this._plateRepository, this._logState);
+  InputPlate(this._plateRepository);
 
   Future<bool> registerPlateEntry({
     required BuildContext context,
@@ -36,7 +33,8 @@ class InputPlate with ChangeNotifier {
     String? customStatus,
   }) async {
     final correctedLocation = location.isEmpty ? '미지정' : location;
-    final plateType = isLocationSelected ? PlateType.parkingCompleted : PlateType.parkingRequests;
+    final plateType =
+    isLocationSelected ? PlateType.parkingCompleted : PlateType.parkingRequests;
 
     try {
       await _plateRepository.addPlate(
@@ -60,26 +58,14 @@ class InputPlate with ChangeNotifier {
         selectedBillType: selectedBillType,
       );
 
-      await _logState.saveLog(
-        PlateLogModel(
-          plateNumber: plateNumber,
-          type: plateType.firestoreValue,
-          area: areaState.currentArea,
-          from: '-',
-          to: plateType.label,
-          action: plateType.label,
-          performedBy: userState.name,
-          timestamp: DateTime.now(),
-          billingType: billingType,
-        ),
-        area: areaState.currentArea,
-      );
-
+      // ✅ 별도 로그 저장 호출 제거
       notifyListeners();
       return true;
     } catch (error) {
       if (!context.mounted) return false;
-      final errorMessage = error.toString().contains('이미 등록된 번호판') ? '이미 등록된 번호판입니다: $plateNumber' : '오류 발생: $error';
+      final errorMessage = error.toString().contains('이미 등록된 번호판')
+          ? '이미 등록된 번호판입니다: $plateNumber'
+          : '오류 발생: $error';
       showFailedSnackbar(context, errorMessage);
       return false;
     }

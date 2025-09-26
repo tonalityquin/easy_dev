@@ -22,7 +22,8 @@ import '../states/head_quarter/calendar_selection_state.dart';
 import '../states/location/location_state.dart';
 import '../states/page/page_info.dart';
 import '../states/page/page_state.dart';
-import '../states/plate/input_log_plate.dart';
+// ⛔️ 리팩터링 후 불필요 → 삭제
+// import '../states/plate/input_log_plate.dart';
 import '../states/plate/modify_plate.dart';
 import '../states/plate/input_plate.dart';
 import '../states/plate/plate_state.dart';
@@ -46,20 +47,25 @@ final List<SingleChildWidget> stateProviders = [
   ChangeNotifierProvider(
     create: (_) => TabletPadModeState(),
   ),
-  ChangeNotifierProvider(
-    create: (_) => InputLogPlate(),
-  ),
+
+  // ⛔️ 리팩터링(로그 병합)으로 InputLogPlate를 더 이상 주입/사용하지 않습니다.
+  // ChangeNotifierProvider(
+  //   create: (_) => InputLogPlate(),
+  // ),
+
   ChangeNotifierProvider(
     create: (context) => ModifyPlate(
       context.read<PlateRepository>(),
     ),
   ),
+
+  // ✅ 리팩터링 후 InputPlate는 PlateRepository 하나만 받습니다.
   ChangeNotifierProvider(
     create: (context) => InputPlate(
       context.read<PlateRepository>(),
-      context.read<InputLogPlate>(),
     ),
   ),
+
   ChangeNotifierProvider(
     create: (context) {
       final repo = context.read<PlateRepository>();
