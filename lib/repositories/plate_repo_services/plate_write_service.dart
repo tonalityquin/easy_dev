@@ -318,17 +318,39 @@ class PlateWriteService {
     final docRef = _firestore.collection('plates').doc(id);
 
     try {
+      // 1) 선택 상태/사용자 반영
       await docRef.update({
         'isSelected': isSelected,
         'selectedBy': isSelected ? selectedBy : null,
       });
 
-      // ✅ 집계 단일화: WRITE 집계는 서비스(여기)에서만 수행
+      // 2) ✅ 주행 FAB 커밋 시 '주행 중' 로그 삽입 (isSelected == true 일 때만)
+      if (isSelected && (selectedBy?.trim().isNotEmpty ?? false)) {
+        await docRef.update({
+          'logs': FieldValue.arrayUnion([
+            {
+              'action': '주행 중',
+              'performedBy': selectedBy,
+              'timestamp': DateTime.now().toIso8601String(),
+            }
+          ])
+        });
+
+        // (선택) 계측: logs arrayUnion에 대한 write 집계
+        await UsageReporter.instance.report(
+          area: area,
+          action: 'write',
+          n: 1,
+          source: 'PlateWriteService.recordWhoPlateClick.logs.arrayUnion(driving)',
+        );
+      }
+
+      // 3) ✅ 집계 단일화: update 자체에 대한 write 집계
       await UsageReporter.instance.report(
         area: area, // ✅ 'unknown' → 실제 area
         action: 'write',
         n: 1,
-        source: 'PlateWriteService.recordWhoPlateClick',
+        source: 'PlateWriteService.recordWhoPlateClick.update',
       );
     } on FirebaseException catch (e, st) {
       if (e.code == 'not-found') {
