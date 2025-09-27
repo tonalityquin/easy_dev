@@ -1,4 +1,4 @@
-// lib/screens/type_pages/parking_completed_pages/parking_completed_control_buttons.dart
+// lib/screens/type_pages/parking_completed_package/parking_completed_control_buttons.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -17,7 +17,7 @@ import 'widgets/parking_completed_status_bottom_sheet.dart';
 import 'widgets/set_departure_request_dialog.dart';
 import '../../../widgets/dialog/plate_remove_dialog.dart';
 
-// ✅ UsageReporter: 파이어베이스(읽기/쓰기/삭제) 발생 지점만 계측
+// ✅ UsageReporter: 파이어베이스 DB 작업만 계측 (read / write / delete)
 import '../../../utils/usage_reporter.dart';
 
 /// Deep Blue 팔레트(서비스 카드와 동일 계열) + 상태 색상
@@ -40,7 +40,8 @@ class ParkingCompletedControlButtons extends StatelessWidget {
   final VoidCallback showSearchDialog;
   final VoidCallback resetParkingAreaFilter;
   final VoidCallback toggleSortIcon;
-  final Function(BuildContext context, String plateNumber, String area) handleEntryParkingRequest;
+  final Function(BuildContext context, String plateNumber, String area)
+  handleEntryParkingRequest;
   final Function(BuildContext context) handleDepartureRequested;
 
   const ParkingCompletedControlButtons({
@@ -83,20 +84,18 @@ class ParkingCompletedControlButtons extends StatelessWidget {
           selectedItemColor: selectedItemColor,
           unselectedItemColor: unselectedItemColor,
           items: isLocationPickerMode || isStatusMode
-              ? [
+              ? const [
             BottomNavigationBarItem(
-              icon:
-              Icon(isLocked ? Icons.lock : Icons.lock_open, color: muted),
+              icon: Icon(Icons.lock),
               label: '화면 잠금',
             ),
             BottomNavigationBarItem(
-              // 출차 요청 아이콘은 붉은색
-              icon: const Icon(Icons.move_down, color: _Palette.danger),
+              icon: Icon(Icons.move_down, color: _Palette.danger),
               label: '출차 요청',
             ),
             BottomNavigationBarItem(
-              // 출차 완료 아이콘은 초록색
-              icon: const Icon(Icons.directions_car, color: _Palette.success),
+              icon:
+              Icon(Icons.directions_car, color: _Palette.success),
               label: '출차 완료',
             ),
           ]
@@ -109,23 +108,28 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                 child: isPlateSelected
                     ? (selectedPlate.isLockedFee
                     ? const Icon(Icons.lock_open,
-                    key: ValueKey('unlock'), color: Color(0x9909367D))
+                    key: ValueKey('unlock'),
+                    color: Color(0x9909367D))
                     : const Icon(Icons.lock,
-                    key: ValueKey('lock'), color: Color(0x9909367D)))
+                    key: ValueKey('lock'),
+                    color: Color(0x9909367D)))
                     : Icon(Icons.refresh,
                     key: const ValueKey('refresh'), color: muted),
               ),
               label: isPlateSelected
-                  ? (selectedPlate.isLockedFee ? '정산 취소' : '사전 정산')
+                  ? (selectedPlate.isLockedFee
+                  ? '정산 취소'
+                  : '사전 정산')
                   : '채팅하기',
             ),
             BottomNavigationBarItem(
-              // 선택 시(=출차 요청 액션) 붉은색으로 강조
               icon: Icon(
                 isPlateSelected ? Icons.check_circle : Icons.search,
-                color: isPlateSelected ? _Palette.danger : muted,
+                color:
+                isPlateSelected ? _Palette.danger : muted,
               ),
-              label: isPlateSelected ? '출차 요청' : '번호판 검색',
+              label:
+              isPlateSelected ? '출차 요청' : '번호판 검색',
             ),
             BottomNavigationBarItem(
               icon: AnimatedRotation(
@@ -134,12 +138,16 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                 child: Transform.scale(
                   scaleX: isSorted ? -1 : 1,
                   child: Icon(
-                    isPlateSelected ? Icons.settings : Icons.sort,
+                    isPlateSelected
+                        ? Icons.settings
+                        : Icons.sort,
                     color: muted,
                   ),
                 ),
               ),
-              label: isPlateSelected ? '상태 수정' : (isSorted ? '최신순' : '오래된 순'),
+              label: isPlateSelected
+                  ? '상태 수정'
+                  : (isSorted ? '최신순' : '오래된 순'),
             ),
           ],
           onTap: (index) async {
@@ -154,7 +162,8 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                   context: context,
                   isScrollControlled: true,
                   backgroundColor: Colors.transparent,
-                  builder: (context) => const DepartureCompletedBottomSheet(),
+                  builder: (context) =>
+                  const DepartureCompletedBottomSheet(),
                 );
               }
               return;
@@ -175,8 +184,10 @@ class ParkingCompletedControlButtons extends StatelessWidget {
             final billingType = selectedPlate.billingType;
             final now = DateTime.now();
             final entryTime =
-                selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
-            final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
+                selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/
+                    1000;
+            final currentTime =
+                now.toUtc().millisecondsSinceEpoch ~/ 1000;
             final firestore = FirebaseFirestore.instance;
             final documentId = selectedPlate.id;
             final selectedArea = selectedPlate.area;
@@ -189,7 +200,8 @@ class ParkingCompletedControlButtons extends StatelessWidget {
 
               // 0원 + 이미 잠금 -> 해제 금지 (DB 없음)
               if (isZeroZero && selectedPlate.isLockedFee) {
-                showFailedSnackbar(context, '이 차량은 0원 규칙으로 잠금 상태이며 해제할 수 없습니다.');
+                showFailedSnackbar(context,
+                    '이 차량은 0원 규칙으로 잠금 상태이며 해제할 수 없습니다.');
                 return;
               }
 
@@ -212,7 +224,9 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                     n: 1,
                   );
 
-                  await plateState.updatePlateLocally(
+                  await context
+                      .read<PlateState>()
+                      .updatePlateLocally(
                       PlateType.parkingCompleted, updatedPlate);
 
                   final autoLog = {
@@ -223,7 +237,10 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                     'auto': true,
                   };
 
-                  await firestore.collection('plates').doc(documentId).update({
+                  await firestore
+                      .collection('plates')
+                      .doc(documentId)
+                      .update({
                     'logs': FieldValue.arrayUnion([autoLog])
                   });
                   _reportDbSafe(
@@ -234,16 +251,19 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                     n: 1,
                   );
 
-                  showSuccessSnackbar(context, '0원 유형이라 자동으로 잠금되었습니다.');
+                  showSuccessSnackbar(
+                      context, '0원 유형이라 자동으로 잠금되었습니다.');
                 } catch (e) {
-                  showFailedSnackbar(context, '자동 잠금 처리에 실패했습니다. 다시 시도해 주세요.');
+                  showFailedSnackbar(context,
+                      '자동 잠금 처리에 실패했습니다. 다시 시도해 주세요.');
                 }
                 return;
               }
 
               // 정산 타입 미지정 (DB 없음)
               if ((billingType ?? '').trim().isEmpty) {
-                showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
+                showFailedSnackbar(
+                    context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
                 return;
               }
 
@@ -272,7 +292,9 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                     n: 1,
                   );
 
-                  await plateState.updatePlateLocally(
+                  await context
+                      .read<PlateState>()
+                      .updatePlateLocally(
                       PlateType.parkingCompleted, updatedPlate);
 
                   final cancelLog = {
@@ -281,7 +303,10 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                     'timestamp': now.toIso8601String(),
                   };
 
-                  await firestore.collection('plates').doc(documentId).update({
+                  await firestore
+                      .collection('plates')
+                      .doc(documentId)
+                      .update({
                     'logs': FieldValue.arrayUnion([cancelLog])
                   });
                   _reportDbSafe(
@@ -308,7 +333,8 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                   addAmount: selectedPlate.addAmount ?? 0,
                   billingType: selectedPlate.billingType ?? '변동',
                   regularAmount: selectedPlate.regularAmount,
-                  regularDurationHours: selectedPlate.regularDurationHours,
+                  regularDurationHours:
+                  selectedPlate.regularDurationHours,
                 );
                 if (result == null) return;
 
@@ -329,7 +355,9 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                     n: 1,
                   );
 
-                  await plateState.updatePlateLocally(
+                  await context
+                      .read<PlateState>()
+                      .updatePlateLocally(
                       PlateType.parkingCompleted, updatedPlate);
 
                   final log = {
@@ -343,7 +371,10 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                       'reason': result.reason!.trim(),
                   };
 
-                  await firestore.collection('plates').doc(documentId).update({
+                  await firestore
+                      .collection('plates')
+                      .doc(documentId)
+                      .update({
                     'logs': FieldValue.arrayUnion([log])
                   });
                   _reportDbSafe(
@@ -392,8 +423,8 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                             selectedPlate.plateNumber,
                             selectedPlate.area,
                           );
-                          showSuccessSnackbar(
-                              context, "삭제 완료: ${selectedPlate.plateNumber}");
+                          showSuccessSnackbar(context,
+                              "삭제 완료: ${selectedPlate.plateNumber}");
                         } catch (_) {
                           // DeletePlate 내부에서 실패 처리
                         }

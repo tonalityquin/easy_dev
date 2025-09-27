@@ -9,6 +9,7 @@
 // - 개수 ≤ N 이면 그때만 실제 번호판 목록을 소량 조회해(BottomSheet 표시에 필요한 plateNumber만 사용) 렌더링
 // - 기존 plateList 화면 로직은 보존(다른 경로에서 사용할 수 있도록), 기본 흐름에선 사용하지 않음
 //
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -32,7 +33,7 @@ import '../../utils/snackbar_helper.dart';
 // 🔧 리미트 설정 단일 소스
 import '../../utils/plate_limit/plate_limit_config.dart';
 
-// ✅ UsageReporter 계측
+// ✅ UsageReporter: 파이어베이스(읽기/쓰기/삭제) 발생 지점만 계측
 import '../../utils/usage_reporter.dart';
 
 import 'parking_completed_package/widgets/signature_plate_search_bottom_sheet/parking_completed_search_bottom_sheet.dart';
@@ -64,14 +65,20 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
   bool _isLocked = true; // 화면 잠금
 
   // ─────────────────────────────────────────────────────────────
-  // UsageReporter 헬퍼
+  // 로컬 로그(디버그 전용)
   // ─────────────────────────────────────────────────────────────
-  void _report(String action, String source, {int n = 1}) {
+  void _log(String msg) {
+    if (kDebugMode) debugPrint('[ParkingCompleted] $msg');
+  }
+
+  // Firestore read 계측만(UsageReporter는 read/write/delete만 허용)
+  void _reportReadDb(String source, {int n = 1}) {
     try {
       final area = context.read<AreaState>().currentArea.trim();
-      UsageReporter.instance.report(area: area, action: action, n: n, source: source);
+      UsageReporter.instance
+          .report(area: area, action: 'read', n: n, source: source);
     } catch (_) {
-      // 계측 실패는 무시
+      // 무시
     }
   }
 
@@ -83,21 +90,19 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
       _isSorted = true;
       _isLocked = true; // ✅ 요구사항: 홈에서 다시 시작할 때 잠금 ON
     });
-    _report('reset', 'parkingCompleted.page.reset');
+    _log('reset page state');
   }
 
   void _toggleSortIcon() {
     setState(() {
       _isSorted = !_isSorted;
     });
-    _report('toggle', _isSorted
-        ? 'parkingCompleted.controls.sort.toggle.toLatest'
-        : 'parkingCompleted.controls.sort.toggle.toOldest');
+    _log(_isSorted ? 'sort → 최신순' : 'sort → 오래된순');
   }
 
   void _showSearchDialog(BuildContext context) {
     final currentArea = context.read<AreaState>().currentArea;
-    _report('open', 'parkingCompleted.search.open');
+    _log('open search dialog');
     showDialog(
       context: context,
       builder: (context) {
@@ -115,7 +120,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
       _selectedParkingArea = null;
       _mode = ParkingViewMode.status;
     });
-    _report('reset', 'parkingCompleted.locationFilter.reset');
+    _log('reset location filter');
   }
 
   // ✅ 출차 요청 핸들러 (기존 로직 유지)
@@ -123,7 +128,8 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
     final movementPlate = context.read<MovementPlate>();
     final userName = context.read<UserState>().name;
     final plateState = context.read<PlateState>();
-    final selectedPlate = plateState.getSelectedPlate(PlateType.parkingCompleted, userName);
+    final selectedPlate =
+    plateState.getSelectedPlate(PlateType.parkingCompleted, userName);
 
     if (selectedPlate != null) {
       movementPlate
@@ -133,25 +139,22 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
         selectedPlate.location,
       )
           .then((_) {
-        _report('success', 'parkingCompleted.departure.request.success');
         Future.delayed(const Duration(milliseconds: 300), () {
-          if (context.mounted) {
-            Navigator.pop(context);
-            showSuccessSnackbar(context, "출차 요청이 완료되었습니다.");
-          }
+          if (!mounted) return;
+          Navigator.pop(context);
+          showSuccessSnackbar(context, "출차 요청이 완료되었습니다.");
         });
       }).catchError((e) {
-        _report('error', 'parkingCompleted.departure.request.error');
-        if (context.mounted) {
-          showFailedSnackbar(context, "출차 요청 중 오류: $e");
-        }
+        if (!mounted) return;
+        showFailedSnackbar(context, "출차 요청 중 오류: $e");
       });
     }
   }
 
   // ✅ (빌드 에러 방지) 컨트롤 버튼에서 요구하는 입차 요청 콜백 스텁
-  void handleEntryParkingRequest(BuildContext context, String plateNumber, String area) async {
-    _report('invoke', 'parkingCompleted.entry.request.stub');
+  void handleEntryParkingRequest(
+      BuildContext context, String plateNumber, String area) async {
+    _log('stub: entry parking request $plateNumber ($area)');
     showSuccessSnackbar(context, "입차 요청 처리: $plateNumber ($area)");
   }
 
@@ -165,7 +168,6 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
   Future<void> _tryShowPlateNumbersBottomSheet(String locationName) async {
     // 🔒 잠금 상태면 즉시 차단
     if (_isLocked) {
-      _report('blocked', 'parkingCompleted.bottomSheet.locked');
       showFailedSnackbar(context, '잠금 상태입니다. 잠금을 해제한 뒤 이용해 주세요.');
       return;
     }
@@ -187,11 +189,13 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
       // 1) location 단위 개수 선판별: raw → (없으면) child 순으로 count()
       Future<int> countAt(String loc) async {
         final snap = await coll
-            .where('type', isEqualTo: PlateType.parkingCompleted.firestoreValue)
+            .where('type',
+            isEqualTo: PlateType.parkingCompleted.firestoreValue)
             .where('area', isEqualTo: area)
             .where('location', isEqualTo: loc)
             .count()
             .get();
+        _reportReadDb('parkingCompleted.countAt($loc)');
         return snap.count ?? 0;
       }
 
@@ -202,10 +206,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
         locCnt = await countAt(child);
       }
 
-      _report('count', 'parkingCompleted.bottomSheet.count', n: locCnt);
-
       if (locCnt == 0) {
-        _report('empty', 'parkingCompleted.bottomSheet.emptyAtLocation');
         showSelectedSnackbar(context, '해당 구역에 입차 완료 차량이 없습니다.');
         return;
       }
@@ -218,28 +219,32 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
           .where('location', isEqualTo: selectedLoc)
           .limit(1)
           .get();
+      _reportReadDb(
+          'parkingCompleted.location_limits.get(area=$area,location=$selectedLoc)');
 
-      if (qsLimit.docs.isNotEmpty && qsLimit.docs.first.data()['limit'] != null) {
-        limit = (qsLimit.docs.first.data()['limit'] as int).clamp(PlateLimitConfig.min, PlateLimitConfig.max);
-        _report('apply', 'parkingCompleted.limit.apply.location');
+      if (qsLimit.docs.isNotEmpty &&
+          qsLimit.docs.first.data()['limit'] != null) {
+        limit = (qsLimit.docs.first.data()['limit'] as int)
+            .clamp(PlateLimitConfig.min, PlateLimitConfig.max);
       } else {
         final prefs = await SharedPreferences.getInstance();
-        limit = (prefs.getInt(PlateLimitConfig.prefsKey) ?? PlateLimitConfig.defaultLimit)
+        limit = (prefs.getInt(PlateLimitConfig.prefsKey) ??
+            PlateLimitConfig.defaultLimit)
             .clamp(PlateLimitConfig.min, PlateLimitConfig.max);
-        _report('apply', 'parkingCompleted.limit.apply.global');
       }
 
       // 3) 기준 초과면 차단
       if (locCnt > limit) {
-        _report('blocked', 'parkingCompleted.bottomSheet.limitExceeded', n: locCnt);
-        showFailedSnackbar(context, '목록 잠금: "$selectedLoc"에 입차 완료 $locCnt대(>$limit) 입니다.');
+        showFailedSnackbar(
+            context, '목록 잠금: "$selectedLoc"에 입차 완료 $locCnt대(>$limit) 입니다.');
         return;
       }
 
       // 4) 조건 만족 시: 선택된 location에서 실제 목록을 소량 조회 (번호판만 사용)
       Future<QuerySnapshot<Map<String, dynamic>>> fetchAt(String loc) {
         return coll
-            .where('type', isEqualTo: PlateType.parkingCompleted.firestoreValue)
+            .where('type',
+            isEqualTo: PlateType.parkingCompleted.firestoreValue)
             .where('area', isEqualTo: area)
             .where('location', isEqualTo: loc)
         // .orderBy('request_time', descending: true) // 필요 시 인덱스 구성
@@ -247,7 +252,9 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
             .get();
       }
 
-      final QuerySnapshot<Map<String, dynamic>> qs = await fetchAt(selectedLoc);
+      final QuerySnapshot<Map<String, dynamic>> qs =
+      await fetchAt(selectedLoc);
+      _reportReadDb('parkingCompleted.fetchAt($selectedLoc).get');
 
       // 5) 번호판만 뽑기 (스키마에 맞춰 plate_number 우선)
       final plateNumbers = <String>[];
@@ -275,17 +282,15 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
       }
 
       if (plateNumbers.isEmpty) {
-        _report('empty', 'parkingCompleted.bottomSheet.emptyAfterFetch');
         showSelectedSnackbar(context, '해당 구역에 입차 완료 차량이 없습니다.');
         return;
       }
 
       if (!mounted) return;
-      _report('open', 'parkingCompleted.bottomSheet.open', n: plateNumbers.length);
-      _showPlateNumberListSheet(locationName: locationName, plates: plateNumbers);
+      _showPlateNumberListSheet(
+          locationName: locationName, plates: plateNumbers);
     } catch (e) {
       if (!mounted) return;
-      _report('error', 'parkingCompleted.bottomSheet.error');
       showFailedSnackbar(context, '번호판 목록 표시 실패: $e');
     }
   }
@@ -299,7 +304,8 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
     //  - 1~3개: 45% 시작
     //  - 4~7개: 60% 시작
     //  - 8개 이상: 80% 시작
-    final double initialFactor = plates.length <= 3 ? 0.45 : (plates.length <= 7 ? 0.60 : 0.80);
+    final double initialFactor =
+    plates.length <= 3 ? 0.45 : (plates.length <= 7 ? 0.60 : 0.80);
 
     showModalBottomSheet(
       context: context,
@@ -324,7 +330,8 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
               child: Container(
                 decoration: const BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                  borderRadius:
+                  BorderRadius.vertical(top: Radius.circular(16)),
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -356,7 +363,9 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          Text('${plates.length}대', style: const TextStyle(color: Colors.black54)),
+                          Text('${plates.length}대',
+                              style:
+                              const TextStyle(color: Colors.black54)),
                         ],
                       ),
                     ),
@@ -367,12 +376,14 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                       child: ListView.separated(
                         controller: scrollController, // ✅ 드래그 시트와 스크롤 연동
                         itemCount: plates.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        separatorBuilder: (_, __) =>
+                        const Divider(height: 1),
                         itemBuilder: (_, i) {
                           final pn = plates[i];
                           return ListTile(
                             dense: true,
-                            leading: const Icon(Icons.directions_car, color: Colors.black87),
+                            leading: const Icon(Icons.directions_car,
+                                color: Colors.black87),
                             title: Text(
                               pn,
                               style: const TextStyle(
@@ -406,7 +417,8 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
       onWillPop: () async {
         final plateState = context.read<PlateState>();
         final userName = context.read<UserState>().name;
-        final selectedPlate = plateState.getSelectedPlate(PlateType.parkingCompleted, userName);
+        final selectedPlate = plateState.getSelectedPlate(
+            PlateType.parkingCompleted, userName);
 
         // 선택된 번호판이 있으면 선택 해제 먼저
         if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
@@ -416,18 +428,18 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
             userName: userName,
             onError: (msg) => debugPrint(msg),
           );
-          _report('clear', 'parkingCompleted.selection.clear');
+          _log('clear selection');
           return false;
         }
 
         // plateList → locationPicker → status 순으로 한 단계씩 되돌기
         if (_mode == ParkingViewMode.plateList) {
           setState(() => _mode = ParkingViewMode.locationPicker);
-          _report('back', 'parkingCompleted.mode.back.toLocationPicker');
+          _log('back → locationPicker');
           return false;
         } else if (_mode == ParkingViewMode.locationPicker) {
           setState(() => _mode = ParkingViewMode.status);
-          _report('back', 'parkingCompleted.mode.back.toStatus');
+          _log('back → status');
           return false;
         }
 
@@ -453,9 +465,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
             setState(() {
               _isLocked = !_isLocked;
             });
-            _report('toggle', _isLocked
-                ? 'parkingCompleted.controls.lock.on'
-                : 'parkingCompleted.controls.lock.off');
+            _log(_isLocked ? 'lock ON' : 'lock OFF');
           },
           showSearchDialog: () => _showSearchDialog(context),
           resetParkingAreaFilter: () => _resetParkingAreaFilter(context),
@@ -477,7 +487,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
         return GestureDetector(
           onTap: () {
             setState(() => _mode = ParkingViewMode.locationPicker);
-            _report('open', 'parkingCompleted.locationPicker.open');
+            _log('open location picker');
           },
           child: ParkingStatusPage(isLocked: _isLocked),
         );
@@ -487,7 +497,6 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
         return ParkingCompletedLocationPicker(
           onLocationSelected: (locationName) {
             _selectedParkingArea = locationName; // 선택된 구역 저장(필요 시)
-            _report('select', 'parkingCompleted.location.select');
             _tryShowPlateNumbersBottomSheet(locationName);
           },
           isLocked: _isLocked,
@@ -495,12 +504,17 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
 
       case ParkingViewMode.plateList:
       // 🔹 기존 plateList 화면은 보존(다른 경로에서 필요할 수 있음). 현재 기본 흐름에선 사용 안 함.
-        List<PlateModel> plates = plateState.getPlatesByCollection(PlateType.parkingCompleted);
+        List<PlateModel> plates =
+        plateState.getPlatesByCollection(PlateType.parkingCompleted);
         if (_selectedParkingArea != null) {
-          plates = plates.where((p) => p.location == _selectedParkingArea).toList();
+          plates = plates
+              .where((p) => p.location == _selectedParkingArea)
+              .toList();
         }
         plates.sort(
-              (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime),
+              (a, b) => _isSorted
+              ? b.requestTime.compareTo(a.requestTime)
+              : a.requestTime.compareTo(b.requestTime),
         );
 
         return ListView(
@@ -509,7 +523,8 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
             PlateContainer(
               data: plates,
               collection: PlateType.parkingCompleted,
-              filterCondition: (request) => request.type == PlateType.parkingCompleted.firestoreValue,
+              filterCondition: (request) =>
+              request.type == PlateType.parkingCompleted.firestoreValue,
               onPlateTap: (plateNumber, area) {
                 context.read<PlateState>().togglePlateIsSelected(
                   collection: PlateType.parkingCompleted,
@@ -517,7 +532,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                   userName: userName,
                   onError: (msg) => showFailedSnackbar(context, msg),
                 );
-                _report('tap', 'parkingCompleted.plate.tap');
+                _log('tap plate: $plateNumber');
               },
             ),
           ],

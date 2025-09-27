@@ -1,3 +1,4 @@
+// lib/screens/type_package/departure_request_page.dart
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -198,6 +199,38 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
             );
           },
         ),
+        // ⬇️ FAB: 로컬에서 선택(보류 변경)이 있을 때만 표시, 잠금 시 숨김
+        floatingActionButton: Consumer<PlateState>(
+          builder: (context, s, _) {
+            final showFab = s.hasPendingSelection && !_isLocked;
+            if (!showFab) return const SizedBox.shrink();
+            return SafeArea(
+              minimum: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: SizedBox(
+                width: double.infinity,
+                child: FloatingActionButton.extended(
+                  onPressed: () async {
+                    await s.commitPendingSelection(
+                      onError: (msg) {
+                        final sc = ScaffoldMessenger.of(context);
+                        sc.hideCurrentSnackBar();
+                        sc.showSnackBar(SnackBar(content: Text(msg)));
+                      },
+                    );
+                    if (context.mounted) {
+                      showSuccessSnackbar(context, '변경 사항을 반영했습니다.');
+                    }
+                  },
+                  icon: const Icon(Icons.directions_car_filled),
+                  label: const Text('주행'),
+                  backgroundColor: const Color(0xFF0D47A1),
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            );
+          },
+        ),
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
         bottomNavigationBar: DepartureRequestControlButtons(
           isSorted: _isSorted,
           isLocked: _isLocked,

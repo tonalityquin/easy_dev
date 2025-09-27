@@ -63,13 +63,15 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
     if (!cam.isGranted) {
       if (mounted) {
         showFailedSnackbar(context, '카메라 권한이 필요합니다. 설정에서 허용해 주세요.');
+        Navigator.pop(context);
       }
-      Navigator.pop(context);
       return;
     }
 
     try {
       final cams = await availableCameras();
+      if (!mounted) return;
+
       final back = cams.firstWhere(
             (c) => c.lensDirection == CameraLensDirection.back,
         orElse: () => cams.first,
@@ -85,6 +87,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
         );
         await _controller!.initialize();
       } catch (_) {
+        if (!mounted) return;
         _controller = CameraController(
           back,
           ResolutionPreset.medium,
@@ -93,25 +96,32 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
         );
         await _controller!.initialize();
       }
+      if (!mounted) return;
 
       // 중앙 AF/AE
       await _controller!.setFocusMode(FocusMode.auto);
       await _controller!.setExposureMode(ExposureMode.auto);
       await _meterTo(const Offset(0.5, 0.5));
+      if (!mounted) return;
 
       // 6초 후 첫 힌트
       _firstHintTimer = Timer(const Duration(seconds: 6), () {
         if (!mounted) return;
-        showSelectedSnackbar(context, '번호판을 화면 가로 70~90%로 채우고 1초 정지해 주세요.');
+        showSelectedSnackbar(
+            context, '번호판을 화면 가로 70~90%로 채우고 1초 정지해 주세요.');
       });
 
       // 자동 촬영 루프 시작
       _startAuto();
     } catch (e) {
-      if (mounted) showFailedSnackbar(context, '카메라 초기화 실패: $e');
-      Navigator.pop(context);
+      if (mounted) {
+        showFailedSnackbar(context, '카메라 초기화 실패: $e');
+        Navigator.pop(context);
+      }
     } finally {
-      if (mounted) setState(() => _initializing = false);
+      if (mounted) {
+        setState(() => _initializing = false);
+      }
     }
   }
 
@@ -158,7 +168,9 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
         final plate = _extractPlate(allText);
 
         if (kDebugMode) {
-          setState(() => _debugText = 'attempt:${_attempts + 1} plate:$plate');
+          if (mounted) {
+            setState(() => _debugText = 'attempt:${_attempts + 1} plate:$plate');
+          }
         }
 
         if (plate != null) {
@@ -177,7 +189,7 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
           }
         }
       } catch (e) {
-        if (kDebugMode) {
+        if (kDebugMode && mounted) {
           setState(() => _debugText = 'shoot_err:$e');
         }
       } finally {
@@ -219,7 +231,8 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
       final m0 = rx.firstMatch(s);
       if (m0 != null) return m0.group(0)!.replaceAll(' ', '');
       for (int i = 0; i + 1 < lines.length; i++) {
-        final joined = (lines[i] + lines[i + 1]).replaceAll(' ', '');
+        final joined =
+        (lines[i] + lines[i + 1]).replaceAll(' ', '');
         final m1 = rx.firstMatch(joined);
         if (m1 != null) return m1.group(0)!.replaceAll(' ', '');
       }
@@ -259,7 +272,8 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text('자동 번호판 인식', style: TextStyle(color: Colors.white)),
+        title:
+        const Text('자동 번호판 인식', style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
         actions: [
@@ -269,14 +283,19 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
             onPressed: () {
               if (_autoRunning) {
                 _stopAuto();
-                showSelectedSnackbar(context, '자동촬영: 일시정지');
+                if (mounted) {
+                  showSelectedSnackbar(context, '자동촬영: 일시정지');
+                }
               } else {
                 _startAuto();
-                showSelectedSnackbar(context, '자동촬영: 재개');
+                if (mounted) {
+                  showSelectedSnackbar(context, '자동촬영: 재개');
+                }
               }
-              setState(() {});
+              if (mounted) setState(() {});
             },
-            icon: Icon(_autoRunning ? Icons.pause_circle : Icons.play_circle),
+            icon: Icon(
+                _autoRunning ? Icons.pause_circle : Icons.play_circle),
           ),
           // 토치 토글
           IconButton(
@@ -287,10 +306,13 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
                 await _controller?.setFlashMode(
                     _torch ? FlashMode.torch : FlashMode.off);
                 if (mounted) {
-                  showSelectedSnackbar(context, _torch ? '플래시 ON' : '플래시 OFF');
+                  showSelectedSnackbar(
+                      context, _torch ? '플래시 ON' : '플래시 OFF');
                 }
               } catch (e) {
-                if (mounted) showFailedSnackbar(context, '플래시 제어 실패: $e');
+                if (mounted) {
+                  showFailedSnackbar(context, '플래시 제어 실패: $e');
+                }
               }
               if (mounted) setState(() {});
             },
@@ -298,7 +320,9 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
           ),
           IconButton(
             tooltip: '닫기',
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              if (mounted) Navigator.pop(context);
+            },
             icon: const Icon(Icons.close),
           ),
         ],
@@ -327,8 +351,8 @@ class _LiveOcrPageState extends State<LiveOcrPage> {
                       if (_debugText != null)
                         Text(
                           _debugText!,
-                          style:
-                          const TextStyle(color: Colors.white, fontSize: 14),
+                          style: const TextStyle(
+                              color: Colors.white, fontSize: 14),
                           textAlign: TextAlign.center,
                         ),
                       if (_lastText != null && _lastText!.isNotEmpty)

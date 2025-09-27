@@ -10,6 +10,13 @@ import '../area/area_state.dart';
 // 📈 UsageReporter (Firebase 동작만 계측: read / write / delete)
 import '../../utils/usage_reporter.dart';
 
+/// 서버 스냅샷 기준의 선택 상태를 plateId별로 보관하기 위한 베이스라인
+class _SelectionBaseline {
+  final bool isSelected;
+  final String? selectedBy;
+  const _SelectionBaseline({required this.isSelected, required this.selectedBy});
+}
+
 class PlateState extends ChangeNotifier {
   final PlateRepository _repository;
   final AreaState _areaState;
@@ -36,16 +43,42 @@ class PlateState extends ChangeNotifier {
   final Set<PlateType> _desiredSubscriptions = {};
 
   // ─────────────────────────────────────────────────────────────
-  // (추가) departureRequests에서 "사라진" 항목 감지를 위한 캐시 & 이벤트
+  // departureRequests에서 "사라진" 항목 감지를 위한 캐시 & 이벤트
   // ─────────────────────────────────────────────────────────────
   final Map<PlateType, Map<String, PlateModel>> _lastByType = {
     for (var c in PlateType.values) c: {},
   };
 
-  final StreamController<PlateModel> _departureRemovedCtrl = StreamController<PlateModel>.broadcast();
+  final StreamController<PlateModel> _departureRemovedCtrl =
+  StreamController<PlateModel>.broadcast();
 
   /// 출차요청 컬렉션에서 사라진 번호판(= 다른 타입으로 이동 추정) 이벤트 스트림
-  Stream<PlateModel> get onDepartureRequestRemoved => _departureRemovedCtrl.stream;
+  Stream<PlateModel> get onDepartureRequestRemoved =>
+      _departureRemovedCtrl.stream;
+
+  // ─────────────────────────────────────────────────────────────
+  // ✅ 선택/해제 지연 반영을 위한 보류 상태
+  // ─────────────────────────────────────────────────────────────
+  PlateType? _pendingCollection;
+  String? _pendingPlateId;
+  bool? _pendingIsSelected;
+  String? _pendingSelectedBy;
+
+  /// 서버 기준 선택 상태 베이스라인 (plateId → 상태)
+  final Map<String, _SelectionBaseline> _baseline = {};
+
+  /// 현재 보류 중인(아직 서버에 반영하지 않은) 선택/해제 변경이 있는지
+  bool get hasPendingSelection =>
+      _pendingCollection != null &&
+          _pendingPlateId != null &&
+          _pendingIsSelected != null;
+
+  void _clearPendingSelection() {
+    _pendingCollection = null;
+    _pendingPlateId = null;
+    _pendingIsSelected = null;
+    _pendingSelectedBy = null;
+  }
 
   PlateState(this._repository, this._areaState) {
     _areaState.addListener(_onAreaChanged);
@@ -137,17 +170,23 @@ class PlateState extends ChangeNotifier {
           .listen((QuerySnapshot<Map<String, dynamic>> snapshot) async {
         // ⛔️ 여기서는 onData로 read 계측하지 않음 (서비스 계층에서 처리)
 
-        final results = snapshot.docs
-            .map((doc) {
+        final results = snapshot.docs.map((doc) {
           try {
             return PlateModel.fromDocument(doc);
           } catch (e) {
             debugPrint('❌ departureCompleted parsing error: $e');
             return null;
           }
-        })
-            .whereType<PlateModel>()
-            .toList();
+        }).whereType<PlateModel>().toList();
+
+        // 서버 베이스라인 갱신
+        for (final p in results) {
+          _baseline[p.id] = _SelectionBaseline(
+            isSelected: p.isSelected,
+            selectedBy: p.selectedBy,
+          );
+        }
+
         _data[type] = results;
         notifyListeners();
 
@@ -157,7 +196,8 @@ class PlateState extends ChangeNotifier {
             final ref = change.doc.reference;
 
             // 📈 Firebase READ: removed 문서 최신 상태 확인 (server get)
-            final fresh = await ref.get(const GetOptions(source: Source.server));
+            final fresh =
+            await ref.get(const GetOptions(source: Source.server));
             _reportRead(
               'PlateState.departureCompleted.removed.ref.get(server)',
               area: fresh.data()?['area']?.toString() ?? area,
@@ -166,12 +206,15 @@ class PlateState extends ChangeNotifier {
             final data = fresh.data();
             if (data == null) continue;
 
-            final isDepartureCompleted = data['type'] == PlateType.departureCompleted.firestoreValue;
+            final isDepartureCompleted =
+                data['type'] ==
+                    PlateType.departureCompleted.firestoreValue;
             final sameArea = data['area'] == area;
             final isLockedFeeTrue = data['isLockedFee'] == true;
 
             if (isDepartureCompleted && sameArea && isLockedFeeTrue) {
-              debugPrint('✅ 정산 전이 감지: doc=${fresh.id}, plate=${data['plateNumber']}');
+              debugPrint(
+                  '✅ 정산 전이 감지: doc=${fresh.id}, plate=${data['plateNumber']}');
 
               final key = (data['id'] ?? fresh.id).toString();
               previousIsLockedFee[key] = true;
@@ -205,14 +248,15 @@ class PlateState extends ChangeNotifier {
       // ⛔️ 여기서는 onData로 read 계측하지 않음 (서비스 계층에서 처리)
 
       // ─────────────────────────────────────────────────────────
-      // (추가) departureRequests에 대해 "사라진 문서" 감지 이벤트
+      // departureRequests에 대해 "사라진 문서" 감지 이벤트
       // ─────────────────────────────────────────────────────────
       if (type == PlateType.departureRequests) {
         final lastMap = _lastByType[type] ?? {};
         final currentMap = {for (final p in filteredData) p.id: p};
 
         // last - current = 사라진 문서들
-        for (final removedId in lastMap.keys.where((id) => !currentMap.containsKey(id))) {
+        for (final removedId
+        in lastMap.keys.where((id) => !currentMap.containsKey(id))) {
           final removed = lastMap[removedId];
           if (removed != null) {
             _departureRemovedCtrl.add(removed);
@@ -225,7 +269,14 @@ class PlateState extends ChangeNotifier {
         // 다른 타입은 캐시만 갱신(필요 시 확장 가능)
         _lastByType[type] = {for (final p in filteredData) p.id: p};
       }
-      // ─────────────────────────────────────────────────────────
+
+      // 서버 베이스라인 갱신
+      for (final p in filteredData) {
+        _baseline[p.id] = _SelectionBaseline(
+          isSelected: p.isSelected,
+          selectedBy: p.selectedBy,
+        );
+      }
 
       _data[type] = filteredData;
       notifyListeners();
@@ -280,6 +331,7 @@ class PlateState extends ChangeNotifier {
     }
   }
 
+  /// ✅ (리팩터링) 선택/해제 시 **로컬 상태만** 변경하고, 서버 반영은 보류 상태로 저장
   Future<void> togglePlateIsSelected({
     required PlateType collection,
     required String plateNumber,
@@ -303,13 +355,19 @@ class PlateState extends ChangeNotifier {
 
       final plate = plateList[index];
 
+      // 동시 선택 제어(로컬 기준)
       if (plate.isSelected && plate.selectedBy != userName) {
         onError('⚠️ 이미 다른 사용자(${plate.selectedBy})가 선택한 번호판입니다.');
         return;
       }
 
-      final alreadySelected = _data.entries.expand((entry) => entry.value).firstWhere(
-            (p) => p.isSelected && p.selectedBy == userName && p.id != plateId,
+      final alreadySelected = _data.entries
+          .expand((entry) => entry.value)
+          .firstWhere(
+            (p) =>
+        p.isSelected &&
+            p.selectedBy == userName &&
+            p.id != plateId,
         orElse: () => PlateModel(
           id: '',
           plateNumber: '',
@@ -333,23 +391,53 @@ class PlateState extends ChangeNotifier {
         return;
       }
 
+      // ── (옵션) 다른 plate에 보류가 잡혀 있으면 롤백하여 한 번에 하나만 보류
+      if (_pendingPlateId != null && _pendingPlateId != plateId) {
+        final prevId = _pendingPlateId!;
+        final prevType = _pendingCollection!;
+        final prevList = _data[prevType];
+        final b = _baseline[prevId];
+        if (prevList != null && b != null) {
+          final i = prevList.indexWhere((p) => p.id == prevId);
+          if (i != -1) {
+            prevList[i] = prevList[i].copyWith(
+              isSelected: b.isSelected,
+              selectedBy: b.selectedBy,
+            );
+          }
+        }
+        _clearPendingSelection();
+      }
+
+      // ── 로컬 토글
       final newIsSelected = !plate.isSelected;
       final newSelectedBy = newIsSelected ? userName : null;
-
-      await _repository.recordWhoPlateClick(
-        plateId,
-        newIsSelected,
-        selectedBy: newSelectedBy,
-        area: currentArea, // ✅ (2) area 전달
-      );
-
-      // ❌ 집계 단일화: 여기서 write 집계 호출 제거
-      // _reportWrite('PlateState.recordWhoPlateClick.toggleSelected', area: currentArea);
 
       _data[collection]![index] = plate.copyWith(
         isSelected: newIsSelected,
         selectedBy: newSelectedBy,
       );
+
+      // ✅ 베이스라인과 동일 여부 체크 → 동일하면 보류 해제(FAB 숨김)
+      final base = _baseline[plateId];
+      final equalsBaseline = base != null &&
+          base.isSelected == newIsSelected &&
+          base.selectedBy == newSelectedBy;
+
+      if (equalsBaseline) {
+        // 원상복구된 상태 → 보류 해제
+        if (_pendingPlateId == plateId) {
+          _clearPendingSelection();
+        } else {
+          // (다른 보류가 있었다면 그대로 두지만, 여기선 보통 동일 plate 재토글 케이스)
+        }
+      } else {
+        // 서버와 상태가 다르면 보류 설정
+        _pendingCollection = collection;
+        _pendingPlateId = plateId;
+        _pendingIsSelected = newIsSelected;
+        _pendingSelectedBy = newSelectedBy;
+      }
 
       notifyListeners();
     } catch (e) {
@@ -357,11 +445,44 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  List<PlateModel> getPlatesByCollection(PlateType collection, {DateTime? selectedDate}) {
+  /// ✅ (신규) 보류된 선택/해제를 실제 Firestore에 반영
+  Future<void> commitPendingSelection({
+    required void Function(String) onError,
+  }) async {
+    if (!hasPendingSelection) return;
+
+    final plateId = _pendingPlateId!;
+    final isSelected = _pendingIsSelected!;
+    final selectedBy = _pendingSelectedBy;
+
+    try {
+      await _repository.recordWhoPlateClick(
+        plateId,
+        isSelected,
+        selectedBy: selectedBy,
+        area: currentArea,
+      );
+
+      // 커밋 성공 → 서버 베이스라인을 새 상태로 갱신
+      _baseline[plateId] = _SelectionBaseline(
+        isSelected: isSelected,
+        selectedBy: selectedBy,
+      );
+
+      _clearPendingSelection();
+      notifyListeners();
+    } catch (e) {
+      onError('🚨 번호판 변경 사항 반영 실패:\n$e');
+    }
+  }
+
+  List<PlateModel> getPlatesByCollection(PlateType collection,
+      {DateTime? selectedDate}) {
     var plates = _data[collection] ?? [];
 
     if (collection == PlateType.departureCompleted && selectedDate != null) {
-      final start = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+      final start =
+      DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
       final end = start.add(const Duration(days: 1));
 
       plates = plates.where((p) {
@@ -378,7 +499,8 @@ class PlateState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> updatePlateLocally(PlateType collection, PlateModel updatedPlate) async {
+  Future<void> updatePlateLocally(
+      PlateType collection, PlateModel updatedPlate) async {
     final list = _data[collection];
     if (list == null) return;
 
@@ -398,7 +520,8 @@ class PlateState extends ChangeNotifier {
     // 🚧 중복 방지 가드:
     final desired = _desiredSubscriptions.toSet();
     final subscribedTypes = _subscriptions.keys.toSet();
-    final sameTypes = desired.length == subscribedTypes.length && desired.containsAll(subscribedTypes);
+    final sameTypes =
+        desired.length == subscribedTypes.length && desired.containsAll(subscribedTypes);
     final sameAreaAll = _subscribedAreas.values.every((a) => a == currentArea);
     if (sameTypes && sameAreaAll) {
       debugPrint("ℹ️ syncWithAreaState: 동일 구성/지역 → 재구독 생략");
@@ -430,6 +553,8 @@ class PlateState extends ChangeNotifier {
     }
     debugPrint("🔄 지역 변경 감지됨: ${_areaState.currentArea}");
     _cancelAllSubscriptions();
+    _clearPendingSelection(); // 지역 변경 시 보류 상태도 초기화
+    _baseline.clear();        // 베이스라인 초기화
     for (final t in _desiredSubscriptions) {
       subscribeType(t);
     }
