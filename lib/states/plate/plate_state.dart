@@ -1,4 +1,3 @@
-// lib/states/plate/plate_state.dart
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -99,21 +98,6 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  void _reportWrite(String source, {String? area, int n = 1}) {
-    try {
-      UsageReporter.instance.report(
-        area: (area == null || area.trim().isEmpty)
-            ? (currentArea.isNotEmpty ? currentArea : '(unspecified)')
-            : area.trim(),
-        action: 'write',
-        n: n,
-        source: source,
-      );
-    } catch (e) {
-      debugPrint('UsageReporter(write) error: $e');
-    }
-  }
-
   // ─────────────────────────────────────────────────────────────
 
   void subscribeType(PlateType type) {
@@ -151,7 +135,7 @@ class PlateState extends ChangeNotifier {
       final sub = _repository
           .departureUnpaidSnapshots(area, descending: descending)
           .listen((QuerySnapshot<Map<String, dynamic>> snapshot) async {
-        // ⛔️ 여기서는 더 이상 onData로 read 계측하지 않음 (서비스 계층으로 이관)
+        // ⛔️ 여기서는 onData로 read 계측하지 않음 (서비스 계층에서 처리)
 
         final results = snapshot.docs
             .map((doc) {
@@ -218,7 +202,7 @@ class PlateState extends ChangeNotifier {
     bool firstDataReceived = false;
 
     final subscription = stream.listen((filteredData) async {
-      // ⛔️ 여기서는 더 이상 onData로 read 계측하지 않음 (서비스 계층으로 이관)
+      // ⛔️ 여기서는 onData로 read 계측하지 않음 (서비스 계층에서 처리)
 
       // ─────────────────────────────────────────────────────────
       // (추가) departureRequests에 대해 "사라진 문서" 감지 이벤트
@@ -356,13 +340,11 @@ class PlateState extends ChangeNotifier {
         plateId,
         newIsSelected,
         selectedBy: newSelectedBy,
+        area: currentArea, // ✅ (2) area 전달
       );
 
-      // 📈 Firebase WRITE: 선택 토글 기록 (유지)
-      _reportWrite(
-        'PlateState.recordWhoPlateClick.toggleSelected',
-        area: currentArea,
-      );
+      // ❌ 집계 단일화: 여기서 write 집계 호출 제거
+      // _reportWrite('PlateState.recordWhoPlateClick.toggleSelected', area: currentArea);
 
       _data[collection]![index] = plate.copyWith(
         isSelected: newIsSelected,
@@ -414,8 +396,6 @@ class PlateState extends ChangeNotifier {
     }
 
     // 🚧 중복 방지 가드:
-    // 현재 구독된 타입/지역이 원하는 구독 셋(_desiredSubscriptions)과 모두 같고,
-    // 모두 현 currentArea에 붙어 있다면 재구독 생략.
     final desired = _desiredSubscriptions.toSet();
     final subscribedTypes = _subscriptions.keys.toSet();
     final sameTypes = desired.length == subscribedTypes.length && desired.containsAll(subscribedTypes);

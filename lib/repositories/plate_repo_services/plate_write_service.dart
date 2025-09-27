@@ -313,6 +313,7 @@ class PlateWriteService {
       String id,
       bool isSelected, {
         String? selectedBy,
+        required String area, // ✅ (2)
       }) async {
     final docRef = _firestore.collection('plates').doc(id);
 
@@ -322,9 +323,9 @@ class PlateWriteService {
         'selectedBy': isSelected ? selectedBy : null,
       });
 
-      // ✅ area를 별도 fetch하지 않고 write 1회로만 보고
+      // ✅ 집계 단일화: WRITE 집계는 서비스(여기)에서만 수행
       await UsageReporter.instance.report(
-        area: 'unknown',
+        area: area, // ✅ 'unknown' → 실제 area
         action: 'write',
         n: 1,
         source: 'PlateWriteService.recordWhoPlateClick',

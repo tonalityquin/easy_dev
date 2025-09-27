@@ -23,12 +23,14 @@ class FirestorePlateRepository implements PlateRepository {
       String area, {
         bool descending = true,
         String? location,
+        bool countInitialSnapshot = false,
       }) {
     return _streamService.streamToCurrentArea(
       type,
       area,
       descending: descending,
       location: location,
+      countInitialSnapshot: countInitialSnapshot, // ✅ (3)
     );
   }
 
@@ -36,10 +38,12 @@ class FirestorePlateRepository implements PlateRepository {
   Stream<QuerySnapshot<Map<String, dynamic>>> departureUnpaidSnapshots(
       String area, {
         bool descending = true,
+        bool countInitialSnapshot = false, // ✅ (3)
       }) {
     return _streamService.departureUnpaidSnapshots(
       area: area,
       descending: descending,
+      countInitialSnapshot: countInitialSnapshot, // ✅
     );
   }
 
@@ -63,8 +67,8 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
-  Future<void> recordWhoPlateClick(String id, bool isSelected, {String? selectedBy}) {
-    return _writeService.recordWhoPlateClick(id, isSelected, selectedBy: selectedBy);
+  Future<void> recordWhoPlateClick(String id, bool isSelected, {String? selectedBy, required String area}) {
+    return _writeService.recordWhoPlateClick(id, isSelected, selectedBy: selectedBy, area: area); // ✅ (2)
   }
 
   @override

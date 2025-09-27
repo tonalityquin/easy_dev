@@ -11,11 +11,12 @@ class PlateStreamService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   Stream<List<PlateModel>> streamToCurrentArea(
-    PlateType type,
-    String area, {
-    bool descending = true,
-    String? location,
-  }) {
+      PlateType type,
+      String area, {
+        bool descending = true,
+        String? location,
+        bool countInitialSnapshot = false, // ✅ (3)
+      }) {
     final query = _buildPlateQuery(
       type: type,
       area: area,
@@ -23,9 +24,11 @@ class PlateStreamService {
       descending: descending,
     );
 
+    bool _didEmitOnce = false; // ✅ (3) 초기 스냅샷 스킵 플래그
+
     return query
         .snapshots()
-        // Firestore 스트림 실패만 로깅 + 재전파
+    // Firestore 스트림 실패만 로깅 + 재전파
         .handleError((e, st) {
       // ignore: unawaited_futures
       DebugFirestoreLogger().log({
@@ -54,38 +57,51 @@ class PlateStreamService {
         final modified = snapshot.docChanges.where((c) => c.type == DocumentChangeType.modified).length;
         final n = added + modified;
         if (n > 0) {
-          // ignore: unawaited_futures
-          UsageReporter.instance.report(
-            area: area,
-            action: 'read',
-            n: n,
-            source: 'PlateStreamService.streamToCurrentArea.onData',
-          );
+          if (!_didEmitOnce) {
+            _didEmitOnce = true;
+            if (countInitialSnapshot) {
+              // ignore: unawaited_futures
+              UsageReporter.instance.report(
+                area: area,
+                action: 'read',
+                n: n,
+                source: 'PlateStreamService.streamToCurrentArea.onData',
+              );
+            }
+          } else {
+            // ignore: unawaited_futures
+            UsageReporter.instance.report(
+              area: area,
+              action: 'read',
+              n: n,
+              source: 'PlateStreamService.streamToCurrentArea.onData',
+            );
+          }
         }
       }
 
       final results = snapshot.docs
           .map((doc) {
-            try {
-              return PlateModel.fromDocument(doc);
-            } catch (e, st) {
-              // ignore: unawaited_futures
-              DebugFirestoreLogger().log({
-                'op': 'plates.stream.parse',
-                'collection': 'plates',
-                'docPath': doc.reference.path,
-                'docId': doc.id,
-                'error': {
-                  'type': e.runtimeType.toString(),
-                  'message': e.toString(),
-                },
-                'stack': st.toString(),
-                'tags': ['plates', 'stream', 'parse', 'error'],
-                'rawKeys': doc.data().keys.take(30).toList(),
-              }, level: 'error');
-              return null;
-            }
-          })
+        try {
+          return PlateModel.fromDocument(doc);
+        } catch (e, st) {
+          // ignore: unawaited_futures
+          DebugFirestoreLogger().log({
+            'op': 'plates.stream.parse',
+            'collection': 'plates',
+            'docPath': doc.reference.path,
+            'docId': doc.id,
+            'error': {
+              'type': e.runtimeType.toString(),
+              'message': e.toString(),
+            },
+            'stack': st.toString(),
+            'tags': ['plates', 'stream', 'parse', 'error'],
+            'rawKeys': doc.data().keys.take(30).toList(),
+          }, level: 'error');
+          return null;
+        }
+      })
           .whereType<PlateModel>()
           .toList();
 
@@ -100,7 +116,7 @@ class PlateStreamService {
     bool descending = true,
   }) {
     Query<Map<String, dynamic>> query =
-        _firestore.collection('plates').where('type', isEqualTo: type.firestoreValue).where('area', isEqualTo: area);
+    _firestore.collection('plates').where('type', isEqualTo: type.firestoreValue).where('area', isEqualTo: area);
 
     if (type == PlateType.departureCompleted) {
       query = query.where('isLockedFee', isEqualTo: false);
@@ -115,9 +131,11 @@ class PlateStreamService {
     return query;
   }
 
+  // ✅ 출차완료(미정산) 스냅샷 스트림: 기본은 초기 스냅샷 미집계, opt-in 시 집계
   Stream<QuerySnapshot<Map<String, dynamic>>> departureUnpaidSnapshots({
     required String area,
     bool descending = true,
+    bool countInitialSnapshot = false, // ✅ (3)
   }) {
     final query = _firestore
         .collection('plates')
@@ -125,6 +143,8 @@ class PlateStreamService {
         .where('area', isEqualTo: area)
         .where('isLockedFee', isEqualTo: false)
         .orderBy(PlateFields.requestTime, descending: descending);
+
+    bool _didEmitOnceDeparture = false; // ✅ (3)
 
     return query.snapshots().handleError((e, st) {
       // ignore: unawaited_futures
@@ -154,13 +174,26 @@ class PlateStreamService {
         final modified = snapshot.docChanges.where((c) => c.type == DocumentChangeType.modified).length;
         final n = added + modified;
         if (n > 0) {
-          // ignore: unawaited_futures
-          UsageReporter.instance.report(
-            area: area,
-            action: 'read',
-            n: n,
-            source: 'PlateStreamService.departureUnpaidSnapshots.onData',
-          );
+          if (!_didEmitOnceDeparture) {
+            _didEmitOnceDeparture = true;
+            if (countInitialSnapshot) {
+              // ignore: unawaited_futures
+              UsageReporter.instance.report(
+                area: area,
+                action: 'read',
+                n: n,
+                source: 'PlateStreamService.departureUnpaidSnapshots.onData',
+              );
+            }
+          } else {
+            // ignore: unawaited_futures
+            UsageReporter.instance.report(
+              area: area,
+              action: 'read',
+              n: n,
+              source: 'PlateStreamService.departureUnpaidSnapshots.onData',
+            );
+          }
         }
       }
       return snapshot;

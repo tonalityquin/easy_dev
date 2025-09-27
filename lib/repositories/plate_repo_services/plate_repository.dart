@@ -10,12 +10,14 @@ abstract class PlateRepository {
       String area, {
         bool descending = true,
         String? location,
+        bool countInitialSnapshot = false, // ✅ (3) 읽기 집계 정책: 초기 스냅샷 집계 여부
       });
 
   /// 출차 완료(미정산) 원본 스냅샷 스트림 (docChanges 사용용)
   Stream<QuerySnapshot<Map<String, dynamic>>> departureUnpaidSnapshots(
       String area, {
-        bool descending,
+        bool descending = true,
+        bool countInitialSnapshot = false, // ✅ (3) 읽기 집계 정책
       });
 
   // ========= Queries =========
@@ -56,6 +58,7 @@ abstract class PlateRepository {
       String id,
       bool isSelected, {
         String? selectedBy,
+        required String area, // ✅ (2) area 전달
       });
 
   Future<void> addPlate({
