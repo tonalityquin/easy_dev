@@ -1,4 +1,3 @@
-// lib/screens/type_package/departure_request_page.dart
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -73,12 +72,12 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
     if (selectedPlate == null) return;
 
     try {
-      // 1) 먼저 출차 완료 처리
+      // 1) 먼저 출차 완료 처리(트랜잭션 전환)
       await movementPlate.setDepartureCompleted(selectedPlate);
 
       if (!context.mounted) return;
 
-      // 2) 성공 후 선택 해제 (await 보장)
+      // 2) 성공 후 선택 해제 (로컬/보류 정리)
       await plateState.togglePlateIsSelected(
         collection: PlateType.departureRequests,
         plateNumber: selectedPlate.plateNumber,

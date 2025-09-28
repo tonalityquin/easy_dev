@@ -28,13 +28,11 @@ class PlateWriteService {
       );
 
       var newData = plate.toMap();
-      newData =
-          _enforceZeroFeeLock(newData, existing: docSnapshot.data());
+      newData = _enforceZeroFeeLock(newData, existing: docSnapshot.data());
 
       final exists = docSnapshot.exists;
       if (exists) {
-        final existingData =
-            docSnapshot.data() ?? const <String, dynamic>{};
+        final existingData = docSnapshot.data() ?? const <String, dynamic>{};
 
         final compOld = Map<String, dynamic>.from(existingData)
           ..remove(PlateFields.logs);
@@ -186,9 +184,7 @@ class PlateWriteService {
       await docRef.update(fields);
       debugPrint("✅ 문서 업데이트 완료: $documentId");
 
-      final area = (fields[PlateFields.area] ??
-          current?['area'] ??
-          'unknown') as String;
+      final area = (fields[PlateFields.area] ?? current?['area'] ?? 'unknown') as String;
       // ✅ write 1회
       await UsageReporter.instance.report(
         area: area,
@@ -309,19 +305,135 @@ class PlateWriteService {
     }
   }
 
-  /// ✅ 수정안 반영: 트랜잭션으로 서버 상태(타입/선점자) 검증 + 원샷 업데이트
+  /// ✅ 전환(입차/출차 완료 등) 트랜잭션:
+  /// - 현재 상태(fromType)와 선점자(forceOverride=false면 검사)를 검증
+  /// - 상태/선택/로그를 **원샷** 업데이트(WRITE 1)
+  Future<void> transitionPlateType({
+    required String plateId,
+    required String actor,              // 전환 수행자(userName)
+    required String fromType,           // 예: 'parking_requests'
+    required String toType,             // 예: 'parking_completed'
+    Map<String, dynamic> extraFields = const {}, // location/area 등
+    bool forceOverride = true,          // false면 타인 선택 시 전환 거부
+  }) async {
+    final docRef = _firestore.collection('plates').doc(plateId);
+
+    try {
+      await _firestore.runTransaction((tx) async {
+        final snap = await tx.get(docRef); // READ 1
+        if (!snap.exists) {
+          throw FirebaseException(plugin: 'cloud_firestore', code: 'not-found');
+        }
+        final data = snap.data() ?? {};
+        final currType = (data['type'] as String?) ?? '';
+
+        if (currType != fromType) {
+          throw FirebaseException(
+            plugin: 'cloud_firestore',
+            code: 'invalid-state',
+            message: 'expected $fromType but was $currType',
+          );
+        }
+
+        final currentSelectedBy = data['selectedBy'] as String?;
+        if (!forceOverride &&
+            currentSelectedBy != null &&
+            currentSelectedBy.isNotEmpty &&
+            currentSelectedBy != actor) {
+          throw FirebaseException(
+            plugin: 'cloud_firestore',
+            code: 'conflict',
+            message: 'selected by $currentSelectedBy',
+          );
+        }
+
+        final update = <String, dynamic>{
+          'type': toType,
+          // 전환 시에는 선택 상태를 정리(유령 선택 방지)
+          'isSelected': false,
+          'selectedBy': null,
+          'updatedAt': FieldValue.serverTimestamp(),
+          ...extraFields,
+          'logs': FieldValue.arrayUnion([
+            {
+              'action': '$fromType → $toType',
+              'performedBy': actor,
+              'timestamp': DateTime.now().toIso8601String(),
+            }
+          ]),
+        };
+
+        tx.update(docRef, update); // WRITE 1
+      });
+
+      await UsageReporter.instance.report(
+        area: (extraFields['area'] as String?) ?? '(unknown)',
+        action: 'write',
+        n: 1,
+        source: 'PlateWriteService.transitionPlateType.tx',
+      );
+    } on FirebaseException catch (e, st) {
+      try {
+        await DebugFirestoreLogger().log({
+          'op': 'plates.transition',
+          'collection': 'plates',
+          'docPath': docRef.path,
+          'docId': plateId,
+          'inputs': {
+            'from': fromType,
+            'to': toType,
+            'actor': actor,
+            'extraKeys': extraFields.keys.toList(),
+            'forceOverride': forceOverride,
+          },
+          'error': {
+            'type': e.runtimeType.toString(),
+            'code': e.code,
+            'message': e.toString(),
+          },
+          'stack': st.toString(),
+          'tags': ['plates', 'transition', 'tx', 'error'],
+        }, level: 'error');
+      } catch (_) {}
+      rethrow;
+    } catch (e, st) {
+      try {
+        await DebugFirestoreLogger().log({
+          'op': 'plates.transition.unknown',
+          'collection': 'plates',
+          'docPath': docRef.path,
+          'docId': plateId,
+          'inputs': {
+            'from': fromType,
+            'to': toType,
+            'actor': actor,
+            'extraKeys': extraFields.keys.toList(),
+            'forceOverride': forceOverride,
+          },
+          'error': {
+            'type': e.runtimeType.toString(),
+            'message': e.toString(),
+          },
+          'stack': st.toString(),
+          'tags': ['plates', 'transition', 'tx', 'error'],
+        }, level: 'error');
+      } catch (_) {}
+      throw Exception("DB 업데이트 실패: $e");
+    }
+  }
+
+  /// ✅ ‘주행’ 커밋 트랜잭션: 서버 상태(타입/선점자) 검증 + 원샷 업데이트
   Future<void> recordWhoPlateClick(
       String id,
       bool isSelected, {
         String? selectedBy,
-        required String area, // ✅ (2)
+        required String area,
       }) async {
     final docRef = _firestore.collection('plates').doc(id);
 
     try {
       await _firestore.runTransaction((tx) async {
-        // READ 1
-        final snap = await tx.get(docRef);
+        final snap = await tx.get(docRef); // READ 1
         if (!snap.exists) {
           throw FirebaseException(
             plugin: 'cloud_firestore',
@@ -356,7 +468,6 @@ class PlateWriteService {
           );
         }
 
-        // ✅ 원샷 업데이트(선택 상태 + 필요 시 로그)
         final update = <String, dynamic>{
           'isSelected': isSelected,
           'selectedBy': isSelected ? selectedBy : null,
@@ -371,11 +482,9 @@ class PlateWriteService {
             ]),
         };
 
-        // WRITE 1
-        tx.update(docRef, update);
+        tx.update(docRef, update); // WRITE 1
       });
 
-      // (계측) 쓰기 1회
       await UsageReporter.instance.report(
         area: area,
         action: 'write',
@@ -383,7 +492,6 @@ class PlateWriteService {
         source: 'PlateWriteService.recordWhoPlateClick.tx',
       );
     } on FirebaseException catch (e, st) {
-      // 상세 로깅
       try {
         await DebugFirestoreLogger().log({
           'op': 'plates.recordWhoClick.tx',
@@ -403,8 +511,6 @@ class PlateWriteService {
           'tags': ['plates', 'update', 'recordWhoClick', 'tx', 'error'],
         }, level: 'error');
       } catch (_) {}
-
-      // 상위에서 코드 분기 가능하도록 그대로 throw
       rethrow;
     } catch (e, st) {
       try {

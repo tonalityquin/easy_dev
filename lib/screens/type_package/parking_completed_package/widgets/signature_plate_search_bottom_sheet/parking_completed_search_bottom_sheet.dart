@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../../../models/plate_model.dart';
+import '../../../../../enums/plate_type.dart';
 import '../parking_completed_status_bottom_sheet.dart';
 import 'keypad/animated_keypad.dart';
 import 'widgets/parking_completed_plate_number_display.dart';
@@ -11,9 +12,6 @@ import 'widgets/parking_completed_search_button.dart';
 import '../../../../../../repositories/plate_repo_services/firestore_plate_repository.dart';
 import '../../../../../../states/plate/movement_plate.dart';
 import '../../../../../../states/plate/delete_plate.dart';
-import '../../../../../../states/user/user_state.dart';
-import '../../../../../../enums/plate_type.dart';
-import '../../../../../../utils/snackbar_helper.dart'; // ✅ snackbar_helper 사용
 
 class ParkingCompletedSearchBottomSheet extends StatefulWidget {
   final void Function(String) onSearch;
@@ -35,7 +33,7 @@ class _ParkingCompletedSearchBottomSheetState extends State<ParkingCompletedSear
 
   bool _isLoading = false;
   bool _hasSearched = false;
-  bool _navigating = false; // 빠른 중복 탭 방지
+  bool _navigating = false;
 
   List<PlateModel> _results = [];
 
@@ -67,7 +65,7 @@ class _ParkingCompletedSearchBottomSheetState extends State<ParkingCompletedSear
   }
 
   Future<void> _refreshSearchResults() async {
-    if (!mounted) return; // 가드 1
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
     });
@@ -80,25 +78,25 @@ class _ParkingCompletedSearchBottomSheetState extends State<ParkingCompletedSear
         area: widget.area,
       );
 
-      if (!mounted) return; // 가드 2
+      if (!mounted) return;
       setState(() {
         _results = results;
         _hasSearched = true;
         _isLoading = false;
       });
     } catch (e) {
-      if (!mounted) return; // 가드 3
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
-      // 🔁 SnackbarHelper로 대체
-      showFailedSnackbar(context, '검색 중 오류가 발생했습니다: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('검색 중 오류가 발생했습니다: $e')),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // rootNavigator 컨텍스트를 미리 확보(현재 시트 닫은 뒤에도 사용 가능)
     final rootContext = Navigator.of(context, rootNavigator: true).context;
 
     return SafeArea(
@@ -138,7 +136,6 @@ class _ParkingCompletedSearchBottomSheetState extends State<ParkingCompletedSear
                       ParkingCompletedPlateNumberDisplay(controller: _controller, isValidPlate: isValidPlate),
                       const SizedBox(height: 24),
 
-                      // 결과 영역
                       Builder(
                         builder: (_) {
                           final text = _controller.text;
@@ -155,43 +152,33 @@ class _ParkingCompletedSearchBottomSheetState extends State<ParkingCompletedSear
                             );
                           }
 
-                          // 유효하지 않은 형식
                           if (!valid) {
                             return const _EmptyState(text: '유효하지 않은 번호 형식입니다. (숫자 4자리)');
                           }
 
-                          // 유효하지만 결과 없음
                           if (_results.isEmpty) {
                             return const _EmptyState(text: '검색 결과가 없습니다.');
                           }
 
-                          // 결과 표시
                           return ParkingCompletedPlateSearchResults(
                             results: _results,
                             onSelect: (selected) {
-                              if (_navigating) return; // 중복 탭 방지
+                              if (_navigating) return;
                               _navigating = true;
 
-                              // 먼저 현재 시트를 닫고
                               Navigator.pop(context);
 
-                              // 다음 프레임에 안전하게 실행(바텀시트 컨텍스트 분리)
                               WidgetsBinding.instance.addPostFrameCallback((_) {
-                                // 이 시점에 본 위젯은 dispose 되었어도 rootContext는 유효
                                 showParkingCompletedStatusBottomSheet(
                                   context: rootContext,
                                   plate: selected,
                                   onRequestEntry: () async {
-                                    final user = rootContext.read<UserState>().name;
                                     await rootContext.read<MovementPlate>().goBackToParkingRequest(
                                       fromType: PlateType.parkingCompleted,
                                       plateNumber: selected.plateNumber,
                                       area: selected.area,
                                       newLocation: "미지정",
-                                      performedBy: user,
                                     );
-                                    // 이 시트는 이미 닫혔으므로 갱신은 필요 없지만,
-                                    // 안전 가드가 있으니 호출되어도 부작용 없음
                                     await _refreshSearchResults();
                                   },
                                   onDelete: () async {
@@ -216,7 +203,6 @@ class _ParkingCompletedSearchBottomSheetState extends State<ParkingCompletedSear
                       ),
                       const SizedBox(height: 16),
 
-                      // 검색 버튼
                       ValueListenableBuilder<TextEditingValue>(
                         valueListenable: _controller,
                         builder: (context, value, child) {

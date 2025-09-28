@@ -1,4 +1,3 @@
-// lib/screens/type_pages/parking_completed_pages/parking_completed_control_buttons.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -36,7 +35,7 @@ Future<void> showParkingCompletedStatusBottomSheet({
     useSafeArea: true,
     backgroundColor: Colors.transparent,
     builder: (_) => FractionallySizedBox(
-      heightFactor: 1, // 최상단까지
+      heightFactor: 1,
       child: _FullHeightSheet(
         plate: plate,
         plateNumber: plateNumber,
@@ -78,7 +77,6 @@ class _FullHeightSheet extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         child: ListView(
           children: [
-            // grip
             Center(
               child: Container(
                 width: 40,
@@ -287,23 +285,18 @@ class _FullHeightSheet extends StatelessWidget {
             const SizedBox(height: 24),
 
             // =========================
-            // 기존 액션들 (Firebase는 내부/다른 모듈에서 수행)
+            // 기존 액션들
             // =========================
             ElevatedButton.icon(
               icon: const Icon(Icons.exit_to_app),
               label: const Text("출차 요청으로 이동"),
               onPressed: () async {
-                // ⚠️ Firestore 작업은 MovementPlate 내부에서 수행/계측
                 final movementPlate = context.read<MovementPlate>();
-                final performedBy = context.read<UserState>().name;
-
                 await movementPlate.setDepartureRequested(
                   plate.plateNumber,
                   plate.area,
                   plate.location,
-                  performedBy: performedBy,
                 );
-
                 if (!context.mounted) return;
                 Navigator.pop(context);
               },
@@ -383,18 +376,13 @@ class _FullHeightSheet extends StatelessWidget {
               icon: const Icon(Icons.assignment_return),
               label: const Text("입차 요청으로 되돌리기"),
               onPressed: () async {
-                // ⚠️ Firestore 작업은 MovementPlate 내부에서 수행/계측
                 final movementPlate = context.read<MovementPlate>();
-                final performedBy = context.read<UserState>().name;
-
                 await movementPlate.goBackToParkingRequest(
                   fromType: PlateType.parkingCompleted,
                   plateNumber: plate.plateNumber,
                   area: plate.area,
                   newLocation: "미지정",
-                  performedBy: performedBy,
                 );
-
                 if (!context.mounted) return;
                 Navigator.pop(context);
               },
@@ -414,7 +402,6 @@ class _FullHeightSheet extends StatelessWidget {
               icon: const Icon(Icons.delete_forever, color: Colors.red),
               label: const Text("삭제", style: TextStyle(color: Colors.red)),
               onPressed: () {
-                // ⚠️ 실제 삭제 Firestore 작업은 onDelete(상위/별도 모듈)에서 수행/계측
                 Navigator.pop(context);
                 onDelete();
               },
@@ -450,15 +437,11 @@ Future<void> handleEntryParkingRequest(
     String plateNumber,
     String area,
     ) async {
-  // ⚠️ Firestore 작업은 MovementPlate 내부에서 수행/계측
   final movementPlate = context.read<MovementPlate>();
-  final performedBy = context.read<UserState>().name;
-
   await movementPlate.goBackToParkingRequest(
     fromType: PlateType.parkingCompleted,
     plateNumber: plateNumber,
     area: area,
     newLocation: "미지정",
-    performedBy: performedBy,
   );
 }

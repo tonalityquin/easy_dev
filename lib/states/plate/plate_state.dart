@@ -224,6 +224,13 @@ class PlateState extends ChangeNotifier {
           }
         }
 
+        // ⬇️ 스트림 갱신 이후 보류 항목 유효성 재점검(사라진 경우 자동 해제)
+        if (hasPendingSelection && !pendingStillValidFor(type)) {
+          _clearPendingSelection();
+          notifyListeners();
+          debugPrint('ℹ️ 전환/필터로 문서가 사라져 보류를 해제했습니다.');
+        }
+
         _isLoading = false;
       }, onError: (error) {
         debugPrint('🔥 [출차 완료] 스냅샷 스트림 에러: $error');
@@ -280,6 +287,13 @@ class PlateState extends ChangeNotifier {
 
       _data[type] = filteredData;
       notifyListeners();
+
+      // ⬇️ 스트림 갱신 이후 보류 유효성 재점검
+      if (hasPendingSelection && !pendingStillValidFor(type)) {
+        _clearPendingSelection();
+        notifyListeners();
+        debugPrint('ℹ️ 전환/필터로 문서가 사라져 보류를 해제했습니다.');
+      }
 
       if (!firstDataReceived) {
         firstDataReceived = true;

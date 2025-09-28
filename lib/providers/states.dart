@@ -1,4 +1,3 @@
-// (예시 경로) lib/state_providers.dart
 import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
 
@@ -6,6 +5,9 @@ import '../repositories/bill_repo_services/bill_repository.dart';
 import '../repositories/location_repo_services/firestore_location_repository.dart';
 import '../repositories/plate_repo_services/plate_repository.dart';
 import '../repositories/user_repo_services/user_repository.dart';
+
+// 🔽 추가: write 트랜잭션 서비스 DI
+import '../repositories/plate_repo_services/plate_write_service.dart';
 
 import '../screens/head_package/calendar_package/calendar_model.dart';
 import '../screens/head_package/calendar_package/google_calendar_service.dart';
@@ -59,13 +61,14 @@ final List<SingleChildWidget> stateProviders = [
     ),
   ),
 
-  // ✅ 리팩터링 후 InputPlate는 PlateRepository 하나만 받습니다.
+  // ✅ InputPlate는 PlateRepository 하나만 받습니다.
   ChangeNotifierProvider(
     create: (context) => InputPlate(
       context.read<PlateRepository>(),
     ),
   ),
 
+  // ✅ PlateState는 기존처럼 PlateRepository + AreaState
   ChangeNotifierProvider(
     create: (context) {
       final repo = context.read<PlateRepository>();
@@ -73,28 +76,44 @@ final List<SingleChildWidget> stateProviders = [
       return PlateState(repo, area);
     },
   ),
+
   ChangeNotifierProvider(
     create: (context) => FilterPlate(
       context.read<PlateState>(),
     ),
   ),
+
   Provider(
     create: (context) => DeletePlate(
       context.read<PlateRepository>(),
       {},
     ),
   ),
-  Provider(
-    create: (context) => MovementPlate(
-      context.read<PlateRepository>(),
-    ),
-  ),
+
+  // ⚠️ 순서 중요: MovementPlate가 UserState와 PlateWriteService를 읽어야 하므로
+  // UserState, PlateWriteService를 먼저 등록한다.
+
+  // ✅ UserState (앞당김)
   ChangeNotifierProvider(
     create: (context) => UserState(
       context.read<UserRepository>(),
       context.read<AreaState>(),
     ),
   ),
+
+  // ✅ PlateWriteService DI (신규)
+  Provider(
+    create: (_) => PlateWriteService(),
+  ),
+
+  // ✅ MovementPlate는 (PlateWriteService, UserState)를 받도록 변경됨
+  ChangeNotifierProvider(
+    create: (context) => MovementPlate(
+      context.read<PlateWriteService>(),
+      context.read<UserState>(),
+    ),
+  ),
+
   ChangeNotifierProvider(
     create: (context) => LocationState(
       FirestoreLocationRepository(),
@@ -118,23 +137,21 @@ final List<SingleChildWidget> stateProviders = [
   ChangeNotifierProvider(
     create: (_) => CalendarModel(GoogleCalendarService()),
   ),
-  // ▼ 개발용 Dev 캘린더 모델(CompanyCalendarPage와 동일 패턴의 전역 주입)
+  // ▼ 개발용 Dev 캘린더 모델
   ChangeNotifierProvider(
     create: (_) => DevCalendarModel(DevGoogleCalendarService()),
   ),
 
-  // ▼▼▼ 여기부터 SecondaryState 전역 주입 (UserState, AreaState 이후여야 함) ▼▼▼
+  // ▼▼▼ SecondaryState 전역 주입 ▼▼▼
   ChangeNotifierProxyProvider2<UserState, AreaState, SecondaryState>(
     create: (_) => SecondaryState(pages: const [tabLocalData, tabBackend]),
     update: (ctx, userState, areaState, secondaryState) {
-      // role/caps 기반 탭 계산
       final role = RoleType.fromName(userState.role);
       final caps = areaState.capabilitiesOfCurrentArea;
 
       List<SecondaryInfo> computePages(RoleType role, CapSet areaCaps) {
         final allowedSections = kRolePolicy[role] ?? const <Section>{};
         if (allowedSections.isEmpty) {
-          // 방어적으로 공통 최소 탭 제공
           return const [tabLocalData, tabBackend];
         }
         final pages = <SecondaryInfo>[];
@@ -145,7 +162,6 @@ final List<SingleChildWidget> stateProviders = [
             if (info != null) pages.add(info);
           }
         }
-        // 혹시 전부 필터링되어 비면 공통 최소 탭 제공
         return pages.isEmpty ? const [tabLocalData, tabBackend] : pages;
       }
 

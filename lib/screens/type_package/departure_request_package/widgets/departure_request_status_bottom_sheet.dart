@@ -20,10 +20,8 @@ Future<void> showDepartureRequestStatusBottomSheet({
   final area = plate.area;
   final division = context.read<UserState>().division;
 
-  // 바깥 컨텍스트를 캡처하여 pop 뒤 push 시 안전하게 사용
   final rootContext = context;
 
-  // ✅ 하얀색 배경 버튼 공통 스타일
   ButtonStyle whiteSheetButtonStyle(BuildContext ctx) => ElevatedButton.styleFrom(
     minimumSize: const Size(double.infinity, 52),
     backgroundColor: Colors.white,
@@ -36,18 +34,18 @@ Future<void> showDepartureRequestStatusBottomSheet({
   await showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    useSafeArea: true, // ⬅️ 최상단까지 안전하게
+    useSafeArea: true,
     backgroundColor: Colors.transparent,
     builder: (modalCtx) {
       return FractionallySizedBox(
-        heightFactor: 1, // ⬅️ 화면 높이 100%
+        heightFactor: 1,
         child: DraggableScrollableSheet(
-          initialChildSize: 1.0, // ⬅️ 시작부터 최대로 펼침
-          maxChildSize: 1.0,      // ⬅️ 최댓값도 전체
+          initialChildSize: 1.0,
+          maxChildSize: 1.0,
           minChildSize: 0.4,
           builder: (sheetCtx, scrollController) {
             return SafeArea(
-              top: false, // ⬅️ 상단 라운딩 유지(노치 영역까지 배경이 차도록)
+              top: false,
               child: Container(
                 decoration: const BoxDecoration(
                   color: Colors.white,
@@ -80,12 +78,11 @@ Future<void> showDepartureRequestStatusBottomSheet({
                     ),
                     const SizedBox(height: 24),
 
-                    // 정보 수정 (하얀색 배경)
                     ElevatedButton.icon(
                       icon: const Icon(Icons.edit_note_outlined),
                       label: const Text("정보 수정"),
                       onPressed: () {
-                        Navigator.pop(sheetCtx); // 시트 닫기
+                        Navigator.pop(sheetCtx);
                         Future.microtask(() {
                           if (!rootContext.mounted) return;
                           Navigator.push(
@@ -103,12 +100,11 @@ Future<void> showDepartureRequestStatusBottomSheet({
                     ),
                     const SizedBox(height: 12),
 
-                    // 로그 확인 (하얀색 배경)
                     ElevatedButton.icon(
                       icon: const Icon(Icons.history),
                       label: const Text("로그 확인"),
                       onPressed: () {
-                        Navigator.pop(sheetCtx); // 시트 닫기
+                        Navigator.pop(sheetCtx);
                         Future.microtask(() {
                           if (!rootContext.mounted) return;
                           Navigator.push(
@@ -118,7 +114,7 @@ Future<void> showDepartureRequestStatusBottomSheet({
                                 initialPlateNumber: plateNumber,
                                 division: division,
                                 area: area,
-                                requestTime: plate.requestTime, // non-null이면 그대로 전달
+                                requestTime: plate.requestTime,
                               ),
                             ),
                           );
@@ -128,7 +124,6 @@ Future<void> showDepartureRequestStatusBottomSheet({
                     ),
                     const SizedBox(height: 12),
 
-                    // 입차 요청으로 되돌리기
                     ElevatedButton.icon(
                       icon: const Icon(Icons.assignment_return),
                       label: const Text("입차 요청으로 되돌리기"),
@@ -145,7 +140,6 @@ Future<void> showDepartureRequestStatusBottomSheet({
                     ),
                     const SizedBox(height: 12),
 
-                    // 입차 완료 처리
                     ElevatedButton.icon(
                       icon: const Icon(Icons.check_circle_outline),
                       label: const Text("입차 완료 처리"),
@@ -162,7 +156,6 @@ Future<void> showDepartureRequestStatusBottomSheet({
                     ),
                     const SizedBox(height: 12),
 
-                    // 삭제
                     TextButton.icon(
                       icon: const Icon(Icons.delete_forever, color: Colors.red),
                       label: const Text("삭제", style: TextStyle(color: Colors.red)),
@@ -188,15 +181,12 @@ Future<void> handleEntryParkingRequest(
     String area,
     ) async {
   final movementPlate = context.read<MovementPlate>();
-  final performedBy = context.read<UserState>().name;
-
   try {
     await movementPlate.goBackToParkingRequest(
       fromType: PlateType.departureRequests,
       plateNumber: plateNumber,
       area: area,
       newLocation: "미지정",
-      performedBy: performedBy,
     );
     if (context.mounted) {
       showSuccessSnackbar(context, "입차 요청이 처리되었습니다.");

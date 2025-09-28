@@ -1,4 +1,3 @@
-// lib/screens/type_package/parking_request_page.dart
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -220,7 +219,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
             );
           },
         ),
-        // ⬇️ FAB: 로컬에서 보류 + 서버 기준으로 여전히 유효할 때만 표시, 잠금 시 숨김
+        // ⬇️ FAB: 로컬 보류 + 서버 기준으로 여전히 유효할 때만 표시, 잠금 시 숨김
         floatingActionButton: Consumer<PlateState>(
           builder: (context, s, _) {
             final showFab = s.hasPendingSelection &&

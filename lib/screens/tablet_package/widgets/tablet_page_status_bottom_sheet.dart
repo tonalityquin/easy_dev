@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 
 import '../../../../models/plate_model.dart';
 import '../../../../states/plate/movement_plate.dart';
-import '../../../../states/user/user_state.dart';
 
 Future<bool?> showTabletPageStatusBottomSheet({
   required BuildContext context,
@@ -30,7 +29,6 @@ Future<bool?> showTabletPageStatusBottomSheet({
             child: ListView(
               controller: scrollController,
               children: [
-                // 상단 그립
                 Center(
                   child: Container(
                     width: 40,
@@ -43,7 +41,6 @@ Future<bool?> showTabletPageStatusBottomSheet({
                   ),
                 ),
 
-                // 타이틀
                 const Row(
                   children: [
                     Icon(Icons.directions_car, color: Colors.blueAccent),
@@ -57,7 +54,6 @@ Future<bool?> showTabletPageStatusBottomSheet({
 
                 const SizedBox(height: 20),
 
-                // 선택된 번호판 강조 표시 (구역/위치/시간은 표시하지 않음)
                 Center(
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -79,7 +75,6 @@ Future<bool?> showTabletPageStatusBottomSheet({
 
                 const SizedBox(height: 16),
 
-                // 안내 문구
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 4),
                   child: Text(
@@ -91,14 +86,13 @@ Future<bool?> showTabletPageStatusBottomSheet({
 
                 const SizedBox(height: 28),
 
-                // 확인/취소 버튼
                 Row(
                   children: [
                     Expanded(
                       child: OutlinedButton.icon(
                         icon: const Icon(Icons.close),
                         label: const Text('아니요'),
-                        onPressed: () => Navigator.pop(context, false), // 취소: false 반환
+                        onPressed: () => Navigator.pop(context, false),
                         style: OutlinedButton.styleFrom(
                           minimumSize: const Size(double.infinity, 48),
                           side: const BorderSide(color: Colors.black26),
@@ -115,17 +109,13 @@ Future<bool?> showTabletPageStatusBottomSheet({
                         label: const Text('네, 출차 요청'),
                         onPressed: () async {
                           final movementPlate = context.read<MovementPlate>();
-                          final performedBy = context.read<UserState>().name;
-
                           await movementPlate.setDepartureRequested(
                             plate.plateNumber,
                             plate.area,
                             plate.location,
-                            performedBy: performedBy,
                           );
-
                           if (!context.mounted) return;
-                          Navigator.pop(context, true); // 확인: true 반환
+                          Navigator.pop(context, true);
                         },
                         style: ElevatedButton.styleFrom(
                           minimumSize: const Size(double.infinity, 48),
