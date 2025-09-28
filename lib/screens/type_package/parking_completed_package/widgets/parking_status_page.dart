@@ -1,4 +1,13 @@
 // lib/screens/type_pages/parking_completed_pages/widgets/parking_status_page.dart
+//
+// [주요 동작]
+// - 페이지가 실제로 "보이는 순간" 영역 전체의 parking_completed 총합을 aggregate count() 1회 수행
+// - LocationState.locations의 capacity 합과 묶어 사용률 게이지로 표기
+//
+// [리팩터링 추가사항]
+// - Area 변경 감지 시(_lastArea 비교) 재집계 트리거
+// - 에러 발생 시 사용자에게 '다시 집계' 버튼 제공(_hadError)
+// - 기존의 "보이는 순간 1회" 원칙 유지(중복 집계 방지)
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -25,6 +34,12 @@ class _ParkingStatusPageState extends State<ParkingStatusPage> {
 
   // 🔒 UI 표시 시점에만 1회 집계하도록 제어
   bool _didCountRun = false;
+
+  // Area 변경 감지용
+  String? _lastArea;
+
+  // 에러 상태 플래그
+  bool _hadError = false;
 
   @override
   void initState() {
@@ -54,9 +69,11 @@ class _ParkingStatusPageState extends State<ParkingStatusPage> {
     if (!mounted) return;
 
     final area = context.read<AreaState>().currentArea.trim();
+    _lastArea = area; // 최신 area 기억
 
     setState(() {
       _isCountLoading = true;
+      _hadError = false;
     });
 
     try {
@@ -84,6 +101,7 @@ class _ParkingStatusPageState extends State<ParkingStatusPage> {
       setState(() {
         _occupiedCount = cnt;
         _isCountLoading = false;
+        _hadError = false;
       });
     } catch (e) {
       try {
@@ -99,6 +117,7 @@ class _ParkingStatusPageState extends State<ParkingStatusPage> {
       setState(() {
         _occupiedCount = 0;
         _isCountLoading = false;
+        _hadError = true; // 에러 플래그 ON
       });
     }
   }
@@ -107,6 +126,15 @@ class _ParkingStatusPageState extends State<ParkingStatusPage> {
   Widget build(BuildContext context) {
     // 빌드 후에도 가시성 변화가 있으면 한 번 더 시도(이미 실행되었으면 무시됨)
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeRunCount());
+
+    // Area 변경 감지 → 재집계 트리거
+    final currentArea = context.select<AreaState, String>((s) => s.currentArea.trim());
+    if (_lastArea != null && _lastArea != currentArea) {
+      // 같은 위젯 인스턴스지만 area가 바뀐 경우에 한해 다시 1회 돌리도록 플래그를 내리고 트리거
+      _didCountRun = false;
+      _lastArea = currentArea;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _maybeRunCount());
+    }
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -120,14 +148,46 @@ class _ParkingStatusPageState extends State<ParkingStatusPage> {
               }
 
               // capacity 합계는 로컬 state로 계산
-              final totalCapacity = locationState.locations
-                  .fold<int>(0, (sum, l) => sum + l.capacity);
+              final totalCapacity = locationState.locations.fold<int>(0, (sum, l) => sum + l.capacity);
               final occupiedCount = _occupiedCount;
 
-              final double usageRatio =
-              totalCapacity == 0 ? 0 : occupiedCount / totalCapacity;
-              final String usagePercent =
-              (usageRatio * 100).toStringAsFixed(1);
+              final double usageRatio = totalCapacity == 0 ? 0 : occupiedCount / totalCapacity;
+              final String usagePercent = (usageRatio * 100).toStringAsFixed(1);
+
+              if (_hadError) {
+                // 에러 UI: 간단한 재시도 버튼 제공
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.warning_amber, size: 40, color: Colors.redAccent),
+                        const SizedBox(height: 12),
+                        const Text(
+                          '현황 집계 중 오류가 발생했습니다.',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '영역: $currentArea',
+                          style: const TextStyle(color: Colors.black54),
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            _didCountRun = false; // 다시 1회만 돌도록
+                            _runAggregateCount();
+                          },
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('다시 집계'),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
 
               return ListView(
                 padding: const EdgeInsets.all(20),
@@ -155,8 +215,7 @@ class _ParkingStatusPageState extends State<ParkingStatusPage> {
                   const SizedBox(height: 12),
                   Text(
                     '$usagePercent% 사용 중',
-                    style: const TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.w600),
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                     textAlign: TextAlign.center,
                   ),
                 ],
