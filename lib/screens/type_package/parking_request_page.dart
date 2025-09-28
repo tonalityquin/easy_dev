@@ -220,10 +220,12 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
             );
           },
         ),
-        // ⬇️ FAB: 로컬에서 선택(보류 변경)이 있을 때만 표시, 잠금 시 숨김
+        // ⬇️ FAB: 로컬에서 보류 + 서버 기준으로 여전히 유효할 때만 표시, 잠금 시 숨김
         floatingActionButton: Consumer<PlateState>(
           builder: (context, s, _) {
-            final showFab = s.hasPendingSelection && !_isLocked;
+            final showFab = s.hasPendingSelection &&
+                s.pendingStillValidFor(PlateType.parkingRequests) &&
+                !_isLocked;
             if (!showFab) return const SizedBox.shrink();
             return SafeArea(
               minimum: const EdgeInsets.fromLTRB(16, 0, 16, 16),

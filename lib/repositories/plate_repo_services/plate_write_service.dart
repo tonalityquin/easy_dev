@@ -309,6 +309,7 @@ class PlateWriteService {
     }
   }
 
+  /// ✅ 수정안 반영: 트랜잭션으로 서버 상태(타입/선점자) 검증 + 원샷 업데이트
   Future<void> recordWhoPlateClick(
       String id,
       bool isSelected, {
@@ -318,49 +319,74 @@ class PlateWriteService {
     final docRef = _firestore.collection('plates').doc(id);
 
     try {
-      // 1) 선택 상태/사용자 반영
-      await docRef.update({
-        'isSelected': isSelected,
-        'selectedBy': isSelected ? selectedBy : null,
+      await _firestore.runTransaction((tx) async {
+        // READ 1
+        final snap = await tx.get(docRef);
+        if (!snap.exists) {
+          throw FirebaseException(
+            plugin: 'cloud_firestore',
+            code: 'not-found',
+            message: 'plate $id not found',
+          );
+        }
+
+        final data = snap.data() ?? {};
+        final type = (data['type'] as String?) ?? '';
+
+        // ✅ 요청 계열 상태에서만 주행(선택) 허용
+        const allowed = {'parking_requests', 'departure_requests'};
+        if (!allowed.contains(type)) {
+          throw FirebaseException(
+            plugin: 'cloud_firestore',
+            code: 'invalid-state',
+            message: 'cannot set driving on $type',
+          );
+        }
+
+        // ✅ 선택 충돌 방지
+        final currentSelectedBy = data['selectedBy'] as String?;
+        if (isSelected &&
+            currentSelectedBy != null &&
+            currentSelectedBy.isNotEmpty &&
+            currentSelectedBy != selectedBy) {
+          throw FirebaseException(
+            plugin: 'cloud_firestore',
+            code: 'conflict',
+            message: 'already selected by $currentSelectedBy',
+          );
+        }
+
+        // ✅ 원샷 업데이트(선택 상태 + 필요 시 로그)
+        final update = <String, dynamic>{
+          'isSelected': isSelected,
+          'selectedBy': isSelected ? selectedBy : null,
+          'updatedAt': FieldValue.serverTimestamp(),
+          if (isSelected && (selectedBy?.trim().isNotEmpty ?? false))
+            'logs': FieldValue.arrayUnion([
+              {
+                'action': '주행 중',
+                'performedBy': selectedBy,
+                'timestamp': DateTime.now().toIso8601String(),
+              }
+            ]),
+        };
+
+        // WRITE 1
+        tx.update(docRef, update);
       });
 
-      // 2) ✅ 주행 FAB 커밋 시 '주행 중' 로그 삽입 (isSelected == true 일 때만)
-      if (isSelected && (selectedBy?.trim().isNotEmpty ?? false)) {
-        await docRef.update({
-          'logs': FieldValue.arrayUnion([
-            {
-              'action': '주행 중',
-              'performedBy': selectedBy,
-              'timestamp': DateTime.now().toIso8601String(),
-            }
-          ])
-        });
-
-        // (선택) 계측: logs arrayUnion에 대한 write 집계
-        await UsageReporter.instance.report(
-          area: area,
-          action: 'write',
-          n: 1,
-          source: 'PlateWriteService.recordWhoPlateClick.logs.arrayUnion(driving)',
-        );
-      }
-
-      // 3) ✅ 집계 단일화: update 자체에 대한 write 집계
+      // (계측) 쓰기 1회
       await UsageReporter.instance.report(
-        area: area, // ✅ 'unknown' → 실제 area
+        area: area,
         action: 'write',
         n: 1,
-        source: 'PlateWriteService.recordWhoPlateClick.update',
+        source: 'PlateWriteService.recordWhoPlateClick.tx',
       );
     } on FirebaseException catch (e, st) {
-      if (e.code == 'not-found') {
-        debugPrint("번호판 문서를 찾을 수 없습니다: $id");
-        return;
-      }
-      debugPrint("DB 에러 (recordWhoPlateClick): $e");
+      // 상세 로깅
       try {
         await DebugFirestoreLogger().log({
-          'op': 'plates.recordWhoClick',
+          'op': 'plates.recordWhoClick.tx',
           'collection': 'plates',
           'docPath': docRef.path,
           'docId': id,
@@ -374,15 +400,16 @@ class PlateWriteService {
             'message': e.toString(),
           },
           'stack': st.toString(),
-          'tags': ['plates', 'update', 'recordWhoClick', 'error'],
+          'tags': ['plates', 'update', 'recordWhoClick', 'tx', 'error'],
         }, level: 'error');
       } catch (_) {}
-      throw Exception("DB 업데이트 실패: $e");
+
+      // 상위에서 코드 분기 가능하도록 그대로 throw
+      rethrow;
     } catch (e, st) {
-      debugPrint("DB 에러 (recordWhoPlateClick): $e");
       try {
         await DebugFirestoreLogger().log({
-          'op': 'plates.recordWhoClick.unknown',
+          'op': 'plates.recordWhoClick.tx.unknown',
           'collection': 'plates',
           'docPath': docRef.path,
           'docId': id,
@@ -395,7 +422,7 @@ class PlateWriteService {
             'message': e.toString(),
           },
           'stack': st.toString(),
-          'tags': ['plates', 'update', 'recordWhoClick', 'error'],
+          'tags': ['plates', 'update', 'recordWhoClick', 'tx', 'error'],
         }, level: 'error');
       } catch (_) {}
       throw Exception("DB 업데이트 실패: $e");

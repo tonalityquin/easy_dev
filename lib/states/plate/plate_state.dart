@@ -428,8 +428,6 @@ class PlateState extends ChangeNotifier {
         // 원상복구된 상태 → 보류 해제
         if (_pendingPlateId == plateId) {
           _clearPendingSelection();
-        } else {
-          // (다른 보류가 있었다면 그대로 두지만, 여기선 보통 동일 plate 재토글 케이스)
         }
       } else {
         // 서버와 상태가 다르면 보류 설정
@@ -445,6 +443,15 @@ class PlateState extends ChangeNotifier {
     }
   }
 
+  /// ✅ 보류된 선택이 현재 페이지(컬렉션)에 여전히 유효한지(서버 스냅샷 기반)
+  bool pendingStillValidFor(PlateType expected) {
+    if (!hasPendingSelection) return false;
+    if (_pendingCollection != expected) return false;
+    final list = _data[expected];
+    if (list == null) return false;
+    return list.any((p) => p.id == _pendingPlateId);
+  }
+
   /// ✅ (신규) 보류된 선택/해제를 실제 Firestore에 반영
   Future<void> commitPendingSelection({
     required void Function(String) onError,
@@ -454,6 +461,15 @@ class PlateState extends ChangeNotifier {
     final plateId = _pendingPlateId!;
     final isSelected = _pendingIsSelected!;
     final selectedBy = _pendingSelectedBy;
+    final expected = _pendingCollection!;
+
+    // 1) 서버 스냅샷 기준으로 보류 유효성 검사(헛커밋 차단)
+    if (!pendingStillValidFor(expected)) {
+      _clearPendingSelection();
+      notifyListeners();
+      onError('선택 항목이 더 이상 유효하지 않습니다. 목록을 새로고침한 뒤 다시 시도해 주세요.');
+      return;
+    }
 
     try {
       await _repository.recordWhoPlateClick(
@@ -471,6 +487,20 @@ class PlateState extends ChangeNotifier {
 
       _clearPendingSelection();
       notifyListeners();
+    } on FirebaseException catch (e) {
+      switch (e.code) {
+        case 'invalid-state':
+          onError('이미 다른 상태로 처리된 문서입니다. 목록을 새로고침해 주세요.');
+          break;
+        case 'conflict':
+          onError('다른 사용자가 먼저 선택했습니다.');
+          break;
+        case 'not-found':
+          onError('문서를 찾을 수 없습니다.');
+          break;
+        default:
+          onError('DB 오류: ${e.message ?? e.code}');
+      }
     } catch (e) {
       onError('🚨 번호판 변경 사항 반영 실패:\n$e');
     }
