@@ -44,7 +44,9 @@ class LocationState extends ChangeNotifier {
     if (cachedJson != null) {
       try {
         final decoded = json.decode(cachedJson) as List;
-        _locations = decoded.map((e) => LocationModel.fromCacheMap(Map<String, dynamic>.from(e))).toList();
+        _locations = decoded
+            .map((e) => LocationModel.fromCacheMap(Map<String, dynamic>.from(e)))
+            .toList();
         _selectedLocationId = null;
         _previousArea = currentArea;
         _isLoading = false;
@@ -77,7 +79,8 @@ class LocationState extends ChangeNotifier {
 
       final currentIds = _locations.map((e) => e.id).toSet();
       final newIds = data.map((e) => e.id).toSet();
-      final isIdentical = currentIds.length == newIds.length && currentIds.containsAll(newIds);
+      final isIdentical =
+          currentIds.length == newIds.length && currentIds.containsAll(newIds);
 
       if (isIdentical) {
         debugPrint('✅ Firestore 데이터가 캐시와 동일 → 갱신 없음');
@@ -90,7 +93,8 @@ class LocationState extends ChangeNotifier {
         final jsonData = json.encode(data.map((e) => e.toCacheMap()).toList());
         await prefs.setString('cached_locations_$currentArea', jsonData);
 
-        final totalCapacity = data.fold<int>(0, (sum, loc) => sum + loc.capacity);
+        final totalCapacity =
+        data.fold<int>(0, (sum, loc) => sum + loc.capacity);
         await prefs.setInt('total_capacity_$currentArea', totalCapacity);
 
         debugPrint('✅ Firestore 데이터 캐시에 갱신됨 (area: $currentArea)');
@@ -108,7 +112,9 @@ class LocationState extends ChangeNotifier {
     int changed = 0;
 
     _locations = _locations.map((loc) {
-      final fullName = loc.type == 'composite' ? '${loc.parent} - ${loc.locationName}' : loc.locationName;
+      final fullName = loc.type == 'composite'
+          ? '${loc.parent} - ${loc.locationName}'
+          : loc.locationName;
 
       final next = counts[fullName];
       if (next == null) return loc;
@@ -123,28 +129,31 @@ class LocationState extends ChangeNotifier {
 
   /// ✅ 특정 displayName들만 부분 갱신 (개별/그룹 새로고침용)
   Future<void> updatePlateCountsForNames(
-    LocationRepository repo,
-    List<String> displayNames,
-  ) async {
+      LocationRepository repo,
+      List<String> displayNames,
+      ) async {
     if (displayNames.isEmpty) return;
 
     final uniq = displayNames.toSet().toList();
-    debugPrint('🎯 부분 갱신 요청: ${uniq.length}개 → 예: ${uniq.take(5).toList()}');
+    debugPrint(
+        '🎯 부분 갱신 요청(bypass cache): ${uniq.length}개 → 예: ${uniq.take(5).toList()}');
 
+    // 🔵 캐시 우회: 개별 새로고침은 항상 실시간 count() 강제
     final counts = await repo.getPlateCountsForLocations(
       locationNames: uniq,
       area: _areaState.currentArea,
+      bypassCache: true, // ⬅⬅⬅ 핵심 변경
     );
 
     updatePlateCounts(counts);
   }
 
   Future<void> addSingleLocation(
-    String locationName,
-    String area, {
-    int capacity = 0,
-    void Function(String)? onError,
-  }) async {
+      String locationName,
+      String area, {
+        int capacity = 0,
+        void Function(String)? onError,
+      }) async {
     try {
       final location = LocationModel(
         id: '${locationName}_$area',
@@ -164,11 +173,11 @@ class LocationState extends ChangeNotifier {
   }
 
   Future<void> addCompositeLocation(
-    String parent,
-    List<Map<String, dynamic>> subs,
-    String area, {
-    void Function(String)? onError,
-  }) async {
+      String parent,
+      List<Map<String, dynamic>> subs,
+      String area, {
+        void Function(String)? onError,
+      }) async {
     try {
       final safeParent = '${parent}_$area';
       final safeSubs = subs.map((sub) {
@@ -187,9 +196,9 @@ class LocationState extends ChangeNotifier {
   }
 
   Future<void> deleteLocations(
-    List<String> ids, {
-    void Function(String)? onError,
-  }) async {
+      List<String> ids, {
+        void Function(String)? onError,
+      }) async {
     try {
       await _repository.deleteLocations(ids);
       await loadFromLocationCache();

@@ -1,68 +1,128 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/material.dart';
 import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
 import '../../utils/usage_reporter.dart';
 
+/// plates 집계를 담당하는 서비스.
+/// - 단일 쿼리 집계: getPlateCount()
+/// - 배치 집계: getPlateCountsForLocations()
+///
+/// ⚠️ UI의 displayName(예: "britishArea - Liverpool")을 그대로 쓰면
+/// Firestore 문서의 `location` 필드("Liverpool")와 불일치가 발생합니다.
+/// 아래 구현은 displayName을 정규화하여 실제 `location`(leaf)로 변환해 쿼리합니다.
+/// 결과 맵의 key는 기존 displayName을 유지하여 상태 갱신 로직과 일치시킵니다.
 class LocationCountService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  /// 특정 location/area/type 조합의 plates 집계 수
+  /// 표시 문자열(displayName)에서 실제 질의용 locationName(leaf)을 추출합니다.
+  /// - 포맷: "parent - child - ... - leaf"
+  /// - leaf만 반환해야 Firestore의 `location` 필드와 매칭됩니다.
+  String _extractLocationName(String name) {
+    const sep = ' - ';
+    final trimmed = name.trim();
+    if (trimmed.contains(sep)) {
+      final parts = trimmed.split(sep);
+      // 이름 안에 '-'가 더 있을 수 있으므로 첫 파트(parent)만 떼고 나머지를 다시 합칩니다.
+      return parts.sublist(1).join(sep).trim();
+    }
+    return trimmed;
+  }
+
+  /// 특정 (location / area / type) 조합의 plates 집계 수를 aggregation count()로 조회
+  /// - aggregation read 1회 발생
   Future<int> getPlateCount({
     required String locationName,
     required String area,
     String type = 'parking_completed',
   }) async {
+    final _area = area.trim();
+    final _loc = locationName.trim();
+    final _type = type.trim();
+
     try {
       final snapshot = await _firestore
           .collection('plates')
-          .where('location', isEqualTo: locationName)
-          .where('area', isEqualTo: area)
-          .where('type', isEqualTo: type)
+          .where('location', isEqualTo: _loc)
+          .where('area', isEqualTo: _area)
+          .where('type', isEqualTo: _type)
           .count()
           .get();
 
-      // Aggregation read는 1회로 단순 보고
-      await UsageReporter.instance.report(
-        area: area,
-        action: 'read',
-        n: 1,
-        source: 'LocationCountService.getPlateCount',
-      );
+      // 일부 SDK 버전에서 count가 int? 이므로 안전하게 널 병합
+      final int safeCount = snapshot.count ?? 0;
 
-      return snapshot.count ?? 0;
-    } catch (e, st) {
+      // 진단 로그(필요시 주석 해제)
+      // debugPrint('🔎 count query → area=$_area, location=$_loc, type=$_type, result=$safeCount');
+
+      // ✅ 집계 read 계측(단순 1회 보고)
       try {
-        final payload = {
-          'op': 'plates.count',
-          'collection': 'plates',
-          'filters': {
-            'location': locationName,
-            'area': area,
-            'type': type,
+        UsageReporter.instance.report(
+          area: _area,
+          action: 'read',
+          n: 1,
+          source: 'LocationCountService.getPlateCount(plates.count)',
+        );
+      } catch (_) {}
+
+      return safeCount;
+    } on FirebaseException catch (e, st) {
+      // Firestore 에러 로깅
+      try {
+        await DebugFirestoreLogger().log({
+          'action': 'getPlateCount',
+          'query': {
+            'collection': 'plates',
+            'area': _area,
+            'location': _loc,
+            'type': _type,
           },
           'error': {
             'type': e.runtimeType.toString(),
-            if (e is FirebaseException) 'code': e.code,
+            'code': e.code,
             'message': e.toString(),
           },
           'stack': st.toString(),
           'tags': ['plates', 'count', 'error'],
-        };
-        await DebugFirestoreLogger().log(payload, level: 'error');
+        }, level: 'error');
+      } catch (_) {}
+      rethrow;
+    } catch (e, st) {
+      try {
+        await DebugFirestoreLogger().log({
+          'action': 'getPlateCount',
+          'query': {
+            'collection': 'plates',
+            'area': _area,
+            'location': _loc,
+            'type': _type,
+          },
+          'error': {
+            'type': e.runtimeType.toString(),
+            'message': e.toString(),
+          },
+          'stack': st.toString(),
+          'tags': ['plates', 'count', 'error'],
+        }, level: 'error');
       } catch (_) {}
       rethrow;
     }
   }
 
-  /// 여러 location에 대해 병렬로 카운트
-  /// - 내부에서 getPlateCount를 호출하므로 read 보고는 중복 없이 각 호출에서 수행됩니다.
+  /// 여러 location(displayName)들에 대해 병렬로 카운트
+  /// - displayName → leaf(location) 정규화 후 getPlateCount 호출
+  /// - 결과 Map의 key는 displayName 유지(상태 갱신 로직과 일치)
+  /// - 내부에서 getPlateCount를 호출하므로 read 보고는 각 호출에서 수행됩니다.
   Future<Map<String, int>> getPlateCountsForLocations({
-    required List<String> locationNames,
+    required List<String> locationNames, // displayName 목록
     required String area,
     String type = 'parking_completed',
   }) async {
+    if (locationNames.isEmpty) return <String, int>{};
+
+    final _area = area.trim();
+    final _type = type.trim();
+
     try {
-      final uniq = locationNames.toSet().toList(); // ✅ 중복 제거
+      final uniq = locationNames.map((e) => e.trim()).toSet().toList(); // ✅ 중복 제거
       const window = 10; // ✅ 동시성 제한(버스트 완화)
 
       final result = <String, int>{};
@@ -70,42 +130,58 @@ class LocationCountService {
         final end = (i + window < uniq.length) ? i + window : uniq.length;
         final slice = uniq.sublist(i, end);
 
-        final entries = await Future.wait(slice.map((name) async {
+        // displayName을 leaf로 정규화하여 실제 질의, 결과는 원래 displayName 키로 저장
+        final entries = await Future.wait(slice.map((displayName) async {
+          final locName = _extractLocationName(displayName);
           final count = await getPlateCount(
-            locationName: name,
-            area: area,
-            type: type,
+            locationName: locName,
+            area: _area,
+            type: _type,
           );
-          return MapEntry(name, count);
+          return MapEntry(displayName, count);
         }));
 
-        result.addEntries(entries);
-        debugPrint('🚚 batch 진행: ${result.length}/${uniq.length} (이번 청크 ${slice.length})');
+        for (final e in entries) {
+          result[e.key] = e.value;
+        }
       }
 
       return result;
-    } catch (e, st) {
+    } on FirebaseException catch (e, st) {
       try {
-        final payload = {
-          'op': 'plates.count.batch',
-          'collection': 'plates',
-          'filters': {
-            'area': area,
-            'type': type,
-          },
-          'locations': {
-            'len': locationNames.length,
-            'sample': locationNames.take(10).toList(),
+        await DebugFirestoreLogger().log({
+          'action': 'getPlateCountsForLocations',
+          'payload': {
+            'names': locationNames.take(20).toList(),
+            'area': _area,
+            'type': _type,
           },
           'error': {
             'type': e.runtimeType.toString(),
-            if (e is FirebaseException) 'code': e.code,
+            'code': e.code,
             'message': e.toString(),
           },
           'stack': st.toString(),
           'tags': ['plates', 'count', 'batch', 'error'],
-        };
-        await DebugFirestoreLogger().log(payload, level: 'error');
+        }, level: 'error');
+      } catch (_) {}
+      rethrow;
+    } catch (e, st) {
+      try {
+        await DebugFirestoreLogger().log({
+          'action': 'getPlateCountsForLocations',
+          'payload': {
+            'names': locationNames.take(20).toList(),
+            'area': _area,
+            'type': _type,
+          },
+          'error': {
+            'type': e.runtimeType.toString(),
+            'message': e.toString(),
+          },
+          'stack': st.toString(),
+          'tags': ['plates', 'count', 'batch', 'error'],
+        }, level: 'error');
       } catch (_) {}
       rethrow;
     }

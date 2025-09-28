@@ -83,19 +83,25 @@ class ParkingCompletedControlButtons extends StatelessWidget {
           iconSize: 24,
           selectedItemColor: selectedItemColor,
           unselectedItemColor: unselectedItemColor,
-          items: isLocationPickerMode || isStatusMode
-              ? const [
+          items: (isLocationPickerMode || isStatusMode)
+              ? [
             BottomNavigationBarItem(
-              icon: Icon(Icons.lock),
-              label: '화면 잠금',
+              icon: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                transitionBuilder: (child, anim) =>
+                    ScaleTransition(scale: anim, child: child),
+                child: isLocked
+                    ? const Icon(Icons.lock, key: ValueKey('locked'))
+                    : const Icon(Icons.lock_open, key: ValueKey('unlocked')),
+              ),
+              label: isLocked ? '화면 잠금' : '잠금 해제',
             ),
-            BottomNavigationBarItem(
+            const BottomNavigationBarItem(
               icon: Icon(Icons.move_down, color: _Palette.danger),
               label: '출차 요청',
             ),
-            BottomNavigationBarItem(
-              icon:
-              Icon(Icons.directions_car, color: _Palette.success),
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.directions_car, color: _Palette.success),
               label: '출차 완료',
             ),
           ]

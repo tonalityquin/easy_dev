@@ -45,8 +45,11 @@ class FirestoreLocationRepository implements LocationRepository {
     required String area,
     required String type,
   }) async {
-    final docRef =
-    _firestore.collection('areas').doc(area).collection('locationCounts').doc(type);
+    final docRef = _firestore
+        .collection('areas')
+        .doc(area)
+        .collection('locationCounts')
+        .doc(type);
 
     try {
       final doc = await docRef.get();
@@ -54,12 +57,15 @@ class FirestoreLocationRepository implements LocationRepository {
       // ✅ 계측: READ (성공 시)
       try {
         final data = doc.data();
-        final raw = (data == null) ? const <String, dynamic>{} : (Map<String, dynamic>.from(data['counts'] ?? {}));
+        final raw = (data == null)
+            ? const <String, dynamic>{}
+            : (Map<String, dynamic>.from(data['counts'] ?? {}));
         await UsageReporter.instance.report(
           area: area,
           action: 'read',
           n: raw.length, // 읽어온 카운트 키 개수
-          source: 'FirestoreLocationRepository._getCachedCounts.areas/$area/locationCounts/$type.get',
+          source:
+          'FirestoreLocationRepository._getCachedCounts.areas/$area/locationCounts/$type.get',
         );
       } catch (_) {
         // 계측 실패는 무시
@@ -91,9 +97,22 @@ class FirestoreLocationRepository implements LocationRepository {
     required List<String> locationNames,
     required String area,
     String type = 'parking_completed',
+    bool bypassCache = false, // ⬅⬅⬅ 추가
   }) async {
     final requested = locationNames.toSet().toList(); // 중복 제거
 
+    // 🔵 캐시 무시 모드: 바로 count()
+    if (bypassCache) {
+      debugPrint(
+          '⚡ bypassCache=true → Firestore count() 강제 수행: ${requested.length}개 (area=$area, type=$type)');
+      return _countService.getPlateCountsForLocations(
+        locationNames: requested,
+        area: area,
+        type: type,
+      );
+    }
+
+    // ✅ 기존 캐시 → 미스만 count() 보충
     try {
       final cached = await _getCachedCounts(area: area, type: type);
       if (cached.isNotEmpty) {
@@ -130,7 +149,8 @@ class FirestoreLocationRepository implements LocationRepository {
       debugPrint('🟥 Repository 캐시 조회 실패 → 폴백: $e');
     }
 
-    debugPrint('🟥 Repository 캐시 없음 → 전체 ${requested.length}개 count() 수행');
+    debugPrint(
+        '🟥 Repository 캐시 없음 → 전체 ${requested.length}개 count() 수행 (area=$area, type=$type)');
     return _countService.getPlateCountsForLocations(
       locationNames: requested,
       area: area,
