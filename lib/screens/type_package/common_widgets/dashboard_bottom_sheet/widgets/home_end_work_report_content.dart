@@ -136,9 +136,14 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
 
   Future<void> _refetchInput() async {
     final area = context.read<AreaState>().currentArea;
+    if (!mounted) return;
     setState(() => _reloadingInput = true);
     try {
       final v = await PlateCountService().getParkingCompletedCountAll(area);
+
+      // ⛑️ 언마운트되었으면 UI 업데이트 중단
+      if (!mounted) return;
+
       _inputCtrl.text = v.toString();
 
       // 🔎 UI 레이어는 흔적만 남김(카운트 증가 X)
@@ -150,6 +155,7 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
         );
       } catch (_) {}
 
+      if (!mounted) return;
       HapticFeedback.selectionClick();
     } catch (_) {
       // no-op
@@ -160,9 +166,14 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
 
   Future<void> _refetchOutput() async {
     final area = context.read<AreaState>().currentArea;
+    if (!mounted) return;
     setState(() => _reloadingOutput = true);
     try {
       final v = await PlateCountService().getDepartureCompletedCountAll(area);
+
+      // ⛑️ 언마운트되었으면 UI 업데이트 중단
+      if (!mounted) return;
+
       _outputCtrl.text = v.toString();
 
       // 🔎 UI 레이어는 흔적만 남김(카운트 증가 X)
@@ -174,6 +185,7 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
         );
       } catch (_) {}
 
+      if (!mounted) return;
       HapticFeedback.selectionClick();
     } catch (_) {
       // no-op
@@ -376,6 +388,7 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
   }
 
   Future<void> _handleSubmit() async {
+    if (!mounted) return;
     setState(() => _submitting = true);
     try {
       final user = Provider.of<UserState>(context, listen: false).user;
@@ -383,6 +396,7 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
       final area = context.read<AreaState>().currentArea;
 
       if (division == null || area.isEmpty) {
+        if (!mounted) return;
         showFailedSnackbar(context, '지역/부서 정보가 없습니다.');
         return;
       }
@@ -391,6 +405,7 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
       final exit = int.tryParse(_outputCtrl.text.trim());
 
       if (entry == null || exit == null) {
+        if (!mounted) return;
         showFailedSnackbar(context, '입차/출차 차량 수는 숫자만 입력 가능합니다.');
         return;
       }
@@ -401,8 +416,10 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
           .doc('${division}_${area}_all');
 
       await updateLockedFeeSummary(division, area);
+      if (!mounted) return;
 
       final summary = await summaryRef.get();
+      if (!mounted) return;
 
       // ✅ Firestore READ (fee_summaries doc 1건)
       try {
@@ -426,12 +443,16 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
       };
 
       await widget.onReport('end', jsonEncode(reportMap));
+      if (!mounted) return;
 
       await _refetchOutput();
+      if (!mounted) return;
 
       HapticFeedback.mediumImpact();
+      if (!mounted) return;
       showSuccessSnackbar(context, '업무 종료 보고를 제출했습니다.');
     } catch (e) {
+      if (!mounted) return;
       showFailedSnackbar(context, '보고 제출 실패: $e');
     } finally {
       if (mounted) setState(() => _submitting = false);
