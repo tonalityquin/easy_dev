@@ -35,14 +35,6 @@ class DebugFirestoreLogger {
       if (!await _logFile!.exists()) {
         await _logFile!.create(recursive: true);
       }
-
-      /*await log({
-        'ts': DateTime.now().toIso8601String(),
-        'level': 'info',
-        'message': 'logger initialized',
-        'tags': ['init']
-      }, level: 'info');
-      */
     } catch (e) {
       debugPrint('❌ DebugFirestoreLogger init 실패: $e');
     }
