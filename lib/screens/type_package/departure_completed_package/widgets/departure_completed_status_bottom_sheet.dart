@@ -10,7 +10,7 @@ import '../../../../states/user/user_state.dart';
 import '../../../../utils/snackbar_helper.dart';
 import '../../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
 import '../../../log_package/log_viewer_bottom_sheet.dart';
-import '../../../modify_package/modify_plate_screen.dart';
+
 // ✅ UsageReporter 계측 (파이어베이스 접근 지점만)
 import '../../../../utils/usage_reporter.dart';
 
@@ -29,7 +29,8 @@ Future<void> showDepartureCompletedStatusBottomSheet({
   await showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    useSafeArea: true, // ⬅️ 최상단까지 안전하게 확장
+    useSafeArea: true,
+    // ⬅️ 최상단까지 안전하게 확장
     backgroundColor: Colors.transparent,
     builder: (modalCtx) {
       return FractionallySizedBox(
@@ -77,6 +78,7 @@ Future<void> showDepartureCompletedStatusBottomSheet({
                     // =========================
                     // 정산(사전 정산)
                     // =========================
+
                     ElevatedButton.icon(
                       icon: const Icon(Icons.receipt_long),
                       label: const Text("정산(사전 정산)"),
@@ -171,39 +173,6 @@ Future<void> showDepartureCompletedStatusBottomSheet({
                         minimumSize: const Size(double.infinity, 52),
                         backgroundColor: Colors.green,
                         foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    // ===== 정보 수정 (네비게이션만 — Firebase 아님)
-                    ElevatedButton.icon(
-                      icon: const Icon(Icons.edit_note_outlined),
-                      label: const Text("정보 수정"),
-                      onPressed: () {
-                        Navigator.pop(sheetCtx);
-                        Future.microtask(() {
-                          if (!rootContext.mounted) return;
-                          Navigator.push(
-                            rootContext,
-                            MaterialPageRoute(
-                              builder: (_) => ModifyPlateScreen(
-                                plate: plate,
-                                collectionKey: PlateType.departureCompleted,
-                              ),
-                            ),
-                          );
-                        });
-                      },
-                      style: ElevatedButton.styleFrom(
-                        minimumSize: const Size(double.infinity, 52),
-                        backgroundColor: Colors.grey.shade100,
-                        foregroundColor: Colors.black87,
-                        elevation: 0,
-                        side: const BorderSide(color: Colors.black12),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
