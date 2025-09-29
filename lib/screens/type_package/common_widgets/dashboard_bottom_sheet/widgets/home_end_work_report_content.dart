@@ -1,3 +1,4 @@
+// lib/screens/.../home_end_work_report_content.dart
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -26,8 +27,6 @@ const kLight = Color(0xFF5472D3); // 톤 변형/보더
 const kFg = Color(0xFFFFFFFF); // onPrimary
 
 /// ─────────────────────────────────────────────────────────────────────────
-/// 바텀시트 호출 헬퍼: 화면 최상단까지 꽉 차게 보여줌
-/// ─────────────────────────────────────────────────────────────────────────
 Future<void> showEndWorkReportBottomSheet({
   required BuildContext context,
   required Future<void> Function(String reportType, String content) onReport,
@@ -55,7 +54,6 @@ Future<void> showEndWorkReportBottomSheet({
   );
 }
 
-/// 시트 공통 프레임(흰 배경/라운드/보더 + SafeArea + 내부 스크롤 컨트롤러 제공)
 class _SheetScaffold extends StatelessWidget {
   const _SheetScaffold({required this.childBuilder});
 
@@ -91,8 +89,6 @@ class HomeEndWorkReportContent extends StatefulWidget {
   final Future<void> Function(String reportType, String content) onReport;
   final int? initialVehicleInput; // 입차
   final int? initialVehicleOutput; // 출차
-
-  /// 바텀시트의 스크롤과 연동되도록 외부에서 주입
   final ScrollController? externalScrollController;
 
   const HomeEndWorkReportContent({
@@ -145,14 +141,12 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
       final v = await PlateCountService().getParkingCompletedCountAll(area);
       _inputCtrl.text = v.toString();
 
-      // ✅ Firestore READ (aggregate count)
+      // 🔎 UI 레이어는 흔적만 남김(카운트 증가 X)
       try {
-        await UsageReporter.instance.report(
+        await UsageReporter.instance.annotate(
           area: area,
-          action: 'read',
-          n: v,
-          source:
-          'HomeEndWorkReportContent._refetchInput.parking_completed.aggregate',
+          source: 'HomeEndWorkReportContent._refetchInput.parking_completed.aggregate',
+          extra: {'value': v},
         );
       } catch (_) {}
 
@@ -171,14 +165,12 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
       final v = await PlateCountService().getDepartureCompletedCountAll(area);
       _outputCtrl.text = v.toString();
 
-      // ✅ Firestore READ (aggregate count)
+      // 🔎 UI 레이어는 흔적만 남김(카운트 증가 X)
       try {
-        await UsageReporter.instance.report(
+        await UsageReporter.instance.annotate(
           area: area,
-          action: 'read',
-          n: v,
-          source:
-          'HomeEndWorkReportContent._refetchOutput.departure_completed.aggregate',
+          source: 'HomeEndWorkReportContent._refetchOutput.departure_completed.aggregate',
+          extra: {'value': v},
         );
       } catch (_) {}
 
@@ -235,13 +227,9 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
           Center(
             child: ChipTheme(
               data: ChipTheme.of(context).copyWith(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                labelStyle:
-                const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-                shape: StadiumBorder(
-                  side: BorderSide(color: kLight.withOpacity(.35)),
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                shape: StadiumBorder(side: BorderSide(color: kLight.withOpacity(.35))),
                 backgroundColor: kLight.withOpacity(.06),
               ),
               child: Wrap(
@@ -252,12 +240,9 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
                 runSpacing: 8,
                 children: [
                   _infoChip(Icons.place, area.isEmpty ? '지역 미지정' : area),
-                  _infoChip(
-                      Icons.domain, division.isEmpty ? '부서 미지정' : division),
-                  if (widget.initialVehicleInput != null ||
-                      widget.initialVehicleOutput != null)
-                    _infoChip(Icons.auto_awesome, '자동 채움 완료',
-                        color: Colors.green),
+                  _infoChip(Icons.domain, division.isEmpty ? '부서 미지정' : division),
+                  if (widget.initialVehicleInput != null || widget.initialVehicleOutput != null)
+                    _infoChip(Icons.auto_awesome, '자동 채움 완료', color: Colors.green),
                 ],
               ),
             ),
@@ -278,8 +263,7 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
                         controller: _inputCtrl,
                         focusNode: _inputFocus,
                         textInputAction: TextInputAction.next,
-                        onFieldSubmitted: (_) =>
-                            FocusScope.of(context).requestFocus(_outputFocus),
+                        onFieldSubmitted: (_) => FocusScope.of(context).requestFocus(_outputFocus),
                         validator: _numberValidator,
                         suffix: _reloadingInput
                             ? const SizedBox(
@@ -287,8 +271,7 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor:
-                            AlwaysStoppedAnimation(kBase),
+                            valueColor: AlwaysStoppedAnimation(kBase),
                           ),
                         )
                             : IconButton(
@@ -297,8 +280,7 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
                           color: kDark,
                           onPressed: _refetchInput,
                         ),
-                        helper:
-                        '현재 지역의 parking_completed 전체 문서 기준 자동 집계',
+                        helper: '현재 지역의 parking_completed 전체 문서 기준 자동 집계',
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -308,8 +290,7 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
                         controller: _outputCtrl,
                         focusNode: _outputFocus,
                         textInputAction: TextInputAction.done,
-                        onFieldSubmitted: (_) =>
-                            FocusScope.of(context).unfocus(),
+                        onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
                         validator: _numberValidator,
                         suffix: _reloadingOutput
                             ? const SizedBox(
@@ -317,8 +298,7 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor:
-                            AlwaysStoppedAnimation(kBase),
+                            valueColor: AlwaysStoppedAnimation(kBase),
                           ),
                         )
                             : IconButton(
@@ -327,8 +307,7 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
                           color: kDark,
                           onPressed: _refetchOutput,
                         ),
-                        helper:
-                        '현재 지역의 departure_completed & 잠금요금(true) 전체 문서 기준',
+                        helper: '현재 지역의 departure_completed & 잠금요금(true) 전체 문서 기준',
                       ),
                     ),
                   ],
@@ -343,8 +322,7 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
                       backgroundColor: kBase,
                       foregroundColor: kFg,
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      textStyle:
-                      const TextStyle(fontWeight: FontWeight.w800),
+                      textStyle: const TextStyle(fontWeight: FontWeight.w800),
                     ),
                     icon: _submitting
                         ? const SizedBox(
@@ -360,8 +338,7 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
                     onPressed: _submitting
                         ? null
                         : () async {
-                      if (!(_formKey.currentState?.validate() ??
-                          false)) {
+                      if (!(_formKey.currentState?.validate() ?? false)) {
                         HapticFeedback.lightImpact();
                         return;
                       }
@@ -383,8 +360,7 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
     return Chip(
       avatar: Icon(icon, size: 16, color: baseColor),
       label: Text(text),
-      labelStyle:
-      TextStyle(color: baseColor, fontWeight: FontWeight.w800),
+      labelStyle: TextStyle(color: baseColor, fontWeight: FontWeight.w800),
       backgroundColor:
       color == null ? kLight.withOpacity(.06) : baseColor.withOpacity(0.08),
       side: BorderSide(color: (color ?? kLight).withOpacity(0.35)),
@@ -434,14 +410,14 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
           area: area,
           action: 'read',
           n: 1,
-          source:
-          'HomeEndWorkReportContent._handleSubmit.fee_summaries.get',
+          source: 'HomeEndWorkReportContent._handleSubmit.fee_summaries.get',
         );
       } catch (_) {}
 
       final data = summary.data();
-      final lockedFee =
-      (data?['totalLockedFee'] ?? 0) is num ? (data?['totalLockedFee'] as num).round() : 0;
+      final lockedFee = (data?['totalLockedFee'] ?? 0) is num
+          ? (data?['totalLockedFee'] as num).round()
+          : 0;
 
       final reportMap = {
         "vehicleInput": entry,
@@ -451,8 +427,6 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
 
       await widget.onReport('end', jsonEncode(reportMap));
 
-      // 제출 후 보정치 초기화 & 화면 수치 재조회
-      await resetDepartureCompletedExtras(area);
       await _refetchOutput();
 
       HapticFeedback.mediumImpact();

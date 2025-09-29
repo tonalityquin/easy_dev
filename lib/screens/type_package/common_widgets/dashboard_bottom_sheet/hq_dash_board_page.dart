@@ -8,7 +8,6 @@ import '../../../../utils/external_openers.dart';
 import 'home_dash_board_controller.dart';
 import 'widgets/home_user_info_card.dart';
 import 'widgets/home_break_button_widget.dart';
-// HomeWorkButtonWidget는 이번 요구사항(퇴근하기 단일 버튼)으로 숨김 레이어 내 대체되므로 제거
 
 class HqDashBoardPage extends StatefulWidget {
   const HqDashBoardPage({super.key});

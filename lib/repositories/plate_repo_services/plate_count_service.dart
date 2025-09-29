@@ -1,3 +1,4 @@
+// lib/repositories/plate_repo_services/plate_count_service.dart
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../enums/plate_type.dart';
@@ -18,7 +19,7 @@ class PlateCountService {
       await baseQuery.count().get().timeout(const Duration(seconds: 10));
       final int count = agg.count ?? 0;
 
-      // ✅ Aggregation read = 1
+      // ✅ Aggregation read = 1 (서비스 레이어에서만 계측)
       await UsageReporter.instance.report(
         area: area,
         action: 'read',
@@ -62,7 +63,7 @@ class PlateCountService {
       await baseQuery.count().get().timeout(const Duration(seconds: 10));
       final int docCount = agg.count ?? 0;
 
-      // 🔹 보정치(재생성 이벤트 카운터) 문서 읽기 → read +1
+      // 🔹 보정치(재생성 이벤트 카운터) 1회 읽기 → 총 2회 READ
       final extraSnap =
       await _firestore.collection('plate_counters').doc('area_$area').get();
       final int extras =

@@ -97,6 +97,8 @@ class UsageReporter {
         'action': action,
         'n': n,
         'at': FieldValue.serverTimestamp(),
+        if (source != null && source.isNotEmpty) 'source': source,
+        'kind': 'report',
       });
 
       final incField = '${action}s'; // reads/writes/deletes
@@ -109,5 +111,51 @@ class UsageReporter {
       }, SetOptions(merge: true));
     });
   }
-}
 
+  /// 🔎 카운터를 증가시키지 않고 "흔적만" 남기는 보고 (UI 레이어에서 사용 권장)
+  /// - action은 'trace'로 고정, n=0
+  /// - 호출 컨텍스트 추적만 하고 비용 카운트는 증가시키지 않음
+  Future<void> annotate({
+    required String area,
+    String? source,
+    Map<String, dynamic>? extra,
+  }) async {
+    await ensureInitialized();
+    final baseId = installId;
+    final userKey = (source == null || source.trim().isEmpty)
+        ? baseId
+        : '${baseId}__${_slug(source)}';
+
+    final date = DateTime.now().toUtc().toIso8601String().substring(0, 10); // YYYY-MM-DD
+    final eventId = const Uuid().v4();
+
+    final countRef = _db
+        .collection('usage_daily').doc(date)
+        .collection('tenants').doc(area)
+        .collection('users').doc(userKey);
+
+    final eventRef = countRef.collection('events').doc(eventId);
+
+    await _db.runTransaction((tx) async {
+      final evt = await tx.get(eventRef);
+      if (evt.exists) return; // 멱등
+
+      tx.set(eventRef, {
+        'action': 'trace',
+        'n': 0,
+        'at': FieldValue.serverTimestamp(),
+        if (source != null && source.isNotEmpty) 'source': source,
+        if (extra != null) 'extra': extra,
+        'kind': 'annotate',
+      });
+
+      // 카운터 문서는 업데이트 시간만 갱신(증분 없음)
+      tx.set(countRef, {
+        'date': date,
+        'tenantId': area,
+        'userId': userKey,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    });
+  }
+}

@@ -1,17 +1,16 @@
+// lib/screens/type_package/common_widgets/dashboard_bottom_sheet/widgets/home_show_report_dialog.dart
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../../repositories/plate_repo_services/plate_count_service.dart';
 import '../../../../../../states/area/area_state.dart';
 import '../../../../../../states/user/user_state.dart';
 import '../../../../../../utils/snackbar_helper.dart';
 import '../../../../../../utils/blocking_dialog.dart';
-// ✅ UsageReporter — 파이어베이스가 실제로 발생하는 로직(READ/WRITE/DELETE)만 계측
 import '../../../../../../utils/usage_reporter.dart';
-
-import '../../../../../repositories/plate_repo_services/plate_count_service.dart';
 import 'home_end_work_report_content.dart';
 
 /// 잠금 요금 안전 추출
@@ -47,70 +46,56 @@ dynamic _jsonSafe(dynamic v) {
 
 /// 바텀시트(최상단까지)로 업무 보고 열기
 Future<void> showHomeReportDialog(BuildContext context) async {
-  // 다이얼로그 열기 전에 현재 지역 읽고 자동 집계값 미리 구하기
   final area = context.read<AreaState>().currentArea;
 
-  int prefilledVehicleOutput = 0; // 출차(전체): departure_completed && isLockedFee
-  int prefilledVehicleInput = 0;  // 입차(전체): parking_completed
+  int prefilledVehicleOutput = 0; // departure_completed & isLockedFee
+  int prefilledVehicleInput = 0;  // parking_completed
 
   try {
     if (area.isNotEmpty) {
+      // 서비스 레이어에서 READ 집계 → UI 레이어는 흔적만(annotate)
       prefilledVehicleOutput =
       await PlateCountService().getDepartureCompletedCountAll(area);
-      // ✅ Firestore READ: departure_completed 전체 COUNT 사전 조회
-      try {
-        await UsageReporter.instance.report(
-          area: area,
-          action: 'read',
-          n: prefilledVehicleOutput,
-          source:
-          'showHomeReportDialog.prefetch.departure_completed.aggregate',
-        );
-      } catch (_) {}
+      await UsageReporter.instance.annotate(
+        area: area,
+        source: 'showHomeReportDialog.prefetch.departure_completed.aggregate',
+        extra: {'value': prefilledVehicleOutput},
+      );
 
       prefilledVehicleInput =
       await PlateCountService().getParkingCompletedCountAll(area);
-      // ✅ Firestore READ: parking_completed 전체 COUNT 사전 조회
-      try {
-        await UsageReporter.instance.report(
-          area: area,
-          action: 'read',
-          n: prefilledVehicleInput,
-          source: 'showHomeReportDialog.prefetch.parking_completed.aggregate',
-        );
-      } catch (_) {}
+      await UsageReporter.instance.annotate(
+        area: area,
+        source: 'showHomeReportDialog.prefetch.parking_completed.aggregate',
+        extra: {'value': prefilledVehicleInput},
+      );
     }
   } catch (_) {
     prefilledVehicleOutput = 0;
     prefilledVehicleInput = 0;
   }
 
-  // ⚠️ 바텀시트 open/close 같은 UX 이벤트는 Firebase가 아니므로 계측하지 않음
-
   return showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
     barrierColor: Colors.black54,
-    backgroundColor: Colors.transparent, // 외곽은 투명
+    backgroundColor: Colors.transparent,
     builder: (ctx) {
-      // 키보드 높이만큼 패딩을 더해, 입력 시에도 콘텐츠가 가려지지 않게
       final bottomInset = MediaQuery.of(ctx).viewInsets.bottom + 16;
 
       return FractionallySizedBox(
-        heightFactor: 1, // ✅ 화면 최상단까지
+        heightFactor: 1,
         child: SafeArea(
-          top: false, // 노치 상단까지 확장
+          top: false,
           child: Container(
             decoration: const BoxDecoration(
-              color: Colors.white, // ✅ 시트 내부 배경은 흰색
+              color: Colors.white,
               borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
             ),
-            // 내부 스크롤 확보(키보드가 올라와도 스크롤 가능)
             child: SingleChildScrollView(
               padding: EdgeInsets.fromLTRB(16, 8, 16, bottomInset),
               child: HomeEndWorkReportContent(
-                // ✅ 초기값 주입
                 initialVehicleInput: prefilledVehicleInput,
                 initialVehicleOutput: prefilledVehicleOutput,
                 onReport: (type, content) async {
@@ -149,16 +134,14 @@ Future<void> showHomeReportDialog(BuildContext context) async {
                           return;
                         }
 
-                        // 2) 전체 누적 요약을 갱신하기 위한 스냅샷 확보(이 스냅샷을 logs 추출에도 재사용)
+                        // 2) plates 스냅샷 조회 (READ 1회)
                         final platesSnap = await FirebaseFirestore.instance
                             .collection('plates')
-                            .where('type',
-                            isEqualTo: 'departure_completed')
+                            .where('type', isEqualTo: 'departure_completed')
                             .where('area', isEqualTo: area)
                             .where('isLockedFee', isEqualTo: true)
                             .get();
 
-                        // ✅ Firestore READ: plates 조회
                         try {
                           await UsageReporter.instance.report(
                             area: area,
@@ -174,7 +157,7 @@ Future<void> showHomeReportDialog(BuildContext context) async {
                           total += _extractLockedFeeAmount(d.data());
                         }
 
-                        // 3) 요약 문서 upsert
+                        // 3) 요약 문서 upsert (WRITE 1회)
                         final summaryRef = FirebaseFirestore.instance
                             .collection('fee_summaries')
                             .doc('${division}_${area}_all');
@@ -188,7 +171,6 @@ Future<void> showHomeReportDialog(BuildContext context) async {
                           'lastUpdated': FieldValue.serverTimestamp(),
                         }, SetOptions(merge: true));
 
-                        // ✅ Firestore WRITE: fee_summaries upsert
                         try {
                           await UsageReporter.instance.report(
                             area: area,
@@ -199,10 +181,8 @@ Future<void> showHomeReportDialog(BuildContext context) async {
                           );
                         } catch (_) {}
 
-                        // 4) 최신 합계 읽기
+                        // 4) 최신 합계 읽기 (READ 1회)
                         final latestSnap = await summaryRef.get();
-
-                        // ✅ Firestore READ: fee_summaries doc 1건 get
                         try {
                           await UsageReporter.instance.report(
                             area: area,
@@ -216,25 +196,19 @@ Future<void> showHomeReportDialog(BuildContext context) async {
                         final latestData = latestSnap.data();
                         final totalLockedFee =
                         (latestData?['totalLockedFee'] ?? 0) is num
-                            ? (latestData?['totalLockedFee'] as num)
-                            .round()
+                            ? (latestData?['totalLockedFee'] as num).round()
                             : 0;
 
-                        // 5) 출차 차량 수 자동 집계(전체)로 보정하고 보고 JSON 구성
+                        // 5) 출차 자동 집계(서비스가 READ 계측함) → UI는 annotate만
                         final vehicleOutputAuto =
                         await PlateCountService()
                             .getDepartureCompletedCountAll(area);
-
-                        // ✅ Firestore READ: departure_completed 전체 COUNT 재조회
-                        try {
-                          await UsageReporter.instance.report(
-                            area: area,
-                            action: 'read',
-                            n: vehicleOutputAuto,
-                            source:
-                            'showHomeReportDialog.onReport.end.aggregate.departure_completed.count',
-                          );
-                        } catch (_) {}
+                        await UsageReporter.instance.annotate(
+                          area: area,
+                          source:
+                          'showHomeReportDialog.onReport.end.aggregate.departure_completed.count',
+                          extra: {'value': vehicleOutputAuto},
+                        );
 
                         final reportLog = {
                           'division': division,
@@ -256,7 +230,7 @@ Future<void> showHomeReportDialog(BuildContext context) async {
                           userName: userName,
                         );
 
-                        // 7) 🔥 logs 집계 JSON 생성 → 업로드(GCS) — Firebase 아님 → 계측 제외
+                        // 7) logs 집계 JSON 생성 → 업로드(GCS) — Firebase 아님 → 계측 제외
                         final List<Map<String, dynamic>> items = [];
                         for (final doc in platesSnap.docs) {
                           final data = doc.data();
@@ -279,7 +253,7 @@ Future<void> showHomeReportDialog(BuildContext context) async {
                           userName: userName,
                         );
 
-                        // 8) 필요 시 문서 삭제(보고·백업 완료 후)
+                        // 8) 필요 시 문서 삭제(삭제는 delete로 계측)
                         await deleteLockedDepartureDocs(area);
 
                         // 9) UI 피드백
