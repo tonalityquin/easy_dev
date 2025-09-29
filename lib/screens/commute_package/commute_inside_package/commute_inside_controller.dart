@@ -8,7 +8,7 @@ import '../../../states/user/user_state.dart';
 import '../../../states/area/area_state.dart';
 import '../../../utils/snackbar_helper.dart';
 import 'utils/commute_inside_clock_in_log_uploader.dart';
-import '../../../utils/usage_reporter.dart';
+// import '../../../utils/usage_reporter.dart';
 
 // ✅ 라우팅을 밖에서 수행하기 위한 목적지 enum
 enum CommuteDestination { none, headquarter, type }
@@ -47,12 +47,12 @@ class CommuteInsideController {
     try {
       final doc = await FirebaseFirestore.instance.collection('areas').doc(docId).get();
 
-      await UsageReporter.instance.report(
+      /*await UsageReporter.instance.report(
         area: area.isNotEmpty ? area : 'unknown',
         action: 'read',
         n: 1,
         source: 'CommuteInsideController._decideDestination/areas.doc.get',
-      );
+      );*/
 
       if (!context.mounted) return CommuteDestination.none;
 

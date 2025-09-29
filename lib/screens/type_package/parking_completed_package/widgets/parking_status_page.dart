@@ -14,6 +14,7 @@ import 'package:provider/provider.dart';
 
 import '../../../../states/location/location_state.dart';
 import '../../../../states/area/area_state.dart';
+import '../../../../utils/usage_reporter.dart';
 
 // import '../../../../utils/usage_reporter.dart';
 
@@ -29,7 +30,7 @@ class ParkingStatusPage extends StatefulWidget {
 class _ParkingStatusPageState extends State<ParkingStatusPage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  int _occupiedCount = 0;      // 영역 전체의 주차 완료 총합
+  int _occupiedCount = 0; // 영역 전체의 주차 완료 총합
   bool _isCountLoading = true; // 총합 집계 로딩 상태
 
   // 🔒 UI 표시 시점에만 1회 집계하도록 제어
@@ -87,12 +88,12 @@ class _ParkingStatusPageState extends State<ParkingStatusPage> {
       final cnt = (snap.count ?? 0);
 
       try {
-        /*await UsageReporter.instance.report(
+        await UsageReporter.instance.report(
           area: area,
           action: 'read', // 읽기
-          n: 1,           // ← 고정(집계 1회당 read 1회)
+          n: 1, // ← 고정(집계 1회당 read 1회)
           source: 'parkingStatus.count.query(parking_completed).aggregate',
-        );*/
+        );
       } catch (_) {
         // 계측 실패는 UX에 영향 없음
       }
@@ -105,12 +106,12 @@ class _ParkingStatusPageState extends State<ParkingStatusPage> {
       });
     } catch (e) {
       try {
-        /*await UsageReporter.instance.report(
+        await UsageReporter.instance.report(
           area: context.read<AreaState>().currentArea.trim(),
           action: 'read',
           n: 1, // ← 실패여도 1회 시도로 고정
           source: 'parkingStatus.count.query(parking_completed).aggregate.error',
-        );*/
+        );
       } catch (_) {}
 
       if (!mounted) return;

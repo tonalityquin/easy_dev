@@ -102,15 +102,15 @@ void areaPickerBottomSheet({
                         },
                         children: userAreas
                             .map((area) => Center(
-                          child: Text(
-                            area,
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black87,
-                            ),
-                          ),
-                        ))
+                                  child: Text(
+                                    area,
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                ))
                             .toList(),
                       ),
                     ),
