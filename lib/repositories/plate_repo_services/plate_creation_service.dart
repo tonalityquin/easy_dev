@@ -124,12 +124,10 @@ class PlateCreationService {
       addAmount = 0;
     }
 
-    final plateFourDigit =
-    plateNumber.length >= 4 ? plateNumber.substring(plateNumber.length - 4) : plateNumber;
+    final plateFourDigit = plateNumber.length >= 4 ? plateNumber.substring(plateNumber.length - 4) : plateNumber;
 
     // billingType이 없으면 요금 잠금 처리
-    final effectiveIsLockedFee =
-        isLockedFee || (billingType == null || billingType.trim().isEmpty);
+    final effectiveIsLockedFee = isLockedFee || (billingType == null || billingType.trim().isEmpty);
 
     final base = PlateModel(
       id: documentId,
@@ -189,7 +187,7 @@ class PlateCreationService {
           final data = snap.data();
           final existingTypeStr = (data?['type'] as String?) ?? '';
           final existingType = PlateType.values.firstWhere(
-                (t) => t.firestoreValue == existingTypeStr,
+            (t) => t.firestoreValue == existingTypeStr,
             orElse: () => PlateType.parkingRequests,
           );
 
@@ -201,16 +199,12 @@ class PlateCreationService {
             final List<Map<String, dynamic>> existingLogs = (() {
               final raw = data?['logs'];
               if (raw is List) {
-                return raw
-                    .whereType<Map>()
-                    .map((e) => Map<String, dynamic>.from(e))
-                    .toList();
+                return raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
               }
               return <Map<String, dynamic>>[];
             })();
 
-            final List<Map<String, dynamic>> newLogs =
-            (plateWithLog.logs ?? []).map((e) => e.toMap()).toList();
+            final List<Map<String, dynamic>> newLogs = (plateWithLog.logs ?? []).map((e) => e.toMap()).toList();
             final List<Map<String, dynamic>> mergedLogs = [...existingLogs, ...newLogs];
 
             final partial = <String, dynamic>{
@@ -218,12 +212,10 @@ class PlateCreationService {
               PlateFields.updatedAt: Timestamp.now(),
               if (base.location.isNotEmpty) PlateFields.location: base.location,
               if (endTime != null) PlateFields.endTime: endTime,
-              if (billingType != null && billingType.trim().isNotEmpty)
-                PlateFields.billingType: billingType,
+              if (billingType != null && billingType.trim().isNotEmpty) PlateFields.billingType: billingType,
               if (imageUrls != null) PlateFields.imageUrls: imageUrls,
               if (paymentMethod != null) PlateFields.paymentMethod: paymentMethod,
-              if (lockedAtTimeInSeconds != null)
-                PlateFields.lockedAtTimeInSeconds: lockedAtTimeInSeconds,
+              if (lockedAtTimeInSeconds != null) PlateFields.lockedAtTimeInSeconds: lockedAtTimeInSeconds,
               if (lockedFeeAmount != null) PlateFields.lockedFeeAmount: lockedFeeAmount,
               PlateFields.isLockedFee: effectiveIsLockedFee,
               PlateFields.logs: mergedLogs,
@@ -231,8 +223,7 @@ class PlateCreationService {
 
             final bool wasLocked = (data?['isLockedFee'] == true);
             if (wasLocked) {
-              final countersRef =
-              _firestore.collection('plate_counters').doc('area_$area');
+              final countersRef = _firestore.collection('plate_counters').doc('area_$area');
               tx.set(
                 countersRef,
                 {'departureCompletedEvents': FieldValue.increment(1)},
@@ -299,8 +290,7 @@ class PlateCreationService {
     if (customStatus != null && customStatus.trim().isNotEmpty) {
       final statusDocRef = _firestore.collection('plate_status').doc(documentId);
       final now = Timestamp.now();
-      final expireAt =
-      Timestamp.fromDate(DateTime.now().add(const Duration(days: 1)));
+      final expireAt = Timestamp.fromDate(DateTime.now().add(const Duration(days: 1)));
 
       final payload = <String, dynamic>{
         'customStatus': customStatus.trim(),

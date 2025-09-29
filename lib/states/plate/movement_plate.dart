@@ -13,11 +13,11 @@ class MovementPlate extends ChangeNotifier {
 
   /// 입차 완료 (parking_requests → parking_completed)
   Future<void> setParkingCompleted(
-      String plateNumber,
-      String area,
-      String location, {
-        bool forceOverride = true,
-      }) async {
+    String plateNumber,
+    String area,
+    String location, {
+    bool forceOverride = true,
+  }) async {
     final actor = _user.name;
     final plateId = '${plateNumber}_$area';
 
@@ -40,11 +40,11 @@ class MovementPlate extends ChangeNotifier {
 
   /// 출차 요청 (parking_completed → departure_requests)
   Future<void> setDepartureRequested(
-      String plateNumber,
-      String area,
-      String location, {
-        bool forceOverride = true,
-      }) async {
+    String plateNumber,
+    String area,
+    String location, {
+    bool forceOverride = true,
+  }) async {
     final actor = _user.name;
     final plateId = '${plateNumber}_$area';
 
@@ -67,9 +67,9 @@ class MovementPlate extends ChangeNotifier {
 
   /// 출차 완료 (departure_requests → departure_completed)
   Future<void> setDepartureCompleted(
-      PlateModel selectedPlate, {
-        bool forceOverride = true,
-      }) async {
+    PlateModel selectedPlate, {
+    bool forceOverride = true,
+  }) async {
     final actor = _user.name;
     final plateId = selectedPlate.id;
 
@@ -95,9 +95,9 @@ class MovementPlate extends ChangeNotifier {
 
   /// (옵션) 입차 완료 → 출차 완료 점프
   Future<void> jumpingDepartureCompleted(
-      PlateModel plate, {
-        bool forceOverride = true,
-      }) async {
+    PlateModel plate, {
+    bool forceOverride = true,
+  }) async {
     final actor = _user.name;
     final plateId = '${plate.plateNumber}_${plate.area}';
 
@@ -120,11 +120,11 @@ class MovementPlate extends ChangeNotifier {
 
   /// (옵션) 출차 요청 → 입차 완료 되돌리기
   Future<void> goBackToParkingCompleted(
-      String plateNumber,
-      String area,
-      String location, {
-        bool forceOverride = true,
-      }) async {
+    String plateNumber,
+    String area,
+    String location, {
+    bool forceOverride = true,
+  }) async {
     final actor = _user.name;
     final plateId = '${plateNumber}_$area';
 

@@ -80,6 +80,20 @@ class PlateState extends ChangeNotifier {
     _pendingSelectedBy = null;
   }
 
+  /// 🔸 외부 동작(예: 정보 수정)으로 동일 plateId의 선택 의도가 무의미해졌을 때 호출
+  void clearPendingSelection() {
+    _clearPendingSelection();
+    notifyListeners();
+  }
+
+  /// 🔸 특정 plateId와 일치할 때만 보류 선택을 해제
+  void clearPendingIfMatches(String plateId) {
+    if (_pendingPlateId == plateId) {
+      _clearPendingSelection();
+      notifyListeners();
+    }
+  }
+
   PlateState(this._repository, this._areaState) {
     _areaState.addListener(_onAreaChanged);
     // ❌ 자동 구독 제거: 필드 페이지(TypePage)에서 명시적으로 enableForTypePages() 호출
@@ -168,7 +182,7 @@ class PlateState extends ChangeNotifier {
       final sub = _repository
           .departureUnpaidSnapshots(area, descending: descending)
           .listen((QuerySnapshot<Map<String, dynamic>> snapshot) async {
-        // ⛔️ 여기서는 onData로 read 계측하지 않음 (서비스 계층에서 처리)
+        // onData read 계측은 서비스 계층에서
 
         final results = snapshot.docs.map((doc) {
           try {
@@ -224,11 +238,11 @@ class PlateState extends ChangeNotifier {
           }
         }
 
-        // ⬇️ 스트림 갱신 이후 보류 항목 유효성 재점검(사라진 경우 자동 해제)
+        // ⬇️ 스트림 갱신 이후 보류 항목 유효성 재점검(사라지거나 무의미해진 경우 자동 해제)
         if (hasPendingSelection && !pendingStillValidFor(type)) {
           _clearPendingSelection();
           notifyListeners();
-          debugPrint('ℹ️ 전환/필터로 문서가 사라져 보류를 해제했습니다.');
+          debugPrint('ℹ️ 전환/필터/외부 변경으로 보류를 해제했습니다.');
         }
 
         _isLoading = false;
@@ -252,7 +266,7 @@ class PlateState extends ChangeNotifier {
     bool firstDataReceived = false;
 
     final subscription = stream.listen((filteredData) async {
-      // ⛔️ 여기서는 onData로 read 계측하지 않음 (서비스 계층에서 처리)
+      // onData read 계측은 서비스 계층에서
 
       // ─────────────────────────────────────────────────────────
       // departureRequests에 대해 "사라진 문서" 감지 이벤트
@@ -288,11 +302,11 @@ class PlateState extends ChangeNotifier {
       _data[type] = filteredData;
       notifyListeners();
 
-      // ⬇️ 스트림 갱신 이후 보류 유효성 재점검
+      // ⬇️ 스트림 갱신 이후 보류 유효성 재점검(사라지거나 무의미해진 경우 자동 해제)
       if (hasPendingSelection && !pendingStillValidFor(type)) {
         _clearPendingSelection();
         notifyListeners();
-        debugPrint('ℹ️ 전환/필터로 문서가 사라져 보류를 해제했습니다.');
+        debugPrint('ℹ️ 전환/필터/외부 변경으로 보류를 해제했습니다.');
       }
 
       if (!firstDataReceived) {
@@ -457,13 +471,53 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  /// ✅ 보류된 선택이 현재 페이지(컬렉션)에 여전히 유효한지(서버 스냅샷 기반)
+  /// ✅ 보류된 선택이 현재 페이지(컬렉션)에 **여전히 의미가 있는지**(서버 스냅샷/로컬 기준)
+  ///
+  /// 다음 경우엔 false를 반환하여 FAB를 숨깁니다.
+  /// 1) 보류 없음 / 다른 컬렉션 / 목록에 없음
+  /// 2) 서버 베이스라인이 이미 보류 상태와 동일(커밋 불필요)
+  /// 3) 편집 등 외부 동작으로 서버·로컬이 모두 "해제 상태(false/null)"인데,
+  ///    보류는 "선택(true)"을 의도하고 있는 경우 → 편집이 우선이라 보류 무효
   bool pendingStillValidFor(PlateType expected) {
     if (!hasPendingSelection) return false;
     if (_pendingCollection != expected) return false;
+
     final list = _data[expected];
     if (list == null) return false;
-    return list.any((p) => p.id == _pendingPlateId);
+
+    final id = _pendingPlateId!;
+    PlateModel? p;
+    try {
+      p = list.firstWhere((e) => e.id == id);
+    } catch (_) {
+      p = null;
+    }
+    if (p == null) return false;
+
+    final base = _baseline[id];
+    final pendSel = _pendingIsSelected!;
+    final pendBy = _pendingSelectedBy;
+
+    // 2) 서버 베이스라인이 이미 보류 상태와 동일 → 커밋 불필요
+    if (base != null &&
+        base.isSelected == pendSel &&
+        (base.selectedBy ?? '') == (pendBy ?? '')) {
+      return false;
+    }
+
+    // 3) 외부 편집 등으로 해제된 상태(서버/로컬 모두 false/null)에서
+    //    보류가 '선택(true)'을 요구하면 무효 처리 → FAB 숨김
+    if (pendSel &&
+        p.isSelected == false &&
+        p.selectedBy == null &&
+        base != null &&
+        base.isSelected == false &&
+        base.selectedBy == null) {
+      return false;
+    }
+
+    // 그 외에는 커밋 의미 있음
+    return true;
   }
 
   /// ✅ (신규) 보류된 선택/해제를 실제 Firestore에 반영

@@ -11,12 +11,12 @@ class PlateStreamService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   Stream<List<PlateModel>> streamToCurrentArea(
-      PlateType type,
-      String area, {
-        bool descending = true,
-        String? location,
-        bool countInitialSnapshot = false, // ✅ (3)
-      }) {
+    PlateType type,
+    String area, {
+    bool descending = true,
+    String? location,
+    bool countInitialSnapshot = false, // ✅ (3)
+  }) {
     final query = _buildPlateQuery(
       type: type,
       area: area,
@@ -28,7 +28,7 @@ class PlateStreamService {
 
     return query
         .snapshots()
-    // Firestore 스트림 실패만 로깅 + 재전파
+        // Firestore 스트림 실패만 로깅 + 재전파
         .handleError((e, st) {
       // ignore: unawaited_futures
       DebugFirestoreLogger().log({
@@ -82,26 +82,26 @@ class PlateStreamService {
 
       final results = snapshot.docs
           .map((doc) {
-        try {
-          return PlateModel.fromDocument(doc);
-        } catch (e, st) {
-          // ignore: unawaited_futures
-          DebugFirestoreLogger().log({
-            'op': 'plates.stream.parse',
-            'collection': 'plates',
-            'docPath': doc.reference.path,
-            'docId': doc.id,
-            'error': {
-              'type': e.runtimeType.toString(),
-              'message': e.toString(),
-            },
-            'stack': st.toString(),
-            'tags': ['plates', 'stream', 'parse', 'error'],
-            'rawKeys': doc.data().keys.take(30).toList(),
-          }, level: 'error');
-          return null;
-        }
-      })
+            try {
+              return PlateModel.fromDocument(doc);
+            } catch (e, st) {
+              // ignore: unawaited_futures
+              DebugFirestoreLogger().log({
+                'op': 'plates.stream.parse',
+                'collection': 'plates',
+                'docPath': doc.reference.path,
+                'docId': doc.id,
+                'error': {
+                  'type': e.runtimeType.toString(),
+                  'message': e.toString(),
+                },
+                'stack': st.toString(),
+                'tags': ['plates', 'stream', 'parse', 'error'],
+                'rawKeys': doc.data().keys.take(30).toList(),
+              }, level: 'error');
+              return null;
+            }
+          })
           .whereType<PlateModel>()
           .toList();
 
@@ -116,7 +116,7 @@ class PlateStreamService {
     bool descending = true,
   }) {
     Query<Map<String, dynamic>> query =
-    _firestore.collection('plates').where('type', isEqualTo: type.firestoreValue).where('area', isEqualTo: area);
+        _firestore.collection('plates').where('type', isEqualTo: type.firestoreValue).where('area', isEqualTo: area);
 
     if (type == PlateType.departureCompleted) {
       query = query.where('isLockedFee', isEqualTo: false);

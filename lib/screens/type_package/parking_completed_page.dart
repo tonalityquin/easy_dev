@@ -298,16 +298,16 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
       for (final d in qs.docs) {
         final data = d.data();
         final pn = (data['plate_number'] // ✅ 실제 스키마
-            ??
-            data['plateNumber'] // 호환
-            ??
-            data['plate'] // 호환
-            ??
-            data['number'] // 호환
-            ??
-            data['licensePlate'] // 호환
-            ??
-            data['carNumber']) // 호환
+                ??
+                data['plateNumber'] // 호환
+                ??
+                data['plate'] // 호환
+                ??
+                data['number'] // 호환
+                ??
+                data['licensePlate'] // 호환
+                ??
+                data['carNumber']) // 호환
             ?.toString()
             .trim();
         if (pn != null && pn.isNotEmpty) {
@@ -359,15 +359,21 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
 
     await showModalBottomSheet(
       context: context,
-      isScrollControlled: true, // ← 전체 높이 제어를 위해 필요
+      isScrollControlled: true,
+      // ← 전체 높이 제어를 위해 필요
       useSafeArea: true,
-      backgroundColor: Colors.transparent, // ← 둥근 모서리 보이게
+      backgroundColor: Colors.transparent,
+      // ← 둥근 모서리 보이게
       builder: (_) {
         return DraggableScrollableSheet(
-          initialChildSize: initialFactor, // 시작 높이 (화면 비율)
-          minChildSize: initialFactor, // 최소 높이
-          maxChildSize: 0.95, // 최대 높이 (거의 풀스크린)
-          expand: false, // 시트가 전체를 강제 점유하지 않음
+          initialChildSize: initialFactor,
+          // 시작 높이 (화면 비율)
+          minChildSize: initialFactor,
+          // 최소 높이
+          maxChildSize: 0.95,
+          // 최대 높이 (거의 풀스크린)
+          expand: false,
+          // 시트가 전체를 강제 점유하지 않음
           builder: (context, scrollController) {
             return SafeArea(
               top: false,
@@ -406,7 +412,8 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          Text('${plates.length}대', style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor)),
+                          Text('${plates.length}대',
+                              style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor)),
                         ],
                       ),
                     ),
@@ -521,7 +528,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
 
     switch (_mode) {
       case ParkingViewMode.status:
-      // 🔹 현황 화면을 탭하면 위치 선택 화면으로 전환
+        // 🔹 현황 화면을 탭하면 위치 선택 화면으로 전환
         return GestureDetector(
           onTap: () {
             setState(() => _mode = ParkingViewMode.locationPicker);
@@ -535,7 +542,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
         );
 
       case ParkingViewMode.locationPicker:
-      // 🔹 위치 선택 시: plateList 모드로 가지 않고, 번호판 BottomSheet 시도
+        // 🔹 위치 선택 시: plateList 모드로 가지 않고, 번호판 BottomSheet 시도
         return ParkingCompletedLocationPicker(
           onLocationSelected: (locationName) {
             _selectedParkingArea = locationName; // 선택된 구역 저장(필요 시)
@@ -545,13 +552,13 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
         );
 
       case ParkingViewMode.plateList:
-      // 🔹 기존 plateList 화면은 보존(다른 경로에서 필요할 수 있음). 현재 기본 흐름에선 사용 안 함.
+        // 🔹 기존 plateList 화면은 보존(다른 경로에서 필요할 수 있음). 현재 기본 흐름에선 사용 안 함.
         List<PlateModel> plates = plateState.getPlatesByCollection(PlateType.parkingCompleted);
         if (_selectedParkingArea != null) {
           plates = plates.where((p) => p.location == _selectedParkingArea).toList();
         }
         plates.sort(
-              (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime),
+          (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime),
         );
 
         return ListView(
@@ -563,11 +570,11 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
               filterCondition: (request) => request.type == PlateType.parkingCompleted.firestoreValue,
               onPlateTap: (plateNumber, area) {
                 context.read<PlateState>().togglePlateIsSelected(
-                  collection: PlateType.parkingCompleted,
-                  plateNumber: plateNumber,
-                  userName: userName,
-                  onError: (msg) => showFailedSnackbar(context, msg),
-                );
+                      collection: PlateType.parkingCompleted,
+                      plateNumber: plateNumber,
+                      userName: userName,
+                      onError: (msg) => showFailedSnackbar(context, msg),
+                    );
                 _log('tap plate: $plateNumber');
               },
             ),

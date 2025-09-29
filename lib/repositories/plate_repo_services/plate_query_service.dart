@@ -11,11 +11,7 @@ class PlateQueryService {
 
   Future<PlateModel?> getPlate(String documentId) async {
     try {
-      final doc = await _firestore
-          .collection('plates')
-          .doc(documentId)
-          .get()
-          .timeout(const Duration(seconds: 10));
+      final doc = await _firestore.collection('plates').doc(documentId).get().timeout(const Duration(seconds: 10));
 
       // ✅ 단건 읽기 → read 1
       final area = doc.data()?['area'] as String? ?? 'unknown';
@@ -136,15 +132,14 @@ class PlateQueryService {
 
   // -------- 공통 쿼리 실행부(파이어스토어 실패만 로깅) --------
   Future<List<PlateModel>> _queryPlates(
-      Query<Map<String, dynamic>> query, {
-        required String op,
-        required Map<String, dynamic> filters,
-        List<String> tags = const ['plates', 'query'],
-      }) async {
+    Query<Map<String, dynamic>> query, {
+    required String op,
+    required Map<String, dynamic> filters,
+    List<String> tags = const ['plates', 'query'],
+  }) async {
     try {
       final querySnapshot = await query.get();
-      final results =
-      querySnapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList();
+      final results = querySnapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList();
 
       // ✅ read 보고: 문서 수 기반(없으면 1로 보정)
       final area = filters['area'] as String? ?? 'unknown';

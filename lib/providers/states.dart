@@ -1,3 +1,5 @@
+// lib/providers/states.dart (또는 providers가 선언된 파일)
+
 import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
 
@@ -11,7 +13,6 @@ import '../repositories/plate_repo_services/plate_write_service.dart';
 
 import '../screens/head_package/calendar_package/calendar_model.dart';
 import '../screens/head_package/calendar_package/google_calendar_service.dart';
-
 // ▼ Dev 캘린더 전역 주입을 위한 추가 import
 import '../screens/dev_package/dev_calendar_package/dev_calendar_model.dart';
 import '../screens/dev_package/dev_calendar_package/dev_google_calendar_service.dart';
@@ -43,32 +44,23 @@ final List<SingleChildWidget> stateProviders = [
   ChangeNotifierProvider(
     create: (context) => PageState(pages: defaultPages),
   ),
-  ChangeNotifierProvider(
-    create: (_) => AreaState(),
-  ),
-  ChangeNotifierProvider(
-    create: (_) => TabletPadModeState(),
-  ),
+  ChangeNotifierProvider(create: (_) => AreaState()),
+  ChangeNotifierProvider(create: (_) => TabletPadModeState()),
 
-  // ⛔️ 리팩터링(로그 병합)으로 InputLogPlate를 더 이상 주입/사용하지 않습니다.
-  // ChangeNotifierProvider(
-  //   create: (_) => InputLogPlate(),
-  // ),
+  // ⛔️ InputLogPlate 제거 (리팩터링)
+  // ChangeNotifierProvider(create: (_) => InputLogPlate()),
 
+  // ⬇⬇⬇ 여기 수정: 인자 제거 ⬇⬇⬇
   ChangeNotifierProvider(
-    create: (context) => ModifyPlate(
-      context.read<PlateRepository>(),
-    ),
+    create: (context) => ModifyPlate(),  // ✅ 무인자
   ),
 
-  // ✅ InputPlate는 PlateRepository 하나만 받습니다.
+  // ✅ InputPlate는 그대로 repo 1개만
   ChangeNotifierProvider(
-    create: (context) => InputPlate(
-      context.read<PlateRepository>(),
-    ),
+    create: (context) => InputPlate(context.read<PlateRepository>()),
   ),
 
-  // ✅ PlateState는 기존처럼 PlateRepository + AreaState
+  // ✅ PlateState는 Repo + AreaState
   ChangeNotifierProvider(
     create: (context) {
       final repo = context.read<PlateRepository>();
@@ -78,35 +70,21 @@ final List<SingleChildWidget> stateProviders = [
   ),
 
   ChangeNotifierProvider(
-    create: (context) => FilterPlate(
-      context.read<PlateState>(),
-    ),
+    create: (context) => FilterPlate(context.read<PlateState>()),
   ),
 
   Provider(
-    create: (context) => DeletePlate(
-      context.read<PlateRepository>(),
-      {},
-    ),
+    create: (context) => DeletePlate(context.read<PlateRepository>(), {}),
   ),
 
-  // ⚠️ 순서 중요: MovementPlate가 UserState와 PlateWriteService를 읽어야 하므로
-  // UserState, PlateWriteService를 먼저 등록한다.
-
-  // ✅ UserState (앞당김)
+  // ⚠️ 순서 중요: MovementPlate가 UserState/PlateWriteService를 사용
   ChangeNotifierProvider(
     create: (context) => UserState(
       context.read<UserRepository>(),
       context.read<AreaState>(),
     ),
   ),
-
-  // ✅ PlateWriteService DI (신규)
-  Provider(
-    create: (_) => PlateWriteService(),
-  ),
-
-  // ✅ MovementPlate는 (PlateWriteService, UserState)를 받도록 변경됨
+  Provider(create: (_) => PlateWriteService()),
   ChangeNotifierProvider(
     create: (context) => MovementPlate(
       context.read<PlateWriteService>(),
@@ -120,27 +98,21 @@ final List<SingleChildWidget> stateProviders = [
       context.read<AreaState>(),
     ),
   ),
+
   ChangeNotifierProvider(
-    create: (context) {
-      final repo = context.read<BillRepository>();
-      final area = context.read<AreaState>();
-      return BillState(repo, area);
-    },
+    create: (context) => BillState(
+      context.read<BillRepository>(),
+      context.read<AreaState>(),
+    ),
   ),
-  ChangeNotifierProvider(
-    create: (_) => FieldSelectedDateState(),
-  ),
-  ChangeNotifierProvider(
-    create: (_) => CalendarSelectionState(),
-  ),
+
+  ChangeNotifierProvider(create: (_) => FieldSelectedDateState()),
+  ChangeNotifierProvider(create: (_) => CalendarSelectionState()),
+
   // 본사(운영) 캘린더 모델
-  ChangeNotifierProvider(
-    create: (_) => CalendarModel(GoogleCalendarService()),
-  ),
-  // ▼ 개발용 Dev 캘린더 모델
-  ChangeNotifierProvider(
-    create: (_) => DevCalendarModel(DevGoogleCalendarService()),
-  ),
+  ChangeNotifierProvider(create: (_) => CalendarModel(GoogleCalendarService())),
+  // 개발용 Dev 캘린더 모델
+  ChangeNotifierProvider(create: (_) => DevCalendarModel(DevGoogleCalendarService())),
 
   // ▼▼▼ SecondaryState 전역 주입 ▼▼▼
   ChangeNotifierProxyProvider2<UserState, AreaState, SecondaryState>(
@@ -151,9 +123,7 @@ final List<SingleChildWidget> stateProviders = [
 
       List<SecondaryInfo> computePages(RoleType role, CapSet areaCaps) {
         final allowedSections = kRolePolicy[role] ?? const <Section>{};
-        if (allowedSections.isEmpty) {
-          return const [tabLocalData, tabBackend];
-        }
+        if (allowedSections.isEmpty) return const [tabLocalData, tabBackend];
         final pages = <SecondaryInfo>[];
         for (final section in allowedSections) {
           final need = kSectionRequires[section] ?? const <Capability>{};
@@ -174,10 +144,8 @@ final List<SingleChildWidget> stateProviders = [
         return true;
       }
 
-      final state =
-          secondaryState ?? SecondaryState(pages: const [tabLocalData, tabBackend]);
+      final state = secondaryState ?? SecondaryState(pages: const [tabLocalData, tabBackend]);
       final newPages = computePages(role, caps);
-
       if (!sameByTitle(state.pages, newPages)) {
         state.updatePages(newPages, keepIndex: true);
       }

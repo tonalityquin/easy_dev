@@ -44,18 +44,15 @@ Widget _infoRow(String label, String? value) {
 }
 
 Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
-    BuildContext context,
-    String plateNumber,
-    String area,
-    ) async {
+  BuildContext context,
+  String plateNumber,
+  String area,
+) async {
   final docId = '${plateNumber}_$area';
 
   DocumentSnapshot<Map<String, dynamic>>? docSnapshot;
   try {
-    docSnapshot = await FirebaseFirestore.instance
-        .collection('plate_status')
-        .doc(docId)
-        .get();
+    docSnapshot = await FirebaseFirestore.instance.collection('plate_status').doc(docId).get();
   } on FirebaseException catch (e) {
     // 필요 시 로깅/스낵바 등 추가 가능
     debugPrint('[inputCustomStatusBottomSheet] FirebaseException: ${e.code} ${e.message}');
@@ -91,14 +88,10 @@ Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
   final String? endDate = (data['endDate'] as String?)?.trim();
 
   final int? regularAmount = data['regularAmount'] is int ? data['regularAmount'] as int : null;
-  final int? regularDurationHours =
-  data['regularDurationHours'] is int ? data['regularDurationHours'] as int : null;
+  final int? regularDurationHours = data['regularDurationHours'] is int ? data['regularDurationHours'] as int : null;
 
   final List<Map<String, dynamic>> paymentHistory =
-      (data['payment_history'] as List<dynamic>?)
-          ?.map((e) => Map<String, dynamic>.from(e as Map))
-          .toList() ??
-          [];
+      (data['payment_history'] as List<dynamic>?)?.map((e) => Map<String, dynamic>.from(e as Map)).toList() ?? [];
 
   final formattedUpdatedAt = _formatAnyDate(updatedAt);
 
@@ -140,9 +133,7 @@ Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
                       (customStatus != null && customStatus.isNotEmpty)
                           ? Icons.warning_amber_rounded
                           : Icons.info_outline,
-                      color: (customStatus != null && customStatus.isNotEmpty)
-                          ? Colors.redAccent
-                          : Colors.blueAccent,
+                      color: (customStatus != null && customStatus.isNotEmpty) ? Colors.redAccent : Colors.blueAccent,
                       size: 28,
                     ),
                     const SizedBox(width: 10),
@@ -195,14 +186,14 @@ Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
                     children: statusList
                         .map(
                           (s) => Chip(
-                        label: Text(
-                          s,
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                        ),
-                        backgroundColor: Colors.orange.withOpacity(0.15),
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      ),
-                    )
+                            label: Text(
+                              s,
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                            ),
+                            backgroundColor: Colors.orange.withOpacity(0.15),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          ),
+                        )
                         .toList(),
                   ),
                 ],

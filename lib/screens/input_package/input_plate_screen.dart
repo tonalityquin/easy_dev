@@ -45,8 +45,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   bool _openedScannerOnce = false;
 
   // ⬇️ DraggableScrollableSheet 애니메이션/상태
-  final DraggableScrollableController _sheetController =
-  DraggableScrollableController();
+  final DraggableScrollableController _sheetController = DraggableScrollableController();
   bool _sheetOpen = false; // 현재 열림 상태
 
   // 시트 크기 (비율)
@@ -102,13 +101,9 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
         if (mounted && data != null) {
           final fetchedStatus = data['customStatus'] as String?;
-          final fetchedList = (data['statusList'] as List<dynamic>?)
-              ?.map((e) => e.toString())
-              .toList() ??
-              [];
+          final fetchedList = (data['statusList'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
 
-          final String? fetchedCountType =
-          (data['countType'] as String?)?.trim();
+          final String? fetchedCountType = (data['countType'] as String?)?.trim();
 
           setState(() {
             controller.fetchedCustomStatus = fetchedStatus;
@@ -136,8 +131,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       await billState.loadFromBillCache();
       if (!mounted) return;
       setState(() {
-        controller.isLocationSelected =
-            controller.locationController.text.isNotEmpty;
+        controller.isLocationSelected = controller.locationController.text.isNotEmpty;
       });
     });
 
@@ -159,14 +153,10 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
   /// plate_status 단건 조회
   /// ✅ UsageReporter: area 기준 read 1회 보고(성공/실패 불문)
-  Future<Map<String, dynamic>?> _fetchPlateStatus(
-      String plateNumber, String area) async {
+  Future<Map<String, dynamic>?> _fetchPlateStatus(String plateNumber, String area) async {
     final docId = '${plateNumber}_$area';
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('plate_status')
-          .doc(docId)
-          .get();
+      final doc = await FirebaseFirestore.instance.collection('plate_status').doc(docId).get();
 
       if (doc.exists) {
         return doc.data();
@@ -229,8 +219,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         key: const ValueKey('frontKeypad'),
         controller: controller.controllerFrontDigit,
         maxLength: controller.isThreeDigit ? 3 : 2,
-        onComplete: () => setState(
-                () => controller.setActiveController(controller.controllerMidDigit)),
+        onComplete: () => setState(() => controller.setActiveController(controller.controllerMidDigit)),
         onChangeFrontDigitMode: (defaultThree) {
           setState(() {
             controller.setFrontDigitMode(defaultThree);
@@ -244,8 +233,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       return KorKeypad(
         key: const ValueKey('midKeypad'),
         controller: controller.controllerMidDigit,
-        onComplete: () => setState(
-                () => controller.setActiveController(controller.controllerBackDigit)),
+        onComplete: () => setState(() => controller.setActiveController(controller.controllerBackDigit)),
       );
     }
 
@@ -289,8 +277,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   Widget build(BuildContext context) {
     // ✅ (2) 키보드/인셋을 반영하여 하단 패딩 보정
     final viewInset = MediaQuery.of(context).viewInsets.bottom;
-    final bottomSafePadding =
-        (controller.showKeypad ? 280.0 : 140.0) + viewInset;
+    final bottomSafePadding = (controller.showKeypad ? 280.0 : 140.0) + viewInset;
 
     // 🔽 뒤로가기 처리: 시트가 열려 있으면 먼저 닫고, 닫혀 있으면 pop 허용
     return PopScope(
@@ -312,8 +299,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
             alignment: Alignment.centerRight,
             child: Text(
               controller.isThreeDigit ? '현재 앞자리: 세자리' : '현재 앞자리: 두자리',
-              style: const TextStyle(
-                  fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black),
             ),
           ),
           actions: [
@@ -334,8 +320,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                   child: SingleChildScrollView(
                     // 🔹 작은 폰 보완: 항상 세로 스크롤 가능 + 드래그 시 키보드 닫기
                     physics: const AlwaysScrollableScrollPhysics(),
-                    keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.onDrag,
+                    keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                     padding: EdgeInsets.fromLTRB(16, 16, 16, bottomSafePadding),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -352,8 +337,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                           onKeypadStateChanged: (_) {
                             setState(() {
                               controller.clearInput();
-                              controller.setActiveController(
-                                  controller.controllerFrontDigit);
+                              controller.setActiveController(controller.controllerFrontDigit);
                               // 필요 시 아래 라인 활성화하면 탭 시 항상 하단 키패드+도크가 열립니다.
                               // controller.showKeypad = true;
                             });
@@ -366,8 +350,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                           isThreeDigit: controller.isThreeDigit,
                         ),
                         const SizedBox(height: 16),
-                        InputLocationSection(
-                            locationController: controller.locationController),
+                        InputLocationSection(locationController: controller.locationController),
                         const SizedBox(height: 16),
                         InputPhotoSection(
                           capturedImages: controller.capturedImages,
@@ -385,19 +368,18 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                   controller: _sheetController,
                   initialChildSize: _sheetClosed,
                   minChildSize: _sheetClosed,
-                  maxChildSize: _sheetOpened, // ★ 1.0 = 최상단까지
+                  maxChildSize: _sheetOpened,
+                  // ★ 1.0 = 최상단까지
                   snap: true,
                   snapSizes: const [_sheetClosed, _sheetOpened],
                   builder: (context, scrollController) {
                     // 메인 배경(화이트)와 구분되는 아주 옅은 톤
-                    const sheetBg =
-                    Color(0xFFF6F8FF); // subtle blue-tinted light gray
+                    const sheetBg = Color(0xFFF6F8FF); // subtle blue-tinted light gray
 
                     return Container(
                       decoration: const BoxDecoration(
                         color: sheetBg, // 기존: Colors.white
-                        borderRadius:
-                        BorderRadius.vertical(top: Radius.circular(16)),
+                        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black26,
@@ -412,8 +394,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                         bottom: false,
                         child: ListView(
                           controller: scrollController,
-                          physics:
-                          const NeverScrollableScrollPhysics(), // 내부 스크롤 금지(요청 유지)
+                          physics: const NeverScrollableScrollPhysics(), // 내부 스크롤 금지(요청 유지)
                           padding: EdgeInsets.fromLTRB(
                             16,
                             8,
@@ -426,8 +407,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                               behavior: HitTestBehavior.opaque,
                               onTap: _toggleSheet,
                               child: Padding(
-                                padding:
-                                const EdgeInsets.only(top: 8, bottom: 12),
+                                padding: const EdgeInsets.only(top: 8, bottom: 12),
                                 child: Column(
                                   children: [
                                     Container(
@@ -441,21 +421,15 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                                     ),
                                     const SizedBox(height: 8),
                                     Row(
-                                      mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
                                         Text(
-                                          _sheetOpen
-                                              ? '정산 유형 / 메모 카드 닫기'
-                                              : '정산 유형 / 메모 카드 열기',
-                                          style: const TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w700),
+                                          _sheetOpen ? '정산 유형 / 메모 카드 닫기' : '정산 유형 / 메모 카드 열기',
+                                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                                         ),
                                         Text(
                                           controller.buildPlateNumber(),
-                                          style: const TextStyle(
-                                              color: Colors.black54),
+                                          style: const TextStyle(color: Colors.black54),
                                         ),
                                       ],
                                     ),
@@ -468,11 +442,9 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                             // ⬇️ 정산 영역
                             InputBillSection(
                               selectedBill: controller.selectedBill,
-                              onChanged: (value) => setState(
-                                      () => controller.selectedBill = value),
+                              onChanged: (value) => setState(() => controller.selectedBill = value),
                               selectedBillType: selectedBillType,
-                              onTypeChanged: (newType) => setState(
-                                      () => selectedBillType = newType),
+                              onTypeChanged: (newType) => setState(() => selectedBillType = newType),
                               countTypeController: controller.countTypeController,
                             ),
 
@@ -481,8 +453,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                             // 차량 상태 토글은 제거, 메모 섹션만 유지
                             InputCustomStatusSection(
                               controller: controller,
-                              fetchedCustomStatus:
-                              controller.fetchedCustomStatus,
+                              fetchedCustomStatus: controller.fetchedCustomStatus,
                               selectedStatusNames: selectedStatusNames,
                               statusSectionKey: statusSectionKey,
                               onDeleted: () {
@@ -515,8 +486,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
           children: [
             InputBottomNavigation(
               showKeypad: controller.showKeypad,
-              keypad:
-              _buildDockAndKeypad(), // ★ 도크 + 키패드 묶음 (그대로 유지, 키패드가 있으면 위에 도크 표시)
+              keypad: _buildDockAndKeypad(), // ★ 도크 + 키패드 묶음 (그대로 유지, 키패드가 있으면 위에 도크 표시)
               actionButton: InputBottomActionSection(
                 controller: controller,
                 mountedContext: mounted,
@@ -550,8 +520,7 @@ class _PlateDock extends StatelessWidget {
   InputDecoration _dec(BuildContext context, bool active) {
     return InputDecoration(
       isDense: true,
-      contentPadding:
-      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       filled: true,
       fillColor: active ? Colors.yellow.shade50 : Colors.white,
       counterText: '',
@@ -574,12 +543,9 @@ class _PlateDock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isFrontActive =
-        controller.activeController == controller.controllerFrontDigit;
-    final isMidActive =
-        controller.activeController == controller.controllerMidDigit;
-    final isBackActive =
-        controller.activeController == controller.controllerBackDigit;
+    final isFrontActive = controller.activeController == controller.controllerFrontDigit;
+    final isMidActive = controller.activeController == controller.controllerMidDigit;
+    final isBackActive = controller.activeController == controller.controllerBackDigit;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12),
@@ -588,8 +554,7 @@ class _PlateDock extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
         boxShadow: [
-          BoxShadow(
-              color: Colors.black12, blurRadius: 8, offset: Offset(0, -2)),
+          BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, -2)),
         ],
       ),
       child: Row(
@@ -605,8 +570,7 @@ class _PlateDock extends StatelessWidget {
                   readOnly: true,
                   maxLength: controller.isThreeDigit ? 3 : 2,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontSize: 20, fontWeight: FontWeight.w700),
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
                   decoration: _dec(context, isFrontActive),
                 ),
               ),
@@ -625,8 +589,7 @@ class _PlateDock extends StatelessWidget {
                   readOnly: true,
                   maxLength: 1,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontSize: 20, fontWeight: FontWeight.w700),
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
                   decoration: _dec(context, isMidActive),
                 ),
               ),
@@ -645,8 +608,7 @@ class _PlateDock extends StatelessWidget {
                   readOnly: true,
                   maxLength: 4,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontSize: 20, fontWeight: FontWeight.w700),
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
                   decoration: _dec(context, isBackActive),
                 ),
               ),

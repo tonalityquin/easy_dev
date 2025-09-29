@@ -15,8 +15,7 @@ class PlateWriteService {
     final docRef = _firestore.collection('plates').doc(documentId);
 
     try {
-      final docSnapshot =
-      await docRef.get().timeout(const Duration(seconds: 10));
+      final docSnapshot = await docRef.get().timeout(const Duration(seconds: 10));
 
       // ✅ read 1회 (prefetch)
       final preArea = (docSnapshot.data()?['area'] ?? plate.area ?? 'unknown') as String;
@@ -34,10 +33,8 @@ class PlateWriteService {
       if (exists) {
         final existingData = docSnapshot.data() ?? const <String, dynamic>{};
 
-        final compOld = Map<String, dynamic>.from(existingData)
-          ..remove(PlateFields.logs);
-        final compNew = Map<String, dynamic>.from(newData)
-          ..remove(PlateFields.logs);
+        final compOld = Map<String, dynamic>.from(existingData)..remove(PlateFields.logs);
+        final compNew = Map<String, dynamic>.from(newData)..remove(PlateFields.logs);
 
         if (_isSameData(compOld, compNew)) {
           return;
@@ -46,14 +43,9 @@ class PlateWriteService {
         newData.remove(PlateFields.logs);
       }
 
-      await docRef
-          .set(newData, SetOptions(merge: true))
-          .timeout(const Duration(seconds: 10));
+      await docRef.set(newData, SetOptions(merge: true)).timeout(const Duration(seconds: 10));
 
-      final area = (newData[PlateFields.area] ??
-          docSnapshot.data()?['area'] ??
-          plate.area ??
-          'unknown') as String;
+      final area = (newData[PlateFields.area] ?? docSnapshot.data()?['area'] ?? plate.area ?? 'unknown') as String;
 
       // ✅ write 1회
       await UsageReporter.instance.report(
@@ -116,16 +108,15 @@ class PlateWriteService {
   }
 
   Future<void> updatePlate(
-      String documentId,
-      Map<String, dynamic> updatedFields, {
-        PlateLogModel? log,
-      }) async {
+    String documentId,
+    Map<String, dynamic> updatedFields, {
+    PlateLogModel? log,
+  }) async {
     final docRef = _firestore.collection('plates').doc(documentId);
 
     Map<String, dynamic>? current;
     try {
-      current =
-          (await docRef.get().timeout(const Duration(seconds: 10))).data();
+      current = (await docRef.get().timeout(const Duration(seconds: 10))).data();
 
       // ✅ prefetch read 1회
       final areaPref = (current?['area'] as String?) ?? 'unknown';
@@ -310,11 +301,11 @@ class PlateWriteService {
   /// - 상태/선택/로그를 **원샷** 업데이트(WRITE 1)
   Future<void> transitionPlateType({
     required String plateId,
-    required String actor,              // 전환 수행자(userName)
-    required String fromType,           // 예: 'parking_requests'
-    required String toType,             // 예: 'parking_completed'
+    required String actor, // 전환 수행자(userName)
+    required String fromType, // 예: 'parking_requests'
+    required String toType, // 예: 'parking_completed'
     Map<String, dynamic> extraFields = const {}, // location/area 등
-    bool forceOverride = true,          // false면 타인 선택 시 전환 거부
+    bool forceOverride = true, // false면 타인 선택 시 전환 거부
   }) async {
     final docRef = _firestore.collection('plates').doc(plateId);
 
@@ -336,10 +327,7 @@ class PlateWriteService {
         }
 
         final currentSelectedBy = data['selectedBy'] as String?;
-        if (!forceOverride &&
-            currentSelectedBy != null &&
-            currentSelectedBy.isNotEmpty &&
-            currentSelectedBy != actor) {
+        if (!forceOverride && currentSelectedBy != null && currentSelectedBy.isNotEmpty && currentSelectedBy != actor) {
           throw FirebaseException(
             plugin: 'cloud_firestore',
             code: 'conflict',
@@ -424,11 +412,11 @@ class PlateWriteService {
 
   /// ✅ ‘주행’ 커밋 트랜잭션: 서버 상태(타입/선점자) 검증 + 원샷 업데이트
   Future<void> recordWhoPlateClick(
-      String id,
-      bool isSelected, {
-        String? selectedBy,
-        required String area,
-      }) async {
+    String id,
+    bool isSelected, {
+    String? selectedBy,
+    required String area,
+  }) async {
     final docRef = _firestore.collection('plates').doc(id);
 
     try {
@@ -536,9 +524,9 @@ class PlateWriteService {
   }
 
   Map<String, dynamic> _enforceZeroFeeLock(
-      Map<String, dynamic> data, {
-        Map<String, dynamic>? existing,
-      }) {
+    Map<String, dynamic> data, {
+    Map<String, dynamic>? existing,
+  }) {
     int effInt(String key) {
       if (data.containsKey(key)) return _toInt(data[key]);
       if (existing != null && existing.containsKey(key)) {
@@ -557,7 +545,7 @@ class PlateWriteService {
 
       data.putIfAbsent(
         PlateFields.lockedAtTimeInSeconds,
-            () => DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000,
+        () => DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000,
       );
       data.putIfAbsent(PlateFields.lockedFeeAmount, () => 0);
     }

@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+// lib/screens/modify_package/modify_plate_controller.dart
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:provider/provider.dart';
@@ -16,8 +16,6 @@ import '../../utils/snackbar_helper.dart';
 import 'utils/modify_plate_service.dart';
 
 import '../../repositories/plate_repo_services/firestore_plate_repository.dart';
-// ✅ UsageReporter 계측
-import '../../utils/usage_reporter.dart';
 
 class ModifyPlateController {
   final BuildContext context;
@@ -139,7 +137,7 @@ class ModifyPlateController {
     dropdownValue = plate.region ?? '전국';
     locationController.text = plate.location;
     selectedBill = plate.billingType;
-    selectedBillType = _determineBillType(plate.billingType); // ✅ 여기 추가
+    selectedBillType = _determineBillType(plate.billingType);
     selectedBillCountType = plate.billingType;
 
     selectedBasicStandard = plate.basicStandard ?? 0;
@@ -157,10 +155,8 @@ class ModifyPlateController {
 
   String _determineBillType(String? billingType) {
     if (billingType == null || billingType.isEmpty) return '변동';
-
     if (billingType.contains('고정')) return '고정';
     if (plate.regularAmount != null && plate.regularAmount! > 0) return '고정';
-
     return '변동';
   }
 
@@ -169,7 +165,6 @@ class ModifyPlateController {
       debugPrint('❌ 정산 유형 변경은 허용되지 않습니다. 기존: $selectedBillType → 시도: $type');
       return;
     }
-
     selectedBill = null;
     selectedBasicAmount = 0;
     selectedBasicStandard = 0;
@@ -211,16 +206,6 @@ class ModifyPlateController {
 
     try {
       await _plateRepo.deletePlateStatus(plateNumber, area);
-      // ✅ 계측: plate_status 삭제 1회
-      try {
-        await UsageReporter.instance.report(
-          area: area.isEmpty ? 'unknown' : area,
-          action: 'delete',
-          n: 1,
-          source:
-          'ModifyPlateController.deleteCustomStatusFromFirestore/_plateRepo.deletePlateStatus',
-        );
-      } catch (_) {}
       fetchedCustomStatus = null;
     } catch (e) {
       debugPrint('❌ customStatus 삭제 실패: $e');
@@ -266,32 +251,22 @@ class ModifyPlateController {
     final newBillingType = selectedBill;
     final updatedCustomStatus = customStatusController.text.trim();
 
-    // area 미리 확보(계측에 사용)
-    final area = context.read<AreaState>().currentArea;
-
-    // (Storage 업로드 — 계측대상 아님)
+    // (Storage 업로드 — 과금/계측 제외)
     final mergedImageUrls = await service.uploadAndMergeImages(plateNumber);
 
-    // plates 문서 업데이트 (ModifyPlateService 내부 write 1회 가정)
+    // ✅ 단일 update로 모든 필드 반영(사전조회 1 + 쓰기 1)
     final success = await service.updatePlateInfo(
       plateNumber: plateNumber,
       imageUrls: mergedImageUrls,
       newLocation: newLocation,
       newBillingType: newBillingType,
+      updatedCustomStatus: updatedCustomStatus,
+      updatedStatusList: selectedStatuses,
     );
 
     if (success) {
-      // ✅ 계측: plates 업데이트(write) 1회
-      try {
-        await UsageReporter.instance.report(
-          area: area.isEmpty ? 'unknown' : area,
-          action: 'write',
-          n: 1,
-          source: 'ModifyPlateController.handleAction/updatePlateInfo',
-        );
-      } catch (_) {}
-
-      // plate_status upsert (write 1회)
+      // plate_status: 문서 비어있으면 delete, 아니면 upsert(tx)
+      final area = context.read<AreaState>().currentArea;
       await _plateRepo.setPlateStatus(
         plateNumber: plateNumber,
         area: area,
@@ -299,34 +274,8 @@ class ModifyPlateController {
         statusList: selectedStatuses,
         createdBy: 'devAdmin020',
       );
-      // ✅ 계측: plate_status write 1회
-      try {
-        await UsageReporter.instance.report(
-          area: area.isEmpty ? 'unknown' : area,
-          action: 'write',
-          n: 1,
-          source: 'ModifyPlateController.handleAction/setPlateStatus',
-        );
-      } catch (_) {}
 
-      // plates 문서 추가 업데이트(write 1회)
-      await FirebaseFirestore.instance
-          .collection('plates')
-          .doc(plate.id)
-          .update({
-        'customStatus': updatedCustomStatus,
-        'statusList': selectedStatuses,
-      });
-      // ✅ 계측: plates write 1회
-      try {
-        await UsageReporter.instance.report(
-          area: area.isEmpty ? 'unknown' : area,
-          action: 'write',
-          n: 1,
-          source: 'ModifyPlateController.handleAction/plates.doc.update',
-        );
-      } catch (_) {}
-
+      // 로컬 상태 반영
       final updatedPlate = plate.copyWith(
         billingType: newBillingType,
         basicStandard: selectedBasicStandard,
@@ -338,6 +287,7 @@ class ModifyPlateController {
         region: dropdownValue,
         imageUrls: mergedImageUrls,
         customStatus: updatedCustomStatus,
+        // ✅ 서버와 동일하게 선택 해제 반영
         isSelected: false,
         selectedBy: null,
         regularAmount: selectedRegularAmount,
@@ -345,18 +295,12 @@ class ModifyPlateController {
       );
 
       final plateState = context.read<PlateState>();
-      await plateState.togglePlateIsSelected(
-        collection: collectionKey,
-        plateNumber: plateNumber,
-        userName: plate.userName,
-        onError: (error) async {},
-      );
 
       await plateState.updatePlateLocally(collectionKey, updatedPlate);
 
       onSuccess();
     } else {
-      // 실패 시 UI만 처리(계측 없음)
+      // 실패 시 UI 처리만
     }
   }
 

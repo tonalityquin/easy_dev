@@ -1,3 +1,4 @@
+// lib/screens/modify_package/utils/modify_plate_service.dart
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -9,7 +10,6 @@ import 'package:flutter/services.dart';
 
 import '../../../models/plate_model.dart';
 import '../../../repositories/plate_repo_services/plate_repository.dart';
-import '../../../states/plate/modify_plate.dart';
 import '../../../states/area/area_state.dart';
 import '../../../states/user/user_state.dart';
 import '../../../utils/gcs_image_uploader.dart';
@@ -112,34 +112,45 @@ class ModifyPlateService {
     return [...existingImageUrls, ...uploadedImageUrls];
   }
 
+  /// 🔧 리팩터링 포인트:
+  /// - 여기서 **한 번의 repo.updatePlate**로 모든 변경을 반영 (사전조회 + write 1)
+  /// - 컨트롤러의 직접 plates.update 제거, ModifyPlate.modifyPlateInfo 호출 제거
   Future<bool> updatePlateInfo({
     required String plateNumber,
     required List<String> imageUrls,
     required String newLocation,
     required String? newBillingType,
+    required String updatedCustomStatus,
+    required List<String> updatedStatusList,
   }) async {
-    final modifyState = context.read<ModifyPlate>();
     final areaState = context.read<AreaState>();
     final userState = context.read<UserState>();
+    final repo = context.read<PlateRepository>();
 
+    // 최종 문서 필드 기준으로 갱신본 구성
     final updatedPlate = originalPlate.copyWith(
       plateNumber: plateNumber,
       location: newLocation,
       billingType: newBillingType,
-      statusList: selectedStatuses,
+      statusList: updatedStatusList,
       basicStandard: selectedBasicStandard,
       basicAmount: selectedBasicAmount,
       addStandard: selectedAddStandard,
       addAmount: selectedAddAmount,
       region: dropdownValue,
       imageUrls: imageUrls,
+      customStatus: updatedCustomStatus,
       regularAmount: selectedRegularAmount,
       regularDurationHours: selectedRegularDurationHours,
     );
 
+    // 변경점 계산 (로그용)
     final changes = originalPlate.diff(updatedPlate);
+
+    // 로그 생성(있을 때만)
+    PlateLogModel? log;
     if (changes.isNotEmpty) {
-      final log = PlateLogModel(
+      log = PlateLogModel(
         plateNumber: updatedPlate.plateNumber,
         type: updatedPlate.type,
         area: areaState.currentArea,
@@ -151,38 +162,40 @@ class ModifyPlateService {
         billingType: updatedPlate.billingType,
         updatedFields: changes,
       );
-
-      await context.read<PlateRepository>().updatePlate(
-            '${originalPlate.plateNumber}_${originalPlate.area}',
-            {
-              if (originalPlate.location != newLocation) 'location': newLocation,
-              if (originalPlate.billingType != newBillingType) 'billingType': newBillingType,
-              if (originalPlate.plateNumber != plateNumber) 'plate_number': plateNumber,
-              'updatedAt': Timestamp.now(),
-            },
-            log: log,
-          );
     }
 
-    return await modifyState.modifyPlateInfo(
-      context: context,
-      plate: originalPlate,
-      newPlateNumber: plateNumber,
-      location: newLocation,
-      areaState: areaState,
-      userState: userState,
-      collectionKey: collectionKey.name,
-      billingType: newBillingType,
-      statusList: selectedStatuses,
-      basicStandard: selectedBasicStandard,
-      basicAmount: selectedBasicAmount,
-      addStandard: selectedAddStandard,
-      addAmount: selectedAddAmount,
-      region: dropdownValue,
-      imageUrls: imageUrls,
-      regularAmount: selectedRegularAmount,
-      regularDurationHours: selectedRegularDurationHours,
+    // 한 번의 update로 모든 필드 반영 (PlateWriteService.updatePlate 내부에서 prefetch READ 1 + WRITE 1 + 계측)
+    await repo.updatePlate(
+      '${originalPlate.plateNumber}_${originalPlate.area}', // 문서 ID는 기존 유지
+      <String, dynamic>{
+        if (originalPlate.location != newLocation) 'location': newLocation,
+        if (originalPlate.billingType != newBillingType) 'billingType': newBillingType,
+        if (originalPlate.plateNumber != plateNumber) 'plate_number': plateNumber,
+
+        // 상태/커스텀 상태도 여기서 동시 반영 → 컨트롤러의 직접 update 제거
+        'statusList': updatedStatusList,
+        'customStatus': updatedCustomStatus,
+
+        // 이미지 및 요금 필드 모두 포함
+        'imageUrls': imageUrls,
+        'region': dropdownValue,
+        'basicStandard': selectedBasicStandard,
+        'basicAmount': selectedBasicAmount,
+        'addStandard': selectedAddStandard,
+        'addAmount': selectedAddAmount,
+        'regularAmount': selectedRegularAmount,
+        'regularDurationHours': selectedRegularDurationHours,
+
+        // ✅ 수정 직후 선택 해제 (추가 클릭 불필요)
+        'isSelected': false,
+        'selectedBy': null,
+
+        'updatedAt': Timestamp.now(),
+      },
+      log: log,
     );
+
+    return true;
   }
 
   static Future<List<String>> listPlateImages({

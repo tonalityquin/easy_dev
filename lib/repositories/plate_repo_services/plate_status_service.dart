@@ -1,3 +1,4 @@
+// lib/repositories/plate_repo_services/plate_status_service.dart
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -13,7 +14,7 @@ class PlateStatusService {
   bool _isEmptyInput(String customStatus, List<String> statusList) =>
       customStatus.trim().isEmpty && statusList.isEmpty;
 
-  // ✅ [유지] 번호판 입력 즉시 메모를 보여주기 위한 prefetch(get)
+  // (옵션) 번호판 입력 즉시 메모 미리 노출 용도
   Future<Map<String, dynamic>?> prefetch({
     required String plateNumber,
     required String area,
@@ -21,16 +22,12 @@ class PlateStatusService {
   }) async {
     final ref = _docRef(plateNumber, area);
     final snap = await ref.get().timeout(timeout);
-    await UsageReporter.instance.report(
-      area: area,
-      action: 'read',
-      n: 1,
-      source: 'PlateStatusService.prefetch',
-    );
+    await UsageReporter.instance.report(area: area, action: 'read', n: 1, source: 'PlateStatusService.prefetch');
     return snap.data();
   }
 
-  // ✅ 수정/삭제 경로: 불필요한 선조회 제거(삭제는 blind delete, 업서트는 tx.get 1회만)
+  /// 빈 입력 → blind delete (READ 0 / DELETE 1)
+  /// 값 있음 → tx.get 1 + set(merge) 1 (READ 1 / WRITE 1)
   Future<void> setPlateStatus({
     required String plateNumber,
     required String area,
@@ -41,23 +38,15 @@ class PlateStatusService {
     Map<String, dynamic>? extra,
   }) async {
     final ref = _docRef(plateNumber, area);
-
     try {
-      // ── [삭제 경로] 문서 존재 여부와 무관하게 delete → READ 0 / DELETE 1
       if (_isEmptyInput(customStatus, statusList)) {
         if (deleteWhenEmpty) {
           await ref.delete().timeout(const Duration(seconds: 10));
-          await UsageReporter.instance.report(
-            area: area,
-            action: 'delete',
-            n: 1,
-            source: 'PlateStatusService.setPlateStatus.delete',
-          );
+          await UsageReporter.instance.report(area: area, action: 'delete', n: 1, source: 'PlateStatusService.setPlateStatus.delete');
         }
         return;
       }
 
-      // ── [업서트 경로] 최초 생성 시 createdAt을 1회만 넣기 위해 tx.get 유지(READ 1 / WRITE 1)
       final data = <String, dynamic>{
         ...?extra,
         'customStatus': customStatus.trim(),
@@ -69,24 +58,12 @@ class PlateStatusService {
 
       await _firestore.runTransaction((tx) async {
         final snap = await tx.get(ref).timeout(const Duration(seconds: 10));
-        if (!snap.exists) {
-          data['createdAt'] = FieldValue.serverTimestamp();
-        }
+        if (!snap.exists) data['createdAt'] = FieldValue.serverTimestamp();
         tx.set(ref, data, SetOptions(merge: true));
       }).timeout(const Duration(seconds: 10));
 
-      await UsageReporter.instance.report(
-        area: area,
-        action: 'read',
-        n: 1,
-        source: 'PlateStatusService.setPlateStatus.tx',
-      );
-      await UsageReporter.instance.report(
-        area: area,
-        action: 'write',
-        n: 1,
-        source: 'PlateStatusService.setPlateStatus.tx',
-      );
+      await UsageReporter.instance.report(area: area, action: 'read', n: 1, source: 'PlateStatusService.setPlateStatus.tx');
+      await UsageReporter.instance.report(area: area, action: 'write', n: 1, source: 'PlateStatusService.setPlateStatus.tx');
     } on FirebaseException catch (e, st) {
       try {
         await DebugFirestoreLogger().log({
@@ -102,11 +79,7 @@ class PlateStatusService {
             'deleteWhenEmpty': deleteWhenEmpty,
             if (extra != null) 'extraKeys': extra.keys.take(30).toList(),
           },
-          'error': {
-            'type': e.runtimeType.toString(),
-            'code': e.code,
-            'message': e.toString(),
-          },
+          'error': {'type': e.runtimeType.toString(), 'code': e.code, 'message': e.toString()},
           'stack': st.toString(),
           'tags': ['plateStatus', 'set', 'error'],
         }, level: 'error');
@@ -119,15 +92,8 @@ class PlateStatusService {
           'collection': 'plate_status',
           'docPath': ref.path,
           'docId': ref.id,
-          'inputs': {
-            'plateNumber': plateNumber,
-            'area': area,
-            'deleteWhenEmpty': deleteWhenEmpty,
-          },
-          'error': {
-            'type': e.runtimeType.toString(),
-            'message': e.toString(),
-          },
+          'inputs': {'plateNumber': plateNumber, 'area': area, 'deleteWhenEmpty': deleteWhenEmpty},
+          'error': {'type': e.runtimeType.toString(), 'message': e.toString()},
           'stack': st.toString(),
           'tags': ['plateStatus', 'set', 'timeout', 'error'],
         }, level: 'error');
@@ -140,14 +106,8 @@ class PlateStatusService {
           'collection': 'plate_status',
           'docPath': ref.path,
           'docId': ref.id,
-          'inputs': {
-            'plateNumber': plateNumber,
-            'area': area,
-          },
-          'error': {
-            'type': e.runtimeType.toString(),
-            'message': e.toString(),
-          },
+          'inputs': {'plateNumber': plateNumber, 'area': area},
+          'error': {'type': e.runtimeType.toString(), 'message': e.toString()},
           'stack': st.toString(),
           'tags': ['plateStatus', 'set', 'error'],
         }, level: 'error');
@@ -156,6 +116,7 @@ class PlateStatusService {
     }
   }
 
+  /// ✅ 월정기 상태 세팅 (repo에서 호출하는 시그니처와 일치)
   Future<void> setMonthlyPlateStatus({
     required String plateNumber,
     required String area,
@@ -174,18 +135,11 @@ class PlateStatusService {
     bool deleteWhenEmpty = true,
   }) async {
     final ref = _docRef(plateNumber, area);
-
     try {
-      // ── [삭제 경로] 선조회 없이 delete
       if (_isEmptyInput(customStatus, statusList)) {
         if (deleteWhenEmpty) {
           await ref.delete().timeout(const Duration(seconds: 10));
-          await UsageReporter.instance.report(
-            area: area,
-            action: 'delete',
-            n: 1,
-            source: 'PlateStatusService.setMonthlyPlateStatus.delete',
-          );
+          await UsageReporter.instance.report(area: area, action: 'delete', n: 1, source: 'PlateStatusService.setMonthlyPlateStatus.delete');
         }
         return;
       }
@@ -210,24 +164,12 @@ class PlateStatusService {
 
       await _firestore.runTransaction((tx) async {
         final snap = await tx.get(ref).timeout(const Duration(seconds: 10));
-        if (!snap.exists) {
-          base['createdAt'] = FieldValue.serverTimestamp();
-        }
+        if (!snap.exists) base['createdAt'] = FieldValue.serverTimestamp();
         tx.set(ref, base, SetOptions(merge: true));
       }).timeout(const Duration(seconds: 10));
 
-      await UsageReporter.instance.report(
-        area: area,
-        action: 'read',
-        n: 1,
-        source: 'PlateStatusService.setMonthlyPlateStatus.tx',
-      );
-      await UsageReporter.instance.report(
-        area: area,
-        action: 'write',
-        n: 1,
-        source: 'PlateStatusService.setMonthlyPlateStatus.tx',
-      );
+      await UsageReporter.instance.report(area: area, action: 'read', n: 1, source: 'PlateStatusService.setMonthlyPlateStatus.tx');
+      await UsageReporter.instance.report(area: area, action: 'write', n: 1, source: 'PlateStatusService.setMonthlyPlateStatus.tx');
     } on FirebaseException catch (e, st) {
       try {
         await DebugFirestoreLogger().log({
@@ -247,11 +189,7 @@ class PlateStatusService {
             'isExtended': isExtended,
             'deleteWhenEmpty': deleteWhenEmpty,
           },
-          'error': {
-            'type': e.runtimeType.toString(),
-            'code': e.code,
-            'message': e.toString(),
-          },
+          'error': {'type': e.runtimeType.toString(), 'code': e.code, 'message': e.toString()},
           'stack': st.toString(),
           'tags': ['plateStatus', 'setMonthly', 'error'],
         }, level: 'error');
@@ -264,14 +202,8 @@ class PlateStatusService {
           'collection': 'plate_status',
           'docPath': ref.path,
           'docId': ref.id,
-          'inputs': {
-            'plateNumber': plateNumber,
-            'area': area,
-          },
-          'error': {
-            'type': e.runtimeType.toString(),
-            'message': e.toString(),
-          },
+          'inputs': {'plateNumber': plateNumber, 'area': area},
+          'error': {'type': e.runtimeType.toString(), 'message': e.toString()},
           'stack': st.toString(),
           'tags': ['plateStatus', 'setMonthly', 'timeout', 'error'],
         }, level: 'error');
@@ -284,14 +216,8 @@ class PlateStatusService {
           'collection': 'plate_status',
           'docPath': ref.path,
           'docId': ref.id,
-          'inputs': {
-            'plateNumber': plateNumber,
-            'area': area,
-          },
-          'error': {
-            'type': e.runtimeType.toString(),
-            'message': e.toString(),
-          },
+          'inputs': {'plateNumber': plateNumber, 'area': area},
+          'error': {'type': e.runtimeType.toString(), 'message': e.toString()},
           'stack': st.toString(),
           'tags': ['plateStatus', 'setMonthly', 'error'],
         }, level: 'error');
@@ -304,12 +230,7 @@ class PlateStatusService {
     final ref = _docRef(plateNumber, area);
     try {
       await ref.delete();
-      await UsageReporter.instance.report(
-        area: area,
-        action: 'delete',
-        n: 1,
-        source: 'PlateStatusService.deletePlateStatus',
-      );
+      await UsageReporter.instance.report(area: area, action: 'delete', n: 1, source: 'PlateStatusService.deletePlateStatus');
     } on FirebaseException catch (e, st) {
       try {
         await DebugFirestoreLogger().log({
@@ -317,15 +238,8 @@ class PlateStatusService {
           'collection': 'plate_status',
           'docPath': ref.path,
           'docId': ref.id,
-          'inputs': {
-            'plateNumber': plateNumber,
-            'area': area,
-          },
-          'error': {
-            'type': e.runtimeType.toString(),
-            'code': e.code,
-            'message': e.toString(),
-          },
+          'inputs': {'plateNumber': plateNumber, 'area': area},
+          'error': {'type': e.runtimeType.toString(), 'code': e.code, 'message': e.toString()},
           'stack': st.toString(),
           'tags': ['plateStatus', 'delete', 'error'],
         }, level: 'error');
@@ -338,14 +252,8 @@ class PlateStatusService {
           'collection': 'plate_status',
           'docPath': ref.path,
           'docId': ref.id,
-          'inputs': {
-            'plateNumber': plateNumber,
-            'area': area,
-          },
-          'error': {
-            'type': e.runtimeType.toString(),
-            'message': e.toString(),
-          },
+          'inputs': {'plateNumber': plateNumber, 'area': area},
+          'error': {'type': e.runtimeType.toString(), 'message': e.toString()},
           'stack': st.toString(),
           'tags': ['plateStatus', 'delete', 'timeout', 'error'],
         }, level: 'error');
@@ -358,14 +266,8 @@ class PlateStatusService {
           'collection': 'plate_status',
           'docPath': ref.path,
           'docId': ref.id,
-          'inputs': {
-            'plateNumber': plateNumber,
-            'area': area,
-          },
-          'error': {
-            'type': e.runtimeType.toString(),
-            'message': e.toString(),
-          },
+          'inputs': {'plateNumber': plateNumber, 'area': area},
+          'error': {'type': e.runtimeType.toString(), 'message': e.toString()},
           'stack': st.toString(),
           'tags': ['plateStatus', 'delete', 'error'],
         }, level: 'error');

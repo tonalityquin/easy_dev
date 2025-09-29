@@ -219,7 +219,7 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
             );
           },
         ),
-        // ⬇️ FAB: 로컬 보류 + 서버 기준으로 여전히 유효할 때만 표시, 잠금 시 숨김
+        // ⬇️ FAB: 보류가 존재 + 여전히 의미가 있을 때만 표시(잠금 시 숨김)
         floatingActionButton: Consumer<PlateState>(
           builder: (context, s, _) {
             final showFab = s.hasPendingSelection &&

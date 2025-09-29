@@ -144,8 +144,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
             }
 
             // null-safe 정렬 (requestTime이 null일 가능성 방어)
-            departureRequests.sort((a, b) =>
-            _isSorted
+            departureRequests.sort((a, b) => _isSorted
                 ? b.requestTime.compareTo(a.requestTime) // 최신순
                 : a.requestTime.compareTo(b.requestTime) // 오래된순
             );
@@ -198,7 +197,7 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
             );
           },
         ),
-        // ⬇️ FAB: 로컬 보류 + 서버 기준으로 유효할 때만 표시
+        // ⬇️ FAB: 보류가 존재 + 여전히 의미가 있을 때만 표시(잠금 시 숨김)
         floatingActionButton: Consumer<PlateState>(
           builder: (context, s, _) {
             final showFab = s.hasPendingSelection &&
