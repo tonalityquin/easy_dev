@@ -1,7 +1,9 @@
 // lib/screens/selector_hubs_package/cards.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';                // Provider 사용
 import '../../routes.dart';
+import '../../states/user/user_state.dart';            // selectedArea 확인
 
 /// 공통 카드 바디(아이콘 배지 → 타이틀 → 이동 버튼)
 class CardBody extends StatefulWidget {
@@ -243,7 +245,24 @@ class HeadquarterCard extends StatelessWidget {
         enabled: enabled,
         disabledHint: '저장된 모드가 service일 때만 선택할 수 있어요',
         onPressed: () {
-          // 서비스 로그인 성공 후 본사(Stub)로 이동
+          // ✅ 이미 로그인 상태면 selectedArea 기준으로 본사 진입 허용/차단
+          try {
+            final us = context.read<UserState>();
+            if (us.isLoggedIn) {
+              final sel = us.user?.selectedArea?.trim() ?? '';
+              if (sel == 'belivus') {
+                Navigator.of(context).pushReplacementNamed(AppRoutes.headStub);
+              } else {
+                // 본사 조건 불충족 → 허브로 회귀
+                Navigator.of(context).pushReplacementNamed(AppRoutes.selector);
+              }
+              return;
+            }
+          } catch (_) {
+            // Provider 미주입 시엔 아래 기존 흐름 수행
+          }
+
+          // 미로그인: 서비스 로그인으로 이동(성공 시 Head Stub로 리다이렉트)
           Navigator.of(context).pushReplacementNamed(
             AppRoutes.serviceLogin,
             arguments: {'redirectAfterLogin': AppRoutes.headStub, 'requiredMode': 'service'},

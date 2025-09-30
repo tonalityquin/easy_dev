@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../routes.dart'; // 기본 redirect(AppRoutes.commute) 사용
-import '../../states/area/area_state.dart'; // currentArea 확인용
+import '../../states/user/user_state.dart'; // 로그인/selectedArea 확인
 
 import 'service/service_login_controller.dart';
 import 'service/sections/service_login_form.dart';
@@ -102,8 +102,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       _didInitAuto = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        // 컨트롤러 내부의 자동 로그인 체크(성공 시 onLoginSucceeded 콜백 호출)
-        _loginController!.initState();
+        // ✅ 이미 로그인 상태면 자동 로그인 체크(= Firestore 접근) 자체를 건너뜀
+        final alreadyLoggedIn = context.read<UserState>().isLoggedIn;
+        if (!alreadyLoggedIn) {
+          // 컨트롤러 내부의 자동 로그인 체크(성공 시 onLoginSucceeded 콜백 호출)
+          _loginController!.initState();
+        }
       });
     }
   }
@@ -115,11 +119,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   }
 
   void _navigateAfterLogin() {
-    // ✅ 본사 진입은 belivus만 허용 (하드코딩)
+    // ✅ 본사 진입은 'selectedArea == belivus' 일 때만 허용 (하드코딩)
     if (_isHeadTarget()) {
-      final currentArea = context.read<AreaState>().currentArea;
-      if (currentArea != 'belivus') {
-        // 접근 차단: 허브로 복귀 (스낵바 안내 제거)
+      final selectedArea = context.read<UserState>().user?.selectedArea?.trim() ?? '';
+      if (selectedArea != 'belivus') {
+        // 접근 차단: 허브로 복귀
         if (!mounted) return;
         Navigator.of(context).pushReplacementNamed(AppRoutes.selector);
         return;
@@ -142,7 +146,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         child: Scaffold(
           body: Center(
             child: Padding(
-              padding: const EdgeInsets.all(24), // ← 수정: named parameter 사용
+              padding: const EdgeInsets.all(24),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -172,7 +176,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       canPop: false,
       child: Scaffold(
         body: Padding(
-          padding: const EdgeInsets.all(20), // ← 수정: named parameter 사용
+          padding: const EdgeInsets.all(20),
           child: Center(
             child: SingleChildScrollView(
               child: FadeTransition(
