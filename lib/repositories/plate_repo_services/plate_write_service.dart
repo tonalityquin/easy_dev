@@ -6,7 +6,7 @@ import 'dart:developer' as dev;
 import '../../models/plate_log_model.dart';
 import '../../models/plate_model.dart';
 import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
-import '../../utils/usage_reporter.dart';
+// import '../../utils/usage_reporter.dart';
 
 class PlateWriteService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -231,26 +231,24 @@ class PlateWriteService {
     final docRef = _firestore.collection('plates').doc(documentId);
 
     try {
-      // area 확보를 위해 한 번 읽어 정확한 테넌트에 누적
-      final snap = await docRef.get();
+      /*final snap = await docRef.get();
       final area = (snap.data()?['area'] as String?) ?? 'unknown';
       await UsageReporter.instance.report(
         area: area,
         action: 'read',
         n: 1,
         source: 'PlateWriteService.deletePlate.prefetch',
-      );
+      );*/
 
       await docRef.delete();
       dev.log("🗑️ 문서 삭제 완료: $documentId", name: "Firestore");
 
-      // ✅ delete 1회
-      await UsageReporter.instance.report(
+      /*await UsageReporter.instance.report(
         area: area,
         action: 'delete',
         n: 1,
         source: 'PlateWriteService.deletePlate.delete',
-      );
+      );*/
     } on FirebaseException catch (e, st) {
       if (e.code == 'not-found') {
         debugPrint("⚠️ 삭제 시 문서 없음 (무시): $documentId");

@@ -10,9 +10,6 @@ import 'dev_package/local_prefs_bottom_sheet.dart';
 import 'dev_package/dev_memo.dart';
 import 'dev_package/google_docs_bottom_sheet.dart';
 
-// ✅ 스모크 테스트 페이지 import
-import 'dev_package/usage_counter_demo_page.dart';
-
 /// ====== 개발 전용 팔레트 (개발 카드와 동일 톤) ======
 /// 버튼/Badge 배경
 const kDevPrimary = Color(0xFF6A1B9A); // Deep Purple
@@ -221,25 +218,6 @@ class DevStubPage extends StatelessWidget {
                           onTap: () async {
                             GoogleDocsDocPanel.enabled.value = true;
                             await GoogleDocsDocPanel.togglePanel();
-                          },
-                        ),
-
-                        // ✅ (새로 추가) 사용량 카운터 스모크 테스트
-                        _ActionCard(
-                          icon: Icons.analytics_outlined,
-                          title: '사용량 카운터',
-                          subtitle: 'READ / WRITE / DELETE',
-                          bg: Colors.indigo.shade600,
-                          fg: Colors.white,
-                          tintColor: Colors.indigo.shade100,
-                          titleColor: Colors.indigo.shade900,
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const UsageCounterDemoPage(),
-                                fullscreenDialog: true,
-                              ),
-                            );
                           },
                         ),
                       ];
