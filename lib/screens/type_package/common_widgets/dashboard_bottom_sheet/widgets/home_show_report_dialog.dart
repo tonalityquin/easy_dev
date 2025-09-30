@@ -9,8 +9,8 @@ import '../../../../../../states/area/area_state.dart';
 import '../../../../../../states/user/user_state.dart';
 import '../../../../../../utils/snackbar_helper.dart';
 import '../../../../../../utils/blocking_dialog.dart';
-import '../../../../../../utils/usage_reporter.dart';
-import '../../../../../../utils/gcs_uploader.dart'; // ✅ GCS 업로드 유틸 임포트
+// import '../../../../../../utils/usage_reporter.dart';
+import '../../../../../../utils/gcs_uploader.dart';
 import 'home_end_work_report_content.dart';
 
 int _extractLockedFeeAmountSafe(Map<String, dynamic> data) {
@@ -46,20 +46,19 @@ Future<void> showHomeReportDialog(BuildContext context) async {
 
   try {
     if (area.isNotEmpty) {
-      // 서비스 레이어에서 READ 집계 → UI 레이어는 흔적만(annotate)
       prefilledVehicleOutput = await PlateCountService().getDepartureCompletedCountAll(area);
-      await UsageReporter.instance.annotate(
+      /*await UsageReporter.instance.annotate(
         area: area,
         source: 'showHomeReportDialog.prefetch.departure_completed.aggregate',
         extra: {'value': prefilledVehicleOutput},
-      );
+      );*/
 
       prefilledVehicleInput = await PlateCountService().getParkingCompletedCountAll(area);
-      await UsageReporter.instance.annotate(
+      /*await UsageReporter.instance.annotate(
         area: area,
         source: 'showHomeReportDialog.prefetch.parking_completed.aggregate',
         extra: {'value': prefilledVehicleInput},
-      );
+      );*/
     }
   } catch (_) {
     prefilledVehicleOutput = 0;
@@ -135,13 +134,13 @@ Future<void> showHomeReportDialog(BuildContext context) async {
 
                         final int p = platesSnap.docs.length;
                         try {
-                          await UsageReporter.instance.reportSampled(
+                          /*await UsageReporter.instance.reportSampled(
                             area: area,
                             action: 'read',
                             n: p,
                             source: 'onReport.end.plates.query(departure_completed&lockedFee)',
                             sampleRate: 0.2,
-                          );
+                          );*/
                         } catch (_) {}
 
                         int totalLockedFee = 0;
@@ -160,13 +159,13 @@ Future<void> showHomeReportDialog(BuildContext context) async {
                           'lastUpdated': FieldValue.serverTimestamp(),
                         }, SetOptions(merge: true));
                         try {
-                          await UsageReporter.instance.reportSampled(
+                          /*await UsageReporter.instance.reportSampled(
                             area: area,
                             action: 'write',
                             n: 1,
                             source: 'onReport.end.fee_summaries.upsert',
                             sampleRate: 0.2,
-                          );
+                          );*/
                         } catch (_) {}
 
                         // 4) 보고 JSON/GCS 업로드 (Firebase 아님 → 계측 제외)
@@ -225,22 +224,22 @@ Future<void> showHomeReportDialog(BuildContext context) async {
                         }
                         await batch.commit();
                         try {
-                          await UsageReporter.instance.reportSampled(
+                          /*await UsageReporter.instance.reportSampled(
                             area: area,
                             action: 'delete',
                             n: p,
                             source: 'onReport.end.batch.commit(delete locked departures)',
                             sampleRate: 0.2,
-                          );
+                          );*/
                         } catch (_) {}
 
                         // 7) 흔적만 남기는 annotate(aggregate 숫자)
                         try {
-                          await UsageReporter.instance.annotate(
+                          /*await UsageReporter.instance.annotate(
                             area: area,
                             source: 'onReport.end.aggregate.departure_completed.count',
                             extra: {'value': p},
-                          );
+                          );*/
                         } catch (_) {}
 
                         // 8) UI 피드백

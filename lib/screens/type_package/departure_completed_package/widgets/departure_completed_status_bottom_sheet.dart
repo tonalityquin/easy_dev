@@ -11,8 +11,7 @@ import '../../../../utils/snackbar_helper.dart';
 import '../../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
 import '../../../log_package/log_viewer_bottom_sheet.dart';
 
-// ✅ UsageReporter 계측 (파이어베이스 접근 지점만)
-import '../../../../utils/usage_reporter.dart';
+// import '../../../../utils/usage_reporter.dart';
 
 Future<void> showDepartureCompletedStatusBottomSheet({
   required BuildContext context,
@@ -125,15 +124,13 @@ Future<void> showDepartureCompletedStatusBottomSheet({
                         );
 
                         try {
-                          // 🔵 Firestore write (레포지토리 경유)
                           await repo.addOrUpdatePlate(plate.id, updatedPlate);
-                          // 계측: WRITE 1 (repo.addOrUpdatePlate)
-                          _reportDbSafe(
+                          /*_reportDbSafe(
                             area: area,
                             action: 'write',
                             source: 'departureCompleted.prebill.repo.addOrUpdatePlate',
                             n: 1,
-                          );
+                          );*/
 
                           // 로컬 상태 갱신 (Firebase 아님 → 계측 제외)
                           await plateState.updatePlateLocally(PlateType.departureCompleted, updatedPlate);
@@ -151,13 +148,12 @@ Future<void> showDepartureCompletedStatusBottomSheet({
                           await firestore.collection('plates').doc(plate.id).update({
                             'logs': FieldValue.arrayUnion([log])
                           });
-                          // 계측: WRITE 1 (plates.update logs arrayUnion)
-                          _reportDbSafe(
+                          /*_reportDbSafe(
                             area: area,
                             action: 'write',
                             source: 'departureCompleted.prebill.plates.update.logs.arrayUnion',
                             n: 1,
-                          );
+                          );*/
 
                           if (!rootContext.mounted) return;
                           showSuccessSnackbar(
@@ -224,8 +220,7 @@ Future<void> showDepartureCompletedStatusBottomSheet({
   );
 }
 
-/// UsageReporter: 파이어베이스 DB 작업만 계측
-void _reportDbSafe({
+/*void _reportDbSafe({
   required String area,
   required String action, // 'read' | 'write' | 'delete' 등
   required String source,
@@ -241,4 +236,4 @@ void _reportDbSafe({
   } catch (_) {
     // 계측 실패는 기능에 영향 X
   }
-}
+}*/

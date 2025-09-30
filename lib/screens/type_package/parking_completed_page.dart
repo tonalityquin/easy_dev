@@ -38,11 +38,9 @@ import '../../states/user/user_state.dart';
 
 import '../../utils/snackbar_helper.dart';
 
-// 🔧 리미트 설정 단일 소스
 import '../../utils/plate_limit/plate_limit_config.dart';
 
-// ✅ UsageReporter: 파이어베이스(읽기/쓰기/삭제) 발생 지점만 계측
-import '../../utils/usage_reporter.dart';
+// import '../../utils/usage_reporter.dart';
 
 import 'parking_completed_package/widgets/signature_plate_search_bottom_sheet/parking_completed_search_bottom_sheet.dart';
 import '../../widgets/navigation/top_navigation.dart';
@@ -89,15 +87,13 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
     if (kDebugMode) debugPrint('[ParkingCompleted] $msg');
   }
 
-  // Firestore read 계측만(UsageReporter는 read/write/delete만 허용)
-  void _reportReadDb(String source, {int n = 1}) {
+  /*void _reportReadDb(String source, {int n = 1}) {
     try {
       final area = context.read<AreaState>().currentArea.trim();
       UsageReporter.instance.report(area: area, action: 'read', n: n, source: source);
     } catch (_) {
-      // 무시
     }
-  }
+  }*/
 
   /// 홈 재탭/진입 시 초기 상태로 되돌림
   void _resetInternalState() {
@@ -197,7 +193,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
         .where('location', isEqualTo: loc)
         .limit(1)
         .get();
-    _reportReadDb('parkingCompleted.location_limits.get(area=$area,location=$loc)');
+    /*_reportReadDb('parkingCompleted.location_limits.get(area=$area,location=$loc)');*/
 
     if (qs.docs.isEmpty) return null;
     final raw = qs.docs.first.data()['limit'];
@@ -253,7 +249,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
             .where('location', isEqualTo: loc)
             .count()
             .get();
-        _reportReadDb('parkingCompleted.countAt($loc)');
+        /*_reportReadDb('parkingCompleted.countAt($loc)');*/
         return snap.count ?? 0;
       }
 
@@ -291,7 +287,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
       }
 
       final QuerySnapshot<Map<String, dynamic>> qs = await fetchAt(selectedLoc);
-      _reportReadDb('parkingCompleted.fetchAt($selectedLoc).get');
+      /*_reportReadDb('parkingCompleted.fetchAt($selectedLoc).get');*/
 
       // 5) 번호판만 뽑기 (스키마에 맞춰 plate_number 우선)
       final plateNumbers = <String>[];

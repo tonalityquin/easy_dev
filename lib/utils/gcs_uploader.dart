@@ -18,7 +18,9 @@ Future<gcs.Object> _uploadJsonToGcs({
 }) async {
   // 1) 임시 파일 생성
   final temp = File(
-    '${Directory.systemTemp.path}/gcs_upload_${DateTime.now().microsecondsSinceEpoch}.json',
+    '${Directory.systemTemp.path}/gcs_upload_${DateTime
+        .now()
+        .microsecondsSinceEpoch}.json',
   );
   await temp.writeAsString(jsonEncode(json), encoding: utf8);
 
@@ -79,7 +81,10 @@ Future<String?> uploadEndWorkReportJson({
   required String userName,
 }) async {
   final now = DateTime.now();
-  final dateStr = now.toIso8601String().split('T').first;
+  final dateStr = now
+      .toIso8601String()
+      .split('T')
+      .first;
   final ts = now.millisecondsSinceEpoch; // 중복 방지용 suffix
   final safeUser = userName.replaceAll(RegExp(r'[^a-zA-Z0-9_\-\.]'), '_');
   final fileName = 'report_${safeUser}_$dateStr\_$ts.json';
@@ -109,7 +114,10 @@ Future<String?> uploadEndLogJson({
   required String userName,
 }) async {
   final now = DateTime.now();
-  final dateStr = now.toIso8601String().split('T').first;
+  final dateStr = now
+      .toIso8601String()
+      .split('T')
+      .first;
   final ts = now.millisecondsSinceEpoch;
   final safeUser = userName.replaceAll(RegExp(r'[^a-zA-Z0-9_\-\.]'), '_');
   final fileName = 'logs_${safeUser}_$dateStr\_$ts.json';

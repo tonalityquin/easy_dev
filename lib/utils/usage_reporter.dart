@@ -10,6 +10,7 @@ import 'package:uuid/uuid.dart';
 /// - events/{eventId}로 멱등 처리(중복 방지)
 class UsageReporter {
   UsageReporter._();
+
   static final UsageReporter instance = UsageReporter._();
 
   final _db = FirebaseFirestore.instance;
@@ -75,17 +76,13 @@ class UsageReporter {
 
     await ensureInitialized();
     final baseId = installId;
-    final userKey = (source == null || source.trim().isEmpty)
-        ? baseId
-        : '${baseId}__${_slug(source)}';
+    final userKey = (source == null || source.trim().isEmpty) ? baseId : '${baseId}__${_slug(source)}';
 
     final date = DateTime.now().toUtc().toIso8601String().substring(0, 10); // YYYY-MM-DD
     final eventId = const Uuid().v4();
 
-    final countRef = _db
-        .collection('usage_daily').doc(date)
-        .collection('tenants').doc(area)
-        .collection('users').doc(userKey);
+    final countRef =
+        _db.collection('usage_daily').doc(date).collection('tenants').doc(area).collection('users').doc(userKey);
 
     final eventRef = countRef.collection('events').doc(eventId);
 
@@ -103,13 +100,16 @@ class UsageReporter {
       });
 
       final incField = '${action}s'; // reads/writes/deletes
-      tx.set(countRef, {
-        'date': date,
-        'tenantId': area,
-        'userId': userKey,
-        incField: FieldValue.increment(n),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      tx.set(
+          countRef,
+          {
+            'date': date,
+            'tenantId': area,
+            'userId': userKey,
+            incField: FieldValue.increment(n),
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true));
     });
   }
 
@@ -144,17 +144,13 @@ class UsageReporter {
   }) async {
     await ensureInitialized();
     final baseId = installId;
-    final userKey = (source == null || source.trim().isEmpty)
-        ? baseId
-        : '${baseId}__${_slug(source)}';
+    final userKey = (source == null || source.trim().isEmpty) ? baseId : '${baseId}__${_slug(source)}';
 
     final date = DateTime.now().toUtc().toIso8601String().substring(0, 10); // YYYY-MM-DD
     final eventId = const Uuid().v4();
 
-    final countRef = _db
-        .collection('usage_daily').doc(date)
-        .collection('tenants').doc(area)
-        .collection('users').doc(userKey);
+    final countRef =
+        _db.collection('usage_daily').doc(date).collection('tenants').doc(area).collection('users').doc(userKey);
 
     final eventRef = countRef.collection('events').doc(eventId);
 
@@ -172,12 +168,15 @@ class UsageReporter {
       });
 
       // 카운터 문서는 업데이트 시간만 갱신(증분 없음)
-      tx.set(countRef, {
-        'date': date,
-        'tenantId': area,
-        'userId': userKey,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      tx.set(
+          countRef,
+          {
+            'date': date,
+            'tenantId': area,
+            'userId': userKey,
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true));
     });
   }
 }

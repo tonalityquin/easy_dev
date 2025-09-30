@@ -3,7 +3,7 @@ import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
 import '../../repositories/plate_repo_services/plate_write_service.dart';
 import '../user/user_state.dart';
-import '../../utils/usage_reporter.dart';
+// import '../../utils/usage_reporter.dart';
 
 class MovementPlate extends ChangeNotifier {
   final PlateWriteService _write;
@@ -30,12 +30,12 @@ class MovementPlate extends ChangeNotifier {
       forceOverride: forceOverride,
     );
 
-    await UsageReporter.instance.report(
+    /*await UsageReporter.instance.report(
       area: area,
       action: 'write',
       n: 1,
       source: 'MovementPlate.setParkingCompleted',
-    );
+    );*/
   }
 
   /// 출차 요청 (parking_completed → departure_requests)
@@ -57,12 +57,12 @@ class MovementPlate extends ChangeNotifier {
       forceOverride: forceOverride,
     );
 
-    await UsageReporter.instance.report(
+    /*await UsageReporter.instance.report(
       area: area,
       action: 'write',
       n: 1,
       source: 'MovementPlate.setDepartureRequested',
-    );
+    );*/
   }
 
   /// 출차 완료 (departure_requests → departure_completed)
@@ -85,37 +85,12 @@ class MovementPlate extends ChangeNotifier {
       forceOverride: forceOverride,
     );
 
-    await UsageReporter.instance.report(
+    /*await UsageReporter.instance.report(
       area: selectedPlate.area,
       action: 'write',
       n: 1,
       source: 'MovementPlate.setDepartureCompleted',
-    );
-  }
-
-  /// (옵션) 입차 완료 → 출차 완료 점프
-  Future<void> jumpingDepartureCompleted(
-    PlateModel plate, {
-    bool forceOverride = true,
-  }) async {
-    final actor = _user.name;
-    final plateId = '${plate.plateNumber}_${plate.area}';
-
-    await _write.transitionPlateType(
-      plateId: plateId,
-      actor: actor,
-      fromType: PlateType.parkingCompleted.firestoreValue,
-      toType: PlateType.departureCompleted.firestoreValue,
-      extraFields: {'area': plate.area, 'location': plate.location},
-      forceOverride: forceOverride,
-    );
-
-    await UsageReporter.instance.report(
-      area: plate.area,
-      action: 'write',
-      n: 1,
-      source: 'MovementPlate.jumpingDepartureCompleted',
-    );
+    );*/
   }
 
   /// (옵션) 출차 요청 → 입차 완료 되돌리기
@@ -137,12 +112,12 @@ class MovementPlate extends ChangeNotifier {
       forceOverride: forceOverride,
     );
 
-    await UsageReporter.instance.report(
+    /*await UsageReporter.instance.report(
       area: area,
       action: 'write',
       n: 1,
       source: 'MovementPlate.goBackToParkingCompleted',
-    );
+    );*/
   }
 
   /// (옵션) 임의 상태 → 입차 요청 되돌리기
@@ -165,11 +140,11 @@ class MovementPlate extends ChangeNotifier {
       forceOverride: forceOverride,
     );
 
-    await UsageReporter.instance.report(
+    /*await UsageReporter.instance.report(
       area: area,
       action: 'write',
       n: 1,
       source: 'MovementPlate.goBackToParkingRequest',
-    );
+    );*/
   }
 }

@@ -7,8 +7,7 @@ import '../../models/plate_model.dart';
 import '../../enums/plate_type.dart';
 import '../area/area_state.dart';
 
-// 📈 UsageReporter (Firebase 동작만 계측: read / write / delete)
-import '../../utils/usage_reporter.dart';
+// import '../../utils/usage_reporter.dart';
 
 /// 서버 스냅샷 기준의 선택 상태를 plateId별로 보관하기 위한 베이스라인
 class _SelectionBaseline {
@@ -123,10 +122,7 @@ class PlateState extends ChangeNotifier {
     _cancelAllSubscriptions();
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // UsageReporter helpers (이 파일에서 발생하는 Firebase 동작만 계측)
-  // ─────────────────────────────────────────────────────────────
-  void _reportRead(String source, {String? area, int n = 1}) {
+  /*void _reportRead(String source, {String? area, int n = 1}) {
     try {
       UsageReporter.instance.report(
         area: (area == null || area.trim().isEmpty)
@@ -139,7 +135,7 @@ class PlateState extends ChangeNotifier {
     } catch (e) {
       debugPrint('UsageReporter(read) error: $e');
     }
-  }
+  }*/
 
   // ─────────────────────────────────────────────────────────────
 
@@ -207,12 +203,11 @@ class PlateState extends ChangeNotifier {
           try {
             final ref = change.doc.reference;
 
-            // 📈 Firebase READ: removed 문서 최신 상태 확인 (server get)
             final fresh = await ref.get(const GetOptions(source: Source.server));
-            _reportRead(
+            /*_reportRead(
               'PlateState.departureCompleted.removed.ref.get(server)',
               area: fresh.data()?['area']?.toString() ?? area,
-            );
+            );*/
 
             final data = fresh.data();
             if (data == null) continue;

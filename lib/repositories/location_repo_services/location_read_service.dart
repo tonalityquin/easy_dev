@@ -12,10 +12,7 @@ class LocationReadService {
 
     // 1) Firestore 쿼리 실패 로깅
     try {
-      snapshot = await _firestore
-          .collection('locations')
-          .where('area', isEqualTo: area)
-          .get();
+      snapshot = await _firestore.collection('locations').where('area', isEqualTo: area).get();
     } catch (e, st) {
       try {
         await DebugFirestoreLogger().log({
@@ -30,7 +27,9 @@ class LocationReadService {
           'stack': st.toString(),
           'tags': ['locations', 'read', 'error'],
         }, level: 'error');
-      } catch (_) {/* 로깅 실패는 무시 */}
+      } catch (_) {
+        /* 로깅 실패는 무시 */
+      }
       rethrow;
     }
 

@@ -2,9 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/plate_log_model.dart';
-
-// ✅ 사용량 계측
-import '../../utils/usage_reporter.dart';
+// import '../../utils/usage_reporter.dart';
 
 class LogViewerBottomSheet extends StatefulWidget {
   /// plateNumber (문서 ID 폴백 조합에 사용)
@@ -162,16 +160,14 @@ class _LogViewerBottomSheetState extends State<LogViewerBottomSheet> {
         _errorMessage = e is StateError ? e.message : '로그를 불러오는 중 오류가 발생했습니다. ($e)';
       });
     } finally {
-      // ✅ Firestore read 1회 계측 (성공/실패 무관)
       try {
-        await UsageReporter.instance.report(
+        /*await UsageReporter.instance.report(
           area: (widget.area.isEmpty ? 'unknown' : widget.area),
           action: 'read',
           n: 1,
           source: 'LogViewerBottomSheet._loadLogs/plates.doc.get',
-        );
+        );*/
       } catch (_) {
-        // 계측 실패는 사용자 플로우에 영향 주지 않음
       }
     }
   }

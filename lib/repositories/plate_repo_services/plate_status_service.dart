@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
-import '../../utils/usage_reporter.dart'; // ✅
+import '../../utils/usage_reporter.dart';
 
 class PlateStatusService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -13,18 +13,6 @@ class PlateStatusService {
 
   bool _isEmptyInput(String customStatus, List<String> statusList) =>
       customStatus.trim().isEmpty && statusList.isEmpty;
-
-  // (옵션) 번호판 입력 즉시 메모 미리 노출 용도
-  Future<Map<String, dynamic>?> prefetch({
-    required String plateNumber,
-    required String area,
-    Duration timeout = const Duration(seconds: 10),
-  }) async {
-    final ref = _docRef(plateNumber, area);
-    final snap = await ref.get().timeout(timeout);
-    await UsageReporter.instance.report(area: area, action: 'read', n: 1, source: 'PlateStatusService.prefetch');
-    return snap.data();
-  }
 
   /// 빈 입력 → blind delete (READ 0 / DELETE 1)
   /// 값 있음 → tx.get 1 + set(merge) 1 (READ 1 / WRITE 1)
@@ -42,7 +30,7 @@ class PlateStatusService {
       if (_isEmptyInput(customStatus, statusList)) {
         if (deleteWhenEmpty) {
           await ref.delete().timeout(const Duration(seconds: 10));
-          await UsageReporter.instance.report(area: area, action: 'delete', n: 1, source: 'PlateStatusService.setPlateStatus.delete');
+          /*await UsageReporter.instance.report(area: area, action: 'delete', n: 1, source: 'PlateStatusService.setPlateStatus.delete');*/
         }
         return;
       }
@@ -62,8 +50,8 @@ class PlateStatusService {
         tx.set(ref, data, SetOptions(merge: true));
       }).timeout(const Duration(seconds: 10));
 
-      await UsageReporter.instance.report(area: area, action: 'read', n: 1, source: 'PlateStatusService.setPlateStatus.tx');
-      await UsageReporter.instance.report(area: area, action: 'write', n: 1, source: 'PlateStatusService.setPlateStatus.tx');
+      /*await UsageReporter.instance.report(area: area, action: 'read', n: 1, source: 'PlateStatusService.setPlateStatus.tx');
+      await UsageReporter.instance.report(area: area, action: 'write', n: 1, source: 'PlateStatusService.setPlateStatus.tx');*/
     } on FirebaseException catch (e, st) {
       try {
         await DebugFirestoreLogger().log({

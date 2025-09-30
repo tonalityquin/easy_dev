@@ -34,8 +34,7 @@ class UserReadService {
     return id.substring(idx + 1);
   }
 
-  String _areaFromDoc(Map<String, dynamic>? data, String id) {
-    // 우선순위: currentArea → selectedArea → id suffix
+  /*String _areaFromDoc(Map<String, dynamic>? data, String id) {
     final d = data ?? const <String, dynamic>{};
     final ca = d['currentArea'] as String?;
     final sa = d['selectedArea'] as String?;
@@ -44,7 +43,7 @@ class UserReadService {
         : (sa?.trim().isNotEmpty == true)
             ? sa!.trim()
             : _inferAreaFromHyphenId(id);
-  }
+  }*/
 
   // TabletModel -> UserModel 매핑 (phone <= handle)
   UserModel _tabletToUser(TabletModel t) {
@@ -75,33 +74,6 @@ class UserReadService {
   static final Map<String, String?> _englishNameMemCache = {};
 
   String _enKey(String division, String area) => 'englishName_${division}_$area';
-
-  // ----- Streams -----
-  Stream<List<UserModel>> watchUsersBySelectedArea(String selectedArea) {
-    final q = _getUserCollectionRef().where('selectedArea', isEqualTo: selectedArea);
-
-    // 구독 시작 비용은 간단히 read 1로 보고
-    // ignore: unawaited_futures
-    UsageReporter.instance.report(
-      area: selectedArea.isNotEmpty ? selectedArea : 'unknown',
-      action: 'read',
-      n: 1,
-      source: 'UserReadService.watchUsersBySelectedArea',
-    );
-
-    return q.snapshots().handleError((e, st) async {
-      try {
-        await DebugFirestoreLogger().log({
-          'op': 'users.watchBySelectedArea',
-          'collection': 'user_accounts',
-          'filters': {'selectedArea': selectedArea},
-          'error': {'type': e.runtimeType.toString(), 'message': e.toString()},
-          'stack': st.toString(),
-          'tags': ['users', 'watch', 'error'],
-        }, level: 'error');
-      } catch (_) {}
-    }).map((snap) => snap.docs.map((d) => UserModel.fromMap(d.id, d.data())).toList());
-  }
 
   // ----- Reads: single -----
   Future<UserModel?> getUserById(String userId) async {
@@ -184,14 +156,14 @@ class UserReadService {
         qs = await _getUserCollectionRef().where('phone', isEqualTo: h).limit(1).get();
       }
 
-      final n = qs.docs.isEmpty ? 1 : qs.docs.length;
+      /*final n = qs.docs.isEmpty ? 1 : qs.docs.length;
       final area = qs.docs.isNotEmpty ? _areaFromDoc(qs.docs.first.data(), qs.docs.first.id) : 'unknown';
       await UsageReporter.instance.report(
         area: area,
         action: 'read',
         n: n,
         source: 'UserReadService.getUserByHandle',
-      );
+      );*/
 
       if (qs.docs.isNotEmpty) {
         final doc = qs.docs.first;

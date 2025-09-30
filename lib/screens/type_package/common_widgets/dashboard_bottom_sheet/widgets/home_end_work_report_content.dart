@@ -62,14 +62,18 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
   }
 
   String? _numberValidator(String? v) {
-    if (v == null || v.trim().isEmpty) return '값을 입력하세요';
+    if (v == null || v
+        .trim()
+        .isEmpty) return '값을 입력하세요';
     final ok = RegExp(r'^\d+$').hasMatch(v.trim());
     if (!ok) return '숫자만 입력 가능합니다';
     return null;
   }
 
   Future<void> _refetchInput() async {
-    final area = context.read<AreaState>().currentArea;
+    final area = context
+        .read<AreaState>()
+        .currentArea;
     if (!mounted) return;
     setState(() => _reloadingInput = true);
     try {
@@ -93,7 +97,9 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
   }
 
   Future<void> _refetchOutput() async {
-    final area = context.read<AreaState>().currentArea;
+    final area = context
+        .read<AreaState>()
+        .currentArea;
     if (!mounted) return;
     setState(() => _reloadingOutput = true);
     try {
@@ -101,11 +107,11 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
       if (!mounted) return;
       _outputCtrl.text = v.toString();
       try {
-        await UsageReporter.instance.annotate(
+       /* await UsageReporter.instance.annotate(
           area: area,
           source: 'HomeEndWorkReportContent._refetchOutput.departure_completed.aggregate',
           extra: {'value': v},
-        );
+        );*/
       } catch (_) {}
       if (!mounted) return;
       HapticFeedback.selectionClick();
@@ -120,9 +126,13 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
     if (!mounted) return;
     setState(() => _submitting = true);
     try {
-      final user = Provider.of<UserState>(context, listen: false).user;
+      final user = Provider
+          .of<UserState>(context, listen: false)
+          .user;
       final division = user?.divisions.first;
-      final area = context.read<AreaState>().currentArea;
+      final area = context
+          .read<AreaState>()
+          .currentArea;
 
       if (division == null || area.isEmpty) {
         if (!mounted) return;
@@ -164,7 +174,10 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
 
   @override
   Widget build(BuildContext context) {
-    final bottomPad = MediaQuery.of(context).viewInsets.bottom + _kBasePad;
+    final bottomPad = MediaQuery
+        .of(context)
+        .viewInsets
+        .bottom + _kBasePad;
     return SingleChildScrollView(
       controller: widget.externalScrollController,
       padding: EdgeInsets.fromLTRB(_kBasePad, 8, _kBasePad, bottomPad),

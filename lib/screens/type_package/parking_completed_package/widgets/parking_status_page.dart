@@ -1,22 +1,11 @@
 // lib/screens/type_pages/parking_completed_pages/widgets/parking_status_page.dart
-//
-// [주요 동작]
-// - 페이지가 실제로 "보이는 순간" 영역 전체의 parking_completed 총합을 aggregate count() 1회 수행
-// - LocationState.locations의 capacity 합과 묶어 사용률 게이지로 표기
-//
-// [리팩터링 추가사항]
-// - Area 변경 감지 시(_lastArea 비교) 재집계 트리거
-// - 에러 발생 시 사용자에게 '다시 집계' 버튼 제공(_hadError)
-// - 기존의 "보이는 순간 1회" 원칙 유지(중복 집계 방지)
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../states/location/location_state.dart';
 import '../../../../states/area/area_state.dart';
-import '../../../../utils/usage_reporter.dart';
-
-// import '../../../../utils/usage_reporter.dart';
+// import '../../../../utils/usage_reporter.dart';;
 
 class ParkingStatusPage extends StatefulWidget {
   final bool isLocked;
@@ -88,12 +77,12 @@ class _ParkingStatusPageState extends State<ParkingStatusPage> {
       final cnt = (snap.count ?? 0);
 
       try {
-        await UsageReporter.instance.report(
+        /*await UsageReporter.instance.report(
           area: area,
           action: 'read', // 읽기
           n: 1, // ← 고정(집계 1회당 read 1회)
           source: 'parkingStatus.count.query(parking_completed).aggregate',
-        );
+        );*/
       } catch (_) {
         // 계측 실패는 UX에 영향 없음
       }
@@ -106,12 +95,12 @@ class _ParkingStatusPageState extends State<ParkingStatusPage> {
       });
     } catch (e) {
       try {
-        await UsageReporter.instance.report(
+        /*await UsageReporter.instance.report(
           area: context.read<AreaState>().currentArea.trim(),
           action: 'read',
           n: 1, // ← 실패여도 1회 시도로 고정
           source: 'parkingStatus.count.query(parking_completed).aggregate.error',
-        );
+        );*/
       } catch (_) {}
 
       if (!mounted) return;

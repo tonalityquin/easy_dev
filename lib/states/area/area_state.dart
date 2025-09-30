@@ -7,7 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../../models/capability.dart';
-import '../../utils/usage_reporter.dart'; // ← 프로젝트 경로에 맞게 유지
+// import '../../utils/usage_reporter.dart';
 
 enum AreaType {
   dev;
@@ -51,17 +51,11 @@ class AreaState with ChangeNotifier {
 
   AreaState();
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // UsageReporter 헬퍼 (파이어베이스 동작만 계측: 이 파일은 모두 READ)
-  // ───────────────────────────────────────────────────────────────────────────
-  void _reportRead(String source, {String? area, int n = 1}) {
+  /*void _reportRead(String source, {String? area, int n = 1}) {
     try {
       final a = (area?.trim().isNotEmpty ?? false)
           ? area!.trim()
           : (_currentArea.isNotEmpty ? _currentArea : '(unspecified)');
-
-      // ✅ report 는 이름있는 매개변수만 받습니다.
-      //    required: area, action / optional: n, source (프로젝트 정의에 따라 다를 수 있음)
       UsageReporter.instance.report(
         area: a,
         action: 'read',
@@ -69,10 +63,9 @@ class AreaState with ChangeNotifier {
         source: source,
       );
     } catch (e) {
-      // 계측 실패는 앱 흐름에 영향 주지 않음
       debugPrint('UsageReporter(read) error: $e');
     }
-  }
+  }*/
 
   /// ✅ 공통: 현재 설정된 _currentArea를 FG(Service)에 통지
   void _notifyForegroundWithArea() {
@@ -130,8 +123,7 @@ class AreaState with ChangeNotifier {
 
       final snapshot = await q.get();
 
-      // 🔎 READ 계측
-      _reportRead('AreaState.loadAreasForDivision.areas.get', area: 'division:$userDivision');
+      /*_reportRead('AreaState.loadAreasForDivision.areas.get', area: 'division:$userDivision');*/
 
       _divisionAreaMap.clear();
 
@@ -184,8 +176,7 @@ class AreaState with ChangeNotifier {
 
       final snapshot = await q.get();
 
-      // 🔎 READ 계측 (네트워크로 실제 get을 수행한 경우에만 보고)
-      _reportRead('AreaState.initializeArea.areas.get', area: area);
+      /*_reportRead('AreaState.initializeArea.areas.get', area: area);*/
 
       if (snapshot.docs.isNotEmpty) {
         final data = snapshot.docs.first.data() as Map<String, dynamic>?;
@@ -237,8 +228,7 @@ class AreaState with ChangeNotifier {
 
       final snapshot = await q.get();
 
-      // 🔎 READ 계측
-      _reportRead('AreaState.updateArea.areas.get', area: newArea);
+      /*_reportRead('AreaState.updateArea.areas.get', area: newArea);*/
 
       if (snapshot.docs.isNotEmpty) {
         final data = snapshot.docs.first.data() as Map<String, dynamic>?;

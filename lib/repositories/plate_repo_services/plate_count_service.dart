@@ -3,11 +3,12 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../enums/plate_type.dart';
 import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
-import '../../utils/usage_reporter.dart'; // ✅
+// import '../../utils/usage_reporter.dart';
 
 class _CacheItem<T> {
   final T value;
   final DateTime at;
+
   _CacheItem(this.value, this.at);
 }
 
@@ -44,18 +45,16 @@ class PlateCountService {
         .where('area', isEqualTo: area);
 
     try {
-      final agg =
-      await baseQuery.count().get().timeout(const Duration(seconds: 10));
+      final agg = await baseQuery.count().get().timeout(const Duration(seconds: 10));
       final int count = agg.count ?? 0;
 
-      // ✅ Aggregation read = 1 (서비스 레이어에서만 계측) — 샘플링
-      await UsageReporter.instance.reportSampled(
+      /*await UsageReporter.instance.reportSampled(
         area: area,
         action: 'read',
         n: 1,
         source: 'PlateCountService.getParkingCompletedCountAll',
         sampleRate: 0.2,
-      );
+      );*/
 
       _setCached(cacheKey, count);
       return count;
@@ -94,24 +93,20 @@ class PlateCountService {
         .where('isLockedFee', isEqualTo: true);
 
     try {
-      final agg =
-      await baseQuery.count().get().timeout(const Duration(seconds: 10));
+      final agg = await baseQuery.count().get().timeout(const Duration(seconds: 10));
       final int docCount = agg.count ?? 0;
 
       // 🔹 보정치(재생성 이벤트 카운터) 1회 읽기 → 총 2회 READ
-      final extraSnap =
-      await _firestore.collection('plate_counters').doc('area_$area').get();
-      final int extras =
-          (extraSnap.data()?['departureCompletedEvents'] as int?) ?? 0;
+      final extraSnap = await _firestore.collection('plate_counters').doc('area_$area').get();
+      final int extras = (extraSnap.data()?['departureCompletedEvents'] as int?) ?? 0;
 
-      // ✅ 총 2번의 read: count() 1, counters 1 — 샘플링
-      await UsageReporter.instance.reportSampled(
+      /*await UsageReporter.instance.reportSampled(
         area: area,
         action: 'read',
         n: 2,
         source: 'PlateCountService.getDepartureCompletedCountAll',
         sampleRate: 0.2,
-      );
+      );*/
 
       final v = docCount + extras;
       _setCached(cacheKey, v);

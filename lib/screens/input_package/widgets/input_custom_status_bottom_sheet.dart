@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
-// ✅ 사용량 계측
-import 'package:easydev/utils/usage_reporter.dart';
+// import 'package:easydev/utils/usage_reporter.dart';
 
 String _formatAnyDate(dynamic v) {
   if (v == null) return '시간 정보 없음';
@@ -54,21 +53,18 @@ Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
   try {
     docSnapshot = await FirebaseFirestore.instance.collection('plate_status').doc(docId).get();
   } on FirebaseException catch (e) {
-    // 필요 시 로깅/스낵바 등 추가 가능
     debugPrint('[inputCustomStatusBottomSheet] FirebaseException: ${e.code} ${e.message}');
-    // 아래 finally에서 read 1회 보고는 그대로 수행됨
     docSnapshot = null;
   } catch (e) {
     debugPrint('[inputCustomStatusBottomSheet] error: $e');
     docSnapshot = null;
   } finally {
-    // ✅ Firestore read 1회 계측 (성공/실패 무관)
-    await UsageReporter.instance.report(
+    /*await UsageReporter.instance.report(
       area: (area.isEmpty ? 'unknown' : area),
       action: 'read',
       n: 1,
       source: 'inputCustomStatusBottomSheet/plate_status.doc.get',
-    );
+    );*/
   }
 
   if (docSnapshot == null || !docSnapshot.exists) return null;

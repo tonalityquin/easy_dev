@@ -264,13 +264,12 @@ class ParkingRequestControlButtons extends StatelessWidget {
 
       try {
         await repo.addOrUpdatePlate(documentId, updatedPlate);
-        // ✅ 계측: WRITE (plates upsert via repository)
-        _reportDbSafe(
+        /*_reportDbSafe(
           area: selectedPlate.area,
           action: 'write',
           source: 'parkingRequest.billing.unlock.repo.addOrUpdatePlate',
           n: 1,
-        );
+        );*/
 
         context.read<PlateState>().updatePlateLocally(PlateType.parkingRequests, updatedPlate);
 
@@ -282,13 +281,12 @@ class ParkingRequestControlButtons extends StatelessWidget {
         await firestore.collection('plates').doc(documentId).update({
           'logs': FieldValue.arrayUnion([cancelLog])
         });
-        // ✅ 계측: WRITE (logs arrayUnion)
-        _reportDbSafe(
+        /*_reportDbSafe(
           area: selectedPlate.area,
           action: 'write',
           source: 'parkingRequest.billing.unlock.plates.update.logs.arrayUnion',
           n: 1,
-        );
+        );*/
 
         HapticFeedback.mediumImpact();
         showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
@@ -325,13 +323,12 @@ class ParkingRequestControlButtons extends StatelessWidget {
 
     try {
       await repo.addOrUpdatePlate(documentId, updatedPlate);
-      // ✅ 계측: WRITE (plates upsert via repository)
-      _reportDbSafe(
+      /*_reportDbSafe(
         area: selectedPlate.area,
         action: 'write',
         source: 'parkingRequest.billing.lock.repo.addOrUpdatePlate',
         n: 1,
-      );
+      );*/
 
       context.read<PlateState>().updatePlateLocally(PlateType.parkingRequests, updatedPlate);
 
@@ -348,12 +345,12 @@ class ParkingRequestControlButtons extends StatelessWidget {
         'logs': FieldValue.arrayUnion([log])
       });
       // ✅ 계측: WRITE (logs arrayUnion)
-      _reportDbSafe(
+      /*_reportDbSafe(
         area: selectedPlate.area,
         action: 'write',
         source: 'parkingRequest.billing.lock.plates.update.logs.arrayUnion',
         n: 1,
-      );
+      );*/
 
       HapticFeedback.mediumImpact();
       showSuccessSnackbar(

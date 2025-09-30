@@ -19,10 +19,8 @@ import 'keypad/num_keypad.dart';
 import 'keypad/kor_keypad.dart';
 import 'widgets/input_bottom_navigation.dart';
 
-// 🔽 실시간 스캐너 페이지
 import 'live_ocr_page.dart';
 
-// ✅ Firestore 사용량 보고 (계측)
 import '../../utils/usage_reporter.dart';
 
 class InputPlateScreen extends StatefulWidget {
@@ -35,20 +33,16 @@ class InputPlateScreen extends StatefulWidget {
 class _InputPlateScreenState extends State<InputPlateScreen> {
   final controller = InputPlateController();
 
-  // 차량 상태 토글 제거 후에도, 서버에서 가져온 선택값은 메모 섹션에서 참고할 수 있으므로 유지
   List<String> selectedStatusNames = [];
   Key statusSectionKey = UniqueKey();
 
   String selectedBillType = '변동';
 
-  // ⬇️ 입장 시 자동으로 스캐너를 한 번만 띄우기 위한 가드
   bool _openedScannerOnce = false;
 
-  // ⬇️ DraggableScrollableSheet 애니메이션/상태
   final DraggableScrollableController _sheetController = DraggableScrollableController();
   bool _sheetOpen = false; // 현재 열림 상태
 
-  // 시트 크기 (비율)
   static const double _sheetClosed = 0.16; // 헤더만 살짝
   static const double _sheetOpened = 1.00; // ★ 최상단까지 (화면 높이 꽉 채움)
 
@@ -170,7 +164,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       debugPrint('[_fetchPlateStatus] error: $e');
       return null;
     } finally {
-      // 🔸 실제 호출 시도 자체를 read 1회로 집계
       await UsageReporter.instance.report(
         area: (area.isEmpty ? 'unknown' : area),
         action: 'read',

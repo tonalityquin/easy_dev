@@ -5,12 +5,11 @@ import 'package:flutter/foundation.dart';
 import '../../models/plate_model.dart';
 import '../../enums/plate_type.dart';
 import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
-import '../../utils/usage_reporter.dart'; // ✅
+// import '../../utils/usage_reporter.dart';
 
 class PlateCreationService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // 🔹 bill 캐시 (메모리, 10분 TTL)
   static final Map<String, Map<String, dynamic>> _billCache = {};
   static final Map<String, DateTime> _billCacheExpiry = {};
   static const Duration _billTtl = Duration(minutes: 10);
@@ -30,16 +29,14 @@ class PlateCreationService {
       return cached;
     }
 
-    // 캐시 미스 → Firestore 1회 get
     final billDoc = await _firestore.collection('bill').doc(key).get();
 
-    // ✅ 캐시 미스에서만 READ 1회 계측
-    await UsageReporter.instance.report(
+    /*await UsageReporter.instance.report(
       area: area,
       action: 'read',
       n: 1,
       source: 'PlateCreationService.addPlate.billRead',
-    );
+    );*/
 
     if (billDoc.exists) {
       final data = billDoc.data()!;
@@ -242,22 +239,21 @@ class PlateCreationService {
         }
       });
 
-      // ✅ 트랜잭션 read/write 집계 보고
       if (reads > 0) {
-        await UsageReporter.instance.report(
+        /*await UsageReporter.instance.report(
           area: area,
           action: 'read',
           n: reads,
           source: 'PlateCreationService.addPlate.tx',
-        );
+        );*/
       }
       if (writes > 0) {
-        await UsageReporter.instance.report(
+        /*await UsageReporter.instance.report(
           area: area,
           action: 'write',
           n: writes,
           source: 'PlateCreationService.addPlate.tx',
-        );
+        );*/
       }
     } catch (e, st) {
       try {
@@ -302,12 +298,12 @@ class PlateCreationService {
 
       try {
         await statusDocRef.set(payload, SetOptions(merge: true));
-        await UsageReporter.instance.report(
+        /*await UsageReporter.instance.report(
           area: area,
           action: 'write',
           n: 1,
           source: 'PlateCreationService.addPlate.statusUpsert',
-        );
+        );*/
       } on FirebaseException catch (e, st) {
         try {
           await DebugFirestoreLogger().log({

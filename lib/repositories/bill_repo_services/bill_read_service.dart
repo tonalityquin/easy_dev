@@ -8,18 +8,16 @@ import '../../utils/usage_reporter.dart';
 class BillReadService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  Future<({
-  List<BillModel> generalBills,
-  List<RegularBillModel> regularBills,
-  })> getBillOnce(String area) async {
+  Future<
+      ({
+        List<BillModel> generalBills,
+        List<RegularBillModel> regularBills,
+      })> getBillOnce(String area) async {
     QuerySnapshot<Map<String, dynamic>> snapshot;
 
     // --- 파이어스토어 쿼리 실패 로깅 ---
     try {
-      snapshot = await _firestore
-          .collection('bill')
-          .where('area', isEqualTo: area)
-          .get();
+      snapshot = await _firestore.collection('bill').where('area', isEqualTo: area).get();
     } catch (e, st) {
       try {
         final payload = {
@@ -39,7 +37,6 @@ class BillReadService {
       rethrow;
     }
 
-    // ✅ 읽기 비용 보고(문서수 기준, 0이면 1로 보정)
     final readN = snapshot.docs.isEmpty ? 1 : snapshot.docs.length;
     await UsageReporter.instance.report(
       area: area,
@@ -53,11 +50,11 @@ class BillReadService {
 
     // 안전 파서: 실패 시 null 반환 + Firestore 에러 로깅
     T? tryParse<T>(
-        T Function() parse, {
-          required String id,
-          required String model, // 'BillModel' | 'RegularBillModel'
-          Map<String, dynamic>? raw,
-        }) {
+      T Function() parse, {
+      required String id,
+      required String model, // 'BillModel' | 'RegularBillModel'
+      Map<String, dynamic>? raw,
+    }) {
       try {
         return parse();
       } catch (e, st) {
@@ -89,7 +86,7 @@ class BillReadService {
 
       if (type == '고정') {
         final item = tryParse<RegularBillModel>(
-              () => RegularBillModel.fromMap(doc.id, data),
+          () => RegularBillModel.fromMap(doc.id, data),
           id: doc.id,
           model: 'RegularBillModel',
           raw: data,
@@ -97,7 +94,7 @@ class BillReadService {
         if (item != null) regularBills.add(item);
       } else {
         final item = tryParse<BillModel>(
-              () => BillModel.fromMap(doc.id, data),
+          () => BillModel.fromMap(doc.id, data),
           id: doc.id,
           model: 'BillModel',
           raw: data,

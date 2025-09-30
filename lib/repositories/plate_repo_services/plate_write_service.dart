@@ -6,7 +6,7 @@ import 'dart:developer' as dev;
 import '../../models/plate_log_model.dart';
 import '../../models/plate_model.dart';
 import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
-import '../../utils/usage_reporter.dart'; // ✅
+import '../../utils/usage_reporter.dart';
 
 class PlateWriteService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -17,14 +17,13 @@ class PlateWriteService {
     try {
       final docSnapshot = await docRef.get().timeout(const Duration(seconds: 10));
 
-      // ✅ read 1회 (prefetch)
-      final preArea = (docSnapshot.data()?['area'] ?? plate.area ?? 'unknown') as String;
+      /*final preArea = (docSnapshot.data()?['area'] ?? plate.area ?? 'unknown') as String;
       await UsageReporter.instance.report(
         area: preArea,
         action: 'read',
         n: 1,
         source: 'PlateWriteService.addOrUpdatePlate.prefetch',
-      );
+      );*/
 
       var newData = plate.toMap();
       newData = _enforceZeroFeeLock(newData, existing: docSnapshot.data());
@@ -45,15 +44,14 @@ class PlateWriteService {
 
       await docRef.set(newData, SetOptions(merge: true)).timeout(const Duration(seconds: 10));
 
-      final area = (newData[PlateFields.area] ?? docSnapshot.data()?['area'] ?? plate.area ?? 'unknown') as String;
+      /*final area = (newData[PlateFields.area] ?? docSnapshot.data()?['area'] ?? plate.area ?? 'unknown') as String;
 
-      // ✅ write 1회
       await UsageReporter.instance.report(
         area: area,
         action: 'write',
         n: 1,
         source: 'PlateWriteService.addOrUpdatePlate.write',
-      );
+      );*/
     } on TimeoutException catch (e, st) {
       try {
         await DebugFirestoreLogger().log({
@@ -118,14 +116,13 @@ class PlateWriteService {
     try {
       current = (await docRef.get().timeout(const Duration(seconds: 10))).data();
 
-      // ✅ prefetch read 1회
-      final areaPref = (current?['area'] as String?) ?? 'unknown';
+      /*final areaPref = (current?['area'] as String?) ?? 'unknown';
       await UsageReporter.instance.report(
         area: areaPref,
         action: 'read',
         n: 1,
         source: 'PlateWriteService.updatePlate.prefetch',
-      );
+      );*/
     } on FirebaseException catch (e, st) {
       try {
         await DebugFirestoreLogger().log({
@@ -175,14 +172,13 @@ class PlateWriteService {
       await docRef.update(fields);
       debugPrint("✅ 문서 업데이트 완료: $documentId");
 
-      final area = (fields[PlateFields.area] ?? current?['area'] ?? 'unknown') as String;
-      // ✅ write 1회
+      /*final area = (fields[PlateFields.area] ?? current?['area'] ?? 'unknown') as String;
       await UsageReporter.instance.report(
         area: area,
         action: 'write',
         n: 1,
         source: 'PlateWriteService.updatePlate.write',
-      );
+      );*/
     } on FirebaseException catch (e, st) {
       debugPrint("🔥 문서 업데이트 실패: $e");
       try {
@@ -354,12 +350,12 @@ class PlateWriteService {
         tx.update(docRef, update); // WRITE 1
       });
 
-      await UsageReporter.instance.report(
+      /*await UsageReporter.instance.report(
         area: (extraFields['area'] as String?) ?? '(unknown)',
         action: 'write',
         n: 1,
         source: 'PlateWriteService.transitionPlateType.tx',
-      );
+      );*/
     } on FirebaseException catch (e, st) {
       try {
         await DebugFirestoreLogger().log({
@@ -473,12 +469,12 @@ class PlateWriteService {
         tx.update(docRef, update); // WRITE 1
       });
 
-      await UsageReporter.instance.report(
+      /*await UsageReporter.instance.report(
         area: area,
         action: 'write',
         n: 1,
         source: 'PlateWriteService.recordWhoPlateClick.tx',
-      );
+      );*/
     } on FirebaseException catch (e, st) {
       try {
         await DebugFirestoreLogger().log({

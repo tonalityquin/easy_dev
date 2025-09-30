@@ -9,7 +9,7 @@ import '../../states/area/area_state.dart';
 import '../../states/plate/plate_state.dart';
 import '../../states/user/user_state.dart';
 
-import '../../utils/usage_reporter.dart';
+// import '../../utils/usage_reporter.dart';
 
 // ── Deep Blue Palette
 const base = Color(0xFF0D47A1); // primary
@@ -150,13 +150,12 @@ void areaPickerBottomSheet({
                                 .doc('$userDivision-$tempSelected')
                                 .get();
 
-                            // 🔎 UsageReporter: Firestore READ 1건 계측
-                            UsageReporter.instance.report(
+                            /*UsageReporter.instance.report(
                               area: tempSelected,
                               action: 'read',
                               n: 1,
                               source: 'AreaPickerBottomSheet.getAreaDoc',
-                            );
+                            );*/
 
                             final data = areaDoc.data();
                             final isHeadquarter = data != null && data['isHeadquarter'] == true;

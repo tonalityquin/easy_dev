@@ -1,15 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
-import '../../utils/usage_reporter.dart';
+// import '../../utils/usage_reporter.dart';
 
-/// plates 집계를 담당하는 서비스.
-/// - 단일 쿼리 집계: getPlateCount()
-/// - 배치 집계: getPlateCountsForLocations()
-///
-/// ⚠️ UI의 displayName(예: "britishArea - Liverpool")을 그대로 쓰면
-/// Firestore 문서의 `location` 필드("Liverpool")와 불일치가 발생합니다.
-/// 아래 구현은 displayName을 정규화하여 실제 `location`(leaf)로 변환해 쿼리합니다.
-/// 결과 맵의 key는 기존 displayName을 유지하여 상태 갱신 로직과 일치시킵니다.
 class LocationCountService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
@@ -53,14 +45,13 @@ class LocationCountService {
       // 진단 로그(필요시 주석 해제)
       // debugPrint('🔎 count query → area=$_area, location=$_loc, type=$_type, result=$safeCount');
 
-      // ✅ 집계 read 계측(단순 1회 보고)
       try {
-        UsageReporter.instance.report(
+        /*UsageReporter.instance.report(
           area: _area,
           action: 'read',
           n: 1,
           source: 'LocationCountService.getPlateCount(plates.count)',
-        );
+        );*/
       } catch (_) {}
 
       return safeCount;

@@ -5,7 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
 import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
-import '../../utils/usage_reporter.dart'; // ✅
+// import '../../utils/usage_reporter.dart';
 
 class PlateStreamService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -51,7 +51,6 @@ class PlateStreamService {
 
       Error.throwWithStackTrace(e, st);
     }).map((snapshot) {
-      // ✅ 서버 확정 스냅샷만 집계 (로컬 보류 스냅샷 제외)
       if (!snapshot.metadata.hasPendingWrites) {
         final added = snapshot.docChanges.where((c) => c.type == DocumentChangeType.added).length;
         final modified = snapshot.docChanges.where((c) => c.type == DocumentChangeType.modified).length;
@@ -61,21 +60,20 @@ class PlateStreamService {
             _didEmitOnce = true;
             if (countInitialSnapshot) {
               // ignore: unawaited_futures
-              UsageReporter.instance.report(
+              /*UsageReporter.instance.report(
                 area: area,
                 action: 'read',
                 n: n,
                 source: 'PlateStreamService.streamToCurrentArea.onData',
-              );
+              );*/
             }
           } else {
-            // ignore: unawaited_futures
-            UsageReporter.instance.report(
+            /*UsageReporter.instance.report(
               area: area,
               action: 'read',
               n: n,
               source: 'PlateStreamService.streamToCurrentArea.onData',
-            );
+            );*/
           }
         }
       }
@@ -177,22 +175,20 @@ class PlateStreamService {
           if (!_didEmitOnceDeparture) {
             _didEmitOnceDeparture = true;
             if (countInitialSnapshot) {
-              // ignore: unawaited_futures
-              UsageReporter.instance.report(
+              /*UsageReporter.instance.report(
                 area: area,
                 action: 'read',
                 n: n,
                 source: 'PlateStreamService.departureUnpaidSnapshots.onData',
-              );
+              );*/
             }
           } else {
-            // ignore: unawaited_futures
-            UsageReporter.instance.report(
+            /*UsageReporter.instance.report(
               area: area,
               action: 'read',
               n: n,
               source: 'PlateStreamService.departureUnpaidSnapshots.onData',
-            );
+            );*/
           }
         }
       }
