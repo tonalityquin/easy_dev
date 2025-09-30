@@ -1,6 +1,5 @@
 // lib/screens/type_package/common_widgets/dashboard_bottom_sheet/widgets/home_show_report_dialog.dart
 import 'dart:convert';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -11,13 +10,12 @@ import '../../../../../../states/user/user_state.dart';
 import '../../../../../../utils/snackbar_helper.dart';
 import '../../../../../../utils/blocking_dialog.dart';
 import '../../../../../../utils/usage_reporter.dart';
+import '../../../../../../utils/gcs_uploader.dart'; // ✅ GCS 업로드 유틸 임포트
 import 'home_end_work_report_content.dart';
 
-/// 잠금 요금 안전 추출
-int _extractLockedFeeAmount(Map<String, dynamic> data) {
+int _extractLockedFeeAmountSafe(Map<String, dynamic> data) {
   final top = data['lockedFeeAmount'];
   if (top is num) return top.round();
-
   final logs = data['logs'];
   if (logs is List) {
     for (int i = logs.length - 1; i >= 0; i--) {
@@ -31,39 +29,32 @@ int _extractLockedFeeAmount(Map<String, dynamic> data) {
   return 0;
 }
 
-/// JSON 인코딩 가능한 값으로 변환(Logs 내부에 Timestamp 등이 있어도 안전하게)
 dynamic _jsonSafe(dynamic v) {
   if (v is Timestamp) return v.toDate().toIso8601String();
   if (v is DateTime) return v.toIso8601String();
   if (v is Map) {
     return v.map((k, val) => MapEntry(k.toString(), _jsonSafe(val)));
   }
-  if (v is List) {
-    return v.map(_jsonSafe).toList();
-  }
+  if (v is List) return v.map(_jsonSafe).toList();
   return v;
 }
 
-/// 바텀시트(최상단까지)로 업무 보고 열기
 Future<void> showHomeReportDialog(BuildContext context) async {
   final area = context.read<AreaState>().currentArea;
-
-  int prefilledVehicleOutput = 0; // departure_completed & isLockedFee
-  int prefilledVehicleInput = 0;  // parking_completed
+  int prefilledVehicleOutput = 0;
+  int prefilledVehicleInput = 0;
 
   try {
     if (area.isNotEmpty) {
       // 서비스 레이어에서 READ 집계 → UI 레이어는 흔적만(annotate)
-      prefilledVehicleOutput =
-      await PlateCountService().getDepartureCompletedCountAll(area);
+      prefilledVehicleOutput = await PlateCountService().getDepartureCompletedCountAll(area);
       await UsageReporter.instance.annotate(
         area: area,
         source: 'showHomeReportDialog.prefetch.departure_completed.aggregate',
         extra: {'value': prefilledVehicleOutput},
       );
 
-      prefilledVehicleInput =
-      await PlateCountService().getParkingCompletedCountAll(area);
+      prefilledVehicleInput = await PlateCountService().getParkingCompletedCountAll(area);
       await UsageReporter.instance.annotate(
         area: area,
         source: 'showHomeReportDialog.prefetch.parking_completed.aggregate',
@@ -83,7 +74,6 @@ Future<void> showHomeReportDialog(BuildContext context) async {
     backgroundColor: Colors.transparent,
     builder: (ctx) {
       final bottomInset = MediaQuery.of(ctx).viewInsets.bottom + 16;
-
       return FractionallySizedBox(
         heightFactor: 1,
         child: SafeArea(
@@ -134,103 +124,76 @@ Future<void> showHomeReportDialog(BuildContext context) async {
                           return;
                         }
 
-                        // 2) plates 스냅샷 조회 (READ 1회)
-                        final platesSnap = await FirebaseFirestore.instance
+                        // 2) plates 단일 조회(잠금요금 출차) → 합계/카운트 계산
+                        final firestore = FirebaseFirestore.instance;
+                        final platesSnap = await firestore
                             .collection('plates')
                             .where('type', isEqualTo: 'departure_completed')
                             .where('area', isEqualTo: area)
                             .where('isLockedFee', isEqualTo: true)
                             .get();
 
+                        final int p = platesSnap.docs.length;
                         try {
-                          await UsageReporter.instance.report(
+                          await UsageReporter.instance.reportSampled(
                             area: area,
                             action: 'read',
-                            n: platesSnap.docs.length,
-                            source:
-                            'showHomeReportDialog.onReport.end.query.departure_completed&lockedFee',
+                            n: p,
+                            source: 'onReport.end.plates.query(departure_completed&lockedFee)',
+                            sampleRate: 0.2,
                           );
                         } catch (_) {}
 
-                        int total = 0;
+                        int totalLockedFee = 0;
                         for (final d in platesSnap.docs) {
-                          total += _extractLockedFeeAmount(d.data());
+                          totalLockedFee += _extractLockedFeeAmountSafe(d.data());
                         }
 
-                        // 3) 요약 문서 upsert (WRITE 1회)
-                        final summaryRef = FirebaseFirestore.instance
-                            .collection('fee_summaries')
-                            .doc('${division}_${area}_all');
-
+                        // 3) fee_summaries upsert 1회(중복 방지: get 없음)
+                        final summaryRef = firestore.collection('fee_summaries').doc('${division}_${area}_all');
                         await summaryRef.set({
                           'division': division,
                           'area': area,
                           'scope': 'all',
-                          'totalLockedFee': total,
-                          'lockedVehicleCount': platesSnap.size,
+                          'totalLockedFee': totalLockedFee,
+                          'lockedVehicleCount': p,
                           'lastUpdated': FieldValue.serverTimestamp(),
                         }, SetOptions(merge: true));
-
                         try {
-                          await UsageReporter.instance.report(
+                          await UsageReporter.instance.reportSampled(
                             area: area,
                             action: 'write',
                             n: 1,
-                            source:
-                            'showHomeReportDialog.onReport.end.fee_summaries.upsert',
+                            source: 'onReport.end.fee_summaries.upsert',
+                            sampleRate: 0.2,
                           );
                         } catch (_) {}
 
-                        // 4) 최신 합계 읽기 (READ 1회)
-                        final latestSnap = await summaryRef.get();
-                        try {
-                          await UsageReporter.instance.report(
-                            area: area,
-                            action: 'read',
-                            n: 1,
-                            source:
-                            'showHomeReportDialog.onReport.end.fee_summaries.get',
-                          );
-                        } catch (_) {}
-
-                        final latestData = latestSnap.data();
-                        final totalLockedFee =
-                        (latestData?['totalLockedFee'] ?? 0) is num
-                            ? (latestData?['totalLockedFee'] as num).round()
-                            : 0;
-
-                        // 5) 출차 자동 집계(서비스가 READ 계측함) → UI는 annotate만
-                        final vehicleOutputAuto =
-                        await PlateCountService()
-                            .getDepartureCompletedCountAll(area);
-                        await UsageReporter.instance.annotate(
-                          area: area,
-                          source:
-                          'showHomeReportDialog.onReport.end.aggregate.departure_completed.count',
-                          extra: {'value': vehicleOutputAuto},
-                        );
-
+                        // 4) 보고 JSON/GCS 업로드 (Firebase 아님 → 계측 제외)
                         final reportLog = {
                           'division': division,
                           'area': area,
                           'vehicleCount': {
-                            'vehicleInput':
-                            int.tryParse('${parsed['vehicleInput']}') ?? 0,
-                            'vehicleOutput': vehicleOutputAuto,
+                            'vehicleInput': int.tryParse('${parsed['vehicleInput']}') ?? 0,
+                            // ✅ onReport 단일 스냅샷의 문서 수를 그대로 사용해 중복 READ 제거
+                            'vehicleOutput': p,
                           },
                           'totalLockedFee': totalLockedFee,
-                          'timestamp': FieldValue.serverTimestamp(),
+                          'createdAt': DateTime.now().toIso8601String(),
                         };
-
-                        // 6) 보고 JSON 업로드(GCS) — Firebase 아님 → 계측 제외
-                        await uploadEndWorkReportJson(
+                        final reportUrl = await uploadEndWorkReportJson(
                           report: reportLog,
                           division: division,
                           area: area,
                           userName: userName,
                         );
 
-                        // 7) logs 집계 JSON 생성 → 업로드(GCS) — Firebase 아님 → 계측 제외
+                        if (reportUrl == null) {
+                          if (ctx.mounted) showFailedSnackbar(ctx, '보고 업로드 실패: 네트워크/권한 확인');
+                          return; // 업로드 실패 시 삭제로 진행하지 않음
+                        }
+
+                        // 5) 로그 묶음 JSON 업로드 (Firebase 아님 → 계측 제외)
                         final List<Map<String, dynamic>> items = [];
                         for (final doc in platesSnap.docs) {
                           final data = doc.data();
@@ -239,30 +202,54 @@ Future<void> showHomeReportDialog(BuildContext context) async {
                             'logs': _jsonSafe(data['logs'] ?? []),
                           });
                         }
-
-                        final logsPayload = {
-                          'division': division,
-                          'area': area,
-                          'items': items,
-                        };
-
-                        await uploadEndLogJson(
-                          report: logsPayload,
+                        final logsUrl = await uploadEndLogJson(
+                          report: {
+                            'division': division,
+                            'area': area,
+                            'items': items,
+                          },
                           division: division,
                           area: area,
                           userName: userName,
                         );
 
-                        // 8) 필요 시 문서 삭제(삭제는 delete로 계측)
-                        await deleteLockedDepartureDocs(area);
+                        if (logsUrl == null) {
+                          if (ctx.mounted) showFailedSnackbar(ctx, '로그 업로드 실패: 네트워크/권한 확인');
+                          return;
+                        }
 
-                        // 9) UI 피드백
+                        // 6) 동일 스냅샷으로 일괄 삭제 (재조회 없음)
+                        final batch = firestore.batch();
+                        for (final d in platesSnap.docs) {
+                          batch.delete(d.reference);
+                        }
+                        await batch.commit();
+                        try {
+                          await UsageReporter.instance.reportSampled(
+                            area: area,
+                            action: 'delete',
+                            n: p,
+                            source: 'onReport.end.batch.commit(delete locked departures)',
+                            sampleRate: 0.2,
+                          );
+                        } catch (_) {}
+
+                        // 7) 흔적만 남기는 annotate(aggregate 숫자)
+                        try {
+                          await UsageReporter.instance.annotate(
+                            area: area,
+                            source: 'onReport.end.aggregate.departure_completed.count',
+                            extra: {'value': p},
+                          );
+                        } catch (_) {}
+
+                        // 8) UI 피드백
                         if (ctx.mounted) {
                           Navigator.pop(ctx);
                           showSuccessSnackbar(
                             ctx,
                             "업무 종료 보고 업로드 및 출차 초기화 "
-                                "(입차: ${parsed['vehicleInput']}, 출차: $vehicleOutputAuto • 전체집계)",
+                            "(입차: ${parsed['vehicleInput']}, 출차: $p • 전체집계)",
                           );
                         }
                       } else if (type == 'start') {
@@ -271,12 +258,6 @@ Future<void> showHomeReportDialog(BuildContext context) async {
                           showSuccessSnackbar(ctx, "업무 시작 보고 완료: $content");
                         }
                       } else if (type == 'middle') {
-                        final user = ctx.read<UserState>().user;
-                        if (user == null || user.divisions.isEmpty) {
-                          showFailedSnackbar(ctx, '사용자 정보가 없어 보고를 저장할 수 없습니다.');
-                          return;
-                        }
-
                         if (ctx.mounted) {
                           Navigator.pop(ctx);
                           showSuccessSnackbar(ctx, "보고란 제출 완료: $content");
@@ -292,44 +273,4 @@ Future<void> showHomeReportDialog(BuildContext context) async {
       );
     },
   );
-}
-
-/// 🔧 보고 후 정리: departure_completed & isLockedFee=true 문서 일괄 삭제
-Future<void> deleteLockedDepartureDocs(String area) async {
-  final firestore = FirebaseFirestore.instance;
-
-  final snap = await firestore
-      .collection('plates')
-      .where('type', isEqualTo: 'departure_completed')
-      .where('area', isEqualTo: area)
-      .where('isLockedFee', isEqualTo: true)
-      .get();
-
-  // ✅ Firestore READ: 삭제 대상 조회
-  try {
-    await UsageReporter.instance.report(
-      area: area,
-      action: 'read',
-      n: snap.docs.length,
-      source: 'deleteLockedDepartureDocs.query.toDelete',
-    );
-  } catch (_) {}
-
-  if (snap.docs.isEmpty) return;
-
-  final batch = firestore.batch();
-  for (final d in snap.docs) {
-    batch.delete(d.reference);
-  }
-  await batch.commit();
-
-  // ✅ Firestore DELETE: 일괄 삭제 커밋
-  try {
-    await UsageReporter.instance.report(
-      area: area,
-      action: 'delete',
-      n: snap.docs.length,
-      source: 'deleteLockedDepartureDocs.batch.commit',
-    );
-  } catch (_) {}
 }

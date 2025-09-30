@@ -1,5 +1,6 @@
 // lib/utils/usage_reporter.dart
 import 'dart:async';
+import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -110,6 +111,27 @@ class UsageReporter {
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     });
+  }
+
+  /// 샘플링 보고: sampleRate(0.0~1.0) 확률로 report(증분), 그 외에는 annotate(증분 없음)
+  Future<void> reportSampled({
+    required String area,
+    required String action,
+    int n = 1,
+    String? source,
+    double sampleRate = 0.2,
+  }) async {
+    assert(sampleRate >= 0 && sampleRate <= 1.0);
+    final r = Random().nextDouble();
+    if (r <= sampleRate) {
+      await report(area: area, action: action, n: n, source: source);
+    } else {
+      await annotate(
+        area: area,
+        source: source,
+        extra: {'action': action, 'n': n, 'sampled': true},
+      );
+    }
   }
 
   /// 🔎 카운터를 증가시키지 않고 "흔적만" 남기는 보고 (UI 레이어에서 사용 권장)
