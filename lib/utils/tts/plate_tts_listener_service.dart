@@ -1,11 +1,12 @@
 // lib/utils/tts/plate_tts_listener_service.dart
 //
-// 변경 요약 (updatedAt 커서/윈도우 A안 + 컴파일 에러 수정):
+// 변경 요약 (updatedAt 커서/윈도우 A안 + 컴파일 에러 수정 + UsageReporter 계측):
 // - 서버 기준선 1건 조회 후 ✨ startAfter(updatedAt, __name__) 커서 적용
 // - ✨ 첫 스냅샷 무음 규칙 제거(커서가 초기 잡음을 제거하므로 안전)
 // - setEnabled: Future<void>로 변경(호출부 await 가능)
 // - updateFilters 추가(저장 없이 인메모리 반영)
-// - Firestore fromCache 로깅, 미사용 카운터 정리
+// - Firestore fromCache 로깅
+// - ✅ UsageReporter로 "읽기(read)" 비용 계측 추가(샘플링 적용)
 //
 // 주의: 쿼리 정렬 순서와 startAfter 필드 순서는 반드시 동일해야 함.
 // 필요한 인덱스(예): area + type + updatedAt + __name__ (ASC/ASC/ASC/ASC)
@@ -19,10 +20,21 @@ import 'package:flutter/foundation.dart';
 import '../../enums/plate_type.dart';
 import '../tts/tts_manager.dart';
 import '../tts/tts_user_filters.dart';
+// 🔎 비용 계측
+import '../usage_reporter.dart';
 
 class PlateTtsListenerService {
   // 마스터 토글
   static bool _enabled = true;
+
+  /// 설치 단위 사용량 보고 샘플링 비율(0.0~1.0). 너무 자주 쓰면 보고(write) 비용이 증가합니다.
+  static double _usageSampleRate = 0.2; // 기본 20%
+  static void setUsageSampleRate(double r) {
+    if (r < 0) r = 0;
+    if (r > 1) r = 1;
+    _usageSampleRate = r;
+    _log('usageSampleRate=$_usageSampleRate');
+  }
 
   /// 저장 없이 즉시 in-memory만 바꾸고 싶으면 [updateFilters] 사용
   static Future<void> setFilters(TtsUserFilters filters) async {
@@ -113,6 +125,8 @@ class PlateTtsListenerService {
   static Future<void> stop() async {
     if (_subscription != null) {
       _log('▶ STOP listen (area=$_currentArea)');
+      // 비용 카운트를 증가시키지 않는 흔적만 남김
+      _annotateUsage(area: _currentArea, source: 'PlateTTS.stop');
     }
     await _subscription?.cancel();
     _subscription = null;
@@ -139,6 +153,9 @@ class PlateTtsListenerService {
     _baselineDocId = null;
 
     _currentArea = currentArea;
+
+    // 시작 흔적(증분 없음)
+    _annotateUsage(area: _currentArea, source: 'PlateTTS.start');
 
     // 모니터링할 타입
     final typesToMonitor = <String>[
@@ -184,6 +201,9 @@ class PlateTtsListenerService {
 
         if (docChanges.isEmpty) {
           _readsEmptySnapshots += 1;
+          // 빈 스냅샷도 네트워크 왕복이 가능하지만, Firestore 과금은 "문서 읽기" 단위이므로 0으로 처리.
+          // 추적만 남김(증분 없음).
+          _annotateUsage(area: _currentArea, source: 'PlateTTS.listen.empty');
           return;
         }
 
@@ -194,6 +214,22 @@ class PlateTtsListenerService {
         _readsRemoved += docChanges.where((c) => c.type == DocumentChangeType.removed).length;
 
         _log('snapshot changes=${docChanges.length}, fromCache=$isFromCache');
+
+        // ✅ 비용 보고: snapshot이 캐시가 아니고, 문서 변경이 있다면 → 문서 읽기 수 만큼 report
+        if (!isFromCache) {
+          final int billedReads = docChanges.length; // added/modified/removed 모두 읽기 1로 취급
+          if (billedReads > 0) {
+            _reportUsageRead(
+              area: _currentArea,
+              n: billedReads,
+              source: 'PlateTTS.listen.snapshot',
+              sampled: true,
+            );
+          }
+        } else {
+          // 캐시 스냅샷이면 비용 증가 없이 흔적만 남김
+          _annotateUsage(area: _currentArea, source: 'PlateTTS.listen.cache');
+        }
 
         // ✨ 첫 스냅샷도 커서 이후만 오므로 발화 OK
 
@@ -280,13 +316,16 @@ class PlateTtsListenerService {
       }, onError: (e, st) {
         _log('listen error: $e\n$st');
         _printReadSummary(prefix: 'READ SUMMARY (listen-error)');
+        _annotateUsage(area: _currentArea, source: 'PlateTTS.listen.error');
       }, onDone: () {
         _log('listen done');
         _printReadSummary(prefix: 'READ SUMMARY (done)');
+        _annotateUsage(area: _currentArea, source: 'PlateTTS.listen.done');
       });
     } catch (e, st) {
       _log('START ERROR: $e\n$st');
       _printReadSummary(prefix: 'READ SUMMARY (start-error)');
+      _annotateUsage(area: _currentArea, source: 'PlateTTS.start.error');
     }
   }
 
@@ -312,11 +351,27 @@ class PlateTtsListenerService {
         final d = qs.docs.first;
         _baselineUpdatedAt = d.data()['updatedAt'] as Timestamp?;
         _baselineDocId = d.id;
-        _log('baseline(updatedAt): ts=${_baselineUpdatedAt?.toDate().toUtc()} id=$_baselineDocId (reads+${qs.docs.length})');
+        _log(
+            'baseline(updatedAt): ts=${_baselineUpdatedAt?.toDate().toUtc()} id=$_baselineDocId (reads+${qs.docs.length})');
       }
+
+      // ✅ 기준선 조회로 발생한 "문서 읽기 수" 보고(샘플링)
+      // limit(1)이므로 0 또는 1
+      if (qs.docs.isNotEmpty) {
+        _reportUsageRead(
+          area: area,
+          n: qs.docs.length,
+          source: 'PlateTTS.baseline',
+          sampled: true,
+        );
+      } else {
+        _annotateUsage(area: area, source: 'PlateTTS.baseline.empty');
+      }
+
       _printReadSummary(prefix: 'READ SUMMARY (after baseline)');
     } catch (e, st) {
       _log('baseline fetch error: $e\n$st');
+      _annotateUsage(area: area, source: 'PlateTTS.baseline.error');
     }
   }
 
@@ -384,4 +439,43 @@ class PlateTtsListenerService {
   }
 
   static String _digitsOnly(String s) => s.replaceAll(RegExp(r'[^0-9]'), '');
+
+  // ===== UsageReporter 헬퍼 =====
+
+  static void _reportUsageRead({
+    required String? area,
+    required int n,
+    required String source,
+    bool sampled = true,
+  }) {
+    final a = (area == null || area.isEmpty) ? '(unknown)' : area;
+    if (n <= 0) {
+      _annotateUsage(area: a, source: '$source.zero');
+      return;
+    }
+    if (sampled) {
+      UsageReporter.instance.reportSampled(
+        area: a,
+        action: 'read',
+        n: n,
+        source: source,
+        sampleRate: _usageSampleRate,
+      );
+    } else {
+      UsageReporter.instance.report(
+        area: a,
+        action: 'read',
+        n: n,
+        source: source,
+      );
+    }
+  }
+
+  static void _annotateUsage({required String? area, required String source}) {
+    final a = (area == null || area.isEmpty) ? '(unknown)' : area;
+    UsageReporter.instance.annotate(
+      area: a,
+      source: source,
+    );
+  }
 }
