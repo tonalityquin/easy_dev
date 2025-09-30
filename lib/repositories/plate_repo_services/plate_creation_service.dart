@@ -184,7 +184,7 @@ class PlateCreationService {
           final data = snap.data();
           final existingTypeStr = (data?['type'] as String?) ?? '';
           final existingType = PlateType.values.firstWhere(
-            (t) => t.firestoreValue == existingTypeStr,
+                (t) => t.firestoreValue == existingTypeStr,
             orElse: () => PlateType.parkingRequests,
           );
 
@@ -206,7 +206,8 @@ class PlateCreationService {
 
             final partial = <String, dynamic>{
               PlateFields.type: plateType.firestoreValue,
-              PlateFields.updatedAt: Timestamp.now(),
+              // ✅ 클라이언트 시각 → 서버 타임스탬프로 일원화
+              PlateFields.updatedAt: FieldValue.serverTimestamp(),
               if (base.location.isNotEmpty) PlateFields.location: base.location,
               if (endTime != null) PlateFields.endTime: endTime,
               if (billingType != null && billingType.trim().isNotEmpty) PlateFields.billingType: billingType,
@@ -234,7 +235,10 @@ class PlateCreationService {
           }
         } else {
           // 신규 set: 로그 2건 포함
-          tx.set(docRef, plateWithLog.toMap());
+          // ✅ 생성 시에도 updatedAt을 서버 타임스탬프로 강제 주입
+          final _map = plateWithLog.toMap();
+          _map[PlateFields.updatedAt] = FieldValue.serverTimestamp();
+          tx.set(docRef, _map);
           writes += 1; // plates set
         }
       });
@@ -282,15 +286,14 @@ class PlateCreationService {
       rethrow;
     }
 
-    // ✅ plate_status upsert → write 1 (customStatus 있을 때만)
+    // ✅ plate_status upsert → updatedAt도 서버 타임스탬프로 (일관화)
     if (customStatus != null && customStatus.trim().isNotEmpty) {
       final statusDocRef = _firestore.collection('plate_status').doc(documentId);
-      final now = Timestamp.now();
       final expireAt = Timestamp.fromDate(DateTime.now().add(const Duration(days: 1)));
 
       final payload = <String, dynamic>{
         'customStatus': customStatus.trim(),
-        'updatedAt': now,
+        'updatedAt': FieldValue.serverTimestamp(), // ← 여기 일원화
         'createdBy': userName,
         'expireAt': expireAt,
         'area': area,

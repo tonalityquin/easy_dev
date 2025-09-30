@@ -1,3 +1,7 @@
+// lib/repositories/plate_repo_services/plate_write_service.dart
+//
+// (요청사항) 기존 주석처리 코드 유지, updatedAt 강제 세팅 반영(생성/업데이트/전환/선택 경로)
+
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
@@ -29,18 +33,24 @@ class PlateWriteService {
       newData = _enforceZeroFeeLock(newData, existing: docSnapshot.data());
 
       final exists = docSnapshot.exists;
+      final existingData = docSnapshot.data() ?? const <String, dynamic>{};
+
+      // 비교 시 로그 필드는 제외
+      final compOld = Map<String, dynamic>.from(existingData)..remove(PlateFields.logs);
+      final compNew = Map<String, dynamic>.from(newData)..remove(PlateFields.logs);
+
+      // 변화 없음이면 조용히 종료(불필요 write 방지)
+      if (exists && _isSameData(compOld, compNew)) {
+        return;
+      }
+
+      // 기존 문서에 쓰는 경우 Firestore array 병합 충돌 방지 위해 logs 제거
       if (exists) {
-        final existingData = docSnapshot.data() ?? const <String, dynamic>{};
-
-        final compOld = Map<String, dynamic>.from(existingData)..remove(PlateFields.logs);
-        final compNew = Map<String, dynamic>.from(newData)..remove(PlateFields.logs);
-
-        if (_isSameData(compOld, compNew)) {
-          return;
-        }
-
         newData.remove(PlateFields.logs);
       }
+
+      // ✅ 생성이든 업데이트든 실제 write를 수행하는 경우 updatedAt은 반드시 서버 시각으로 갱신
+      newData['updatedAt'] = FieldValue.serverTimestamp();
 
       await docRef.set(newData, SetOptions(merge: true)).timeout(const Duration(seconds: 10));
 
@@ -106,10 +116,10 @@ class PlateWriteService {
   }
 
   Future<void> updatePlate(
-    String documentId,
-    Map<String, dynamic> updatedFields, {
-    PlateLogModel? log,
-  }) async {
+      String documentId,
+      Map<String, dynamic> updatedFields, {
+        PlateLogModel? log,
+      }) async {
     final docRef = _firestore.collection('plates').doc(documentId);
 
     Map<String, dynamic>? current;
@@ -167,6 +177,9 @@ class PlateWriteService {
     if (log != null) {
       fields['logs'] = FieldValue.arrayUnion([log.toMap()]);
     }
+
+    // ✅ 어떤 업데이트든 write가 발생하면 updatedAt을 서버 시각으로 갱신
+    fields['updatedAt'] = FieldValue.serverTimestamp();
 
     try {
       await docRef.update(fields);
@@ -334,7 +347,7 @@ class PlateWriteService {
           // 전환 시에는 선택 상태를 정리(유령 선택 방지)
           'isSelected': false,
           'selectedBy': null,
-          'updatedAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(), // ✅ 전환 시점 갱신
           ...extraFields,
           'logs': FieldValue.arrayUnion([
             {
@@ -390,7 +403,7 @@ class PlateWriteService {
             'to': toType,
             'actor': actor,
             'extraKeys': extraFields.keys.toList(),
-            'forceOverride': forceOverride,
+            'forceOverride': true,
           },
           'error': {
             'type': e.runtimeType.toString(),
@@ -406,11 +419,11 @@ class PlateWriteService {
 
   /// ✅ ‘주행’ 커밋 트랜잭션: 서버 상태(타입/선점자) 검증 + 원샷 업데이트
   Future<void> recordWhoPlateClick(
-    String id,
-    bool isSelected, {
-    String? selectedBy,
-    required String area,
-  }) async {
+      String id,
+      bool isSelected, {
+        String? selectedBy,
+        required String area,
+      }) async {
     final docRef = _firestore.collection('plates').doc(id);
 
     try {
@@ -453,7 +466,7 @@ class PlateWriteService {
         final update = <String, dynamic>{
           'isSelected': isSelected,
           'selectedBy': isSelected ? selectedBy : null,
-          'updatedAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(), // ✅ 선택 상태 변경 시각 갱신
           if (isSelected && (selectedBy?.trim().isNotEmpty ?? false))
             'logs': FieldValue.arrayUnion([
               {
@@ -518,9 +531,9 @@ class PlateWriteService {
   }
 
   Map<String, dynamic> _enforceZeroFeeLock(
-    Map<String, dynamic> data, {
-    Map<String, dynamic>? existing,
-  }) {
+      Map<String, dynamic> data, {
+        Map<String, dynamic>? existing,
+      }) {
     int effInt(String key) {
       if (data.containsKey(key)) return _toInt(data[key]);
       if (existing != null && existing.containsKey(key)) {
@@ -539,7 +552,7 @@ class PlateWriteService {
 
       data.putIfAbsent(
         PlateFields.lockedAtTimeInSeconds,
-        () => DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000,
+            () => DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000,
       );
       data.putIfAbsent(PlateFields.lockedFeeAmount, () => 0);
     }
