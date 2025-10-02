@@ -68,6 +68,9 @@ class PlateState extends ChangeNotifier {
   /// 현재 보류 중인(아직 서버에 반영하지 않은) 선택/해제 변경이 있는지
   bool get hasPendingSelection => _pendingCollection != null && _pendingPlateId != null && _pendingIsSelected != null;
 
+  /// 현재 보류가 선택(true)인지 해제(false)인지, 보류 없으면 null
+  bool? get pendingIsSelected => _pendingIsSelected;
+
   void _clearPendingSelection() {
     _pendingCollection = null;
     _pendingPlateId = null;
@@ -91,8 +94,6 @@ class PlateState extends ChangeNotifier {
 
   PlateState(this._repository, this._areaState) {
     _areaState.addListener(_onAreaChanged);
-    // ❌ 자동 구독 제거: 필드 페이지(TypePage)에서 명시적으로 enableForTypePages() 호출
-    // _initDefaultSubscriptions();
   }
 
   String get currentArea => _areaState.currentArea;
@@ -121,21 +122,6 @@ class PlateState extends ChangeNotifier {
     debugPrint('🔕 PlateState disabled (HQ or leaving type pages)');
     _cancelAllSubscriptions();
   }
-
-  /*void _reportRead(String source, {String? area, int n = 1}) {
-    try {
-      UsageReporter.instance.report(
-        area: (area == null || area.trim().isEmpty)
-            ? (currentArea.isNotEmpty ? currentArea : '(unspecified)')
-            : area.trim(),
-        action: 'read',
-        n: n,
-        source: source,
-      );
-    } catch (e) {
-      debugPrint('UsageReporter(read) error: $e');
-    }
-  }*/
 
   // ─────────────────────────────────────────────────────────────
 
@@ -171,27 +157,29 @@ class PlateState extends ChangeNotifier {
     notifyListeners();
 
     if (type == PlateType.departureCompleted) {
-      final sub = _repository.departureUnpaidSnapshots(area, descending: descending).listen(
-          (QuerySnapshot<Map<String, dynamic>> snapshot) async {
-        // onData read 계측은 서비스 계층에서
-
+      final sub = _repository
+          .departureUnpaidSnapshots(area, descending: descending)
+          .listen((QuerySnapshot<Map<String, dynamic>> snapshot) async {
         final results = snapshot.docs
             .map((doc) {
-              try {
-                return PlateModel.fromDocument(doc);
-              } catch (e) {
-                debugPrint('❌ departureCompleted parsing error: $e');
-                return null;
-              }
-            })
+          try {
+            return PlateModel.fromDocument(doc);
+          } catch (e) {
+            debugPrint('❌ departureCompleted parsing error: $e');
+            return null;
+          }
+        })
             .whereType<PlateModel>()
             .toList();
 
-        // 서버 베이스라인 갱신
+        // 서버 베이스라인 갱신 (해제 상태면 selectedBy를 null로 정규화)
         for (final p in results) {
+          final normalizedSelectedBy = p.isSelected
+              ? ((p.selectedBy?.trim().isNotEmpty ?? false) ? p.selectedBy!.trim() : null)
+              : null;
           _baseline[p.id] = _SelectionBaseline(
             isSelected: p.isSelected,
-            selectedBy: p.selectedBy,
+            selectedBy: normalizedSelectedBy,
           );
         }
 
@@ -204,11 +192,6 @@ class PlateState extends ChangeNotifier {
             final ref = change.doc.reference;
 
             final fresh = await ref.get(const GetOptions(source: Source.server));
-            /*_reportRead(
-              'PlateState.departureCompleted.removed.ref.get(server)',
-              area: fresh.data()?['area']?.toString() ?? area,
-            );*/
-
             final data = fresh.data();
             if (data == null) continue;
 
@@ -227,7 +210,7 @@ class PlateState extends ChangeNotifier {
           }
         }
 
-        // ⬇️ 스트림 갱신 이후 보류 항목 유효성 재점검(사라지거나 무의미해진 경우 자동 해제)
+        // ⬇️ 스트림 갱신 이후 보류 유효성 재점검
         if (hasPendingSelection && !pendingStillValidFor(type)) {
           _clearPendingSelection();
           notifyListeners();
@@ -255,11 +238,7 @@ class PlateState extends ChangeNotifier {
     bool firstDataReceived = false;
 
     final subscription = stream.listen((filteredData) async {
-      // onData read 계측은 서비스 계층에서
-
-      // ─────────────────────────────────────────────────────────
-      // departureRequests에 대해 "사라진 문서" 감지 이벤트
-      // ─────────────────────────────────────────────────────────
+      // departureRequests만 "사라진 문서" 감지
       if (type == PlateType.departureRequests) {
         final lastMap = _lastByType[type] ?? {};
         final currentMap = {for (final p in filteredData) p.id: p};
@@ -271,26 +250,26 @@ class PlateState extends ChangeNotifier {
             _departureRemovedCtrl.add(removed);
           }
         }
-
-        // 캐시 갱신
         _lastByType[type] = currentMap;
       } else {
-        // 다른 타입은 캐시만 갱신(필요 시 확장 가능)
         _lastByType[type] = {for (final p in filteredData) p.id: p};
       }
 
-      // 서버 베이스라인 갱신
+      // 서버 베이스라인 갱신 (해제 상태면 selectedBy를 null로 정규화)
       for (final p in filteredData) {
+        final normalizedSelectedBy = p.isSelected
+            ? ((p.selectedBy?.trim().isNotEmpty ?? false) ? p.selectedBy!.trim() : null)
+            : null;
         _baseline[p.id] = _SelectionBaseline(
           isSelected: p.isSelected,
-          selectedBy: p.selectedBy,
+          selectedBy: normalizedSelectedBy,
         );
       }
 
       _data[type] = filteredData;
       notifyListeners();
 
-      // ⬇️ 스트림 갱신 이후 보류 유효성 재점검(사라지거나 무의미해진 경우 자동 해제)
+      // ⬇️ 스트림 갱신 이후 보류 유효성 재점검
       if (hasPendingSelection && !pendingStillValidFor(type)) {
         _clearPendingSelection();
         notifyListeners();
@@ -340,14 +319,14 @@ class PlateState extends ChangeNotifier {
 
     try {
       return plates.firstWhere(
-        (plate) => plate.isSelected && plate.selectedBy == userName,
+            (plate) => plate.isSelected && plate.selectedBy == userName,
       );
     } catch (_) {
       return null;
     }
   }
 
-  /// ✅ (리팩터링) 선택/해제 시 **로컬 상태만** 변경하고, 서버 반영은 보류 상태로 저장
+  /// ✅ 선택/해제 시 로컬 토글 + 보류 기록
   Future<void> togglePlateIsSelected({
     required PlateType collection,
     required String plateNumber,
@@ -379,25 +358,25 @@ class PlateState extends ChangeNotifier {
 
       final alreadySelected = _data.entries.expand((entry) => entry.value).firstWhere(
             (p) => p.isSelected && p.selectedBy == userName && p.id != plateId,
-            orElse: () => PlateModel(
-              id: '',
-              plateNumber: '',
-              plateFourDigit: '',
-              type: '',
-              requestTime: DateTime.now(),
-              location: '',
-              area: '',
-              userName: '',
-              isSelected: false,
-              statusList: [],
-            ),
-          );
+        orElse: () => PlateModel(
+          id: '',
+          plateNumber: '',
+          plateFourDigit: '',
+          type: '',
+          requestTime: DateTime.now(),
+          location: '',
+          area: '',
+          userName: '',
+          isSelected: false,
+          statusList: [],
+        ),
+      );
 
       if (alreadySelected.id.isNotEmpty && !plate.isSelected) {
         onError(
           '⚠️ 이미 다른 번호판을 선택한 상태입니다.\n'
-          '• 선택된 번호판: ${alreadySelected.plateNumber}\n'
-          '선택을 해제한 후 다시 시도해 주세요.',
+              '• 선택된 번호판: ${alreadySelected.plateNumber}\n'
+              '선택을 해제한 후 다시 시도해 주세요.',
         );
         return;
       }
@@ -429,9 +408,19 @@ class PlateState extends ChangeNotifier {
         selectedBy: newSelectedBy,
       );
 
-      // ✅ 베이스라인과 동일 여부 체크 → 동일하면 보류 해제(FAB 숨김)
+      // ✅ 베이스라인과 동일 여부 체크(해제는 selectedBy 무시, 선택은 trim 비교)
       final base = _baseline[plateId];
-      final equalsBaseline = base != null && base.isSelected == newIsSelected && base.selectedBy == newSelectedBy;
+      bool equalsBaseline = false;
+      if (base != null) {
+        if (!newIsSelected && base.isSelected == false) {
+          // 해제 상태는 selectedBy 의미 없음
+          equalsBaseline = true;
+        } else {
+          final baseSelBy = (base.selectedBy ?? '').trim();
+          final newSelBy = (newSelectedBy ?? '').trim();
+          equalsBaseline = (base.isSelected == newIsSelected) && (baseSelBy == newSelBy);
+        }
+      }
 
       if (equalsBaseline) {
         // 원상복구된 상태 → 보류 해제
@@ -452,13 +441,7 @@ class PlateState extends ChangeNotifier {
     }
   }
 
-  /// ✅ 보류된 선택이 현재 페이지(컬렉션)에 **여전히 의미가 있는지**(서버 스냅샷/로컬 기준)
-  ///
-  /// 다음 경우엔 false를 반환하여 FAB를 숨깁니다.
-  /// 1) 보류 없음 / 다른 컬렉션 / 목록에 없음
-  /// 2) 서버 베이스라인이 이미 보류 상태와 동일(커밋 불필요)
-  /// 3) 편집 등 외부 동작으로 서버·로컬이 모두 "해제 상태(false/null)"인데,
-  ///    보류는 "선택(true)"을 의도하고 있는 경우 → 편집이 우선이라 보류 무효
+  /// ✅ 보류 유효성 검사(해제는 selectedBy 무시, 선택은 trim 비교)
   bool pendingStillValidFor(PlateType expected) {
     if (!hasPendingSelection) return false;
     if (_pendingCollection != expected) return false;
@@ -480,12 +463,20 @@ class PlateState extends ChangeNotifier {
     final pendBy = _pendingSelectedBy;
 
     // 2) 서버 베이스라인이 이미 보류 상태와 동일 → 커밋 불필요
-    if (base != null && base.isSelected == pendSel && (base.selectedBy ?? '') == (pendBy ?? '')) {
-      return false;
+    if (base != null) {
+      if (!pendSel && base.isSelected == false) {
+        // 해제는 selectedBy 무시
+        return false;
+      } else if (pendSel && base.isSelected == true) {
+        final baseSelBy = (base.selectedBy ?? '').trim();
+        final pendByNorm = (pendBy ?? '').trim();
+        if (baseSelBy == pendByNorm) {
+          return false;
+        }
+      }
     }
 
-    // 3) 외부 편집 등으로 해제된 상태(서버/로컬 모두 false/null)에서
-    //    보류가 '선택(true)'을 요구하면 무효 처리 → FAB 숨김
+    // 3) 외부 편집 등으로 해제된 상태(서버/로컬 모두 false/null)에서 보류가 '선택(true)'을 요구하면 무효
     if (pendSel &&
         p.isSelected == false &&
         p.selectedBy == null &&
@@ -526,10 +517,12 @@ class PlateState extends ChangeNotifier {
         area: currentArea,
       );
 
-      // 커밋 성공 → 서버 베이스라인을 새 상태로 갱신
+      // 커밋 성공 → 서버 베이스라인을 새 상태로 갱신(해제 시 selectedBy는 null로)
       _baseline[plateId] = _SelectionBaseline(
         isSelected: isSelected,
-        selectedBy: selectedBy,
+        selectedBy: isSelected
+            ? ((selectedBy?.trim().isNotEmpty ?? false) ? selectedBy!.trim() : null)
+            : null,
       );
 
       _clearPendingSelection();
@@ -603,6 +596,8 @@ class PlateState extends ChangeNotifier {
 
     debugPrint("🔄 syncWithAreaState : 지역 변경 감지 및 상태 갱신 호출됨");
     _cancelAllSubscriptions();
+    _clearPendingSelection(); // 지역 변경 시 보류 상태도 초기화
+    _baseline.clear(); // 베이스라인 초기화
     for (final t in _desiredSubscriptions) {
       subscribeType(t);
     }

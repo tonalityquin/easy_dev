@@ -225,6 +225,13 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
             final showFab = s.hasPendingSelection &&
                 s.pendingStillValidFor(PlateType.parkingRequests) &&
                 !_isLocked;
+
+            // 동적 FAB 라벨/아이콘/색상: 보류가 선택(true)이면 '주행', 해제(false)이면 '해제'
+            final isSelecting = s.pendingIsSelected ?? true;
+            final fabLabel = isSelecting ? '주행' : '해제';
+            final fabIcon  = isSelecting ? Icons.directions_car_filled : Icons.undo;
+            final fabBg    = isSelecting ? const Color(0xFF0D47A1) : Colors.grey;
+
             if (!showFab) return const SizedBox.shrink();
             return SafeArea(
               minimum: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -243,9 +250,9 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
                       showSuccessSnackbar(context, '변경 사항을 반영했습니다.');
                     }
                   },
-                  icon: const Icon(Icons.directions_car_filled),
-                  label: const Text('주행'),
-                  backgroundColor: const Color(0xFF0D47A1),
+                  icon: Icon(fabIcon),
+                  label: Text(fabLabel),
+                  backgroundColor: fabBg,
                   foregroundColor: Colors.white,
                 ),
               ),
