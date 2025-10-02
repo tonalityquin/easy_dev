@@ -20,6 +20,7 @@ import 'package:flutter/foundation.dart';
 import '../../enums/plate_type.dart';
 import '../tts/tts_manager.dart';
 import '../tts/tts_user_filters.dart';
+
 // 🔎 비용 계측
 import '../usage_reporter.dart';
 
@@ -120,6 +121,7 @@ class PlateTtsListenerService {
   }
 
   static void _log(String msg) => debugPrint('[PLATE_TTS][$_listenSeq][${_ts()}] $msg');
+
   static String _ts() => DateTime.now().toIso8601String();
 
   static Future<void> stop() async {
@@ -155,7 +157,7 @@ class PlateTtsListenerService {
     _currentArea = currentArea;
 
     // 시작 흔적(증분 없음)
-    _annotateUsage(area: _currentArea, source: 'PlateTTS.start');
+    /*_annotateUsage(area: _currentArea, source: 'PlateTTS.start');*/
 
     // 모니터링할 타입
     final typesToMonitor = <String>[
@@ -203,7 +205,7 @@ class PlateTtsListenerService {
           _readsEmptySnapshots += 1;
           // 빈 스냅샷도 네트워크 왕복이 가능하지만, Firestore 과금은 "문서 읽기" 단위이므로 0으로 처리.
           // 추적만 남김(증분 없음).
-          _annotateUsage(area: _currentArea, source: 'PlateTTS.listen.empty');
+          /*_annotateUsage(area: _currentArea, source: 'PlateTTS.listen.empty');*/
           return;
         }
 
@@ -325,7 +327,7 @@ class PlateTtsListenerService {
     } catch (e, st) {
       _log('START ERROR: $e\n$st');
       _printReadSummary(prefix: 'READ SUMMARY (start-error)');
-      _annotateUsage(area: _currentArea, source: 'PlateTTS.start.error');
+      /*_annotateUsage(area: _currentArea, source: 'PlateTTS.start.error');*/
     }
   }
 
