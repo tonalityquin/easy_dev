@@ -47,7 +47,7 @@ class MonthlyPlateSection extends StatelessWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // 지역 선택: 접근성/피드백/비활성화 반영
+            // 지역 선택: 폭 제한 + 말줄임 + 편집 모드 비활성화
             Semantics(
               button: true,
               enabled: !isEditMode,
@@ -67,18 +67,22 @@ class MonthlyPlateSection extends StatelessWidget {
                   foregroundColor: cs.primary,
                   side: BorderSide(color: cs.primary, width: 1),
                   backgroundColor: cs.surface,
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
                 child: ConstrainedBox(
+                  // 드롭다운(지역명) 버튼이 가로 공간을 과도하게 차지하지 않도록 상한을 둔다.
                   constraints: const BoxConstraints(maxWidth: 160),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Expanded(
+                      // 버튼 내부 텍스트는 길면 말줄임 처리
+                      Flexible(
                         child: Text(
                           dropdownValue,
                           maxLines: 1,
@@ -98,7 +102,7 @@ class MonthlyPlateSection extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
-            // 번호판 입력 필드
+            // 번호판 입력 필드: 남은 가로 공간 전부 사용
             Expanded(
               child: MonthlyPlateField(
                 frontDigitCount: isThreeDigit ? 3 : 2,
