@@ -34,7 +34,7 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
 
   String? _errorMessage;
 
-  static const List<String> _basicStandardOptions = ['1분', '5분', '30분', '60분'];
+  static const List<String> _basicStandardOptions = ['1분', '5분', '30분', '60분', '120분', '240분'];
   static const List<String> _addStandardOptions = ['1분', '10분', '30분', '60분'];
 
   @override

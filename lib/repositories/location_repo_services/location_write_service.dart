@@ -40,16 +40,18 @@ class LocationWriteService {
           'stack': st.toString(),
           'tags': ['locations', 'write', 'single', 'error'],
         }, level: 'error');
-      } catch (_) {/* 로깅 실패는 무시 */}
+      } catch (_) {
+        /* 로깅 실패는 무시 */
+      }
       rethrow;
     }
   }
 
   Future<void> addCompositeLocation(
-      String parent,
-      List<Map<String, dynamic>> subs,
-      String area,
-      ) async {
+    String parent,
+    List<Map<String, dynamic>> subs,
+    String area,
+  ) async {
     final batch = _firestore.batch();
     int writeOps = 0;
 
@@ -95,11 +97,7 @@ class LocationWriteService {
           'area': area,
           'subs': {
             'len': subs.length,
-            'sampleNames': subs
-                .map((m) => (m['name'] ?? '').toString())
-                .where((s) => s.isNotEmpty)
-                .take(10)
-                .toList(),
+            'sampleNames': subs.map((m) => (m['name'] ?? '').toString()).where((s) => s.isNotEmpty).take(10).toList(),
           },
           'error': {
             'type': e.runtimeType.toString(),
@@ -109,7 +107,9 @@ class LocationWriteService {
           'stack': st.toString(),
           'tags': ['locations', 'write', 'composite', 'error'],
         }, level: 'error');
-      } catch (_) {/* 로깅 실패는 무시 */}
+      } catch (_) {
+        /* 로깅 실패는 무시 */
+      }
       rethrow;
     }
   }
@@ -158,7 +158,9 @@ class LocationWriteService {
           'stack': st.toString(),
           'tags': ['locations', 'delete', 'batch', 'error'],
         }, level: 'error');
-      } catch (_) {/* 로깅 실패는 무시 */}
+      } catch (_) {
+        /* 로깅 실패는 무시 */
+      }
       rethrow;
     }
   }

@@ -310,14 +310,13 @@ class UserReadService {
 
       final users = querySnapshot.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList();
 
-      // read 보고: 결과 수(없으면 1)
-      final n = users.isEmpty ? 1 : users.length;
+      /*final n = users.isEmpty ? 1 : users.length;
       await UsageReporter.instance.report(
         area: selectedArea,
         action: 'read',
         n: n,
         source: 'UserReadService.refreshUsersBySelectedArea',
-      );
+      );*/
 
       await updateCacheWithUsers(selectedArea, users);
       return users;
