@@ -14,13 +14,14 @@ import 'theme.dart';
 import 'utils/tts/foreground_task_handler.dart';
 import 'utils/app_navigator.dart';
 
-// 🔔 추가: 로컬 알림/타임존
+// 🔔 로컬 알림/타임존
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:timezone/data/latest_all.dart' as tz;
+import 'package:timezone/data/latest_all.dart' as tzdata; // ← prefix 정리
 import 'package:timezone/timezone.dart' as tz;
 
-// 🔔 추가: endTime 리마인더 서비스
+// 🔔 endTime 리마인더 서비스 + prefs
 import 'services/endtime_reminder_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 String _ts() => DateTime.now().toIso8601String();
 
@@ -70,20 +71,27 @@ void main() async {
     ),
   );
 
-  // 🔔 추가: 로컬 알림 초기화
+  // 🔔 로컬 알림 초기화
   await _initLocalNotifications();
 
   // 🔔 서비스에 플러그인 주입 (알림 예약/취소에 사용)
   EndtimeReminderService.instance.attachPlugin(flnp);
 
+  // 🔔 앱 시작 시 보강: prefs에 endTime이 있으면 즉시 예약/갱신
+  final prefs = await SharedPreferences.getInstance();
+  final savedEnd = prefs.getString('endTime');
+  if (savedEnd != null && savedEnd.isNotEmpty) {
+    await EndtimeReminderService.instance.scheduleDailyOneHourBefore(savedEnd);
+  }
+
   debugPrint('[MAIN][${_ts()}] runApp(AppBootstrapper)');
   runApp(const AppBootstrapper());
 }
 
-// 🔔 추가: 로컬 알림/타임존 초기화 + 권한/채널 생성
+// 🔔 로컬 알림/타임존 초기화 + 권한/채널 생성
 Future<void> _initLocalNotifications() async {
   // 타임존 초기화(KST)
-  tz.initializeTimeZones();
+  tzdata.initializeTimeZones();
   tz.setLocalLocation(tz.getLocation('Asia/Seoul'));
 
   // 플러그인 초기화
@@ -106,7 +114,6 @@ Future<void> _initLocalNotifications() async {
     // ✔ Android 13+ 런타임 알림 권한 요청
     await androidImpl?.requestNotificationsPermission();
   }
-
 
   // iOS 권한 요청
   final iosImpl =

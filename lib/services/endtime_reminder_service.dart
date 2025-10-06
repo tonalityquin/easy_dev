@@ -4,7 +4,7 @@ import 'package:timezone/timezone.dart' as tz;
 
 /// 매일 endTime("HH:mm")의 1시간 전에 로컬 알림을 예약하는 서비스.
 /// - flutter_local_notifications + timezone 기반
-/// - Android Doze 중에도 표시되도록 androidAllowWhileIdle 사용
+/// - Android Doze 중에도 표시되도록 exactAllowWhileIdle 사용
 /// - matchDateTimeComponents: time 로 매일 반복
 class EndtimeReminderService {
   EndtimeReminderService._();
@@ -49,7 +49,8 @@ class EndtimeReminderService {
           importance: Importance.high,
           priority: Priority.high,
           category: AndroidNotificationCategory.reminder,
-          styleInformation: DefaultStyleInformation(true, true),
+          // v19에서도 기본 스타일 사용 가능
+          // styleInformation: DefaultStyleInformation(true, true),
         ),
         iOS: DarwinNotificationDetails(),
       ),
