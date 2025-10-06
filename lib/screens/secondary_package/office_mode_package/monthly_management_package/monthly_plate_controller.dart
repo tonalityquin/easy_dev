@@ -147,15 +147,17 @@ class MonthlyPlateController {
     return true;
   }
 
+  /// ✅ 앞자리 2자리 또는 3자리 모두 허용하도록 수정
   /// 앞자리(2/3자리), 중간(한글 1자), 뒷자리(4자리) 유효성
   bool isInputValid() {
-    final validFront = isThreeDigit ? controllerFrontDigit.text.length == 3 : controllerFrontDigit.text.length == 2;
-    return validFront && controllerMidDigit.text.length == 1 && controllerBackDigit.text.length == 4;
+    final frontLen = controllerFrontDigit.text.length;
+    final frontOk = (frontLen == 2 || frontLen == 3);
+    return frontOk && controllerMidDigit.text.length == 1 && controllerBackDigit.text.length == 4;
   }
 
   /// "plateNumber_area" 형태의 문서 ID에서 plateNumber만 추출
   String _extractPlateFromDocId(String docId) {
-    // ex) "12가-3456_서울" -> "12가-3456"
+    // ex) "12-가-3456_서울" -> "12-가-3456"
     return docId.split('_').first;
   }
 
@@ -378,18 +380,25 @@ class MonthlyPlateController {
 
   /// 기존 문서 데이터 로딩(편집 진입 시)
   Future<void> loadExistingData(
-      Map<String, dynamic> data, {
-        required String docId,
-      }) async {
+    Map<String, dynamic> data, {
+    required String docId,
+  }) async {
     isEditMode = true;
     docIdToEdit = docId;
 
     final plate = _extractPlateFromDocId(docId);
     final parts = plate.split('-'); // [앞, 한글, 뒤]
     if (parts.length == 3) {
-      controllerFrontDigit.text = parts[0];
-      controllerMidDigit.text = parts[1];
-      controllerBackDigit.text = parts[2];
+      final front = parts[0];
+      final mid = parts[1];
+      final back = parts[2];
+
+      // ✅ 저장된 번호판 앞자리 길이에 맞춰 플래그 동기화
+      isThreeDigit = (front.length == 3);
+
+      controllerFrontDigit.text = front;
+      controllerMidDigit.text = mid;
+      controllerBackDigit.text = back;
     }
 
     dropdownValue = data['region'] ?? '전국';
@@ -411,9 +420,9 @@ class MonthlyPlateController {
   // 등록/수정 (UI와의 호환 유지)
   // ─────────────────────────────────────────────────────────────────────────────
   Future<void> updatePlateEntry(
-      BuildContext context,
-      VoidCallback refreshUI,
-      ) async {
+    BuildContext context,
+    VoidCallback refreshUI,
+  ) async {
     if (!_validateBeforeWrite(context)) return;
 
     // await 전에 필요한 핸들러를 확보해 두면 lint를 더 쉽게 피할 수 있습니다.
@@ -491,9 +500,9 @@ class MonthlyPlateController {
   }
 
   Future<void> submitPlateEntry(
-      BuildContext context,
-      VoidCallback refreshUI,
-      ) async {
+    BuildContext context,
+    VoidCallback refreshUI,
+  ) async {
     if (!_validateBeforeWrite(context)) return;
 
     // await 이전에 핸들러 캐싱

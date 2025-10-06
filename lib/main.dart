@@ -14,7 +14,25 @@ import 'theme.dart';
 import 'utils/tts/foreground_task_handler.dart';
 import 'utils/app_navigator.dart';
 
+// 🔔 추가: 로컬 알림/타임존
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/data/latest_all.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
+
+// 🔔 추가: endTime 리마인더 서비스
+import 'services/endtime_reminder_service.dart';
+
 String _ts() => DateTime.now().toIso8601String();
+
+// ───────────────────────────────────────────────────────────────
+// flutter_local_notifications 플러그인 인스턴스 & 백그라운드 탭 핸들러
+final FlutterLocalNotificationsPlugin flnp = FlutterLocalNotificationsPlugin();
+
+@pragma('vm:entry-point')
+void notificationTapBackground(NotificationResponse resp) {
+  // TODO: 알림 탭 시 라우팅/처리가 필요하면 구현 (resp.payload 참조 가능)
+}
+// ───────────────────────────────────────────────────────────────
 
 @pragma('vm:entry-point')
 void myForegroundCallback() {
@@ -52,8 +70,57 @@ void main() async {
     ),
   );
 
+  // 🔔 추가: 로컬 알림 초기화
+  await _initLocalNotifications();
+
+  // 🔔 서비스에 플러그인 주입 (알림 예약/취소에 사용)
+  EndtimeReminderService.instance.attachPlugin(flnp);
+
   debugPrint('[MAIN][${_ts()}] runApp(AppBootstrapper)');
   runApp(const AppBootstrapper());
+}
+
+// 🔔 추가: 로컬 알림/타임존 초기화 + 권한/채널 생성
+Future<void> _initLocalNotifications() async {
+  // 타임존 초기화(KST)
+  tz.initializeTimeZones();
+  tz.setLocalLocation(tz.getLocation('Asia/Seoul'));
+
+  // 플러그인 초기화
+  const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+  const iosInit = DarwinInitializationSettings();
+  await flnp.initialize(
+    const InitializationSettings(android: androidInit, iOS: iosInit),
+    onDidReceiveNotificationResponse: (resp) {
+      // 포그라운드 상태에서 알림 탭 시 처리 (필요 시 라우팅)
+    },
+    onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
+  );
+
+  // Android 13+ 권한 요청
+  final androidImpl = flnp
+      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+
+  final enabled = await androidImpl?.areNotificationsEnabled();
+  if (enabled == false) {
+    // ✔ Android 13+ 런타임 알림 권한 요청
+    await androidImpl?.requestNotificationsPermission();
+  }
+
+
+  // iOS 권한 요청
+  final iosImpl =
+  flnp.resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>();
+  await iosImpl?.requestPermissions(alert: true, badge: true, sound: true);
+
+  // 알림 채널 생성(안드로이드)
+  const channel = AndroidNotificationChannel(
+    'easydev_reminders',
+    '근무 리마인더',
+    description: '퇴근 1시간 전 알림 채널',
+    importance: Importance.high,
+  );
+  await androidImpl?.createNotificationChannel(channel);
 }
 
 class AppBootstrapper extends StatefulWidget {

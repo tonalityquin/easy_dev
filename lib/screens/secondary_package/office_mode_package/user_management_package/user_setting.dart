@@ -8,6 +8,9 @@ import 'sections/user_input_section.dart';
 import 'sections/user_role_dropdown_section.dart';
 import 'sections/user_validation_helpers_section.dart';
 
+// 🔔 추가: endTime 리마인더 서비스
+import '../../../../services/endtime_reminder_service.dart';
+
 /// 서비스 로그인 카드 팔레트(브랜드 톤)
 class _SvcColors {
   static const base = Color(0xFF0D47A1); // primary
@@ -461,7 +464,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: () {
+                        onPressed: () async {
                           FocusScope.of(context).unfocus();
 
                           // 1) 필드 검증
@@ -478,6 +481,8 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
 
                           final fullEmail = '${_emailController.text}@gmail.com';
 
+                          // 저장 콜백 호출 전/후 어느 시점이든 무방하나,
+                          // 일반적으로 저장 성공 후 예약하는 편이 안전합니다.
                           widget.onSave(
                             _nameController.text,
                             _phoneController.text,
@@ -495,7 +500,18 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                             _positionController.text,
                           );
 
-                          Navigator.pop(context);
+                          // 🔔 추가: endTime(계정별 HH:mm)로 알림 예약/취소
+                          final endTime = _timeToString(_endTime);
+                          if (endTime != null) {
+                            await EndtimeReminderService.instance
+                                .scheduleDailyOneHourBefore(endTime);
+                          } else {
+                            await EndtimeReminderService.instance.cancel();
+                          }
+
+                          if (mounted) {
+                            Navigator.pop(context);
+                          }
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _SvcColors.base,
