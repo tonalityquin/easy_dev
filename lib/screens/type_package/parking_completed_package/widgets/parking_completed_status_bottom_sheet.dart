@@ -16,8 +16,7 @@ import '../../../../utils/snackbar_helper.dart';
 import '../../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
 import '../../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 
-// ✅ Firebase 작업만 계측
-import '../../../../utils/usage_reporter.dart';
+// import '../../../../utils/usage_reporter.dart';
 
 Future<void> showParkingCompletedStatusBottomSheet({
   required BuildContext context,
@@ -421,12 +420,12 @@ void _reportDbSafe({
   int n = 1,
 }) {
   try {
-    UsageReporter.instance.report(
+    /*UsageReporter.instance.report(
       area: area.trim(),
       action: action,
       n: n,
       source: source,
-    );
+    );*/
   } catch (_) {
     // no-op
   }

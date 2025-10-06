@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart'; // debugPrint, kDebugMode
 import '../../models/bill_model.dart';
 import '../../models/regular_bill_model.dart';
 import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
-import '../../utils/usage_reporter.dart';
+// import '../../utils/usage_reporter.dart';
 
 class BillReadService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -37,13 +37,13 @@ class BillReadService {
       rethrow;
     }
 
-    final readN = snapshot.docs.isEmpty ? 1 : snapshot.docs.length;
+    /*final readN = snapshot.docs.isEmpty ? 1 : snapshot.docs.length;
     await UsageReporter.instance.report(
       area: area,
       action: 'read',
       n: readN,
       source: 'BillReadService.getBillOnce',
-    );
+    );*/
 
     final List<BillModel> generalBills = [];
     final List<RegularBillModel> regularBills = [];

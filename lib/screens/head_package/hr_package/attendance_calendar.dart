@@ -10,7 +10,7 @@ import '../../../models/user_model.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../utils/sheets_config.dart';
 import 'widgets/time_edit_sheet.dart';
-import '../../../utils/usage_reporter.dart'; // ✅ Firestore 사용량 보고
+// import '../../../utils/usage_reporter.dart';
 
 class AttendanceCalendar extends StatefulWidget {
   const AttendanceCalendar({super.key});
@@ -231,12 +231,12 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
         final doc = await col.doc(docId).get();
 
         // ✅ Firestore read 보고 (정확한 area)
-        await UsageReporter.instance.report(
+        /*await UsageReporter.instance.report(
           area: area,
           action: 'read',
           n: 1,
           source: 'AttendanceCalendar._findUserByInput/user_accounts.doc.get',
-        );
+        );*/
 
         if (doc.exists && doc.data() != null) {
           return UserModel.fromMap(doc.id, doc.data()!);
@@ -248,13 +248,13 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
 
       // ✅ Firestore read 보고 (결과 문서들을 area별로 분배, 비어있으면 unknown +1)
       if (qs.docs.isEmpty) {
-        await UsageReporter.instance.report(
+        /*await UsageReporter.instance.report(
           area: 'unknown',
           action: 'read',
           n: 1,
           source:
           'AttendanceCalendar._findUserByInput/user_accounts.where(phone).get',
-        );
+        );*/
       } else {
         final buckets = <String, int>{};
         for (final d in qs.docs) {
@@ -262,13 +262,13 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
           buckets.update(areaGuess, (v) => v + 1, ifAbsent: () => 1);
         }
         for (final e in buckets.entries) {
-          await UsageReporter.instance.report(
+          /*await UsageReporter.instance.report(
             area: e.key,
             action: 'read',
             n: e.value,
             source:
             'AttendanceCalendar._findUserByInput/user_accounts.where(phone).get',
-          );
+          );*/
         }
       }
 

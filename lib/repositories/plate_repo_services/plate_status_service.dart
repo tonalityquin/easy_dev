@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
-import '../../utils/usage_reporter.dart';
+// import '../../utils/usage_reporter.dart';
 
 class PlateStatusService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -127,7 +127,7 @@ class PlateStatusService {
       if (_isEmptyInput(customStatus, statusList)) {
         if (deleteWhenEmpty) {
           await ref.delete().timeout(const Duration(seconds: 10));
-          await UsageReporter.instance.report(area: area, action: 'delete', n: 1, source: 'PlateStatusService.setMonthlyPlateStatus.delete');
+          // await UsageReporter.instance.report(area: area, action: 'delete', n: 1, source: 'PlateStatusService.setMonthlyPlateStatus.delete');
         }
         return;
       }
@@ -156,8 +156,8 @@ class PlateStatusService {
         tx.set(ref, base, SetOptions(merge: true));
       }).timeout(const Duration(seconds: 10));
 
-      await UsageReporter.instance.report(area: area, action: 'read', n: 1, source: 'PlateStatusService.setMonthlyPlateStatus.tx');
-      await UsageReporter.instance.report(area: area, action: 'write', n: 1, source: 'PlateStatusService.setMonthlyPlateStatus.tx');
+      /*await UsageReporter.instance.report(area: area, action: 'read', n: 1, source: 'PlateStatusService.setMonthlyPlateStatus.tx');
+      await UsageReporter.instance.report(area: area, action: 'write', n: 1, source: 'PlateStatusService.setMonthlyPlateStatus.tx');*/
     } on FirebaseException catch (e, st) {
       try {
         await DebugFirestoreLogger().log({
@@ -218,7 +218,7 @@ class PlateStatusService {
     final ref = _docRef(plateNumber, area);
     try {
       await ref.delete();
-      await UsageReporter.instance.report(area: area, action: 'delete', n: 1, source: 'PlateStatusService.deletePlateStatus');
+      // await UsageReporter.instance.report(area: area, action: 'delete', n: 1, source: 'PlateStatusService.deletePlateStatus');
     } on FirebaseException catch (e, st) {
       try {
         await DebugFirestoreLogger().log({

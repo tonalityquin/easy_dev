@@ -8,7 +8,7 @@ import '../../../../../../states/area/area_state.dart';
 import '../../../../../../states/user/user_state.dart';
 import '../../../../../repositories/plate_repo_services/plate_count_service.dart';
 import '../../../../../../utils/snackbar_helper.dart';
-import '../../../../../../utils/usage_reporter.dart';
+// import '../../../../../../utils/usage_reporter.dart';
 
 const _kBasePad = 16.0;
 
@@ -81,11 +81,11 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
       if (!mounted) return;
       _inputCtrl.text = v.toString();
       try {
-        await UsageReporter.instance.annotate(
+        /*await UsageReporter.instance.annotate(
           area: area,
           source: 'HomeEndWorkReportContent._refetchInput.parking_completed.aggregate',
           extra: {'value': v},
-        );
+        );*/
       } catch (_) {}
       if (!mounted) return;
       HapticFeedback.selectionClick();

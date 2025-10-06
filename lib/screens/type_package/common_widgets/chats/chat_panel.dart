@@ -6,10 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../utils/snackbar_helper.dart';
-
-// ✅ UsageReporter: "파이어베이스에서만" 계측 (READ / WRITE / DELETE 구분)
-//    - 이 파일에서는 latest_message 리스닝(READ)과 메시지 전송(WRITE)만 보고합니다.
-import '../../../../utils/usage_reporter.dart';
+// import '../../../../utils/usage_reporter.dart';
 import '../../../../services/latest_message_service.dart'; // ★ 추가
 
 class ChatPanel extends StatefulWidget {
@@ -48,8 +45,8 @@ class _ChatPanelState extends State<ChatPanel> {
   /// ────────────────────────────────────────────────────────────────────────────
   Future<void> _report(String action, {int n = 1, required String source}) async {
     try {
-      await UsageReporter.instance
-          .report(area: widget.roomId, action: action, n: n, source: source);
+      /*await UsageReporter.instance
+          .report(area: widget.roomId, action: action, n: n, source: source);*/
     } catch (_) {
       // 계측 실패는 기능에 영향 주지 않음
     }

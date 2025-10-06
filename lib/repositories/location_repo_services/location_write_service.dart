@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/location_model.dart';
 import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
-import '../../utils/usage_reporter.dart';
+// import '../../utils/usage_reporter.dart';
 
 class LocationWriteService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -14,13 +14,13 @@ class LocationWriteService {
       await docRef.set(data);
 
       // ✅ write 1회 (정확한 테넌트로)
-      final area = (data['area'] ?? location.area ?? 'unknown') as String;
+      /*final area = (data['area'] ?? location.area ?? 'unknown') as String;
       await UsageReporter.instance.report(
         area: area,
         action: 'write',
         n: 1,
         source: 'LocationWriteService.addSingleLocation',
-      );
+      );*/
     } catch (e, st) {
       // 실패 시 Firestore 로깅만 (error 레벨)
       try {
@@ -80,12 +80,12 @@ class LocationWriteService {
 
       // ✅ batch write 개수만큼 비용 보고
       if (writeOps > 0) {
-        await UsageReporter.instance.report(
+        /*await UsageReporter.instance.report(
           area: area,
           action: 'write',
           n: writeOps,
           source: 'LocationWriteService.addCompositeLocation',
-        );
+        );*/
       }
     } catch (e, st) {
       // 실패 시 Firestore 로깅만 (error 레벨)
@@ -133,12 +133,12 @@ class LocationWriteService {
         areaBuckets.update(area, (v) => v + 1, ifAbsent: () => 1);
       }
       for (final entry in areaBuckets.entries) {
-        await UsageReporter.instance.report(
+        /*await UsageReporter.instance.report(
           area: entry.key,
           action: 'delete',
           n: entry.value,
           source: 'LocationWriteService.deleteLocations',
-        );
+        );*/
       }
     } catch (e, st) {
       // 실패 시 Firestore 로깅만 (error 레벨)

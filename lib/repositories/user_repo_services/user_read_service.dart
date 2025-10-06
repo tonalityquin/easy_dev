@@ -396,12 +396,12 @@ class UserReadService {
       }
 
       // read 1회
-      await UsageReporter.instance.report(
+      /*await UsageReporter.instance.report(
         area: area.isNotEmpty ? area : 'unknown',
         action: 'read',
         n: 1,
         source: 'UserReadService.getEnglishNameByArea',
-      );
+      );*/
 
       // 캐시 저장(널도 저장해 둬서 재쿼리 방지)
       _englishNameMemCache[key] = name;

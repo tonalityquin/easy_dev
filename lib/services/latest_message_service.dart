@@ -4,8 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-// 프로젝트 구조에 맞게 경로 확인 필요
-import '../utils/usage_reporter.dart';
+// import '../utils/usage_reporter.dart';
 
 /// 최근 메시지 데이터(텍스트/타임스탬프/메타)
 class LatestMessageData {
@@ -139,12 +138,12 @@ class LatestMessageService {
 
       // 서버 확정 스냅샷 1회만 READ 집계
       try {
-        await UsageReporter.instance.report(
+        /*await UsageReporter.instance.report(
           area: _area,
           action: 'read',
           n: 1,
           source: 'latest_message.service.server',
-        );
+        );*/
       } catch (_) {
         // ignore
       }

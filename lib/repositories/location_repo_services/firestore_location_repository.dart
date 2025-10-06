@@ -6,8 +6,7 @@ import 'location_repository.dart';
 import 'location_read_service.dart';
 import 'location_write_service.dart';
 import 'location_count_service.dart';
-// ✅ UsageReporter: 파이어베이스(읽기/쓰기/삭제) 발생 지점만 계측
-import '../../utils/usage_reporter.dart';
+// import '../../utils/usage_reporter.dart';
 
 class FirestoreLocationRepository implements LocationRepository {
   final LocationReadService _readService = LocationReadService();
@@ -56,7 +55,7 @@ class FirestoreLocationRepository implements LocationRepository {
 
       // ✅ 계측: READ (성공 시)
       try {
-        final data = doc.data();
+        /*final data = doc.data();
         final raw = (data == null)
             ? const <String, dynamic>{}
             : (Map<String, dynamic>.from(data['counts'] ?? {}));
@@ -66,7 +65,7 @@ class FirestoreLocationRepository implements LocationRepository {
           n: raw.length, // 읽어온 카운트 키 개수
           source:
           'FirestoreLocationRepository._getCachedCounts.areas/$area/locationCounts/$type.get',
-        );
+        );*/
       } catch (_) {
         // 계측 실패는 무시
       }
@@ -80,13 +79,13 @@ class FirestoreLocationRepository implements LocationRepository {
     } catch (e) {
       // ✅ 계측: READ (오류 시도)
       try {
-        await UsageReporter.instance.report(
+        /*await UsageReporter.instance.report(
           area: area,
           action: 'read',
           n: 0,
           source:
           'FirestoreLocationRepository._getCachedCounts.areas/$area/locationCounts/$type.get.error',
-        );
+        );*/
       } catch (_) {}
       return {};
     }

@@ -17,8 +17,7 @@ import 'widgets/parking_completed_status_bottom_sheet.dart';
 import 'widgets/set_departure_request_dialog.dart';
 import '../../../widgets/dialog/plate_remove_dialog.dart';
 
-// ✅ UsageReporter: 파이어베이스 DB 작업만 계측 (read / write / delete)
-import '../../../utils/usage_reporter.dart';
+// import '../../../utils/usage_reporter.dart';
 
 /// Deep Blue 팔레트(서비스 카드와 동일 계열) + 상태 색상
 class _Palette {
@@ -455,12 +454,12 @@ void _reportDbSafe({
   int n = 1,
 }) {
   try {
-    UsageReporter.instance.report(
+    /*UsageReporter.instance.report(
       area: area.trim(),
       action: action,
       n: n,
       source: source,
-    );
+    );*/
   } catch (_) {
     // 계측 실패는 UX에 영향 없음
   }

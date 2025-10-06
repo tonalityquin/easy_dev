@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
-// import 'package:easydev/utils/usage_reporter.dart';
+import 'package:easydev/utils/usage_reporter.dart';
 
 String _formatAnyDate(dynamic v) {
   if (v == null) return '시간 정보 없음';
@@ -43,10 +43,10 @@ Widget _infoRow(String label, String? value) {
 }
 
 Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
-  BuildContext context,
-  String plateNumber,
-  String area,
-) async {
+    BuildContext context,
+    String plateNumber,
+    String area,
+    ) async {
   final docId = '${plateNumber}_$area';
 
   DocumentSnapshot<Map<String, dynamic>>? docSnapshot;
@@ -59,12 +59,14 @@ Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
     debugPrint('[inputCustomStatusBottomSheet] error: $e');
     docSnapshot = null;
   } finally {
-    /*await UsageReporter.instance.report(
+    // ⬇️ 집계 계측에서 installId prefix 제거
+    await UsageReporter.instance.report(
       area: (area.isEmpty ? 'unknown' : area),
       action: 'read',
       n: 1,
-      source: 'inputCustomStatusBottomSheet/plate_status.doc.get',
-    );*/
+      source: 'InputPlateScreen._fetchPlateStatus/plate_status.doc.get',
+      useSourceOnlyKey: true, // ★ 중요
+    );
   }
 
   if (docSnapshot == null || !docSnapshot.exists) return null;
@@ -182,14 +184,14 @@ Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
                     children: statusList
                         .map(
                           (s) => Chip(
-                            label: Text(
-                              s,
-                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                            ),
-                            backgroundColor: Colors.orange.withOpacity(0.15),
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          ),
-                        )
+                        label: Text(
+                          s,
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                        ),
+                        backgroundColor: Colors.orange.withOpacity(0.15),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      ),
+                    )
                         .toList(),
                   ),
                 ],

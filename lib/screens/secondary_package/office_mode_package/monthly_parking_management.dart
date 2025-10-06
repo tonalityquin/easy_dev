@@ -7,7 +7,7 @@ import 'package:provider/provider.dart';
 import '../../../states/user/user_state.dart';
 import 'monthly_management_package/monthly_plate_bottom_sheet.dart';
 import '../../../utils/snackbar_helper.dart'; // ✅ 커스텀 스낵바
-import '../../../utils/usage_reporter.dart'; // ✅ UsageReporter 계측
+// import '../../../utils/usage_reporter.dart';
 
 /// 서비스 로그인 카드와 동일 팔레트(Deep Blue)
 class _SvcColors {
@@ -75,7 +75,7 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
 
       // ✅ 계측: read 1회 (가능한 정확한 area로 보고)
       try {
-        final data = snap.data();
+        /*final data = snap.data();
         final areaFromData = (data?['area'] as String?)?.trim();
         final areaFromId = _inferAreaFromPlateStatusDocId(_selectedDocId!);
         final area = (areaFromData?.isNotEmpty == true)
@@ -88,7 +88,7 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
           action: 'read',
           n: 1,
           source: 'MonthlyParkingManagement._handlePrimaryAction.docGet',
-        );
+        );*/
       } catch (_) {}
 
       if (!snap.exists) {
@@ -147,14 +147,14 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
     if (!ok) return;
 
     // 삭제 전에 area를 도출(문서가 plateNumber_area 규칙)
-    final areaForReport = _inferAreaFromPlateStatusDocId(_selectedDocId!);
+    // final areaForReport = _inferAreaFromPlateStatusDocId(_selectedDocId!);
 
     try {
       await FirebaseFirestore.instance.collection('plate_status').doc(_selectedDocId).delete();
 
       // ✅ 계측: delete 1회
       try {
-        final area = areaForReport.isNotEmpty
+        /*final area = areaForReport.isNotEmpty
             ? areaForReport
             : (context.read<UserState>().currentArea.trim().isNotEmpty
             ? context.read<UserState>().currentArea.trim()
@@ -164,7 +164,7 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
           action: 'delete',
           n: 1,
           source: 'MonthlyParkingManagement._handleDelete.delete',
-        );
+        );*/
       } catch (_) {}
 
       if (!mounted) return;
@@ -648,8 +648,8 @@ class _FabLabel extends StatelessWidget {
 
 /// plate_status 문서 ID에서 area 추출: 규칙이 'plateNumber_area' 라고 가정.
 /// 규칙이 다르면 'unknown' 반환.
-String _inferAreaFromPlateStatusDocId(String docId) {
+/*String _inferAreaFromPlateStatusDocId(String docId) {
   final idx = docId.lastIndexOf('_');
   if (idx <= 0 || idx >= docId.length - 1) return 'unknown';
   return docId.substring(idx + 1);
-}
+}*/

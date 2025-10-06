@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import '../../models/bill_model.dart';
 import '../../models/regular_bill_model.dart';
 import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
-import '../../utils/usage_reporter.dart';
+// import '../../utils/usage_reporter.dart';
 
 class BillWriteService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -21,13 +21,13 @@ class BillWriteService {
       await docRef.set(data);
       debugPrint("✅ Firestore 일반 정산 저장 성공: ${bill.id}");
 
-      final area = (data['area'] ?? bill.area ?? 'unknown') as String;
+      /*final area = (data['area'] ?? bill.area ?? 'unknown') as String;
       await UsageReporter.instance.report(
         area: area,
         action: 'write',
         n: 1,
         source: 'BillWriteService.addNormalBill',
-      );
+      );*/
     } catch (e, st) {
       debugPrint("🔥 Firestore 일반 정산 저장 실패: $e");
       // --- 실패 시 Firestore 로거에만 error 레벨 기록 ---
@@ -67,13 +67,13 @@ class BillWriteService {
       await docRef.set(data);
       debugPrint("✅ Firestore 정기 정산 저장 성공: ${bill.id}");
 
-      final area = (data['area'] ?? bill.area ?? 'unknown') as String;
+      /*final area = (data['area'] ?? bill.area ?? 'unknown') as String;
       await UsageReporter.instance.report(
         area: area,
         action: 'write',
         n: 1,
         source: 'BillWriteService.addRegularBill',
-      );
+      );*/
     } catch (e, st) {
       debugPrint("🔥 Firestore 정기 정산 저장 실패: $e");
       // --- 실패 시 Firestore 로거에만 error 레벨 기록 ---

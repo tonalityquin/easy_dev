@@ -21,8 +21,8 @@ import '../../enums/plate_type.dart';
 import '../tts/tts_manager.dart';
 import '../tts/tts_user_filters.dart';
 
-// 🔎 비용 계측
-import '../usage_reporter.dart';
+
+// import '../usage_reporter.dart';
 
 class PlateTtsListenerService {
   // 마스터 토글
@@ -456,28 +456,28 @@ class PlateTtsListenerService {
       return;
     }
     if (sampled) {
-      UsageReporter.instance.reportSampled(
+      /*UsageReporter.instance.reportSampled(
         area: a,
         action: 'read',
         n: n,
         source: source,
         sampleRate: _usageSampleRate,
-      );
+      );*/
     } else {
-      UsageReporter.instance.report(
+      /*UsageReporter.instance.report(
         area: a,
         action: 'read',
         n: n,
         source: source,
-      );
+      );*/
     }
   }
 
   static void _annotateUsage({required String? area, required String source}) {
     final a = (area == null || area.isEmpty) ? '(unknown)' : area;
-    UsageReporter.instance.annotate(
+    /*UsageReporter.instance.annotate(
       area: a,
       source: source,
-    );
+    );*/
   }
 }

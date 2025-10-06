@@ -65,24 +65,40 @@ class UsageReporter {
   /// [source]: 비용 발생 지점(메서드/화면명). 예) "PlateQueryService.getPlate"
   ///
   /// 보고 경로:
-  /// usage_daily/{YYYY-MM-DD}/tenants/{area}/users/{installId__[slug(source)]}
+  /// usage_daily/{YYYY-MM-DD}/tenants/{area}/users/{userKey}
+  /// - 기본(userKey): `{installId}__{slug(source)}`
+  /// - useSourceOnlyKey=true일 때: `{slug(source)}`  ← **installId prefix 제거**
   Future<void> report({
     required String area,
     required String action,
     int n = 1,
     String? source,
+    bool useSourceOnlyKey = false, // ⬅️ 추가: true면 installId prefix 제거
   }) async {
     assert(action == 'read' || action == 'write' || action == 'delete');
 
     await ensureInitialized();
     final baseId = installId;
-    final userKey = (source == null || source.trim().isEmpty) ? baseId : '${baseId}__${_slug(source)}';
+    final src = (source == null || source.trim().isEmpty) ? null : _slug(source);
+
+    final String userKey;
+    if (useSourceOnlyKey) {
+      // 소스만으로 키를 만들되, 소스가 비어 있으면 installId 사용
+      userKey = src ?? baseId;
+    } else {
+      userKey = src == null ? baseId : '${baseId}__$src';
+    }
 
     final date = DateTime.now().toUtc().toIso8601String().substring(0, 10); // YYYY-MM-DD
     final eventId = const Uuid().v4();
 
-    final countRef =
-        _db.collection('usage_daily').doc(date).collection('tenants').doc(area).collection('users').doc(userKey);
+    final countRef = _db
+        .collection('usage_daily')
+        .doc(date)
+        .collection('tenants')
+        .doc(area)
+        .collection('users')
+        .doc(userKey);
 
     final eventRef = countRef.collection('events').doc(eventId);
 
@@ -101,15 +117,16 @@ class UsageReporter {
 
       final incField = '${action}s'; // reads/writes/deletes
       tx.set(
-          countRef,
-          {
-            'date': date,
-            'tenantId': area,
-            'userId': userKey,
-            incField: FieldValue.increment(n),
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true));
+        countRef,
+        {
+          'date': date,
+          'tenantId': area,
+          'userId': userKey,
+          incField: FieldValue.increment(n),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
     });
   }
 
@@ -120,16 +137,24 @@ class UsageReporter {
     int n = 1,
     String? source,
     double sampleRate = 0.2,
+    bool useSourceOnlyKey = false, // ⬅️ 옵션 전달
   }) async {
     assert(sampleRate >= 0 && sampleRate <= 1.0);
     final r = Random().nextDouble();
     if (r <= sampleRate) {
-      await report(area: area, action: action, n: n, source: source);
+      await report(
+        area: area,
+        action: action,
+        n: n,
+        source: source,
+        useSourceOnlyKey: useSourceOnlyKey,
+      );
     } else {
       await annotate(
         area: area,
         source: source,
         extra: {'action': action, 'n': n, 'sampled': true},
+        useSourceOnlyKey: useSourceOnlyKey,
       );
     }
   }
@@ -141,16 +166,29 @@ class UsageReporter {
     required String area,
     String? source,
     Map<String, dynamic>? extra,
+    bool useSourceOnlyKey = false, // ⬅️ 옵션 전달
   }) async {
     await ensureInitialized();
     final baseId = installId;
-    final userKey = (source == null || source.trim().isEmpty) ? baseId : '${baseId}__${_slug(source)}';
+    final src = (source == null || source.trim().isEmpty) ? null : _slug(source);
+
+    final String userKey;
+    if (useSourceOnlyKey) {
+      userKey = src ?? baseId;
+    } else {
+      userKey = src == null ? baseId : '${baseId}__$src';
+    }
 
     final date = DateTime.now().toUtc().toIso8601String().substring(0, 10); // YYYY-MM-DD
     final eventId = const Uuid().v4();
 
-    final countRef =
-        _db.collection('usage_daily').doc(date).collection('tenants').doc(area).collection('users').doc(userKey);
+    final countRef = _db
+        .collection('usage_daily')
+        .doc(date)
+        .collection('tenants')
+        .doc(area)
+        .collection('users')
+        .doc(userKey);
 
     final eventRef = countRef.collection('events').doc(eventId);
 
@@ -169,14 +207,15 @@ class UsageReporter {
 
       // 카운터 문서는 업데이트 시간만 갱신(증분 없음)
       tx.set(
-          countRef,
-          {
-            'date': date,
-            'tenantId': area,
-            'userId': userKey,
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true));
+        countRef,
+        {
+          'date': date,
+          'tenantId': area,
+          'userId': userKey,
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
     });
   }
 }

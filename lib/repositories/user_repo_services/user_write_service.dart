@@ -29,12 +29,12 @@ class UserWriteService {
       await docRef.set(user.toMap());
 
       // write 1
-      await UsageReporter.instance.report(
+      /*await UsageReporter.instance.report(
         area: _inferAreaFromHyphenId(user.id),
         action: 'write',
         n: 1,
         source: 'UserWriteService.addUserCard',
-      );
+      );*/
     } on FirebaseException catch (e, st) {
       try {
         await DebugFirestoreLogger().log({
@@ -228,12 +228,12 @@ class UserWriteService {
 
     // delete 집계 보고
     for (final e in buckets.entries) {
-      await UsageReporter.instance.report(
+      /*await UsageReporter.instance.report(
         area: e.key,
         action: 'delete',
         n: e.value,
         source: 'UserWriteService.deleteUsers',
-      );
+      );*/
     }
   }
 

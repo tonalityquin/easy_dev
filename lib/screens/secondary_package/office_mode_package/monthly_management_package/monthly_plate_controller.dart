@@ -8,7 +8,7 @@ import '../../../../utils/snackbar_helper.dart';
 import '../../../../repositories/plate_repo_services/firestore_plate_repository.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../../states/area/area_state.dart';
-import '../../../../utils/usage_reporter.dart'; // ✅ UsageReporter 계측
+// import '../../../../utils/usage_reporter.dart';
 
 class MonthlyPlateController {
   // ─────────────────────────────────────────────────────────────────────────────
@@ -343,12 +343,12 @@ class MonthlyPlateController {
 
       // ✅ UsageReporter: write 1회
       try {
-        await UsageReporter.instance.report(
+        /*await UsageReporter.instance.report(
           area: area.isNotEmpty ? area : 'unknown',
           action: 'write',
           n: 1,
           source: 'MonthlyPlateController.recordPaymentHistory.set',
-        );
+        );*/
       } catch (_) {}
     } catch (e) {
       rethrow;
@@ -366,17 +366,20 @@ class MonthlyPlateController {
 
       // ✅ UsageReporter: delete 1회
       try {
-        await UsageReporter.instance.report(
+        /*await UsageReporter.instance.report(
           area: area.isNotEmpty ? area : 'unknown',
           action: 'delete',
           n: 1,
           source: 'MonthlyPlateController.deleteCustomStatusFromFirestore.delete',
-        );
+        );*/
       } catch (_) {}
     } catch (e) {
       rethrow;
     }
   }
+
+
+
 
   /// 기존 문서 데이터 로딩(편집 진입 시)
   Future<void> loadExistingData(
@@ -470,12 +473,12 @@ class MonthlyPlateController {
 
       // ✅ UsageReporter: write 2회 (plate_status + monthly plate_status)
       try {
-        await UsageReporter.instance.report(
+        /*await UsageReporter.instance.report(
           area: area.isNotEmpty ? area : 'unknown',
           action: 'write',
           n: 2,
           source: 'MonthlyPlateController.updatePlateEntry.write',
-        );
+        );*/
       } catch (_) {}
 
       await extendDatesIfNeeded();
@@ -551,12 +554,12 @@ class MonthlyPlateController {
 
       // ✅ UsageReporter: write 2회 (plate_status + monthly plate_status)
       try {
-        await UsageReporter.instance.report(
+        /*await UsageReporter.instance.report(
           area: area.isNotEmpty ? area : 'unknown',
           action: 'write',
           n: 2,
           source: 'MonthlyPlateController.submitPlateEntry.write',
-        );
+        );*/
       } catch (_) {}
 
       // ✅ async gap 이후 BuildContext 생존 여부 확인

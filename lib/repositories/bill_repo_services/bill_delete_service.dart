@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
-import '../../utils/usage_reporter.dart';
+// import '../../utils/usage_reporter.dart';
 
 class BillDeleteService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -15,24 +15,24 @@ class BillDeleteService {
 
     try {
       // ── 정확한 area 집계를 위해 프리페치 1회 ──────────────
-      final snap = await docRef.get();
+      /*final snap = await docRef.get();
       final area = (snap.data()?['area'] as String?) ?? 'unknown';
       await UsageReporter.instance.report(
         area: area,
         action: 'read',
         n: 1,
         source: 'BillDeleteService.deleteBill.prefetch',
-      );
+      );*/
 
       // ── 실제 삭제 ───────────────────────────────────────
       await docRef.delete();
 
-      await UsageReporter.instance.report(
+      /*await UsageReporter.instance.report(
         area: area,
         action: 'delete',
         n: 1,
         source: 'BillDeleteService.deleteBill.delete',
-      );
+      );*/
     } catch (e, st) {
       // --- 실패 시 Firestore 로거에만 error 레벨 기록 ---
       try {

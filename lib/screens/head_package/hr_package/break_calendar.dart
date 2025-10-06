@@ -10,7 +10,7 @@ import '../../../models/user_model.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../utils/sheets_config.dart';
 import 'widgets/time_edit_sheet.dart';
-import '../../../utils/usage_reporter.dart'; // ✅ Firestore 사용량 보고
+// import '../../../utils/usage_reporter.dart';
 
 class BreakCalendar extends StatefulWidget {
   const BreakCalendar({super.key});
@@ -218,12 +218,12 @@ class _BreakCalendarState extends State<BreakCalendar> {
         final doc = await col.doc(docId).get();
 
         // ✅ Firestore read 보고 (정확한 area로 +1)
-        await UsageReporter.instance.report(
+        /*await UsageReporter.instance.report(
           area: area,
           action: 'read',
           n: 1,
           source: 'BreakCalendar._findUserByInput/user_accounts.doc.get',
-        );
+        );*/
 
         if (doc.exists && doc.data() != null) {
           return UserModel.fromMap(doc.id, doc.data()!);
@@ -235,12 +235,12 @@ class _BreakCalendarState extends State<BreakCalendar> {
 
       // ✅ 결과 문서 수만큼 area 버킷으로 read 집계 (없으면 unknown +1)
       if (qs.docs.isEmpty) {
-        await UsageReporter.instance.report(
+        /*await UsageReporter.instance.report(
           area: 'unknown',
           action: 'read',
           n: 1,
           source: 'BreakCalendar._findUserByInput/user_accounts.where(phone).get',
-        );
+        );*/
       } else {
         final buckets = <String, int>{};
         for (final d in qs.docs) {
@@ -248,13 +248,13 @@ class _BreakCalendarState extends State<BreakCalendar> {
           buckets.update(areaGuess, (v) => v + 1, ifAbsent: () => 1);
         }
         for (final e in buckets.entries) {
-          await UsageReporter.instance.report(
+          /*await UsageReporter.instance.report(
             area: e.key,
             action: 'read',
             n: e.value,
             source:
             'BreakCalendar._findUserByInput/user_accounts.where(phone).get',
-          );
+          );*/
         }
       }
 

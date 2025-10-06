@@ -164,11 +164,13 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       debugPrint('[_fetchPlateStatus] error: $e');
       return null;
     } finally {
+      // ⬇️ installId prefix 없이 source 슬러그만으로 집계
       await UsageReporter.instance.report(
         area: (area.isEmpty ? 'unknown' : area),
         action: 'read',
         n: 1,
         source: 'InputPlateScreen._fetchPlateStatus/plate_status.doc.get',
+        useSourceOnlyKey: true, // ★ 중요
       );
     }
   }
