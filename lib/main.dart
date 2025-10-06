@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+
 import 'routes.dart';
 import 'providers/providers.dart';
 import 'screens/dev_package/dev_memo.dart';
@@ -14,26 +15,35 @@ import 'theme.dart';
 import 'utils/tts/foreground_task_handler.dart';
 import 'utils/app_navigator.dart';
 
+
 // 🔔 로컬 알림/타임존
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata; // ← prefix 정리
 import 'package:timezone/timezone.dart' as tz;
 
+
 // 🔔 endTime 리마인더 서비스 + prefs
 import 'services/endtime_reminder_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+
+const kIsWorkingPrefsKey = 'isWorking';
+
+
 String _ts() => DateTime.now().toIso8601String();
+
 
 // ───────────────────────────────────────────────────────────────
 // flutter_local_notifications 플러그인 인스턴스 & 백그라운드 탭 핸들러
 final FlutterLocalNotificationsPlugin flnp = FlutterLocalNotificationsPlugin();
+
 
 @pragma('vm:entry-point')
 void notificationTapBackground(NotificationResponse resp) {
   // TODO: 알림 탭 시 라우팅/처리가 필요하면 구현 (resp.payload 참조 가능)
 }
 // ───────────────────────────────────────────────────────────────
+
 
 @pragma('vm:entry-point')
 void myForegroundCallback() {
@@ -42,12 +52,15 @@ void myForegroundCallback() {
   FlutterForegroundTask.setTaskHandler(MyTaskHandler());
 }
 
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
 
   // ✅ UI <-> Task 통신 포트 초기화 (sendDataToTask / onReceiveData 사용을 위해 필요)
   debugPrint('[MAIN][${_ts()}] initCommunicationPort');
   FlutterForegroundTask.initCommunicationPort();
+
 
   // ✅ 포그라운드 태스크 초기화
   debugPrint('[MAIN][${_ts()}] ForegroundTask.init');
@@ -71,28 +84,39 @@ void main() async {
     ),
   );
 
+
   // 🔔 로컬 알림 초기화
   await _initLocalNotifications();
+
 
   // 🔔 서비스에 플러그인 주입 (알림 예약/취소에 사용)
   EndtimeReminderService.instance.attachPlugin(flnp);
 
-  // 🔔 앱 시작 시 보강: prefs에 endTime이 있으면 즉시 예약/갱신
+
+  // 🔔 앱 시작 시 보강: prefs의 endTime & isWorking 기준으로 예약/취소 정합화
   final prefs = await SharedPreferences.getInstance();
   final savedEnd = prefs.getString('endTime');
-  if (savedEnd != null && savedEnd.isNotEmpty) {
+  final isWorking = prefs.getBool(kIsWorkingPrefsKey) ?? false;
+
+
+  if (isWorking && savedEnd != null && savedEnd.isNotEmpty) {
     await EndtimeReminderService.instance.scheduleDailyOneHourBefore(savedEnd);
+  } else {
+    await EndtimeReminderService.instance.cancel();
   }
+
 
   debugPrint('[MAIN][${_ts()}] runApp(AppBootstrapper)');
   runApp(const AppBootstrapper());
 }
+
 
 // 🔔 로컬 알림/타임존 초기화 + 권한/채널 생성
 Future<void> _initLocalNotifications() async {
   // 타임존 초기화(KST)
   tzdata.initializeTimeZones();
   tz.setLocalLocation(tz.getLocation('Asia/Seoul'));
+
 
   // 플러그인 초기화
   const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -105,9 +129,11 @@ Future<void> _initLocalNotifications() async {
     onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
   );
 
+
   // Android 13+ 권한 요청
   final androidImpl = flnp
       .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+
 
   final enabled = await androidImpl?.areNotificationsEnabled();
   if (enabled == false) {
@@ -115,10 +141,12 @@ Future<void> _initLocalNotifications() async {
     await androidImpl?.requestNotificationsPermission();
   }
 
+
   // iOS 권한 요청
   final iosImpl =
   flnp.resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>();
   await iosImpl?.requestPermissions(alert: true, badge: true, sound: true);
+
 
   // 알림 채널 생성(안드로이드)
   const channel = AndroidNotificationChannel(
@@ -130,15 +158,18 @@ Future<void> _initLocalNotifications() async {
   await androidImpl?.createNotificationChannel(channel);
 }
 
+
 class AppBootstrapper extends StatefulWidget {
   const AppBootstrapper({super.key});
   @override
   State<AppBootstrapper> createState() => _AppBootstrapperState();
 }
 
+
 class _AppBootstrapperState extends State<AppBootstrapper> {
   // ✅ 중복 실행 방지: 한 번만 생성되는 Future
   late final Future<void> _initFuture = _initializeApp();
+
 
   @override
   Widget build(BuildContext context) {
@@ -162,14 +193,17 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
     );
   }
 
+
   Future<void> _initializeApp() async {
     // ✅ Firebase
     debugPrint('[MAIN][${_ts()}] Firebase.initializeApp');
     await Firebase.initializeApp();
 
+
     // ✅ 개발용 리소스 등록 (비용 방지: 현재 비활성화)
     // debugPrint('[MAIN][${_ts()}] registerDevResources');
     // await registerDevResources();
+
 
     // ✅ 권한 요청
     debugPrint('[MAIN][${_ts()}] request permissions');
@@ -179,8 +213,10 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
       debugPrint('[MAIN][${_ts()}] Permission.locationWhenInUse → $status');
     }
 
+
     final batteryOpt = await Permission.ignoreBatteryOptimizations.request();
     debugPrint('[MAIN][${_ts()}] Permission.ignoreBatteryOptimizations → $batteryOpt');
+
 
     // ✅ 포그라운드 서비스 시작
     debugPrint('[MAIN][${_ts()}] startService(callback: myForegroundCallback)');
@@ -191,20 +227,25 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
     );
     debugPrint('[MAIN][${_ts()}] startService done');
 
+
     // ✅ 플로팅/메모 초기화(상태 로드). enabled가 true일 때만 mount됨
     debugPrint('[MAIN][${_ts()}] DevMemo.init');
     await DevMemo.init();
     debugPrint('[MAIN][${_ts()}] HeadMemo.init');
     await HeadMemo.init();
 
+
     // ⬇️ CommuteOutsideFloating.init 제거됨
+
 
     debugPrint('[MAIN][${_ts()}] _initializeApp done');
   }
 }
 
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
+
 
   @override
   Widget build(BuildContext context) {
@@ -219,9 +260,11 @@ class MyApp extends StatelessWidget {
         routes: appRoutes,
         onUnknownRoute: (_) => MaterialPageRoute(builder: (_) => const NotFoundPage()),
 
+
         // ✅ 앱 전역 네비게이터 키(오버레이/시트 컨텍스트 안정성)
         navigatorKey: AppNavigator.key,
         scaffoldMessengerKey: AppNavigator.scaffoldMessengerKey,
+
 
         // ✅ 첫 프레임 후, 각 플로팅이 켜져있다면 오버레이 장착
         builder: (context, child) {
@@ -238,10 +281,13 @@ class MyApp extends StatelessWidget {
   }
 }
 
+
 class ErrorApp extends StatelessWidget {
   final String message;
 
+
   const ErrorApp({super.key, required this.message});
+
 
   @override
   Widget build(BuildContext context) {
@@ -261,8 +307,10 @@ class ErrorApp extends StatelessWidget {
   }
 }
 
+
 class NotFoundPage extends StatelessWidget {
   const NotFoundPage({super.key});
+
 
   @override
   Widget build(BuildContext context) {
