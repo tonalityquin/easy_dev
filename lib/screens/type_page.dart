@@ -20,9 +20,10 @@ import 'type_package/common_widgets/chats/chat_bottom_sheet.dart';
 import 'secondary_page.dart';
 import '../utils/snackbar_helper.dart';
 
-// ⬇️ 추가: 최근 메시지 저장/재생 기능
-import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/tts/tts_manager.dart';
+
+// ⬇️ 추가: 전역 최신 메시지 서비스(실시간 구독 + 캐시)
+import '../services/latest_message_service.dart';
 
 /// Deep Blue 팔레트(서비스 카드와 동일 계열)
 class _Palette {
@@ -59,6 +60,12 @@ class _TypePageState extends State<TypePage> {
           final plateState = context.read<PlateState>();
           final pageState = context.read<PageState>();
           final userName = context.read<UserState>().name;
+
+          // ★ 현재 area 기반으로 전역 리스너(실시간 READ) 시작 — idempotent
+          final currentArea = context.read<AreaState>().currentArea.trim();
+          if (currentArea.isNotEmpty) {
+            LatestMessageService.instance.start(currentArea);
+          }
 
           return PopScope(
             // ✅ 이 화면에서만 뒤로가기(pop) 차단 → 앱 종료 방지
@@ -111,31 +118,9 @@ class _TypePageState extends State<TypePage> {
 class _ChatDashboardBar extends StatelessWidget {
   const _ChatDashboardBar();
 
-  static String _prefsKey(String area) => 'chat.latest_message.$area';
-
-  static Future<void> _saveLatestToPrefs(String area, String message) async {
-    if (area.isEmpty) return;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_prefsKey(area), message);
-    } catch (e) {
-      debugPrint('⚠️ save latest message failed: $e');
-    }
-  }
-
-  static Future<String?> _readLatestFromPrefs(String area) async {
-    if (area.isEmpty) return null;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getString(_prefsKey(area));
-    } catch (e) {
-      debugPrint('⚠️ read latest message failed: $e');
-      return null;
-    }
-  }
-
   static Future<void> _replayLatestTts(BuildContext context, String area) async {
-    final text = (await _readLatestFromPrefs(area))?.trim() ?? '';
+    // ★ Firestore 접근 없음: 서비스가 저장해 둔 로컬 캐시만 사용 → READ 0
+    final text = (await LatestMessageService.instance.readFromPrefs()).trim();
     if (text.isEmpty) {
       showSelectedSnackbar(context, '최근 메시지가 없습니다.');
       return;
@@ -159,7 +144,7 @@ class _ChatDashboardBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
       child: Row(
         children: [
-          // ── 채팅: 최근 메시지 저장 + "다시 듣기" 버튼
+          // ── 채팅: 최근 메시지 표시 + "다시 듣기" (Firestore 구독 없음)
           Expanded(
             child: area.isEmpty
                 ? ElevatedButton(
@@ -181,18 +166,13 @@ class _ChatDashboardBar extends StatelessWidget {
                 ],
               ),
             )
-                : StreamBuilder<String>(
-              // 최신 메시지를 스트림으로 받되, 화면에는 “다시 듣기”만 보임
-              stream: latestMessageStream(area),
-              builder: (context, snapshot) {
-                final latest = (snapshot.data ?? '').trim();
-                if (latest.isNotEmpty) {
-                  // 비동기 저장(중복 호출 무방)
-                  _saveLatestToPrefs(area, latest);
-                }
-
+                : ValueListenableBuilder<LatestMessageData>(
+              // ★ 전역 서비스의 메모리 캐시를 구독 → Firestore 접근 없음
+              valueListenable: LatestMessageService.instance.latest,
+              builder: (context, latestData, _) {
+                final hasText = latestData.text.trim().isNotEmpty;
                 return ElevatedButton(
-                  onPressed: () => _replayLatestTts(context, area),
+                  onPressed: hasText ? () => _replayLatestTts(context, area) : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: _Palette.base,

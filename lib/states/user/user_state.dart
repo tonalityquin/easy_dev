@@ -11,6 +11,9 @@ import '../../utils/tts/plate_tts_listener_service.dart';
 import '../../utils/tts/chat_tts_listener_service.dart';
 import '../area/area_state.dart';
 
+// ★ 추가: 로그아웃 시 전역 메시지 구독도 정리하기 위해 import
+import '../../services/latest_message_service.dart';
+
 class UserState extends ChangeNotifier {
   final UserRepository _repository;
   final AreaState _areaState;
@@ -221,12 +224,16 @@ class UserState extends ChangeNotifier {
     } catch (e) {
       debugPrint('clearUserToPhone error: $e');
     } finally {
-      // TTS는 예외와 무관하게 정리
+      // TTS/메시지 리스너는 예외와 무관하게 정리
       try {
         PlateTtsListenerService.stop();
       } catch (_) {}
       try {
         ChatTtsListenerService.stop();
+      } catch (_) {}
+      // ★ 전역 메시지 서비스 구독도 종료(로그아웃/세션 종료 시)
+      try {
+        await LatestMessageService.instance.stop();
       } catch (_) {}
 
       _user = null;
@@ -388,7 +395,7 @@ class UserState extends ChangeNotifier {
 
       await _areaState.initializeArea(trimmedArea);
 
-      // ✅ PlateTTS도 ChatTTS와 동일한 시작 지점에서 무조건 시작
+      // ✅ Plate/Chat TTS 시작(여기서 ChatTTS는 전역 서비스 캐시만 구독)
       PlateTtsListenerService.start(trimmedArea);
       ChatTtsListenerService.start(trimmedArea);
     } catch (e) {
@@ -434,7 +441,7 @@ class UserState extends ChangeNotifier {
           handle, userData.areas.firstOrNull ?? '', selectedArea);
       await _areaState.initializeArea(selectedArea);
 
-      // ✅ PlateTTS도 ChatTTS와 동일한 시작 지점에서 무조건 시작
+      // ✅ Plate/Chat TTS 시작(여기서 ChatTTS는 전역 서비스 캐시만 구독)
       PlateTtsListenerService.start(selectedArea);
       ChatTtsListenerService.start(selectedArea);
     } catch (e) {
@@ -469,6 +476,7 @@ class UserState extends ChangeNotifier {
     await _areaState.updateArea(newArea, isSyncing: true);
 
     // ✅ 지역 변경 시에도 Plate/Chat TTS 모두 동일 타이밍으로 시작
+    //    (ChatTTS → LatestMessageService.start(newArea) 호출 포함)
     PlateTtsListenerService.start(newArea);
     ChatTtsListenerService.start(newArea);
   }

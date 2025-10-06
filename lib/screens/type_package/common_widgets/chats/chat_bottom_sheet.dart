@@ -6,43 +6,15 @@ import '../../../../states/user/user_state.dart';
 import 'chat_panel.dart';
 import '../../../../utils/snackbar_helper.dart';
 
-// ✅ UsageReporter: 파이어베이스 사용량 계측(이 파일에서는 READ만 발생)
-import '../../../../utils/usage_reporter.dart';
+import '../../../../services/latest_message_service.dart'; // ★ 추가
 
 /// Firestore 경로 참조 헬퍼: 최근 메시지 도큐먼트
 DocumentReference<Map<String, dynamic>> latestMessageRef(String roomId) =>
     FirebaseFirestore.instance.collection('chats').doc(roomId).collection('state').doc('latest_message');
 
-/// 최근 메시지를 스트림으로 노출
-/// - Firestore READ 계측: 스냅샷 수신마다 1회
-/// - 동일 문자열 반복 방지
-Stream<String> latestMessageStream(String roomId) async* {
-  final ref = latestMessageRef(roomId);
-
-  String? lastEmitted;
-  await for (final snapshot in ref.snapshots()) {
-    // 🔎 UsageReporter: Firestore READ 1건 계측
-    try {
-      await UsageReporter.instance.report(
-        area: roomId,
-        action: 'read', // READ
-        n: 1,
-        source: 'chat.latest_message.snapshots',
-      );
-    } catch (_) {
-      // 계측 실패는 기능에 영향 주지 않음
-    }
-
-    final data = snapshot.data();
-    final msg = (data == null) ? '' : (data['message'] is String ? data['message'] as String : '');
-
-    // distinct() 동작을 수동 구현
-    if (msg != lastEmitted) {
-      lastEmitted = msg;
-      yield msg;
-    }
-  }
-}
+// ★ (중요) latestMessageStream(String roomId) 함수는 제거되었습니다.
+//   헤더/패널/오픈 버튼은 전역 LatestMessageService가 유일하게 snapshots()를 구독하고,
+//   UI는 ValueListenableBuilder로 latest를 구독합니다.
 
 /// 구역 채팅 바텀시트 열기
 /// (⚠️ 이 함수에서는 Firestore 작업이 없으므로 UsageReporter 계측 없음)
@@ -166,7 +138,7 @@ void chatBottomSheet(BuildContext context) {
 
 /// 채팅 열기 버튼
 /// - roomId 변화를 감지하도록 `select` 사용 (read → select)
-/// - StreamBuilder 로딩/에러 상태 처리
+/// - ValueListenableBuilder로 서비스 캐시 구독
 class ChatOpenButton extends StatelessWidget {
   const ChatOpenButton({super.key});
 
@@ -174,52 +146,29 @@ class ChatOpenButton extends StatelessWidget {
   Widget build(BuildContext context) {
     // currentArea 변경 시 자동으로 리빌드되도록 select 사용
     final roomId = context.select<UserState, String?>(
-      (s) => s.user?.currentArea?.trim(),
+          (s) => s.user?.currentArea?.trim(),
     );
 
     if (roomId == null || roomId.isEmpty) {
       return const SizedBox.shrink();
     }
 
-    return StreamBuilder<String>(
-      stream: latestMessageStream(roomId),
-      builder: (context, snapshot) {
-        Widget child;
+    // 안전하게 서비스 시작(idempotent)
+    LatestMessageService.instance.start(roomId);
 
-        if (snapshot.hasError) {
-          child = const _ChatButtonChild(
-            icon: Icons.forum,
-            label: '채팅 열기',
-          );
-        } else if (snapshot.connectionState == ConnectionState.waiting) {
-          child = Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
-              SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-              SizedBox(width: 8),
-              Text('불러오는 중...'),
-            ],
-          );
-        } else {
-          final latestMsg = snapshot.data ?? '채팅 열기';
-          final text = latestMsg.length > 20 ? '${latestMsg.substring(0, 20)}...' : latestMsg;
-          child = _ChatButtonChild(
-            icon: Icons.forum,
-            label: text.isEmpty ? '채팅 열기' : text,
-          );
-        }
+    return ValueListenableBuilder<LatestMessageData>(
+      valueListenable: LatestMessageService.instance.latest,
+      builder: (context, data, _) {
+        final latestMsg = data.text;
+        final text = latestMsg.length > 20 ? '${latestMsg.substring(0, 20)}...' : latestMsg;
+        final label = text.isEmpty ? '채팅 열기' : text;
 
         // 흰색 배경 + 라운드 + 테두리로 깔끔한 버튼
         return ElevatedButton(
           onPressed: () => chatBottomSheet(context),
           style: ElevatedButton.styleFrom(
             elevation: 0,
-            backgroundColor: Colors.white,
-            // ✅ 버튼 배경도 흰색
+            backgroundColor: Colors.white, // ✅ 버튼 배경도 흰색
             foregroundColor: Colors.black87,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             shape: RoundedRectangleBorder(
@@ -227,37 +176,22 @@ class ChatOpenButton extends StatelessWidget {
               side: const BorderSide(color: Color(0xFFE0E0E0)),
             ),
           ),
-          child: child,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.forum, size: 18),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+              ),
+            ],
+          ),
         );
       },
-    );
-  }
-}
-
-class _ChatButtonChild extends StatelessWidget {
-  final IconData icon;
-  final String label;
-
-  const _ChatButtonChild({
-    required this.icon,
-    required this.label,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(icon, size: 18),
-        const SizedBox(width: 6),
-        Flexible(
-          child: Text(
-            label,
-            overflow: TextOverflow.ellipsis,
-            maxLines: 1,
-          ),
-        ),
-      ],
     );
   }
 }

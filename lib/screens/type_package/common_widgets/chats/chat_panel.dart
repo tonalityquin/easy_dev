@@ -10,6 +10,7 @@ import '../../../../utils/snackbar_helper.dart';
 // ✅ UsageReporter: "파이어베이스에서만" 계측 (READ / WRITE / DELETE 구분)
 //    - 이 파일에서는 latest_message 리스닝(READ)과 메시지 전송(WRITE)만 보고합니다.
 import '../../../../utils/usage_reporter.dart';
+import '../../../../services/latest_message_service.dart'; // ★ 추가
 
 class ChatPanel extends StatefulWidget {
   final String roomId;
@@ -25,11 +26,13 @@ class _ChatPanelState extends State<ChatPanel> {
 
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
-  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _chatSubscription;
+  // ★ 전역 서비스 사용: 개별 구독 제거
+  // StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _chatSubscription;
 
-  String latestMessage = '';
-  Timestamp? latestTimestamp;
-  bool _hasPendingWrites = false;
+  // (로컬 상태는 제거하고, 서비스 캐시만 사용)
+  // String latestMessage = '';
+  // Timestamp? latestTimestamp;
+  // bool _hasPendingWrites = false;
 
   List<String> _shortcuts = [];
   bool _canSend = false;
@@ -55,7 +58,9 @@ class _ChatPanelState extends State<ChatPanel> {
   @override
   void initState() {
     super.initState();
-    _listenToLatestMessage();
+    // ★ 개별 리스너 제거 — 전역 서비스가 이미 start(area)로 구독 중
+    // _listenToLatestMessage();
+
     _loadShortcuts();
     _controller.addListener(_handleTextChanged);
   }
@@ -64,8 +69,7 @@ class _ChatPanelState extends State<ChatPanel> {
   void didUpdateWidget(covariant ChatPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.roomId != widget.roomId) {
-      _chatSubscription?.cancel();
-      _listenToLatestMessage();
+      // ★ 구독 전환 불필요(전역 서비스가 처리)
       _loadShortcuts();
       _controller.clear(); // 방 변경 시 혼동 방지
       _exitMultiSelectIfNeeded();
@@ -79,39 +83,7 @@ class _ChatPanelState extends State<ChatPanel> {
     }
   }
 
-  /// Firestore READ 계측 지점
-  void _listenToLatestMessage() {
-    _chatSubscription = FirebaseFirestore.instance
-        .collection('chats')
-        .doc(widget.roomId)
-        .collection('state')
-        .doc('latest_message')
-        .snapshots(includeMetadataChanges: true)
-        .listen((docSnapshot) {
-      final data = docSnapshot.data();
-      if (!mounted) return;
-
-      setState(() {
-        _hasPendingWrites = docSnapshot.metadata.hasPendingWrites;
-        if (data == null) {
-          latestMessage = '';
-          latestTimestamp = null;
-          return;
-        }
-        final msg = data['message'];
-        latestMessage = (msg is String) ? msg : '';
-        final ts = data['timestamp'];
-        latestTimestamp = ts is Timestamp ? ts : null;
-      });
-
-      // 🔎 Firestore READ: 서버 동기화된 스냅샷 수신 시에만 계측
-      if (!docSnapshot.metadata.hasPendingWrites) {
-        _report('read', source: 'chat.latest_message.listen');
-      }
-    });
-  }
-
-  /// Firestore WRITE 계측 지점
+  /// Firestore WRITE 지점
   Future<void> _sendMessage() async {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
@@ -361,7 +333,7 @@ class _ChatPanelState extends State<ChatPanel> {
 
   @override
   void dispose() {
-    _chatSubscription?.cancel();
+    // _chatSubscription?.cancel(); // 개별 구독 없음
     _controller.removeListener(_handleTextChanged);
     _controller.dispose();
     _focusNode.dispose();
@@ -370,177 +342,181 @@ class _ChatPanelState extends State<ChatPanel> {
 
   @override
   Widget build(BuildContext context) {
-    String timeText = '';
-    final ts = latestTimestamp;
-    if (ts != null) {
-      try {
-        final dt = ts.toDate();
-        if (dt.millisecondsSinceEpoch > 0) {
-          timeText = DateFormat('yyyy-MM-dd HH:mm').format(dt.toLocal());
+    return ValueListenableBuilder<LatestMessageData>(
+      valueListenable: LatestMessageService.instance.latest,
+      builder: (context, data, _) {
+        // 시간 문자열 구성
+        String timeText = '';
+        final ts = data.timestamp;
+        if (ts != null) {
+          try {
+            final dt = ts.toDate();
+            if (dt.millisecondsSinceEpoch > 0) {
+              timeText = DateFormat('yyyy-MM-dd HH:mm').format(dt.toLocal());
+            }
+          } catch (_) {}
         }
-      } catch (_) {}
-    }
+        final subtitle =
+        (data.hasPendingWrites || ts == null) ? '동기화 중...' : (timeText.isNotEmpty ? '🕒 $timeText' : '');
 
-    final subtitle =
-    _hasPendingWrites || ts == null ? '동기화 중...' : (timeText.isNotEmpty ? '🕒 $timeText' : '');
-
-    return Column(
-      mainAxisSize: MainAxisSize.max,
-      children: [
-        // 상단 액션 바
-        Row(
+        return Column(
+          mainAxisSize: MainAxisSize.max,
           children: [
-            if (_shortcuts.isNotEmpty) ...[
-              if (!_isMultiSelect)
+            // 상단 액션 바
+            Row(
+              children: [
+                if (_shortcuts.isNotEmpty) ...[
+                  if (!_isMultiSelect)
+                    TextButton.icon(
+                      onPressed: _toggleMultiSelect,
+                      icon: const Icon(Icons.select_all),
+                      label: const Text('선택'),
+                    )
+                  else ...[
+                    FilledButton.icon(
+                      onPressed: _selectedShortcutIdx.isNotEmpty ? _insertSelectedShortcuts : null,
+                      icon: const Icon(Icons.input),
+                      label: Text('삽입(${_selectedShortcutIdx.length})'),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: _toggleMultiSelect,
+                      child: const Text('취소'),
+                    ),
+                  ],
+                  const Spacer(),
+                ] else
+                  const Spacer(),
                 TextButton.icon(
-                  onPressed: _toggleMultiSelect,
-                  icon: const Icon(Icons.select_all),
-                  label: const Text('선택'),
-                )
-              else ...[
-                FilledButton.icon(
-                  onPressed: _selectedShortcutIdx.isNotEmpty ? _insertSelectedShortcuts : null,
-                  icon: const Icon(Icons.input),
-                  label: Text('삽입(${_selectedShortcutIdx.length})'),
-                ),
-                const SizedBox(width: 8),
-                TextButton(
-                  onPressed: _toggleMultiSelect,
-                  child: const Text('취소'),
+                  onPressed: _addShortcut,
+                  icon: const Icon(Icons.add),
+                  label: const Text('쇼트컷 추가'),
                 ),
               ],
-              const Spacer(),
-            ] else
-              const Spacer(),
-            TextButton.icon(
-              onPressed: _addShortcut,
-              icon: const Icon(Icons.add),
-              label: const Text('쇼트컷 추가'),
             ),
-          ],
-        ),
-        const SizedBox(height: 8),
+            const SizedBox(height: 8),
 
-        // 최근 메시지 + 쇼트컷
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Container(
-                  width: double.infinity,
-                  margin: const EdgeInsets.all(12),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('[익명]', style: TextStyle(fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 6),
-                      Text(latestMessage),
-                      const SizedBox(height: 8),
-                      if (subtitle.isNotEmpty)
-                        Text(
-                          subtitle,
-                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                        ),
-                    ],
-                  ),
-                ),
-                if (_shortcuts.isNotEmpty) ...[
-                  SizedBox(
-                    height: 40,
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Row(
-                        children: List.generate(_shortcuts.length, (i) {
-                          final s = _shortcuts[i];
-                          final selected = _selectedShortcutIdx.contains(i);
-
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: GestureDetector(
-                              onLongPress: !_isMultiSelect ? () => _removeShortcut(s) : null,
-                              child: FilterChip(
-                                selected: selected,
-                                label: Text(s, overflow: TextOverflow.ellipsis),
-                                onSelected: (val) {
-                                  if (_isMultiSelect) {
-                                    _toggleShortcutSelection(i);
-                                  } else {
-                                    _insertAtCursor(s); // 즉시 삽입
-                                  }
-                                },
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                              ),
+            // 최근 메시지 + 쇼트컷
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('[익명]', style: TextStyle(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 6),
+                          Text(data.text),
+                          const SizedBox(height: 8),
+                          if (subtitle.isNotEmpty)
+                            Text(
+                              subtitle,
+                              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                             ),
-                          );
-                        }),
+                        ],
+                      ),
+                    ),
+                    if (_shortcuts.isNotEmpty) ...[
+                      SizedBox(
+                        height: 40,
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Row(
+                            children: List.generate(_shortcuts.length, (i) {
+                              final s = _shortcuts[i];
+                              final selected = _selectedShortcutIdx.contains(i);
+
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: GestureDetector(
+                                  onLongPress: !_isMultiSelect ? () => _removeShortcut(s) : null,
+                                  child: FilterChip(
+                                    selected: selected,
+                                    label: Text(s, overflow: TextOverflow.ellipsis),
+                                    onSelected: (val) {
+                                      if (_isMultiSelect) {
+                                        _toggleShortcutSelection(i);
+                                      } else {
+                                        _insertAtCursor(s); // 즉시 삽입
+                                      }
+                                    },
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+
+            // 입력 + 지우기 + 전송
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    focusNode: _focusNode,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => _canSend ? _sendMessage() : null,
+                    decoration: InputDecoration(
+                      hintText: '메시지를 입력하세요...',
+                      filled: true,
+                      fillColor: Colors.grey[200],
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide.none,
+                      ),
+                      // 입력 전체 지우기 버튼
+                      suffixIcon: IconButton(
+                        tooltip: '입력 지우기',
+                        icon: const Icon(Icons.clear),
+                        onPressed: _controller.text.isNotEmpty ? _clearInput : null,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 8),
-                ],
+                ),
+                const SizedBox(width: 8),
+                Semantics(
+                  button: true,
+                  label: '메시지 보내기',
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: _canSend ? Colors.blue : Colors.blue.withOpacity(0.4),
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.send, color: Colors.white),
+                      onPressed: _canSend ? _sendMessage : null,
+                      tooltip: '보내기',
+                    ),
+                  ),
+                ),
               ],
             ),
-          ),
-        ),
-
-        // 입력 + 지우기 + 전송
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _controller,
-                focusNode: _focusNode,
-                textInputAction: TextInputAction.send,
-                onSubmitted: (_) => _canSend ? _sendMessage() : null,
-                decoration: InputDecoration(
-                  hintText: '메시지를 입력하세요...',
-                  filled: true,
-                  fillColor: Colors.grey[200],
-                  contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide.none,
-                  ),
-                  // 입력 전체 지우기 버튼
-                  suffixIcon: IconButton(
-                    tooltip: '입력 지우기',
-                    icon: const Icon(Icons.clear),
-                    onPressed: _controller.text.isNotEmpty ? _clearInput : null,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Semantics(
-              button: true,
-              label: '메시지 보내기',
-              child: Container(
-                decoration: BoxDecoration(
-                  color: _canSend ? Colors.blue : Colors.blue.withOpacity(0.4),
-                  shape: BoxShape.circle,
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.send, color: Colors.white),
-                  onPressed: _canSend ? _sendMessage : null,
-                  tooltip: '보내기',
-                ),
-              ),
-            ),
+            const SizedBox(height: 8),
           ],
-        ),
-        const SizedBox(height: 8),
-      ],
+        );
+      },
     );
   }
 }
