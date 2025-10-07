@@ -227,6 +227,7 @@ class UserWriteService {
     }
 
     // delete 집계 보고
+    // ignore: unused_local_variable
     for (final e in buckets.entries) {
       /*await UsageReporter.instance.report(
         area: e.key,

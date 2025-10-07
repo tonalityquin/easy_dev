@@ -261,6 +261,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
           final areaGuess = _inferAreaFromUserDoc(d.id, d.data());
           buckets.update(areaGuess, (v) => v + 1, ifAbsent: () => 1);
         }
+        // ignore: unused_local_variable
         for (final e in buckets.entries) {
           /*await UsageReporter.instance.report(
             area: e.key,

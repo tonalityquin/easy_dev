@@ -474,6 +474,7 @@ class PlateTtsListenerService {
   }
 
   static void _annotateUsage({required String? area, required String source}) {
+    // ignore: unused_local_variable
     final a = (area == null || area.isEmpty) ? '(unknown)' : area;
     /*UsageReporter.instance.annotate(
       area: a,

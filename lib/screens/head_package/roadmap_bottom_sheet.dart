@@ -23,16 +23,6 @@ class RoadmapItem {
 const List<RoadmapItem> _roadmapData = [
   RoadmapItem(
     load: RoadmapLoad.medium,
-    title: 'API 외부 삽입 로직 강화',
-    notes: [
-      'Google Calendar API',
-      'Google Excel API',
-      'Google Accounts',
-    ],
-    status: RoadmapStatus.done,
-  ),
-  RoadmapItem(
-    load: RoadmapLoad.medium,
     title: '베타 버전 릴리즈',
     notes: [
       'Play Console 초기 버전 릴리즈',
@@ -40,51 +30,28 @@ const List<RoadmapItem> _roadmapData = [
     status: RoadmapStatus.done,
   ),
   RoadmapItem(
-    load: RoadmapLoad.light,
-    title: '입차 완료 현황 심화 열람 limit 확장',
-    notes: [
-      'Goal.각 주차 구역 별로 limit 지정',
-      '각 주차 구역 별 실시간 입차 번호판 확인 가능 갯수 범위 조절',
-    ],
-    status: RoadmapStatus.done,
-  ),
-  RoadmapItem(
-    load: RoadmapLoad.medium,
-    title: '사진 촬영 시 불안정한 화소 해결',
-    notes: [
-      'Prob.촬영 후 사진은 정상이나 촬영 시 포커싱에서의 문제가 불특정 기기에서 발생',
-      'Goal.촬영 전과 후의 카메라 페이지가 동일한 성능을 가지도록',
-    ],
-    status: RoadmapStatus.done,
-  ),
-  RoadmapItem(
-    load: RoadmapLoad.medium,
-    title: '중복 번호판 데이터 생성',
-    notes: [
-      'Condition',
-      '1.동일한 날짜',
-      '2.동일한 번호판',
-      'Prob.동일한 테이블에서 관리하고 있어 이중 데이터 생성 불가능'
-          'Goal.동일한 날짜에서 기존 로직에 방해 없이 새롭게 데이터 생성'
-    ],
-    status: RoadmapStatus.done,
-  ),
-  RoadmapItem(
     load: RoadmapLoad.heavy,
-    title: '기술 조사(서비스 - 번호판 생성 - OCR)',
+    title: '번호판 OCR 기술 적용',
     notes: [
-      '촬영한 사진에 적혀 있는 번호판 데이터가 번호판 컨트롤러에 삽입',
-      'Requirement.로컬 AI 모델 사용',
+      '카메라로 감지한 번호판 데이터가 번호판 컨트롤러에 삽입',
+    ],
+    status: RoadmapStatus.done,
+  ),
+  RoadmapItem(
+    load: RoadmapLoad.medium,
+    title: '로컬에 저장한 출근, 퇴근 시간 알림 기능',
+    notes: [
+      '퇴근 1시간 전에 근무자 핸드폰에서 퇴근 버튼 누를 것을 장려하는 알람이 울리도록',
     ],
     status: RoadmapStatus.done,
   ),
   RoadmapItem(
     load: RoadmapLoad.light,
-    title: '뒤로가기 앱 꺼짐 방지 로직 재삽입',
+    title: '로컬 모드',
     notes: [
-      '모든 화면에서 뒤로가기 시 앱 꺼짐 로직 방지 코드 점검 및 삽입',
+      '비 동기화 무료 1인용 사용 모드 지원',
     ],
-    status: RoadmapStatus.done,
+    status: RoadmapStatus.inProgress,
   ),
   RoadmapItem(
     load: RoadmapLoad.light,
@@ -93,7 +60,7 @@ const List<RoadmapItem> _roadmapData = [
       '페이지 별로 FAQ 키워드 단어 삽입',
       '사용자가 어려움 혹은 오류 발생 시 키워드를 검색해서 대처할 수 있도록',
     ],
-    status: RoadmapStatus.inProgress,
+    status: RoadmapStatus.planned,
   ),
   RoadmapItem(
     load: RoadmapLoad.light,
@@ -115,22 +82,6 @@ const List<RoadmapItem> _roadmapData = [
   ),
   RoadmapItem(
     load: RoadmapLoad.light,
-    title: 'Block Dialog 삽입 과정 추가',
-    notes: [
-      '번호판 생성 수정 등 실시간에 민감한 로직에 방어 코드 삽입',
-    ],
-    status: RoadmapStatus.planned,
-  ),
-  RoadmapItem(
-    load: RoadmapLoad.light,
-    title: '디버그 경로 보완',
-    notes: [
-      'Stress Test 중 발생하는 케이스 define',
-    ],
-    status: RoadmapStatus.planned,
-  ),
-  RoadmapItem(
-    load: RoadmapLoad.light,
     title: '가이드북 생성 및 액션 카드 추가',
     notes: [
       '앱에서 캡처 등을 통해 특정 난이도 있는 행동들에 대한 가이드 북 삽입',
@@ -139,7 +90,23 @@ const List<RoadmapItem> _roadmapData = [
   ),
   RoadmapItem(
     load: RoadmapLoad.heavy,
-    title: 'QR 코드 생성(태블릿 모드)',
+    title: '업무 통계 접근성 완화 지원',
+    notes: [
+      '외부 프로그램으로 업무 통계 데이터 제공',
+    ],
+    status: RoadmapStatus.planned,
+  ),
+  RoadmapItem(
+    load: RoadmapLoad.heavy,
+    title: '홈페이지 모드 지원',
+    notes: [
+      '홈페이지로 출차 요청 및 업무 보조 지원',
+    ],
+    status: RoadmapStatus.planned,
+  ),
+  RoadmapItem(
+    load: RoadmapLoad.heavy,
+    title: 'QR 코드 지원',
     notes: [
       'Case A.사용자가 QR코드를 촬영하여 받은 일회성 페이지에서 특정 번호판을 입차 완료에서 출차 요청으로 변경',
       'Case B.사용자가 출차 요청한 후, 발급받은 QR코드를 촬영하여 출차 완료가 되면 알림 수신',
@@ -147,15 +114,7 @@ const List<RoadmapItem> _roadmapData = [
     status: RoadmapStatus.planned,
   ),
 
-  RoadmapItem(
-    load: RoadmapLoad.medium,
-    title: '로컬에 저장한 출근, 퇴근 시간 알림 기능',
-    notes: [
-      'Goal.퇴근 10분 전 등 특정 시간에 맞춰서 핸드폰에서 알람이 울리도록',
-      'Requirement.로컬 AI 모델 사용',
-    ],
-    status: RoadmapStatus.planned,
-  ),
+  
 ];
 
 class RoadmapBottomSheet extends StatelessWidget {

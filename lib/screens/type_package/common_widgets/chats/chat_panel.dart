@@ -43,6 +43,7 @@ class _ChatPanelState extends State<ChatPanel> {
   /// ────────────────────────────────────────────────────────────────────────────
   /// UsageReporter 헬퍼 (파이어베이스 작업만 호출)
   /// ────────────────────────────────────────────────────────────────────────────
+  // ignore: unused_element_parameter
   Future<void> _report(String action, {int n = 1, required String source}) async {
     try {
       /*await UsageReporter.instance

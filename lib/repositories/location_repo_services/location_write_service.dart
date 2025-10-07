@@ -48,10 +48,10 @@ class LocationWriteService {
   }
 
   Future<void> addCompositeLocation(
-    String parent,
-    List<Map<String, dynamic>> subs,
-    String area,
-  ) async {
+      String parent,
+      List<Map<String, dynamic>> subs,
+      String area,
+      ) async {
     final batch = _firestore.batch();
     int writeOps = 0;
 
@@ -97,7 +97,11 @@ class LocationWriteService {
           'area': area,
           'subs': {
             'len': subs.length,
-            'sampleNames': subs.map((m) => (m['name'] ?? '').toString()).where((s) => s.isNotEmpty).take(10).toList(),
+            'sampleNames': subs
+                .map((m) => (m['name'] ?? '').toString())
+                .where((s) => s.isNotEmpty)
+                .take(10)
+                .toList(),
           },
           'error': {
             'type': e.runtimeType.toString(),
@@ -132,6 +136,7 @@ class LocationWriteService {
         final area = _inferAreaFromId(id);
         areaBuckets.update(area, (v) => v + 1, ifAbsent: () => 1);
       }
+      // ignore: unused_local_variable
       for (final entry in areaBuckets.entries) {
         /*await UsageReporter.instance.report(
           area: entry.key,
