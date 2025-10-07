@@ -6,6 +6,9 @@ import 'package:flutter/material.dart';
 import 'service/offline_login_controller.dart';
 import 'service/sections/offline_login_form.dart';
 
+// ★ 추가: 오프라인 세션 존재 시 즉시 진입을 위한 서비스
+import 'package:easydev/offlines/offline_auth_service.dart';
+
 class OfflineLoginScreen extends StatefulWidget {
   final VoidCallback? onLoginSucceeded;
 
@@ -52,6 +55,17 @@ class _OfflineLoginScreenState extends State<OfflineLoginScreen>
     );
 
     _loginAnimationController.forward();
+
+    // ★ 추가: 이미 오프라인 세션이 있으면 즉시 성공 처리(바로 진입)
+    //  - controller 내부 저장 로직과 무관하게, 앱 진입 스킵 UX 보장
+    Future.microtask(() async {
+      final has = await OfflineAuthService.instance.hasSession();
+      if (!mounted) return;
+      if (has) {
+        // routes.dart에서 onLoginSucceeded 콜백이 '/offline_commute'로 네비게이션함
+        widget.onLoginSucceeded?.call();
+      }
+    });
   }
 
   @override

@@ -12,6 +12,10 @@ import 'utils/offline_commute_inside_clock_in_log_uploader.dart';
 // import 'package:shared_preferences/shared_preferences.dart';
 // import 'package:easydev/services/endtime_reminder_service.dart';
 
+// (선택) 오프라인 세션을 활용하고 싶다면 주석 해제하여 사용하세요.
+// import 'package:easydev/offlines/offline_auth_service.dart';
+// import 'package:easydev/offlines/offline_session_model.dart';
+
 // ✅ 라우팅을 밖에서 수행하기 위한 목적지 enum
 enum CommuteDestination { none, headquarter, type }
 
@@ -44,7 +48,7 @@ class OfflineCommuteInsideController {
     if (!userState.isWorking) return CommuteDestination.none;
     if (!context.mounted) return CommuteDestination.none;
 
-    // 기존: Firestore로 본사 여부 판단
+    // 기존(Firestore): 본사 여부 판단 → headquarter/type
     // 변경: 정보가 없으므로 기본 목적지를 'type'으로 보냄(업무유형 선택 페이지)
     return CommuteDestination.type;
   }
@@ -86,10 +90,18 @@ class OfflineCommuteInsideController {
 
   Future<void> _uploadAttendanceSilently(BuildContext context) async {
     final userState = Provider.of<UserState>(context, listen: false);
-    final area = userState.area;
-    final name = userState.name;
+    var area = userState.area;
+    var name = userState.name;
+
+    // (선택) 오프라인 세션을 활용하고 싶다면 아래 주석을 해제해서 폴백 사용
+    // try {
+    //   final session = await OfflineAuthService.instance.currentSession();
+    //   area = (area.isEmpty) ? (session?.area ?? area) : area;
+    //   name = (name.isEmpty) ? (session?.name ?? name) : name;
+    // } catch (_) {}
 
     if (area.isEmpty || name.isEmpty) {
+      // 업로드 필수 정보 부족 시 업로드 스킵
       return;
     }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:easydev/offlines/offline_auth_service.dart';
 
 /// 오프라인 모드 전용 로그인 컨트롤러
 /// - 아래 고정 자격증명만 성공 처리:
@@ -54,7 +55,7 @@ class OfflineLoginController {
     );
   }
 
-  /// 비밀번호 표시/숨김 토글
+  /// 비밀번호 표시/숨김 토글 (무인자) — UI에서 setState로 래핑해 호출
   void togglePassword() {
     obscurePassword = !obscurePassword;
   }
@@ -62,7 +63,7 @@ class OfflineLoginController {
   /// 숫자만 남기고 간단 포맷 적용(필요 시 고도화 가능)
   void formatPhoneNumber(String value, StateSetter setState) {
     final digits = _digitsOnly(value);
-    // 여기서는 단순히 숫자만 유지 (하이픈 포맷이 필요하면 추가하세요)
+    // 여기서는 단순히 숫자만 유지 (하이픈 포맷이 필요하면 추가)
     final selectionIndex = phoneController.selection.baseOffset;
     setState(() {
       phoneController.text = digits;
@@ -78,14 +79,17 @@ class OfflineLoginController {
     if (isLoading) return;
     setState(() => isLoading = true);
     try {
-      await Future<void>.delayed(const Duration(milliseconds: 150)); // 살짝의 UX용 딜레이
+      await Future<void>.delayed(const Duration(milliseconds: 150)); // UX용 미세 딜레이
       await attemptLogin(context);
     } finally {
-      setState(() => isLoading = false);
+      if (context.mounted) {
+        setState(() => isLoading = false);
+      }
     }
   }
 
-  /// 오프라인 전용 로그인 시도(직접 호출 가능)
+  /// 오프라인 전용 로그인 시도
+  /// - 성공 시: SQLite 세션 저장 → onLoginSucceeded or '/offline_commute'
   Future<void> attemptLogin(BuildContext context) async {
     final name = nameController.text.trim();
     final phone = _digitsOnly(phoneController.text.trim());
@@ -95,20 +99,42 @@ class OfflineLoginController {
         phone == allowedPhone &&
         password == allowedPassword;
 
-    if (ok) {
+    if (!ok) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('오프라인 로그인 정보가 올바르지 않습니다.')),
+        );
+      }
+      return;
+    }
+
+    try {
+      // ✅ 오프라인 세션을 SQLite에 저장
+      await OfflineAuthService.instance.signInOffline(
+        userId: phone,
+        name: name,           // 입력값 유지(표시는 별도 하드코딩 위젯 사용 가능)
+        position: 'dev',      // 요구사항
+        phone: phone,         // 01012345678
+        area: '근무 지역',     // 요구사항
+      );
+
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('오프라인 로그인 성공')),
       );
+
+      // ✅ 네비게이션
       if (onLoginSucceeded != null) {
         onLoginSucceeded!();
       } else {
-        // 라우트 상수 import 없이도 작동하도록 이름 문자열 사용
         Navigator.of(context).pushReplacementNamed('/offline_commute');
       }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('오프라인 로그인 정보가 올바르지 않습니다.')),
-      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('오프라인 세션 저장 실패: $e')),
+        );
+      }
     }
   }
 

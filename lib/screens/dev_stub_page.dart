@@ -9,6 +9,8 @@ import 'dev_package/github_markdown_bottom_sheet.dart';
 import 'dev_package/local_prefs_bottom_sheet.dart';
 import 'dev_package/dev_memo.dart';
 import 'dev_package/google_docs_bottom_sheet.dart';
+// ✅ 추가: SQLite 탐색기
+import 'dev_package/sqlite_explorer_bottom_sheet.dart';
 
 /// ====== 개발 전용 팔레트 (개발 카드와 동일 톤) ======
 /// 버튼/Badge 배경
@@ -92,9 +94,11 @@ class DevStubPage extends StatelessWidget {
                           ? 3
                           : 2;
                       const spacing = 12.0;
-                      final textScale = MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
+                      final textScale =
+                      MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
 
-                      final tileWidth = (width - spacing * (crossAxisCount - 1)) / crossAxisCount;
+                      final tileWidth =
+                          (width - spacing * (crossAxisCount - 1)) / crossAxisCount;
                       final baseTileHeight = 150.0;
                       final tileHeight = baseTileHeight * textScale;
                       final childAspectRatio = tileWidth / tileHeight;
@@ -167,7 +171,8 @@ class DevStubPage extends StatelessWidget {
                               isScrollControlled: true,
                               backgroundColor: Colors.transparent,
                               builder: (_) => const Material(
-                                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                                borderRadius:
+                                BorderRadius.vertical(top: Radius.circular(16)),
                                 clipBehavior: Clip.antiAlias,
                                 child: SizedBox(
                                   height: 560,
@@ -202,7 +207,8 @@ class DevStubPage extends StatelessWidget {
                           tintColor: calLight,
                           titleColor: calDark,
                           onTap: () {
-                            Navigator.of(context).pushNamed(AppRoutes.devCalendar);
+                            Navigator.of(context)
+                                .pushNamed(AppRoutes.devCalendar);
                           },
                         ),
 
@@ -218,6 +224,32 @@ class DevStubPage extends StatelessWidget {
                           onTap: () async {
                             GoogleDocsDocPanel.enabled.value = true;
                             await GoogleDocsDocPanel.togglePanel();
+                          },
+                        ),
+
+                        // ✅ NEW: SQLite 탐색기
+                        _ActionCard(
+                          icon: Icons.storage_rounded,
+                          title: 'SQLite',
+                          subtitle: 'DB 탐색기 · 미리보기',
+                          bg: cs.primaryContainer,
+                          fg: cs.onPrimaryContainer,
+                          tintColor: Colors.blueGrey.withOpacity(.15),
+                          onTap: () {
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => const Material(
+                                borderRadius:
+                                BorderRadius.vertical(top: Radius.circular(16)),
+                                clipBehavior: Clip.antiAlias,
+                                child: SizedBox(
+                                  height: 560,
+                                  child: SQLiteExplorerBottomSheet(),
+                                ),
+                              ),
+                            );
                           },
                         ),
                       ];

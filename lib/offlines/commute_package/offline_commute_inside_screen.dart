@@ -4,7 +4,11 @@ import 'package:provider/provider.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../utils/sheets_config.dart';
-import '../../../utils/logout_helper.dart';
+
+// ✨ 변경: 온라인용 LogoutHelper 제거 → 오프라인 세션 삭제 전용 헬퍼 사용
+import 'package:easydev/routes.dart';
+
+import '../../offline_logout_helper.dart';
 import 'commute_inside_package/offline_commute_inside_controller.dart';
 import 'commute_inside_package/sections/offline_commute_inside_report_button_section.dart';
 import 'commute_inside_package/sections/offline_commute_inside_work_button_section.dart';
@@ -171,10 +175,10 @@ class _OfflineCommuteInsideScreenState extends State<OfflineCommuteInsideScreen>
   }
 
   Future<void> _handleLogout(BuildContext context) async {
-    await LogoutHelper.logoutAndGoToLogin(
+    // ✨ 변경: 오프라인 세션 삭제 후 오프라인 로그인으로 복귀
+    await OfflineLogoutHelper.logoutAndGoToLogin(
       context,
-      checkWorking: false,
-      delay: const Duration(milliseconds: 500),
+      loginRoute: AppRoutes.offlineLogin,
     );
   }
 

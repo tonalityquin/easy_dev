@@ -61,9 +61,11 @@ class AppRoutes {
 // 오프라인 모드: DevAuthGate/SharedPreferences 의존 제거 버전
 // =====================================================
 //
-// - 기존 코드의 _DevAuthGate/SharedPreferences 인증 로직을 제거했습니다.
-// - 오프라인 로그인 성공 시, '/offline_commute'로 이동하도록 OfflineLoginScreen에 콜백을 주입합니다.
-// - 온라인/정식 모드가 필요하면, 별도 빌드 플래그로 다른 routes.dart를 사용하세요.
+// - OfflineLoginScreen에서 SQLite 세션 존재 시 자동으로 onLoginSucceeded 호출.
+// - 오프라인 로그인 성공 시, '/offline_commute'로 이동(아래 routes에서 콜백 처리).
+// - 필요 시, 앱의 초기 라우트를 '/offline_login'로 두거나
+//   별도 '/offline_gate' 라우트에 OfflineEntryGate를 연결해도 됩니다.
+//
 
 final Map<String, WidgetBuilder> appRoutes = {
   // 허브(셀렉터)
@@ -105,3 +107,17 @@ final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.breakSheet: (context) =>
   const TimesheetPage(initialTab: TimesheetTab.breakTime),
 };
+
+/* ────────────────────────────────────────────────────────────────────────────
+※ 선택사항: 오프라인 진입 게이트 라우트를 쓰고 싶다면 아래를 추가하세요.
+import 'package:easydev/offlines/offline_entry_gate.dart';
+
+... routes 내에:
+'/offline_gate': (context) => const OfflineEntryGate(
+  offlineHomeRoute: AppRoutes.offlineCommute,
+  loginRoute: AppRoutes.offlineLogin,
+),
+
+그리고 MaterialApp.initialRoute를 '/offline_gate'로 지정하면,
+세션 유무에 따라 자동 분기됩니다.
+──────────────────────────────────────────────────────────────────────────── */
