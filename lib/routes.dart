@@ -1,23 +1,29 @@
 // lib/routes.dart
+// 오프라인 모드용 라우팅 테이블
+// - SharedPreferences 기반 DevAuthGate 제거
+// - OfflineLoginScreen 성공 시 OfflineCommuteInsideScreen으로 이동하도록 연결
+
+import 'package:flutter/material.dart';
+
+// ▼ 오프라인 패키지
+import 'package:easydev/offlines/commute_package/offline_commute_inside_screen.dart';
+import 'package:easydev/offlines/login_package/offline_login_screen.dart';
+
+// ▼ 일반 화면들
 import 'package:easydev/screens/dev_stub_page.dart';
 import 'package:easydev/screens/head_stub_page.dart';
-import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:easydev/screens/headquarter_page.dart';
+import 'package:easydev/screens/login_package/login_screen.dart';
+import 'package:easydev/screens/type_page.dart';
+import 'package:easydev/screens/tablet_package/tablet_page.dart';
+import 'package:easydev/screens/faq_page.dart';
+import 'package:easydev/screens/community_stub_page.dart';
 
 import 'screens/commute_package/commute_inside_screen.dart';
 import 'screens/dev_package/dev_calendar_page.dart';
 import 'screens/head_package/company_calendar_page.dart';
 import 'screens/head_package/labor_guide_page.dart';
-import 'screens/headquarter_page.dart';
-import 'screens/login_package/login_screen.dart';
-import 'screens/tablet_package/tablet_page.dart';
-import 'screens/type_page.dart';
 import 'selector_hubs_page.dart';
-
-import 'screens/faq_page.dart';
-import 'screens/parking_page.dart';
-
-import 'screens/community_stub_page.dart';
 
 // ▼ 신규 페이지 import
 import 'screens/head_package/timesheet_page.dart';
@@ -26,14 +32,17 @@ class AppRoutes {
   static const selector = '/selector';
   static const serviceLogin = '/service_login';
   static const tabletLogin = '/tablet_login';
-  static const outsideLogin = '/outside_login';
+
+  // ✅ 오프라인 전용
+  static const offlineLogin = '/offline_login';
+  static const offlineCommute = '/offline_commute';
+
   static const commute = '/commute';
-  static const commuteShortcut = '/commute_shortcut';
   static const headquarterPage = '/headquarter_page';
   static const typePage = '/type_page';
   static const tablet = '/tablet_page';
   static const faq = '/faq';
-  static const parking = '/parking';
+
   static const communityStub = '/community_stub';
   static const headStub = '/head_stub';
   static const devStub = '/dev_stub';
@@ -48,103 +57,49 @@ class AppRoutes {
   static const breakSheet = '/break_sheet';
 }
 
-/// ============================
-/// 간단 라우트 가드: dev_auth + dev_auth_until 검사
-/// ============================
-const _prefsKeyDevAuth = 'dev_auth';
-const _prefsKeyDevAuthUntil = 'dev_auth_until';
-
-Future<bool> _isDevAuthorized() async {
-  final prefs = await SharedPreferences.getInstance();
-  final ok = prefs.getBool(_prefsKeyDevAuth) ?? false;
-  final until = prefs.getInt(_prefsKeyDevAuthUntil);
-  final alive = ok && until != null && DateTime.now().millisecondsSinceEpoch < until;
-  if (!alive) {
-    // 만료/미인증이면 정리(선택)
-    await prefs.remove(_prefsKeyDevAuth);
-    await prefs.remove(_prefsKeyDevAuthUntil);
-  }
-  return alive;
-}
-
-class _DevAuthGate extends StatelessWidget {
-  const _DevAuthGate({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<bool>(
-      future: _isDevAuthorized(),
-      builder: (context, snap) {
-        if (snap.connectionState != ConnectionState.done) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-        if (snap.data == true) return child;
-        return const _NotAuthorizedScreen();
-      },
-    );
-  }
-}
-
-class _NotAuthorizedScreen extends StatelessWidget {
-  const _NotAuthorizedScreen();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('권한 필요')),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.lock_outline, size: 48),
-              const SizedBox(height: 12),
-              const Text(
-                '개발자 인증이 필요합니다.\n허브 화면에서 하단 펠리컨을 눌러 개발 코드를 입력하세요.',
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.selector),
-                icon: const Icon(Icons.home),
-                label: const Text('허브로 이동'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
+// =====================================================
+// 오프라인 모드: DevAuthGate/SharedPreferences 의존 제거 버전
+// =====================================================
+//
+// - 기존 코드의 _DevAuthGate/SharedPreferences 인증 로직을 제거했습니다.
+// - 오프라인 로그인 성공 시, '/offline_commute'로 이동하도록 OfflineLoginScreen에 콜백을 주입합니다.
+// - 온라인/정식 모드가 필요하면, 별도 빌드 플래그로 다른 routes.dart를 사용하세요.
 
 final Map<String, WidgetBuilder> appRoutes = {
+  // 허브(셀렉터)
   AppRoutes.selector: (context) => const SelectorHubsPage(),
+
+  // 서비스/태블릿 로그인(온라인용 기존 화면: 유지)
   AppRoutes.serviceLogin: (context) => const LoginScreen(),
   AppRoutes.tabletLogin: (context) => const LoginScreen(mode: 'tablet'),
-  AppRoutes.outsideLogin: (context) => const LoginScreen(mode: 'outside'),
+
+  // ✅ 오프라인 로그인 → 성공 시 오프라인 출퇴근으로 이동
+  AppRoutes.offlineLogin: (context) => OfflineLoginScreen(
+    onLoginSucceeded: () =>
+        Navigator.of(context).pushReplacementNamed(AppRoutes.offlineCommute),
+  ),
+
+  // 출퇴근(온라인/오프라인)
   AppRoutes.commute: (context) => const CommuteInsideScreen(),
+  AppRoutes.offlineCommute: (context) => const OfflineCommuteInsideScreen(),
+
+  // 기타 페이지들
   AppRoutes.headquarterPage: (context) => const HeadquarterPage(),
   AppRoutes.typePage: (context) => const TypePage(),
   AppRoutes.tablet: (context) => const TabletPage(),
   AppRoutes.faq: (context) => const FaqPage(),
 
-  // ✅ 개발자 전용(또는 인증 필요) 라우트는 Gate로 감싼다
-  AppRoutes.parking: (context) => const _DevAuthGate(child: ParkingPage()),
+  // 스텁들(오프라인 모드에서는 권한 게이트 제거)
   AppRoutes.communityStub: (context) => const CommunityStubPage(),
   AppRoutes.headStub: (context) => const HeadStubPage(),
-  AppRoutes.devStub: (context) => const _DevAuthGate(child: DevStubPage()),
+  AppRoutes.devStub: (context) => const DevStubPage(),
 
-  // ▼ 기존 페이지
+  // 기존 페이지
   AppRoutes.companyCalendar: (context) => const CompanyCalendarPage(),
   AppRoutes.devCalendar: (context) => const DevCalendarPage(),
   AppRoutes.laborGuide: (context) => const LaborGuidePage(),
 
-  // ▼ 신규 페이지 매핑
+  // 신규 타임시트 페이지
   AppRoutes.attendanceSheet: (context) =>
   const TimesheetPage(initialTab: TimesheetTab.attendance),
   AppRoutes.breakSheet: (context) =>

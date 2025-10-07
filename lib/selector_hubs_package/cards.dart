@@ -320,7 +320,7 @@ class ParkingCard extends StatelessWidget {
         bg: _base, iconColor: Colors.white,
         titleWidget: title,
         buttonBg: _base, buttonFg: Colors.white,
-        onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.parking),
+        onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.offlineLogin),
       ),
     );
   }
