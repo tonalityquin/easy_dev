@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 /// 오프라인 모드 전용 로그인 컨트롤러
-/// - Firestore / SharedPreferences / 전역 상태 의존 없음
 /// - 아래 고정 자격증명만 성공 처리:
 ///   이름: tester / 전화번호: 01012345678 / 비밀번호: 12345
 class OfflineLoginController {

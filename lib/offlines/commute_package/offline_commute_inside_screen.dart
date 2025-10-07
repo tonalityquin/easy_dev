@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../states/user/user_state.dart';
 import '../../../utils/snackbar_helper.dart';
@@ -21,6 +20,8 @@ class OfflineCommuteInsideScreen extends StatefulWidget {
 
 class _OfflineCommuteInsideScreenState extends State<OfflineCommuteInsideScreen> {
   final controller = OfflineCommuteInsideController();
+
+  // ✅ 세션(메모리) 보관으로 변경: 영구 저장 제거(SharedPreferences 제거)
   String? kakaoUrl;
   bool loadingUrl = true;
   bool _isLoading = false;
@@ -30,9 +31,9 @@ class _OfflineCommuteInsideScreenState extends State<OfflineCommuteInsideScreen>
     super.initState();
     controller.initialize(context);
 
-    // OPTION A: 자동 라우팅은 최초 진입 시 1회만 수행
+    // 최초 진입 시 1회 자동 라우팅
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await _loadCustomKakaoUrl();
+      await _loadCustomKakaoUrl(); // 이제는 세션 메모리 초기값만 세팅
       if (!mounted) return;
 
       final userState = context.read<UserState>();
@@ -42,13 +43,11 @@ class _OfflineCommuteInsideScreenState extends State<OfflineCommuteInsideScreen>
     });
   }
 
+  // ✅ 영구 저장 삭제: 초기값 세팅만 하고 로딩 종료
   Future<void> _loadCustomKakaoUrl() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedUrl = prefs.getString('custom_kakao_url');
-
     if (!mounted) return;
     setState(() {
-      kakaoUrl = (savedUrl != null && savedUrl.isNotEmpty) ? savedUrl : null;
+      kakaoUrl = null; // 초기값은 없음(세션 보관)
       loadingUrl = false;
     });
   }
@@ -66,7 +65,6 @@ class _OfflineCommuteInsideScreenState extends State<OfflineCommuteInsideScreen>
         return DraggableScrollableSheet(
           expand: false,
           initialChildSize: 1.0,
-          // 최상단까지
           minChildSize: 0.25,
           maxChildSize: 1.0,
           builder: (ctx, scrollController) {
@@ -77,7 +75,6 @@ class _OfflineCommuteInsideScreenState extends State<OfflineCommuteInsideScreen>
                   left: 20,
                   right: 20,
                   top: 20,
-                  // 키보드가 올라올 때 안전하게 하단 패딩 확보
                   bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
                 ),
                 child: childBuilder(ctx),
@@ -89,11 +86,9 @@ class _OfflineCommuteInsideScreenState extends State<OfflineCommuteInsideScreen>
     );
   }
 
+  // ✅ 영구 저장(SharedPreferences) → 세션(상태) 변경
   void _handleChangeUrl(BuildContext context) async {
-    final prefs = await SharedPreferences.getInstance();
-    final urlTextCtrl = TextEditingController(
-      text: prefs.getString('custom_kakao_url') ?? '',
-    );
+    final urlTextCtrl = TextEditingController(text: kakaoUrl ?? '');
 
     await _showFullHeightSheet<void>(
       childBuilder: (_) => Column(
@@ -117,15 +112,12 @@ class _OfflineCommuteInsideScreenState extends State<OfflineCommuteInsideScreen>
           ElevatedButton(
             onPressed: () async {
               final url = urlTextCtrl.text.trim();
-              await prefs.setString('custom_kakao_url', url);
-
               if (!mounted) return;
               setState(() {
-                kakaoUrl = url.isNotEmpty ? url : null;
+                kakaoUrl = url.isNotEmpty ? url : null; // 메모리에만 보관
               });
-
               Navigator.pop(context);
-              showSuccessSnackbar(context, 'URL이 저장되었습니다.');
+              showSuccessSnackbar(context, 'URL이 저장되었습니다. (앱 재시작 시 초기화)');
             },
             child: const Text('저장'),
           ),
@@ -179,7 +171,6 @@ class _OfflineCommuteInsideScreenState extends State<OfflineCommuteInsideScreen>
   }
 
   Future<void> _handleLogout(BuildContext context) async {
-    // 앱 종료 대신 공통 정책: 허브(Selector)로 이동 + prefs('mode') 초기화
     await LogoutHelper.logoutAndGoToLogin(
       context,
       checkWorking: false,

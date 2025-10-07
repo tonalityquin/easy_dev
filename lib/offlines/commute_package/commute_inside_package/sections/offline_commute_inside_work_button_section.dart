@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../../states/user/user_state.dart';
+
 import '../../../../utils/blocking_dialog.dart';
 import '../offline_commute_inside_controller.dart';
 import '../../../../routes.dart';
+import '../../../../states/user/user_state.dart';
 
 class OfflineCommuteInsideWorkButtonSection extends StatelessWidget {
   final OfflineCommuteInsideController controller;

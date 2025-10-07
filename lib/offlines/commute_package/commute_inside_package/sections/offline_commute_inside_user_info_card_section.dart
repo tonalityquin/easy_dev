@@ -16,7 +16,8 @@ class OfflineCommuteInsideUserInfoCardSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final userState = context.watch<UserState>();
+    // Provider 구독은 유지하되, 표시 값은 하드코딩
+    final _ = context.watch<UserState>();
 
     return InkWell(
       borderRadius: BorderRadius.circular(12),
@@ -64,16 +65,18 @@ class OfflineCommuteInsideUserInfoCardSection extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          userState.name,
-                          style: const TextStyle(
+                        // userState.name → 하드코딩: 'Tester'
+                        const Text(
+                          'Tester',
+                          style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                             color: Colors.black,
                           ),
                         ),
+                        // userState.position → 하드코딩: 'dev'
                         Text(
-                          userState.position,
+                          'dev',
                           style: TextStyle(
                             fontSize: 13,
                             color: _Palette.dark.withOpacity(.7),
@@ -89,8 +92,10 @@ class OfflineCommuteInsideUserInfoCardSection extends StatelessWidget {
               const SizedBox(height: 16),
               Divider(color: _Palette.light.withOpacity(.35), height: 1),
               const SizedBox(height: 12),
-              _infoRow(Icons.phone, 'Tel.', formatPhoneNumber(userState.phone)),
-              _infoRow(Icons.location_on, 'Sector.', userState.area),
+              // formatPhoneNumber(userState.phone) → 하드코딩: '01012345678'
+              _infoRow(Icons.phone, 'Tel.', formatPhoneNumber('01012345678')),
+              // userState.area → 하드코딩: '근무 지역'
+              _infoRow(Icons.location_on, 'Sector.', '근무 지역'),
             ],
           ),
         ),

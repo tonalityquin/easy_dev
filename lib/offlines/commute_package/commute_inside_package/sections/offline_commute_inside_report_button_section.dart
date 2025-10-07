@@ -16,7 +16,6 @@ class OfflineCommuteInsideReportButtonSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-
     final disabled = loadingUrl || isDisabled;
 
     return ElevatedButton.icon(
@@ -42,7 +41,6 @@ class OfflineCommuteInsideReportButtonSection extends StatelessWidget {
       onPressed: disabled
           ? null
           : () async {
-
         if (kakaoUrl == null || kakaoUrl!.isEmpty) {
           showFailedSnackbar(context, '카카오톡 URL이 없습니다.');
           return;
@@ -58,7 +56,6 @@ class OfflineCommuteInsideReportButtonSection extends StatelessWidget {
           await intent.launch();
         } catch (e) {
           if (context.mounted) {
-            // 🔁 기본 SnackBar → 커스텀 스낵바
             showFailedSnackbar(context, '크롬으로 열 수 없습니다: $e');
           }
         }
