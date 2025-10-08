@@ -6,8 +6,10 @@ import 'package:flutter/material.dart';
 import 'service/offline_login_controller.dart';
 import 'service/sections/offline_login_form.dart';
 
-// ★ 추가: 오프라인 세션 존재 시 즉시 진입을 위한 서비스
+// ★ 오프라인 세션 존재 시 즉시 진입
 import 'package:easydev/offlines/offline_auth_service.dart';
+// ★ DB 워밍업(재오픈 보장)
+import 'package:easydev/offlines/offline_auth_db.dart';
 
 class OfflineLoginScreen extends StatefulWidget {
   final VoidCallback? onLoginSucceeded;
@@ -56,13 +58,13 @@ class _OfflineLoginScreenState extends State<OfflineLoginScreen>
 
     _loginAnimationController.forward();
 
-    // ★ 추가: 이미 오프라인 세션이 있으면 즉시 성공 처리(바로 진입)
-    //  - controller 내부 저장 로직과 무관하게, 앱 진입 스킵 UX 보장
-    Future.microtask(() async {
+    // ★ 첫 프레임 이후 DB 워밍업 → 세션 체크
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await OfflineAuthDb.instance.reopenIfNeeded(); // ✅ 핫 리스타트/탐색기 영향 방지
       final has = await OfflineAuthService.instance.hasSession();
       if (!mounted) return;
       if (has) {
-        // routes.dart에서 onLoginSucceeded 콜백이 '/offline_commute'로 네비게이션함
+        // routes.dart에서 onLoginSucceeded 콜백이 '/offline_commute' 네비게이션
         widget.onLoginSucceeded?.call();
       }
     });
@@ -81,7 +83,6 @@ class _OfflineLoginScreenState extends State<OfflineLoginScreen>
       canPop: false,
       child: Scaffold(
         body: Padding(
-          // ✅ 수정: 위치 인자 대신 named 파라미터 사용
           padding: const EdgeInsets.all(20),
           child: Center(
             child: SingleChildScrollView(

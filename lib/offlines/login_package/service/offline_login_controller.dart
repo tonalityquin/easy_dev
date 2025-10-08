@@ -1,14 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:easydev/offlines/offline_auth_service.dart';
 
+// (선택) 마스터 저장소가 프로젝트에 존재한다면 주석 해제하세요.
+// import 'package:easydev/offlines/repositories/offline_master_repository.dart';
+
 /// 오프라인 모드 전용 로그인 컨트롤러
-/// - 아래 고정 자격증명만 성공 처리:
-///   이름: tester / 전화번호: 01012345678 / 비밀번호: 12345
+/// - 고정 자격증명 성공 시:
+///   - SQLite offline_sessions 에 세션 저장
+///   - area 기본값은 "HQ 지역"으로 저장(요구사항)
+///   - (있다면) OfflineMasterRepository 를 통해 tester.isSaved = true 로 마킹
 class OfflineLoginController {
   // 고정 자격증명
   static const String allowedName = 'tester';
   static const String allowedPhone = '01012345678';
   static const String allowedPassword = '12345';
+
+  // 요구사항 기본값(테스터 계정)
+  static const String defaultDivision = 'dev';      // division
+  static const String defaultAreaHQ = 'HQ 지역';     // areas[0]
+  static const String defaultAreaWorking = 'WorkingArea 지역'; // areas[1]
 
   // 상태
   bool isLoading = false;
@@ -63,7 +73,6 @@ class OfflineLoginController {
   /// 숫자만 남기고 간단 포맷 적용(필요 시 고도화 가능)
   void formatPhoneNumber(String value, StateSetter setState) {
     final digits = _digitsOnly(value);
-    // 여기서는 단순히 숫자만 유지 (하이픈 포맷이 필요하면 추가)
     final selectionIndex = phoneController.selection.baseOffset;
     setState(() {
       phoneController.text = digits;
@@ -79,7 +88,7 @@ class OfflineLoginController {
     if (isLoading) return;
     setState(() => isLoading = true);
     try {
-      await Future<void>.delayed(const Duration(milliseconds: 150)); // UX용 미세 딜레이
+      await Future<void>.delayed(const Duration(milliseconds: 150)); // UX 보완용 소딜레이
       await attemptLogin(context);
     } finally {
       if (context.mounted) {
@@ -89,7 +98,8 @@ class OfflineLoginController {
   }
 
   /// 오프라인 전용 로그인 시도
-  /// - 성공 시: SQLite 세션 저장 → onLoginSucceeded or '/offline_commute'
+  /// - 성공 시: SQLite 세션 저장(division=dev, area="HQ 지역")
+  /// - 추가: (있다면) 마스터 저장소에 tester.isSaved = true 마킹
   Future<void> attemptLogin(BuildContext context) async {
     final name = nameController.text.trim();
     final phone = _digitsOnly(phoneController.text.trim());
@@ -109,14 +119,29 @@ class OfflineLoginController {
     }
 
     try {
-      // ✅ 오프라인 세션을 SQLite에 저장
+      // ✅ 세션 저장: area 기본값은 요구사항대로 "HQ 지역"으로 기록
       await OfflineAuthService.instance.signInOffline(
         userId: phone,
-        name: name,           // 입력값 유지(표시는 별도 하드코딩 위젯 사용 가능)
-        position: 'dev',      // 요구사항
-        phone: phone,         // 01012345678
-        area: '근무 지역',     // 요구사항
+        name: name,                 // 입력값 유지
+        position: defaultDivision,  // division=dev → 세션의 position 필드에 저장
+        phone: phone,               // 01012345678
+        area: defaultAreaHQ,        // 기본: HQ 지역 (areas[0])
       );
+
+      // (선택) 마스터 저장소가 있으면 seed + tester.isSaved=true 마킹
+      // try {
+      //   final repo = OfflineMasterRepository.instance;
+      //   await repo.ensureSeededDefaults(); // division/dev, area/HQ·WorkingArea 등 기본값 보장
+      //   await repo.markTesterSaved(phone: phone, isSaved: true);
+      //   // 필요 시 tester의 areas 순서(0=HQ, 1=WorkingArea)와 division=dev도 보정
+      //   await repo.ensureTesterAreasOrder(
+      //     phone: phone,
+      //     areas: const [defaultAreaHQ, defaultAreaWorking],
+      //   );
+      //   await repo.ensureTesterDivision(phone: phone, division: defaultDivision);
+      // } catch (_) {
+      //   // 마스터 저장소가 아직 없거나 API가 다를 수 있으니 조용히 스킵
+      // }
 
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
