@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'offlines/offline_auth_service.dart';
+import 'offlines/sql/offline_auth_service.dart';
 
 class OfflineLogoutHelper {
   /// 세션을 지우고 로그인 화면으로 이동(스택 제거)

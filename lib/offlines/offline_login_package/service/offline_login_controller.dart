@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:easydev/offlines/offline_auth_service.dart';
+import 'package:easydev/offlines/sql/offline_auth_service.dart';
 
 // (선택) 마스터 저장소가 프로젝트에 존재한다면 주석 해제하세요.
 // import 'package:easydev/offlines/repositories/offline_master_repository.dart';

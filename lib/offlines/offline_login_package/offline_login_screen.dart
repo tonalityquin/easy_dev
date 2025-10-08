@@ -7,9 +7,9 @@ import 'service/offline_login_controller.dart';
 import 'service/sections/offline_login_form.dart';
 
 // ★ 오프라인 세션 존재 시 즉시 진입
-import 'package:easydev/offlines/offline_auth_service.dart';
+import 'package:easydev/offlines/sql/offline_auth_service.dart';
 // ★ DB 워밍업(재오픈 보장)
-import 'package:easydev/offlines/offline_auth_db.dart';
+import 'package:easydev/offlines/sql/offline_auth_db.dart';
 
 class OfflineLoginScreen extends StatefulWidget {
   final VoidCallback? onLoginSucceeded;

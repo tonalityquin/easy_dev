@@ -62,7 +62,7 @@ class OfflineCommuteInsideWorkButtonSection extends StatelessWidget {
           // ✅ 모달이 닫힌 뒤 실제 라우팅
           switch (dest) {
             case CommuteDestination.headquarter:
-              Navigator.pushReplacementNamed(context, AppRoutes.headquarterPage);
+              Navigator.pushReplacementNamed(context, AppRoutes.offlineHeadquarterPage);
               break;
             case CommuteDestination.type:
               Navigator.pushReplacementNamed(context, AppRoutes.typePage);

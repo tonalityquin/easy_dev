@@ -3,11 +3,12 @@
 // - SharedPreferences 기반 DevAuthGate 제거
 // - OfflineLoginScreen 성공 시 OfflineCommuteInsideScreen으로 이동하도록 연결
 
+import 'package:easydev/offlines/offline_head_page.dart';
 import 'package:flutter/material.dart';
 
 // ▼ 오프라인 패키지
-import 'package:easydev/offlines/commute_package/offline_commute_inside_screen.dart';
-import 'package:easydev/offlines/login_package/offline_login_screen.dart';
+import 'package:easydev/offlines/offline_commute_package/offline_commute_inside_screen.dart';
+import 'package:easydev/offlines/offline_login_package/offline_login_screen.dart';
 
 // ▼ 일반 화면들
 import 'package:easydev/screens/dev_stub_page.dart';
@@ -36,10 +37,12 @@ class AppRoutes {
   // ✅ 오프라인 전용
   static const offlineLogin = '/offline_login';
   static const offlineCommute = '/offline_commute';
-
   static const commute = '/commute';
+
   static const headquarterPage = '/headquarter_page';
   static const typePage = '/type_page';
+  static const offlineHeadquarterPage = '/offline_headquarter_page';
+  static const offlineTypePage = '/offline_type_page';
   static const tablet = '/tablet_page';
   static const faq = '/faq';
 
@@ -88,6 +91,7 @@ final Map<String, WidgetBuilder> appRoutes = {
   // 기타 페이지들
   AppRoutes.headquarterPage: (context) => const HeadquarterPage(),
   AppRoutes.typePage: (context) => const TypePage(),
+  AppRoutes.offlineHeadquarterPage: (context) => const OfflineHeadPage(),
   AppRoutes.tablet: (context) => const TabletPage(),
   AppRoutes.faq: (context) => const FaqPage(),
 
@@ -107,17 +111,3 @@ final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.breakSheet: (context) =>
   const TimesheetPage(initialTab: TimesheetTab.breakTime),
 };
-
-/* ────────────────────────────────────────────────────────────────────────────
-※ 선택사항: 오프라인 진입 게이트 라우트를 쓰고 싶다면 아래를 추가하세요.
-import 'package:easydev/offlines/offline_entry_gate.dart';
-
-... routes 내에:
-'/offline_gate': (context) => const OfflineEntryGate(
-  offlineHomeRoute: AppRoutes.offlineCommute,
-  loginRoute: AppRoutes.offlineLogin,
-),
-
-그리고 MaterialApp.initialRoute를 '/offline_gate'로 지정하면,
-세션 유무에 따라 자동 분기됩니다.
-──────────────────────────────────────────────────────────────────────────── */
