@@ -25,7 +25,6 @@ class _HomeBreakButtonWidgetState extends State<HomeBreakButtonWidget> {
         context: context,
         message: '휴게 사용 기록 중입니다...',
         task: () async {
-          await widget.controller.recordBreakTime(context);
         },
       );
     } finally {
