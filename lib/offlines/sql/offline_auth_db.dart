@@ -1,3 +1,6 @@
+// ==============================
+// File: offline_auth_db.dart (v7 - plates/bills/locations + WorkingArea 기본 시드)
+// ==============================
 import 'dart:async';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
@@ -8,25 +11,31 @@ class OfflineAuthDb {
 
   // ───────────────── DB 메타 ─────────────────
   static const _dbName = 'offlines.db';
-  static const _dbVersion = 5; // ⬅️ v5: offline_accounts에 division, area 컬럼 추가
+  static const _dbVersion = 7; // v7: offline_bills, offline_locations 테이블 추가 (v6: offline_plates)
 
   // ───────────────── 테이블명 ─────────────────
-  static const tableSessions = 'offline_sessions';
+  static const tableSessions  = 'offline_sessions';
   @Deprecated('Use tableSessions instead')
-  static const table = tableSessions; // 구 코드 호환용
+  static const table          = tableSessions; // 구 코드 호환용
 
-  static const tableDivision = 'division';                    // 마스터
-  static const tableArea = 'area';                            // 마스터
-  static const tableAccounts = 'offline_accounts';            // 계정 메타
-  static const tableAccAreas = 'offline_account_areas';       // 계정-지역 배열(정렬)
-  static const tableAccDivs  = 'offline_account_divisions';   // 계정-디비전 배열(정렬)
+  static const tableDivision  = 'division';                    // 마스터
+  static const tableArea      = 'area';                        // 마스터
+  static const tableAccounts  = 'offline_accounts';            // 계정 메타
+  static const tableAccAreas  = 'offline_account_areas';       // 계정-지역 배열(정렬)
+  static const tableAccDivs   = 'offline_account_divisions';   // 계정-디비전 배열(정렬)
+
+  // v6: 차량 번호 보관
+  static const tablePlates    = 'offline_plates';
+  // v7: 과금정책 / 로케이션 보관
+  static const tableBills     = 'offline_bills';
+  static const tableLocations = 'offline_locations';
 
   Database? _db;
   Future<Database>? _openingFuture;
 
   // ───────────────── 시드 타임스탬프(ms) ─────────────────
   // 2025-05-08 23:02:37 (UTC+9)
-  static const int _divCreatedAtMs = 1746712957000;
+  static const int _divCreatedAtMs  = 1746712957000;
   // 2025-05-10 13:57:51 (UTC+9)
   static const int _seedCreatedAtMs = 1746853071000;
 
@@ -58,7 +67,7 @@ class OfflineAuthDb {
         path,
         version: _dbVersion,
         onCreate: (Database db, int version) async {
-          // ── 세션(그대로) ──
+          // ── 세션 ──
           await db.execute('''
             CREATE TABLE $tableSessions(
               id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -118,8 +127,8 @@ class OfflineAuthDb {
               endMinute INTEGER,
 
               -- v5 추가 메타
-              division TEXT,  -- ⬅️ 선택/대표 디비전
-              area TEXT       -- ⬅️ 선택/대표 지역
+              division TEXT,
+              area TEXT
             )
           ''');
 
@@ -146,10 +155,93 @@ class OfflineAuthDb {
             )
           ''');
 
+          // ── v6: 차량 번호 보관 ──
+          await db.execute('''
+            CREATE TABLE $tablePlates(
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              plate_key TEXT NOT NULL UNIQUE,
+              plate_number TEXT NOT NULL,
+              plate_four_digit TEXT,
+              region TEXT,
+              area TEXT,
+              location TEXT,
+              billing_type TEXT,
+              custom_status TEXT,
+              basic_amount INTEGER NOT NULL DEFAULT 0,
+              basic_standard INTEGER NOT NULL DEFAULT 0,
+              add_amount INTEGER NOT NULL DEFAULT 0,
+              add_standard INTEGER NOT NULL DEFAULT 0,
+              is_locked_fee INTEGER NOT NULL DEFAULT 0,
+              locked_fee_amount INTEGER NOT NULL DEFAULT 0,
+              locked_at_seconds INTEGER,
+              is_selected INTEGER NOT NULL DEFAULT 0,
+              status_type TEXT,
+              updated_at INTEGER,
+              request_time TEXT,
+              user_name TEXT,
+              selected_by TEXT,
+              user_adjustment INTEGER NOT NULL DEFAULT 0,
+              regular_amount INTEGER NOT NULL DEFAULT 0,
+              regular_duration_hours INTEGER NOT NULL DEFAULT 0,
+              image_urls TEXT,
+              logs TEXT,
+              created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')*1000)
+            )
+          ''');
+          await db.execute('''
+            CREATE INDEX IF NOT EXISTS idx_${tablePlates}_plate_area
+            ON $tablePlates(plate_number, area)
+          ''');
+
+          // ── v7: 과금정책(bills) ──
+          await db.execute('''
+            CREATE TABLE $tableBills(
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              bill_key TEXT NOT NULL UNIQUE,          -- 예: "무료_가로수길(캔버스랩)"
+              area TEXT NOT NULL,                     -- 예: "가로수길(캔버스랩)"
+              count_type TEXT NOT NULL,               -- 예: "무료"
+              type TEXT NOT NULL,                     -- 예: "변동"
+              basic_amount INTEGER NOT NULL DEFAULT 0,
+              basic_standard INTEGER NOT NULL DEFAULT 1,
+              add_amount INTEGER NOT NULL DEFAULT 0,
+              add_standard INTEGER NOT NULL DEFAULT 1,
+              updated_at INTEGER,                     -- ms epoch
+              created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')*1000),
+              UNIQUE(area, count_type, type)
+            )
+          ''');
+          await db.execute('''
+            CREATE INDEX IF NOT EXISTS idx_${tableBills}_area_type
+            ON $tableBills(area, type)
+          ''');
+
+          // ── v7: 로케이션(locations) ──
+          // ※ UNIQUE에 표현식 금지 → parent를 NOT NULL DEFAULT ''로 두고 컬럼만 사용
+          await db.execute('''
+            CREATE TABLE $tableLocations(
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              location_key TEXT NOT NULL UNIQUE,      -- 예: "승강기_가로수길(캔버스랩)", "A-1_britishArea"
+              area TEXT NOT NULL,
+              location_name TEXT NOT NULL,            -- 예: "승강기", "A-1"
+              parent TEXT NOT NULL DEFAULT '',        -- 예: "승강기", "airport" (빈문자 기본)
+              type TEXT NOT NULL,                     -- 예: "single", "composite"
+              capacity INTEGER NOT NULL DEFAULT 0,
+              is_selected INTEGER NOT NULL DEFAULT 0, -- 0/1
+              timestamp_raw TEXT,                     -- 원문 문자열 보관
+              updated_at INTEGER,                     -- ms epoch (선택)
+              created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')*1000),
+              UNIQUE(area, location_name, parent)
+            )
+          ''');
+          await db.execute('''
+            CREATE INDEX IF NOT EXISTS idx_${tableLocations}_area_name
+            ON $tableLocations(area, location_name)
+          ''');
+
+          // 기본 시드 투입 (idempotent)
           await _seedDefaults(db);
         },
         onUpgrade: (db, oldVersion, newVersion) async {
-          // v2: 마스터 테이블
           if (oldVersion < 2) {
             await db.execute('''
               CREATE TABLE IF NOT EXISTS $tableDivision(
@@ -170,8 +262,6 @@ class OfflineAuthDb {
               )
             ''');
           }
-
-          // v3: 계정 테이블(기본형)
           if (oldVersion < 3) {
             await db.execute('''
               CREATE TABLE IF NOT EXISTS $tableAccounts(
@@ -185,8 +275,6 @@ class OfflineAuthDb {
               )
             ''');
           }
-
-          // v4: 계정 메타 확장 + per-account 배열 테이블
           if (oldVersion < 4) {
             final addCols = <String>[
               'ALTER TABLE $tableAccounts ADD COLUMN email TEXT',
@@ -205,7 +293,6 @@ class OfflineAuthDb {
             for (final sql in addCols) {
               await db.execute(sql);
             }
-
             await db.execute('''
               CREATE TABLE IF NOT EXISTS $tableAccAreas(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -216,7 +303,6 @@ class OfflineAuthDb {
                 UNIQUE(userId, name)
               )
             ''');
-
             await db.execute('''
               CREATE TABLE IF NOT EXISTS $tableAccDivs(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -228,13 +314,9 @@ class OfflineAuthDb {
               )
             ''');
           }
-
-          // v5: offline_accounts에 division/area 추가
           if (oldVersion < 5) {
             try { await db.execute('ALTER TABLE $tableAccounts ADD COLUMN division TEXT'); } catch (_) {}
             try { await db.execute('ALTER TABLE $tableAccounts ADD COLUMN area TEXT'); } catch (_) {}
-
-            // 기존 tester 행 보정: division/area 기본값 주입 (없을 때만)
             await db.execute('''
               UPDATE $tableAccounts
                  SET division = COALESCE(division, 'dev'),
@@ -242,8 +324,90 @@ class OfflineAuthDb {
                WHERE userId = 'tester'
             ''');
           }
+          if (oldVersion < 6) {
+            await db.execute('''
+              CREATE TABLE IF NOT EXISTS $tablePlates(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                plate_key TEXT NOT NULL UNIQUE,
+                plate_number TEXT NOT NULL,
+                plate_four_digit TEXT,
+                region TEXT,
+                area TEXT,
+                location TEXT,
+                billing_type TEXT,
+                custom_status TEXT,
+                basic_amount INTEGER NOT NULL DEFAULT 0,
+                basic_standard INTEGER NOT NULL DEFAULT 0,
+                add_amount INTEGER NOT NULL DEFAULT 0,
+                add_standard INTEGER NOT NULL DEFAULT 0,
+                is_locked_fee INTEGER NOT NULL DEFAULT 0,
+                locked_fee_amount INTEGER NOT NULL DEFAULT 0,
+                locked_at_seconds INTEGER,
+                is_selected INTEGER NOT NULL DEFAULT 0,
+                status_type TEXT,
+                updated_at INTEGER,
+                request_time TEXT,
+                user_name TEXT,
+                selected_by TEXT,
+                user_adjustment INTEGER NOT NULL DEFAULT 0,
+                regular_amount INTEGER NOT NULL DEFAULT 0,
+                regular_duration_hours INTEGER NOT NULL DEFAULT 0,
+                image_urls TEXT,
+                logs TEXT,
+                created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')*1000)
+              )
+            ''');
+            await db.execute('''
+              CREATE INDEX IF NOT EXISTS idx_${tablePlates}_plate_area
+              ON $tablePlates(plate_number, area)
+            ''');
+          }
+          if (oldVersion < 7) {
+            await db.execute('''
+              CREATE TABLE IF NOT EXISTS $tableBills(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                bill_key TEXT NOT NULL UNIQUE,
+                area TEXT NOT NULL,
+                count_type TEXT NOT NULL,
+                type TEXT NOT NULL,
+                basic_amount INTEGER NOT NULL DEFAULT 0,
+                basic_standard INTEGER NOT NULL DEFAULT 1,
+                add_amount INTEGER NOT NULL DEFAULT 0,
+                add_standard INTEGER NOT NULL DEFAULT 1,
+                updated_at INTEGER,
+                created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')*1000),
+                UNIQUE(area, count_type, type)
+              )
+            ''');
+            await db.execute('''
+              CREATE INDEX IF NOT EXISTS idx_${tableBills}_area_type
+              ON $tableBills(area, type)
+            ''');
 
-          // 누락 보정 및 시드 보정
+            // UNIQUE에 표현식 금지 → parent NOT NULL DEFAULT '' + 컬럼만 사용
+            await db.execute('''
+              CREATE TABLE IF NOT EXISTS $tableLocations(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                location_key TEXT NOT NULL UNIQUE,
+                area TEXT NOT NULL,
+                location_name TEXT NOT NULL,
+                parent TEXT NOT NULL DEFAULT '',
+                type TEXT NOT NULL,
+                capacity INTEGER NOT NULL DEFAULT 0,
+                is_selected INTEGER NOT NULL DEFAULT 0,
+                timestamp_raw TEXT,
+                updated_at INTEGER,
+                created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')*1000),
+                UNIQUE(area, location_name, parent)
+              )
+            ''');
+            await db.execute('''
+              CREATE INDEX IF NOT EXISTS idx_${tableLocations}_area_name
+              ON $tableLocations(area, location_name)
+            ''');
+          }
+
+          // 누락된 기본 시드 보정
           await _seedDefaults(db);
         },
         onOpen: (db) async {
@@ -253,10 +417,10 @@ class OfflineAuthDb {
       );
 
       _db = db;
-      completer.complete(db);
+      if (!completer.isCompleted) completer.complete(db);
       return db;
     } catch (e, st) {
-      completer.completeError(e, st);
+      if (!completer.isCompleted) completer.completeError(e, st);
       rethrow;
     } finally {
       _openingFuture = null;
@@ -272,6 +436,8 @@ class OfflineAuthDb {
   }
 
   // ───────────────── 시드 주입(idempotent) ─────────────────
+  // 요구: WorkingArea 지역의 location 3건 + bill 2건이 기본으로 존재
+  // 방법: INSERT OR IGNORE → 여러 번 호출돼도 최초에만 삽입, 이후 값 보존
   static Future<void> _seedDefaults(Database db) async {
     await db.transaction((txn) async {
       // 1) division(dev)
@@ -318,8 +484,7 @@ class OfflineAuthDb {
         ''',
       );
 
-      // 4) per-account 배열: tester의 areas/divisions 정렬 시드
-      // 요청: tester 계정은 HQ 지역이 array 0번, WorkingArea 지역이 array 1번
+      // 4) per-account 배열: tester areas/divisions 정렬 시드
       await txn.rawInsert(
         'INSERT OR IGNORE INTO $tableAccAreas(userId, name, orderIndex) VALUES(?, ?, ?)',
         ['tester', 'HQ 지역', 0],
@@ -328,11 +493,100 @@ class OfflineAuthDb {
         'INSERT OR IGNORE INTO $tableAccAreas(userId, name, orderIndex) VALUES(?, ?, ?)',
         ['tester', 'WorkingArea 지역', 1],
       );
-
-      // divisions: tester는 dev 0번
       await txn.rawInsert(
         'INSERT OR IGNORE INTO $tableAccDivs(userId, name, orderIndex) VALUES(?, ?, ?)',
         ['tester', 'dev', 0],
+      );
+
+      // ─────────────────────────────────────────────────────
+      // 5) WorkingArea 지역 "기본 시드": locations 3 + bills 2
+      //    - INSERT OR IGNORE: 존재 시 덮어쓰지 않음 (기본 행 보장)
+      // ─────────────────────────────────────────────────────
+
+      // Locations (3)
+      await txn.rawInsert(
+        '''
+        INSERT OR IGNORE INTO $tableLocations
+          (location_key, area, location_name, parent, type, capacity, is_selected, timestamp_raw)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''',
+        [
+          '승강기_WorkingArea 지역',
+          'WorkingArea 지역',
+          '승강기',
+          '승강기',
+          'single',
+          14,
+          0, // is_selected=false
+          '2025년 10월 7일 오후 3시 21분 47초 UTC+9',
+        ],
+      );
+
+      await txn.rawInsert(
+        '''
+        INSERT OR IGNORE INTO $tableLocations
+          (location_key, area, location_name, parent, type, capacity, is_selected, timestamp_raw)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''',
+        [
+          'A-1_WorkingArea 지역',
+          'WorkingArea 지역',
+          'A-1',
+          'airport',
+          'composite',
+          3,
+          0,
+          '2025년 9월 18일 오후 6시 12분 51초 UTC+9',
+        ],
+      );
+
+      await txn.rawInsert(
+        '''
+        INSERT OR IGNORE INTO $tableLocations
+          (location_key, area, location_name, parent, type, capacity, is_selected, timestamp_raw)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''',
+        [
+          'A-2_WorkingArea 지역',
+          'WorkingArea 지역',
+          'A-2',
+          'airport',
+          'composite',
+          2,
+          0,
+          '2025년 9월 18일 오후 6시 12분 51초 UTC+9',
+        ],
+      );
+
+      // Bills (2)
+      await txn.rawInsert(
+        '''
+        INSERT OR IGNORE INTO $tableBills
+          (bill_key, area, count_type, type, basic_amount, basic_standard, add_amount, add_standard)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''',
+        [
+          '무료_WorkingArea 지역',
+          'WorkingArea 지역',
+          '무료',
+          '변동',
+          0, 1, 0, 1,
+        ],
+      );
+
+      await txn.rawInsert(
+        '''
+        INSERT OR IGNORE INTO $tableBills
+          (bill_key, area, count_type, type, basic_amount, basic_standard, add_amount, add_standard)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''',
+        [
+          '일반주차_WorkingArea 지역',
+          'WorkingArea 지역',
+          '일반주차',
+          '변동',
+          2000, 5, 1000, 1,
+        ],
       );
     });
   }
