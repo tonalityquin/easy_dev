@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
-import '../../../../../../states/user/user_state.dart';
 import 'package:easydev/offlines/sql/offline_auth_service.dart';
 import 'package:easydev/offlines/sql/offline_session_model.dart';
 
@@ -18,8 +16,6 @@ class HomeUserInfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 외부 상태 변경 시 리빌드 트리거를 위한 구독(값은 사용하지 않음)
-    final _ = context.watch<UserState>();
 
     return FutureBuilder<OfflineSession?>(
       future: OfflineAuthService.instance.currentSession(),

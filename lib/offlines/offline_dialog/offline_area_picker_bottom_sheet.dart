@@ -1,13 +1,9 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:sqflite/sqflite.dart';
 
+// 라우트 / SQLite
 import '../../routes.dart';
-import '../../states/plate/plate_state.dart';
-import '../../states/user/user_state.dart';
-
-// SQLite 인증/세션/DB
 import '../sql/offline_auth_db.dart';          // ← 경로 조정
 import '../sql/offline_auth_service.dart';     // ← 경로 조정
 import '../sql/offline_session_model.dart';    // ← 경로 조정
@@ -18,12 +14,11 @@ const dark = Color(0xFF09367D); // 강조 텍스트/아이콘
 const light = Color(0xFF5472D3); // 톤 변형/보더
 const fg = Color(0xFFFFFFFF);    // onPrimary
 
-/// Firestore를 전혀 사용하지 않는, SQLite 전용 지역 선택 바텀시트
-/// - AreaState 의존 제거
-/// - 선택 후 offline_sessions 를 갱신하여 앱 어디서든 DB 기준으로 현재 지역 반영
+/// Firestore/상태 전혀 사용하지 않는, SQLite 전용 지역 선택 바텀시트
+/// - PlateState / UserState 의존 제거
+/// - 선택 후 offline_sessions 및 offline_accounts 를 갱신
 Future<void> offlineAreaPickerBottomSheet({
   required BuildContext context,
-  required PlateState plateState,
 }) {
   // pop 이후 push 시 안전하게 쓰기 위한 루트 컨텍스트
   final rootContext = context;
@@ -44,7 +39,6 @@ Future<void> offlineAreaPickerBottomSheet({
             return SafeArea(
               top: false,
               child: _AreaPickerContent(
-                plateState: plateState,
                 rootContext: rootContext,
               ),
             );
@@ -56,11 +50,9 @@ Future<void> offlineAreaPickerBottomSheet({
 }
 
 class _AreaPickerContent extends StatefulWidget {
-  final PlateState plateState;
   final BuildContext rootContext;
 
   const _AreaPickerContent({
-    required this.plateState,
     required this.rootContext,
   });
 
@@ -69,7 +61,6 @@ class _AreaPickerContent extends StatefulWidget {
 }
 
 class _AreaPickerContentState extends State<_AreaPickerContent> {
-  final TextEditingController _searchCtrl = TextEditingController();
   late FixedExtentScrollController _scrollCtrl;
 
   List<String> _areas = const [];
@@ -88,7 +79,6 @@ class _AreaPickerContentState extends State<_AreaPickerContent> {
   @override
   void dispose() {
     _scrollCtrl.dispose();
-    _searchCtrl.dispose();
     super.dispose();
   }
 
@@ -184,25 +174,82 @@ class _AreaPickerContentState extends State<_AreaPickerContent> {
     return false;
   }
 
-  /// 세션 테이블에 현재 선택 지역을 저장 (단일 세션 정책 반영)
-  Future<void> _persistSelectedAreaToSession(String selected) async {
+  /// 세션(offline_sessions)과 계정(offline_accounts)의 지역을 함께 갱신
+  /// - 우선 세션 userId 행을 타깃으로, 없으면 isSelected=1 행 사용
+  /// - 세션 테이블은 단일 세션 정책: 전부 삭제 후 1건 삽입
+  Future<bool> _persistSelectedAreaEverywhere(String selected) async {
     final db = await OfflineAuthDb.instance.database;
     final cur = await OfflineAuthService.instance.currentSession();
 
-    // 세션이 없으면 저장하지 않고 종료
-    if (cur == null) return;
+    return await db.transaction<bool>((txn) async {
+      String? targetUserId = cur?.userId;
 
-    final updated = OfflineSession(
-      userId: cur.userId,
-      name: cur.name,
-      position: cur.position,
-      phone: cur.phone,
-      area: selected,
-      createdAt: DateTime.now(),
-    );
+      if (targetUserId == null || targetUserId.isEmpty) {
+        final sel = await txn.query(
+          OfflineAuthDb.tableAccounts,
+          columns: const ['userId'],
+          where: 'isSelected = 1',
+          limit: 1,
+        );
+        if (sel.isNotEmpty) {
+          targetUserId = (sel.first['userId'] as String?)?.trim();
+        }
+      } else {
+        // 세션 userId가 실제로 존재하는지 체크 (없으면 isSelected=1로 폴백)
+        final me = await txn.query(
+          OfflineAuthDb.tableAccounts,
+          columns: const ['userId'],
+          where: 'userId = ?',
+          whereArgs: [targetUserId],
+          limit: 1,
+        );
+        if (me.isEmpty) {
+          final sel = await txn.query(
+            OfflineAuthDb.tableAccounts,
+            columns: const ['userId'],
+            where: 'isSelected = 1',
+            limit: 1,
+          );
+          if (sel.isNotEmpty) {
+            targetUserId = (sel.first['userId'] as String?)?.trim();
+          } else {
+            targetUserId = null;
+          }
+        }
+      }
 
-    await db.delete(OfflineAuthDb.tableSessions);
-    await db.insert(OfflineAuthDb.tableSessions, updated.toMap());
+      if (targetUserId == null || targetUserId.isEmpty) {
+        debugPrint('❌ 대상 계정이 없어 지역 저장 불가');
+        return false;
+      }
+
+      // 1) offline_accounts: 대표/현재 지역 갱신
+      final accUpd = await txn.update(
+        OfflineAuthDb.tableAccounts,
+        {
+          'currentArea': selected,
+          'selectedArea': selected,
+          'area': selected, // v5의 대표지역 컬럼까지 동기화(선택)
+        },
+        where: 'userId = ?',
+        whereArgs: [targetUserId],
+      );
+
+      // 2) offline_sessions: 단일 세션 재기록
+      //    - cur가 있으면 기존 정보 유지 + area만 교체
+      final updatedSession = OfflineSession(
+        userId: cur?.userId ?? targetUserId,
+        name: cur?.name ?? '',
+        position: cur?.position ?? '',
+        phone: cur?.phone ?? '',
+        area: selected,
+        createdAt: DateTime.now(),
+      );
+      await txn.delete(OfflineAuthDb.tableSessions);
+      await txn.insert(OfflineAuthDb.tableSessions, updatedSession.toMap());
+
+      return accUpd > 0;
+    });
   }
 
   @override
@@ -268,8 +315,6 @@ class _AreaPickerContentState extends State<_AreaPickerContent> {
 
   /// 상단 타이틀/그립바/확인버튼을 공통으로 감싸는 쉘
   Widget _shell({required Widget child}) {
-    final userState = context.read<UserState>();
-
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -346,14 +391,12 @@ class _AreaPickerContentState extends State<_AreaPickerContent> {
                 // 닫기
                 if (mounted) Navigator.of(context).pop();
 
-                // 유저 상태(선택사항) 업데이트 – 앱 특정 부분에서 사용 중이라면 유지
-                await userState.areaPickerCurrentArea(selected);
-
-                // 세션 DB 갱신
+                // 세션/계정 DB 갱신
+                bool ok = false;
                 try {
-                  await _persistSelectedAreaToSession(selected);
+                  ok = await _persistSelectedAreaEverywhere(selected);
                 } on DatabaseException catch (e, st) {
-                  debugPrint('❌ 세션 업데이트 실패: $e\n$st');
+                  debugPrint('❌ 지역 저장 실패: $e\n$st');
                 }
 
                 // HQ 여부를 SQLite에서 조회
@@ -366,20 +409,20 @@ class _AreaPickerContentState extends State<_AreaPickerContent> {
 
                 if (!widget.rootContext.mounted) return;
 
+                if (!ok) {
+                  ScaffoldMessenger.of(widget.rootContext).showSnackBar(
+                    const SnackBar(content: Text('지역 저장에 실패했습니다. 다시 시도해 주세요.')),
+                  );
+                  return;
+                }
+
+                // ✅ PlateState 없이 라우팅만 수행
                 if (isHeadquarter) {
-                  // ✅ HQ 전환: 모든 구독 해제 → HQ 페이지로
-                  widget.plateState.disableAll();
                   Navigator.pushReplacementNamed(
                     widget.rootContext,
                     AppRoutes.offlineHeadquarterPage,
                   );
                 } else {
-                  // ✅ 필드 전환: 구독 활성화(최초 진입) + 필요 시 재구독 → 필드 페이지
-                  widget.plateState.enableForTypePages();
-
-                  // 프로젝트에 존재한다면 사용 (없으면 제거)
-                  // widget.plateState.syncWithAreaState();
-
                   Navigator.pushReplacementNamed(
                     widget.rootContext,
                     AppRoutes.offlineTypePage,

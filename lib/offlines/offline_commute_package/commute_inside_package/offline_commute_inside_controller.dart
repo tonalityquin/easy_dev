@@ -1,66 +1,90 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-
 import '../../../routes.dart';
-import '../../../states/user/user_state.dart';
-import '../../../states/area/area_state.dart';
-import '../../../utils/snackbar_helper.dart';
 
+// SQLite / 세션 (경로는 실제 프로젝트 구조에 맞춰 조정)
+import '../../sql/offline_auth_db.dart';
+import '../../sql/offline_auth_service.dart';
 
-// ✅ 라우팅을 밖에서 수행하기 위한 목적지 enum
+// ✅ 라우팅을 밖에서 수행하기 위한 목적지 enum (유지)
 enum CommuteDestination { none, headquarter, type }
 
 class OfflineCommuteInsideController {
   void initialize(BuildContext context) {
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final userState = context.read<UserState>();
-      final areaState = context.read<AreaState>();
-      final areaToInit = userState.area.trim();
+    // 현재는 DB 기반이라 별도 초기화 불필요
+    debugPrint('[OfflineCommuteInsideController] initialize');
+  }
 
-      final alreadyInitialized =
-          areaState.currentArea == areaToInit && areaState.capabilitiesOfCurrentArea.isNotEmpty;
+  // HQ 여부 판별 (area 테이블)
+  Future<bool> _isHeadquarterArea(String areaName) async {
+    if (areaName.trim().isEmpty) return false;
+    final db = await OfflineAuthDb.instance.database;
+    final rows = await db.query(
+      OfflineAuthDb.tableArea,
+      columns: const ['isHeadquarter'],
+      where: 'name = ?',
+      whereArgs: [areaName],
+      limit: 1,
+    );
+    if (rows.isEmpty) return false;
+    final v = rows.first['isHeadquarter'];
+    if (v is int) return v == 1;
+    if (v is bool) return v;
+    return false;
+  }
 
-      if (!alreadyInitialized) {
-        await areaState.initializeArea(areaToInit);
-        debugPrint('[GoToWork] initializeArea 호출: $areaToInit');
+  // DB에서 현재 세션 기준 목적지 결정
+  Future<CommuteDestination> decideDestinationFromDb() async {
+    final session = await OfflineAuthService.instance.currentSession();
+    if (session == null) return CommuteDestination.none;
+
+    final isHq = await _isHeadquarterArea(session.area);
+    return isHq ? CommuteDestination.headquarter : CommuteDestination.type;
+  }
+
+  // DB에서 isWorking=1인지 확인 (userId → isSelected=1 폴백)
+  Future<bool> _isWorkingFromDb() async {
+    final session = await OfflineAuthService.instance.currentSession();
+    final db = await OfflineAuthDb.instance.database;
+
+    int working = 0;
+    if (session != null && session.userId.isNotEmpty) {
+      final rows = await db.query(
+        OfflineAuthDb.tableAccounts,
+        columns: const ['isWorking'],
+        where: 'userId = ?',
+        whereArgs: [session.userId],
+        limit: 1,
+      );
+      if (rows.isNotEmpty) {
+        working = rows.first['isWorking'] as int? ?? 0;
       } else {
-        debugPrint('[GoToWork] 초기화 스킵 (이미 준비됨): $areaToInit');
+        final fb = await db.query(
+          OfflineAuthDb.tableAccounts,
+          columns: const ['isWorking'],
+          where: 'isSelected = 1',
+          limit: 1,
+        );
+        working = fb.isNotEmpty ? (fb.first['isWorking'] as int? ?? 0) : 0;
       }
-
-      debugPrint('[GoToWork] currentArea: ${areaState.currentArea}');
-    });
-  }
-
-  // ✅ Firestore 의존 제거: 간단한 폴백 규칙으로 대체
-  Future<CommuteDestination> _decideDestination(
-      BuildContext context,
-      UserState userState,
-      ) async {
-    // 오프라인 모드: SQLite tester는 HQ 계정 → 본사 여부와 관계없이 OfflineHeadPage로 보냄
-    if (!context.mounted) return CommuteDestination.none;
-    return CommuteDestination.headquarter;
-  }
-
-  // ✅ 버튼 경로: 모달 안에서 호출 — 상태 갱신 + 목적지 판단만 수행
-  Future<CommuteDestination> handleWorkStatusAndDecide(
-      BuildContext context,
-      UserState userState,
-      ) async {
-    try {
-      await _uploadAttendanceSilently(context); // (Sheets append)
-      await userState.isHeWorking(); // 근무 상태 갱신
-
-      return _decideDestination(context, userState);
-    } catch (e) {
-      _showWorkError(context);
-      return CommuteDestination.none;
+    } else {
+      final fb = await db.query(
+        OfflineAuthDb.tableAccounts,
+        columns: const ['isWorking'],
+        where: 'isSelected = 1',
+        limit: 1,
+      );
+      working = fb.isNotEmpty ? (fb.first['isWorking'] as int? ?? 0) : 0;
     }
+    return working == 1;
   }
 
-  // ✅ 자동 경로: (모달 아님) 현재 근무중이면 목적지 판단 후 즉시 라우팅
-  void redirectIfWorking(BuildContext context, UserState userState) {
+  /// ✅ 자동 경로: 현재 근무중이면 목적지 판단 후 즉시 라우팅 (UserState 불필요)
+  void redirectIfWorkingDb(BuildContext context) {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final dest = await _decideDestination(context, userState);
+      final isWorking = await _isWorkingFromDb();
+      if (!context.mounted || !isWorking) return;
+
+      final dest = await decideDestinationFromDb();
       if (!context.mounted) return;
 
       switch (dest) {
@@ -76,21 +100,11 @@ class OfflineCommuteInsideController {
     });
   }
 
-  Future<void> _uploadAttendanceSilently(BuildContext context) async {
-    final userState = Provider.of<UserState>(context, listen: false);
-    var area = userState.area;
-    var name = userState.name;
-
-    if (area.isEmpty || name.isEmpty) {
-      // 업로드 필수 정보 부족 시 업로드 스킵
-      return;
-    }
-
-    if (!context.mounted) return;
-  }
-
-  void _showWorkError(BuildContext context) {
-    if (!context.mounted) return;
-    showFailedSnackbar(context, '작업 처리 중 오류가 발생했습니다. 다시 시도해주세요.');
+  // 기존 온라인 업로드 자리를 남겨둠(현재는 오프라인이므로 NO-OP)
+  Future<void> uploadAttendanceSilentlyIfPossible() async {
+    // 예: 세션에서 area/name 읽어 Sheets에 append 하던 로직
+    final session = await OfflineAuthService.instance.currentSession();
+    if (session == null) return;
+    // 오프라인 모드에서는 네트워크 업로드 생략 또는 큐에 적재
   }
 }

@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
-import '../../../../states/user/user_state.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../utils/sheets_config.dart';
-
-// ✨ 변경: 온라인용 LogoutHelper 제거 → 오프라인 세션 삭제 전용 헬퍼 사용
 import 'package:easydev/routes.dart';
 
 import '../../offline_logout_helper.dart';
+
+// 섹션 위젯들
 import 'commute_inside_package/offline_commute_inside_controller.dart';
 import 'commute_inside_package/sections/offline_commute_inside_report_button_section.dart';
 import 'commute_inside_package/sections/offline_commute_inside_work_button_section.dart';
@@ -25,7 +23,7 @@ class OfflineCommuteInsideScreen extends StatefulWidget {
 class _OfflineCommuteInsideScreenState extends State<OfflineCommuteInsideScreen> {
   final controller = OfflineCommuteInsideController();
 
-  // ✅ 세션(메모리) 보관으로 변경: 영구 저장 제거(SharedPreferences 제거)
+  // ✅ 세션(메모리) 보관: 영구 저장 제거
   String? kakaoUrl;
   bool loadingUrl = true;
   bool _isLoading = false;
@@ -33,17 +31,17 @@ class _OfflineCommuteInsideScreenState extends State<OfflineCommuteInsideScreen>
   @override
   void initState() {
     super.initState();
+
+    // 컨트롤러 초기화(현재는 DB 기반이라 특이 작업 없음)
     controller.initialize(context);
 
-    // 최초 진입 시 1회 자동 라우팅
+    // 최초 진입 시 1회: URL 로딩 + DB기반 자동 라우팅
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await _loadCustomKakaoUrl(); // 이제는 세션 메모리 초기값만 세팅
+      await _loadCustomKakaoUrl(); // 세션 메모리 초기값만 세팅
       if (!mounted) return;
 
-      final userState = context.read<UserState>();
-      if (userState.isWorking) {
-        controller.redirectIfWorking(context, userState);
-      }
+      // ✅ UserState 없이 DB의 isWorking==1이면 자동 라우팅
+      controller.redirectIfWorkingDb(context);
     });
   }
 
@@ -175,7 +173,7 @@ class _OfflineCommuteInsideScreenState extends State<OfflineCommuteInsideScreen>
   }
 
   Future<void> _handleLogout(BuildContext context) async {
-    // ✨ 변경: 오프라인 세션 삭제 후 오프라인 로그인으로 복귀
+    // ✨ 오프라인 세션 삭제 후 오프라인 로그인으로 복귀
     await OfflineLogoutHelper.logoutAndGoToLogin(
       context,
       loginRoute: AppRoutes.offlineLogin,
@@ -184,127 +182,123 @@ class _OfflineCommuteInsideScreenState extends State<OfflineCommuteInsideScreen>
 
   @override
   Widget build(BuildContext context) {
-    // ✅ 이 화면에서만 뒤로가기로 앱 종료되지 않도록 차단 (스낵바 안내 없음)
+    // ✅ 이 화면에서만 뒤로가기로 앱 종료되지 않도록 차단
     return PopScope(
       canPop: false,
       child: Scaffold(
-        body: Consumer<UserState>(
-          builder: (context, userState, _) {
-            // 자동 라우팅은 initState의 addPostFrameCallback에서 1회 수행
-
-            return SafeArea(
-              child: Stack(
-                children: [
-                  SingleChildScrollView(
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
+        body: SafeArea(
+          child: Stack(
+            children: [
+              SingleChildScrollView(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      children: [
+                        const OfflineCommuteInsideHeaderWidgetSection(),
+                        const OfflineCommuteInsideUserInfoCardSection(),
+                        const SizedBox(height: 6),
+                        Row(
                           children: [
-                            const OfflineCommuteInsideHeaderWidgetSection(),
-                            const OfflineCommuteInsideUserInfoCardSection(),
-                            const SizedBox(height: 6),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: OfflineCommuteInsideReportButtonSection(
-                                    loadingUrl: loadingUrl,
-                                    kakaoUrl: kakaoUrl,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: OfflineCommuteInsideWorkButtonSection(
-                                    controller: controller,
-                                    onLoadingChanged: (value) {
-                                      setState(() {
-                                        _isLoading = value;
-                                      });
-                                    },
-                                  ),
-                                ),
-                              ],
+                            Expanded(
+                              child: OfflineCommuteInsideReportButtonSection(
+                                loadingUrl: loadingUrl,
+                                kakaoUrl: kakaoUrl,
+                              ),
                             ),
-                            const SizedBox(height: 1),
-                            Center(
-                              child: SizedBox(
-                                height: 80,
-                                child: Image.asset('assets/images/pelican.png'),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: OfflineCommuteInsideWorkButtonSection(
+                                controller: controller,
+                                onLoadingChanged: (value) {
+                                  setState(() {
+                                    _isLoading = value;
+                                  });
+                                },
                               ),
                             ),
                           ],
                         ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    top: 16,
-                    right: 16,
-                    child: PopupMenuButton<String>(
-                      onSelected: (value) {
-                        switch (value) {
-                          case 'logout':
-                            _handleLogout(context);
-                            break;
-                          case 'changeUrl':
-                            _handleChangeUrl(context);
-                            break;
-                          case 'setCommuteSheet':
-                            _handleSetCommuteSheetId(context);
-                            break;
-                        }
-                      },
-                      itemBuilder: (context) => const [
-                        PopupMenuItem(
-                          value: 'logout',
-                          child: Row(
-                            children: [
-                              Icon(Icons.logout, color: Colors.redAccent),
-                              SizedBox(width: 8),
-                              Text('로그아웃'),
-                            ],
-                          ),
-                        ),
-                        PopupMenuItem(
-                          value: 'changeUrl',
-                          child: Row(
-                            children: [
-                              Icon(Icons.edit_location_alt, color: Colors.blueAccent),
-                              SizedBox(width: 8),
-                              Text('경로 변경'),
-                            ],
-                          ),
-                        ),
-                        PopupMenuItem(
-                          value: 'setCommuteSheet',
-                          child: Row(
-                            children: [
-                              Icon(Icons.assignment_add, color: Colors.green),
-                              SizedBox(width: 8),
-                              Text('출근 시트 삽입'),
-                            ],
+                        const SizedBox(height: 1),
+                        Center(
+                          child: SizedBox(
+                            height: 80,
+                            child: Image.asset('assets/images/pelican.png'),
                           ),
                         ),
                       ],
-                      icon: const Icon(Icons.more_vert),
                     ),
                   ),
-                  if (_isLoading || userState.isWorking)
-                    Positioned.fill(
-                      child: AbsorbPointer(
-                        absorbing: true,
-                        child: Container(
-                          color: Colors.black.withOpacity(0.2),
-                          child: const Center(
-                            child: CircularProgressIndicator(),
-                          ),
-                        ),
+                ),
+              ),
+              Positioned(
+                top: 16,
+                right: 16,
+                child: PopupMenuButton<String>(
+                  onSelected: (value) {
+                    switch (value) {
+                      case 'logout':
+                        _handleLogout(context);
+                        break;
+                      case 'changeUrl':
+                        _handleChangeUrl(context);
+                        break;
+                      case 'setCommuteSheet':
+                        _handleSetCommuteSheetId(context);
+                        break;
+                    }
+                  },
+                  itemBuilder: (context) => const [
+                    PopupMenuItem(
+                      value: 'logout',
+                      child: Row(
+                        children: [
+                          Icon(Icons.logout, color: Colors.redAccent),
+                          SizedBox(width: 8),
+                          Text('로그아웃'),
+                        ],
                       ),
                     ),
-                ],
+                    PopupMenuItem(
+                      value: 'changeUrl',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit_location_alt, color: Colors.blueAccent),
+                          SizedBox(width: 8),
+                          Text('경로 변경'),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'setCommuteSheet',
+                      child: Row(
+                        children: [
+                          Icon(Icons.assignment_add, color: Colors.green),
+                          SizedBox(width: 8),
+                          Text('출근 시트 삽입'),
+                        ],
+                      ),
+                    ),
+                  ],
+                  icon: const Icon(Icons.more_vert),
+                ),
               ),
-            );
-          },
+
+              // ✅ 로딩 오버레이: UserState 제거 → _isLoading만 사용
+              if (_isLoading)
+                Positioned.fill(
+                  child: AbsorbPointer(
+                    absorbing: true,
+                    child: Container(
+                      color: Colors.black.withOpacity(0.2),
+                      child: const Center(
+                        child: CircularProgressIndicator(),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

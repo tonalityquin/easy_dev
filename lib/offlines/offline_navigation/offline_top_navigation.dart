@@ -1,15 +1,15 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
-import '../../states/plate/plate_state.dart';
-import '../offline_dialog/offline_area_picker_bottom_sheet.dart'; // 위 파일 경로에 맞추세요
+// 바텀시트: SQLite 전용 버전 (context 만 받는 시그니처)
+import '../offline_dialog/offline_area_picker_bottom_sheet.dart'; // ← 경로를 프로젝트에 맞게 조정하세요
 
+// SQLite 인증/세션/DB
 import '../sql/offline_auth_db.dart';        // ← 경로 조정
 import '../sql/offline_auth_service.dart';   // ← 경로 조정
 
 /// 오프라인 상단 네비게이션 (SQLite 직결):
-/// - AreaState 없이 현재 지역을 DB에서 읽어 표시
+/// - 상태(PlateState/AreaState) 없이 현재 지역을 DB에서 읽어 표시
 /// - 바텀시트를 닫으면 DB를 재조회하여 즉시 갱신
 class OfflineTopNavigation extends StatefulWidget {
   const OfflineTopNavigation({
@@ -32,17 +32,18 @@ class _OfflineTopNavigationState extends State<OfflineTopNavigation> {
     _currentAreaF = _loadCurrentArea();
   }
 
+  /// DB에서 현재 표시할 지역명을 로드
   Future<String> _loadCurrentArea() async {
-    // 1) 세션에서 현재 지역
+    // 1) 세션 테이블에 기록된 현재 지역
     final session = await OfflineAuthService.instance.currentSession();
     final area = (session?.area ?? '').trim();
     if (area.isNotEmpty) return area;
 
-    // 2) 폴백: area 마스터 첫 항목 (선택 사항)
+    // 2) 폴백: area 마스터 첫 항목(선택 사항)
     final db = await OfflineAuthDb.instance.database;
     final rows = await db.query(
       OfflineAuthDb.tableArea,
-      columns: ['name'],
+      columns: const ['name'],
       orderBy: 'name ASC',
       limit: 1,
     );
@@ -59,8 +60,6 @@ class _OfflineTopNavigationState extends State<OfflineTopNavigation> {
 
   @override
   Widget build(BuildContext context) {
-    final plateState = context.read<PlateState>(); // 필요 없다면 provider 의존 제거 가능
-
     return FutureBuilder<String>(
       future: _currentAreaF,
       builder: (context, snap) {
@@ -75,7 +74,6 @@ class _OfflineTopNavigationState extends State<OfflineTopNavigation> {
               // 바텀시트 완료까지 대기 → 이후 DB 재조회로 즉시 반영
               await offlineAreaPickerBottomSheet(
                 context: context,
-                plateState: plateState,
               );
               await _refresh();
             }
@@ -94,14 +92,16 @@ class _OfflineTopNavigationState extends State<OfflineTopNavigation> {
                     color: Colors.blueAccent,
                   ),
                   const SizedBox(width: 6),
-                  Text(
-                    title,
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                    style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
+                  Flexible(
+                    child: Text(
+                      title,
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
                     ),
                   ),
                   if (widget.isAreaSelectable) ...[
