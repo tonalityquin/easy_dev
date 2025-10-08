@@ -420,7 +420,7 @@ class _AreaPickerContentState extends State<_AreaPickerContent> {
                 if (isHeadquarter) {
                   Navigator.pushReplacementNamed(
                     widget.rootContext,
-                    AppRoutes.offlineHeadquarterPage,
+                    AppRoutes.offlineTypePage,
                   );
                 } else {
                   Navigator.pushReplacementNamed(

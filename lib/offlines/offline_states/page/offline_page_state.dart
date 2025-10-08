@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
-import '../../../enums/plate_type.dart';
 import '../../../screens/type_package/parking_completed_page.dart';
-import '../../../states/plate/plate_state.dart';
 import 'offline_page_info.dart';
 
+/// 탭 이동 시 '데이터 유무로 이동 차단' 로직을 제거하여
+/// 입차 요청/출차 요청 화면은 데이터가 없더라도 항상 진입 가능하게 함.
 class OfflinePageState with ChangeNotifier {
   final List<OfflinePageInfo> pages;
 
@@ -55,32 +54,11 @@ class OfflinePageState with ChangeNotifier {
         ParkingCompletedPage.reset(parkingCompletedKey);
         notifyListeners(); // 리셋 반영을 위해 리스너 알림
       }
-      return; // 다른 탭은 기존대로 무시
+      return;
     }
 
-    final plateState = context.read<PlateState>();
-
-    // 입차 요청 탭: 데이터 없으면 이동 막기
-    if (index == 0) {
-      final plates = plateState.getPlatesByCollection(PlateType.parkingRequests);
-      if (plates.isEmpty) {
-        const msg = "🚫 입차 요청 데이터가 없습니다.";
-        debugPrint(msg);
-        onError?.call(msg);
-        return;
-      }
-    }
-
-    // 출차 요청 탭: 데이터 없으면 이동 막기
-    if (index == 2) {
-      final plates = plateState.getPlatesByCollection(PlateType.departureRequests);
-      if (plates.isEmpty) {
-        const msg = "🚫 출차 요청 데이터가 없습니다.";
-        debugPrint(msg);
-        onError?.call(msg);
-        return;
-      }
-    }
+    // ❌ (삭제됨) 데이터 유무로 탭 이동 차단 로직
+    //    - 입차 요청/출차 요청 데이터가 없어도 화면 진입 가능해야 하므로 제거
 
     // 홈 탭 최초/일반 진입 시 완료 페이지 상태 리셋
     if (index == 1) {

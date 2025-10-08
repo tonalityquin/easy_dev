@@ -1,9 +1,5 @@
-// lib/routes.dart
-// 오프라인 모드용 라우팅 테이블
-// - SharedPreferences 기반 DevAuthGate 제거
-// - OfflineLoginScreen 성공 시 OfflineCommuteInsideScreen으로 이동하도록 연결
-
 import 'package:easydev/offlines/offline_head_page.dart';
+import 'package:easydev/offlines/offline_type_page.dart';
 import 'package:flutter/material.dart';
 
 // ▼ 오프라인 패키지
@@ -60,16 +56,6 @@ class AppRoutes {
   static const breakSheet = '/break_sheet';
 }
 
-// =====================================================
-// 오프라인 모드: DevAuthGate/SharedPreferences 의존 제거 버전
-// =====================================================
-//
-// - OfflineLoginScreen에서 SQLite 세션 존재 시 자동으로 onLoginSucceeded 호출.
-// - 오프라인 로그인 성공 시, '/offline_commute'로 이동(아래 routes에서 콜백 처리).
-// - 필요 시, 앱의 초기 라우트를 '/offline_login'로 두거나
-//   별도 '/offline_gate' 라우트에 OfflineEntryGate를 연결해도 됩니다.
-//
-
 final Map<String, WidgetBuilder> appRoutes = {
   // 허브(셀렉터)
   AppRoutes.selector: (context) => const SelectorHubsPage(),
@@ -92,6 +78,7 @@ final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.headquarterPage: (context) => const HeadquarterPage(),
   AppRoutes.typePage: (context) => const TypePage(),
   AppRoutes.offlineHeadquarterPage: (context) => const OfflineHeadPage(),
+  AppRoutes.offlineTypePage: (context) => const OfflineTypePage(),
   AppRoutes.tablet: (context) => const TabletPage(),
   AppRoutes.faq: (context) => const FaqPage(),
 

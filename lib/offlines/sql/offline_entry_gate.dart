@@ -90,8 +90,8 @@ class _OfflineEntryGateState extends State<OfflineEntryGate> {
       if (!mounted) return;
 
       final routeName = isHq
-          ? AppRoutes.offlineHeadquarterPage
-          : AppRoutes.typePage;
+          ? AppRoutes.offlineTypePage
+          : AppRoutes.offlineTypePage;
 
       Navigator.pushReplacementNamed(context, routeName);
       return;

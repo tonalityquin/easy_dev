@@ -2,19 +2,21 @@ import 'package:flutter/material.dart';
 
 import 'widgets/home_user_info_card.dart';
 
-import '../../../sql/offline_auth_db.dart';        // ← 경로 조정
-import '../../../sql/offline_auth_service.dart';   // ← 경로 조정
+// ▼ SQLite / 세션 (경로는 프로젝트에 맞게 조정하세요)
+import '../../../sql/offline_auth_db.dart'; // ← 경로 조정
+import '../../../sql/offline_auth_service.dart'; // ← 경로 조정
 
-import '../../../../../../routes.dart';
+// ▼ 라우트 (경로/상수명은 프로젝트에 맞게 조정하세요)
+import '../../../../../../routes.dart'; // 예: AppRoutes.selector
 
-class OfflineHqDashBoardPage extends StatefulWidget {
-  const OfflineHqDashBoardPage({super.key});
+class OfflineHomeDashBoardBottomSheet extends StatefulWidget {
+  const OfflineHomeDashBoardBottomSheet({super.key});
 
   @override
-  State<OfflineHqDashBoardPage> createState() => _OfflineHqDashBoardPageState();
+  State<OfflineHomeDashBoardBottomSheet> createState() => _OfflineHomeDashBoardBottomSheetState();
 }
 
-class _OfflineHqDashBoardPageState extends State<OfflineHqDashBoardPage> {
+class _OfflineHomeDashBoardBottomSheetState extends State<OfflineHomeDashBoardBottomSheet> {
   // true = 숨김(기본), false = 펼침
   bool _layerHidden = true;
 
@@ -27,7 +29,7 @@ class _OfflineHqDashBoardPageState extends State<OfflineHqDashBoardPage> {
   /// 퇴근 처리: offline_accounts.isWorking = 0
   /// - 세션 userId 또는 phone(숫자만 비교)로 타깃 행을 찾고
   /// - 없으면 isSelected=1 행으로 폴백
-  /// - 성공 시 selector hubs 페이지로 이동
+  /// - 성공 시 selector 페이지로 이동
   Future<void> _clockOut() async {
     if (_processingClockOut) return;
     setState(() => _processingClockOut = true);
@@ -107,12 +109,11 @@ class _OfflineHqDashBoardPageState extends State<OfflineHqDashBoardPage> {
           const SnackBar(content: Text('퇴근 처리 완료되었습니다.')),
         );
 
-        // ✅ selector hubs 페이지로 이동
-        // - 스택을 비우고 selector hubs 가 루트가 되도록 처리
-        // - AppRoutes.selectorHubsPage 이름은 프로젝트 라우트에 맞춰 변경하세요.
+        // ✅ selector 페이지로 이동 (스택 비우기)
+        // - AppRoutes.selector 이름은 프로젝트 라우트에 맞춰 변경하세요.
         Navigator.of(context).pushNamedAndRemoveUntil(
           AppRoutes.selector,
-              (route) => false,
+          (route) => false,
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -134,64 +135,79 @@ class _OfflineHqDashBoardPageState extends State<OfflineHqDashBoardPage> {
 
   @override
   Widget build(BuildContext context) {
-
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const HomeUserInfoCard(),
-            const SizedBox(height: 16),
-
-            // 레이어(토글) 버튼: 기본 true(숨김) → 누르면 false(펼침)
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                icon: Icon(_layerHidden ? Icons.layers : Icons.layers_clear),
-                label: Text(_layerHidden ? '오프라인 작업 버튼 펼치기' : '작업 버튼 숨기기'),
-                style: _layerToggleBtnStyle(),
-                onPressed: () => setState(() => _layerHidden = !_layerHidden),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // 숨김/펼침 영역
-            AnimatedCrossFade(
-              duration: const Duration(milliseconds: 200),
-              crossFadeState: _layerHidden
-                  ? CrossFadeState.showFirst
-                  : CrossFadeState.showSecond,
-              firstChild: const SizedBox.shrink(),
-              secondChild: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // 1) 휴게 사용 확인 (내부에서 자체 로직 처리)
-                  const SizedBox(height: 16),
-
-                  // 2) 퇴근하기 (명시 버튼) — UserState 없이 직접 SQLite로 처리 후 selector hubs로 이동
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.exit_to_app),
-                      label: const Text('퇴근하기'),
-                      style: _clockOutBtnStyle(),
-                      onPressed: _processingClockOut ? null : _clockOut,
-                    ),
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.95,
+      minChildSize: 0.4,
+      maxChildSize: 0.95,
+      builder: (context, scrollController) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: SingleChildScrollView(
+            controller: scrollController,
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                const SizedBox(height: 12),
+                Container(
+                  width: 60,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(3),
                   ),
-                  const SizedBox(height: 16),
-                ],
-              ),
-            ),
+                ),
+                const SizedBox(height: 24),
+                const SizedBox(height: 16),
+                const HomeUserInfoCard(),
+                const SizedBox(height: 16),
 
-            // 접힘 상태일 때 하단 여백
-            if (_layerHidden) const SizedBox(height: 16),
-            const SizedBox(height: 32),
-          ],
-        ),
-      ),
+                // 레이어(토글) 버튼: 기본 true(숨김) → 누르면 false(펼침)
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    icon: Icon(_layerHidden ? Icons.layers : Icons.layers_clear),
+                    label: Text(_layerHidden ? '오프라인 작업 버튼 펼치기' : '작업 버튼 숨기기'),
+                    style: _layerToggleBtnStyle(),
+                    onPressed: () => setState(() => _layerHidden = !_layerHidden),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // 숨김/펼침 영역
+                AnimatedCrossFade(
+                  duration: const Duration(milliseconds: 200),
+                  crossFadeState: _layerHidden ? CrossFadeState.showFirst : CrossFadeState.showSecond,
+                  firstChild: const SizedBox.shrink(),
+                  secondChild: Column(
+                    children: [
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.exit_to_app),
+                          label: const Text('오프라인 퇴근하기'),
+                          style: _clockOutBtnStyle(),
+                          onPressed: _processingClockOut ? null : _clockOut,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // 접힘 상태일 때 하단 여백
+                if (_layerHidden) const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

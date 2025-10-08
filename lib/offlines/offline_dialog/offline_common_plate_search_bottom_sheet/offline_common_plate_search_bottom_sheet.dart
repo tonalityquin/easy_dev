@@ -6,22 +6,22 @@ import 'widgets/plate_search_header.dart';
 import 'widgets/plate_search_results.dart';
 import 'widgets/search_button.dart';
 
-// FirestorePlateRepository import
-import '../../../repositories/plate_repo_services/firestore_plate_repository.dart';
-import '../../../utils/snackbar_helper.dart'; // ✅ 커스텀 스낵바
 
-class CommonPlateSearchBottomSheet extends StatefulWidget {
+import '../../../repositories/plate_repo_services/firestore_plate_repository.dart';
+import '../../../utils/snackbar_helper.dart';
+
+class OfflineCommonPlateSearchBottomSheet extends StatefulWidget {
   final void Function(String) onSearch;
   final String area;
 
-  const CommonPlateSearchBottomSheet({
+  const OfflineCommonPlateSearchBottomSheet({
     super.key,
     required this.onSearch,
     required this.area,
   });
 
   @override
-  State<CommonPlateSearchBottomSheet> createState() => _CommonPlateSearchBottomSheetState();
+  State<OfflineCommonPlateSearchBottomSheet> createState() => _OfflineCommonPlateSearchBottomSheetState();
 
   static Future<void> show(
       BuildContext context,
@@ -37,7 +37,7 @@ class CommonPlateSearchBottomSheet extends StatefulWidget {
       pageBuilder: (_, __, ___) {
         return Align(
           alignment: Alignment.bottomCenter,
-          child: CommonPlateSearchBottomSheet(
+          child: OfflineCommonPlateSearchBottomSheet(
             onSearch: onSearch,
             area: area,
           ),
@@ -63,7 +63,7 @@ class CommonPlateSearchBottomSheet extends StatefulWidget {
   }
 }
 
-class _CommonPlateSearchBottomSheetState extends State<CommonPlateSearchBottomSheet>
+class _OfflineCommonPlateSearchBottomSheetState extends State<OfflineCommonPlateSearchBottomSheet>
     with SingleTickerProviderStateMixin {
   final TextEditingController _controller = TextEditingController();
   bool _isLoading = false;

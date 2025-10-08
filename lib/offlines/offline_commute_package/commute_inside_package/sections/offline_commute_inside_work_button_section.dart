@@ -239,10 +239,10 @@ class _OfflineCommuteInsideWorkButtonSectionState extends State<OfflineCommuteIn
 
       switch (dest) {
         case CommuteDestination.headquarter:
-          Navigator.pushReplacementNamed(context, AppRoutes.offlineHeadquarterPage);
+          Navigator.pushReplacementNamed(context, AppRoutes.offlineTypePage);
           break;
         case CommuteDestination.type:
-          Navigator.pushReplacementNamed(context, AppRoutes.typePage);
+          Navigator.pushReplacementNamed(context, AppRoutes.offlineTypePage);
           break;
         case CommuteDestination.none:
           // 목적지 판별 실패 시 버튼은 '출근 중' 상태로 남지만, 필요하면 안내
@@ -317,13 +317,13 @@ class _OfflineCommuteInsideWorkButtonSectionState extends State<OfflineCommuteIn
                   case CommuteDestination.headquarter:
                     Navigator.pushReplacementNamed(
                       context,
-                      AppRoutes.offlineHeadquarterPage,
+                      AppRoutes.offlineTypePage,
                     );
                     break;
                   case CommuteDestination.type:
                     Navigator.pushReplacementNamed(
                       context,
-                      AppRoutes.typePage,
+                      AppRoutes.offlineTypePage,
                     );
                     break;
                   case CommuteDestination.none:

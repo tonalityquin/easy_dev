@@ -89,10 +89,10 @@ class OfflineCommuteInsideController {
 
       switch (dest) {
         case CommuteDestination.headquarter:
-          Navigator.pushReplacementNamed(context, AppRoutes.offlineHeadquarterPage);
+          Navigator.pushReplacementNamed(context, AppRoutes.offlineTypePage);
           break;
         case CommuteDestination.type:
-          Navigator.pushReplacementNamed(context, AppRoutes.typePage);
+          Navigator.pushReplacementNamed(context, AppRoutes.offlineTypePage);
           break;
         case CommuteDestination.none:
           break;
