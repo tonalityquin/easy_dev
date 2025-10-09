@@ -1,5 +1,5 @@
 // ==============================
-// File: offline_auth_db.dart (v7 - plates/bills/locations + WorkingArea 기본 시드)
+// File: offline_auth_db.dart (v7 - plates/bills/locations + HQ 기본 시드)
 // ==============================
 import 'dart:async';
 import 'package:sqflite/sqflite.dart';
@@ -197,8 +197,8 @@ class OfflineAuthDb {
           await db.execute('''
             CREATE TABLE $tableBills(
               id INTEGER PRIMARY KEY AUTOINCREMENT,
-              bill_key TEXT NOT NULL UNIQUE,          -- 예: "무료_가로수길(캔버스랩)"
-              area TEXT NOT NULL,                     -- 예: "가로수길(캔버스랩)"
+              bill_key TEXT NOT NULL UNIQUE,          -- 예: "무료_HQ 지역"
+              area TEXT NOT NULL,                     -- 예: "HQ 지역"
               count_type TEXT NOT NULL,               -- 예: "무료"
               type TEXT NOT NULL,                     -- 예: "변동"
               basic_amount INTEGER NOT NULL DEFAULT 0,
@@ -220,7 +220,7 @@ class OfflineAuthDb {
           await db.execute('''
             CREATE TABLE $tableLocations(
               id INTEGER PRIMARY KEY AUTOINCREMENT,
-              location_key TEXT NOT NULL UNIQUE,      -- 예: "승강기_가로수길(캔버스랩)", "A-1_britishArea"
+              location_key TEXT NOT NULL UNIQUE,      -- 예: "승강기_HQ 지역", "A-1_HQ 지역"
               area TEXT NOT NULL,
               location_name TEXT NOT NULL,            -- 예: "승강기", "A-1"
               parent TEXT NOT NULL DEFAULT '',        -- 예: "승강기", "airport" (빈문자 기본)
@@ -436,7 +436,7 @@ class OfflineAuthDb {
   }
 
   // ───────────────── 시드 주입(idempotent) ─────────────────
-  // 요구: WorkingArea 지역의 location 3건 + bill 2건이 기본으로 존재
+  // 요구: HQ 지역의 location 3건 + bill 2건이 기본으로 존재
   // 방법: INSERT OR IGNORE → 여러 번 호출돼도 최초에만 삽입, 이후 값 보존
   static Future<void> _seedDefaults(Database db) async {
     await db.transaction((txn) async {
@@ -499,11 +499,11 @@ class OfflineAuthDb {
       );
 
       // ─────────────────────────────────────────────────────
-      // 5) WorkingArea 지역 "기본 시드": locations 3 + bills 2
+      // 5) HQ 지역 "기본 시드": locations 3 + bills 2
       //    - INSERT OR IGNORE: 존재 시 덮어쓰지 않음 (기본 행 보장)
       // ─────────────────────────────────────────────────────
 
-      // Locations (3)
+      // Locations (3) → HQ 지역
       await txn.rawInsert(
         '''
         INSERT OR IGNORE INTO $tableLocations
@@ -511,8 +511,8 @@ class OfflineAuthDb {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ''',
         [
-          '승강기_WorkingArea 지역',
-          'WorkingArea 지역',
+          '승강기_HQ 지역',
+          'HQ 지역',
           '승강기',
           '승강기',
           'single',
@@ -529,8 +529,8 @@ class OfflineAuthDb {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ''',
         [
-          'A-1_WorkingArea 지역',
-          'WorkingArea 지역',
+          'A-1_HQ 지역',
+          'HQ 지역',
           'A-1',
           'airport',
           'composite',
@@ -547,8 +547,8 @@ class OfflineAuthDb {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ''',
         [
-          'A-2_WorkingArea 지역',
-          'WorkingArea 지역',
+          'A-2_HQ 지역',
+          'HQ 지역',
           'A-2',
           'airport',
           'composite',
@@ -558,7 +558,7 @@ class OfflineAuthDb {
         ],
       );
 
-      // Bills (2)
+      // Bills (2) → HQ 지역
       await txn.rawInsert(
         '''
         INSERT OR IGNORE INTO $tableBills
@@ -566,8 +566,8 @@ class OfflineAuthDb {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ''',
         [
-          '무료_WorkingArea 지역',
-          'WorkingArea 지역',
+          '무료_HQ 지역',
+          'HQ 지역',
           '무료',
           '변동',
           0, 1, 0, 1,
@@ -581,8 +581,8 @@ class OfflineAuthDb {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ''',
         [
-          '일반주차_WorkingArea 지역',
-          'WorkingArea 지역',
+          '일반주차_HQ 지역',
+          'HQ 지역',
           '일반주차',
           '변동',
           2000, 5, 1000, 1,

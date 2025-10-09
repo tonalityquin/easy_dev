@@ -12,7 +12,7 @@ import '../../../../states/user/user_state.dart';
 /// ▶️ 리팩터링: 바텀시트가 **화면 최상단까지** 차오르도록 변경
 /// - showModalBottomSheet + FractionallySizedBox(heightFactor: 1) 사용
 /// - 키보드가 올라오면 하단 여백 반영
-Future<void> showParkingRequestStatusBottomSheet({
+Future<void> offlineShowParkingRequestStatusBottomSheet({
   required BuildContext context,
   required PlateModel plate,
   required VoidCallback onCancelEntryRequest,

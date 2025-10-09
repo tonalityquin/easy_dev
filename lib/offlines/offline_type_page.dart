@@ -4,10 +4,10 @@ import 'package:provider/provider.dart';
 
 import '../enums/plate_type.dart';
 
+import 'offline_input_package/offline_input_plate_screen.dart';
 import 'offline_states/page/offline_page_state.dart';
 import 'offline_states/page/offline_page_info.dart';
 
-import '../screens/input_package/input_plate_screen.dart';
 import 'offline_type_package/common_widgets/dashboard_bottom_sheet/offline_home_dash_board_bottom_sheet.dart';
 import '../utils/snackbar_helper.dart';
 
@@ -289,7 +289,7 @@ class _RefreshableBodyState extends State<RefreshableBody> {
 
   void _handleHorizontalDragEnd(BuildContext context, double velocity) {
     if (_dragDistance > _hDistanceThreshold && velocity > _hVelocityThreshold) {
-      Navigator.of(context).push(_slidePage(const InputPlateScreen(), fromLeft: true));
+      Navigator.of(context).push(_slidePage(const OfflineInputPlateScreen(), fromLeft: true));
     } else if (_dragDistance < -_hDistanceThreshold && velocity < -_hVelocityThreshold) {
       // ⛔ 제거됨: SecondaryPage로의 이동 로직
       debugPrint('⏸[H] 좌->우 이외 스와이프는 현재 동작 없음');

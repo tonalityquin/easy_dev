@@ -4,7 +4,7 @@
 // - Firestore/Provider 제거, SQLite(offline_auth_db/offline_auth_service)만 사용
 // - PlateType/PlateModel 의존 제거 → status_type 문자열 상수로 대체
 // - 출차 요청 목록/선택/출차 완료/뒤로가기(선택 해제) 전부 offline_plates 직접 질의
-// - UI는 간단한 ListTile 기반(PlateContainer 제거)
+// - ✅ 목록 아이템을 박스(UI)로 리팩터링하고, 번호 + 위치를 함께 출력(주차 요청 페이지와 동일 스타일)
 // - 검색 바텀시트: 공용 BottomSheet 제거 → 로컬 풀스크린 모달 바텀시트로 안내 텍스트만 표시
 //
 import 'package:flutter/foundation.dart';
@@ -21,7 +21,7 @@ import '../offline_navigation/offline_top_navigation.dart';
 // import '../../widgets/dialog/common_plate_search_bottom_sheet/common_plate_search_bottom_sheet.dart';
 
 // 기존 departure_request_status_bottom_sheet.dart는 PlateModel 의존 → 사용 제거
-import 'offline_departure_request_package/departure_request_control_buttons.dart';
+import 'offline_departure_request_package/offline_departure_request_control_buttons.dart';
 
 // ⛳ PlateType 제거: status_type을 문자열 상수로 사용
 const String _kStatusDepartureRequests = 'departureRequests';
@@ -311,7 +311,7 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
           },
         ),
         // FAB 없음: SQLite 즉시반영
-        bottomNavigationBar: DepartureRequestControlButtons(
+        bottomNavigationBar: OfflineDepartureRequestControlButtons(
           isSorted: _isSorted,
           isLocked: _isLocked,
           showSearchDialog: _showSearchDialog,
@@ -364,6 +364,7 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
       );
     }
 
+    // ✅ 주차 요청 페이지와 동일한 박스형 리스트 아이템
     final tiles = rows.map((r) {
       final id = r['id'] as int;
       final pn = (r['plate_number'] as String?)?.trim();
@@ -374,26 +375,87 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
       final title = (pn != null && pn.isNotEmpty)
           ? pn
           : (four.isNotEmpty ? '****-$four' : '미상');
+      final locationText = loc.isNotEmpty ? loc : '위치 미지정';
 
-      return ListTile(
-        dense: true,
-        leading: Icon(selected ? Icons.check_circle : Icons.circle_outlined),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: loc.isNotEmpty ? Text(loc) : null,
+      return InkWell(
         onTap: () async {
-          if (_isLocked) return;
+          if (_isLocked) {
+            showSelectedSnackbar(context, '화면이 잠금 상태입니다.');
+            return;
+          }
           await _togglePlateSelection(id);
           if (!mounted) return;
           setState(() {}); // 재빌드
         },
+        child: Container(
+          width: double.infinity, // ✅ 가로 꽉차게
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: selected ? Colors.black.withOpacity(0.04) : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected ? Colors.black : Colors.grey.shade300,
+              width: selected ? 1.6 : 1.0,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Icon(
+                selected ? Icons.check_circle : Icons.directions_car,
+                size: 22,
+                color: selected ? Colors.black : Colors.grey[700],
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 차량 번호(크게)
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    // 위치
+                    Text(
+                      locationText,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey.shade700,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.chevron_right),
+            ],
+          ),
+        ),
       );
     }).toList();
 
     return ListView.separated(
-      padding: const EdgeInsets.all(8.0),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
       itemCount: tiles.length,
-      separatorBuilder: (_, __) => const Divider(height: 1),
+      separatorBuilder: (_, __) => const SizedBox(height: 10), // ✅ 박스 간격
       itemBuilder: (_, i) => tiles[i],
     );
+    // ─────────────────────────────────────────────────────────────
   }
 }

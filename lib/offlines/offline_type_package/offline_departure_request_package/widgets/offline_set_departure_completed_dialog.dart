@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-class SetDepartureCompletedBottomSheet extends StatelessWidget {
+class OfflineSetDepartureCompletedDialog extends StatelessWidget {
   final VoidCallback onConfirm;
 
-  const SetDepartureCompletedBottomSheet({
+  const OfflineSetDepartureCompletedDialog({
     super.key,
     required this.onConfirm,
   });

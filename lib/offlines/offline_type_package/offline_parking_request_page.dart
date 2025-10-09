@@ -7,6 +7,7 @@
 // - 위치 바텀시트(ParkingLocationBottomSheet)에서 선택 후 상태 전환
 // - 선택/뒤로가기/정렬 등은 전부 offline_plates 직접 질의로 구현(간단 ListTile UI)
 // - 검색: 기존 CommonPlateSearchBottomSheet 대신 모달 바텀시트로 안내 텍스트만 표시
+// - ✅ 목록 아이템을 박스(UI)로 리팩터링하고, 번호 + 위치를 함께 출력
 //
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -17,17 +18,14 @@ import '../sql/offline_auth_service.dart';
 
 import '../../utils/snackbar_helper.dart';
 
-// (교체) 공통 검색 바텀시트 사용 제거 → 모달 바텀시트로 안내만 표시
-// import '../../widgets/dialog/common_plate_search_bottom_sheet/common_plate_search_bottom_sheet.dart';
-
 // 위치 선택 바텀시트 (기존 프로젝트의 것을 사용)
-import '../../widgets/dialog/parking_location_bottom_sheet.dart';
+import '../offline_dialog/offline_parking_location_bottom_sheet.dart';
 
 // 상단 네비게이션 (기존 프로젝트의 것을 사용)
 import '../offline_navigation/offline_top_navigation.dart';
 
 // 하단 컨트롤 버튼(기존 프로젝트 위젯 시그니처에 맞춰 콜백 제공)
-import 'offline_parking_request_package/parking_request_control_buttons.dart';
+import 'offline_parking_request_package/offline_parking_request_control_buttons.dart';
 
 // ⛳ PlateType 제거: 상태 문자열을 직접 사용
 //   스키마: offline_plates.status_type TEXT
@@ -156,19 +154,14 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
         isScrollControlled: true,        // ✅ 풀스크린 높이 사용
         useSafeArea: true,               // ✅ 노치/상단 안전영역까지 차오르되 컨텐츠는 안전영역 내 배치
         backgroundColor: Colors.white,
-        // 필요 없으면 주석 처리(상단 라운드 제거 가능)
-        // shape: const RoundedRectangleBorder(
-        //   borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-        // ),
         builder: (sheetContext) {
           return FractionallySizedBox(
             heightFactor: 1,             // ✅ 화면 전체 높이
             child: SafeArea(
-              // 상단까지 ‘시트’가 올라오고, 컨텐츠는 안전영역 내에 있도록 유지
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
                 child: Column(
-                  mainAxisSize: MainAxisSize.max,      // 높이 채우기(선택)
+                  mainAxisSize: MainAxisSize.max,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
@@ -192,8 +185,6 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
                       style: TextStyle(fontSize: 15),
                     ),
                     const SizedBox(height: 12),
-                    // 필요 시 Expanded로 아래 영역 채우고 스크롤 제공 가능:
-                    // Expanded(child: SingleChildScrollView(child: ...)),
                   ],
                 ),
               ),
@@ -205,7 +196,6 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
       _openingSearch = false;
     }
   }
-
 
   // ─────────────────────────────────────────────────────────────
   // '입차 완료' 플로우
@@ -248,7 +238,7 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
       final String? selectedLocation = await showDialog<String>(
         context: context,
         builder: (dialogContext) {
-          return ParkingLocationBottomSheet(locationController: locationController);
+          return OfflineParkingLocationBottomSheet(locationController: locationController);
         },
       );
 
@@ -406,7 +396,7 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
             return snap.data ?? const SizedBox.shrink();
           },
         ),
-        bottomNavigationBar: ParkingRequestControlButtons(
+        bottomNavigationBar: OfflineParkingRequestControlButtons(
           isSorted: _isSorted,
           isLocked: _isLocked,
           onToggleLock: () {
@@ -428,9 +418,10 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
       return const Center(child: Text('현재 지역 정보를 확인할 수 없습니다.'));
     }
 
+    // ✅ location 컬럼 포함해서 조회 (위치 표시를 위해)
     final rows = await db.query(
       OfflineAuthDb.tablePlates,
-      columns: const ['id', 'plate_number', 'plate_four_digit', 'request_time', 'is_selected'],
+      columns: const ['id', 'plate_number', 'plate_four_digit', 'location', 'request_time', 'is_selected'],
       where: "COALESCE(status_type,'') = ? AND area = ?",
       whereArgs: [_kStatusParkingRequests, area],
       orderBy: _isSorted
@@ -447,14 +438,13 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
       final id = r['id'] as int;
       final pn = (r['plate_number'] as String?)?.trim();
       final four = (r['plate_four_digit'] as String?)?.trim() ?? '';
+      final loc = (r['location'] as String?)?.trim() ?? '';
       final selected = ((r['is_selected'] as int?) ?? 0) != 0;
 
       final title = (pn != null && pn.isNotEmpty) ? pn : (four.isNotEmpty ? '****-$four' : '미상');
+      final locationText = loc.isNotEmpty ? loc : '위치 미지정';
 
-      return ListTile(
-        dense: true,
-        leading: Icon(selected ? Icons.check_circle : Icons.circle_outlined),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+      return InkWell(
         onTap: () async {
           if (_isLocked) {
             showSelectedSnackbar(context, '화면이 잠금 상태입니다.');
@@ -464,13 +454,73 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
           if (!mounted) return;
           setState(() {}); // 재빌드
         },
+        child: Container(
+          width: double.infinity, // ✅ 가로 꽉차게
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: selected ? Colors.black.withOpacity(0.04) : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected ? Colors.black : Colors.grey.shade300,
+              width: selected ? 1.6 : 1.0,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Icon(
+                selected ? Icons.check_circle : Icons.directions_car,
+                size: 22,
+                color: selected ? Colors.black : Colors.grey[700],
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 차량 번호(크게)
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    // 위치
+                    Text(
+                      locationText,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey.shade700,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.chevron_right),
+            ],
+          ),
+        ),
       );
     }).toList();
 
     return ListView.separated(
-      padding: const EdgeInsets.all(8.0),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
       itemCount: tiles.length,
-      separatorBuilder: (_, __) => const Divider(height: 1),
+      separatorBuilder: (_, __) => const SizedBox(height: 10), // ✅ 박스 간격
       itemBuilder: (_, i) => tiles[i],
     );
   }

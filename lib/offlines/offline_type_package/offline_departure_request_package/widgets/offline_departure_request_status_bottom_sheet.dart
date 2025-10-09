@@ -9,7 +9,7 @@ import '../../../../states/user/user_state.dart';
 import '../../../../utils/snackbar_helper.dart';
 import '../../../../enums/plate_type.dart';
 
-Future<void> showDepartureRequestStatusBottomSheet({
+Future<void> offlineShowDepartureRequestStatusBottomSheet({
   required BuildContext context,
   required PlateModel plate,
   required VoidCallback onRequestEntry,

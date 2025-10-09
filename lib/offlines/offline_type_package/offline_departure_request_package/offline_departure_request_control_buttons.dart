@@ -7,7 +7,6 @@
 //   && (selected_by=userId OR user_name=name) 로 직접 조회
 // - 정산(자동 0원 잠금 / 잠금 취소 / 사전 정산), 출차 완료 트리거 모두 SQLite 처리
 // - 상태 시트는 PlateModel 의존 대신, 로컬 간단 액션 시트로 대체(입차요청/입차완료/삭제)
-//
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -18,7 +17,6 @@ import '../../sql/offline_auth_db.dart';
 import '../../sql/offline_auth_service.dart';
 
 import '../../../utils/snackbar_helper.dart';
-
 import '../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
 import '../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 // 기존 widgets/departure_request_status_bottom_sheet.dart 는 PlateModel 의존 → 사용 제거
@@ -35,7 +33,7 @@ class _Palette {
 // ⛳ 상태 문자열(PlateType 대체)
 const String _kStatusDepartureRequests = 'departureRequests';
 
-class DepartureRequestControlButtons extends StatefulWidget {
+class OfflineDepartureRequestControlButtons extends StatefulWidget {
   final bool isSorted;
   final bool isLocked;
 
@@ -54,7 +52,7 @@ class DepartureRequestControlButtons extends StatefulWidget {
       String location,
       ) handleEntryParkingCompleted;
 
-  const DepartureRequestControlButtons({
+  const OfflineDepartureRequestControlButtons({
     super.key,
     required this.isSorted,
     required this.isLocked,
@@ -67,12 +65,12 @@ class DepartureRequestControlButtons extends StatefulWidget {
   });
 
   @override
-  State<DepartureRequestControlButtons> createState() =>
-      _DepartureRequestControlButtonsState();
+  State<OfflineDepartureRequestControlButtons> createState() =>
+      _OfflineDepartureRequestControlButtonsState();
 }
 
-class _DepartureRequestControlButtonsState
-    extends State<DepartureRequestControlButtons> {
+class _OfflineDepartureRequestControlButtonsState
+    extends State<OfflineDepartureRequestControlButtons> {
   Map<String, Object?>? _selectedRow; // 현재 선택된 plate row (offline_plates)
   bool _loading = false;
 
@@ -142,6 +140,8 @@ class _DepartureRequestControlButtonsState
     );
   }
 
+  int _selected_row_int(String key) => (_selectedRow?[key] as int?) ?? 0;
+
   // 정산 관리(자동 0원 잠금 / 취소 / 사전 정산)
   Future<void> _handleBilling() async {
     if (_selectedRow == null) return;
@@ -152,7 +152,7 @@ class _DepartureRequestControlButtonsState
     final int id = (_selectedRow!['id'] as int);
     final String billingType = (_selectedRow!['billing_type'] as String?)?.trim() ?? '';
     final int basicAmount   = (_selectedRow!['basic_amount'] as int?) ?? 0;
-    final int addAmount     = (_selected_row_int('add_amount'));
+    final int addAmount     = _selected_row_int('add_amount');
     final int? regularAmount = _selectedRow!['regular_amount'] as int?;
     final bool isFixed = billingType == '고정';
 
@@ -178,12 +178,12 @@ class _DepartureRequestControlButtonsState
         OfflineAuthDb.tablePlates,
         {
           'is_locked_fee': 1,
-          'locked_at_time_in_seconds': currentSec,
+          'locked_at_seconds': currentSec, // ✅ 스키마 컬럼명
           'locked_fee_amount': 0,
-          'payment_method': null,
+          // 선택 해제 + 수행자 기록
           'is_selected': 0,
           'selected_by': null,
-          'user_name': null,
+          'user_name': uname,
           'updated_at': _nowMs(),
         },
         where: 'id = ?',
@@ -222,12 +222,12 @@ class _DepartureRequestControlButtonsState
         OfflineAuthDb.tablePlates,
         {
           'is_locked_fee': 0,
-          'locked_at_time_in_seconds': null,
+          'locked_at_seconds': null,     // ✅ 스키마 컬럼명
           'locked_fee_amount': null,
-          'payment_method': null,
+          // 선택 해제 + 수행자 기록
           'is_selected': 0,
           'selected_by': null,
-          'user_name': null,
+          'user_name': uname,
           'updated_at': _nowMs(),
         },
         where: 'id = ?',
@@ -247,10 +247,17 @@ class _DepartureRequestControlButtonsState
     }
 
     // 사전 정산(잠금)
-    final entryMs = (_selectedRow!['request_time'] as int?) ?? 0;
-    final entrySec = DateTime.fromMillisecondsSinceEpoch(entryMs, isUtc: true)
-        .millisecondsSinceEpoch ~/
-        1000;
+    // request_time: TEXT 가능 → 안전 파싱
+    final entrySec = () {
+      final req = _selectedRow!['request_time'];
+      if (req is String && req.trim().isNotEmpty) {
+        final dt = DateTime.tryParse(req);
+        if (dt != null) return dt.toUtc().millisecondsSinceEpoch ~/ 1000;
+      }
+      // fallback: created_at(ms)
+      final createdMs = (_selectedRow!['created_at'] as int?) ?? DateTime.now().millisecondsSinceEpoch;
+      return DateTime.fromMillisecondsSinceEpoch(createdMs, isUtc: false).toUtc().millisecondsSinceEpoch ~/ 1000;
+    }();
 
     final result = await showOnTapBillingBottomSheet(
       context: context,
@@ -270,12 +277,12 @@ class _DepartureRequestControlButtonsState
       OfflineAuthDb.tablePlates,
       {
         'is_locked_fee': 1,
-        'locked_at_time_in_seconds': currentSec,
+        'locked_at_seconds': currentSec, // ✅ 스키마 컬럼명
         'locked_fee_amount': result.lockedFee,
-        'payment_method': result.paymentMethod,
+        // 선택 해제 + 수행자 기록
         'is_selected': 0,
         'selected_by': null,
-        'user_name': null,
+        'user_name': uname,
         'updated_at': _nowMs(),
       },
       where: 'id = ?',
@@ -287,9 +294,9 @@ class _DepartureRequestControlButtonsState
       'performedBy': uname,
       'timestamp': nowIso,
       'lockedFee': result.lockedFee,
-      'paymentMethod': result.paymentMethod,
+      'paymentMethod': result.paymentMethod, // DB에는 저장하지 않고 로그에만 기록
     };
-    if (result.reason != null && result.reason!.trim().isNotEmpty) {
+    if ((result.reason ?? '').trim().isNotEmpty) {
       log['reason'] = result.reason!.trim();
     }
     await _appendLog(id, log);
@@ -301,8 +308,6 @@ class _DepartureRequestControlButtonsState
     );
     await _refreshSelected();
   }
-
-  int _selected_row_int(String key) => (_selectedRow?[key] as int?) ?? 0;
 
   // ✅ PlateModel 의존 없는 간단 상태 시트
   Future<void> _showQuickActionsSheet() async {

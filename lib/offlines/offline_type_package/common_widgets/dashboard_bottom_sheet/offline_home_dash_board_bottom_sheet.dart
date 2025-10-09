@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../../../../offline_logout_helper.dart';
 import 'widgets/home_user_info_card.dart';
 
 // ▼ SQLite / 세션 (경로는 프로젝트에 맞게 조정하세요)
 import '../../../sql/offline_auth_db.dart'; // ← 경로 조정
 import '../../../sql/offline_auth_service.dart'; // ← 경로 조정
+
+// ▼ 로그아웃 헬퍼 (경로는 프로젝트에 맞게 조정하세요)
+
 
 // ▼ 라우트 (경로/상수명은 프로젝트에 맞게 조정하세요)
 import '../../../../../../routes.dart'; // 예: AppRoutes.selector
@@ -20,8 +24,9 @@ class _OfflineHomeDashBoardBottomSheetState extends State<OfflineHomeDashBoardBo
   // true = 숨김(기본), false = 펼침
   bool _layerHidden = true;
 
-  // 퇴근 처리 중 중복 탭 방지
+  // 퇴근 처리/로그아웃 중 중복 탭 방지
   bool _processingClockOut = false;
+  bool _processingLogout = false;
 
   // 숫자만 추출(전화번호 비교용)
   String _digits(String s) => s.replaceAll(RegExp(r'[^0-9]'), '');
@@ -110,10 +115,9 @@ class _OfflineHomeDashBoardBottomSheetState extends State<OfflineHomeDashBoardBo
         );
 
         // ✅ selector 페이지로 이동 (스택 비우기)
-        // - AppRoutes.selector 이름은 프로젝트 라우트에 맞춰 변경하세요.
         Navigator.of(context).pushNamedAndRemoveUntil(
-          AppRoutes.selector,
-          (route) => false,
+          AppRoutes.selector, // 프로젝트 라우트에 맞게 조정
+              (route) => false,
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -129,6 +133,31 @@ class _OfflineHomeDashBoardBottomSheetState extends State<OfflineHomeDashBoardBo
     } finally {
       if (mounted) {
         setState(() => _processingClockOut = false);
+      }
+    }
+  }
+
+  /// 오프라인 로그아웃: 세션 삭제 후 로그인/셀렉터 화면으로 이동(스택 제거)
+  Future<void> _logout() async {
+    if (_processingLogout) return;
+    setState(() => _processingLogout = true);
+    try {
+      await OfflineLogoutHelper.logoutAndGoToLogin(
+        context,
+        // 프로젝트의 로그인(or 셀렉터) 라우트 이름으로 조정하세요.
+        loginRoute: AppRoutes.selector,
+        // 또는 loginBuilder를 사용하려면 아래처럼 전달:
+        // loginBuilder: (_) => const LoginScreen(),
+      );
+    } catch (e, st) {
+      debugPrint('❌ logout 실패: $e\n$st');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('로그아웃 중 오류가 발생했습니다.')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _processingLogout = false);
       }
     }
   }
@@ -185,6 +214,7 @@ class _OfflineHomeDashBoardBottomSheetState extends State<OfflineHomeDashBoardBo
                   firstChild: const SizedBox.shrink(),
                   secondChild: Column(
                     children: [
+                      // 오프라인 퇴근하기
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
@@ -192,6 +222,18 @@ class _OfflineHomeDashBoardBottomSheetState extends State<OfflineHomeDashBoardBo
                           label: const Text('오프라인 퇴근하기'),
                           style: _clockOutBtnStyle(),
                           onPressed: _processingClockOut ? null : _clockOut,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // ✅ 오프라인 로그아웃 (세션 삭제 + 로그인/셀렉터로 이동)
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.logout),
+                          label: const Text('오프라인 로그아웃'),
+                          style: _logoutBtnStyle(),
+                          onPressed: _processingLogout ? null : _logout,
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -232,6 +274,18 @@ ButtonStyle _clockOutBtnStyle() {
     minimumSize: const Size.fromHeight(55),
     padding: EdgeInsets.zero,
     side: const BorderSide(color: Colors.redAccent, width: 1.0),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+  );
+}
+
+ButtonStyle _logoutBtnStyle() {
+  // 로그아웃은 중립 톤(파란 회색 보더)
+  return ElevatedButton.styleFrom(
+    backgroundColor: Colors.white,
+    foregroundColor: Colors.black,
+    minimumSize: const Size.fromHeight(48),
+    padding: EdgeInsets.zero,
+    side: const BorderSide(color: Colors.blueGrey, width: 1.0),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
   );
 }

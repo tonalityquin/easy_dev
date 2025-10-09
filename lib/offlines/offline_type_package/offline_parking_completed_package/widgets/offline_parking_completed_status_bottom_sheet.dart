@@ -14,6 +14,7 @@ import '../../../../screens/log_package/log_viewer_bottom_sheet.dart';
 
 // 상태 키 상수 (PlateType 의존 제거)
 const String _kStatusParkingRequests  = 'parkingRequests';
+const String _kStatusDepartureRequests = 'departureRequests';
 
 Future<void> showOfflineParkingCompletedStatusBottomSheet({
   required BuildContext context,
@@ -314,7 +315,7 @@ class _FullHeightSheetSqliteState extends State<_FullHeightSheetSqlite> {
     await db.update(
       OfflineAuthDb.tablePlates,
       {
-        'status_type': _kStatusParkingRequests,
+        'status_type': _kStatusDepartureRequests,
         'is_selected': 0,
         'updated_at': _nowMs(),
       },
