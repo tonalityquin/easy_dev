@@ -90,8 +90,8 @@ class _OfflineWorkAutoRouterState extends State<OfflineWorkAutoRouter> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         final routeName = isHq
-            ? AppRoutes.offlineHeadquarterPage
-            : AppRoutes.typePage; // 프로젝트에서 사용하는 타입 페이지 라우트명
+            ? AppRoutes.offlineTypePage
+            : AppRoutes.offlineTypePage; // 프로젝트에서 사용하는 타입 페이지 라우트명
 
         Navigator.pushReplacementNamed(context, routeName);
       });

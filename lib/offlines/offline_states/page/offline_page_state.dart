@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../screens/type_package/parking_completed_page.dart';
+import '../../offline_type_package/offline_parking_completed_page.dart';
 import 'offline_page_info.dart';
 
 /// 탭 이동 시 '데이터 유무로 이동 차단' 로직을 제거하여
@@ -51,7 +51,7 @@ class OfflinePageState with ChangeNotifier {
     //   ParkingStatusPage부터 다시 시작하고, 화면 잠금(isLocked)을 true로 설정
     if (_selectedIndex == index) {
       if (index == 1) {
-        ParkingCompletedPage.reset(parkingCompletedKey);
+        OfflineParkingCompletedPage.reset(parkingCompletedKey);
         notifyListeners(); // 리셋 반영을 위해 리스너 알림
       }
       return;
@@ -62,7 +62,7 @@ class OfflinePageState with ChangeNotifier {
 
     // 홈 탭 최초/일반 진입 시 완료 페이지 상태 리셋
     if (index == 1) {
-      ParkingCompletedPage.reset(parkingCompletedKey);
+      OfflineParkingCompletedPage.reset(parkingCompletedKey);
     }
 
     _selectedIndex = index;

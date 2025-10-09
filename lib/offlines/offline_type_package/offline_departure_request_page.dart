@@ -5,7 +5,7 @@
 // - PlateType/PlateModel 의존 제거 → status_type 문자열 상수로 대체
 // - 출차 요청 목록/선택/출차 완료/뒤로가기(선택 해제) 전부 offline_plates 직접 질의
 // - UI는 간단한 ListTile 기반(PlateContainer 제거)
-// - 검색 바텀시트/상단 네비/하단 컨트롤 버튼은 기존 위젯 재사용(단, 상태 시트는 로컬 간단 시트로 대체)
+// - 검색 바텀시트: 공용 BottomSheet 제거 → 로컬 풀스크린 모달 바텀시트로 안내 텍스트만 표시
 //
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -17,7 +17,9 @@ import '../sql/offline_auth_service.dart';
 import '../../utils/snackbar_helper.dart';
 
 import '../offline_navigation/offline_top_navigation.dart';
-import '../../widgets/dialog/common_plate_search_bottom_sheet/common_plate_search_bottom_sheet.dart';
+// 공용 검색 바텀시트 제거
+// import '../../widgets/dialog/common_plate_search_bottom_sheet/common_plate_search_bottom_sheet.dart';
+
 // 기존 departure_request_status_bottom_sheet.dart는 PlateModel 의존 → 사용 제거
 import 'offline_departure_request_package/departure_request_control_buttons.dart';
 
@@ -91,24 +93,57 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
   }
 
   // ─────────────────────────────────────────────────────────────
-  // 검색 바텀시트
+  // 검색 바텀시트 → 로컬 풀스크린 모달로 안내 텍스트만 표시
   // ─────────────────────────────────────────────────────────────
   Future<void> _showSearchDialog() async {
     if (_openingSearch) return;
     _openingSearch = true;
     try {
-      final currentArea = await _loadCurrentArea();
       if (!mounted) return;
-      await showModalBottomSheet(
+      await showModalBottomSheet<void>(
         context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (ctx) => CommonPlateSearchBottomSheet(
-          onSearch: (query) {
-            // TODO: 필요시 SQLite LIKE 검색으로 확장
-          },
-          area: currentArea,
-        ),
+        isScrollControlled: true,   // ✅ 최상단까지
+        useSafeArea: true,          // ✅ 노치/상단 안전영역 반영
+        backgroundColor: Colors.white,
+        builder: (sheetContext) {
+          return FractionallySizedBox(
+            heightFactor: 1,        // ✅ 전체 화면 높이
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.max,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            '번호판 위치 검색',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.of(sheetContext).pop(),
+                          tooltip: '닫기',
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      '입차 요청 및 출차 요청에 있는 번호판 위치를 검색할 수 있습니다.',
+                      style: TextStyle(fontSize: 15),
+                    ),
+                    const SizedBox(height: 12),
+                    // 필요 시 Expanded로 본문 추가 가능
+                    // Expanded(child: SingleChildScrollView(child: ...)),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
       );
     } finally {
       _openingSearch = false;
@@ -323,7 +358,7 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
     if (rows.isEmpty) {
       return const Center(
         child: Text(
-          '출차 요청이 없습니다.',
+          '오프라인 출차 요청이 없습니다.',
           style: TextStyle(color: Colors.grey),
         ),
       );

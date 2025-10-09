@@ -6,6 +6,7 @@
 // - '입차 완료' 처리 시 offline_locations.capacity 기준으로 초과 여부 판정
 // - 위치 바텀시트(ParkingLocationBottomSheet)에서 선택 후 상태 전환
 // - 선택/뒤로가기/정렬 등은 전부 offline_plates 직접 질의로 구현(간단 ListTile UI)
+// - 검색: 기존 CommonPlateSearchBottomSheet 대신 모달 바텀시트로 안내 텍스트만 표시
 //
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -16,8 +17,9 @@ import '../sql/offline_auth_service.dart';
 
 import '../../utils/snackbar_helper.dart';
 
-// (있다면 사용) 공통 검색 바텀시트
-import '../../widgets/dialog/common_plate_search_bottom_sheet/common_plate_search_bottom_sheet.dart';
+// (교체) 공통 검색 바텀시트 사용 제거 → 모달 바텀시트로 안내만 표시
+// import '../../widgets/dialog/common_plate_search_bottom_sheet/common_plate_search_bottom_sheet.dart';
+
 // 위치 선택 바텀시트 (기존 프로젝트의 것을 사용)
 import '../../widgets/dialog/parking_location_bottom_sheet.dart';
 
@@ -30,7 +32,7 @@ import 'offline_parking_request_package/parking_request_control_buttons.dart';
 // ⛳ PlateType 제거: 상태 문자열을 직접 사용
 //   스키마: offline_plates.status_type TEXT
 const String _kStatusParkingCompleted = 'parkingCompleted';
-const String _kStatusParkingRequests  = 'parkingRequests';
+const String _kStatusParkingRequests = 'parkingRequests';
 
 class OfflineParkingRequestPage extends StatefulWidget {
   const OfflineParkingRequestPage({super.key});
@@ -141,22 +143,61 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // 검색 다이얼로그
+  // 검색 다이얼로그 → 모달 바텀시트로 안내 문구 표시
   // ─────────────────────────────────────────────────────────────
   Future<void> _showSearchDialog() async {
     if (_openingSearch) return;
     _openingSearch = true;
     try {
-      final currentArea = await _loadCurrentArea();
       if (!mounted) return;
-      await showDialog(
+
+      await showModalBottomSheet<void>(
         context: context,
-        builder: (context) {
-          return CommonPlateSearchBottomSheet(
-            onSearch: (_) {
-              // TODO: 필요 시 SQLite LIKE 검색으로 확장
-            },
-            area: currentArea,
+        isScrollControlled: true,        // ✅ 풀스크린 높이 사용
+        useSafeArea: true,               // ✅ 노치/상단 안전영역까지 차오르되 컨텐츠는 안전영역 내 배치
+        backgroundColor: Colors.white,
+        // 필요 없으면 주석 처리(상단 라운드 제거 가능)
+        // shape: const RoundedRectangleBorder(
+        //   borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        // ),
+        builder: (sheetContext) {
+          return FractionallySizedBox(
+            heightFactor: 1,             // ✅ 화면 전체 높이
+            child: SafeArea(
+              // 상단까지 ‘시트’가 올라오고, 컨텐츠는 안전영역 내에 있도록 유지
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.max,      // 높이 채우기(선택)
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            '번호판 위치 검색',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.of(sheetContext).pop(),
+                          tooltip: '닫기',
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      '입차 요청 및 출차 요청에 있는 번호판 위치를 검색할 수 있습니다.',
+                      style: TextStyle(fontSize: 15),
+                    ),
+                    const SizedBox(height: 12),
+                    // 필요 시 Expanded로 아래 영역 채우고 스크롤 제공 가능:
+                    // Expanded(child: SingleChildScrollView(child: ...)),
+                  ],
+                ),
+              ),
+            ),
           );
         },
       );
@@ -164,6 +205,7 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
       _openingSearch = false;
     }
   }
+
 
   // ─────────────────────────────────────────────────────────────
   // '입차 완료' 플로우
@@ -278,7 +320,8 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
       await txn.update(
         OfflineAuthDb.tablePlates,
         {'is_selected': 0},
-        where: "COALESCE(status_type,'') = ? AND (COALESCE(selected_by,'') = ? OR COALESCE(user_name,'') = ?)",
+        where:
+        "COALESCE(status_type,'') = ? AND (COALESCE(selected_by,'') = ? OR COALESCE(user_name,'') = ?)",
         whereArgs: [_kStatusParkingRequests, uid, uname],
       );
 
@@ -397,7 +440,7 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
     );
 
     if (rows.isEmpty) {
-      return const Center(child: Text('입차 요청 내역이 없습니다.'));
+      return const Center(child: Text('오프라인 입차 요청 내역이 없습니다.'));
     }
 
     final tiles = rows.map((r) {

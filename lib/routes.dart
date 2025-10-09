@@ -1,4 +1,3 @@
-import 'package:easydev/offlines/offline_head_page.dart';
 import 'package:easydev/offlines/offline_type_page.dart';
 import 'package:flutter/material.dart';
 
@@ -37,7 +36,6 @@ class AppRoutes {
 
   static const headquarterPage = '/headquarter_page';
   static const typePage = '/type_page';
-  static const offlineHeadquarterPage = '/offline_headquarter_page';
   static const offlineTypePage = '/offline_type_page';
   static const tablet = '/tablet_page';
   static const faq = '/faq';
@@ -77,7 +75,6 @@ final Map<String, WidgetBuilder> appRoutes = {
   // 기타 페이지들
   AppRoutes.headquarterPage: (context) => const HeadquarterPage(),
   AppRoutes.typePage: (context) => const TypePage(),
-  AppRoutes.offlineHeadquarterPage: (context) => const OfflineHeadPage(),
   AppRoutes.offlineTypePage: (context) => const OfflineTypePage(),
   AppRoutes.tablet: (context) => const TabletPage(),
   AppRoutes.faq: (context) => const FaqPage(),
