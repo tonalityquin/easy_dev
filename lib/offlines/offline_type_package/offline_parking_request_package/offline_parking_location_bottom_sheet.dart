@@ -2,8 +2,8 @@
 import 'package:flutter/material.dart';
 
 // ▼ SQLite (경로는 프로젝트 구조에 맞게 조정하세요)
-import '../sql/offline_auth_db.dart';
-import '../sql/offline_auth_service.dart';
+import '../../sql/offline_auth_db.dart';
+import '../../sql/offline_auth_service.dart';
 
 class OfflineParkingLocationBottomSheet extends StatefulWidget {
   final TextEditingController locationController;
