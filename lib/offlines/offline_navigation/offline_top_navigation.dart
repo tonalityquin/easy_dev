@@ -2,7 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 // 튜토리얼 바텀시트만 사용 (오프라인에서 area 로직 제거)
-import '../offline_dialog/offline_tutorial_bottom_sheet.dart';
+import '../offline_tutorials//offline_tutorial_bottom_sheet.dart';
 
 /// 오프라인 상단 네비게이션 (튜토리얼 전용)
 /// - 탭하면 튜토리얼 목록 바텀시트를 연다.

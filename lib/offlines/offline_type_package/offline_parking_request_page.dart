@@ -19,7 +19,7 @@ import '../sql/offline_auth_service.dart';
 import '../../utils/snackbar_helper.dart';
 
 // 위치 선택 바텀시트 (기존 프로젝트의 것을 사용)
-import '../offline_dialog/offline_parking_location_bottom_sheet.dart';
+import 'offline_parking_request_package/offline_parking_location_bottom_sheet.dart';
 
 // 상단 네비게이션 (기존 프로젝트의 것을 사용)
 import '../offline_navigation/offline_top_navigation.dart';
