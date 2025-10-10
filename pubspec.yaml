@@ -73,6 +73,10 @@ dependencies:
 
   uuid: ^4.5.1
 
+  # video
+  video_player: ^2.10.0
+  chewie: ^1.13.0
+  video_thumbnail: ^0.5.6
 
 dev_dependencies:
   flutter_test:
@@ -95,6 +99,7 @@ flutter:
     - assets/icons/app_icon.png        # 런처 아이콘 원본을 앱 내에서도 쓸 거면 유지, 아니면 삭제해도 됨
     - assets/icons/app_icon_ios.png
     - assets/keys/easydev-97fb6-e31d7e6b30f9.json
+    - assets/tutorials/
 
 
 # ↓↓↓ 최상위 레벨 설정 블록 (dev_dependencies 밖)
