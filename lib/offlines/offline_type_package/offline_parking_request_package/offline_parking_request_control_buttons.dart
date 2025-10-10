@@ -1,11 +1,7 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // HapticFeedback
 
 import '../../../utils/snackbar_helper.dart';
-import '../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
-import '../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 
 // ▼ SQLite
 import '../../sql/offline_auth_db.dart';
@@ -100,22 +96,6 @@ class OfflineParkingRequestControlButtons extends StatelessWidget {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // JSON logs(Text) append
-  // ─────────────────────────────────────────────────────────────
-  String _appendLogText(String? logsText, Map<String, Object?> log) {
-    try {
-      final List<dynamic> arr = (logsText == null || logsText.trim().isEmpty)
-          ? <dynamic>[]
-          : (jsonDecode(logsText) as List<dynamic>);
-      arr.add(log);
-      return jsonEncode(arr);
-    } catch (_) {
-      // 파싱 실패 시 새 배열로 시작
-      return jsonEncode([log]);
-    }
-  }
-
-  // ─────────────────────────────────────────────────────────────
   // 상태 바텀시트 (입차 요청 취소)
   // ─────────────────────────────────────────────────────────────
   Future<void> _showStatusBottomSheet(BuildContext context) async {
@@ -156,6 +136,21 @@ class OfflineParkingRequestControlButtons extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
+
+                // ⬇️ 추가된 항목 (동작 없음: 비활성화 표시)
+                const ListTile(
+                  leading: Icon(Icons.receipt_long),
+                  title: Text('로그 확인'),
+                  enabled: false, // 기능 없이 비활성화
+                ),
+                const ListTile(
+                  leading: Icon(Icons.edit),
+                  title: Text('정보 수정'),
+                  enabled: false, // 기능 없이 비활성화
+                ),
+                const Divider(),
+
+                // 기존: 입차 요청 취소
                 ListTile(
                   leading: const Icon(Icons.cancel),
                   title: const Text('입차 요청 취소'),
@@ -164,6 +159,7 @@ class OfflineParkingRequestControlButtons extends StatelessWidget {
                     await _cancelEntryRequestSqlite(context, selected);
                   },
                 ),
+
                 const SizedBox(height: 8),
                 TextButton(
                   onPressed: () => Navigator.of(ctx).pop(),
@@ -178,9 +174,9 @@ class OfflineParkingRequestControlButtons extends StatelessWidget {
   }
 
   Future<void> _cancelEntryRequestSqlite(
-      BuildContext context,
-      Map<String, Object?> selected,
-      ) async {
+    BuildContext context,
+    Map<String, Object?> selected,
+  ) async {
     try {
       final db = await OfflineAuthDb.instance.database;
       final id = selected['id'] as int;
@@ -199,189 +195,59 @@ class OfflineParkingRequestControlButtons extends StatelessWidget {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // 사전정산(잠금/해제) SQLite 처리
+  // [NEW] 정산 안내 풀스크린 바텀시트
+  // 핸드폰 최상단까지 올라오는 형태 + 안내 문구 출력
+  // '정산 진행'을 누르면 기존 사전정산 로직(_handleBillingActionSqlite) 실행
   // ─────────────────────────────────────────────────────────────
-  Future<void> _handleBillingActionSqlite(BuildContext context) async {
-    final db = await OfflineAuthDb.instance.database;
-    final (uid, uname) = await _currentIdentity();
-
-    final row = await _getSelectedPlateRow();
-    if (row == null) {
-      showFailedSnackbar(context, '선택된 입차 요청이 없습니다.');
-      return;
-    }
-
-    final String plateNumber = (row['plate_number'] as String?) ?? '';
-    final String area = (row['area'] as String?) ?? '';
-    final String billingType = (row['billing_type'] as String?)?.trim() ?? '';
-    final int basicAmount = (row['basic_amount'] as int?) ?? 0;
-    final int basicStd = (row['basic_standard'] as int?) ?? 0;
-    final int addAmount = (row['add_amount'] as int?) ?? 0;
-    final int addStd = (row['add_standard'] as int?) ?? 0;
-    final int? regularAmount = row['regular_amount'] as int?;
-    final int? regularHours = row['regular_duration_hours'] as int?;
-
-    final bool isLockedFee = ((row['is_locked_fee'] as int?) ?? 0) != 0;
-
-    // request_time TEXT, created_at INTEGER(ms)
-    int entryTimeSeconds = () {
-      final reqText = row['request_time'] as String?;
-      if (reqText != null && reqText.trim().isNotEmpty) {
-        final dt = DateTime.tryParse(reqText);
-        if (dt != null) return dt.toUtc().millisecondsSinceEpoch ~/ 1000;
-      }
-      final createdMs = (row['created_at'] as int?) ?? DateTime.now().millisecondsSinceEpoch;
-      return DateTime.fromMillisecondsSinceEpoch(createdMs, isUtc: false)
-          .toUtc()
-          .millisecondsSinceEpoch ~/
-          1000;
-    }();
-
-    final now = DateTime.now();
-    final int currentSeconds = now.toUtc().millisecondsSinceEpoch ~/ 1000;
-
-    // 0원 자동잠금 규칙
-    final bool isFixed = billingType == '고정';
-    final bool isZeroAutoLock =
-        ((basicAmount == 0) && (addAmount == 0)) || (isFixed && (regularAmount ?? 0) == 0);
-
-    // 0원 + 이미 잠금 → 해제 금지
-    if (isZeroAutoLock && isLockedFee) {
-      showFailedSnackbar(context, '이 차량은 0원 규칙으로 잠금 상태이며 해제할 수 없습니다.');
-      return;
-    }
-
-    // 0원 + 아직 잠금 아님 → 자동 잠금
-    if (isZeroAutoLock && !isLockedFee) {
-      final oldLogs = row['logs'] as String?;
-      final newLogs = _appendLogText(oldLogs, {
-        'action': '사전 정산(자동 잠금: 0원)',
-        'performedBy': uname,
-        'timestamp': now.toIso8601String(),
-        'lockedFee': 0,
-        'auto': true,
-      });
-
-      await db.update(
-        OfflineAuthDb.tablePlates,
-        {
-          'is_locked_fee': 1,
-          'locked_at_seconds': currentSeconds,
-          'locked_fee_amount': 0,
-          // 선택 해제
-          'is_selected': 0,
-          'selected_by': null,
-          'user_name': uname, // 선택 흔적 정리(유지 여부는 정책에 맞게)
-          'logs': newLogs,
-          'updated_at': DateTime.now().millisecondsSinceEpoch,
-        },
-        where: '''
-          COALESCE(status_type,'') = ? AND plate_number = ? AND area = ?
-          AND (COALESCE(selected_by,'') = ? OR COALESCE(user_name,'') = ?)
-        ''',
-        whereArgs: ['parkingRequests', plateNumber, area, uid, uname],
-      );
-
-      HapticFeedback.mediumImpact();
-      showSuccessSnackbar(context, '0원 유형이라 자동으로 잠금되었습니다.');
-      return;
-    }
-
-    // 정산 타입 미지정
-    if (billingType.isEmpty) {
-      showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
-      return;
-    }
-
-    // 이미 잠금 → 해제(사전 정산 취소)
-    if (isLockedFee) {
-      final confirm = await showDialog<bool>(
-        context: context,
-        builder: (_) => const ConfirmCancelFeeDialog(),
-      );
-      if (confirm != true) return;
-
-      final oldLogs = row['logs'] as String?;
-      final newLogs = _appendLogText(oldLogs, {
-        'action': '사전 정산 취소',
-        'performedBy': uname,
-        'timestamp': now.toIso8601String(),
-      });
-
-      await db.update(
-        OfflineAuthDb.tablePlates,
-        {
-          'is_locked_fee': 0,
-          'locked_at_seconds': null,
-          'locked_fee_amount': null,
-          // 선택 해제
-          'is_selected': 0,
-          'selected_by': null,
-          'user_name': uname,
-          'logs': newLogs,
-          'updated_at': DateTime.now().millisecondsSinceEpoch,
-        },
-        where: '''
-          COALESCE(status_type,'') = ? AND plate_number = ? AND area = ?
-          AND (COALESCE(selected_by,'') = ? OR COALESCE(user_name,'') = ?)
-        ''',
-        whereArgs: ['parkingRequests', plateNumber, area, uid, uname],
-      );
-
-      HapticFeedback.mediumImpact();
-      showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
-      return;
-    }
-
-    // 잠금 아님 → 바텀시트 열어 사전 정산
-    final result = await showOnTapBillingBottomSheet(
+  Future<void> _showBillingInfoFullSheet(BuildContext context) async {
+    await showModalBottomSheet<void>(
       context: context,
-      entryTimeInSeconds: entryTimeSeconds,
-      currentTimeInSeconds: currentSeconds,
-      basicStandard: basicStd,
-      basicAmount: basicAmount,
-      addStandard: addStd,
-      addAmount: addAmount,
-      billingType: billingType.isEmpty ? '변동' : billingType,
-      regularAmount: regularAmount,
-      regularDurationHours: regularHours,
-    );
-    if (result == null) return;
-
-    final oldLogs = row['logs'] as String?;
-    final newLogs = _appendLogText(oldLogs, {
-      'action': '사전 정산',
-      'performedBy': uname,
-      'timestamp': now.toIso8601String(),
-      'lockedFee': result.lockedFee,
-      'paymentMethod': result.paymentMethod,
-      if ((result.reason ?? '').trim().isNotEmpty) 'reason': result.reason!.trim(),
-    });
-
-    await db.update(
-      OfflineAuthDb.tablePlates,
-      {
-        'is_locked_fee': 1,
-        'locked_at_seconds': currentSeconds,
-        'locked_fee_amount': result.lockedFee,
-        // 선택 해제
-        'is_selected': 0,
-        'selected_by': null,
-        'user_name': uname,
-        'logs': newLogs,
-        'updated_at': DateTime.now().millisecondsSinceEpoch,
+      isScrollControlled: true,
+      // ✅ 최상단까지
+      useSafeArea: true,
+      // ✅ 노치/상단 안전영역 반영
+      backgroundColor: Colors.white,
+      builder: (sheetContext) {
+        return FractionallySizedBox(
+          heightFactor: 1, // ✅ 화면 전체 높이
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.max,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          '정산 관리',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.of(sheetContext).pop(),
+                        tooltip: '닫기',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    '기본 정산, 할증, 할인을 적용할 수 있습니다.',
+                    style: TextStyle(fontSize: 15),
+                  ),
+                  const SizedBox(height: 16),
+                  const Divider(height: 1),
+                  const SizedBox(height: 12),
+                  // (하단 버튼 제거) - 필요시 설명/옵션 영역을 여기에 추가하세요.
+                  // Expanded(child: SingleChildScrollView(child: ...)),
+                ],
+              ),
+            ),
+          ),
+        );
       },
-      where: '''
-        COALESCE(status_type,'') = ? AND plate_number = ? AND area = ?
-        AND (COALESCE(selected_by,'') = ? OR COALESCE(user_name,'') = ?)
-      ''',
-      whereArgs: ['parkingRequests', plateNumber, area, uid, uname],
-    );
-
-    HapticFeedback.mediumImpact();
-    showSuccessSnackbar(
-      context,
-      '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})',
     );
   }
 
@@ -449,7 +315,8 @@ class OfflineParkingRequestControlButtons extends StatelessWidget {
             if (index == 0) {
               final hasSel = await _hasSelectedPlate();
               if (hasSel) {
-                await _handleBillingActionSqlite(context);
+                // ✅ 변경: 바로 정산 로직 실행 대신, 최상단까지 올라오는 안내 바텀시트 먼저 노출
+                await _showBillingInfoFullSheet(context);
               } else {
                 onToggleLock();
               }

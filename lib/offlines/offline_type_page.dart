@@ -1,3 +1,5 @@
+import 'dart:math'; // ★ 무작위 선택용
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -160,9 +162,63 @@ class _OfflineTypePageState extends State<OfflineTypePage> {
 class _ChatDashboardBar extends StatelessWidget {
   const _ChatDashboardBar();
 
-  // ‘다시 듣기’ 버튼 유지(외부 TTS/메시지 서비스 없이 안내만)
-  static Future<void> _onReplayLatestPressed(BuildContext context) async {
-    showSelectedSnackbar(context, '다시 듣기 기능이 비활성화되어 있습니다.');
+  // 상태 키 상수 (요청 의도: 입차 완료 → 출차 요청)
+  static const String _kStatusParkingCompleted   = 'parkingCompleted';
+  static const String _kStatusDepartureRequests  = 'departureRequests';
+
+  /// 무작위로 '입차 완료' → '출차 요청' 전환
+  static Future<void> _onRandomDepartureRequest(BuildContext context) async {
+    final area = await _loadCurrentArea();
+    if (area.isEmpty) {
+      showFailedSnackbar(context, '현재 지역 정보를 확인할 수 없습니다.');
+      return;
+    }
+
+    try {
+      final db = await OfflineAuthDb.instance.database;
+
+      // 후보: 현재 지역의 parkingCompleted
+      final rows = await db.query(
+        OfflineAuthDb.tablePlates,
+        columns: const ['id', 'plate_number', 'plate_four_digit'],
+        where: '''
+          COALESCE(status_type,'') = ?
+          AND LOWER(TRIM(area)) = LOWER(TRIM(?))
+        ''',
+        whereArgs: [_kStatusParkingCompleted, area],
+        limit: 500, // 넉넉히
+      );
+
+      if (rows.isEmpty) {
+        showSelectedSnackbar(context, '입차 완료 상태 차량이 없습니다.');
+        return;
+      }
+
+      final rnd = Random();
+      final picked = rows[rnd.nextInt(rows.length)];
+      final id = picked['id'] as int;
+      final pn = (picked['plate_number'] as String?)?.trim();
+      final four = (picked['plate_four_digit'] as String?)?.trim() ?? '';
+      final title = (pn != null && pn.isNotEmpty) ? pn : (four.isNotEmpty ? '****-$four' : '미상');
+
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+
+      // 상태 전환: departureRequests + 타임스탬프 갱신
+      await db.update(
+        OfflineAuthDb.tablePlates,
+        {
+          'status_type': _kStatusDepartureRequests,
+          'updated_at': nowMs,
+          'request_time': '$nowMs', // TEXT 필드이므로 숫자 문자열로 저장
+        },
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+
+      showSuccessSnackbar(context, '무작위 출차 요청 전환: $title');
+    } catch (e) {
+      showFailedSnackbar(context, '출차 요청 전환 중 오류: $e');
+    }
   }
 
   // 현재 세션의 area 추출 (없으면 빈 문자열)
@@ -210,10 +266,10 @@ class _ChatDashboardBar extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
           child: Row(
             children: [
-              // ── 채팅: '다시 듣기' 버튼만 유지 (외부 서비스 접근 없음)
+              // ── 무작위로 출차 요청
               Expanded(
                 child: ElevatedButton(
-                  onPressed: enabled ? () => _onReplayLatestPressed(context) : null,
+                  onPressed: enabled ? () => _onRandomDepartureRequest(context) : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: enabled ? _Palette.base : _Palette.dark.withOpacity(.35),
@@ -225,9 +281,9 @@ class _ChatDashboardBar extends StatelessWidget {
                   child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.volume_up, size: 20),
+                      Icon(Icons.shuffle, size: 20),
                       SizedBox(width: 6),
-                      Text('다시 듣기', overflow: TextOverflow.ellipsis),
+                      Text('무작위로 출차 요청', overflow: TextOverflow.ellipsis),
                     ],
                   ),
                 ),

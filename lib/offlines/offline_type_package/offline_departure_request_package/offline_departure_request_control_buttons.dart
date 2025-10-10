@@ -1,12 +1,13 @@
 // lib/screens/type_pages/offline_departure_request_package/departure_request_control_buttons.dart
 //
-// 변경 요약 👇
-// - Firestore/Provider/Repository 제거 → SQLite(offline_auth_db/offline_auth_service)만 사용
-// - PlateType/PlateState/PlateModel 의존 제거
-// - 현재 선택 차량 여부는 offline_plates에서 is_selected=1 && status_type='departureRequests'
-//   && (selected_by=userId OR user_name=name) 로 직접 조회
-// - 정산(자동 0원 잠금 / 잠금 취소 / 사전 정산), 출차 완료 트리거 모두 SQLite 처리
-// - 상태 시트는 PlateModel 의존 대신, 로컬 간단 액션 시트로 대체(입차요청/입차완료/삭제)
+// 리팩터링 요약
+// - ✅ Stateless + FutureBuilder<bool> 로 유지(선택 여부를 매 빌드마다 SQLite 재조회)
+// - ✅ 정산 로직(사전정산/잠금/해제) 전부 제거 → '정산 관리' 안내 풀스크린 바텀시트만 노출
+// - ✅ 불필요한 정산 관련 import 제거(billing_bottom_sheet, confirm_cancel_fee_dialog)
+// - ✅ 상태 시트의 '입차 요청으로 변경'은 parkingRequests, '입차 완료 처리'는 parkingCompleted 상수 사용
+// - ✅ 상태 시트에 '출차 완료 처리' 추가(departured 상수 사용)
+// - 액션 시점에는 필요한 최소 조회만 수행(상태 시트/삭제 등)
+//
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -17,9 +18,6 @@ import '../../sql/offline_auth_db.dart';
 import '../../sql/offline_auth_service.dart';
 
 import '../../../utils/snackbar_helper.dart';
-import '../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
-import '../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
-// 기존 widgets/departure_request_status_bottom_sheet.dart 는 PlateModel 의존 → 사용 제거
 import '../../../widgets/dialog/plate_remove_dialog.dart';
 
 /// Deep Blue 팔레트 + 상태 강조 색
@@ -30,27 +28,20 @@ class _Palette {
   static const success = Color(0xFF2E7D32);
 }
 
-// ⛳ 상태 문자열(PlateType 대체)
+// 상태 문자열
 const String _kStatusDepartureRequests = 'departureRequests';
+const String _kStatusParkingRequests   = 'parkingRequests';
+const String _kStatusParkingCompleted  = 'parkingCompleted';
+const String _kStatusDepartured        = 'departured';
 
-class OfflineDepartureRequestControlButtons extends StatefulWidget {
+class OfflineDepartureRequestControlButtons extends StatelessWidget {
   final bool isSorted;
   final bool isLocked;
 
   final VoidCallback showSearchDialog;
   final VoidCallback toggleSortIcon;
-  final VoidCallback handleDepartureCompleted;
+  final VoidCallback handleDepartureCompleted; // 메인 하단 중앙 버튼(출차) 액션은 페이지 콜백 유지
   final VoidCallback toggleLock;
-
-  // 상태 시트에서 사용할 콜백 (페이지에서 주입)
-  final Function(BuildContext context, String plateNumber, String area)
-  handleEntryParkingRequest;
-  final Function(
-      BuildContext context,
-      String plateNumber,
-      String area,
-      String location,
-      ) handleEntryParkingCompleted;
 
   const OfflineDepartureRequestControlButtons({
     super.key,
@@ -60,59 +51,48 @@ class OfflineDepartureRequestControlButtons extends StatefulWidget {
     required this.toggleSortIcon,
     required this.handleDepartureCompleted,
     required this.toggleLock,
-    required this.handleEntryParkingRequest,
-    required this.handleEntryParkingCompleted,
   });
 
-  @override
-  State<OfflineDepartureRequestControlButtons> createState() =>
-      _OfflineDepartureRequestControlButtonsState();
-}
-
-class _OfflineDepartureRequestControlButtonsState
-    extends State<OfflineDepartureRequestControlButtons> {
-  Map<String, Object?>? _selectedRow; // 현재 선택된 plate row (offline_plates)
-  bool _loading = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _refreshSelected(); // 처음/리빌드마다 선택 상태 동기화
-  }
-
-  int _nowMs() => DateTime.now().millisecondsSinceEpoch;
-  int _nowSec() => DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
-
-  Future<(String uid, String uname)> _sessionIdentity() async {
+  // ─────────────────────────────────────────────────────────────
+  // 공통 유틸
+  // ─────────────────────────────────────────────────────────────
+  Future<(String uid, String uname)> _identity() async {
     final s = await OfflineAuthService.instance.currentSession();
     return ((s?.userId ?? '').trim(), (s?.name ?? '').trim());
   }
 
-  Future<void> _refreshSelected() async {
-    try {
-      setState(() => _loading = true);
-      final db = await OfflineAuthDb.instance.database;
-      final (uid, uname) = await _sessionIdentity();
-      final rows = await db.query(
-        OfflineAuthDb.tablePlates,
-        where: '''
-          is_selected = 1
-          AND COALESCE(status_type,'') = ?
-          AND (COALESCE(selected_by,'') = ? OR COALESCE(user_name,'') = ?)
-        ''',
-        whereArgs: [_kStatusDepartureRequests, uid, uname],
-        orderBy: 'COALESCE(updated_at, created_at) DESC',
-        limit: 1,
-      );
-      _selectedRow = rows.isNotEmpty ? rows.first : null;
-    } catch (_) {
-      _selectedRow = null;
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
+  String _asStr(Object? v) => (v?.toString() ?? '').trim();
+  int _asInt(Object? v) => switch (v) {
+    int i => i,
+    num n => n.toInt(),
+    String s => int.tryParse(s) ?? 0,
+    _ => 0,
+  };
+
+  int _nowMs() => DateTime.now().millisecondsSinceEpoch;
+
+  Future<Map<String, Object?>?> _getSelectedPlateRow() async {
+    final db = await OfflineAuthDb.instance.database;
+    final (uid, uname) = await _identity();
+    final rows = await db.query(
+      OfflineAuthDb.tablePlates,
+      where: '''
+        is_selected = 1
+        AND COALESCE(status_type,'') = ?
+        AND (COALESCE(selected_by,'') = ? OR COALESCE(user_name,'') = ?)
+      ''',
+      whereArgs: [_kStatusDepartureRequests, uid, uname],
+      orderBy: 'COALESCE(updated_at, created_at) DESC',
+      limit: 1,
+    );
+    return rows.isNotEmpty ? rows.first : null;
   }
 
-  // logs(JSON Array String) 에 로그 한 건 추가
+  Future<bool> _hasSelectedPlate() async {
+    final r = await _getSelectedPlateRow();
+    return r != null && ((_asInt(r['is_selected'])) != 0);
+  }
+
   Future<void> _appendLog(int id, Map<String, Object?> log) async {
     final db = await OfflineAuthDb.instance.database;
     final r = await db.query(
@@ -140,181 +120,114 @@ class _OfflineDepartureRequestControlButtonsState
     );
   }
 
-  int _selected_row_int(String key) => (_selectedRow?[key] as int?) ?? 0;
-
-  // 정산 관리(자동 0원 잠금 / 취소 / 사전 정산)
-  Future<void> _handleBilling() async {
-    if (_selectedRow == null) return;
-
-    final db = await OfflineAuthDb.instance.database;
-    final (uid, uname) = await _sessionIdentity();
-
-    final int id = (_selectedRow!['id'] as int);
-    final String billingType = (_selectedRow!['billing_type'] as String?)?.trim() ?? '';
-    final int basicAmount   = (_selectedRow!['basic_amount'] as int?) ?? 0;
-    final int addAmount     = _selected_row_int('add_amount');
-    final int? regularAmount = _selectedRow!['regular_amount'] as int?;
-    final bool isFixed = billingType == '고정';
-
-    // 자동 0원 잠금 여부
-    final bool isZeroAuto = ((basicAmount == 0) && (addAmount == 0)) ||
-        (isFixed && ((regularAmount ?? 0) == 0));
-
-    final bool isLockedFee =
-        ((_selectedRow!['is_locked_fee'] as int?) ?? 0) != 0;
-
-    final nowIso = DateTime.now().toIso8601String();
-    final currentSec = _nowSec();
-
-    // 자동 0원 잠금 해제 불가 규칙
-    if (isZeroAuto && isLockedFee) {
-      showFailedSnackbar(context, '이 차량은 0원 규칙으로 잠금 상태이며 해제할 수 없습니다.');
-      return;
-    }
-
-    // 자동 0원 잠금 수행
-    if (isZeroAuto && !isLockedFee) {
-      await db.update(
-        OfflineAuthDb.tablePlates,
-        {
-          'is_locked_fee': 1,
-          'locked_at_seconds': currentSec, // ✅ 스키마 컬럼명
-          'locked_fee_amount': 0,
-          // 선택 해제 + 수행자 기록
-          'is_selected': 0,
-          'selected_by': null,
-          'user_name': uname,
-          'updated_at': _nowMs(),
-        },
-        where: 'id = ?',
-        whereArgs: [id],
-      );
-
-      await _appendLog(id, {
-        'action': '사전 정산(자동 잠금: 0원)',
-        'performedBy': uname,
-        'timestamp': nowIso,
-        'lockedFee': 0,
-        'auto': true,
-      });
-
-      HapticFeedback.mediumImpact();
-      showSuccessSnackbar(context, '0원 유형이라 자동으로 잠금되었습니다.');
-      await _refreshSelected();
-      return;
-    }
-
-    // 정산 타입 미지정
-    if (billingType.isEmpty) {
-      showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
-      return;
-    }
-
-    // 잠금 해제(사전 정산 취소)
-    if (isLockedFee) {
-      final confirm = await showDialog<bool>(
-        context: context,
-        builder: (_) => const ConfirmCancelFeeDialog(),
-      );
-      if (confirm != true) return;
-
-      await db.update(
-        OfflineAuthDb.tablePlates,
-        {
-          'is_locked_fee': 0,
-          'locked_at_seconds': null,     // ✅ 스키마 컬럼명
-          'locked_fee_amount': null,
-          // 선택 해제 + 수행자 기록
-          'is_selected': 0,
-          'selected_by': null,
-          'user_name': uname,
-          'updated_at': _nowMs(),
-        },
-        where: 'id = ?',
-        whereArgs: [id],
-      );
-
-      await _appendLog(id, {
-        'action': '사전 정산 취소',
-        'performedBy': uname,
-        'timestamp': nowIso,
-      });
-
-      HapticFeedback.mediumImpact();
-      showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
-      await _refreshSelected();
-      return;
-    }
-
-    // 사전 정산(잠금)
-    // request_time: TEXT 가능 → 안전 파싱
-    final entrySec = () {
-      final req = _selectedRow!['request_time'];
-      if (req is String && req.trim().isNotEmpty) {
-        final dt = DateTime.tryParse(req);
-        if (dt != null) return dt.toUtc().millisecondsSinceEpoch ~/ 1000;
-      }
-      // fallback: created_at(ms)
-      final createdMs = (_selectedRow!['created_at'] as int?) ?? DateTime.now().millisecondsSinceEpoch;
-      return DateTime.fromMillisecondsSinceEpoch(createdMs, isUtc: false).toUtc().millisecondsSinceEpoch ~/ 1000;
-    }();
-
-    final result = await showOnTapBillingBottomSheet(
+  // ─────────────────────────────────────────────────────────────
+  // '정산 관리' 안내 풀스크린 바텀시트(실제 정산 로직 없음)
+  // ─────────────────────────────────────────────────────────────
+  Future<void> _showBillingInfoFullSheet(BuildContext context) async {
+    await showModalBottomSheet<void>(
       context: context,
-      entryTimeInSeconds: entrySec,
-      currentTimeInSeconds: currentSec,
-      basicStandard: _selected_row_int('basic_standard'),
-      basicAmount: basicAmount,
-      addStandard: _selected_row_int('add_standard'),
-      addAmount: addAmount,
-      billingType: billingType.isEmpty ? '변동' : billingType,
-      regularAmount: regularAmount,
-      regularDurationHours: _selectedRow!['regular_duration_hours'] as int?,
-    );
-    if (result == null) return;
-
-    await db.update(
-      OfflineAuthDb.tablePlates,
-      {
-        'is_locked_fee': 1,
-        'locked_at_seconds': currentSec, // ✅ 스키마 컬럼명
-        'locked_fee_amount': result.lockedFee,
-        // 선택 해제 + 수행자 기록
-        'is_selected': 0,
-        'selected_by': null,
-        'user_name': uname,
-        'updated_at': _nowMs(),
+      isScrollControlled: true,
+      useSafeArea: true, // 상단 안전영역 반영
+      backgroundColor: Colors.white,
+      builder: (sheetContext) {
+        return FractionallySizedBox(
+          heightFactor: 1, // 화면 전체 높이
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.max,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          '정산 관리',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.of(sheetContext).pop(),
+                        tooltip: '닫기',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    '기본 정산, 할증, 할인을 적용할 수 있습니다.\n'
+                        '현재 버전에서는 정산 정보를 확인만 할 수 있습니다.',
+                    style: TextStyle(fontSize: 15),
+                  ),
+                  const SizedBox(height: 16),
+                  const Divider(height: 1),
+                  const SizedBox(height: 12),
+                  // 설명/추가 안내 섹션 필요 시 확장
+                ],
+              ),
+            ),
+          ),
+        );
       },
-      where: 'id = ?',
-      whereArgs: [id],
     );
-
-    final log = <String, Object?>{
-      'action': '사전 정산',
-      'performedBy': uname,
-      'timestamp': nowIso,
-      'lockedFee': result.lockedFee,
-      'paymentMethod': result.paymentMethod, // DB에는 저장하지 않고 로그에만 기록
-    };
-    if ((result.reason ?? '').trim().isNotEmpty) {
-      log['reason'] = result.reason!.trim();
-    }
-    await _appendLog(id, log);
-
-    HapticFeedback.mediumImpact();
-    showSuccessSnackbar(
-      context,
-      '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})',
-    );
-    await _refreshSelected();
   }
 
-  // ✅ PlateModel 의존 없는 간단 상태 시트
-  Future<void> _showQuickActionsSheet() async {
-    if (_selectedRow == null) return;
-    final plateNumber = (_selectedRow!['plate_number'] as String?) ?? '';
-    final area = (_selectedRow!['area'] as String?) ?? '';
-    final location = (_selectedRow!['location'] as String?) ?? '';
+  // ─────────────────────────────────────────────────────────────
+  // 상태 전환: 입차요청/입차완료/출차완료
+  // ─────────────────────────────────────────────────────────────
+  Future<void> _updateStatus({
+    required BuildContext context,
+    required int id,
+    required String toStatus,
+    String? locationOverride,
+    String? plateNumberForToast,
+  }) async {
+    try {
+      final db = await OfflineAuthDb.instance.database;
+      final (uid, uname) = await _identity();
+
+      final values = <String, Object?>{
+        'status_type': toStatus,
+        'is_selected': 0,
+        'updated_at': _nowMs(),
+      };
+      if (locationOverride != null) {
+        values['location'] = locationOverride;
+      }
+
+      await db.update(
+        OfflineAuthDb.tablePlates,
+        values,
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+
+      await _appendLog(id, {
+        'action': '상태 변경',
+        'to': toStatus,
+        'performedBy': uname.isNotEmpty ? uname : uid,
+        'timestamp': DateTime.now().toIso8601String(),
+      });
+
+      HapticFeedback.mediumImpact();
+      showSuccessSnackbar(
+        context,
+        '처리 완료'
+            '${plateNumberForToast != null && plateNumberForToast.trim().isNotEmpty ? ': $plateNumberForToast' : ''}',
+      );
+    } catch (e) {
+      showFailedSnackbar(context, '상태 변경 실패: $e');
+    }
+  }
+
+  // 상태 시트(간단 액션)
+  Future<void> _showQuickActionsSheet(BuildContext context) async {
+    final selectedRow = await _getSelectedPlateRow();
+    if (selectedRow == null) return;
+
+    final id = _asInt(selectedRow['id']);
+    final plateNumber = _asStr(selectedRow['plate_number']);
 
     await showModalBottomSheet(
       context: context,
@@ -325,22 +238,63 @@ class _OfflineDepartureRequestControlButtonsState
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // 안내 항목(비활성) - 필요 시 추가
+            const ListTile(
+              leading: Icon(Icons.receipt_long),
+              title: Text('로그 확인'),
+              enabled: false,
+            ),
+            const ListTile(
+              leading: Icon(Icons.edit),
+              title: Text('정보 수정'),
+              enabled: false,
+            ),
+            const Divider(),
+            // 입차 요청으로 변경(parkingRequests)
             ListTile(
               leading: const Icon(Icons.playlist_add),
               title: const Text('입차 요청으로 변경'),
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(context);
-                widget.handleEntryParkingRequest(context, plateNumber, area);
+                await _updateStatus(
+                  context: context,
+                  id: id,
+                  toStatus: _kStatusParkingRequests,
+                  locationOverride: '미지정', // 입차요청으로 되돌릴 때 위치 비움/미지정 처리
+                  plateNumberForToast: plateNumber,
+                );
               },
             ),
+            // 입차 완료 처리(parkingCompleted)
             ListTile(
               leading: const Icon(Icons.local_parking),
               title: const Text('입차 완료 처리'),
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(context);
-                widget.handleEntryParkingCompleted(context, plateNumber, area, location);
+                // 위치는 유지(없으면 빈 값 그대로)
+                await _updateStatus(
+                  context: context,
+                  id: id,
+                  toStatus: _kStatusParkingCompleted,
+                  plateNumberForToast: plateNumber,
+                );
               },
             ),
+            // 출차 완료 처리(departured)
+            ListTile(
+              leading: const Icon(Icons.check_circle_outline),
+              title: const Text('출차 완료 처리'),
+              onTap: () async {
+                Navigator.pop(context);
+                await _updateStatus(
+                  context: context,
+                  id: id,
+                  toStatus: _kStatusDepartured,
+                  plateNumberForToast: plateNumber,
+                );
+              },
+            ),
+            // 삭제
             ListTile(
               leading: const Icon(Icons.delete, color: Colors.red),
               title: const Text('삭제', style: TextStyle(color: Colors.red)),
@@ -351,18 +305,12 @@ class _OfflineDepartureRequestControlButtonsState
                   builder: (_) => PlateRemoveDialog(
                     onConfirm: () async {
                       final db = await OfflineAuthDb.instance.database;
-                      final id = _selectedRow?['id'] as int?;
-                      if (id != null) {
-                        await db.delete(
-                          OfflineAuthDb.tablePlates,
-                          where: 'id = ?',
-                          whereArgs: [id],
-                        );
-                        showSuccessSnackbar(context, "삭제 완료: $plateNumber");
-                        await _refreshSelected();
-                      } else {
-                        showFailedSnackbar(context, '삭제할 항목을 찾을 수 없습니다.');
-                      }
+                      await db.delete(
+                        OfflineAuthDb.tablePlates,
+                        where: 'id = ?',
+                        whereArgs: [id],
+                      );
+                      showSuccessSnackbar(context, "삭제 완료: $plateNumber");
                     },
                   ),
                 );
@@ -381,82 +329,85 @@ class _OfflineDepartureRequestControlButtonsState
     final Color unselectedItemColor = _Palette.dark.withOpacity(.55);
     final Color muted = _Palette.dark.withOpacity(.60);
 
-    final bool isPlateSelected =
-        !_loading && _selectedRow != null && ((_selectedRow!['is_selected'] as int?) ?? 0) != 0;
+    return FutureBuilder<bool>(
+      future: _hasSelectedPlate(),
+      builder: (context, snap) {
+        final bool isPlateSelected = snap.data == true;
 
-    return BottomNavigationBar(
-      backgroundColor: Colors.white,
-      elevation: 0,
-      type: BottomNavigationBarType.fixed,
-      selectedItemColor: selectedItemColor,
-      unselectedItemColor: unselectedItemColor,
-      selectedFontSize: 12,
-      unselectedFontSize: 12,
-      iconSize: 24,
-      items: [
-        BottomNavigationBarItem(
-          icon: Tooltip(
-            message: isPlateSelected ? '정산 관리' : '화면 잠금',
-            child: Icon(
-              isPlateSelected ? Icons.payments : (widget.isLocked ? Icons.lock : Icons.lock_open),
-              color: muted,
-            ),
-          ),
-          label: isPlateSelected ? '정산 관리' : '화면 잠금',
-        ),
-        BottomNavigationBarItem(
-          icon: Tooltip(
-            message: isPlateSelected ? '출차 완료' : '번호판 검색',
-            child: Icon(
-              isPlateSelected ? Icons.check_circle : Icons.search,
-              color: isPlateSelected ? _Palette.success : _Palette.danger,
-            ),
-          ),
-          label: isPlateSelected ? '출차' : '검색',
-        ),
-        BottomNavigationBarItem(
-          icon: Tooltip(
-            message: isPlateSelected ? '상태 수정' : '정렬 변경',
-            child: AnimatedRotation(
-              turns: widget.isSorted ? 0.5 : 0.0,
-              duration: const Duration(milliseconds: 300),
-              child: Transform.scale(
-                scaleX: widget.isSorted ? -1 : 1,
+        return BottomNavigationBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          type: BottomNavigationBarType.fixed,
+          selectedItemColor: selectedItemColor,
+          unselectedItemColor: unselectedItemColor,
+          selectedFontSize: 12,
+          unselectedFontSize: 12,
+          iconSize: 24,
+          items: [
+            BottomNavigationBarItem(
+              icon: Tooltip(
+                message: isPlateSelected ? '정산 관리' : '화면 잠금',
                 child: Icon(
-                  isPlateSelected ? Icons.settings : Icons.sort,
+                  isPlateSelected ? Icons.payments : (isLocked ? Icons.lock : Icons.lock_open),
                   color: muted,
                 ),
               ),
+              label: isPlateSelected ? '정산 관리' : '화면 잠금',
             ),
-          ),
-          label: isPlateSelected ? '상태 수정' : (widget.isSorted ? '최신순' : '오래된순'),
-        ),
-      ],
-      onTap: (index) async {
-        HapticFeedback.selectionClick();
+            BottomNavigationBarItem(
+              icon: Tooltip(
+                message: isPlateSelected ? '출차 완료' : '번호판 검색',
+                child: Icon(
+                  isPlateSelected ? Icons.check_circle : Icons.search,
+                  color: isPlateSelected ? _Palette.success : _Palette.danger,
+                ),
+              ),
+              label: isPlateSelected ? '출차' : '검색',
+            ),
+            BottomNavigationBarItem(
+              icon: Tooltip(
+                message: isPlateSelected ? '상태 수정' : '정렬 변경',
+                child: AnimatedRotation(
+                  turns: isSorted ? 0.5 : 0.0,
+                  duration: const Duration(milliseconds: 300),
+                  child: Transform.scale(
+                    scaleX: isSorted ? -1 : 1,
+                    child: Icon(
+                      isPlateSelected ? Icons.settings : Icons.sort,
+                      color: muted,
+                    ),
+                  ),
+                ),
+              ),
+              label: isPlateSelected ? '상태 수정' : (isSorted ? '최신순' : '오래된순'),
+            ),
+          ],
+          onTap: (index) async {
+            HapticFeedback.selectionClick();
 
-        if (!isPlateSelected) {
-          if (index == 0) {
-            widget.toggleLock();
-          } else if (index == 1) {
-            widget.showSearchDialog();
-          } else if (index == 2) {
-            widget.toggleSortIcon();
-          }
-          return;
-        }
+            if (!isPlateSelected) {
+              if (index == 0) {
+                toggleLock();
+              } else if (index == 1) {
+                showSearchDialog();
+              } else if (index == 2) {
+                toggleSortIcon();
+              }
+              return;
+            }
 
-        // 차량 선택됨
-        if (index == 0) {
-          await _handleBilling();
-        } else if (index == 1) {
-          // 출차 완료 트리거(실제 상태 전환은 페이지 콜백에서 SQLite로 처리)
-          widget.handleDepartureCompleted();
-          await _refreshSelected();
-        } else if (index == 2) {
-          // PlateModel 의존 시트를 대체한 로컬 간단 액션 시트
-          await _showQuickActionsSheet();
-        }
+            // 차량 선택됨
+            if (index == 0) {
+              // ✅ 정산 로직 대신 안내 시트만 노출
+              await _showBillingInfoFullSheet(context);
+            } else if (index == 1) {
+              // 메인 하단 중앙 버튼은 기존처럼 "출차 완료" 콜백을 호출
+              handleDepartureCompleted(); // 페이지에서 SQLite 전환 처리
+            } else if (index == 2) {
+              await _showQuickActionsSheet(context);
+            }
+          },
+        );
       },
     );
   }

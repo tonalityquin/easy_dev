@@ -9,7 +9,7 @@ class OfflineInputPlateService {
   /// 차량 입차 등록을 SQLite `offline_plates`에 기록합니다.
   ///
   /// 정책:
-  /// - status_type: 'parkingRequests' 로 저장 (입차 요청 상태)
+  /// - 위치가 확정된 경우(status_type: 'parkingCompleted'), 아니면 'parkingRequests'
   /// - plate_key: "plateNumber|area" 규칙으로 구성 (UNIQUE)
   /// - 이미 같은 plate_number+area 레코드가 있으면 최신 1건을 UPDATE, 없으면 INSERT
   /// - selectedStatuses는 logs(JSON)로 보관, customStatus는 custom_status 컬럼에 저장
@@ -17,7 +17,7 @@ class OfflineInputPlateService {
     required BuildContext context,
     required String plateNumber,
     required String location,
-    required bool isLocationSelected, // (주의) DB의 is_selected는 선택 UI용이라 저장에 사용하지 않음
+    required bool isLocationSelected, // 위치 확정 여부(확정이면 parkingCompleted)
     required String? selectedBill,
     required List<String> selectedStatuses,
     required int basicStandard,
@@ -28,6 +28,9 @@ class OfflineInputPlateService {
     String? customStatus,
     required String selectedBillType, // '변동' | '고정' | '정기'
   }) async {
+    const String kStatusParkingRequests  = 'parkingRequests';
+    const String kStatusParkingCompleted = 'parkingCompleted';
+
     final db = await OfflineAuthDb.instance.database;
     final session = await OfflineAuthService.instance.currentSession();
 
@@ -37,7 +40,6 @@ class OfflineInputPlateService {
 
     final now = DateTime.now();
     final nowMs = now.millisecondsSinceEpoch;
-    final requestIso = now.toIso8601String();
 
     final plateFour = _extractLast4Digits(plateNumber);
     final plateKey = '$plateNumber|$area';
@@ -51,9 +53,13 @@ class OfflineInputPlateService {
     final String logsJson = jsonEncode({
       'statuses': selectedStatuses,
       'selectedBillType': selectedBillType,
-      'savedAt': requestIso,
+      'savedAt': now.toIso8601String(),
       'by': uname,
     });
+
+    // 위치 선택 여부에 따라 최종 상태 결정
+    final String finalStatus =
+    isLocationSelected ? kStatusParkingCompleted : kStatusParkingRequests;
 
     return await db.transaction<bool>((txn) async {
       // 기존 레코드 탐색: 동일 plate_number + area, 최신 1건
@@ -81,9 +87,9 @@ class OfflineInputPlateService {
         'add_standard': finalAddStandard,
         'is_locked_fee': 0,
         'locked_fee_amount': 0,
-        'status_type': 'parkingRequests',
+        'status_type': finalStatus,                // ★ 핵심: 상태 반영
         'updated_at': nowMs,
-        'request_time': requestIso,
+        'request_time': '$nowMs',                 // TEXT 컬럼에 epoch ms 문자열로 저장(정렬 일관성)
         'user_name': uname,
         'selected_by': uid,
         'user_adjustment': 0,
@@ -109,7 +115,6 @@ class OfflineInputPlateService {
             ...values,
             'created_at': nowMs,
           },
-          // plate_key UNIQUE 충돌 시 무시하고 false 반환으로 처리하기 위해 try-catch 사용
         );
         return insertedId > 0;
       }

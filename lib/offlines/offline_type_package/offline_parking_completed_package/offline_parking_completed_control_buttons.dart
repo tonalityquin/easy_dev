@@ -1,4 +1,4 @@
-// lib/screens/type_pages/offline_parking_completed_package/offline_parking_completed_control_buttons.dart
+// lib/offlines/offline_type_package/offline_parking_completed_package/offline_parking_completed_control_buttons.dart
 //
 // 변경 요약 👇
 // - Firestore/Provider/Repository/PlateType/UserState/PlateState/DeletePlate 완전 제거
@@ -139,6 +139,7 @@ class _OfflineParkingCompletedControlButtonsState
       limit: 1,
     );
 
+    if (!mounted) return; // ← setState after dispose 방지
     setState(() {
       _selectedPlate = rows.isNotEmpty ? rows.first : null;
     });
@@ -170,7 +171,9 @@ class _OfflineParkingCompletedControlButtonsState
     final updated = _asInt(p['updated_at']);
     final created = _asInt(p['created_at']);
     final ms = updated > 0 ? updated : created;
-    return ms > 0 ? (ms ~/ 1000) : (DateTime.now().millisecondsSinceEpoch ~/ 1000);
+    return ms > 0
+        ? (ms ~/ 1000)
+        : (DateTime.now().millisecondsSinceEpoch ~/ 1000);
   }
 
   Future<void> _appendLog(int id, Map<String, Object?> log) async {
@@ -268,8 +271,9 @@ class _OfflineParkingCompletedControlButtonsState
       basicAmount: _asInt(p['basic_amount']),
       addStandard: _asInt(p['add_standard']),
       addAmount: _asInt(p['add_amount']),
-      billingType:
-      _asStr(p['billing_type']).isNotEmpty ? _asStr(p['billing_type']) : '변동',
+      billingType: _asStr(p['billing_type']).isNotEmpty
+          ? _asStr(p['billing_type'])
+          : '변동',
       regularAmount: _asInt(p['regular_amount']),
       regularDurationHours: _asInt(p['regular_duration_hours']),
     );
@@ -362,7 +366,8 @@ class _OfflineParkingCompletedControlButtonsState
                 ),
                 const Divider(height: 1),
                 ListTile(
-                  leading: const Icon(Icons.delete_outline, color: _Palette.danger),
+                  leading:
+                  const Icon(Icons.delete_outline, color: _Palette.danger),
                   title: const Text('삭제'),
                   onTap: () {
                     Navigator.of(context).pop();
@@ -448,7 +453,8 @@ class _OfflineParkingCompletedControlButtonsState
               color: muted,
             ),
           ),
-          label: isPlateSelected ? '상태 수정' : (widget.isSorted ? '최신순' : '오래된 순'),
+          label:
+          isPlateSelected ? '상태 수정' : (widget.isSorted ? '최신순' : '오래된 순'),
         ),
       ],
       onTap: (index) async {
@@ -460,12 +466,16 @@ class _OfflineParkingCompletedControlButtonsState
             // '출차 요청' 버튼 → 검색/다이얼로그(현행 유지)
             widget.showSearchDialog();
           } else if (index == 2) {
-            // 출차 완료 현황 시트(기존 UI)
-            showModalBottomSheet(
+            // 출차 완료 현황 시트(리팩터링된 바텀시트: selectedDate 필수)
+            final now = DateTime.now();
+            final selectedDate = DateTime(now.year, now.month, now.day);
+            await showModalBottomSheet(
               context: context,
               isScrollControlled: true,
               backgroundColor: Colors.transparent,
-              builder: (context) => const OfflineDepartureCompletedBottomSheet(),
+              builder: (context) => OfflineDepartureCompletedBottomSheet(
+                selectedDate: selectedDate,
+              ),
             );
           }
           return;

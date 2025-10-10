@@ -4,10 +4,10 @@
 // - Firestore/Provider 제거, SQLite(offline_auth_db/offline_auth_service)만 사용
 // - PlateType enum 의존 제거 → 상태 문자열을 파일 내부 상수로 정의해 사용
 // - '입차 완료' 처리 시 offline_locations.capacity 기준으로 초과 여부 판정
-// - 위치 바텀시트(ParkingLocationBottomSheet)에서 선택 후 상태 전환
-// - 선택/뒤로가기/정렬 등은 전부 offline_plates 직접 질의로 구현(간단 ListTile UI)
+// - 위치 바텀시트(OfflineParkingLocationBottomSheet)에서 선택 후 상태 전환
+// - 선택/뒤로가기/정렬 등은 전부 offline_plates 직접 질의로 구현
 // - 검색: 기존 CommonPlateSearchBottomSheet 대신 모달 바텀시트로 안내 텍스트만 표시
-// - ✅ 목록 아이템을 박스(UI)로 리팩터링하고, 번호 + 위치를 함께 출력
+// - ✅ 목록 아이템을 박스(UI)로 리팩터링하고, 번호 + 위치 + 정산 유형(요약) 함께 출력
 //
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -411,6 +411,22 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
     );
   }
 
+  String _buildBillingSummary({
+    required int basicAmount,
+    required int basicStd,
+    required int addAmount,
+    required int addStd,
+  }) {
+    final parts = <String>[];
+    if (basicAmount > 0) {
+      parts.add('기본 ${basicAmount}원${basicStd > 0 ? ' / ${basicStd}분' : ''}');
+    }
+    if (addAmount > 0) {
+      parts.add('추가 ${addAmount}원${addStd > 0 ? ' / ${addStd}분' : ''}');
+    }
+    return parts.isEmpty ? '' : parts.join(', ');
+  }
+
   Future<Widget> _buildListBody() async {
     final db = await OfflineAuthDb.instance.database;
     final area = await _loadCurrentArea();
@@ -418,10 +434,22 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
       return const Center(child: Text('현재 지역 정보를 확인할 수 없습니다.'));
     }
 
-    // ✅ location 컬럼 포함해서 조회 (위치 표시를 위해)
+    // ✅ 위치, 정산 유형(오프라인 플레이트의 billing_type 및 요약) 함께 조회
     final rows = await db.query(
       OfflineAuthDb.tablePlates,
-      columns: const ['id', 'plate_number', 'plate_four_digit', 'location', 'request_time', 'is_selected'],
+      columns: const [
+        'id',
+        'plate_number',
+        'plate_four_digit',
+        'location',
+        'billing_type',
+        'basic_amount',
+        'basic_standard',
+        'add_amount',
+        'add_standard',
+        'request_time',
+        'is_selected',
+      ],
       where: "COALESCE(status_type,'') = ? AND area = ?",
       whereArgs: [_kStatusParkingRequests, area],
       orderBy: _isSorted
@@ -439,10 +467,25 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
       final pn = (r['plate_number'] as String?)?.trim();
       final four = (r['plate_four_digit'] as String?)?.trim() ?? '';
       final loc = (r['location'] as String?)?.trim() ?? '';
+      final billing = (r['billing_type'] as String?)?.trim() ?? '';
+      final basicAmount = (r['basic_amount'] as int?) ?? 0;
+      final basicStd = (r['basic_standard'] as int?) ?? 0;
+      final addAmount = (r['add_amount'] as int?) ?? 0;
+      final addStd = (r['add_standard'] as int?) ?? 0;
       final selected = ((r['is_selected'] as int?) ?? 0) != 0;
 
       final title = (pn != null && pn.isNotEmpty) ? pn : (four.isNotEmpty ? '****-$four' : '미상');
       final locationText = loc.isNotEmpty ? loc : '위치 미지정';
+
+      final billingSummary = _buildBillingSummary(
+        basicAmount: basicAmount,
+        basicStd: basicStd,
+        addAmount: addAmount,
+        addStd: addStd,
+      );
+      final billingText = billing.isEmpty
+          ? '정산 미지정'
+          : (billingSummary.isEmpty ? '정산 $billing' : '정산 $billing ($billingSummary)');
 
       return InkWell(
         onTap: () async {
@@ -503,6 +546,18 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
                       style: TextStyle(
                         fontSize: 14,
                         color: Colors.grey.shade700,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    // 정산 유형 + 요약
+                    Text(
+                      billingText,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: Colors.grey.shade600,
                         fontWeight: FontWeight.w500,
                       ),
                     ),

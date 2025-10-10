@@ -1,19 +1,24 @@
 // lib/offlines/offline_type_package/offline_parking_completed_package/widgets/offline_parking_completed_status_bottom_sheet.dart
+//
+// 리팩터링 사항
+// - "정산(사전 정산)" 버튼: 로직 제거 및 비활성화(onPressed: null)
+// - "로그 확인" 버튼: 로직 제거 및 비활성화(onPressed: null)
+// - "정보 수정" 버튼 추가: 비활성화(onPressed: null), "로그 확인" 아래에 배치
+// - 정산 취소 로직 삭제 및 버튼 비활성화(onPressed: null)
+// - 불필요해진 import 정리(ConfirmCancelFeeDialog 제거). 정산 취소는 비활성화 버튼만 유지.
+//
 
 import 'dart:convert';
 import 'package:flutter/material.dart';
 
-// ▼ SQLite / 세션 (경로는 프로젝트 구조에 맞게 조정하세요)
+// ▼ SQLite / 세션
 import '../../../sql/offline_auth_db.dart';
 import '../../../sql/offline_auth_service.dart';
 
 import '../../../../utils/snackbar_helper.dart';
-import '../../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
-import '../../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
-import '../../../../screens/log_package/log_viewer_bottom_sheet.dart';
 
-// 상태 키 상수 (PlateType 의존 제거)
-const String _kStatusParkingRequests  = 'parkingRequests';
+// 상태 키 상수
+const String _kStatusParkingRequests = 'parkingRequests';
 const String _kStatusDepartureRequests = 'departureRequests';
 
 Future<void> showOfflineParkingCompletedStatusBottomSheet({
@@ -22,8 +27,8 @@ Future<void> showOfflineParkingCompletedStatusBottomSheet({
   required Future<void> Function() onRequestEntry,
   required VoidCallback onDelete,
 }) async {
-  final division = await _loadDivisionFromAccounts();      // ✅ division을 SQLite에서
-  final area = await _loadCurrentArea();                   // ✅ area도 SQLite에서
+  final division = await _loadDivisionFromAccounts();
+  final area = await _loadCurrentArea();
 
   await showModalBottomSheet(
     context: context,
@@ -49,6 +54,7 @@ Future<String> _loadDivisionFromAccounts() async {
   final uid = (s?.userId ?? '').trim();
 
   Map<String, Object?>? row;
+
   if (uid.isNotEmpty) {
     final r1 = await db.query(
       OfflineAuthDb.tableAccounts,
@@ -59,12 +65,16 @@ Future<String> _loadDivisionFromAccounts() async {
     );
     if (r1.isNotEmpty) row = r1.first;
   }
-  row ??= (await db.query(
-    OfflineAuthDb.tableAccounts,
-    columns: const ['division'],
-    where: 'isSelected = 1',
-    limit: 1,
-  )).firstOrNull;
+
+  if (row == null) {
+    final r2 = await db.query(
+      OfflineAuthDb.tableAccounts,
+      columns: const ['division'],
+      where: 'isSelected = 1',
+      limit: 1,
+    );
+    if (r2.isNotEmpty) row = r2.first;
+  }
 
   return ((row?['division'] as String?) ?? '').trim();
 }
@@ -76,6 +86,7 @@ Future<String> _loadCurrentArea() async {
   final uid = (s?.userId ?? '').trim();
 
   Map<String, Object?>? row;
+
   if (uid.isNotEmpty) {
     final r1 = await db.query(
       OfflineAuthDb.tableAccounts,
@@ -86,12 +97,16 @@ Future<String> _loadCurrentArea() async {
     );
     if (r1.isNotEmpty) row = r1.first;
   }
-  row ??= (await db.query(
-    OfflineAuthDb.tableAccounts,
-    columns: const ['currentArea', 'selectedArea'],
-    where: 'isSelected = 1',
-    limit: 1,
-  )).firstOrNull;
+
+  if (row == null) {
+    final r2 = await db.query(
+      OfflineAuthDb.tableAccounts,
+      columns: const ['currentArea', 'selectedArea'],
+      where: 'isSelected = 1',
+      limit: 1,
+    );
+    if (r2.isNotEmpty) row = r2.first;
+  }
 
   return ((row?['currentArea'] as String?) ?? (row?['selectedArea'] as String?) ?? '').trim();
 }
@@ -138,12 +153,6 @@ class _FullHeightSheetSqliteState extends State<_FullHeightSheetSqlite> {
   int _nowMs() => DateTime.now().millisecondsSinceEpoch;
 
   String _asStr(Object? v) => (v?.toString() ?? '').trim();
-  int _asInt(Object? v) => switch (v) {
-    int i => i,
-    num n => n.toInt(),
-    String s => int.tryParse(s) ?? 0,
-    _ => 0,
-  };
 
   Future<void> _reloadPlate() async {
     setState(() => _loading = true);
@@ -192,122 +201,6 @@ class _FullHeightSheetSqliteState extends State<_FullHeightSheetSqlite> {
       where: 'id = ?',
       whereArgs: [id],
     );
-  }
-
-  DateTime _resolveRequestTime(Map<String, Object?> p) {
-    final rt = _asStr(p['request_time']);
-    if (rt.isNotEmpty) {
-      final parsed = DateTime.tryParse(rt);
-      if (parsed != null) return parsed;
-      final asInt = int.tryParse(rt);
-      if (asInt != null && asInt > 0) {
-        return DateTime.fromMillisecondsSinceEpoch(asInt * 1000, isUtc: true).toLocal();
-      }
-    }
-    final updated = _asInt(p['updated_at']);
-    final created = _asInt(p['created_at']);
-    final ms = updated > 0 ? updated : created;
-    if (ms > 0) return DateTime.fromMillisecondsSinceEpoch(ms);
-    return DateTime.now();
-  }
-
-  Future<void> _lockPrebill() async {
-    final p = _plate;
-    if (p == null) return;
-
-    final billingType = _asStr(p['billing_type']);
-    if (billingType.isEmpty) {
-      showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
-      return;
-    }
-
-    final entrySec = _resolveRequestTime(p).toUtc().millisecondsSinceEpoch ~/ 1000;
-    final nowSec = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
-
-    final result = await showOnTapBillingBottomSheet(
-      context: context,
-      entryTimeInSeconds: entrySec,
-      currentTimeInSeconds: nowSec,
-      basicStandard: _asInt(p['basic_standard']),
-      basicAmount: _asInt(p['basic_amount']),
-      addStandard: _asInt(p['add_standard']),
-      addAmount: _asInt(p['add_amount']),
-      billingType: billingType.isNotEmpty ? billingType : '변동',
-      regularAmount: _asInt(p['regular_amount']),
-      regularDurationHours: _asInt(p['regular_duration_hours']),
-    );
-    if (result == null) return;
-
-    final db = await OfflineAuthDb.instance.database;
-
-    // ⬇️ 여기부터 수정
-    final String pm = result.paymentMethod;   // non-nullable
-    final String? rn = result.reason;         // nullable
-
-    await db.update(
-      OfflineAuthDb.tablePlates,
-      {
-        'is_locked_fee': 1,
-        'locked_fee_amount': result.lockedFee,
-        'locked_at_seconds': nowSec,
-        'updated_at': _nowMs(),
-      },
-      where: 'id = ?',
-      whereArgs: [widget.plateId],
-    );
-
-    // reason은 nullable, paymentMethod는 non-nullable
-    final trimmedReason = rn?.trim();
-    await _appendLog(widget.plateId, {
-      'action': '사전 정산',
-      'performedBy': _uname.isNotEmpty ? _uname : _uid,
-      'timestamp': DateTime.now().toIso8601String(),
-      'lockedFee': result.lockedFee,
-      if (pm.trim().isNotEmpty) 'paymentMethod': pm,
-      if (trimmedReason != null && trimmedReason.isNotEmpty) 'reason': trimmedReason,
-    });
-
-    if (!mounted) return;
-    await _reloadPlate();
-
-    // ⬇️ 여기도 수정 (null 체크 제거)
-    final pmSuffix = pm.trim().isNotEmpty ? ' ($pm)' : '';
-    showSuccessSnackbar(context, '사전 정산 완료: ₩${result.lockedFee}$pmSuffix');
-  }
-
-
-  Future<void> _unlockPrebill() async {
-    final p = _plate;
-    if (p == null) return;
-
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (_) => const ConfirmCancelFeeDialog(),
-    );
-    if (confirm != true) return;
-
-    final db = await OfflineAuthDb.instance.database;
-    await db.update(
-      OfflineAuthDb.tablePlates,
-      {
-        'is_locked_fee': 0,
-        'locked_fee_amount': null,
-        'locked_at_seconds': null,
-        'updated_at': _nowMs(),
-      },
-      where: 'id = ?',
-      whereArgs: [widget.plateId],
-    );
-
-    await _appendLog(widget.plateId, {
-      'action': '사전 정산 취소',
-      'performedBy': _uname.isNotEmpty ? _uname : _uid,
-      'timestamp': DateTime.now().toIso8601String(),
-    });
-
-    if (!mounted) return;
-    await _reloadPlate();
-    showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
   }
 
   Future<void> _moveToDepartureRequest() async {
@@ -360,8 +253,6 @@ class _FullHeightSheetSqliteState extends State<_FullHeightSheetSqlite> {
   @override
   Widget build(BuildContext context) {
     final p = _plate;
-    final locked = ((p?['is_locked_fee'] as int?) ?? 0) != 0;
-    final plateNumber = _asStr(p?['plate_number']);
 
     return SafeArea(
       top: false,
@@ -398,28 +289,32 @@ class _FullHeightSheetSqliteState extends State<_FullHeightSheetSqlite> {
             ),
             const SizedBox(height: 24),
 
+            // ⛔ 비활성화: 정산(사전 정산)
             ElevatedButton.icon(
               icon: const Icon(Icons.receipt_long),
               label: const Text("정산(사전 정산)"),
-              onPressed: locked ? null : _lockPrebill,
+              onPressed: null, // 비활성화
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size(double.infinity, 52),
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
+                backgroundColor: Colors.grey.shade200,
+                foregroundColor: Colors.grey.shade600,
+                elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
             ),
             const SizedBox(height: 12),
+
+            // ⛔ 비활성화: 정산 취소(잠금 해제) - 로직 삭제
             ElevatedButton.icon(
               icon: const Icon(Icons.lock_open),
               label: const Text("정산 취소"),
-              onPressed: locked ? _unlockPrebill : null,
+              onPressed: null, // 비활성화
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size(double.infinity, 52),
                 backgroundColor: Colors.grey.shade100,
-                foregroundColor: Colors.black87,
+                foregroundColor: Colors.black38,
                 elevation: 0,
                 side: const BorderSide(color: Colors.black12),
                 shape: RoundedRectangleBorder(
@@ -427,7 +322,9 @@ class _FullHeightSheetSqliteState extends State<_FullHeightSheetSqlite> {
                 ),
               ),
             ),
+
             const SizedBox(height: 24),
+
             ElevatedButton.icon(
               icon: const Icon(Icons.exit_to_app),
               label: const Text("출차 요청으로 이동"),
@@ -442,28 +339,16 @@ class _FullHeightSheetSqliteState extends State<_FullHeightSheetSqlite> {
               ),
             ),
             const SizedBox(height: 12),
+
+            // ⛔ 비활성화: 로그 확인
             ElevatedButton.icon(
               icon: const Icon(Icons.history),
               label: const Text("로그 확인"),
-              onPressed: () {
-                final reqTime = _resolveRequestTime(p);
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => LogViewerBottomSheet(
-                      initialPlateNumber: plateNumber,
-                      division: widget.division,
-                      area: widget.area,
-                      requestTime: reqTime,
-                    ),
-                  ),
-                );
-              },
+              onPressed: null, // 비활성화
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size(double.infinity, 52),
                 backgroundColor: Colors.grey.shade100,
-                foregroundColor: Colors.black87,
+                foregroundColor: Colors.black38,
                 elevation: 0,
                 side: const BorderSide(color: Colors.black12),
                 shape: RoundedRectangleBorder(
@@ -472,6 +357,25 @@ class _FullHeightSheetSqliteState extends State<_FullHeightSheetSqlite> {
               ),
             ),
             const SizedBox(height: 12),
+
+            // ⛔ 비활성화: 정보 수정 (신규)
+            ElevatedButton.icon(
+              icon: const Icon(Icons.edit),
+              label: const Text("정보 수정"),
+              onPressed: null, // 비활성화
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 52),
+                backgroundColor: Colors.grey.shade100,
+                foregroundColor: Colors.black38,
+                elevation: 0,
+                side: const BorderSide(color: Colors.black12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+
             ElevatedButton.icon(
               icon: const Icon(Icons.assignment_return),
               label: const Text("입차 요청으로 되돌리기"),
@@ -486,6 +390,7 @@ class _FullHeightSheetSqliteState extends State<_FullHeightSheetSqlite> {
               ),
             ),
             const SizedBox(height: 12),
+
             TextButton.icon(
               icon: const Icon(Icons.delete_forever, color: Colors.red),
               label: const Text("삭제", style: TextStyle(color: Colors.red)),

@@ -4,7 +4,7 @@
 // - Firestore/Provider 제거, SQLite(offline_auth_db/offline_auth_service)만 사용
 // - PlateType/PlateModel 의존 제거 → status_type 문자열 상수로 대체
 // - 출차 요청 목록/선택/출차 완료/뒤로가기(선택 해제) 전부 offline_plates 직접 질의
-// - ✅ 목록 아이템을 박스(UI)로 리팩터링하고, 번호 + 위치를 함께 출력(주차 요청 페이지와 동일 스타일)
+// - ✅ 목록 아이템을 박스(UI)로 리팩터링하고, 번호 + 위치 + 정산 유형(요약)을 함께 출력
 // - 검색 바텀시트: 공용 BottomSheet 제거 → 로컬 풀스크린 모달 바텀시트로 안내 텍스트만 표시
 //
 import 'package:flutter/foundation.dart';
@@ -17,10 +17,8 @@ import '../sql/offline_auth_service.dart';
 import '../../utils/snackbar_helper.dart';
 
 import '../offline_navigation/offline_top_navigation.dart';
-// 공용 검색 바텀시트 제거
-// import '../../widgets/dialog/common_plate_search_bottom_sheet/common_plate_search_bottom_sheet.dart';
 
-// 기존 departure_request_status_bottom_sheet.dart는 PlateModel 의존 → 사용 제거
+// 컨트롤 버튼
 import 'offline_departure_request_package/offline_departure_request_control_buttons.dart';
 
 // ⛳ PlateType 제거: status_type을 문자열 상수로 사용
@@ -136,8 +134,6 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
                       style: TextStyle(fontSize: 15),
                     ),
                     const SizedBox(height: 12),
-                    // 필요 시 Expanded로 본문 추가 가능
-                    // Expanded(child: SingleChildScrollView(child: ...)),
                   ],
                 ),
               ),
@@ -197,7 +193,7 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
 
       if (!mounted) return;
       showSuccessSnackbar(context, '출차 완료: $pn');
-      setState(() {}); // 목록 갱신
+      setState(() {}); // 목록 갱신 → 컨트롤 바도 재빌드되어 선택상태 재판단(FutureBuilder)
     } catch (e) {
       if (kDebugMode) debugPrint("출차 완료 처리 실패: $e");
       if (mounted) showFailedSnackbar(context, "출차 완료 중 오류 발생: $e");
@@ -243,6 +239,8 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
         whereArgs: [id],
       );
     });
+
+    if (mounted) setState(() {}); // ✅ 부모 재빌드 → 컨트롤 바 FutureBuilder가 재조회
   }
 
   // 뒤로가기: 선택 해제
@@ -278,6 +276,22 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
   // ─────────────────────────────────────────────────────────────
   void _toggleSortIcon() => setState(() => _isSorted = !_isSorted);
   void _toggleLock()     => setState(() => _isLocked = !_isLocked);
+
+  String _buildBillingSummary({
+    required int basicAmount,
+    required int basicStd,
+    required int addAmount,
+    required int addStd,
+  }) {
+    final parts = <String>[];
+    if (basicAmount > 0) {
+      parts.add('기본 ${basicAmount}원${basicStd > 0 ? ' / ${basicStd}분' : ''}');
+    }
+    if (addAmount > 0) {
+      parts.add('추가 ${addAmount}원${addStd > 0 ? ' / ${addStd}분' : ''}');
+    }
+    return parts.isEmpty ? '' : parts.join(', ');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -318,13 +332,7 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
           toggleSortIcon: _toggleSortIcon,
           toggleLock: _toggleLock,
           handleDepartureCompleted: _handleDepartureCompleted,
-          // ✅ 시그니처 맞춤(4개 인자)
-          handleEntryParkingRequest: (ctx, plateNumber, area) {
-            showSelectedSnackbar(context, '이 화면에서는 입차 요청 처리를 제공하지 않습니다.');
-          },
-          handleEntryParkingCompleted: (ctx, plateNumber, area, location) {
-            showSelectedSnackbar(context, '이 화면에서는 입차 완료 처리를 제공하지 않습니다.');
-          },
+          // ⛔️ 리팩터링: handleEntryParkingRequest / handleEntryParkingCompleted 제거됨
         ),
       ),
     );
@@ -344,6 +352,11 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
         'plate_number',
         'plate_four_digit',
         'location',
+        'billing_type',
+        'basic_amount',
+        'basic_standard',
+        'add_amount',
+        'add_standard',
         'request_time',
         'is_selected',
       ],
@@ -364,18 +377,33 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
       );
     }
 
-    // ✅ 주차 요청 페이지와 동일한 박스형 리스트 아이템
+    // ✅ 주차 요청 페이지와 동일한 박스형 리스트 아이템 (정산 유형 포함)
     final tiles = rows.map((r) {
       final id = r['id'] as int;
       final pn = (r['plate_number'] as String?)?.trim();
       final four = (r['plate_four_digit'] as String?)?.trim() ?? '';
       final loc = (r['location'] as String?)?.trim() ?? '';
+      final billing = (r['billing_type'] as String?)?.trim() ?? '';
+      final basicAmount = (r['basic_amount'] as int?) ?? 0;
+      final basicStd = (r['basic_standard'] as int?) ?? 0;
+      final addAmount = (r['add_amount'] as int?) ?? 0;
+      final addStd = (r['add_standard'] as int?) ?? 0;
       final selected = ((r['is_selected'] as int?) ?? 0) != 0;
 
       final title = (pn != null && pn.isNotEmpty)
           ? pn
           : (four.isNotEmpty ? '****-$four' : '미상');
       final locationText = loc.isNotEmpty ? loc : '위치 미지정';
+
+      final billingSummary = _buildBillingSummary(
+        basicAmount: basicAmount,
+        basicStd: basicStd,
+        addAmount: addAmount,
+        addStd: addStd,
+      );
+      final billingText = billing.isEmpty
+          ? '정산 미지정'
+          : (billingSummary.isEmpty ? '정산 $billing' : '정산 $billing ($billingSummary)');
 
       return InkWell(
         onTap: () async {
@@ -384,8 +412,6 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
             return;
           }
           await _togglePlateSelection(id);
-          if (!mounted) return;
-          setState(() {}); // 재빌드
         },
         child: Container(
           width: double.infinity, // ✅ 가로 꽉차게
@@ -439,6 +465,18 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
                         fontWeight: FontWeight.w500,
                       ),
                     ),
+                    const SizedBox(height: 2),
+                    // 정산 유형 + 요약
+                    Text(
+                      billingText,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: Colors.grey.shade600,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -456,6 +494,5 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
       separatorBuilder: (_, __) => const SizedBox(height: 10), // ✅ 박스 간격
       itemBuilder: (_, i) => tiles[i],
     );
-    // ─────────────────────────────────────────────────────────────
   }
 }
