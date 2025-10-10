@@ -36,8 +36,9 @@ class _OfflineLiveOcrPageState extends State<OfflineLiveOcrPage> {
   int _attempts = 0;
   static const int _hintEvery = 10; // n회 연속 실패 시 힌트 노출
 
-  String? _debugText; // blocks/plate 등 디버그 표시
+  String? _debugText; // 디버그 표시
   String? _lastText; // 최근 인식 텍스트 일부
+  String? _candText; // ⬅️ 확정 실패 시 후보 표시
   Timer? _firstHintTimer;
 
   // 미터링(탭-투-포커스)용
@@ -107,8 +108,7 @@ class _OfflineLiveOcrPageState extends State<OfflineLiveOcrPage> {
       // 6초 후 첫 힌트
       _firstHintTimer = Timer(const Duration(seconds: 6), () {
         if (!mounted) return;
-        showSelectedSnackbar(
-            context, '번호판을 화면 가로 70~90%로 채우고 1초 정지해 주세요.');
+        showSelectedSnackbar(context, '번호판을 화면 가로 70~90%로 채우고 1초 정지해 주세요.');
       });
 
       // 자동 촬영 루프 시작
@@ -138,6 +138,7 @@ class _OfflineLiveOcrPageState extends State<OfflineLiveOcrPage> {
     if (_autoRunning || _controller == null) return;
     _autoRunning = true;
     _attempts = 0;
+    _candText = null;
     _autoLoop();
   }
 
@@ -161,11 +162,23 @@ class _OfflineLiveOcrPageState extends State<OfflineLiveOcrPage> {
         final result = await _recognizer.processImage(input);
 
         final allText = result.text;
-        _lastText = allText.isEmpty
-            ? ''
-            : (allText.length > 80 ? '${allText.substring(0, 80)}…' : allText);
+        _lastText =
+        allText.isEmpty ? '' : (allText.length > 80 ? '${allText.substring(0, 80)}…' : allText);
 
+        // 확정 시도(엄격+보정)
         final plate = _extractPlate(allText);
+
+        // ⬇️ 실패 시, 느슨한 후보들을 모아 하단에 보여줌
+        if (plate == null) {
+          final cands = _extractPlateCandidates(allText);
+          if (mounted) {
+            setState(() {
+              _candText = cands.isEmpty ? null : '인식 후보: ${cands.join("  •  ")}';
+            });
+          }
+        } else {
+          _candText = null; // 확정되면 후보 표시는 숨김
+        }
 
         if (kDebugMode) {
           if (mounted) {
@@ -209,6 +222,25 @@ class _OfflineLiveOcrPageState extends State<OfflineLiveOcrPage> {
   }
 
   // ───────── 번호판 파서 ─────────
+
+  // (1) 한국 번호판 가운데 글자 화이트리스트(2004개정 + 추가)
+  static const String _plateMidWhitelist =
+      r'(?:가|나|다|라|마|거|너|더|러|머|버|서|어|저|고|노|도|로|모|보|소|오|조|구|누|두|루|무|부|수|우|주|하|허|호|배)';
+
+  // (2) 가운데 글자 오인식 보정(리→러 등)
+  static const Map<String, String> _midConfuseFix = {
+    '기': '거',
+    '니': '너',
+    '디': '더',
+    '리': '러',
+    '미': '머',
+    '비': '버',
+    '시': '서',
+    '이': '어',
+    '지': '저',
+    '히': '허',
+  };
+
   String _normalizeChars(String s) => s
       .replaceAll(RegExp(r'\s+'), ' ')
       .replaceAll('O', '0')
@@ -218,26 +250,101 @@ class _OfflineLiveOcrPageState extends State<OfflineLiveOcrPage> {
       .replaceAll('B', '8')
       .replaceAll('S', '5');
 
+  // (3) 최종 패턴: 가운데 글자에 화이트리스트 적용
   final List<RegExp> _patterns = [
     // 123가4567 / 12가3456
-    RegExp(r'\b\d{3}\s*[가-힣]\s*\d{4}\b'),
-    RegExp(r'\b\d{2}\s*[가-힣]\s*\d{4}\b'),
+    RegExp(r'\b\d{3}\s*' + _plateMidWhitelist + r'\s*\d{4}\b'),
+    RegExp(r'\b\d{2}\s*' + _plateMidWhitelist + r'\s*\d{4}\b'),
   ];
 
+  // (4) 엄격+보정 추출
   String? _extractPlate(String text) {
-    var s = _normalizeChars(text);
+    final s = _normalizeChars(text);
     final lines = s.split(RegExp(r'[\r\n]+'));
+
+    // 1차: 엄격 패턴
     for (final rx in _patterns) {
       final m0 = rx.firstMatch(s);
       if (m0 != null) return m0.group(0)!.replaceAll(' ', '');
+
       for (int i = 0; i + 1 < lines.length; i++) {
-        final joined =
-        (lines[i] + lines[i + 1]).replaceAll(' ', '');
+        final joined = (lines[i] + lines[i + 1]).replaceAll(' ', '');
         final m1 = rx.firstMatch(joined);
         if (m1 != null) return m1.group(0)!.replaceAll(' ', '');
       }
     }
+
+    // 2차: 느슨 + 가운데 글자 보정 → 화이트리스트 검증
+    final loose0 = _extractPlateLoose(s);
+    if (loose0 != null) return loose0;
+
+    for (int i = 0; i + 1 < lines.length; i++) {
+      final joined = (lines[i] + lines[i + 1]).replaceAll(' ', '');
+      final loose = _extractPlateLoose(joined);
+      if (loose != null) return loose;
+    }
+
     return null;
+  }
+
+  // 느슨한 캡처 + 가운데 보정 → 화이트리스트 검증 후 하나만 반환
+  String? _extractPlateLoose(String text) {
+    final t = _normalizeChars(text);
+    final rxLoose = RegExp(r'(\d{2,3})\s*([가-힣])\s*(\d{4})');
+    for (final m in rxLoose.allMatches(t)) {
+      final left = m.group(1)!;
+      var mid = m.group(2)!;
+      final right = m.group(3)!;
+
+      // 가운데 글자 오인식 보정 적용
+      mid = _midConfuseFix[mid] ?? mid;
+
+      final cand = '$left$mid$right';
+      final pass = RegExp(r'^\d{2,3}' + _plateMidWhitelist + r'\d{4}$').hasMatch(cand);
+      if (pass) return cand;
+    }
+    return null;
+  }
+
+  // ⬇️ 확정 실패 시 하단에 보여줄 "인식 후보"들을 모아 반환
+  // - 느슨한 패턴(왼 1~3, 한글 1, 오른 3~4)로 모두 수집
+  // - 가운데 글자 보정 전/후를 함께 취합(중복 제거)
+  List<String> _extractPlateCandidates(String text) {
+    final t = _normalizeChars(text);
+    final rxLoose = RegExp(r'(\d{1,3})\s*([가-힣])\s*(\d{3,4})');
+
+    final set = <String>{};
+    for (final m in rxLoose.allMatches(t)) {
+      final left = m.group(1)!;
+      final mid0 = m.group(2)!;
+      final right = m.group(3)!;
+
+      final c0 = '$left$mid0$right';
+      set.add(c0);
+
+      final fixed = _midConfuseFix[mid0];
+      if (fixed != null) {
+        set.add('$left$fixed$right');
+      }
+    }
+
+    // 보기 좋게 길이/형식이 정상(2~3 + 1 + 4)에 가까운 순으로 정렬
+    final list = set.toList()
+      ..sort((a, b) {
+        int score(String s) {
+          final m = RegExp(r'^(\d{1,3})([가-힣])(\d{3,4})$').firstMatch(s);
+          if (m == null) return 99;
+          final l = m.group(1)!.length;
+          final r = m.group(3)!.length;
+          // 2~3 / 4 에 가까울수록 가점
+          return (l == 2 || l == 3 ? 0 : 1) + (r == 4 ? 0 : 1);
+        }
+
+        return score(a).compareTo(score(b));
+      });
+
+    // 너무 길면 상위 몇 개만
+    return list.take(8).toList();
   }
 
   // 미리보기 탭 → AF/AE 재조정
@@ -272,8 +379,7 @@ class _OfflineLiveOcrPageState extends State<OfflineLiveOcrPage> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title:
-        const Text('자동 번호판 인식', style: TextStyle(color: Colors.white)),
+        title: const Text('자동 번호판 인식', style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
         actions: [
@@ -294,8 +400,7 @@ class _OfflineLiveOcrPageState extends State<OfflineLiveOcrPage> {
               }
               if (mounted) setState(() {});
             },
-            icon: Icon(
-                _autoRunning ? Icons.pause_circle : Icons.play_circle),
+            icon: Icon(_autoRunning ? Icons.pause_circle : Icons.play_circle),
           ),
           // 토치 토글
           IconButton(
@@ -303,11 +408,9 @@ class _OfflineLiveOcrPageState extends State<OfflineLiveOcrPage> {
             onPressed: () async {
               _torch = !_torch;
               try {
-                await _controller?.setFlashMode(
-                    _torch ? FlashMode.torch : FlashMode.off);
+                await _controller?.setFlashMode(_torch ? FlashMode.torch : FlashMode.off);
                 if (mounted) {
-                  showSelectedSnackbar(
-                      context, _torch ? '플래시 ON' : '플래시 OFF');
+                  showSelectedSnackbar(context, _torch ? '플래시 ON' : '플래시 OFF');
                 }
               } catch (e) {
                 if (mounted) {
@@ -340,8 +443,9 @@ class _OfflineLiveOcrPageState extends State<OfflineLiveOcrPage> {
                   child: CameraPreview(_controller!),
                 ),
               ),
-              // 디버그 텍스트
-              if (_debugText != null || _lastText != null)
+
+              // 디버그/후보 텍스트
+              if (_debugText != null || _lastText != null || _candText != null)
                 Positioned(
                   left: 8,
                   right: 8,
@@ -351,17 +455,30 @@ class _OfflineLiveOcrPageState extends State<OfflineLiveOcrPage> {
                       if (_debugText != null)
                         Text(
                           _debugText!,
-                          style: const TextStyle(
-                              color: Colors.white, fontSize: 14),
+                          style: const TextStyle(color: Colors.white, fontSize: 14),
                           textAlign: TextAlign.center,
+                        ),
+                      if (_candText != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            _candText!,
+                            style: const TextStyle(
+                              color: Colors.amber,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       if (_lastText != null && _lastText!.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 6),
                           child: Text(
                             _lastText!,
-                            style: const TextStyle(
-                                color: Colors.white70, fontSize: 12),
+                            style: const TextStyle(color: Colors.white70, fontSize: 12),
                             textAlign: TextAlign.center,
                             maxLines: 3,
                             overflow: TextOverflow.ellipsis,
