@@ -61,27 +61,7 @@ void main() async {
   debugPrint('[MAIN][${_ts()}] initCommunicationPort');
   FlutterForegroundTask.initCommunicationPort();
 
-  // ✅ 포그라운드 태스크 초기화
-  debugPrint('[MAIN][${_ts()}] ForegroundTask.init');
-  FlutterForegroundTask.init(
-    androidNotificationOptions: AndroidNotificationOptions(
-      channelId: 'foreground_service',
-      channelName: '출차 요청 수신 중',
-      channelDescription: '포그라운드에서 대기 중',
-      channelImportance: NotificationChannelImportance.LOW,
-      priority: NotificationPriority.LOW,
-    ),
-    iosNotificationOptions: IOSNotificationOptions(
-      showNotification: true,
-      playSound: false,
-    ),
-    foregroundTaskOptions: ForegroundTaskOptions(
-      eventAction: ForegroundTaskEventAction.repeat(5000),
-      autoRunOnBoot: true,
-      allowWakeLock: true,
-      allowWifiLock: true,
-    ),
-  );
+  // (요청에 따라 ForegroundTask.init 제거)
 
   // 🔔 로컬 알림 초기화 (게이트 적용)
   await _initLocalNotifications();
