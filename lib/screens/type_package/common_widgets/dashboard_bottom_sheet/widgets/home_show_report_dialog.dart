@@ -11,6 +11,7 @@ import '../../../../../../utils/snackbar_helper.dart';
 import '../../../../../../utils/blocking_dialog.dart';
 // import '../../../../../../utils/usage_reporter.dart';
 import '../../../../../../utils/gcs_uploader.dart';
+import '../../../../../../utils/end_work_report_sheets_uploader.dart';
 import 'home_end_work_report_content.dart';
 
 int _extractLockedFeeAmountSafe(Map<String, dynamic> data) {
@@ -47,18 +48,7 @@ Future<void> showHomeReportDialog(BuildContext context) async {
   try {
     if (area.isNotEmpty) {
       prefilledVehicleOutput = await PlateCountService().getDepartureCompletedCountAll(area);
-      /*await UsageReporter.instance.annotate(
-        area: area,
-        source: 'showHomeReportDialog.prefetch.departure_completed.aggregate',
-        extra: {'value': prefilledVehicleOutput},
-      );*/
-
       prefilledVehicleInput = await PlateCountService().getParkingCompletedCountAll(area);
-      /*await UsageReporter.instance.annotate(
-        area: area,
-        source: 'showHomeReportDialog.prefetch.parking_completed.aggregate',
-        extra: {'value': prefilledVehicleInput},
-      );*/
     }
   } catch (_) {
     prefilledVehicleOutput = 0;
@@ -97,9 +87,11 @@ Future<void> showHomeReportDialog(BuildContext context) async {
                     context: ctx,
                     message: '보고 처리 중입니다. 잠시만 기다려 주세요...',
                     task: () async {
-                      final area = ctx.read<AreaState>().currentArea;
-                      final division = ctx.read<AreaState>().currentDivision;
-                      final userName = ctx.read<UserState>().name;
+                      final areaState = ctx.read<AreaState>();
+                      final userState = ctx.read<UserState>();
+                      final area = areaState.currentArea;
+                      final division = areaState.currentDivision;
+                      final userName = userState.name;
 
                       if (type == 'end') {
                         // 1) 입력 파싱
@@ -123,7 +115,7 @@ Future<void> showHomeReportDialog(BuildContext context) async {
                           return;
                         }
 
-                        // 2) plates 단일 조회(잠금요금 출차) → 합계/카운트 계산
+                        // 2) plates 단일 스냅샷 조회(출차 완료 + 잠금요금 true)
                         final firestore = FirebaseFirestore.instance;
                         final platesSnap = await firestore
                             .collection('plates')
@@ -133,66 +125,45 @@ Future<void> showHomeReportDialog(BuildContext context) async {
                             .get();
 
                         final int p = platesSnap.docs.length;
-                        try {
-                          /*await UsageReporter.instance.reportSampled(
-                            area: area,
-                            action: 'read',
-                            n: p,
-                            source: 'onReport.end.plates.query(departure_completed&lockedFee)',
-                            sampleRate: 0.2,
-                          );*/
-                        } catch (_) {}
 
+                        // 3) 잠금요금 합계 계산
                         int totalLockedFee = 0;
                         for (final d in platesSnap.docs) {
                           totalLockedFee += _extractLockedFeeAmountSafe(d.data());
                         }
 
-                        // 3) fee_summaries upsert 1회(중복 방지: get 없음)
-                        final summaryRef = firestore.collection('fee_summaries').doc('${division}_${area}_all');
-                        await summaryRef.set({
-                          'division': division,
-                          'area': area,
-                          'scope': 'all',
-                          'totalLockedFee': totalLockedFee,
-                          'lockedVehicleCount': p,
-                          'lastUpdated': FieldValue.serverTimestamp(),
-                        }, SetOptions(merge: true));
-                        try {
-                          /*await UsageReporter.instance.reportSampled(
-                            area: area,
-                            action: 'write',
-                            n: 1,
-                            source: 'onReport.end.fee_summaries.upsert',
-                            sampleRate: 0.2,
-                          );*/
-                        } catch (_) {}
+                        // ✅ 사용자 입력 확정(없으면 기본값/스냅샷으로 대체)
+                        final int vehicleInputCount =
+                            int.tryParse('${parsed['vehicleInput']}') ?? 0;
+                        final int vehicleOutputManual =
+                            int.tryParse('${parsed['vehicleOutput']}') ?? p;
 
-                        // 4) 보고 JSON/GCS 업로드 (Firebase 아님 → 계측 제외)
+                        // 4) 보고 JSON 구성 — 보고/시트에는 '사용자 입력 출차 수'를 반영
                         final reportLog = {
                           'division': division,
                           'area': area,
                           'vehicleCount': {
-                            'vehicleInput': int.tryParse('${parsed['vehicleInput']}') ?? 0,
-                            // ✅ onReport 단일 스냅샷의 문서 수를 그대로 사용해 중복 READ 제거
-                            'vehicleOutput': p,
+                            'vehicleInput': vehicleInputCount,
+                            'vehicleOutput': vehicleOutputManual, // 👈 사용자 수정값 반영
                           },
                           'totalLockedFee': totalLockedFee,
                           'createdAt': DateTime.now().toIso8601String(),
+                          'uploadedBy': userName,
                         };
+
+                        // 5) GCS 보고 업로드
                         final reportUrl = await uploadEndWorkReportJson(
                           report: reportLog,
                           division: division,
                           area: area,
                           userName: userName,
                         );
-
                         if (reportUrl == null) {
                           if (ctx.mounted) showFailedSnackbar(ctx, '보고 업로드 실패: 네트워크/권한 확인');
-                          return; // 업로드 실패 시 삭제로 진행하지 않음
+                          return;
                         }
 
-                        // 5) 로그 묶음 JSON 업로드 (Firebase 아님 → 계측 제외)
+                        // 6) GCS 로그 묶음 업로드
                         final List<Map<String, dynamic>> items = [];
                         for (final doc in platesSnap.docs) {
                           final data = doc.data();
@@ -211,44 +182,49 @@ Future<void> showHomeReportDialog(BuildContext context) async {
                           area: area,
                           userName: userName,
                         );
-
                         if (logsUrl == null) {
                           if (ctx.mounted) showFailedSnackbar(ctx, '로그 업로드 실패: 네트워크/권한 확인');
                           return;
                         }
 
-                        // 6) 동일 스냅샷으로 일괄 삭제 (재조회 없음)
+                        // 7) Google Sheets에 행 추가 (A~G만 기록)
+                        final ok = await EndWorkReportSheetsUploader.appendRow(
+                          reportJson: reportLog,
+                          // sheetName: '업무종료보고', // 필요 시 원하는 탭명으로 지정
+                        );
+                        if (!ok) {
+                          if (ctx.mounted) {
+                            showFailedSnackbar(ctx, '스프레드시트 업로드 실패: 시트 ID/권한/탭명 확인');
+                          }
+                          return;
+                        }
+
+                        // 8) fee_summaries 업서트 — 무결성 위해 스냅샷 기반 p/totalLockedFee 사용
+                        final summaryRef =
+                        firestore.collection('fee_summaries').doc('${division}_${area}_all');
+                        await summaryRef.set({
+                          'division': division,
+                          'area': area,
+                          'scope': 'all',
+                          'totalLockedFee': totalLockedFee,
+                          'lockedVehicleCount': p,
+                          'lastUpdated': FieldValue.serverTimestamp(),
+                        }, SetOptions(merge: true));
+
+                        // 9) 동일 스냅샷으로 plates 일괄 삭제
                         final batch = firestore.batch();
                         for (final d in platesSnap.docs) {
                           batch.delete(d.reference);
                         }
                         await batch.commit();
-                        try {
-                          /*await UsageReporter.instance.reportSampled(
-                            area: area,
-                            action: 'delete',
-                            n: p,
-                            source: 'onReport.end.batch.commit(delete locked departures)',
-                            sampleRate: 0.2,
-                          );*/
-                        } catch (_) {}
 
-                        // 7) 흔적만 남기는 annotate(aggregate 숫자)
-                        try {
-                          /*await UsageReporter.instance.annotate(
-                            area: area,
-                            source: 'onReport.end.aggregate.departure_completed.count',
-                            extra: {'value': p},
-                          );*/
-                        } catch (_) {}
-
-                        // 8) UI 피드백
+                        // 10) UI 피드백 — 사용자값과 스냅샷 수를 함께 표기(혼동 방지)
                         if (ctx.mounted) {
                           Navigator.pop(ctx);
                           showSuccessSnackbar(
                             ctx,
                             "업무 종료 보고 업로드 및 출차 초기화 "
-                            "(입차: ${parsed['vehicleInput']}, 출차: $p • 전체집계)",
+                                "(입차: $vehicleInputCount, 출차: $vehicleOutputManual (스냅샷: $p) • 전체집계)",
                           );
                         }
                       } else if (type == 'start') {
