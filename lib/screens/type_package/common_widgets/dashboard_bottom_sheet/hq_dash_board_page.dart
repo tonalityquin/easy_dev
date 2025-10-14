@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../../../../../states/user/user_state.dart';
 
 import '../../../../utils/external_openers.dart';
+import '../../../../utils/logout_helper.dart';
 import 'home_dash_board_controller.dart';
 import 'widgets/home_user_info_card.dart';
 import 'widgets/home_break_button_widget.dart';
@@ -52,9 +53,8 @@ class _HqDashBoardPageState extends State<HqDashBoardPage> {
                 // 숨김/펼침 영역
                 AnimatedCrossFade(
                   duration: const Duration(milliseconds: 200),
-                  crossFadeState: _layerHidden
-                      ? CrossFadeState.showFirst
-                      : CrossFadeState.showSecond,
+                  crossFadeState:
+                  _layerHidden ? CrossFadeState.showFirst : CrossFadeState.showSecond,
                   firstChild: const SizedBox.shrink(),
                   secondChild: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -70,7 +70,20 @@ class _HqDashBoardPageState extends State<HqDashBoardPage> {
                           icon: const Icon(Icons.exit_to_app),
                           label: const Text('퇴근하기'),
                           style: _clockOutBtnStyle(),
-                          onPressed: () => controller.handleWorkStatus(userState, context),
+                          onPressed: () =>
+                              controller.handleWorkStatus(userState, context),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // 2.5) 로그아웃
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.logout),
+                          label: const Text('로그아웃'),
+                          style: _logoutBtnStyle(),
+                          onPressed: () => LogoutHelper.logoutAndGoToLogin(context),
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -121,6 +134,18 @@ ButtonStyle _clockOutBtnStyle() {
     minimumSize: const Size.fromHeight(55),
     padding: EdgeInsets.zero,
     side: const BorderSide(color: Colors.redAccent, width: 1.0),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+  );
+}
+
+ButtonStyle _logoutBtnStyle() {
+  // 로그아웃은 중립 톤(회색 보더) 유지
+  return ElevatedButton.styleFrom(
+    backgroundColor: Colors.white,
+    foregroundColor: Colors.black,
+    minimumSize: const Size.fromHeight(55),
+    padding: EdgeInsets.zero,
+    side: const BorderSide(color: Colors.grey, width: 1.0),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
   );
 }
